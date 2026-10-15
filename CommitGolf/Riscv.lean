@@ -1,4 +1,4 @@
-import SigGolf.Oracle
+import CommitGolf.Oracle
 import RiscvZkvm.Rv64.Execution
 import RiscvZkvm.Rv64.StepOn
 import RiscvZkvm.Interpreter.Decode
@@ -11,8 +11,10 @@ compressions are charged. The base RV64IM decoder and instruction semantics come
 `riscv-zkvm` model; the W-suffixed word operations, the memory checks, `HASH` and `HALT`, and all
 pricing are defined here. -/
 
-namespace SigGolf.Riscv
+namespace CommitGolf.Riscv
 open RiscvZkvm.Rv64 RiscvZkvm.Interpreter OracleComp OracleSpec
+
+open VectorCommit
 
 /-! ### Images -/
 
@@ -28,23 +30,17 @@ def dataBase (image : Image) : Nat := 16 * ((MEMORY_BYTES - image.data.length) /
 
 /-! ### Layout -/
 
-/-- Each object's buffer as `(address, length)`. -/
-def layoutBuffers (layout : Layout) (sizes : Sizes) : List (Nat × Nat) :=
-  [(layout.message, 32), (layout.secretKey, 32), (layout.publicKey, 16),
-   (layout.cache, sizes.cache), (layout.signature, sizes.signature),
-   (layout.witness, sizes.witness)]
-
 /-- Two buffers do not overlap; an empty buffer overlaps nothing. -/
 abbrev DisjointBuffers (left right : Nat × Nat) : Prop :=
   left.2 = 0 ∨ right.2 = 0 ∨ left.1 + left.2 ≤ right.1 ∨ right.1 + right.2 ≤ left.1
 
-abbrev LayoutValid (layout : Layout) (sizes : Sizes) (image : Image) : Prop :=
-  (∀ buffer ∈ layoutBuffers layout sizes,
+abbrev LayoutValid (buffers : List (Nat × Nat)) (image : Image) : Prop :=
+  (∀ buffer ∈ buffers,
     buffer.1 % 8 = 0 ∧ buffer.1 + buffer.2 ≤ dataBase image) ∧
-  (layoutBuffers layout sizes).Pairwise DisjointBuffers
+  (buffers).Pairwise DisjointBuffers
 
-abbrev Image.Valid (image : Image) (sizes : Sizes) (layout : Layout) : Prop :=
-  image.byteSize < MAX_PROGRAM_BYTES ∧ LayoutValid layout sizes image
+abbrev Image.Valid (image : Image) (buffers : List (Nat × Nat)) : Prop :=
+  image.byteSize < MAX_PROGRAM_BYTES ∧ LayoutValid buffers image
 
 /-! ### Memory -/
 
@@ -160,26 +156,37 @@ def fetch (image : Image) (state : MachineState) : Option Instruction :=
     | none => none
   else none
 
-/-! ### HASH -/
+/-! ### Oracle and randomness syscalls -/
 
-/-- `HASH` takes the input address in `a0`, the byte length in `a1`, and the output address in
-`a2`; it reads whole blocks only. -/
-def hashArgumentsValid (state : MachineState) : Bool :=
-  let source := state.getReg .x10
-  let bytes := (state.getReg .x11).toNat
-  let destination := state.getReg .x12
-  decide (source.toNat % 8 = 0) && decide (0 < bytes ∧ bytes % 64 = 0) &&
-    rangeValid source bytes && decide (destination.toNat % 8 = 0) && rangeValid destination 32
+/-- Write exactly the rounded byte width, zero-padding the high bits of a partial byte. -/
+def writeBits {bits : Nat} (state : MachineState) (address : BitVec 64)
+    (answer : BitVec bits) : MachineState :=
+  ((List.range ((bits + 7) / 8)).foldl
+    (fun state i => state.setByte (address + BitVec.ofNat 64 i)
+      (BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i)))) state).setPC (state.pc + 4)
 
-/-- The input bytes as a `Query` of `a1 / 64` blocks. -/
-def hashInput (state : MachineState) : Query :=
-  let n := (state.getReg .x11).toNat / 64 - 1
-  ⟨n, readBuffer state (state.getReg .x10).toNat (64 * (n + 1))⟩
+/-- HASH: t0=0, a0=input address, a1=rounded input byte width,
+a2=output address, a3=oracle index. Every call uses the same solver-selected family as the games. -/
+def hashInput (F : OracleFamily) (state : MachineState) : Option (HashQuery F) := do
+  let id := (state.getReg .x13).toNat
+  if h : id < F.count then
+    let oracle : Fin F.count := ⟨id, h⟩
+    let inputBytes := (F.inputBits oracle + 7) / 8
+    let outputBytes := (F.outputBits oracle + 7) / 8
+    let source := state.getReg .x10
+    let destination := state.getReg .x12
+    if (state.getReg .x11).toNat = inputBytes ∧ source.toNat % 8 = 0 ∧
+        destination.toNat % 8 = 0 ∧ rangeValid source inputBytes = true ∧
+        rangeValid destination outputBytes = true then
+      return ⟨oracle, BitVec.ofNat (F.inputBits oracle)
+        (readBuffer state source.toNat inputBytes).toNat⟩
+    else none
+  else none
 
-def writeHash (state : MachineState) (answer : BitVec 256) : MachineState :=
-  (state.writeWords (state.getReg .x12)
-    [answer.extractLsb' 0 64, answer.extractLsb' 64 64,
-      answer.extractLsb' 128 64, answer.extractLsb' 192 64]).setPC (state.pc + 4)
+/-- RANDOM: t0=2, a0=destination, a1=byte count. These private coins do not consume hash budget. -/
+def randomArgumentsValid (state : MachineState) : Bool :=
+  decide ((state.getReg .x10).toNat % 8 = 0) &&
+    rangeValid (state.getReg .x10) (state.getReg .x11).toNat
 
 /-! ### Execution and costs -/
 
@@ -199,28 +206,37 @@ structure Execution where
 def Execution.charge (result : Execution) (cycles blocks : Nat) : Execution :=
   { result with cycles := cycles + result.cycles, compressions := blocks + result.compressions }
 
-/-- A program still running after `steps` instructions is reported `unfinished`; since every step
-costs at least one cycle, `Termination` rules that out within `CYCLE_LIMIT` steps. -/
-def execute (image : Image) : Nat → MachineState → OracleComp HashSpec Execution
+/-- Execute a submitted image against the shared oracle family and independent private coins.
+Faults and exhausted step bounds never report successful HALT. -/
+def execute (F : OracleFamily) (image : Image) :
+    Nat → MachineState → OracleComp (World F) Execution
   | 0, state => pure { exit := .unfinished, state := state, cycles := 0, compressions := 0 }
   | steps + 1, state =>
     match fetch image state with
     | none => pure { exit := .failure, state := state, cycles := 0, compressions := 0 }
     | some (.base .ECALL) =>
-      if state.getReg .x5 = 0 && hashArgumentsValid state then do
-        let input := hashInput state
-        let answer ← HashSpec.query input
-        let result ← execute image steps (writeHash state answer)
-        return result.charge (8 * input.blocks) input.blocks
+      if state.getReg .x5 = 0 then
+        match hashInput F state with
+        | none => pure { exit := .failure, state := state, cycles := 1, compressions := 0 }
+        | some input => do
+          let answer ← (hashSpec F).query input
+          let result ← execute F image steps (writeBits state (state.getReg .x12) answer)
+          let blocks := ((F.inputBits input.oracle + 7) / 8 + 63) / 64
+          return result.charge (8 * max 1 blocks) blocks
       else if state.getReg .x5 = 1 then
         pure { exit := if state.getReg .x10 = 0 then .success else .failure, state := state,
                cycles := 1, compressions := 0 }
+      else if state.getReg .x5 = 2 && randomArgumentsValid state then do
+        let bytes := (state.getReg .x11).toNat
+        let answer ← liftM ($ᵗ BitVec (8 * bytes) : ProbComp (BitVec (8 * bytes)))
+        let result ← execute F image steps (writeBits state (state.getReg .x10) answer)
+        return result.charge (1 + (bytes + 7) / 8) 0
       else pure { exit := .failure, state := state, cycles := 1, compressions := 0 }
     | some instruction =>
       match ordinaryStep state instruction with
       | none => pure { exit := .failure, state := state, cycles := 1, compressions := 0 }
       | some next => do
-          let result ← execute image steps next
+          let result ← execute F image steps next
           return result.charge (instructionCycles instruction) 0
 
-end SigGolf.Riscv
+end CommitGolf.Riscv

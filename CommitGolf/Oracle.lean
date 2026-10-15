@@ -1,6 +1,11 @@
-import SigGolf.Parameters
+import CommitGolf.Parameters
 import VCVio.OracleComp.QueryTracking.RandomOracle.Simulation
 import VCVio.OracleComp.QueryTracking.WriterCost
+
+/-! Independent solver-selected random oracles. Cache keys include oracle identity and input.
+All participants share one cache per game; private coins remain independent. -/
+namespace CommitGolf.VectorCommit
+open OracleComp OracleSpec
 
 /-! # Oracle
 
@@ -18,38 +23,60 @@ function `f`. `liftM` embeds a computation over fewer oracles into one over more
 `$ᵗ T` draws a uniform element of `T`; `Pr[p | c]` is the probability that `c` returns a
 value satisfying `p`, and `Pr[= x | c]` that it returns exactly `x`. -/
 
-namespace SigGolf
-open OracleComp OracleSpec
+/-- A solver is allowed to supply `count` number of independent oracles each with
+their own `inputBits`, `outputBits` constraining the size of the input/output-/
+structure OracleFamily where
+  count : Nat
+  inputBits : Fin count → Nat
+  outputBits : Fin count → Nat
 
-/-- Byte strings of one or more 64-byte blocks, as HASH reads them: `⟨n, bytes⟩` holds `n + 1`
-blocks, the README's `k`, so the empty input is unrepresentable. The length is part of the input;
-there is no implicit domain separation. -/
-abbrev Query := (n : Nat) × Bytes (64 * (n + 1))
+/-- A query to a particular oracle in an `OracleFamily` on `input` -/
+structure HashQuery (F : OracleFamily) where
+  oracle : Fin F.count
+  input : BitVec (F.inputBits oracle)
+  deriving DecidableEq
 
-/-- Blocks in an input, each charged as one compression. -/
-def Query.blocks (query : Query) : Nat := query.1 + 1
+/-- An interface for querying a random oracle as a function from -/
+abbrev hashSpec (F : OracleFamily) : OracleSpec (HashQuery F) :=
+  fun q => BitVec (F.outputBits q.oracle)
 
-abbrev HashSpec : OracleSpec Query := Query →ₒ BitVec 256
+/-- The adversary and the honest algorithms have private coins and the same oracles. -/
+abbrev World (F : OracleFamily) := unifSpec + hashSpec F
 
-/-- One particular function `H`, for statements that must hold for every `H`. -/
-abbrev Hash := QueryImpl HashSpec Id
+/-- Coin queries forwarded, hash queries lazily cached. The table starts empty. -/
+def romImpl (F : OracleFamily) :
+    QueryImpl (World F) (StateT (QueryCache (hashSpec F)) ProbComp) :=
+  unifFwdImpl (hashSpec F) + (hashSpec F).randomOracle
 
-/-- The security experiment's shared oracles: private coins and the hash. -/
-abbrev World := unifSpec + HashSpec
+/-- Run against that lazy family. -/
+def withROM {F : OracleFamily} {α : Type}
+    (program : OracleComp (World F) α) : ProbComp α :=
+  (simulateQ (romImpl F) program).run' ∅
 
-/-- Run against a lazy random oracle: a new input gets a fresh uniform answer, a repeated one
-gets its stored answer. The table starts empty. -/
-def withRandomOracle {α : Type} (program : OracleComp HashSpec α) : ProbComp α :=
-  (simulateQ HashSpec.randomOracle program).run' ∅
-
-/-- One unit per hash call, cache hits included; coins are free. -/
-def hashCost : World.Domain → Nat
+/-- One unit per oracle call, including cache hits; coins are free. -/
+def hashCost (F : OracleFamily) : (World F).Domain → Nat
   | .inl _ => 0
   | .inr _ => 1
 
-/-- The same lazy random oracle, with private coins forwarded for free and a running total of
-`hashCost`; running it returns the result paired with the total. -/
-def countedOracle : QueryImpl World (AddWriterT Nat (StateT (QueryCache HashSpec) ProbComp)) :=
-  (unifFwdImpl HashSpec + HashSpec.randomOracle).withAddCost hashCost
+/-- The same lazy family, with a running total of `hashCost`. -/
+def countedOracle (F : OracleFamily) :
+    QueryImpl (World F)
+      (AddWriterT Nat (StateT (QueryCache (hashSpec F)) ProbComp)) :=
+  (romImpl F).withAddCost (hashCost F)
 
-end SigGolf
+/-- Total hash-cost instrumentation. Counts every hash query of the computation, including cache hits. -/
+def withTotalHashCount {F : OracleFamily} {α : Type}
+    (program : OracleComp (World F) α) : ProbComp (α × Nat) :=
+  (simulateQ (countedOracle F) program).run.run' ∅
+
+/-- Charge only the hash summand, not private coins. -/
+def isHashQuery {F : OracleFamily} : (World F).Domain → Prop
+  | .inl _ => False
+  | .inr _ => True
+
+instance {F : OracleFamily} : DecidablePred (isHashQuery (F := F)) :=
+  fun q => match q with
+    | .inl _ => isFalse (by simp [isHashQuery])
+    | .inr _ => isTrue (by simp [isHashQuery])
+
+end CommitGolf.VectorCommit

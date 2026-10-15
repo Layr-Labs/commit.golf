@@ -1,130 +1,121 @@
-import SigGolf.Riscv
+import CommitGolf.Riscv
 
-/-! # Programs
-
-A submission's four programs and how each is loaded, run, and charged: inputs are written to
-fresh zeroed memory, the image executes for at most `CYCLE_LIMIT` instructions, and the output
-is read back. The honest experiment `keygen`, `sign`, `expand`, `verify` is defined here too,
-once for one message and once over every message. -/
-
-namespace SigGolf
+/-! Submitted machine images, canonical input loading, execution, and output decoding.
+The three algorithms are derived here; a solver cannot substitute abstract implementations. -/
+namespace CommitGolf.VectorCommit
 open OracleComp RiscvZkvm.Rv64
 
 structure Submission where
+  family : OracleFamily
   sizes : Sizes
   layout : Layout
   image : Program → Riscv.Image
+  steps : Program → Nat
+  openingBytes : Nat
+  bindingBits : Nat
 
-/-! ### Loading -/
+/-- A byte view avoids materializing a full vector or a whole address space during loading. -/
+structure InputBuffer where
+  address : Nat
+  length : Nat
+  byteAt : Nat → Byte
 
-def Input (sizes : Sizes) : Program → Type
-  | .keygen => SecretKey
-  | .sign => SecretKey × Bytes sizes.cache × Message
-  | .expand => Message × PublicKey × Bytes sizes.signature
-  | .verify => Message × PublicKey × Bytes sizes.witness
+def fixedBuffer {n : Nat} (address : Nat) (value : Bytes n) : InputBuffer :=
+  ⟨address, n, fun i => BitVec.ofNat 8 (value.toNat / 2 ^ (8 * i))⟩
 
-/-- `verify` only accepts or rejects, so it has no output. -/
-def Output (sizes : Sizes) : Program → Type
-  | .keygen => PublicKey × Bytes sizes.cache
-  | .sign => Bytes sizes.signature
-  | .expand => Bytes sizes.witness
-  | .verify => Unit
+def vectorBuffer (address : Nat) (m : MessageVector) : InputBuffer :=
+  ⟨address, VECTOR_LENGTH * MESSAGE_BYTES, fun j =>
+    if h : j / MESSAGE_BYTES < VECTOR_LENGTH then
+      BitVec.ofNat 8 ((m ⟨j / MESSAGE_BYTES, h⟩).toNat / 2 ^ (8 * (j % MESSAGE_BYTES)))
+    else 0⟩
 
-/-- Little-endian byte list of a fixed-size value, as `Riscv.readBuffer` reads it back. -/
-def bytes {n : Nat} (value : Bytes n) : List Byte :=
-  (List.range n).map fun i => value.extractLsb' (8 * i) 8
+/-- Positions are serialized in increasing order, as little-endian 64-bit integers. -/
+def positionsBuffer (address : Nat) (I : Positions) : InputBuffer :=
+  let indices := I.sort (· ≤ ·)
+  ⟨address, 8 * indices.length, fun j =>
+    match indices[j / 8]? with
+    | none => 0
+    | some i => BitVec.ofNat 8 (i.val / 2 ^ (8 * (j % 8)))⟩
 
-def inputBuffers (sizes : Sizes) (layout : Layout) :
-    (program : Program) → Input sizes program → List (Nat × List Byte)
-  | .keygen, secretKey => [(layout.secretKey, bytes secretKey)]
-  | .sign, (secretKey, cache, message) =>
-      [(layout.secretKey, bytes secretKey), (layout.cache, bytes cache),
-        (layout.message, bytes message)]
-  | .expand, (message, pk, signature) =>
-      [(layout.message, bytes message), (layout.publicKey, bytes pk),
-        (layout.signature, bytes signature)]
-  | .verify, (message, pk, witness) =>
-      [(layout.message, bytes message), (layout.publicKey, bytes pk),
-        (layout.witness, bytes witness)]
+def valuesBuffer (address : Nat) (I : Positions) (a : ∀ _ : I, Message) : InputBuffer :=
+  let indices := I.attach.sort (fun i j => i.val ≤ j.val)
+  ⟨address, MESSAGE_BYTES * indices.length, fun j =>
+    match indices[j / MESSAGE_BYTES]? with
+    | none => 0
+    | some i => BitVec.ofNat 8 ((a i).toNat / 2 ^ (8 * (j % MESSAGE_BYTES)))⟩
 
-/-- Memory holds only the embedded data and the declared inputs; `sp`, register `x2`, starts at
-`dataBase`. -/
-def initialState (submission : Submission) (program : Program)
-    (input : Input submission.sizes program) : MachineState :=
-  let image := submission.image program
-  let dataBase := BitVec.ofNat 64 (Riscv.dataBase image)
-  let withData := Riscv.initialMachine.writeBytesAsWords dataBase image.data
-  let loaded := (inputBuffers submission.sizes submission.layout program input).foldl
-    (fun state (offset, data) => state.writeBytesAsWords (BitVec.ofNat 64 offset) data) withData
-  loaded.setReg .x2 dataBase
+def inputBuffers (s : Submission) : (p : Program) → Input s.sizes p → List InputBuffer
+  | .commit, m => [vectorBuffer s.layout.message m]
+  | .opening, (td, I) =>
+      [fixedBuffer s.layout.trapDoor td, positionsBuffer s.layout.indices I]
+  | .check, input =>
+      [fixedBuffer s.layout.commitment input.commitment, positionsBuffer s.layout.indices input.indices,
+       valuesBuffer s.layout.claimedValues input.indices input.claimedValues,
+       ⟨s.layout.openingProof, input.proof.length, fun j => input.proof[j]?.getD 0⟩]
 
-def readOutput (sizes : Sizes) (layout : Layout) :
-    (program : Program) → MachineState → Output sizes program
-  | .keygen, state =>
-      (Riscv.readBuffer state layout.publicKey 16, Riscv.readBuffer state layout.cache sizes.cache)
-  | .sign, state => Riscv.readBuffer state layout.signature sizes.signature
-  | .expand, state => Riscv.readBuffer state layout.witness sizes.witness
-  | .verify, _ => ()
+def inputValid (s : Submission) : (p : Program) → Input s.sizes p → Bool
+  | .check, input => decide (input.proof.length ≤ s.sizes.openingProof)
+  | _, _ => true
 
-/-! ### One run -/
+def inputCount (s : Submission) : (p : Program) → Input s.sizes p → Nat
+  | .commit, _ => VECTOR_LENGTH
+  | .opening, (_, I) => I.card
+  | .check, input => input.indices.card
 
-structure RunResult (α : Type) where
-  output : Option α
-  cycles : Nat
-  compressions : Nat
+def proofLength (s : Submission) : (p : Program) → Input s.sizes p → Nat
+  | .check, input => input.proof.length
+  | _, _ => s.sizes.openingProof
 
-/-- An image that fails `Image.Valid` is run as is; the statements are meant together with
-`Admission`. -/
-def Submission.run (submission : Submission) (program : Program)
-    (input : Input submission.sizes program) :
-    OracleComp HashSpec (RunResult (Output submission.sizes program)) := do
-  let execution ←
-    Riscv.execute (submission.image program) CYCLE_LIMIT (initialState submission program input)
-  let output := readOutput submission.sizes submission.layout program execution.state
-  return ⟨if execution.exit = .success then some output else none,
-    execution.cycles, execution.compressions⟩
+/-- Input buffers take precedence over image data; Admission proves they are disjoint.
+All other bytes are zero. Each stored machine word packs eight consecutive bytes. -/
+def initialState (s : Submission) (p : Program) (input : Input s.sizes p) : MachineState :=
+  let image := s.image p
+  let inputs := inputBuffers s p input
+  let byteAt := fun address =>
+    match inputs.find? (fun b => decide (b.address ≤ address ∧ address < b.address + b.length)) with
+    | some b => b.byteAt (address - b.address)
+    | none => if Riscv.dataBase image ≤ address then
+        image.data[address - Riscv.dataBase image]?.getD 0 else 0
+  let state : MachineState := { Riscv.initialMachine with
+    mem := fun address => BitVec.ofNat 64 (∑ j ∈ Finset.range 8,
+      (byteAt (address.toNat + j)).toNat * 2 ^ (8 * j)) }
+  let state := state.setReg .x2 (BitVec.ofNat 64 (Riscv.dataBase image))
+  let state := state.setReg .x10 (BitVec.ofNat 64 s.layout.message)
+  let state := state.setReg .x11 (BitVec.ofNat 64 s.layout.commitment)
+  let state := state.setReg .x12 (BitVec.ofNat 64 s.layout.trapDoor)
+  let state := state.setReg .x13 (BitVec.ofNat 64 s.layout.indices)
+  let state := state.setReg .x14 (BitVec.ofNat 64 s.layout.claimedValues)
+  let state := state.setReg .x15 (BitVec.ofNat 64 s.layout.openingProof)
+  let state := state.setReg .x16 (BitVec.ofNat 64 (inputCount s p input))
+  state.setReg .x17 (BitVec.ofNat 64 (proofLength s p input))
 
-/-! ### The honest experiment -/
+/-- Oversized adversarial proofs reject before loading; all other inputs execute the image. -/
+def Submission.run (s : Submission) (p : Program) (input : Input s.sizes p) :
+    OracleComp (World s.family) Riscv.Execution :=
+  if inputValid s p input then
+    Riscv.execute s.family (s.image p) (s.steps p) (initialState s p input)
+  else pure ⟨.failure, Riscv.initialMachine, 0, 0⟩
 
-structure HonestResult where
-  success : Bool
-  compressions : Program → Nat
-  verificationCycles : Nat
+def readOutput (s : Submission) : (p : Program) → Riscv.Execution → Option (Output s.sizes p)
+  | .commit, result => if result.exit = .success then
+      some (Riscv.readBuffer result.state s.layout.commitment COMMITMENT_BYTES,
+        Riscv.readBuffer result.state s.layout.trapDoor s.sizes.trapDoor) else none
+  | .opening, result =>
+      let n := (result.state.getReg .x11).toNat
+      if result.exit = .success ∧ n ≤ s.sizes.openingProof then
+        some ((List.range n).map fun j => result.state.getByte
+          (BitVec.ofNat 64 (s.layout.openingProof + j))) else none
+  | .check, result => if result.exit = .success then some () else none
 
-/-- The README's honest experiment, steps 1 to 4. A failed program remains charged; unreached
-ones cost zero. -/
-def Submission.honest (submission : Submission) (secretKey : SecretKey) (message : Message) :
-    OracleComp HashSpec HonestResult := do
-  let mut charges : Program → Nat := fun _ => 0
-  -- 1. keygen
-  let keygen ← submission.run .keygen secretKey
-  charges := Function.update charges .keygen keygen.compressions
-  let some (pk, cache) := keygen.output
-    | return { success := false, compressions := charges, verificationCycles := 0 }
-  -- 2. sign
-  let sign ← submission.run .sign (secretKey, cache, message)
-  charges := Function.update charges .sign sign.compressions
-  let some signature := sign.output
-    | return { success := false, compressions := charges, verificationCycles := 0 }
-  -- 3. expand
-  let expand ← submission.run .expand (message, pk, signature)
-  charges := Function.update charges .expand expand.compressions
-  let some witness := expand.output
-    | return { success := false, compressions := charges, verificationCycles := 0 }
-  -- 4. verify
-  let verify ← submission.run .verify (message, pk, witness)
-  charges := Function.update charges .verify verify.compressions
-  return { success := verify.output.isSome, compressions := charges,
-           verificationCycles := verify.cycles + witnessCharge submission.sizes.witness }
+def Submission.commit (s : Submission) (m : MessageVector) :
+    OracleComp (World s.family) (Option (Commitment × TrapDoor s.sizes)) :=
+  readOutput s .commit <$> s.run .commit m
 
-/-- All 2^256 messages against the same `H`: a mathematical definition, not something one can
-execute. -/
-noncomputable def Submission.everyMessageSucceeds (submission : Submission)
-    (secretKey : SecretKey) : OracleComp HashSpec Bool := do
-  let mut allSucceeded := true
-  for message in (Finset.univ : Finset Message).toList do
-    let result ← submission.honest secretKey message
-    allSucceeded := allSucceeded && result.success
-  return allSucceeded
+def Submission.opening (s : Submission) (td : TrapDoor s.sizes) (I : Positions) :
+    OracleComp (World s.family) (Option (List Byte)) :=
+  readOutput s .opening <$> s.run .opening (td, I)
 
-end SigGolf
+def Submission.check (s : Submission) (c : Commitment) (I : Positions)
+    (a : ∀ _ : I, Message) (pf : List Byte) : OracleComp (World s.family) Bool :=
+  (fun result => (readOutput s .check result).isSome) <$> s.run .check ⟨c, I, a, pf⟩
+end CommitGolf.VectorCommit

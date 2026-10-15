@@ -1,62 +1,50 @@
-import SigGolf.Security
+import CommitGolf.Security
 
-/-! # Statements
+/-! Perfect completeness, position binding, and the benchmark opening-size objective. -/
+namespace CommitGolf.VectorCommit
 
-The six statements a certificate proves, in the order the README lists them, and the certificate
-itself. `expectedValue c g` is the expectation of `g result` over the computation `c`;
-probabilities and expectations live in `ENNReal`, the nonnegative reals with infinity. -/
-
-namespace SigGolf
 open OracleComp OracleComp.EvalDist
 
-/-- **Admission.** Sizes within bounds; each image within the size limit, with aligned,
-nonoverlapping buffers below its data. -/
-def Submission.Admission (submission : Submission) : Prop :=
-  submission.sizes.Valid ∧
-    ∀ program, (submission.image program).Valid submission.sizes submission.layout
-
-instance (submission : Submission) : Decidable submission.Admission := by
-  unfold Submission.Admission; infer_instance
-
-/-- **Completeness.** -/
+/-- **Completeness.** Every adaptive choice of vector and positions opens and checks. -/
 def Submission.Completeness (submission : Submission) : Prop :=
-  ∀ secretKey,
-    1 - FAILURE ≤ Pr[= true | withRandomOracle (submission.everyMessageSucceeds secretKey)]
+  ∀ A : CompletenessAdversary submission,
+    Pr[= true | withROM (completenessGame submission A)] = 1
 
-/-- **Compression budgets:** `E_{H,M}[2^(N_P / BUDGET_P)] ≤ 2`. -/
-def Submission.CompressionBudgets (submission : Submission) : Prop :=
-  ∀ secretKey program (budget : Nat), program.budget = some budget →
-    expectedValue (do let message ← ($ᵗ Message : ProbComp Message)
-                      withRandomOracle (submission.honest secretKey message))
-      (fun result => (2 : ENNReal) ^ ((result.compressions program : ℝ) / budget)) ≤ 2
+/-- **Position binding.** An adversary inside `QUERY_BUDGET` hash calls forges with probability
+at most `bindingError submission.bindingBits`. -/
+noncomputable def Submission.Security (submission : Submission) : Prop :=
+  ∀ A : BindingAdversary submission, AdversaryWithinBudget A →
+    Pr[= true | withROM (bindingGame submission A)] ≤ bindingError submission.bindingBits
 
-/-- **Verification cycles.** Only honest witnesses are bounded here; arbitrary ones fall
-under `Termination`. -/
-def Submission.VerificationCycles (submission : Submission) (C : Nat) : Prop :=
-  ∀ (hash : Hash) secretKey message,
-    let result := evalWithAnswerFn hash (submission.honest secretKey message)
-    result.success = true → result.verificationCycles ≤ C
+/-- **Opening size.** For every vector, the expected average byte length of `OPENING_SAMPLES`
+uniform single-position openings is at most `submission.openingBytes`. -/
+def Submission.OpeningSize (submission : Submission) : Prop :=
+  ∀ messages : Fin VECTOR_LENGTH → Message,
+    expectedValue (withROM (openingSample submission messages))
+      (fun total => match total with
+        | none => ⊤
+        | some n => (n : ENNReal) / OPENING_SAMPLES) ≤ submission.openingBytes
 
-/-- **Security.** No bound on the adversary's computation or private randomness; only hash calls
-count. -/
-def Submission.Security (submission : Submission) : Prop :=
-  ∀ (adversary : Adversary submission.sizes) (Q : Nat), 1 ≤ Q →
-    Pr[fun (won, calls) => won = true ∧ calls ≤ Q | submission.securityExperiment adversary]
-      ≤ (Q : ENNReal) / 2 ^ SECURITY_BITS
+/-- The machine representations must fit, be disjoint, and have positive bounded step limits. -/
+def Submission.Admission (s : Submission) : Prop :=
+  0 < MESSAGE_BYTES ∧ 0 < COMMITMENT_BYTES ∧ 0 < OPENING_SAMPLES ∧
+  Riscv.MEMORY_BYTES < 2 ^ 64 ∧ VECTOR_LENGTH ≤ 2 ^ 64 ∧
+  ∀ p, (s.image p).Valid (s.layout.buffers s.sizes) ∧
+    0 < s.steps p ∧ s.steps p ≤ Riscv.CYCLE_LIMIT
 
-/-- **Termination.** Inputs include arbitrary caches, signatures, and witnesses. A run cut off at
-`CYCLE_LIMIT` instructions has spent at least that many cycles, so it never satisfies this. -/
-def Submission.Termination (submission : Submission) : Prop :=
-  ∀ (hash : Hash) (program : Program) (input : Input submission.sizes program),
-    (evalWithAnswerFn hash (submission.run program input)).cycles < CYCLE_LIMIT
+/-- Every admitted input halts or rejects before the cycle limit, for every possible response
+sequence (including fresh private coins), not merely honestly generated inputs. -/
+def Submission.Termination (s : Submission) : Prop :=
+  ∀ p (input : Input s.sizes p) (result : Riscv.Execution), result ∈ support (s.run p input) →
+    result.exit ≠ .unfinished ∧ result.cycles < Riscv.CYCLE_LIMIT
 
-/-- The score is `S × C` for the declared signature size `S` and the certified cycle bound `C`. -/
-structure Certificate (submission : Submission) (C : Nat) : Prop where
+/-- Completeness, position binding at `QUERY_BUDGET` queries, and the opening-size score. -/
+structure Certificate (submission : Submission) : Prop where
   admission : submission.Admission
-  completeness : submission.Completeness
-  compressionBudgets : submission.CompressionBudgets
-  verificationCycles : submission.VerificationCycles C
-  security : submission.Security
   termination : submission.Termination
+  bindingBitsValid : MIN_BINDING_BITS ≤ submission.bindingBits
+  completeness : submission.Completeness
+  security : submission.Security
+  openingSize : submission.OpeningSize
 
-end SigGolf
+end CommitGolf.VectorCommit

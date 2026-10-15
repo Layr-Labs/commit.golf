@@ -1,95 +1,133 @@
 import Mathlib.Data.ENNReal.Inv
 import Mathlib.Data.Fintype.Basic
 
-/-! # Parameters
+/-! Benchmark constants, byte representations, programs, and declared buffer layouts. -/
+namespace CommitGolf.VectorCommit
 
-The competition's constants, its byte types, the four programs, and what a submission declares:
-its object sizes and one memory layout. Read this file first; `Oracle`, `Riscv`, `Programs`,
-`Security`, and `Statements` build on it in that order. -/
-
-namespace SigGolf
-
-/-! ### Honest budgets, in 64-byte hash compressions -/
-
-def BUDGET_KEYGEN : Nat := 2 ^ 20
-def BUDGET_SIGN : Nat := 2 ^ 17
-def BUDGET_EXPAND : Nat := 2 ^ 20
-
-/-! ### Security -/
-
-/-- Signing requests the adversary may make. -/
-def LIFETIME : Nat := 2 ^ 32
-
-/-- When the whole experiment makes at most `Q` hash calls, honest ones included, a forgery has
-probability at most `Q / 2 ^ SECURITY_BITS`. -/
-def SECURITY_BITS : Nat := 127
-
-/-- Allowed probability, over the oracle, that some honest message fails. -/
-noncomputable def FAILURE : ENNReal := 1 / 2 ^ 128
-
-/-! ### Machine and object limits -/
-
-/-- Every program halts below this many cycles. Execution is also cut off after this many
-instructions, which loses nothing since each instruction costs at least one cycle. -/
-def CYCLE_LIMIT : Nat := 2 ^ 32
-
-/-- Data memory, 16 MiB. -/
-def MEMORY_BYTES : Nat := 2 ^ 24
-
-/-- Bound on `4 × instructions + embedded data bytes` per program. -/
-def MAX_PROGRAM_BYTES : Nat := 2 ^ 20
-
-def MAX_CACHE_BYTES : Nat := 2 ^ 17
-
-def MAX_WITNESS_BYTES : Nat := 2 ^ 17
-
-def MAX_SIGNATURE_BYTES : Nat := 2 ^ 14
-
-/-! ### Objects -/
-
+/-- One byte, represented as an 8-bit vector. -/
 abbrev Byte := BitVec 8
 
-/-- `n` bytes as one little-endian bit vector. -/
+/-- A fixed-width byte string, represented as a bit vector. -/
 abbrev Bytes (n : Nat) := BitVec (8 * n)
-abbrev SecretKey := Bytes 32
-abbrev Message := Bytes 32
-abbrev PublicKey := Bytes 16
 
+/-- Size in bytes of each entry in the committed vector. -/
+def MESSAGE_BYTES : Nat := 32
+
+/-- Size in bytes of the commitment to the entire vector. -/
+def COMMITMENT_BYTES : Nat := 32
+
+/-- One entry of the committed vector. -/
+abbrev Message := Bytes MESSAGE_BYTES
+
+/-- The fixed-size public commitment produced by the commit program. -/
+abbrev Commitment := Bytes COMMITMENT_BYTES
+
+/-! ## Security parameters -/
+
+/-- Base-two exponent of the adversary's allowed number of hash queries. -/
+def QUERY_BITS : Nat := 100
+
+/-- Minimum declared binding parameter; at this floor the allowed forgery probability is one half. -/
+def MIN_BINDING_BITS : Nat := QUERY_BITS + 1
+
+/-- Maximum number of hash-oracle calls allowed to the binding adversary. -/
+def QUERY_BUDGET : Nat := 2 ^ QUERY_BITS
+
+/-- Allowed forgery probability: the query budget divided by two to the declared binding parameter. -/
+noncomputable def bindingError (bits : Nat) : ENNReal :=
+  (QUERY_BUDGET : ENNReal) / 2 ^ bits
+
+/-! ## Vector dimensions and opening samples -/
+
+/-- Base-two logarithm of the number of entries in the vector. -/
+def VECTOR_LOG_LENGTH : Nat := 24
+
+/-- Number of entries in the committed vector. -/
+def VECTOR_LENGTH : Nat := 2 ^ VECTOR_LOG_LENGTH
+
+/-- Number of uniformly sampled single-position openings averaged by the size experiment. -/
+def OPENING_SAMPLES : Nat := 100
+
+/-- A message at every valid vector position. -/
+abbrev MessageVector := Fin VECTOR_LENGTH → Message
+
+/-- A finite set of vector positions to open or check. -/
+abbrev Positions := Finset (Fin VECTOR_LENGTH)
+
+/-! ## Programs and storage layout -/
+
+/-- The three submitted machine programs: commit a vector, produce an opening, and check it. -/
 inductive Program where
-  | keygen | sign | expand | verify
+  | commit
+  | opening
+  | check
   deriving DecidableEq
 
+/-- Enumerates all three programs for statements that quantify over every program. -/
 instance : Fintype Program :=
-  ⟨{.keygen, .sign, .expand, .verify}, fun program => by cases program <;> simp⟩
+  ⟨{.commit, .opening, .check}, fun p => by cases p <;> simp⟩
 
-def Program.budget : Program → Option Nat
-  | .keygen => some BUDGET_KEYGEN
-  | .sign => some BUDGET_SIGN
-  | .expand => some BUDGET_EXPAND
-  | .verify => none
-
-/-- The README's `S`, `W`, and `K`, in bytes. -/
+/-- Solver-declared storage capacities. Commitment and message widths are organizer constants. -/
 structure Sizes where
-  signature : Nat
-  witness : Nat
-  cache : Nat
+  trapDoor : Nat
+  openingProof : Nat
   deriving DecidableEq
 
-/-- One set of byte offsets shared by all four programs. -/
+/-- Fixed-size private state produced by commit and supplied to the opening program. -/
+abbrev TrapDoor (sizes : Sizes) := Bytes sizes.trapDoor
+
+/-- Byte addresses of the input and output buffers used by the machine programs. -/
 structure Layout where
   message : Nat
-  secretKey : Nat
-  publicKey : Nat
-  cache : Nat
-  signature : Nat
-  witness : Nat
+  commitment : Nat
+  trapDoor : Nat
+  indices : Nat
+  claimedValues : Nat
+  openingProof : Nat
   deriving DecidableEq
 
-abbrev Sizes.Valid (sizes : Sizes) : Prop :=
-  sizes.signature ≤ MAX_SIGNATURE_BYTES ∧ sizes.witness ≤ MAX_WITNESS_BYTES ∧
-    sizes.cache ≤ MAX_CACHE_BYTES
+/-- Reserved buffer ranges as address and byte-length pairs, used to check memory layout validity. -/
+def Layout.buffers (layout : Layout) (sizes : Sizes) : List (Nat × Nat) :=
+  [(layout.message, VECTOR_LENGTH * MESSAGE_BYTES),
+   (layout.commitment, COMMITMENT_BYTES),
+   (layout.trapDoor, sizes.trapDoor),
+   (layout.indices, VECTOR_LENGTH * 8),
+   (layout.claimedValues, VECTOR_LENGTH * MESSAGE_BYTES),
+   (layout.openingProof, sizes.openingProof)]
 
-/-- `⌈bytes / 256⌉`: verification pays one cycle per started 256-byte block of witness. -/
-def witnessCharge (bytes : Nat) : Nat := (bytes + 255) / 256
+/-! ## Program inputs and outputs -/
 
-end SigGolf
+/-- A commitment, selected positions, claimed values, and proof supplied to the check program. -/
+structure CheckInput where
+  commitment : Commitment
+  indices : Positions
+  claimedValues : ∀ _ : indices, Message
+  proof : List Byte
+
+/-- Typed inputs for each program before serialization into machine memory. -/
+abbrev Input (sizes : Sizes) : Program → Type
+  | .commit => MessageVector
+  | .opening => TrapDoor sizes × Positions
+  | .check => CheckInput
+
+/-- Decoded successful outputs; the check program signals acceptance without returning data. -/
+abbrev Output (sizes : Sizes) : Program → Type
+  | .commit => Commitment × TrapDoor sizes
+  | .opening => List Byte
+  | .check => Unit
+
+end CommitGolf.VectorCommit
+
+namespace CommitGolf.Riscv
+
+/-- Execution-cycle ceiling; the termination certificate requires every execution to finish below it. -/
+def CYCLE_LIMIT : Nat := 2 ^ 32
+
+/-- Four GiB accommodates the default 512 MiB vector and arbitrary-subset buffers.
+Memory is modeled as a function; loading does not allocate the entire address space. -/
+def MEMORY_BYTES : Nat := 2 ^ 32
+
+/-- Maximum size in bytes of each submitted program image, including embedded data. -/
+def MAX_PROGRAM_BYTES : Nat := 2 ^ 20
+
+end CommitGolf.Riscv

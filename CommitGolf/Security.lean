@@ -1,124 +1,81 @@
-import SigGolf.Programs
-import VCVio.OracleComp.QueryTracking.LoggingOracle
+import CommitGolf.Programs
+import VCVio.OracleComp.QueryTracking.QueryBound
 
-/-! # Security
-
-The forgery experiment. An adaptive adversary receives the public key and cache, queries the hash
-and a signing oracle that accepts any cache, and finally submits either a witness for an unsigned
-message or a signature pair the oracle never returned. The oracle counts every hash call in the
-experiment, honest or not, toward the budget `Q`; the signing oracle logs every request.
-
-The adversary is an `OracleComp` over coins, the hash, and signing: a computation that makes
-finitely many queries and then submits a forgery or gives up. A strategy that could run for ever
-is represented by its truncations, which give up where they are cut. Giving up never wins, and
-such a strategy's win probability is the limit of its truncations', so a bound over all
-adversaries bounds every adaptive strategy.
-
-Two more VCVio pieces. `impl.withLogging` is `impl` with a `WriterT` layer that appends
-`⟨query, answer⟩` to a `QueryLog` after each answered query, and running it returns the result
-paired with the log. `QueryImpl.ofLift World m` forwards `World` queries unchanged into `m`. -/
-
-namespace SigGolf
+/-! Chapter 18 completeness and binding games, and the honest opening-size experiment. The adversary chooses the commitment and both
+openings. Only its oracle calls are bounded; subsequent checks are uncharged. -/
+namespace CommitGolf
+namespace VectorCommit
 open OracleComp OracleSpec
+/-- Chapter 18, Lemma 18.2.1: choose the vector and subset before honest commitment. -/
+abbrev CompletenessAdversary (s : Submission) :=
+  OracleComp (World s.family) (MessageVector × Positions)
 
-/-! ### Oracles and adversary -/
+def completenessGame (s : Submission) (A : CompletenessAdversary s) :
+    OracleComp (World s.family) Bool := do
+  let (m, I) ← A
+  let some (c, td) ← s.commit m | return false
+  let some pf ← s.opening td I | return false
+  s.check c I (fun i => m i.val) pf
 
-/-- The cache is the attacker's choice. -/
-structure SigningRequest (sizes : Sizes) where
-  message : Message
-  cache : Bytes sizes.cache
+/-- Failed honest execution has no size score; the certificate assigns it infinite cost. -/
+def openingSample (s : Submission) (m : MessageVector) :
+    OracleComp (World s.family) (Option Nat) := do
+  let some (_, td) ← s.commit m | return none
+  let mut total := 0
+  for _ in List.range OPENING_SAMPLES do
+    let bits ← liftM ($ᵗ BitVec VECTOR_LOG_LENGTH : ProbComp (BitVec VECTOR_LOG_LENGTH))
+    let some pf ← s.opening td {bits.toFin} | return none
+    total := total + pf.length
+  return some total
 
-/-- `none` when the signer fails. -/
-abbrev SigningSpec (sizes : Sizes) : OracleSpec (SigningRequest sizes) :=
-  SigningRequest sizes →ₒ Option (Bytes sizes.signature)
+/-- Two opening claims at possibly different subsets of one commitment. -/
+structure BindingForgery (submission : Submission) where
+  commitment : Commitment
+  indices₀ : Finset (Fin VECTOR_LENGTH)
+  values₀ : ∀ _ : indices₀, Message
+  proof₀ : List Byte
+  indices₁ : Finset (Fin VECTOR_LENGTH)
+  values₁ : ∀ _ : indices₁, Message
+  proof₁ : List Byte
 
-/-- The signing oracle's transcript T: each request paired with its answer, failures included. -/
-abbrev SigningLog (sizes : Sizes) := QueryLog (SigningSpec sizes)
+/-- An adversary chooses its own commitment and both opening claims. -/
+abbrev BindingAdversary (submission : Submission) :=
+  OracleComp (World submission.family) (BindingForgery submission)
 
-inductive Forgery (sizes : Sizes) where
-  | witness (message : Message) (witness : Bytes sizes.witness)
-  | signature (message : Message) (signature : Bytes sizes.signature)
+/-- Claims disagree on at least one common coordinate. -/
+def BindingForgery.conflicts {submission : Submission} (f : BindingForgery submission) : Prop :=
+  ∃ (i : Fin VECTOR_LENGTH) (h₀ : i ∈ f.indices₀) (h₁ : i ∈ f.indices₁),
+    f.values₀ ⟨i, h₀⟩ ≠ f.values₁ ⟨i, h₁⟩
 
-/-- A classical adversary: given the public key and cache, a computation over coins, the hash,
-and signing that ends by submitting a forgery, or by giving up with `none`. It queries coins as
-`.inl (.inl _)`, `H` as `.inl (.inr _)`, and signing as `.inr _`. Local computation is
-unrestricted; only oracle answers and coins reveal information. -/
-abbrev Adversary (sizes : Sizes) :=
-  PublicKey → Bytes sizes.cache →
-    OracleComp (World + SigningSpec sizes) (Option (Forgery sizes))
+/-- Two valid proofs for one commitment must not disagree at a common index. -/
+noncomputable def checkBindingForgery (submission : Submission) (f : BindingForgery submission) :
+    OracleComp (World submission.family) Bool := by
+  classical
+  exact do
+    let b₀ ← submission.check f.commitment f.indices₀ f.values₀ f.proof₀
+    let b₁ ← submission.check f.commitment f.indices₁ f.values₁ f.proof₁
+    return b₀ && b₁ && decide f.conflicts
 
-/-- All signing work, including any internal search, is charged like any other hash call. -/
-def Submission.signingOracle (submission : Submission) (secretKey : SecretKey) :
-    QueryImpl (SigningSpec submission.sizes)
-      (WriterT (SigningLog submission.sizes) (OracleComp World)) :=
-  QueryImpl.withLogging fun request => do
-    let run ← liftM (submission.run .sign (secretKey, request.cache, request.message))
-    return run.output
+/-- The position-binding game: the adversary speaks, then both openings are checked. -/
+noncomputable def bindingGame (submission : Submission) (A : BindingAdversary submission) :
+    OracleComp (World submission.family) Bool := do
+  let f ← A
+  checkBindingForgery submission f
 
-def Submission.interact (submission : Submission) (secretKey : SecretKey)
-    (adversary : Adversary submission.sizes) (pk : PublicKey)
-    (cache : Bytes submission.sizes.cache) :
-    OracleComp World (Option (Forgery submission.sizes) × SigningLog submission.sizes) :=
-  (simulateQ (QueryImpl.ofLift World (WriterT (SigningLog submission.sizes) (OracleComp World)) +
-    submission.signingOracle secretKey) (adversary pk cache)).run
+/-- Pathwise bound on adversarial hash queries, not on the verifier's. -/
+def AdversaryWithinBudget {submission : Submission} (A : BindingAdversary submission) : Prop :=
+  A.IsQueryBoundP (isHashQuery (F := submission.family)) QUERY_BUDGET
 
-/-! ### The signing log -/
+/-- Adversary cost, then both honest checks on the same cache, uncharged. Result:
+`(didForge, adversaryHashCalls)`. -/
+noncomputable def bindingExperimentCounted (submission : Submission)
+    (A : BindingAdversary submission) : ProbComp (Bool × Nat) :=
+  (do
+    let (f, q) ← (simulateQ (countedOracle submission.family) A).run
+    let success ← simulateQ (romImpl submission.family) (checkBindingForgery submission f)
+    return (success, Multiplicative.toAdd q)
+    : StateT (QueryCache (hashSpec submission.family)) ProbComp (Bool × Nat)).run' ∅
 
-namespace SigningLog
-variable {sizes : Sizes}
+end VectorCommit
 
-/-- At most `LIFETIME` requests, failed ones included. -/
-abbrev WithinLifetime (log : SigningLog sizes) : Prop := log.length ≤ LIFETIME
-
-/-- Some returned signature has this message: an entry `⟨request, answer⟩` with that message and
-an answer. -/
-abbrev Signed (log : SigningLog sizes) (message : Message) : Prop :=
-  ∃ entry ∈ log, entry.1.message = message ∧ entry.2.isSome = true
-
-/-- The signer returned exactly this pair. -/
-abbrev Contains (log : SigningLog sizes) (message : Message) (signature : Bytes sizes.signature) :
-    Prop :=
-  ∃ entry ∈ log, entry.1.message = message ∧ entry.2 = some signature
-
-end SigningLog
-
-/-! ### The experiment -/
-
-/-- Whether the forgery verifies under the original public key and is fresh with respect to the
-log. -/
-def Submission.checkForgery (submission : Submission) (pk : PublicKey)
-    (log : SigningLog submission.sizes) : Forgery submission.sizes → OracleComp HashSpec Bool
-  | .witness message witness => do
-      let verify ← submission.run .verify (message, pk, witness)
-      return verify.output.isSome && decide (¬ log.Signed message)
-  | .signature message signature => do
-      let expand ← submission.run .expand (message, pk, signature)
-      let some witness := expand.output | return false
-      let verify ← submission.run .verify (message, pk, witness)
-      return verify.output.isSome && decide (¬ log.Contains message signature)
-
-/-- The README's security experiment, steps 1 to 4. A win needs at most `LIFETIME` requests and a
-fresh, verified forgery, so making more requests loses instead of being cut off; the best win
-probability over all adversaries is the same either way. Hash calls are counted in
-`securityExperiment`. -/
-def Submission.game (submission : Submission) (adversary : Adversary submission.sizes) :
-    OracleComp World Bool := do
-  -- 1. the secret key
-  let secretKey ← liftM ($ᵗ SecretKey : ProbComp SecretKey)
-  -- 2. keygen; a failure is not a win
-  let keygen ← liftM (submission.run .keygen secretKey)
-  let some (pk, cache) := keygen.output | return false
-  -- 3. the adversary's queries
-  let (final, log) ← submission.interact secretKey adversary pk cache
-  -- 4. the final submission
-  let some forgery := final | return false
-  let forged ← liftM (submission.checkForgery pk log forgery)
-  return decide log.WithinLifetime && forged
-
-/-- Whether the adversary won, and the hash calls of the whole experiment: key generation,
-signing, the adversary's own queries, and the final check. `H`'s table starts empty. -/
-def Submission.securityExperiment (submission : Submission)
-    (adversary : Adversary submission.sizes) : ProbComp (Bool × Nat) :=
-  (simulateQ countedOracle (submission.game adversary)).run.run' ∅
-
-end SigGolf
+end CommitGolf
