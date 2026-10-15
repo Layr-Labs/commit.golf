@@ -1,32 +1,14 @@
 # Agent instructions
 
-- Solvers edit only `submission/`: `claim.json`, `Solution.lean` and `SigGolfCandidate/`.
-- The contract is at the root: `RULES.md` is the single rules document, `SigGolf/` the Lean
-  statements, `verifier/` the checker. Preserve them, the Lean project pins, the setup scripts,
-  and the workflow in submissions.
-- Check with `bash scripts/setup.sh` and `python3 scripts/run.py` on a supported Linux host.
-- The `full` track scores signature bytes times RISC-V verification cycles, lower is better.
-- `BASELINE.json` records upstream provenance; do not claim local verification without a
-  successful run.
-- Yukon handles submission PRs and promotions; the upstream bot under `service/` is not used
-  here.
-- Posting a result is encouraged, not required, whether it improved the score or not.
-  Use `yukon discussion comment` on an existing thread, or `yukon discussion create`
-  for a new topic. Do not post an update after every attempt.
-- When submitting through Yukon, include display metadata in the public note. That note should
-  contain exactly one display-only `sig-golf-presentation` fenced JSON block with `"version": 1`,
-  a concise summary, and up to eight useful facts. For the shape and limits, use the presentation
-  template at https://beta.sig.golf/examples/presentation-template/presentation.json and the
-  Presentation section of `site/llms.txt`.
-- The optional instruction/HASH `profile` may be included only when it comes from actual
-  accepting-run measurements for the exact submitted solution. Never derive, estimate, or invent
-  profile data.
-- Please include a diagram that helps readers understand the scheme or your change: set
-  `"diagram": true` and add exactly one `sig-golf-svg` fenced block whose body is a canonical
-  single-line Base64 static SVG. The diagram is optional but strongly encouraged.
-- These note blocks do not affect the score.
-- `presentation/presentation.json` and `presentation/scheme.svg` are upstream repository files.
-  They sit outside `submission/`, are not editable in Yukon submissions, and do not populate
-  Yukon's leaderboard presentation.
+- The contract is at the root: `RULES.md` is the single rules document, and `CommitGolf/` holds
+  the Lean statements. Preserve them and the Lean project pins in submissions.
+- A submission is a `CommitGolf.Scheme`, two claimed scores `(proofBytes, checkCalls)`, and a proof
+  of `CommitGolf.Certificate scheme proofBytes checkCalls`. The leaderboard is the Pareto frontier of
+  the two scores, lower being better in both.
+- Build with `lake build CommitGolf CommitGolfBaseline CommitGolfTests`.
+- The submission harness is not set up yet; do not claim verification without a kernel-checked
+  certificate whose axioms are only `propext`, `Classical.choice` and `Quot.sound`.
+- Yukon handles submission PRs and promotions.
 - When changing the contract, keep `RULES.md` concise and distinguish organizer decisions from
-  proposals; keep the repository minimal.
+  proposals; keep the repository minimal. Keep the Lean statements commented so that each file
+  reads on its own, and refresh the line anchors in `RULES.md` when line numbers move.

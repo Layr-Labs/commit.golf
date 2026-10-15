@@ -1,16 +1,15 @@
 import Lake
 open Lake DSL
 
-package SigGolf where
+package CommitGolf where
   leanOptions := #[⟨`autoImplicit, false⟩]
 
 require VCVio from git
   "https://github.com/Verified-zkEVM/VCVio" @ "25f26bfee60d6700644eb1a69f091091948f15da"
 
-require «riscv-zkvm» from git
-  "https://github.com/Verified-zkEVM/riscv-zkvm" @ "4634e41b229da4256e4a1f1688b94133fffa4af0"
-
-@[default_target] lean_lib SigGolf
-lean_lib SigGolfTests
--- Namespace for submitted proofs; the verifier copies a PR's SigGolfCandidate/ modules here.
-lean_lib SigGolfCandidate
+-- The contract: parameters, oracle, scheme syntax, games, and the statements a certificate proves.
+@[default_target] lean_lib CommitGolf
+-- The textbook Merkle tree, the baseline scheme.
+lean_lib CommitGolfBaseline
+-- Kernel-checked constants and runs of the baseline on small trees.
+lean_lib CommitGolfTests

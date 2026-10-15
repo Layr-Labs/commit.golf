@@ -1,12 +1,3 @@
-__pycache__/
-.work/
-scripts/score.json
-scripts/score.tmp
-.cache/
-.work-vm-console.log
-.DS_Store
 .lake/
-.venv/
-*.pyc
-verifier/.tools
-verifier/.work/
+.build/
+.DS_Store
