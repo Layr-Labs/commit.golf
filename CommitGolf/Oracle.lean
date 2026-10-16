@@ -47,8 +47,7 @@ def callCost : World.Domain → Nat
   | .inl _ => 0
   | .inr _ => 1
 
-/-- `world π` with a running total of `callCost`. In proof goals the total may display
-multiplicatively (VCVio's `AddWriterT` writes to `Multiplicative Nat`). -/
+/-- `world π` with a running total of `callCost`. -/
 def counted (π : Perm) : QueryImpl World (AddWriterT Nat ProbComp) :=
   π.world.withAddCost callCost
 

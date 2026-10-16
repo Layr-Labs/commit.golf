@@ -3,11 +3,8 @@ import Mathlib.Data.ENNReal.Inv
 
 /-! # Parameters
 
-The competition's constants and object types. The files read in order: `Parameters`, `Oracle`
-(the permutation and call counting), `Scheme`, `Honest` (the honest run), `Binding` (the game),
-and `Statements` (the certificate). The definitions follow [CY24, Chapter 18] (Chiesa and Yogev,
-*Building Cryptographic Proofs from Hash Functions*), with `MT.Commit`, `MT.Open`, and `MT.Check`
-renamed `commit`, `opening`, and `check`. -/
+Constants and object types, following [CY24, Chapter 18]. Files, in order: `Parameters`,
+`Oracle`, `Scheme`, `Honest`, `Binding`, `Statements`. -/
 
 namespace CommitGolf
 

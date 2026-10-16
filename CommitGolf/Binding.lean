@@ -22,8 +22,7 @@ structure Claim where
   values₁ : Values positions₁
   proof₁ : Proof
 
-/-- A classical adversary with unbounded computation and private coins. Every `OracleComp` makes
-finitely many queries; a strategy that might run for ever is covered by its truncations. -/
+/-- A classical adversary with unbounded computation and private coins. -/
 abbrev Adversary := OracleComp World Claim
 
 /-- Some position in both `I₀` and `I₁` has different values in `a₀` and `a₁`. -/

@@ -46,9 +46,7 @@ A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#
 
    `Pr[A wins and makes at most q calls] ≤ q / 2^128`.
 
-In the **binding game** ([Lean](CommitGolf/Binding.lean#L40-L45)), `π` is uniform over all permutations, and `A` ([Lean](CommitGolf/Binding.lean#L25-L27)), computationally unbounded, queries `π` and `π⁻¹` and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L15-L23)). It **wins** ([Lean](CommitGolf/Binding.lean#L34-L38)) if `check^π(rt, I₀, a₀, pf₀) = check^π(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L29-L32)). Only `A`'s calls count.
-
-Equivalently, with `ε(q)` the largest winning probability using at most `q` calls: `q / ε(q) ≥ 2^128` for all `q ∈ [1, 2^128]`. A birthday collision on `n`-bit digests gives `ε(q) ≈ q² / 2^n`, so `n ≈ 256`.
+In the **binding game** ([Lean](CommitGolf/Binding.lean#L39-L44)), `π` is uniform over all permutations, and `A` ([Lean](CommitGolf/Binding.lean#L25-L26)), computationally unbounded, queries `π` and `π⁻¹` and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L15-L23)). It **wins** ([Lean](CommitGolf/Binding.lean#L33-L37)) if `check^π(rt, I₀, a₀, pf₀) = check^π(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
 
 ## Submission
 
@@ -69,10 +67,10 @@ bash scripts/setup.sh && python3 scripts/run.py            # verify (Linux, Land
 
 ## Decisions
 
-All parameters above are agreed with the organizers. Perfect completeness, a deterministic `check`, and binding counting only the adversary's calls follow [CY24]. The 32-byte commitment rules out Merkle caps and multi-root commitments.
+All choices above are agreed with the organizers.
 
 ## Known limitations
 
-- **Binding, not extractability** [CY24, §18.5], and **no hiding** [CY24, §18.6].
-- **One commitment, no preprocessing, classical adversaries.**
-- **Ideal model.** A `check` that accepts anything when `π` maps a hard-coded state to a hard-coded Keccak-f output is binding for a random `π` but not for Keccak-f. Submissions are reviewed by hand for such backdoors.
+- Binding, not extractability [CY24, §18.5]; no hiding [CY24, §18.6].
+- One commitment; no preprocessing; classical adversaries.
+- Ideal permutation: backdoors specific to Keccak-f are excluded by manual review.
