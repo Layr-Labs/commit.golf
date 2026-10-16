@@ -13,3 +13,5 @@ require VCVio from git
 lean_lib CommitGolfBaseline
 -- Kernel-checked constants, runs of the baseline on small trees, and the certificate's axioms.
 lean_lib CommitGolfTests
+-- Namespace for submitted proofs; the verifier copies a submission's CommitGolfCandidate/ here.
+lean_lib CommitGolfCandidate

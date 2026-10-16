@@ -1,0 +1,8 @@
+{
+  "challenge_module": "CommitGolf.Challenge",
+  "solution_module": "Solution",
+  "theorem_names": ["CommitGolf.Challenge.certificate"],
+  "definition_names": ["CommitGolf.Challenge.submission"],
+  "permitted_axioms": ["propext", "Quot.sound", "Classical.choice"],
+  "enable_nanoda": false
+}

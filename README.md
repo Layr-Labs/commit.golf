@@ -19,7 +19,16 @@ lake exe cache get
 lake build CommitGolf CommitGolfBaseline CommitGolfTests
 ```
 
-The submission harness (Yukon wiring, verifier) is not set up yet.
+A submission lives in `submission/`; the example there submits the baseline. `verifier/`, ported
+from sig.golf, checks it with Lean's `comparator`, which replays every proof through the kernel in
+a sandbox. On Linux with Landlock and user systemd:
+
+```sh
+bash scripts/setup.sh
+python3 scripts/run.py
+```
+
+The Yukon wiring is not set up yet.
 
 ## License
 

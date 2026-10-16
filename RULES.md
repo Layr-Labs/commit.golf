@@ -83,13 +83,15 @@ Equivalently: let `ε(q)` be the best winning probability of an adversary that a
 
 The statements are in [`CommitGolf/`](CommitGolf), one file per section above, written with [VCVio](https://github.com/Verified-zkEVM/VCVio). A certificate must pass Lean's kernel and use no axioms beyond `propext`, `Classical.choice`, and `Quot.sound`. Build with `lake build CommitGolf CommitGolfBaseline CommitGolfTests`.
 
+**Verification.** A submission is the directory `submission/`: `claim.json` with `proofBytes` and `checkCalls`, `Solution.lean`, and optional modules under `CommitGolfCandidate/`. `Solution.lean` defines `CommitGolf.Challenge.submission` and proves `CommitGolf.Challenge.certificate`; the [example](submission/Solution.lean) submits the baseline. Submissions may import `CommitGolf`, `CommitGolfBaseline`, Mathlib, VCVio and Lean's standard libraries. The [verifier](verifier/verify.py), ported from sig.golf, copies the official contract into a fresh project, writes the [challenge](verifier/Challenge.lean.in) from the claimed scores, and runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. `comparator` replays every declaration through the kernel, so a proof that skipped kernel checking is rejected even though `#print axioms` looks clean; it then checks that the statement is the challenge's and that only the three axioms are used. Run it with `bash scripts/setup.sh` and `python3 scripts/run.py` on Linux with Landlock and user systemd.
+
 **Baseline.** [`CommitGolfBaseline/Merkle.lean`](CommitGolfBaseline/Merkle.lean) is the textbook binary Merkle tree, compressing with `C(L, R) = trunc₂₅₆ π(0¹⁰⁸⁸ ‖ L ‖ R)`, without path pruning. It scores `(76800 bytes, 2400 calls)`, and [`CommitGolfBaseline/MerkleProof/`](CommitGolfBaseline/MerkleProof) proves its certificate.
 
 ## Decisions
 
-- **Agreed with the organizers:** a random permutation with its inverse as the oracle, 1600-bit width, `2^24` entries of 32 bytes, a 32-byte commitment whose size is not scored (this rules out Merkle caps and multi-root commitments), budgets of `100·ℓ` and `100·|I|` calls, 100 opened positions, a Pareto frontier of the two scores, and the criterion `q / ε(q) ≥ 2^128`.
+- **Agreed with the organizers:** a random permutation with its inverse as the oracle, 1600-bit width, `2^24` entries of 32 bytes, a 32-byte commitment whose size is not scored (this rules out Merkle caps and multi-root commitments), budgets of `100·ℓ` and `100·|I|` calls, 100 opened positions, a Pareto frontier of the two scores, the criterion `q / ε(q) ≥ 2^128` for every `q` from 1 to `2^128`, and distinct uniform positions.
 - **As in [CY24]:** perfect completeness, a deterministic `check`, and binding that counts only the adversary's calls.
-- **Proposed in this draft, open for discussion:** budgets counted per entry and in the worst case, distinct uniform positions, and a worst-case message.
+- **Proposed in this draft, open for discussion:** budgets counted per entry and in the worst case, and a worst-case message.
 
 ## Known limitations
 
