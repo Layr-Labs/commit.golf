@@ -52,9 +52,7 @@ In the **binding game** ([Lean](CommitGolf/Binding.lean#L39-L44)), `π` is unifo
 
 The directory `submission/` holds `claim.json`, with `proofBytes` and `checkCalls`, and `Solution.lean`, with optional modules under `CommitGolfCandidate/`. `Solution.lean` defines `CommitGolf.Challenge.submission : Scheme` and proves `CommitGolf.Challenge.certificate : Certificate submission proofBytes checkCalls`. It may import `CommitGolf`, `CommitGolfBaseline`, Mathlib, VCVio, and Lean's standard libraries. The [example](submission/Solution.lean) submits the baseline.
 
-The [verifier](verifier/verify.py), ported from sig.golf, runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
-
-A verified submission enters the leaderboard unless an existing entry is at least as good on both scores.
+The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
 
 ```sh
 lake build CommitGolf CommitGolfBaseline CommitGolfTests   # build
@@ -64,10 +62,6 @@ bash scripts/setup.sh && python3 scripts/run.py            # verify (Linux, Land
 ## Baseline
 
 [`CommitGolfBaseline/Merkle.lean`](CommitGolfBaseline/Merkle.lean): the binary Merkle tree with `C(L, R) = trunc₂₅₆ π(0¹⁰⁸⁸ ‖ L ‖ R)` and unpruned paths, scoring `(76800, 2400)`. [`CommitGolfBaseline/MerkleProof/`](CommitGolfBaseline/MerkleProof) proves its certificate.
-
-## Decisions
-
-All choices above are agreed with the organizers.
 
 ## Known limitations
 
