@@ -8,20 +8,20 @@ taken over openings of 100 random positions: **opening proof bytes** and **permu
 
 ## Contract
 
-`RULES.md` states the rules. `CommitGolf/` holds the Lean statements a certificate proves; read its
-files in the order listed in `RULES.md`. `CommitGolfBaseline/` defines the textbook Merkle tree, the
-baseline at `(76800 bytes, 2400 calls)`, with its certificate proved in
-`CommitGolfBaseline/MerkleProof/`. `lakefile.lean`, `lake-manifest.json` and `lean-toolchain`
-pin the Lean project.
+`RULES.md` states the rules; `CommitGolf/` holds the Lean statements, read in the order listed
+there. `CommitGolfBaseline/` is the textbook Merkle tree at `(76800 bytes, 2400 calls)`, with its
+certificate proved in `CommitGolfBaseline/MerkleProof/`.
 
 ```sh
 lake exe cache get
 lake build CommitGolf CommitGolfBaseline CommitGolfTests
 ```
 
-A submission lives in `submission/`; the example there submits the baseline. `verifier/`, ported
-from sig.golf, checks it with Lean's `comparator`, which replays every proof through the kernel in
-a sandbox. On Linux with Landlock and user systemd:
+## Submitting
+
+Edit `submission/`; the example there submits the baseline. `verifier/`, ported from sig.golf,
+checks it with Lean's `comparator`, which replays every proof through the kernel in a sandbox. On
+Linux with Landlock and user systemd:
 
 ```sh
 bash scripts/setup.sh

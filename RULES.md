@@ -5,15 +5,14 @@ Design a **vector commitment scheme** on top of a random permutation. Schemes ar
 - **proof size**: bytes in the opening proof;
 - **verification cost**: permutation calls made by the verifier.
 
-The leaderboard is the Pareto frontier of these two scores, lower being better in both. Every scheme proves in Lean that it is complete and binding.
-
-The definitions are those of Chapter 18 of [CY24] (Chiesa and Yogev, *[Building Cryptographic Proofs from Hash Functions](https://github.com/hash-based-snargs-book/hash-based-snargs-book)*), applied to any scheme rather than just Merkle trees: completeness is Lemma 18.2.1 and position binding is Lemma 18.4.1.
+The leaderboard is the Pareto frontier of these two scores, lower being better in both. Every scheme proves in Lean that it is complete and binding, in the sense of Chapter 18 of [CY24] (Chiesa and Yogev, *[Building Cryptographic Proofs from Hash Functions](https://github.com/hash-based-snargs-book/hash-based-snargs-book)*), which states them for Merkle trees: completeness is Lemma 18.2.1 and position binding is Lemma 18.4.1.
 
 ## Submission
 
-1. A scheme: three algorithms `commit`, `opening`, and `check` ([Lean](CommitGolf/Scheme.lean#L23-L38)).
-2. Two integers `proofBytes` and `checkCalls`: the claimed scores.
-3. A Lean proof of [`Certificate scheme proofBytes checkCalls`](CommitGolf/Statements.lean#L73-L80): the [five statements](#statements) below.
+A submission is the directory `submission/`; the [example](submission/Solution.lean) submits the [baseline](#lean-and-verification).
+
+- `claim.json`: the claimed scores `proofBytes` and `checkCalls`.
+- `Solution.lean`, with optional modules under `CommitGolfCandidate/`. It defines the scheme `CommitGolf.Challenge.submission`, three algorithms `commit`, `opening`, and `check` ([Lean](CommitGolf/Scheme.lean#L23-L38)), and proves `CommitGolf.Challenge.certificate`: [`Certificate submission proofBytes checkCalls`](CommitGolf/Statements.lean#L73-L80), the [five statements](#statements) below.
 
 A submission enters the leaderboard unless an existing entry is at least as good on both scores.
 
@@ -21,16 +20,16 @@ A submission enters the leaderboard unless an existing entry is at least as good
 
 ([Lean](CommitGolf/Parameters.lean))
 
-| Constant         | Value                         |
-| ---------------- | ----------------------------- |
-| `WIDTH`          | 1600 bits (a permutation state) |
-| `LENGTH` (`ℓ`)   | 2^24 entries                  |
-| `DIGEST_BYTES`   | 32 bytes (an entry, and the commitment) |
-| `BATCH`          | 100 positions                 |
-| `SECURITY_BITS`  | 128                           |
-| `COMMIT_BUDGET`  | 100 · ℓ calls                 |
-| `OPEN_BUDGET(k)` | 100 · k calls                 |
-| `CHECK_BUDGET(k)`| 100 · k calls                 |
+| Constant          | Value                                   |
+| ----------------- | --------------------------------------- |
+| `WIDTH`           | 1600 bits (a permutation state)         |
+| `LENGTH` (`ℓ`)    | 2^24 entries                            |
+| `DIGEST_BYTES`    | 32 bytes (an entry, and the commitment) |
+| `BATCH`           | 100 positions                           |
+| `SECURITY_BITS`   | 128                                     |
+| `COMMIT_BUDGET`   | 100 · ℓ calls                           |
+| `OPEN_BUDGET(k)`  | 100 · k calls                           |
+| `CHECK_BUDGET(k)` | 100 · k calls                           |
 
 A **message** `m` is a vector of `ℓ` entries. A set of **positions** `I` selects some of them, and `m[I]` is the message restricted to `I`. A **proof** is a byte string of any length.
 
@@ -80,18 +79,31 @@ Only the adversary's own calls count, as in [CY24]; the calls `check` makes on i
 
 Equivalently: let `ε(q)` be the best winning probability of an adversary that always makes at most `q` calls. The scheme qualifies when `q / ε(q) ≥ 2^128` for every `q` from 1 to `2^128` (the average-case security level of [CY24, §19.2]). A birthday collision on `n`-bit digests already wins with `ε(q) ≈ q² / 2^n`, so `n` must be about 256.
 
-## Lean
+## Lean and verification
 
-The statements are in [`CommitGolf/`](CommitGolf), one file per section above, written with [VCVio](https://github.com/Verified-zkEVM/VCVio). A certificate must pass Lean's kernel and use no axioms beyond `propext`, `Classical.choice`, and `Quot.sound`. Build with `lake build CommitGolf CommitGolfBaseline CommitGolfTests`.
+The statements are in [`CommitGolf/`](CommitGolf), one file per section above, written with [VCVio](https://github.com/Verified-zkEVM/VCVio). Submissions may import `CommitGolf`, `CommitGolfBaseline`, Mathlib, VCVio, and Lean's standard libraries.
 
-**Verification.** A submission is the directory `submission/`: `claim.json` with `proofBytes` and `checkCalls`, `Solution.lean`, and optional modules under `CommitGolfCandidate/`. `Solution.lean` defines `CommitGolf.Challenge.submission` and proves `CommitGolf.Challenge.certificate`; the [example](submission/Solution.lean) submits the baseline. Submissions may import `CommitGolf`, `CommitGolfBaseline`, Mathlib, VCVio and Lean's standard libraries. The [verifier](verifier/verify.py), ported from sig.golf, copies the official contract into a fresh project, writes the [challenge](verifier/Challenge.lean.in) from the claimed scores, and runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. `comparator` replays every declaration through the kernel, so a proof that skipped kernel checking is rejected even though `#print axioms` looks clean; it then checks that the statement is the challenge's and that only the three axioms are used. Run it with `bash scripts/setup.sh` and `python3 scripts/run.py` on Linux with Landlock and user systemd.
+The [verifier](verifier/verify.py), ported from sig.golf, accepts a submission when Lean's [`comparator`](https://github.com/leanprover/comparator), run in a sandbox against the official contract, confirms that:
+
+- the proof passes Lean's kernel, with every declaration replayed (`#print axioms` alone is not enough: it trusts declarations added with kernel checking disabled);
+- the theorem is exactly the [challenge](verifier/Challenge.lean.in) for the claimed scores;
+- it uses no axioms beyond `propext`, `Classical.choice`, and `Quot.sound`.
+
+Build with `lake build CommitGolf CommitGolfBaseline CommitGolfTests`. Verify with `bash scripts/setup.sh` and `python3 scripts/run.py`, on Linux with Landlock and user systemd.
 
 **Baseline.** [`CommitGolfBaseline/Merkle.lean`](CommitGolfBaseline/Merkle.lean) is the textbook binary Merkle tree, compressing with `C(L, R) = trunc₂₅₆ π(0¹⁰⁸⁸ ‖ L ‖ R)`, without path pruning. It scores `(76800 bytes, 2400 calls)`, and [`CommitGolfBaseline/MerkleProof/`](CommitGolfBaseline/MerkleProof) proves its certificate.
 
 ## Decisions
 
-- **Agreed with the organizers:** a random permutation with its inverse as the oracle, 1600-bit width, `2^24` entries of 32 bytes, a 32-byte commitment whose size is not scored (this rules out Merkle caps and multi-root commitments), worst-case budgets (for every `π`, `m`, `I` and all coins) of `100·ℓ` calls for `commit` and `100·|I|` for `opening` and for `check` on honest openings, 100 opened positions, a Pareto frontier of the two scores, the criterion `q / ε(q) ≥ 2^128` for every `q` from 1 to `2^128`, distinct uniform positions, and a worst-case message for both scores.
-- **As in [CY24]:** perfect completeness, a deterministic `check`, and binding that counts only the adversary's calls.
+Agreed with the organizers:
+
+- the oracle: a random permutation of 1600-bit states, and its inverse;
+- `2^24` entries of 32 bytes, and a 32-byte commitment whose size is not scored (this rules out Merkle caps and multi-root commitments);
+- scores averaged over 100 distinct uniform positions, for a worst-case message, ranked on a Pareto frontier;
+- worst-case budgets, for every `π`, `m`, `I`, and all coins: `100·ℓ` calls for `commit`, and `100·|I|` for `opening` and for `check` on honest openings;
+- binding: `q / ε(q) ≥ 2^128` for every `q` from 1 to `2^128`.
+
+As in [CY24]: perfect completeness, a deterministic `check`, and binding that counts only the adversary's calls.
 
 ## Known limitations
 
@@ -102,6 +114,7 @@ The statements are in [`CommitGolf/`](CommitGolf), one file per section above, w
 - **Classical adversaries only.**
 - **Calls, not cycles.** Every call costs the same; local computation is free.
 - **Opened values are free.** Proof size counts `pf` only, not the values `a`.
-- **Ideal model only.** A scheme can special-case inputs that matter only for a concrete permutation, for example a `check` that accepts anything when `π` maps a hard-coded state to a hard-coded Keccak-f output. For a random `π` this almost never happens, so it is provably binding, yet broken in practice. Submissions are reviewed by hand for such backdoors.
-- **Average case.** Positions and the message do not depend on `π` or on the commitment, unlike in Fiat–Shamir-based SNARGs; `check` is budgeted on honest openings only, so it may be slow on malformed proofs.
+- **Malformed proofs.** `check` is budgeted on honest openings only, so it may be slow on other inputs.
+- **Positions do not depend on the commitment**, unlike in Fiat–Shamir-based SNARGs.
+- **Ideal model only.** A `check` that accepts anything when `π` maps a hard-coded state to a hard-coded Keccak-f output is provably binding for a random `π`, yet broken for Keccak-f. Submissions are reviewed by hand for such backdoors.
 - **One permutation width.** Field-native permutations such as Poseidon2 are not modeled.

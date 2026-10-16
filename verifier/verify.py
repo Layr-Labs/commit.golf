@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check one frozen beta PR using a trusted challenge and an isolated comparator.
+"""Check one frozen submission using a trusted challenge and an isolated comparator.
 
 Local mode is for development only. Linux refuses to compile untrusted code without the
 systemd + Landlock sandbox; the checker is never given the GitHub token.
@@ -91,7 +91,7 @@ def linux_command(cmd: list[str], project: Path, env: dict[str, str], hidden: li
                   'RestrictAddressFamilies=~AF_UNIX', 'NoNewPrivileges=yes', 'ProtectSystem=strict',
                   f'ReadWritePaths={project / ".lake"}', 'PrivateTmp=yes', 'PrivatePIDs=yes', 'ProcSubset=pid',
                   'InaccessiblePaths=/sys',
-                  'InaccessiblePaths=' + ' '.join(f'-{p}' for p in ['/etc/ots', '/etc/commit-golf', *hidden]),
+                  'InaccessiblePaths=' + ' '.join(f'-{p}' for p in ['/etc/commit-golf', *hidden]),
                   'PrivateDevices=yes', 'TemporaryFileSystem=/dev/shm', 'PrivateIPC=yes',
                   'SystemCallErrorNumber=EPERM',
                   'SystemCallFilter=~@network-io @debug ptrace process_vm_readv process_vm_writev '

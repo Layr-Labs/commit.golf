@@ -4,9 +4,8 @@ import Std.Tactic.BVDecide
 
 /-! # Regression tests
 
-Kernel-checked values of the constants, and runs of the Merkle baseline's building blocks on an
-8-leaf tree. They test the code, not the statements: the statements are only checked by proving a
-certificate. -/
+The constants' values; runs of the Merkle baseline on an 8-leaf tree; the fact, assumed by the
+statements, that VCVio computations never fail; and the axioms of the baseline's certificate. -/
 
 namespace CommitGolf.Tests
 open OracleComp OracleSpec Baseline
