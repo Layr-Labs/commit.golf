@@ -55,9 +55,10 @@ def SECURITY_BITS : Nat := 128
 
 /-! ### Honest budgets, in permutation calls
 
-A call is one query to `π` or to `π⁻¹`. The budgets keep `commit` and `opening` practical; they are
-generous on purpose, so that they rule out only absurd designs. `check` has no budget: its average
-number of calls is the second score. -/
+A call is one query to `π` or to `π⁻¹`. The budgets keep the honest algorithms practical for every
+number of opened positions; they are generous on purpose, so that they rule out only absurd designs.
+`check` is budgeted only on honest openings: its calls on malformed proofs are unbounded, and its
+average number of calls on honest openings of `BATCH` positions is the second score. -/
 
 /-- Calls allowed to `commit`, for every message, every permutation, and all coins: 100 per entry. -/
 def COMMIT_BUDGET : Nat := 100 * LENGTH
@@ -65,6 +66,10 @@ def COMMIT_BUDGET : Nat := 100 * LENGTH
 /-- Calls allowed to `opening` when it opens `k` positions with an honest trapdoor: 100 per opened
 position. -/
 def OPEN_BUDGET (k : Nat) : Nat := 100 * k
+
+/-- Calls allowed to `check` when it checks an honest opening of `k` positions: 100 per opened
+position. -/
+def CHECK_BUDGET (k : Nat) : Nat := 100 * k
 
 /-! ### Objects
 

@@ -13,7 +13,7 @@ The definitions are those of Chapter 18 of [CY24] (Chiesa and Yogev, *[Building 
 
 1. A scheme: three algorithms `commit`, `opening`, and `check` ([Lean](CommitGolf/Scheme.lean#L23-L38)).
 2. Two integers `proofBytes` and `checkCalls`: the claimed scores.
-3. A Lean proof of [`Certificate scheme proofBytes checkCalls`](CommitGolf/Statements.lean#L70-L77): the [five statements](#statements) below.
+3. A Lean proof of [`Certificate scheme proofBytes checkCalls`](CommitGolf/Statements.lean#L73-L80): the [five statements](#statements) below.
 
 A submission enters the leaderboard unless an existing entry is at least as good on both scores.
 
@@ -30,6 +30,7 @@ A submission enters the leaderboard unless an existing entry is at least as good
 | `SECURITY_BITS`  | 128                           |
 | `COMMIT_BUDGET`  | 100 · ℓ calls                 |
 | `OPEN_BUDGET(k)` | 100 · k calls                 |
+| `CHECK_BUDGET(k)`| 100 · k calls                 |
 
 A **message** `m` is a vector of `ℓ` entries. A set of **positions** `I` selects some of them, and `m[I]` is the message restricted to `I`. A **proof** is a byte string of any length.
 
@@ -51,7 +52,7 @@ All parties share a permutation `π` of the 1600-bit states. They may evaluate b
 
 ## Statements
 
-A certificate proves five statements ([Lean](CommitGolf/Statements.lean#L70-L77)). They differ in how `π` is chosen.
+A certificate proves five statements ([Lean](CommitGolf/Statements.lean#L73-L80)). They differ in how `π` is chosen.
 
 The **honest run** ([Lean](CommitGolf/Honest.lean#L30-L40)) on a permutation `π`, a message `m`, and positions `I` computes `(rt, td) ← commit(m)`, then `pf ← opening(td, I)`, then `check(rt, I, m[I], pf)`, counting the calls each algorithm makes.
 
@@ -60,20 +61,20 @@ The **honest run** ([Lean](CommitGolf/Honest.lean#L30-L40)) on a permutation `π
 These hold for **every** `π`, even one chosen to make the scheme fail, and for every `m`, every `I`, and all coins.
 
 1. **Completeness** ([Lean](CommitGolf/Statements.lean#L17-L24)): `check` accepts in the honest run.
-2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L26-L32)): `commit` makes at most `COMMIT_BUDGET` calls and `opening` at most `OPEN_BUDGET(|I|)`.
+2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L26-L35)): `commit` makes at most `COMMIT_BUDGET` calls, `opening` at most `OPEN_BUDGET(|I|)`, and `check` at most `CHECK_BUDGET(|I|)` on the honest opening. `check` is not budgeted on other inputs.
 
 ### On average: the scores
 
 The **scored run** ([Lean](CommitGolf/Honest.lean#L55-L60)) draws a uniformly random `π` and a uniformly random set `I` of exactly `BATCH` distinct positions ([Lean](CommitGolf/Honest.lean#L48-L53)), then performs the honest run. For every message `m`:
 
-3. **Proof size** ([Lean](CommitGolf/Statements.lean#L34-L40)): the expected length of `pf` in bytes is at most `proofBytes`.
-4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L42-L48)): the expected number of calls made by `check` is at most `checkCalls`.
+3. **Proof size** ([Lean](CommitGolf/Statements.lean#L37-L43)): the expected length of `pf` in bytes is at most `proofBytes`.
+4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L45-L51)): the expected number of calls made by `check` is at most `checkCalls`.
 
 ### Against an adversary: binding
 
 The **binding game** ([Lean](CommitGolf/Binding.lean#L59-L65)) draws a uniformly random `π`. The adversary ([Lean](CommitGolf/Binding.lean#L39-L46)), who has unlimited computation and may call `π` and `π⁻¹`, outputs a commitment and two openings of it, `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L28-L37)). It **wins** ([Lean](CommitGolf/Binding.lean#L53-L57)) if `check` accepts both openings and they **conflict** ([Lean](CommitGolf/Binding.lean#L48-L51)): some position in both `I₀` and `I₁` has different values in `a₀` and `a₁`.
 
-5. **Binding** ([Lean](CommitGolf/Statements.lean#L50-L66)): for every adversary and every `q ≥ 1`, `Pr[the adversary wins and makes at most q calls] ≤ q / 2^128`.
+5. **Binding** ([Lean](CommitGolf/Statements.lean#L53-L69)): for every adversary and every `q ≥ 1`, `Pr[the adversary wins and makes at most q calls] ≤ q / 2^128`.
 
 Only the adversary's own calls count, as in [CY24]; the calls `check` makes on its output do not. An adversary making no calls is covered by `q = 1`.
 
@@ -91,7 +92,7 @@ The statements are in [`CommitGolf/`](CommitGolf), one file per section above, w
 
 - **Agreed with the organizers:** a random permutation with its inverse as the oracle, 1600-bit width, `2^24` entries of 32 bytes, a 32-byte commitment whose size is not scored (this rules out Merkle caps and multi-root commitments), budgets of `100·ℓ` and `100·|I|` calls, 100 opened positions, a Pareto frontier of the two scores, the criterion `q / ε(q) ≥ 2^128` for every `q` from 1 to `2^128`, and distinct uniform positions.
 - **As in [CY24]:** perfect completeness, a deterministic `check`, and binding that counts only the adversary's calls.
-- **Proposed in this draft, open for discussion:** budgets counted per entry and in the worst case, and a worst-case message.
+- **Proposed in this draft, open for discussion:** budgets counted per entry and in the worst case, a `check` budget of `100·|I|` calls on honest openings only, and a worst-case message.
 
 ## Known limitations
 

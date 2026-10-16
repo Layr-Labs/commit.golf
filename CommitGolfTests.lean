@@ -16,7 +16,8 @@ open OracleComp OracleSpec Baseline
 example : LENGTH = 16777216 := by decide
 -- A Merkle compression leaves 1088 bits of capacity once two digests fill the state.
 example : WIDTH - 2 * DIGEST_BITS = 1088 := by decide
-example : COMMIT_BUDGET = 1677721600 ∧ OPEN_BUDGET BATCH = 10000 := by decide
+example : COMMIT_BUDGET = 1677721600 ∧ OPEN_BUDGET BATCH = 10000 ∧ CHECK_BUDGET BATCH = 10000 := by
+  decide
 -- The baseline's scores: unpruned Merkle paths for `BATCH` positions.
 example : BATCH * LOG_LENGTH * DIGEST_BYTES = 76800 ∧ BATCH * LOG_LENGTH = 2400 := by decide
 

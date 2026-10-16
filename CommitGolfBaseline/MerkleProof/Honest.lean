@@ -302,8 +302,10 @@ theorem length_le_commitBudget : LENGTH ≤ COMMIT_BUDGET := by
 
 theorem merkle_honestBudgets : merkle.HonestBudgets := by
   intro π m positions
-  obtain ⟨r, hr, -, hc, ho, -⟩ := honest_spec π m positions
-  rw [hr, probEvent_pure, if_pos ⟨hc.trans length_le_commitBudget, ho ▸ Nat.zero_le _⟩]
+  obtain ⟨r, hr, -, hc, ho, hk, -⟩ := honest_spec π m positions
+  have hcheck : r.checkCalls ≤ CHECK_BUDGET positions.card := by
+    rw [hk]; unfold CHECK_BUDGET LOG_LENGTH; omega
+  rw [hr, probEvent_pure, if_pos ⟨hc.trans length_le_commitBudget, ho ▸ Nat.zero_le _, hcheck⟩]
 
 /-- In the scored run, every outcome is an honest run on a batch of `BATCH` positions. -/
 theorem expectedValue_scoredRun_le (m : Message) (g : Scheme.HonestResult → ENNReal) (c : ENNReal)

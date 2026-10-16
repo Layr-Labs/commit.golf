@@ -24,11 +24,14 @@ def Completeness : Prop :=
     Pr[fun result => result.accepted = true | scheme.honest π message positions] = 1
 
 /-- **2. Honest budgets.** For every permutation, message, set of positions `I`, and for all coins,
-`commit` makes at most `COMMIT_BUDGET` permutation calls and `opening` at most `OPEN_BUDGET |I|`. -/
+in the honest run `commit` makes at most `COMMIT_BUDGET` permutation calls, `opening` at most
+`OPEN_BUDGET |I|`, and `check` at most `CHECK_BUDGET |I|`. Only honest openings are budgeted:
+`check` may take any number of calls on other inputs. -/
 def HonestBudgets : Prop :=
   ∀ (π : Perm) (message : Message) (positions : Positions),
     Pr[fun result => result.commitCalls ≤ COMMIT_BUDGET ∧
-        result.openCalls ≤ OPEN_BUDGET positions.card |
+        result.openCalls ≤ OPEN_BUDGET positions.card ∧
+        result.checkCalls ≤ CHECK_BUDGET positions.card |
       scheme.honest π message positions] = 1
 
 /-- **3. Proof size**, the first score: for every message, the expected length in bytes of the
