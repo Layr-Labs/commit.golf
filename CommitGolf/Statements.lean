@@ -2,10 +2,9 @@ import CommitGolf.Binding
 
 /-! # Statements
 
-The five statements a certificate proves, in the order `RULES.md` lists them, and the certificate
-itself. Statements 1–4 hold with probability `1`, that is, for all coins, and for every `π`, every
-message, and every set of positions. Probabilities live in `ENNReal`, the nonnegative reals with
-infinity. -/
+The five statements a certificate proves, in the order of `RULES.md`, and the certificate.
+Statements 1–4 hold in the honest run for every `π`, message, and set of positions, with
+probability `1` (for all coins). Probabilities live in `ENNReal`. -/
 
 namespace CommitGolf
 open OracleComp
@@ -18,7 +17,7 @@ def Completeness : Prop :=
   ∀ (π : Perm) (message : Message) (positions : Positions),
     Pr[fun result => result.accepted = true | scheme.honest π message positions] = 1
 
-/-- **2. Honest budgets.** `check` is budgeted on the honest opening only. -/
+/-- **2. Honest budgets.** -/
 def HonestBudgets : Prop :=
   ∀ (π : Perm) (message : Message) (positions : Positions),
     Pr[fun result => result.commitCalls ≤ COMMIT_BUDGET ∧
@@ -36,9 +35,8 @@ def VerificationCost (checkCalls : Nat) : Prop :=
   ∀ (π : Perm) (message : Message) (positions : Positions), positions.card = BATCH →
     Pr[fun result => result.checkCalls ≤ checkCalls | scheme.honest π message positions] = 1
 
-/-- **5. Binding** [CY24, Lemma 18.4.1]. No bound on the adversary's computation or private
-randomness; only its calls count. "At most `q` calls" sits inside the probability, so the number
-of calls may depend on the coins and on `π`, and `q = 1` covers adversaries that make none. -/
+/-- **5. Binding** [CY24, Lemma 18.4.1]. The number of calls may depend on the coins and on `π`;
+`q = 1` covers adversaries that make none. -/
 def Binding : Prop :=
   ∀ (adversary : Adversary) (q : Nat), 1 ≤ q →
     Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤

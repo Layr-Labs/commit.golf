@@ -35,10 +35,7 @@ def BATCH : Nat := 100
 `q / 2 ^ SECURITY_BITS`. -/
 def SECURITY_BITS : Nat := 128
 
-/-! ### Honest budgets, in permutation calls
-
-They hold in the worst case and rule out only absurd designs. `check` is budgeted on honest
-openings only. -/
+/-! ### Honest budgets, in permutation calls -/
 
 def COMMIT_BUDGET : Nat := 100 * LENGTH
 
@@ -68,7 +65,7 @@ abbrev Positions := Finset Index
 /-- A committed vector `m ∈ Σ^ℓ`. -/
 abbrev Message := Index → Entry
 
-/-- Claimed values `a ∈ Σ^I`: one entry at each position of `I`, and nothing else. -/
+/-- Claimed values `a ∈ Σ^I`. -/
 abbrev Values (positions : Positions) := positions → Entry
 
 abbrev Byte := BitVec 8
