@@ -2,8 +2,8 @@ import CommitGolf.Honest
 
 /-! # Binding game
 
-Position binding, as in [CY24, Lemma 18.4.1]: no efficient adversary can open one commitment to
-two different values at the same position.
+Position binding, as in [CY24, Lemma 18.4.1]: no adversary making few permutation calls can open
+one commitment to two different values at the same position.
 
 **The game.**
 1. Draw a uniform permutation `π`.
