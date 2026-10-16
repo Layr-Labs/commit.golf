@@ -5,11 +5,12 @@ import CommitGolf.Binding
 The five properties a submission proves, in the order `RULES.md` lists them, and the `Certificate`
 bundling them. The certificate for a scheme and two claimed scores is the competition claim.
 
-Probabilities and expectations are valued in `ENNReal`, the nonnegative reals extended with `∞`.
-`expectedValue c g` is the expectation of `g r` when `r` is the result of the computation `c`. -/
+Statements 1–4 are worst-case: they hold with probability `1` in the honest run, for every
+permutation, message, set of positions, and all coins. Probabilities are valued in `ENNReal`, the
+nonnegative reals extended with `∞`. -/
 
 namespace CommitGolf
-open OracleComp OracleComp.EvalDist
+open OracleComp
 
 namespace Scheme
 variable (scheme : Scheme)
@@ -34,21 +35,18 @@ def HonestBudgets : Prop :=
         result.checkCalls ≤ CHECK_BUDGET positions.card |
       scheme.honest π message positions] = 1
 
-/-- **3. Proof size**, the first score: for every message, the expected length in bytes of the
-opening proof is at most `proofBytes`. The expectation is over the scored run: a uniform
-permutation, a uniform set of `BATCH` distinct positions, and the scheme's coins. -/
+/-- **3. Proof size**, the first score: for every permutation, message, set of exactly `BATCH`
+positions, and for all coins, the honest opening proof has at most `proofBytes` bytes. -/
 def ProofSize (proofBytes : Nat) : Prop :=
-  ∀ message : Message,
-    expectedValue (scheme.scoredRun message) (fun result => (result.proofBytes : ENNReal)) ≤
-      proofBytes
+  ∀ (π : Perm) (message : Message) (positions : Positions), positions.card = BATCH →
+    Pr[fun result => result.proofBytes ≤ proofBytes | scheme.honest π message positions] = 1
 
-/-- **4. Verification cost**, the second score: for every message, the expected number of
-permutation calls `check` makes on the honest opening is at most `checkCalls`, over the same
-scored run as `ProofSize`. -/
+/-- **4. Verification cost**, the second score: for every permutation, message, set of exactly
+`BATCH` positions, and for all coins, `check` makes at most `checkCalls` permutation calls on the
+honest opening. -/
 def VerificationCost (checkCalls : Nat) : Prop :=
-  ∀ message : Message,
-    expectedValue (scheme.scoredRun message) (fun result => (result.checkCalls : ENNReal)) ≤
-      checkCalls
+  ∀ (π : Perm) (message : Message) (positions : Positions), positions.card = BATCH →
+    Pr[fun result => result.checkCalls ≤ checkCalls | scheme.honest π message positions] = 1
 
 /-- **5. Binding** ([CY24, Lemma 18.4.1]): for every adversary and every `q ≥ 1`, the probability
 that the adversary makes at most `q` permutation calls *and* wins the binding game is at most

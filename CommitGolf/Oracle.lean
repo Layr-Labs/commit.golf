@@ -16,10 +16,9 @@ The inverse is offered because practical permutations (Keccak-f, Poseidon2) are 
 invertible, so a security proof must not assume otherwise.
 
 **Two ways to use `π` in a statement.**
-- Statements that must hold *for every* permutation, such as perfect completeness, take a fixed
-  `π : Perm` and run the scheme against it.
-- Statements about a *random* permutation, such as the scores and binding, sample one with
-  `$ᵗ Perm`.
+- Statements that must hold *for every* permutation (completeness, the budgets, and the scores)
+  take a fixed `π : Perm` and run the scheme against it.
+- Binding is about a *random* permutation: the game samples one with `$ᵗ Perm`.
 
 **VCVio vocabulary.** The statements use the [VCVio](https://github.com/Verified-zkEVM/VCVio)
 library for oracle computations. Here is the little of it that the files rely on:

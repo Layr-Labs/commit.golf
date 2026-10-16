@@ -1,5 +1,4 @@
 import CommitGolfBaseline.MerkleProof.Tree
-import VCVio.EvalDist.Expectation
 
 /-! # The Merkle baseline: honest runs
 
@@ -7,7 +6,7 @@ Completeness, honest budgets, proof size, and verification cost of `merkle`, and
 `check` says about each opened position (used for binding). -/
 
 namespace CommitGolf.Baseline
-open OracleComp OracleSpec OracleComp.EvalDist
+open OracleComp OracleSpec
 
 variable (π : Perm)
 
@@ -307,35 +306,16 @@ theorem merkle_honestBudgets : merkle.HonestBudgets := by
     rw [hk]; unfold CHECK_BUDGET LOG_LENGTH; omega
   rw [hr, probEvent_pure, if_pos ⟨hc.trans length_le_commitBudget, ho ▸ Nat.zero_le _, hcheck⟩]
 
-/-- In the scored run, every outcome is an honest run on a batch of `BATCH` positions. -/
-theorem expectedValue_scoredRun_le (m : Message) (g : Scheme.HonestResult → ENNReal) (c : ENNReal)
-    (h : ∀ r : Scheme.HonestResult, r.checkCalls = BATCH * LOG_LENGTH →
-      r.proofBytes = BATCH * LOG_LENGTH * DIGEST_BYTES → g r ≤ c) :
-    expectedValue (merkle.scoredRun m) g ≤ c := by
-  unfold Scheme.scoredRun Scheme.randomBatch
-  apply expectedValue_bind_le_of_le
-  intro π
-  rw [bind_assoc]
-  apply expectedValue_bind_le_of_le
-  intro e
-  rw [pure_bind]
-  obtain ⟨r, hr, -, -, -, hk, hp⟩ := honest_spec π m (Finset.univ.map e)
-  have hcard : (Finset.univ.map e).card = BATCH := by simp
-  rw [hr, expectedValue_pure]
-  exact h r (by rw [hk, hcard]) (by rw [hp, hcard])
-
 theorem merkle_proofSize : merkle.ProofSize 76800 := by
-  intro m
-  apply expectedValue_scoredRun_le
-  intro r _ hp
-  rw [hp]
-  norm_num [BATCH, LOG_LENGTH, DIGEST_BYTES]
+  intro π m positions hcard
+  obtain ⟨r, hr, -, -, -, -, hp⟩ := honest_spec π m positions
+  have h : r.proofBytes ≤ 76800 := by rw [hp, hcard]; norm_num [BATCH, LOG_LENGTH, DIGEST_BYTES]
+  rw [hr, probEvent_pure, if_pos h]
 
 theorem merkle_verificationCost : merkle.VerificationCost 2400 := by
-  intro m
-  apply expectedValue_scoredRun_le
-  intro r hk _
-  rw [hk]
-  norm_num [BATCH, LOG_LENGTH]
+  intro π m positions hcard
+  obtain ⟨r, hr, -, -, -, hk, -⟩ := honest_spec π m positions
+  have h : r.checkCalls ≤ 2400 := by rw [hk, hcard]; norm_num [BATCH, LOG_LENGTH]
+  rw [hr, probEvent_pure, if_pos h]
 
 end CommitGolf.Baseline

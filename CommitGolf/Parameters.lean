@@ -10,7 +10,7 @@ The competition's constants and the types of the objects a vector commitment sch
 1. `Parameters` (this file): constants and object types.
 2. `Oracle`: the ideal permutation `π` and how its calls are counted.
 3. `Scheme`: the syntax of a vector commitment scheme, `commit`, `opening`, and `check`.
-4. `Honest`: the honest commit-open-check run, and the random batch over which scores are averaged.
+4. `Honest`: the honest commit-open-check run.
 5. `Binding`: the position-binding game played by an adversary.
 6. `Statements`: the five properties a submission proves, bundled as a `Certificate`.
 
@@ -45,8 +45,8 @@ def LENGTH : Nat := 2 ^ LOG_LENGTH
 
 /-! ### Scoring and security -/
 
-/-- Number of distinct positions opened together in the scored opening. Both scores are averages
-over a uniformly random set of exactly `BATCH` positions. -/
+/-- Number of positions opened together when scoring: both scores are measured on honest openings
+of exactly `BATCH` positions. -/
 def BATCH : Nat := 100
 
 /-- Security level of position binding: an adversary making at most `q ≥ 1` permutation calls wins
@@ -57,8 +57,7 @@ def SECURITY_BITS : Nat := 128
 
 A call is one query to `π` or to `π⁻¹`. The budgets keep the honest algorithms practical for every
 number of opened positions; they are generous on purpose, so that they rule out only absurd designs.
-`check` is budgeted only on honest openings: its calls on malformed proofs are unbounded, and its
-average number of calls on honest openings of `BATCH` positions is the second score. -/
+`check` is budgeted only on honest openings: its calls on malformed proofs are unbounded. -/
 
 /-- Calls allowed to `commit`, for every message, every permutation, and all coins: 100 per entry. -/
 def COMMIT_BUDGET : Nat := 100 * LENGTH

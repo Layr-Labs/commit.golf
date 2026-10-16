@@ -1,8 +1,8 @@
 # commit.golf
 
 Optimize a **vector commitment scheme in the ideal permutation model** under the [draft rules](RULES.md).
-Schemes commit to `2^24` entries of 32 bytes and are ranked on the Pareto frontier of two averages,
-taken over openings of 100 random positions: **opening proof bytes** and **permutation calls made by
+Schemes commit to `2^24` entries of 32 bytes and are ranked on the Pareto frontier of two worst-case
+scores, for openings of 100 positions: **opening proof bytes** and **permutation calls made by
 `check`**. Every scheme proves, in Lean, perfect completeness and position binding error at most
 `q / 2^128` against adversaries making `q` calls to the permutation or its inverse.
 
