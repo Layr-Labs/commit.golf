@@ -36,13 +36,13 @@ The **honest run** ([Lean](CommitGolf/Honest.lean#L24-L29)) on `(π, m, I)` is `
 
 ## Statements
 
-A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#L47-L54)) proves five statements. The first four hold in the honest run for every `π`, `m`, `I`, and all coins:
+A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#L46-L53)) proves five statements. The first four hold in the honest run for every `π`, `m`, `I`, and all coins:
 
 1. **Completeness** ([Lean](CommitGolf/Statements.lean#L15-L18)): `b = 1`.
 2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L20-L26)): `commit`, `opening`, and `check` make at most `COMMIT_BUDGET`, `OPEN_BUDGET(|I|)`, and `CHECK_BUDGET(|I|)` calls.
 3. **Proof size** ([Lean](CommitGolf/Statements.lean#L28-L31)): if `|I| = BATCH`, then `|pf| ≤ proofBytes`.
 4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L33-L36)): if `|I| = BATCH`, then `check` makes at most `checkCalls` calls.
-5. **Binding** ([Lean](CommitGolf/Statements.lean#L38-L43)): for every adversary `A` and every `q ≥ 1`,
+5. **Binding** ([Lean](CommitGolf/Statements.lean#L38-L42)): for every adversary `A` and every `q ≥ 1`,
 
    `Pr[A wins and makes at most q calls] ≤ q / 2^128`.
 

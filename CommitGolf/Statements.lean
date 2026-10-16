@@ -35,8 +35,7 @@ def VerificationCost (checkCalls : Nat) : Prop :=
   ∀ (π : Perm) (message : Message) (positions : Positions), positions.card = BATCH →
     Pr[fun result => result.checkCalls ≤ checkCalls | scheme.honest π message positions] = 1
 
-/-- **5. Binding** [CY24, Lemma 18.4.1]. The number of calls may depend on the coins and on `π`;
-`q = 1` covers adversaries that make none. -/
+/-- **5. Binding** [CY24, Lemma 18.4.1]. The number of calls may depend on the coins and on `π`. -/
 def Binding : Prop :=
   ∀ (adversary : Adversary) (q : Nat), 1 ≤ q →
     Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤
