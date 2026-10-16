@@ -17,7 +17,8 @@ The commitment need not come from `commit`: the adversary chooses it freely.
 
 **What is counted.** Only the adversary's own calls to `π` and `π⁻¹`, as in [CY24]. The calls
 `check` makes on the adversary's output are not counted, so a slow `check` cannot make the binding
-bound easier to meet. `Statements.Binding` bounds the winning probability in terms of this count. -/
+bound easier to meet. `Scheme.Binding`, in `Statements`, bounds the winning probability in terms
+of this count. -/
 
 namespace CommitGolf
 open OracleComp OracleSpec
@@ -58,7 +59,7 @@ def Breaks (π : Perm) (claim : Claim) : Prop :=
 
 /-- The binding game: draw a uniform permutation and run the adversary against it. Returns the
 permutation, the adversary's claim, and the number of permutation calls the adversary made.
-`Statements.Binding` then asks whether `Breaks π claim` holds. -/
+`Scheme.Binding` then asks whether `Breaks π claim` holds. -/
 def bindingGame (adversary : Adversary) : ProbComp (Perm × Claim × Nat) := do
   let π ← $ᵗ Perm
   let (claim, calls) ← π.run adversary

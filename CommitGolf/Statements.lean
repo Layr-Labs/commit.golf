@@ -6,8 +6,8 @@ The five properties a submission proves, in the order `RULES.md` lists them, and
 bundling them. The certificate for a scheme and two claimed scores is the competition claim.
 
 Statements 1–4 are worst-case: they hold with probability `1` in the honest run, for every
-permutation, message, set of positions, and all coins. Probabilities are valued in `ENNReal`, the
-nonnegative reals extended with `∞`. -/
+permutation, message, and set of positions (of exactly `BATCH` positions for the two scores), and
+for all coins. Probabilities are valued in `ENNReal`, the nonnegative reals extended with `∞`. -/
 
 namespace CommitGolf
 open OracleComp

@@ -66,7 +66,7 @@ These hold for **every** `π`, even one chosen to make the scheme fail, for ever
 
 ### Against an adversary: binding
 
-The **binding game** ([Lean](CommitGolf/Binding.lean#L59-L65)) draws a uniformly random `π`. The adversary ([Lean](CommitGolf/Binding.lean#L39-L46)), who has unlimited computation and may call `π` and `π⁻¹`, outputs a commitment and two openings of it, `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L28-L37)). It **wins** ([Lean](CommitGolf/Binding.lean#L53-L57)) if `check` accepts both openings and they **conflict** ([Lean](CommitGolf/Binding.lean#L48-L51)): some position in both `I₀` and `I₁` has different values in `a₀` and `a₁`.
+The **binding game** ([Lean](CommitGolf/Binding.lean#L60-L66)) draws a uniformly random `π`. The adversary ([Lean](CommitGolf/Binding.lean#L40-L47)), who has unlimited computation and may call `π` and `π⁻¹`, outputs a commitment and two openings of it, `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L29-L38)). It **wins** ([Lean](CommitGolf/Binding.lean#L54-L58)) if `check` accepts both openings and they **conflict** ([Lean](CommitGolf/Binding.lean#L49-L52)): some position in both `I₀` and `I₁` has different values in `a₀` and `a₁`.
 
 5. **Binding** ([Lean](CommitGolf/Statements.lean#L51-L67)): for every adversary and every `q ≥ 1`, `Pr[the adversary wins and makes at most q calls] ≤ q / 2^128`.
 
