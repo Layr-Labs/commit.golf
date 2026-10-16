@@ -62,9 +62,3 @@ bash scripts/setup.sh && python3 scripts/run.py            # verify (Linux, Land
 ## Baseline
 
 [`CommitGolfBaseline/Merkle.lean`](CommitGolfBaseline/Merkle.lean): the binary Merkle tree with `C(L, R) = trunc₂₅₆ π(0¹⁰⁸⁸ ‖ L ‖ R)` and unpruned paths, scoring `(76800, 2400)`. [`CommitGolfBaseline/MerkleProof/`](CommitGolfBaseline/MerkleProof) proves its certificate.
-
-## Known limitations
-
-- Binding, not extractability [CY24, §18.5]; no hiding [CY24, §18.6].
-- One commitment; no preprocessing; classical adversaries.
-- Ideal permutation: backdoors specific to Keccak-f are excluded by manual review.
