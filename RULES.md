@@ -90,9 +90,9 @@ The statements are in [`CommitGolf/`](CommitGolf), one file per section above, w
 
 ## Decisions
 
-- **Agreed with the organizers:** a random permutation with its inverse as the oracle, 1600-bit width, `2^24` entries of 32 bytes, a 32-byte commitment whose size is not scored (this rules out Merkle caps and multi-root commitments), budgets of `100·ℓ` and `100·|I|` calls, 100 opened positions, a Pareto frontier of the two scores, the criterion `q / ε(q) ≥ 2^128` for every `q` from 1 to `2^128`, and distinct uniform positions.
+- **Agreed with the organizers:** a random permutation with its inverse as the oracle, 1600-bit width, `2^24` entries of 32 bytes, a 32-byte commitment whose size is not scored (this rules out Merkle caps and multi-root commitments), budgets of `100·ℓ` calls for `commit` and `100·|I|` for `opening` and for `check` on honest openings, 100 opened positions, a Pareto frontier of the two scores, the criterion `q / ε(q) ≥ 2^128` for every `q` from 1 to `2^128`, and distinct uniform positions.
 - **As in [CY24]:** perfect completeness, a deterministic `check`, and binding that counts only the adversary's calls.
-- **Proposed in this draft, open for discussion:** budgets counted per entry and in the worst case, a `check` budget of `100·|I|` calls on honest openings only, and a worst-case message.
+- **Proposed in this draft, open for discussion:** budgets counted per entry and in the worst case, and a worst-case message.
 
 ## Known limitations
 
