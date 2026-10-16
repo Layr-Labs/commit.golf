@@ -24,8 +24,8 @@ The textbook binary Merkle tree, without salts (Remark 18.1.3) and without path 
 Score: `BATCH × LOG_LENGTH × DIGEST_BYTES = 100 × 24 × 32 = 76800` bytes, checked with
 `BATCH × LOG_LENGTH = 2400` permutation calls.
 
-This file defines the scheme; `CommitGolfTests` runs it on small trees. Proving
-`Certificate merkle 76800 2400` is the sanity check of the statements. -/
+This file defines the scheme; `CommitGolfTests` runs it on small trees. `MerkleProof/` proves
+`Certificate merkle 76800 2400` (`merkle_certificate`), the sanity check of the statements. -/
 
 namespace CommitGolf.Baseline
 open OracleComp OracleSpec

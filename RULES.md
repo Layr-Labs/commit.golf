@@ -112,7 +112,7 @@ Build with `lake build CommitGolf CommitGolfBaseline CommitGolfTests`.
 
 ## Baseline
 
-[`CommitGolfBaseline/Merkle.lean`](CommitGolfBaseline/Merkle.lean) defines the binary Merkle tree of [CY24, §18.1], without salts or path pruning, with the compression `C(L, R) = trunc₂₅₆ π(0¹⁰⁸⁸ ‖ L ‖ R)`. It scores `(100 × 24 × 32, 100 × 24) = (76800 bytes, 2400 calls)`. Proving its certificate is the sanity check of these statements.
+[`CommitGolfBaseline/Merkle.lean`](CommitGolfBaseline/Merkle.lean) defines the binary Merkle tree of [CY24, §18.1], without salts or path pruning, with the compression `C(L, R) = trunc₂₅₆ π(0¹⁰⁸⁸ ‖ L ‖ R)`. It scores `(100 × 24 × 32, 100 × 24) = (76800 bytes, 2400 calls)`. Its certificate, `merkle_certificate : Certificate merkle 76800 2400`, is proved in [`CommitGolfBaseline/MerkleProof/`](CommitGolfBaseline/MerkleProof) as the sanity check of these statements; `CommitGolfTests` checks that its axioms are only the three allowed. Its binding proof is a generic collision bound for an ideal permutation (`Lazy.lean`), with error about `(q + 48)² / 2^257`.
 
 ## Decisions
 

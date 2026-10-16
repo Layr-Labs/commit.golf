@@ -1,1 +1,2 @@
 import CommitGolfBaseline.Merkle
+import CommitGolfBaseline.MerkleProof.Certificate

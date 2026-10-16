@@ -9,7 +9,7 @@ require VCVio from git
 
 -- The contract: parameters, oracle, scheme syntax, games, and the statements a certificate proves.
 @[default_target] lean_lib CommitGolf
--- The textbook Merkle tree, the baseline scheme.
+-- The textbook Merkle tree, the baseline scheme, and the proof of its certificate.
 lean_lib CommitGolfBaseline
--- Kernel-checked constants and runs of the baseline on small trees.
+-- Kernel-checked constants, runs of the baseline on small trees, and the certificate's axioms.
 lean_lib CommitGolfTests

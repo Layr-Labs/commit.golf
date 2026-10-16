@@ -10,7 +10,8 @@ taken over openings of 100 random positions: **opening proof bytes** and **permu
 
 `RULES.md` states the rules. `CommitGolf/` holds the Lean statements a certificate proves; read its
 files in the order listed in `RULES.md`. `CommitGolfBaseline/` defines the textbook Merkle tree, the
-baseline at `(76800 bytes, 2400 calls)`. `lakefile.lean`, `lake-manifest.json` and `lean-toolchain`
+baseline at `(76800 bytes, 2400 calls)`, with its certificate proved in
+`CommitGolfBaseline/MerkleProof/`. `lakefile.lean`, `lake-manifest.json` and `lean-toolchain`
 pin the Lean project.
 
 ```sh

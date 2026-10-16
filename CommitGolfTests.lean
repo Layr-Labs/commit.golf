@@ -57,4 +57,13 @@ private def toyTree : List (List Digest) := (toyPerm.eval (layers 3 toyLeaves)).
   BitVec.ofNat DIGEST_BITS 0xdeadbeef
 #guard (Digest.toBytes (BitVec.ofNat DIGEST_BITS 0xdeadbeef)).length == DIGEST_BYTES
 
+/-! ### The baseline's certificate
+
+`merkle_certificate` proves `Certificate merkle 76800 2400`. Its transitive axioms must be exactly
+the three the rules allow; `#guard_msgs` fails the build otherwise (in particular on `sorryAx`). -/
+
+/-- info: 'CommitGolf.Baseline.merkle_certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms merkle_certificate
+
 end CommitGolf.Tests
