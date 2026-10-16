@@ -10,5 +10,6 @@
 - Do not claim verification without a successful verifier run. `#print axioms` is not enough: it
   trusts declarations added with kernel checking disabled.
 - Yukon handles submission PRs and promotions.
-- When changing the contract, keep `RULES.md` concise and the repository minimal. Keep the Lean statements commented so that each file reads on its
-  own, and refresh the line anchors in `RULES.md` when line numbers move.
+- When changing the contract, keep `RULES.md` concise and the repository minimal. Keep the Lean
+  statements commented so that each file reads on its own, and refresh the line anchors in
+  `RULES.md` when line numbers move.

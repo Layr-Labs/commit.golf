@@ -16,9 +16,8 @@ structure HonestResult where
   accepted : Bool
   commitCalls : Nat
   openCalls : Nat
-  /-- The second score. -/
   checkCalls : Nat
-  /-- The length of `pf` in bytes: the first score. -/
+  /-- The length of `pf` in bytes. -/
   proofBytes : Nat
 
 /-- `(rt, td) ← commit m`, then `pf ← opening td I`, then `check rt I m[I] pf`, against `π`. -/

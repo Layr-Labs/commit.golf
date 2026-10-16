@@ -48,10 +48,7 @@ def Digest.ofBytes (bytes : List Byte) : Digest :=
 /-- `C(L, R)`, one forward call to `π`.
 
 The input state holds `L ‖ R` in its low 512 bits (`R` lowest) and zeros in its high 1088 bits; the
-output is the low 256 bits of `π` of that state. The 1088 zero bits play the role of a sponge's
-*capacity*: without them, an adversary could pick any output state `y`, query `π⁻¹ y`, and read off
-a preimage `(L, R)`, so a collision would take two inverse calls. With them, an inverse call lands
-on a valid input (high bits all zero) only with probability about `2 ^ -1088`. -/
+output is the low 256 bits of `π` of that state. -/
 def compress (left right : Digest) : OracleComp PermSpec Digest := do
   let output : State ← (PermSpec.query (Sum.inl ((left ++ right).setWidth WIDTH)) :)
   return output.setWidth DIGEST_BITS

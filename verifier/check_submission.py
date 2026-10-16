@@ -54,7 +54,7 @@ def imports(source: str) -> list[str]:
         line = line.strip()
         if not line:
             continue
-        if line.startswith("prelude") or line.startswith("module "):
+        if re.match(r"(prelude|module|public|private|meta)\b", line):
             raise ValueError("alternate module headers are not allowed")
         if line.startswith("import"):
             parts = line.split()

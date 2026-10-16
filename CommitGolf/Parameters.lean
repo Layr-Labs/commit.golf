@@ -67,7 +67,7 @@ abbrev Values (positions : Positions) := positions → Entry
 
 abbrev Byte := BitVec 8
 
-/-- An opening proof: a byte string of any length. Its length is the first score. -/
+/-- An opening proof: a byte string of any length. -/
 abbrev Proof := List Byte
 
 /-- `m[I]`, the message restricted to `I`. -/

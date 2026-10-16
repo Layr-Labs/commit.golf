@@ -42,6 +42,13 @@ class PolicyTests(unittest.TestCase):
         self.assertFalse(value['ok'])
         self.assertIn('outside the allowed modules', value['errors'][0])
 
+    def test_alternate_module_headers_are_rejected(self):
+        for header in ('module\nimport Lake\n', 'prelude\n', 'public import Lake\n', 'meta import Lake\n'):
+            (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text(header)
+            value = check(self.root)
+            self.assertFalse(value['ok'], header)
+            self.assertIn('alternate module headers', value['errors'][0])
+
     def test_symlink_and_archive_file_are_rejected(self):
         (self.root / 'CommitGolfCandidate' / 'Alias.lean').symlink_to('Helper.lean')
         (self.root / 'notes.zip').write_bytes(b'irrelevant')

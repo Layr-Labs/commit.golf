@@ -1,5 +1,9 @@
 import CommitGolf
 
+/-! # Running a computation against a fixed permutation
+
+`simp` lemmas computing `Perm.eval` and `Perm.run` step by step. -/
+
 namespace CommitGolf.Perm
 open OracleComp OracleSpec
 
