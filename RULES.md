@@ -28,7 +28,7 @@ Design a vector commitment scheme in the ideal permutation model, as in Chapter 
 
 ([Lean](CommitGolf/Scheme.lean#L10-L22))
 
-- `commit^π(m) → (rt, td)`, probabilistic;
+- `commit^π(m) → (rt, td)`, probabilistic, where `td` is any opening trapdoor;
 - `opening^π(td, I) → pf`, probabilistic;
 - `check^π(rt, I, a, pf) → {0, 1}` for `a ∈ Σ^I`, deterministic.
 

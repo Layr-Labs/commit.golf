@@ -103,7 +103,7 @@ def ordered (positions : Positions) : List positions :=
 /-- The Merkle commitment scheme.
 
 - `commit`: build the whole tree (`2 ^ 24 - 1` calls); the root is the commitment and the tree is
-  the trapdoor.
+  the opening trapdoor.
 - `opening`: read off the copaths from the stored tree (no calls).
 - `check`: reject unless the proof has exactly `|I| × 24` digests; split it into one copath per
   position; climb each to a root (24 calls each); accept when all roots equal `rt`. -/

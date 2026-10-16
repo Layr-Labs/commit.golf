@@ -9,7 +9,7 @@ open OracleComp OracleSpec
 
 /-- A vector commitment scheme.
 
-- `commit m` returns a commitment `rt` and a trapdoor `td`, any data kept for `opening`.
+- `commit m` returns a commitment `rt` and an opening trapdoor `td`, any data kept for `opening`.
 - `opening td I` returns a proof `pf` for the positions `I`.
 - `check rt I a pf` decides whether `pf` proves that the committed vector has values `a` at `I`.
 
