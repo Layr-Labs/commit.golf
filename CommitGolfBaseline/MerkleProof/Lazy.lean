@@ -20,7 +20,11 @@ table's domain, and it breaks goodness only if that state has zero capacity: pro
 `2^512 / (2^1600 - |T|)`. Summing over the calls gives the bound. -/
 
 namespace CommitGolf.Baseline
+
+-- The proofs mention numbers such as `2 ^ 1600`; let Lean evaluate them without a warning.
+set_option exponentiation.threshold 2000
 open OracleComp OracleSpec
+open scoped PermCount
 
 /-- Pairs `(x, π x)` recorded during a run, most recent first. -/
 abbrev Table := List (State × State)

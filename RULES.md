@@ -102,5 +102,7 @@ The statements are in [`CommitGolf/`](CommitGolf), one file per section above, w
 - **One commitment.** Attacks on many commitments or users at once are not modeled.
 - **Classical adversaries only.**
 - **Calls, not cycles.** Every call costs the same; local computation is free.
-- **Average case.** Positions and the message do not depend on `π` or on the commitment, unlike in Fiat–Shamir-based SNARGs; `check` may be slow on unusual inputs.
+- **Opened values are free.** Proof size counts `pf` only, not the values `a`.
+- **Ideal model only.** A scheme can special-case inputs that matter only for a concrete permutation, for example a `check` that accepts anything when `π` maps a hard-coded state to a hard-coded Keccak-f output. For a random `π` this almost never happens, so it is provably binding, yet broken in practice. Submissions are reviewed by hand for such backdoors.
+- **Average case.** Positions and the message do not depend on `π` or on the commitment, unlike in Fiat–Shamir-based SNARGs; `check` is budgeted on honest openings only, so it may be slow on malformed proofs.
 - **One permutation width.** Field-native permutations such as Poseidon2 are not modeled.

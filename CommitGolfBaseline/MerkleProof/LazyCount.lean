@@ -10,12 +10,22 @@ result, `sum_le_of_fibers`, bounds a sum over `Ext T` by splitting it along such
 
 namespace CommitGolf.Baseline
 
+-- The proofs mention numbers such as `2 ^ 1600`; let Lean evaluate them without a warning.
+set_option exponentiation.threshold 2000
+
 set_option linter.constructorNameAsVariable false
+
+namespace PermCount
 
 /-- One fixed `Fintype` structure on permutations, so that every `Finset.univ : Finset Perm` below
 is literally the same term: comparing two different structures would unfold the enumeration of
-all `(2 ^ 1600)!` permutations. -/
-noncomputable instance (priority := high) fintypePerm : Fintype Perm := inferInstance
+all `(2 ^ 1600)!` permutations. Scoped, so that it does not reach files that import this one;
+`open scoped CommitGolf.Baseline.PermCount` turns it on. -/
+noncomputable scoped instance (priority := high) fintypePerm : Fintype Perm := inferInstance
+
+end PermCount
+
+open scoped PermCount
 
 /-- Permutations that agree with every pair of `T`. -/
 @[irreducible] noncomputable def Ext (T : List (State × State)) : Finset Perm :=

@@ -58,6 +58,18 @@ private def toyTree : List (List Digest) := (toyPerm.eval (layers 3 toyLeaves)).
   BitVec.ofNat DIGEST_BITS 0xdeadbeef
 #guard (Digest.toBytes (BitVec.ofNat DIGEST_BITS 0xdeadbeef)).length == DIGEST_BYTES
 
+/-! ### VCVio computations never fail
+
+`Completeness` and `HonestBudgets` are stated as probability `1`. That reads as "always" only because
+computations in the pinned VCVio cannot fail: no probability mass is lost to failure. A VCVio update
+that added failure to `OracleComp` would break these checks. -/
+
+example {α : Type} (c : ProbComp α) : Pr[⊥ | c] = 0 := probFailure_eq_zero
+example (scheme : Scheme) (π : Perm) (m : Message) (I : Positions) :
+    Pr[⊥ | scheme.honest π m I] = 0 := probFailure_eq_zero
+example (adversary : Scheme.Adversary) : Pr[⊥ | Scheme.bindingGame adversary] = 0 :=
+  probFailure_eq_zero
+
 /-! ### The baseline's certificate
 
 `merkle_certificate` proves `Certificate merkle 76800 2400`. Its transitive axioms must be exactly

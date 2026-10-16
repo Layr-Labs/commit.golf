@@ -28,8 +28,9 @@ library for oracle computations. Here is the little of it that the files rely on
   along the way. It is a syntax tree of queries; it means nothing until the queries are answered.
 - `A →ₒ B` specifies one oracle taking an `A` and answering a `B`; `spec₁ + spec₂` offers both
   oracles, a query to the first being tagged `.inl` and one to the second `.inr`.
-- `unifSpec` is the oracle of fair coins (uniform draws from `Fin (n + 1)`), and
-  `ProbComp α := OracleComp unifSpec α` is a probabilistic computation.
+- `unifSpec` is the oracle of private randomness ("coins"): the query `n` returns a uniformly
+  random element of `Fin (n + 1)`. `ProbComp α := OracleComp unifSpec α` is a probabilistic
+  computation.
 - A `QueryImpl spec m` answers each query of `spec` by a computation in the monad `m`;
   `simulateQ impl c` runs `c`, answering every query with `impl`.
 - `liftM` embeds a computation over fewer oracles into one over more.
@@ -76,7 +77,10 @@ def callCost : World.Domain → Nat
   | .inl _ => 0
   | .inr _ => 1
 
-/-- `world π` together with a running count of permutation calls. -/
+/-- `world π` together with a running count of permutation calls.
+
+`AddWriterT Nat` is VCVio's writer over `Multiplicative Nat`: the count is a sum, but in proof goals
+it may appear multiplicatively, so that zero calls displays as `1` and adding counts as `*`. -/
 def counted (π : Perm) : QueryImpl World (AddWriterT Nat ProbComp) :=
   π.world.withAddCost callCost
 

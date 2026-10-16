@@ -13,6 +13,9 @@ expected number of calls, and proves the two facts about paths that the certific
   (binding). -/
 
 namespace CommitGolf.Baseline
+
+-- The proofs mention numbers such as `2 ^ 1600`; let Lean evaluate them without a warning.
+set_option exponentiation.threshold 2000
 open OracleComp OracleSpec
 
 /-! ### The compression function, unfolded -/
