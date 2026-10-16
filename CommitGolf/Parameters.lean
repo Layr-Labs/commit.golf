@@ -3,109 +3,80 @@ import Mathlib.Data.ENNReal.Inv
 
 /-! # Parameters
 
-The competition's constants and the types of the objects a vector commitment scheme handles.
-
-**Reading order.** This is the first of six files; each builds on the previous ones:
-
-1. `Parameters` (this file): constants and object types.
-2. `Oracle`: the ideal permutation `π` and how its calls are counted.
-3. `Scheme`: the syntax of a vector commitment scheme, `commit`, `opening`, and `check`.
-4. `Honest`: the honest commit-open-check run.
-5. `Binding`: the position-binding game played by an adversary.
-6. `Statements`: the five properties a submission proves, bundled as a `Certificate`.
-
-**Source.** The objects follow [CY24, Chapter 18] (Chiesa and Yogev, *Building Cryptographic
-Proofs from Hash Functions*), with the Merkle-specific names replaced by generic ones: `MT.Commit`,
-`MT.Open`, and `MT.Check` become `commit`, `opening`, and `check`. A message is a vector of
-`LENGTH` entries, a commitment is one digest, and an opening proof for a set `I` of positions is a
-byte string whose length is one of the two scores. -/
+The competition's constants and object types. The files read in order: `Parameters`, `Oracle`
+(the permutation and call counting), `Scheme`, `Honest` (the honest run), `Binding` (the game),
+and `Statements` (the certificate). The definitions follow [CY24, Chapter 18] (Chiesa and Yogev,
+*Building Cryptographic Proofs from Hash Functions*), with `MT.Commit`, `MT.Open`, and `MT.Check`
+renamed `commit`, `opening`, and `check`. -/
 
 namespace CommitGolf
 
-/-! ### The ideal permutation -/
+/-! ### Sizes -/
 
-/-- Width of the ideal permutation `π`, in bits: the state size of Keccak-f[1600], the permutation
-behind SHA-3. A state is `WIDTH` bits; how a scheme splits it into rate and capacity is part of the
-design. -/
+/-- Width of the permutation in bits: the Keccak-f[1600] state. -/
 def WIDTH : Nat := 1600
 
-/-! ### The committed vector -/
-
-/-- Bytes in one vector entry and in one commitment: a 32-byte digest. -/
+/-- Bytes in an entry and in a commitment. -/
 def DIGEST_BYTES : Nat := 32
 
-/-- The same size in bits, `256`. -/
 def DIGEST_BITS : Nat := 8 * DIGEST_BYTES
 
-/-- `log₂` of the vector length. -/
 def LOG_LENGTH : Nat := 24
 
-/-- Number of entries in a committed vector: `ℓ = 2 ^ 24`. -/
+/-- Entries in a committed vector, `ℓ = 2 ^ 24`. -/
 def LENGTH : Nat := 2 ^ LOG_LENGTH
 
 /-! ### Scoring and security -/
 
-/-- Number of positions opened together when scoring: both scores are measured on honest openings
-of exactly `BATCH` positions. -/
+/-- Both scores are measured on honest openings of exactly `BATCH` positions. -/
 def BATCH : Nat := 100
 
-/-- Security level of position binding: an adversary making at most `q ≥ 1` permutation calls wins
-the binding game with probability at most `q / 2 ^ SECURITY_BITS`. -/
+/-- An adversary making at most `q ≥ 1` permutation calls breaks binding with probability at most
+`q / 2 ^ SECURITY_BITS`. -/
 def SECURITY_BITS : Nat := 128
 
 /-! ### Honest budgets, in permutation calls
 
-A call is one query to `π` or to `π⁻¹`. The budgets keep the honest algorithms practical for every
-number of opened positions; they are generous on purpose, so that they rule out only absurd designs.
-`check` is budgeted only on honest openings: its calls on malformed proofs are unbounded. -/
+They hold in the worst case and rule out only absurd designs. `check` is budgeted on honest
+openings only. -/
 
-/-- Calls allowed to `commit`, for every message, every permutation, and all coins: 100 per entry. -/
 def COMMIT_BUDGET : Nat := 100 * LENGTH
 
-/-- Calls allowed to `opening` when it opens `k` positions with an honest trapdoor: 100 per opened
-position. -/
+/-- For an opening of `k` positions. -/
 def OPEN_BUDGET (k : Nat) : Nat := 100 * k
 
-/-- Calls allowed to `check` when it checks an honest opening of `k` positions: 100 per opened
-position. -/
+/-- For checking an honest opening of `k` positions. -/
 def CHECK_BUDGET (k : Nat) : Nat := 100 * k
 
-/-! ### Objects
+/-! ### Objects -/
 
-Entries and commitments are bit vectors rather than byte strings because schemes compute with them
-(slice them into permutation states, compare them). Proofs are byte strings because their length in
-bytes is scored. -/
-
-/-- A state of the permutation `π`: `WIDTH = 1600` bits. -/
+/-- A state of the permutation. -/
 abbrev State := BitVec WIDTH
 
-/-- A vector entry: one element of the alphabet `Σ` of [CY24], a 256-bit string. -/
+/-- A vector entry, an element of the alphabet `Σ` of [CY24]. -/
 abbrev Entry := BitVec DIGEST_BITS
 
-/-- A commitment: the `rt` of [CY24], a 256-bit string. -/
+/-- The commitment `rt`. -/
 abbrev Commitment := BitVec DIGEST_BITS
 
-/-- A position in the vector: `0, 1, …, LENGTH - 1`. -/
+/-- A position `0, …, LENGTH - 1`. -/
 abbrev Index := Fin LENGTH
 
-/-- A set `I ⊆ [ℓ]` of positions to open. -/
+/-- A set `I` of positions to open. -/
 abbrev Positions := Finset Index
 
-/-- A committed vector `m ∈ Σ^ℓ`: one entry at every position. -/
+/-- A committed vector `m ∈ Σ^ℓ`. -/
 abbrev Message := Index → Entry
 
-/-- Claimed values `a ∈ Σ^I`: one entry at each position of `I`, and nothing else. Since values
-outside `I` are not even representable, `check` cannot read them. -/
+/-- Claimed values `a ∈ Σ^I`: one entry at each position of `I`, and nothing else. -/
 abbrev Values (positions : Positions) := positions → Entry
 
-/-- One byte. -/
 abbrev Byte := BitVec 8
 
-/-- An opening proof `pf`: a byte string of any length. Its length in bytes is the first score. -/
+/-- An opening proof: a byte string of any length. Its length is the first score. -/
 abbrev Proof := List Byte
 
-/-- `m[I]`: the message restricted to the positions in `I`, as `check` receives it in the honest
-run. -/
+/-- `m[I]`, the message restricted to `I`. -/
 def Message.restrict (message : Message) (positions : Positions) : Values positions :=
   fun i => message i
 

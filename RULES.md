@@ -12,7 +12,7 @@ The leaderboard is the Pareto frontier of these two scores, lower being better i
 A submission is the directory `submission/`; the [example](submission/Solution.lean) submits the [baseline](#lean-and-verification).
 
 - `claim.json`: the claimed scores `proofBytes` and `checkCalls`.
-- `Solution.lean`, with optional modules under `CommitGolfCandidate/`. It defines the scheme `CommitGolf.Challenge.submission`, three algorithms `commit`, `opening`, and `check` ([Lean](CommitGolf/Scheme.lean#L23-L38)), and proves `CommitGolf.Challenge.certificate`: [`Certificate submission proofBytes checkCalls`](CommitGolf/Statements.lean#L71-L78), the [five statements](#statements) below.
+- `Solution.lean`, with optional modules under `CommitGolfCandidate/`. It defines the scheme `CommitGolf.Challenge.submission`, three algorithms `commit`, `opening`, and `check` ([Lean](CommitGolf/Scheme.lean#L10-L22)), and proves `CommitGolf.Challenge.certificate`: [`Certificate submission proofBytes checkCalls`](CommitGolf/Statements.lean#L49-L56), the [five statements](#statements) below.
 
 A submission enters the leaderboard unless an existing entry is at least as good on both scores.
 
@@ -41,7 +41,7 @@ All parties share a permutation `π` of the 1600-bit states. They may evaluate b
 
 ## Scheme
 
-([Lean](CommitGolf/Scheme.lean#L23-L38))
+([Lean](CommitGolf/Scheme.lean#L10-L22))
 
 - **`commit(m) → (rt, td)`** commits to the message `m`. It returns a 32-byte commitment `rt` and a trapdoor `td`: any data kept for opening, not scored.
 - **`opening(td, I) → pf`** proves the values of `m` at the positions `I`, for any set `I`.
@@ -51,24 +51,24 @@ All parties share a permutation `π` of the 1600-bit states. They may evaluate b
 
 ## Statements
 
-A certificate proves five statements ([Lean](CommitGolf/Statements.lean#L71-L78)). They differ in how `π` is chosen.
+A certificate proves five statements ([Lean](CommitGolf/Statements.lean#L49-L56)). They differ in how `π` is chosen.
 
-The **honest run** ([Lean](CommitGolf/Honest.lean#L27-L37)) on a permutation `π`, a message `m`, and positions `I` computes `(rt, td) ← commit(m)`, then `pf ← opening(td, I)`, then `check(rt, I, m[I], pf)`, counting the calls each algorithm makes.
+The **honest run** ([Lean](CommitGolf/Honest.lean#L24-L29)) on a permutation `π`, a message `m`, and positions `I` computes `(rt, td) ← commit(m)`, then `pf ← opening(td, I)`, then `check(rt, I, m[I], pf)`, counting the calls each algorithm makes.
 
 ### Worst case: completeness, budgets, and scores
 
 These hold for **every** `π`, even one chosen to make the scheme fail, for every `m`, and for all coins.
 
-1. **Completeness** ([Lean](CommitGolf/Statements.lean#L18-L25)): for every `I`, `check` accepts in the honest run.
-2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L27-L36)): for every `I`, `commit` makes at most `COMMIT_BUDGET` calls, `opening` at most `OPEN_BUDGET(|I|)`, and `check` at most `CHECK_BUDGET(|I|)` on the honest opening. `check` is not budgeted on other inputs.
-3. **Proof size** ([Lean](CommitGolf/Statements.lean#L38-L42)): for every `I` of exactly `BATCH` positions, `pf` has at most `proofBytes` bytes.
-4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L44-L49)): for every `I` of exactly `BATCH` positions, `check` makes at most `checkCalls` calls on the honest opening.
+1. **Completeness** ([Lean](CommitGolf/Statements.lean#L16-L19)): for every `I`, `check` accepts in the honest run.
+2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L21-L27)): for every `I`, `commit` makes at most `COMMIT_BUDGET` calls, `opening` at most `OPEN_BUDGET(|I|)`, and `check` at most `CHECK_BUDGET(|I|)` on the honest opening. `check` is not budgeted on other inputs.
+3. **Proof size** ([Lean](CommitGolf/Statements.lean#L29-L32)): for every `I` of exactly `BATCH` positions, `pf` has at most `proofBytes` bytes.
+4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L34-L37)): for every `I` of exactly `BATCH` positions, `check` makes at most `checkCalls` calls on the honest opening.
 
 ### Against an adversary: binding
 
-The **binding game** ([Lean](CommitGolf/Binding.lean#L60-L66)) draws a uniformly random `π`. The adversary ([Lean](CommitGolf/Binding.lean#L40-L47)), who has unlimited computation and may call `π` and `π⁻¹`, outputs a commitment and two openings of it, `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L29-L38)). It **wins** ([Lean](CommitGolf/Binding.lean#L54-L58)) if `check` accepts both openings and they **conflict** ([Lean](CommitGolf/Binding.lean#L49-L52)): some position in both `I₀` and `I₁` has different values in `a₀` and `a₁`.
+The **binding game** ([Lean](CommitGolf/Binding.lean#L40-L45)) draws a uniformly random `π`. The adversary ([Lean](CommitGolf/Binding.lean#L25-L27)), who has unlimited computation and may call `π` and `π⁻¹`, outputs a commitment and two openings of it, `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L15-L23)). It **wins** ([Lean](CommitGolf/Binding.lean#L34-L38)) if `check` accepts both openings and they **conflict** ([Lean](CommitGolf/Binding.lean#L29-L32)): some position in both `I₀` and `I₁` has different values in `a₀` and `a₁`.
 
-5. **Binding** ([Lean](CommitGolf/Statements.lean#L51-L67)): for every adversary and every `q ≥ 1`, `Pr[the adversary wins and makes at most q calls] ≤ q / 2^128`.
+5. **Binding** ([Lean](CommitGolf/Statements.lean#L39-L45)): for every adversary and every `q ≥ 1`, `Pr[the adversary wins and makes at most q calls] ≤ q / 2^128`.
 
 Only the adversary's own calls count, as in [CY24]; the calls `check` makes on its output do not. An adversary making no calls is covered by `q = 1`.
 
