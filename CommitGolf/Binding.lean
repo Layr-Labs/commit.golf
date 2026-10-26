@@ -2,9 +2,7 @@ import CommitGolf.Honest
 
 /-! # Binding game
 
-Position binding [CY24, Lemma 18.4.1]. The declared instances are independent. Finite-domain
-instances are sampled eagerly; infinite-domain random oracles use shared lazy caches. The
-adversary outputs a commitment and two openings of it. It wins if `check` accepts both and they
+Position binding [CY24, Lemma 18.4.1]. Sample the declared oracle instances independently; the adversary outputs a commitment and two openings of it. It wins if `check` accepts both and they
 disagree at a position both open. Only the adversary's own calls are counted, as in [CY24]. -/
 
 namespace CommitGolf
@@ -47,16 +45,13 @@ def checkClaim (claim : Claim) : StateT scheme.oracles.State ProbComp (Bool × B
     (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)
   return (accepted₀, accepted₁)
 
-/-- Binding experiment for every oracle family. The adversary and both checks share the oracle
-state. Only the adversary's calls are returned; verifier queries can extend random-oracle caches. -/
-def bindingGame (adversary : Adversary scheme.oracles) :
-    ProbComp (Claim × Nat × Bool × Bool) := do
-  let initial ← scheme.oracles.initialState
-  let experiment : StateT scheme.oracles.State ProbComp (Claim × Nat × Bool × Bool) := do
-    let (claim, calls) ← scheme.oracles.runShared adversary
-    let (accepted₀, accepted₁) ← scheme.checkClaim claim
-    return (claim, calls, accepted₀, accepted₁)
-  return (← experiment.run initial).1
+/-- Initialize the declared family and run the adversary. Returns the resulting oracle state,
+the claim, and the adversary's call count. Verification continues from that same state. -/
+def bindingGame {family : OracleFamily} (adversary : Adversary family) :
+    ProbComp (family.State × Claim × Nat) := do
+  let π ← family.initialState
+  let ((claim, calls), π) ← (family.runShared adversary).run π
+  return (π, claim, calls)
 
 end Scheme
 

@@ -19,26 +19,26 @@ def finiteBindingGame {family : OracleFamily} (adversary : Adversary family)
 
 variable (scheme : Scheme)
 
-/-- Shared execution of finite-domain oracles gives the same answers as the original game. -/
-theorem bindingGame_eq_finite (h : scheme.oracles.HasFiniteDomain)
-    (adversary : Adversary scheme.oracles) :
-    scheme.bindingGame adversary = (fun (H, claim, calls) =>
-      (claim, calls,
-        (scheme.oracles.eval H (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)).1,
-        (scheme.oracles.eval H (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)).1)) <$>
-      finiteBindingGame adversary h := by
-  simp [bindingGame, checkClaim, finiteBindingGame, OracleFamily.initialState_eq_sample _ h,
-    StateT.run_bind, OracleFamily.runShared_stateOf, OracleFamily.checkShared_stateOf,
-    map_eq_bind_pure_comp]
+/-- Shared execution of finite-domain oracles preserves the sampled realization. -/
+theorem bindingGame_eq_finite {family : OracleFamily} (h : family.HasFiniteDomain)
+    (adversary : Adversary family) :
+    bindingGame adversary = (fun (H, claim, calls) =>
+      (family.stateOf h H, claim, calls)) <$> finiteBindingGame adversary h := by
+  simp [bindingGame, finiteBindingGame, OracleFamily.initialState_eq_sample _ h,
+    OracleFamily.runShared_stateOf, map_eq_bind_pure_comp]
 
 /-- Exact preservation of the old security statement for every finite-domain family. -/
 theorem bindingProbability_eq_finite (h : scheme.oracles.HasFiniteDomain)
     (adversary : Adversary scheme.oracles) (q : Nat) :
-    Pr[fun (claim, calls, a₀, a₁) => claim.Conflicting ∧ calls ≤ q ∧ a₀ = true ∧ a₁ = true |
-      scheme.bindingGame adversary] =
+    Pr[fun (claim, calls, a₀, a₁) => claim.Conflicting ∧ calls ≤ q ∧ a₀ = true ∧ a₁ = true | do
+        let (π, claim, calls) ← bindingGame adversary
+        let ((a₀, a₁), _) ← (scheme.checkClaim claim).run π
+        return (claim, calls, a₀, a₁)] =
       Pr[fun (H, claim, calls) => scheme.Breaks H claim ∧ calls ≤ q |
         finiteBindingGame adversary h] := by
-  rw [scheme.bindingGame_eq_finite h, probEvent_map]
+  rw [bindingGame_eq_finite h]
+  simp only [map_eq_bind_pure_comp, bind_assoc]
+  simp [checkClaim, StateT.run_bind, OracleFamily.checkShared_stateOf]
   congr 1
   funext ⟨H, claim, calls⟩
   simp [Breaks, and_assoc, and_left_comm, and_comm]

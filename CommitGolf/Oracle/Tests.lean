@@ -142,7 +142,13 @@ private def probeAdversary : Scheme.Adversary R := do
   let _ ← (R.world.query (.inr []) :)
   return emptyClaim
 
-example : probeScheme.bindingGame probeAdversary = (do
+private def probeExperiment (adversary : Scheme.Adversary R) :
+    ProbComp (Scheme.Claim × Nat × Bool × Bool) := do
+  let (π, claim, calls) ← Scheme.bindingGame adversary
+  let ((a₀, a₁), _) ← (probeScheme.checkClaim claim).run π
+  return (claim, calls, a₀, a₁)
+
+example : probeExperiment probeAdversary = (do
     let y ← $ᵗ BitVec 2
     return (emptyClaim, 1, y == 0, y == 0)) := by
   change (do
@@ -156,7 +162,7 @@ example : probeScheme.bindingGame probeAdversary = (do
   simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
 -- A query first made by verification is sampled too, then reused by the second check.
-example : probeScheme.bindingGame (pure emptyClaim) = (do
+example : probeExperiment (pure emptyClaim) = (do
     let y ← $ᵗ BitVec 2
     return (emptyClaim, 0, y == 0, y == 0)) := by
   change (do

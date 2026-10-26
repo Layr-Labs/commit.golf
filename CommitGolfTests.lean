@@ -81,7 +81,7 @@ that added failure to `OracleComp` would break these checks. -/
 example {α : Type} (c : ProbComp α) : Pr[⊥ | c] = 0 := probFailure_eq_zero
 example (scheme : Scheme) (π : scheme.oracles.Realization) (m : Message) (I : Positions) :
     Pr[⊥ | scheme.honest π m I] = 0 := probFailure_eq_zero
-example (adversary : Scheme.Adversary) : Pr[⊥ | Scheme.finiteBindingGame adversary] = 0 :=
+example (adversary : Scheme.Adversary) : Pr[⊥ | Scheme.bindingGame adversary] = 0 :=
   probFailure_eq_zero
 
 /-! ### The baseline's certificate
