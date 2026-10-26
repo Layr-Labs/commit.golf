@@ -10,3 +10,5 @@ scripts/score.json
 scripts/score.tmp
 verifier/.tools
 verifier/.work/
+
+/scripts/scores/

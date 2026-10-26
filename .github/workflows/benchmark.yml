@@ -1,6 +1,10 @@
 name: Benchmark
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      track:
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -8,6 +12,8 @@ jobs:
     # 64 GB host: 32 GB for the isolated verifier VM, with host headroom.
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 300
+    env:
+      BENCHMARK_TRACK: ${{ inputs.track }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -18,6 +24,8 @@ jobs:
         with:
           path: .cache/trusted.tar.zst
           key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
+      - name: Validate track
+        run: python3 -c 'import os, sys; sys.path.insert(0, "verifier"); from tracks import track_constructor; track_constructor(os.environ["BENCHMARK_TRACK"])'
       - name: Start verifier VM
         run: bash scripts/blacksmith.sh start
       - name: Setup
@@ -33,14 +41,14 @@ jobs:
           path: .cache/trusted.tar.zst
           key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Benchmark
-        run: bash scripts/blacksmith.sh run
+        run: bash scripts/blacksmith.sh run "$BENCHMARK_TRACK"
       - name: Collect results
         if: always()
         run: bash scripts/blacksmith.sh collect
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-score
-          path: scripts/score.json
+          path: scripts/scores/${{ inputs.track }}/score.json
           include-hidden-files: true
           if-no-files-found: error
       - name: Upload verifier logs

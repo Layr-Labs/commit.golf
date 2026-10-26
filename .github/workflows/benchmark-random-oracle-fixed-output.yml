@@ -1,0 +1,10 @@
+name: Benchmark random-oracle-fixed-output
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    uses: ./.github/workflows/benchmark.yml
+    with:
+      track: random-oracle-fixed-output

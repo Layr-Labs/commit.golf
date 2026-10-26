@@ -4,9 +4,9 @@ Optimize a **vector commitment scheme** under the [draft rules](RULES.md), in fo
 tracks: **ideal permutation**, **ideal compression**, **variable-input, fixed-output random oracle**, or **ideal XOF**. A scheme declares a finite collection
 of independent instances of its track's primitive.
 
-Schemes commit to `2^24` entries of 32 bytes. Each track ranks schemes on the Pareto frontier of
-two worst-case scores for openings of 100 positions: **opening proof bytes** and **oracle calls
-made by `check`**. Every scheme proves perfect completeness and position binding error at most
+Schemes commit to `2^24` entries of 32 bytes. Each track minimizes the product of
+two certified worst-case bounds for openings of 100 positions: **opening proof bytes** and **oracle calls
+made by `check`**. Both factors are recorded as metrics. Every scheme proves perfect completeness and position binding error at most
 `q / 2^128` against adversaries making `q` calls across the declared family.
 
 ## Contract and baselines
@@ -56,14 +56,36 @@ On Linux with Landlock and user systemd:
 
 ```sh
 bash scripts/setup.sh
-python3 scripts/run.py --track ideal-permutation
-python3 scripts/run.py --track ideal-compression
+bash scripts/benchmark.sh --track ideal-permutation
+bash scripts/benchmark.sh --track ideal-compression
 ```
 
-Omitting `--track` from `scripts/run.py` selects `ideal-permutation` for compatibility with the
-existing workflow. The workflows are unchanged; compression verification is selected locally.
-The runner writes the selected track and its scores to `scripts/score.json`.
+Omitting `--track` from `scripts/benchmark.sh` selects `ideal-permutation` for compatibility with the
+existing workflow. Each track has a dispatch workflow calling the same isolated verifier job.
+The runner writes the product score, selected track, and both metrics to
+`scripts/scores/<track>/score.json`.
 
 ## License
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
+## Yukon
+
+`benchmark.json` declares all four tracks on one shared branch. **The four-track import is not
+ready yet:** Yukon validates a baseline for every track, and the RO/XOF certified submissions
+are still pending. Only permutation and compression currently have complete certificates.
+
+Each track permits edits only
+in its corresponding `submissions/<track>/` directory. After import, use:
+
+```sh
+yukon setup --track ideal-permutation
+yukon run --track ideal-permutation
+yukon submit --track ideal-permutation
+```
+
+Substitute another declared track name to select it. `yukon switch <track>` changes only Yukon
+selection; it preserves your Git branch, HEAD, index, and worktree. Yukon owns submission PRs
+and promotions; do not manually merge submission PRs. Failed verification produces no score.
+Use submission notes for reproducible context and GitHub Discussions for partial research;
+remove secrets and private data before posting.

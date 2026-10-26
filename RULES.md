@@ -1,9 +1,12 @@
 # commit.golf · rules
 
-Design a vector commitment scheme in one of the ideal-oracle tracks below, with the syntax and security notions of Chapter 18 of [CY24] (Chiesa and Yogev, *[Building Cryptographic Proofs from Hash Functions](https://github.com/hash-based-snargs-book/hash-based-snargs-book)*). Schemes are ranked on the Pareto frontier of two scores for openings of 100 positions, lower being better in both:
+Design a vector commitment scheme in one of the ideal-oracle tracks below, with the syntax and security notions of Chapter 18 of [CY24] (Chiesa and Yogev, *[Building Cryptographic Proofs from Hash Functions](https://github.com/hash-based-snargs-book/hash-based-snargs-book)*). Schemes minimize the product of two certified bounds for openings of 100 positions:
 
 - **proof size**: bytes in the opening proof;
 - **verification cost**: oracle calls made by `check`.
+
+The score is `proofBytes × checkCalls`, lower is better. Both factors are retained as metrics.
+Each track is scored independently. The product must be at most `2^53 - 1` for exact Yukon scoring.
 
 ## Model
 
@@ -83,7 +86,7 @@ The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com
 
 ```sh
 lake build CommitGolf CommitGolfBaseline CommitGolfTests   # build
-bash scripts/setup.sh && python3 scripts/run.py --track ideal-permutation # verify (Linux, Landlock, user systemd)
+bash scripts/setup.sh && bash scripts/benchmark.sh --track ideal-permutation # verify (Linux, Landlock, user systemd)
 ```
 
 ## Baselines

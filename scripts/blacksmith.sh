@@ -71,8 +71,13 @@ CLOUD
     guest 'sudo tar --zstd -C /srv -cf - golf/.elan commit-benchmark/.lake commit-benchmark/verifier/.tools' > .cache/trusted.tar.zst
     ;;
   run)
+    track="${2:?A track is required}"
+    case "$track" in
+      ideal-permutation|ideal-compression|random-oracle-fixed-output|ideal-xof) ;;
+      *) echo 'Unknown track' >&2; exit 2 ;;
+    esac
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
-    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 scripts/run.py'
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) bash scripts/benchmark.sh --track '"$track"
     ;;
   collect)
     if [[ -f "${vm}/qemu.pid" ]]; then

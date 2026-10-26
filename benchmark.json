@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 2,
+  "name": "commit-golf",
+  "tracks": [
+    {
+      "name": "ideal-permutation",
+      "description": "Minimize opening proof bytes \u00d7 verification oracle calls for a Lean-certified vector commitment in the ideal-permutation model.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submissions/ideal-permutation"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "bash",
+        "scripts/benchmark.sh",
+        "--track",
+        "ideal-permutation"
+      ],
+      "scorePath": "scripts/scores/ideal-permutation/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-ideal-permutation.yml",
+        "maxConcurrentWorkflows": 2
+      }
+    },
+    {
+      "name": "ideal-compression",
+      "description": "Minimize opening proof bytes \u00d7 verification oracle calls for a Lean-certified vector commitment in the ideal-compression model.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submissions/ideal-compression"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "bash",
+        "scripts/benchmark.sh",
+        "--track",
+        "ideal-compression"
+      ],
+      "scorePath": "scripts/scores/ideal-compression/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-ideal-compression.yml",
+        "maxConcurrentWorkflows": 2
+      }
+    },
+    {
+      "name": "random-oracle-fixed-output",
+      "description": "Minimize opening proof bytes \u00d7 verification oracle calls for a Lean-certified vector commitment in the random-oracle-fixed-output model.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submissions/random-oracle-fixed-output"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "bash",
+        "scripts/benchmark.sh",
+        "--track",
+        "random-oracle-fixed-output"
+      ],
+      "scorePath": "scripts/scores/random-oracle-fixed-output/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-random-oracle-fixed-output.yml",
+        "maxConcurrentWorkflows": 2
+      }
+    },
+    {
+      "name": "ideal-xof",
+      "description": "Minimize opening proof bytes \u00d7 verification oracle calls for a Lean-certified vector commitment in the ideal-xof model.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submissions/ideal-xof"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "bash",
+        "scripts/benchmark.sh",
+        "--track",
+        "ideal-xof"
+      ],
+      "scorePath": "scripts/scores/ideal-xof/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-ideal-xof.yml",
+        "maxConcurrentWorkflows": 2
+      }
+    }
+  ]
+}

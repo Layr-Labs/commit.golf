@@ -1,0 +1,30 @@
+name: Test PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install Lean
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL \
+            https://raw.githubusercontent.com/leanprover/elan/464c9d28395000a2a0128e07081e4956d50eced2/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Download dependency cache
+        run: lake exe cache get
+      - name: Build and test all tracks
+        run: >-
+          lake build CommitGolf CommitGolfBaseline CommitGolfTests
+          IdealPermutation IdealCompression RandomOracleFixedOutputModel IdealXofModel
+      - name: Test verifier plumbing
+        run: python3 -m unittest discover -s verifier/tests
