@@ -3,6 +3,7 @@ TRACKS = {
     "ideal-permutation": "idealPermutation",
     "ideal-compression": "idealCompression",
     "random-oracle-fixed-output": "randomOracleFixedOutput",
+    "ideal-xof": "idealXof",
 }
 
 

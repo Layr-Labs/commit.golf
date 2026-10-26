@@ -20,7 +20,8 @@ Design a vector commitment scheme in one of the ideal-oracle tracks below, with 
 | `CHECK_BUDGET(k)` | 100 · k calls  |
 
 A scheme declares a finite, nonempty collection of independent oracle instances. Each instance
-has its own dimensions, measured in bits, fixed before any experiment:
+uses the dimensions below, measured in bits. Permutation, compression, and fixed-output RO
+dimensions are fixed before the experiment; XOF output length is chosen per query:
 
 - **Ideal permutation:** a uniform bijection of `{0,1}^n`, with `n > 0`. Forward and inverse
   queries are available. See [IdealPermutation](CommitGolf/Oracle/IdealPermutation.lean).
@@ -30,9 +31,12 @@ has its own dimensions, measured in bits, fixed before any experiment:
 - **Random oracle:** a function `{0,1}* → {0,1}^m`, with `m > 0`, on arbitrary finite bitstrings
   including the empty string. Distinct inputs have independent uniform outputs. See
   [RandomOracleFixedOutput](CommitGolf/Oracle/RandomOracleFixedOutput.lean).
+- **Ideal XOF:** each input in `{0,1}*` identifies an independent uniform bit stream. A query
+  `(x, n)` returns its first `n` bits, in most-significant-bit order, for any `n ≥ 0`.
+  Longer answers extend shorter ones. See [IdealXof](CommitGolf/Oracle/IdealXof.lean).
 
 Every instance must belong to the selected track. Queries identify their instance; distinct
-instances are independent even when their dimensions match. Repeated inputs to the same
+instances are independent even when their dimensions match. Repeated queries to the same
 instance return the same answer. All parties share the same realization `H` of the collection.
 Every query costs one **call**, regardless of input length or bit widths, including repeats and inverse queries;
 private coins and local computation are free. `X^H` denotes `X` with access to this collection.
@@ -62,18 +66,18 @@ A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#
 
    `Pr[A wins and makes at most q calls] ≤ q / 2^SECURITY_BITS`.
 
-In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers are sampled on first query and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L24-L26)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L14-L22)). It **wins** ([Lean](CommitGolf/Statements.lean#L38-L45)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
+In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers and XOF stream bits are sampled when first needed and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L24-L26)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L14-L22)). It **wins** ([Lean](CommitGolf/Statements.lean#L38-L45)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
 
 ## Submission
 
-Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, or `submissions/random-oracle-fixed-output/`. It holds `claim.json`,
+Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, `submissions/random-oracle-fixed-output/`, or `submissions/ideal-xof/`. It holds `claim.json`,
 with `proofBytes` and `checkCalls`, and `Solution.lean`, with optional modules under
 `CommitGolfCandidate/`. `Solution.lean` defines `CommitGolf.Challenge.submission : Scheme` and
 proves `CommitGolf.Challenge.certificate : TrackCertificate track submission proofBytes checkCalls`.
 The track certificate proves the five statements and that all declared instances belong to the
 selected track. The trusted verifier selects `track`; the submission cannot override it.
 Allowed imports are `CommitGolf`, `CommitGolfBaseline`, and the pinned dependencies (Lean,
-Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; the random-oracle-fixed-output starter is pending.
+Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; fixed-output RO and XOF starters are pending.
 
 The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
 

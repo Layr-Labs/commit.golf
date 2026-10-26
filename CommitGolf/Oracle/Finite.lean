@@ -12,6 +12,7 @@ def stateOf : (F : OracleFamily) → F.HasFiniteDomain → F.Realization → F.S
   | .permutation _ _, _, H => H
   | .compression _ _ _ _, _, H => H
   | .randomOracleFixedOutput _ _, h, _ => False.elim h
+  | .idealXof, h, _ => False.elim h
   | .sum F G, h, H => (F.stateOf h.1 H.1, G.stateOf h.2 H.2)
 
 /-- The deterministic answer associated with a fixed realization. -/
@@ -24,6 +25,7 @@ lemma answer_eq_pure (F : OracleFamily) (H : F.Realization) {m : Type → Type}
   | permutation => cases q <;> rfl
   | compression => rfl
   | randomOracleFixedOutput => rfl
+  | idealXof => rfl
   | sum F G ihF ihG => cases q with
     | inl q => exact ihF H.1 q
     | inr q => exact ihG H.2 q
@@ -35,6 +37,7 @@ lemma sharedAnswer_stateOf (F : OracleFamily) (h : F.HasFiniteDomain) (H : F.Rea
   | permutation => cases q <;> rfl
   | compression => rfl
   | randomOracleFixedOutput => exact False.elim h
+  | idealXof => exact False.elim h
   | sum F G ihF ihG =>
     cases q with
     | inl q => simp [sharedAnswer, stateOf, ihF, value, answer]
@@ -46,6 +49,7 @@ lemma initialState_eq_sample (F : OracleFamily) (h : F.HasFiniteDomain) :
   | permutation => simp [initialState, sample, stateOf]
   | compression => simp [initialState, sample, stateOf]
   | randomOracleFixedOutput => exact False.elim h
+  | idealXof => exact False.elim h
   | sum F G ihF ihG => simp [initialState, sample, stateOf, ihF h.1, ihG h.2]
 
 lemma checkShared_stateOf (F : OracleFamily) (h : F.HasFiniteDomain) (H : F.Realization)

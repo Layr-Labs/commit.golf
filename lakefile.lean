@@ -26,3 +26,6 @@ lean_lib IdealCompression where
 -- This target is model regression coverage, not a certified submission.
 lean_lib RandomOracleFixedOutputModel where
   roots := #[`CommitGolf.Oracle.Tests]
+
+lean_lib IdealXofModel where
+  roots := #[`CommitGolf.Oracle.Tests]

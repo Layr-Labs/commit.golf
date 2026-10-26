@@ -184,4 +184,76 @@ example : ((do
       return ((a, b), ((∅ : RandomOracleFixedOutput.Cache 2).cacheQuery [] a).cacheQuery [false] b)) := by
   simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
+/-! ## Ideal XOF: output lengths share a single stream per input -/
+
+private abbrev X : OracleFamily := .idealXof
+example : (X.sum X).InTrack .idealXof := by decide
+example : ¬ (X.sum R).InTrack .idealXof := by decide
+example : ¬ X.HasFiniteDomain := by decide
+example : X.callCost (.inr ([], 1000000)) = 1 := rfl
+example : X.callCost (.inr ([], 0)) = 1 := rfl
+
+-- Zero output needs no randomness and leaves even a nonempty cache untouched.
+example (x : IdealXof.Input) (cache : IdealXof.Cache) :
+    (X.sharedAnswer (x, 0)).run cache = pure (0, cache) := rfl
+
+-- Request one bit, extend to two, then shorten and repeat. Exactly two fair bits are sampled.
+example (x : IdealXof.Input) :
+    ((do
+      let a ← X.sharedAnswer (x, 1)
+      let b ← X.sharedAnswer (x, 2)
+      let c ← X.sharedAnswer (x, 1)
+      let d ← X.sharedAnswer (x, 2)
+      return (a, b, c, d)) :
+      StateT X.State ProbComp (BitVec 1 × BitVec 2 × BitVec 1 × BitVec 2)).run ∅ = (do
+        let a ← $ᵗ Bool
+        let b ← $ᵗ Bool
+        return ((BitVec.cons a 0, BitVec.cons a (BitVec.cons b 0),
+          BitVec.cons a 0, BitVec.cons a (BitVec.cons b 0)),
+          ((∅ : IdealXof.Cache).cacheQuery (x, 0) a).cacheQuery (x, 1) b)) := by
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
+
+-- Different inputs use independent bits, even at the same stream position.
+example : ((do
+    let a ← X.sharedAnswer ([], 1)
+    let b ← X.sharedAnswer ([false], 1)
+    return (a, b)) : StateT X.State ProbComp (BitVec 1 × BitVec 1)).run ∅ = (do
+      let a ← $ᵗ Bool
+      let b ← $ᵗ Bool
+      return ((BitVec.cons a 0, BitVec.cons b 0),
+        ((∅ : IdealXof.Cache).cacheQuery ([], 0) a).cacheQuery ([false], 0) b)) := by
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
+
+-- Declared instances have separate streams even for identical inputs.
+example : ((do
+    let a ← (X.sum X).sharedAnswer (.inl ([], 1))
+    let b ← (X.sum X).sharedAnswer (.inr ([], 1))
+    return (a, b)) : StateT (X.sum X).State ProbComp (BitVec 1 × BitVec 1)).run (∅, ∅) = (do
+      let a ← $ᵗ Bool
+      let b ← $ᵗ Bool
+      return ((BitVec.cons a 0, BitVec.cons b 0),
+        (∅ : IdealXof.Cache).cacheQuery ([], 0) a,
+        (∅ : IdealXof.Cache).cacheQuery ([], 0) b)) := by
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
+
+-- Public accounting counts requests, not the internal stream-bit samples.
+private def xofRequests : OracleComp X.world (BitVec 2) := do
+  let _ ← (X.world.query (.inr ([], 1)) :)
+  (X.world.query (.inr ([], 2)) :)
+
+example : (X.runShared xofRequests).run ∅ = (do
+    let a ← $ᵗ Bool
+    let b ← $ᵗ Bool
+    return ((BitVec.cons a (BitVec.cons b 0), 2),
+      ((∅ : IdealXof.Cache).cacheQuery ([], 0) a).cacheQuery ([], 1) b)) := by
+  change ((do
+    let _ ← X.sharedAnswer ([], 1)
+    let b ← X.sharedAnswer ([], 2)
+    return (b, 2)) : StateT X.State ProbComp (BitVec 2 × Nat)).run ∅ = _
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
+
 end CommitGolf.OracleTests

@@ -24,6 +24,8 @@ class TrackTests(unittest.TestCase):
         self.assertEqual(track_constructor("ideal-compression"), "idealCompression")
         self.assertEqual(track_constructor("random-oracle-fixed-output"), "randomOracleFixedOutput")
         self.assertEqual(submission_path("random-oracle-fixed-output"), "submissions/random-oracle-fixed-output")
+        self.assertEqual(track_constructor("ideal-xof"), "idealXof")
+        self.assertEqual(submission_path("ideal-xof"), "submissions/ideal-xof")
         for value in ("", "../ideal-permutation", "mixed", "random-oracle-fixed-output,ideal-compression", "idealCompression", "x; import Evil"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 submission_path(value)
