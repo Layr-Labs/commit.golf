@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class TrackTests(unittest.TestCase):
     def test_baseline_directories_pass_intake(self):
-        for track in TRACKS:
+        for track in ("ideal-permutation", "ideal-compression"):
             with self.subTest(track=track):
                 result = check(ROOT / submission_path(track))
                 self.assertTrue(result["ok"], result["errors"])
@@ -22,7 +22,9 @@ class TrackTests(unittest.TestCase):
     def test_closed_track_mapping(self):
         self.assertEqual(track_constructor("ideal-permutation"), "idealPermutation")
         self.assertEqual(track_constructor("ideal-compression"), "idealCompression")
-        for value in ("", "../ideal-permutation", "mixed", "idealCompression", "x; import Evil"):
+        self.assertEqual(track_constructor("random-oracle"), "randomOracle")
+        self.assertEqual(submission_path("random-oracle"), "submissions/random-oracle")
+        for value in ("", "../ideal-permutation", "mixed", "random-oracle,ideal-compression", "idealCompression", "x; import Evil"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 submission_path(value)
 

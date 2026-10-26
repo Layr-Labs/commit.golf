@@ -1,5 +1,6 @@
 import CommitGolf
 import CommitGolf.Oracle.Tests
+import CommitGolf.Oracle.RandomOracleTests
 import CommitGolfBaseline
 import Std.Tactic.BVDecide
 

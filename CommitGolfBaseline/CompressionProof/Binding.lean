@@ -134,6 +134,7 @@ theorem probEvent_breaks_le (adversary : Adversary family) (q : Nat) :
 
 theorem merkle_binding : merkle.Binding := by
   intro adversary q hq
+  rw [Scheme.bindingProbability, dif_pos (by trivial)]
   by_cases hbig : 2 ^ 128 ≤ q
   · refine probEvent_le_one.trans ?_
     rw [ENNReal.le_div_iff_mul_le (by simp) (by simp), one_mul]

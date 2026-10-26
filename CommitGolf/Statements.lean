@@ -38,7 +38,7 @@ def VerificationCost (checkCalls : Nat) : Prop :=
 /-- **5. Binding** [CY24, Lemma 18.4.1]. -/
 def Binding : Prop :=
   ∀ (adversary : Adversary scheme.oracles) (q : Nat), 1 ≤ q →
-    Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤
+    scheme.bindingProbability adversary q ≤
       (q : ENNReal) / 2 ^ SECURITY_BITS
 
 end Scheme

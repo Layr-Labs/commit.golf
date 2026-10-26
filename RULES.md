@@ -27,11 +27,14 @@ has its own dimensions, measured in bits, fixed before any experiment:
 - **Ideal compression:** a uniform function `{0,1}^n → {0,1}^m`, with `0 < m < n`. Only forward
   queries are available; collisions are allowed. See
   [IdealCompression](CommitGolf/Oracle/IdealCompression.lean).
+- **Random oracle:** a function `{0,1}* → {0,1}^m`, with `m > 0`, on arbitrary finite bitstrings
+  including the empty string. Distinct inputs have independent uniform outputs. See
+  [RandomOracle](CommitGolf/Oracle/RandomOracle.lean).
 
 Every instance must belong to the selected track. Queries identify their instance; distinct
 instances are independent even when their dimensions match. Repeated inputs to the same
 instance return the same answer. All parties share the same realization `H` of the collection.
-Every query costs one **call**, regardless of bit widths, including repeats and inverse queries;
+Every query costs one **call**, regardless of input length or bit widths, including repeats and inverse queries;
 private coins and local computation are free. `X^H` denotes `X` with access to this collection.
 
 - A message is `m ∈ Σ^ℓ` with `Σ = {0,1}^256`. For positions `I ⊆ [ℓ] = {0, …, ℓ−1}`, `m[I] ∈ Σ^I` is its restriction.
@@ -59,18 +62,18 @@ A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#
 
    `Pr[A wins and makes at most q calls] ≤ q / 2^SECURITY_BITS`.
 
-In the **binding game** ([Lean](CommitGolf/Binding.lean#L40-L46)), the instances in `H` are sampled independently and uniformly, and `A` ([Lean](CommitGolf/Binding.lean#L25-L27)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L15-L23)). It **wins** ([Lean](CommitGolf/Binding.lean#L34-L38)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L29-L32)). Only `A`'s calls count.
+In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers are sampled on first query and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L26-L28)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L16-L24)). It **wins** ([Lean](CommitGolf/Binding.lean#L35-L39)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L30-L33)). Only `A`'s calls count.
 
 ## Submission
 
-Select `submissions/ideal-permutation/` or `submissions/ideal-compression/`. It holds `claim.json`,
+Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, or `submissions/random-oracle/`. It holds `claim.json`,
 with `proofBytes` and `checkCalls`, and `Solution.lean`, with optional modules under
 `CommitGolfCandidate/`. `Solution.lean` defines `CommitGolf.Challenge.submission : Scheme` and
 proves `CommitGolf.Challenge.certificate : TrackCertificate track submission proofBytes checkCalls`.
 The track certificate proves the five statements and that all declared instances belong to the
 selected track. The trusted verifier selects `track`; the submission cannot override it.
 Allowed imports are `CommitGolf`, `CommitGolfBaseline`, and the pinned dependencies (Lean,
-Batteries, Mathlib, VCVio). Both submission directories contain a baseline example.
+Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; the random-oracle starter is pending.
 
 The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
 
