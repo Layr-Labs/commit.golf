@@ -7,26 +7,6 @@ These lemmas connect shared execution to the original fixed-realization semantic
 namespace CommitGolf.OracleFamily
 open OracleComp OracleSpec
 
-/-- Whole-function sampling is available only for finite-domain families. -/
-def HasFiniteDomain : OracleFamily → Prop
-  | .permutation _ _ | .compression _ _ _ _ => True
-  | .randomOracleFixedOutput _ _ => False
-  | .sum F G => F.HasFiniteDomain ∧ G.HasFiniteDomain
-
-instance decidableHasFiniteDomain (F : OracleFamily) : Decidable F.HasFiniteDomain :=
-  match F with
-  | .permutation _ _ => isTrue trivial
-  | .compression _ _ _ _ => isTrue trivial
-  | .randomOracleFixedOutput _ _ => isFalse id
-  | .sum F G => @instDecidableAnd _ _ F.decidableHasFiniteDomain G.decidableHasFiniteDomain
-
-/-- Independent uniform sampling of finite-domain instances. -/
-def sample : (F : OracleFamily) → (h : F.HasFiniteDomain := by decide) → ProbComp F.Realization
-  | .permutation n _, _ => IdealPermutation.sample n
-  | .compression n k _ _, _ => IdealCompression.sample n k
-  | .randomOracleFixedOutput _ _, h => False.elim h
-  | .sum F G, h => do return (← F.sample h.1, ← G.sample h.2)
-
 /-- Embed a finite-domain realization into the shared state. -/
 def stateOf : (F : OracleFamily) → F.HasFiniteDomain → F.Realization → F.State
   | .permutation _ _, _, H => H

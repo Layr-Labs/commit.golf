@@ -65,6 +65,25 @@ abbrev Realization : OracleFamily → Type
   | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.Function m
   | .sum F G => F.Realization × G.Realization
 
+/-- Whole-function sampling is available only for finite-domain families. -/
+def HasFiniteDomain : OracleFamily → Prop
+  | .permutation _ _ | .compression _ _ _ _ => True
+  | .randomOracleFixedOutput _ _ => False
+  | .sum F G => F.HasFiniteDomain ∧ G.HasFiniteDomain
+
+instance decidableHasFiniteDomain (F : OracleFamily) : Decidable F.HasFiniteDomain :=
+  match F with
+  | .permutation _ _ => isTrue trivial
+  | .compression _ _ _ _ => isTrue trivial
+  | .randomOracleFixedOutput _ _ => isFalse id
+  | .sum F G => @instDecidableAnd _ _ F.decidableHasFiniteDomain G.decidableHasFiniteDomain
+
+/-- Independent uniform sampling of finite-domain instances. -/
+def sample : (F : OracleFamily) → (h : F.HasFiniteDomain := by decide) → ProbComp F.Realization
+  | .permutation n _, _ => IdealPermutation.sample n
+  | .compression n k _ _, _ => IdealCompression.sample n k
+  | .randomOracleFixedOutput _ _, h => False.elim h
+  | .sum F G, h => do return (← F.sample h.1, ← G.sample h.2)
 
 def answer {m : Type → Type} [Monad m] :
     (F : OracleFamily) → F.Realization → QueryImpl F.spec m
