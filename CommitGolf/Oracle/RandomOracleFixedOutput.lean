@@ -6,7 +6,7 @@ import VCVio.OracleComp.QueryTracking.RandomOracle.Basic
 Inputs are finite bit strings, including the empty string. Each instance fixes a positive
 output width. Fresh inputs receive independent uniform answers; repeats reuse a cached answer.
 There is no bound on input length and each query costs one call. -/
-namespace CommitGolf.RandomOracle
+namespace CommitGolf.RandomOracleFixedOutput
 open OracleComp OracleSpec
 
 abbrev Input := List Bool
@@ -18,4 +18,4 @@ abbrev Cache (outputBits : Nat) := (Spec outputBits).QueryCache
 abbrev answer (outputBits : Nat) : QueryImpl (Spec outputBits)
     (StateT (Cache outputBits) ProbComp) := (Spec outputBits).randomOracle
 
-end CommitGolf.RandomOracle
+end CommitGolf.RandomOracleFixedOutput

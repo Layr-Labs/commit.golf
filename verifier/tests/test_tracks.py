@@ -22,9 +22,9 @@ class TrackTests(unittest.TestCase):
     def test_closed_track_mapping(self):
         self.assertEqual(track_constructor("ideal-permutation"), "idealPermutation")
         self.assertEqual(track_constructor("ideal-compression"), "idealCompression")
-        self.assertEqual(track_constructor("random-oracle"), "randomOracle")
-        self.assertEqual(submission_path("random-oracle"), "submissions/random-oracle")
-        for value in ("", "../ideal-permutation", "mixed", "random-oracle,ideal-compression", "idealCompression", "x; import Evil"):
+        self.assertEqual(track_constructor("random-oracle-fixed-output"), "randomOracleFixedOutput")
+        self.assertEqual(submission_path("random-oracle-fixed-output"), "submissions/random-oracle-fixed-output")
+        for value in ("", "../ideal-permutation", "mixed", "random-oracle-fixed-output,ideal-compression", "idealCompression", "x; import Evil"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 submission_path(value)
 

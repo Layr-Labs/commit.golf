@@ -2,7 +2,7 @@
 TRACKS = {
     "ideal-permutation": "idealPermutation",
     "ideal-compression": "idealCompression",
-    "random-oracle": "randomOracle",
+    "random-oracle-fixed-output": "randomOracleFixedOutput",
 }
 
 

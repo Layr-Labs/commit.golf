@@ -1,7 +1,7 @@
 # Agent instructions
 
 - Solvers edit only their selected `submissions/<track>/`: `claim.json`, `Solution.lean` and
-  `CommitGolfCandidate/`, where `<track>` is `ideal-permutation`, `ideal-compression`, or `random-oracle`.
+  `CommitGolfCandidate/`, where `<track>` is `ideal-permutation`, `ideal-compression`, or `random-oracle-fixed-output`.
   Everything else is the contract (`RULES.md`, the Lean statements in `CommitGolf/`, the baseline,
   `verifier/`, the scripts, the workflow and the Lean project pins); preserve it.
 - A submission proves `CommitGolf.TrackCertificate track scheme proofBytes checkCalls`. The leaderboard is the

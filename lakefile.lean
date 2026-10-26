@@ -24,5 +24,5 @@ lean_lib IdealCompression where
 
 -- Check the variable-input, fixed-output oracle model independently of the Merkle baselines.
 -- This target is model regression coverage, not a certified submission.
-lean_lib RandomOracleModel where
-  roots := #[`CommitGolf.Oracle.RandomOracleTests]
+lean_lib RandomOracleFixedOutputModel where
+  roots := #[`CommitGolf.Oracle.RandomOracleFixedOutputTests]

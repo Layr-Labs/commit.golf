@@ -22,26 +22,26 @@ lake exe cache get
 lake build IdealPermutation
 lake build IdealCompression
 
-# Check the new random-oracle model (its certified Merkle baseline is not yet implemented):
-lake build RandomOracleModel
+# Check the new random-oracle-fixed-output model (its certified Merkle baseline is not yet implemented):
+lake build RandomOracleFixedOutputModel
 
 # Build both baseline libraries and all regression tests:
 lake build CommitGolf CommitGolfBaseline CommitGolfTests
 ```
 
-The `random-oracle` track accepts any finite bitstring, including the empty string. Each instance
+The `random-oracle-fixed-output` track accepts any finite bitstring, including the empty string. Each instance
 chooses a positive fixed output width. Fresh inputs get independent uniform answers; repeated
 inputs reuse the same answer. Every query costs one call regardless of input length. The binding
 game shares caches between the adversary and both checks and counts only adversary calls.
 The model, eligibility checks, and verifier track selection are implemented. A certified Merkle
-starter for this track is still pending; `RandomOracleModel` checks the model, not a submission.
+starter for this track is still pending; `RandomOracleFixedOutputModel` checks the model, not a submission.
 
 ## Submitting
 
 Edit `submissions/ideal-permutation/` or `submissions/ideal-compression/`. Each directory starts
 with its track's baseline, with `claim.json` and `Solution.lean`. Optional supporting modules go
-in that directory's `CommitGolfCandidate/`. The certificate enforces the selected track. Custom random-oracle submissions use
-`submissions/random-oracle/` and `--track random-oracle`; no certified starter is supplied there yet.
+in that directory's `CommitGolfCandidate/`. The certificate enforces the selected track. Custom random-oracle-fixed-output submissions use
+`submissions/random-oracle-fixed-output/` and `--track random-oracle-fixed-output`; no certified starter is supplied there yet.
 
 On Linux with Landlock and user systemd:
 

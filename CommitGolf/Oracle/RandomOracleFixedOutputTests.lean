@@ -1,16 +1,16 @@
 import CommitGolf.Statements
 
-/-! # Variable-input random-oracle model regressions -/
-namespace CommitGolf.RandomOracleTests
+/-! # Variable-input random-oracle-fixed-output model regressions -/
+namespace CommitGolf.RandomOracleFixedOutputTests
 open OracleComp OracleSpec
 
 private abbrev P : OracleFamily := .permutation 3 (by decide)
 private abbrev C : OracleFamily := .compression 4 2 (by decide) (by decide)
-private abbrev R : OracleFamily := .randomOracle 2 (by decide)
+private abbrev R : OracleFamily := .randomOracleFixedOutput 2 (by decide)
 private abbrev Rs := R.sum R
 
-example : Rs.InTrack .randomOracle := by decide
-example : ¬ (R.sum C).InTrack .randomOracle := by decide
+example : Rs.InTrack .randomOracleFixedOutput := by decide
+example : ¬ (R.sum C).InTrack .randomOracleFixedOutput := by decide
 example : ¬ (R.sum P).InTrack .idealPermutation := by decide
 example : ¬ R.InTrack .idealCompression := by decide
 example : ¬ R.Finite := by decide
@@ -24,55 +24,55 @@ example : R.callCost (.inr []) = 1 := rfl
 example : R.callCost (.inr (List.replicate 10000 false)) = 1 := rfl
 
 -- Fresh inputs receive a uniform answer, recorded in the cache.
-example (x : RandomOracle.Input) :
+example (x : RandomOracleFixedOutput.Input) :
     (R.sharedAnswer x).run ∅ = (do
       let y ← $ᵗ BitVec 2
-      return (y, (∅ : RandomOracle.Cache 2).cacheQuery x y)) := by
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer, map_eq_bind_pure_comp]
+      return (y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y)) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
 -- Cached answers persist, including between adversary and verifier phases.
-example (x : RandomOracle.Input) (y : BitVec 2) :
-    (R.sharedAnswer x).run ((∅ : RandomOracle.Cache 2).cacheQuery x y) =
-      pure (y, (∅ : RandomOracle.Cache 2).cacheQuery x y) := by
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer]
+example (x : RandomOracleFixedOutput.Input) (y : BitVec 2) :
+    (R.sharedAnswer x).run ((∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y) =
+      pure (y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer]
 
 -- Two instances can return different answers to the same input.
-example (x : RandomOracle.Input) (y z : BitVec 2) :
+example (x : RandomOracleFixedOutput.Input) (y z : BitVec 2) :
     (Rs.sharedAnswer (.inl x)).run
-      ((∅ : RandomOracle.Cache 2).cacheQuery x y, (∅ : RandomOracle.Cache 2).cacheQuery x z) =
-      pure (y, (∅ : RandomOracle.Cache 2).cacheQuery x y,
-        (∅ : RandomOracle.Cache 2).cacheQuery x z) := by
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer]
+      ((∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x z) =
+      pure (y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y,
+        (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x z) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer]
 
 -- Repeats consume two calls but sample just once.
-private def randomRepeats (x : RandomOracle.Input) : OracleComp R.world (BitVec 2 × BitVec 2) := do
+private def randomRepeats (x : RandomOracleFixedOutput.Input) : OracleComp R.world (BitVec 2 × BitVec 2) := do
   let a ← (R.world.query (.inr x) :)
   let b ← (R.world.query (.inr x) :)
   return (a, b)
 
-example (x : RandomOracle.Input) :
+example (x : RandomOracleFixedOutput.Input) :
     (R.runShared (randomRepeats x)).run ∅ = (do
       let y ← $ᵗ BitVec 2
-      return (((y, y), 2), (∅ : RandomOracle.Cache 2).cacheQuery x y)) := by
+      return (((y, y), 2), (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y)) := by
   simp [OracleFamily.runShared, randomRepeats, OracleFamily.sharedAnswer,
-    RandomOracle.answer, OracleFamily.callCost, map_eq_bind_pure_comp]
+    RandomOracleFixedOutput.answer, OracleFamily.callCost, map_eq_bind_pure_comp]
   change ((do
     let a ← R.sharedAnswer x
     let b ← R.sharedAnswer x
     return ((a, b), 2)) : StateT R.State ProbComp ((BitVec 2 × BitVec 2) × Nat)).run ∅ = _
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer, map_eq_bind_pure_comp]
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
 -- Independent instances sample separately even on the identical input.
-example (x : RandomOracle.Input) :
+example (x : RandomOracleFixedOutput.Input) :
     ((do
       let a ← Rs.sharedAnswer (.inl x)
       let b ← Rs.sharedAnswer (.inr x)
       return (a, b)) : StateT Rs.State ProbComp (BitVec 2 × BitVec 2)).run (∅, ∅) = (do
         let a ← $ᵗ BitVec 2
         let b ← $ᵗ BitVec 2
-        return ((a, b), (∅ : RandomOracle.Cache 2).cacheQuery x a,
-          (∅ : RandomOracle.Cache 2).cacheQuery x b)) := by
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer, map_eq_bind_pure_comp]
+        return ((a, b), (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x a,
+          (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x b)) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
 -- The binding experiment shares the adversary's cache with both verification calls.
 private def emptyClaim : Scheme.Claim where
@@ -109,7 +109,7 @@ example : probeScheme.sharedBindingGame probeAdversary = (do
       return (emptyClaim, 1, a == 0, b == 0)) :
       StateT R.State ProbComp (Scheme.Claim × Nat × Bool × Bool)).run ∅
     return result.1) = _
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer, map_eq_bind_pure_comp]
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
 -- A query first made by verification is sampled too, then reused by the second check.
 example : probeScheme.sharedBindingGame (pure emptyClaim) = (do
@@ -122,7 +122,7 @@ example : probeScheme.sharedBindingGame (pure emptyClaim) = (do
       return (emptyClaim, 0, a == 0, b == 0)) :
       StateT R.State ProbComp (Scheme.Claim × Nat × Bool × Bool)).run ∅
     return result.1) = _
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer, map_eq_bind_pure_comp]
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
 -- Different inputs in one instance get independent samples.
 example : ((do
@@ -131,7 +131,7 @@ example : ((do
     return (a, b)) : StateT R.State ProbComp (BitVec 2 × BitVec 2)).run ∅ = (do
       let a ← $ᵗ BitVec 2
       let b ← $ᵗ BitVec 2
-      return ((a, b), ((∅ : RandomOracle.Cache 2).cacheQuery [] a).cacheQuery [false] b)) := by
-  simp [OracleFamily.sharedAnswer, RandomOracle.answer, map_eq_bind_pure_comp]
+      return ((a, b), ((∅ : RandomOracleFixedOutput.Cache 2).cacheQuery [] a).cacheQuery [false] b)) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
-end CommitGolf.RandomOracleTests
+end CommitGolf.RandomOracleFixedOutputTests

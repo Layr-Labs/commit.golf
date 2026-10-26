@@ -1,6 +1,6 @@
 import CommitGolf.Oracle.IdealPermutation
 import CommitGolf.Oracle.IdealCompression
-import CommitGolf.Oracle.RandomOracle
+import CommitGolf.Oracle.RandomOracleFixedOutput
 
 /-! # Independent oracle instances and tracks
 
@@ -13,14 +13,14 @@ open OracleComp OracleSpec
 inductive Track where
   | idealPermutation
   | idealCompression
-  | randomOracle
+  | randomOracleFixedOutput
   deriving DecidableEq, Repr
 
 inductive OracleFamily where
   | permutation (width : Nat) (positive : 0 < width)
   | compression (inputBits outputBits : Nat) (positive : 0 < outputBits)
       (compressing : outputBits < inputBits)
-  | randomOracle (outputBits : Nat) (positive : 0 < outputBits)
+  | randomOracleFixedOutput (outputBits : Nat) (positive : 0 < outputBits)
   | sum (left right : OracleFamily)
   deriving DecidableEq
 
@@ -33,27 +33,27 @@ abbrev baseline : OracleFamily := .permutation WIDTH (by decide)
 def InTrack : OracleFamily → Track → Prop
   | .permutation _ _, track => track = .idealPermutation
   | .compression _ _ _ _, track => track = .idealCompression
-  | .randomOracle _ _, track => track = .randomOracle
+  | .randomOracleFixedOutput _ _, track => track = .randomOracleFixedOutput
   | .sum F G, track => F.InTrack track ∧ G.InTrack track
 
 instance instDecidableInTrack (F : OracleFamily) (track : Track) : Decidable (F.InTrack track) :=
   match F with
   | .permutation _ _ => inferInstanceAs (Decidable (track = .idealPermutation))
   | .compression _ _ _ _ => inferInstanceAs (Decidable (track = .idealCompression))
-  | .randomOracle _ _ => inferInstanceAs (Decidable (track = .randomOracle))
+  | .randomOracleFixedOutput _ _ => inferInstanceAs (Decidable (track = .randomOracleFixedOutput))
   | .sum F G => @instDecidableAnd _ _ (F.instDecidableInTrack track) (G.instDecidableInTrack track)
 
 abbrev Domain : OracleFamily → Type
   | .permutation n _ => BitVec n ⊕ BitVec n
   | .compression n _ _ _ => BitVec n
-  | .randomOracle _ _ => RandomOracle.Input
+  | .randomOracleFixedOutput _ _ => RandomOracleFixedOutput.Input
   | .sum F G => F.Domain ⊕ G.Domain
 
 /-- The public interface, without private coins. -/
 abbrev spec : (F : OracleFamily) → OracleSpec F.Domain
   | .permutation n _ => IdealPermutation.Spec n
   | .compression n k _ _ => IdealCompression.Spec n k
-  | .randomOracle m _ => RandomOracle.Spec m
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.Spec m
   | .sum F G => F.spec + G.spec
 
 abbrev world (F : OracleFamily) := unifSpec + F.spec
@@ -62,27 +62,27 @@ abbrev world (F : OracleFamily) := unifSpec + F.spec
 abbrev Realization : OracleFamily → Type
   | .permutation n _ => IdealPermutation.Function n
   | .compression n k _ _ => IdealCompression.Function n k
-  | .randomOracle m _ => RandomOracle.Function m
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.Function m
   | .sum F G => F.Realization × G.Realization
 
 /-- Whole-function sampling is available only for finite-domain families. -/
 def Finite : OracleFamily → Prop
   | .permutation _ _ | .compression _ _ _ _ => True
-  | .randomOracle _ _ => False
+  | .randomOracleFixedOutput _ _ => False
   | .sum F G => F.Finite ∧ G.Finite
 
 instance decidableFinite (F : OracleFamily) : Decidable F.Finite :=
   match F with
   | .permutation _ _ => isTrue trivial
   | .compression _ _ _ _ => isTrue trivial
-  | .randomOracle _ _ => isFalse id
+  | .randomOracleFixedOutput _ _ => isFalse id
   | .sum F G => @instDecidableAnd _ _ F.decidableFinite G.decidableFinite
 
 /-- Independent uniform sampling of finite-domain instances. -/
 def sample : (F : OracleFamily) → (h : F.Finite := by decide) → ProbComp F.Realization
   | .permutation n _, _ => IdealPermutation.sample n
   | .compression n k _ _, _ => IdealCompression.sample n k
-  | .randomOracle _ _, h => False.elim h
+  | .randomOracleFixedOutput _ _, h => False.elim h
   | .sum F G, h => do return (← F.sample h.1, ← G.sample h.2)
 
 def answer {m : Type → Type} [Monad m] :
@@ -91,7 +91,7 @@ def answer {m : Type → Type} [Monad m] :
     | .inl x => pure (π x)
     | .inr y => pure (π.symm y)
   | .compression _ _ _ _, H => fun q => pure (H q)
-  | .randomOracle _ _, H => fun q => pure (H q)
+  | .randomOracleFixedOutput _ _, H => fun q => pure (H q)
   | .sum F G, H => F.answer H.1 (m := m) + G.answer H.2 (m := m)
 
 /-- Every public query costs one, including repeats and inverse queries; coins are free. -/
@@ -113,13 +113,13 @@ A sum keeps separate state for each instance, even when their widths are identic
 abbrev State : OracleFamily → Type
   | .permutation n _ => IdealPermutation.Function n
   | .compression n m _ _ => IdealCompression.Function n m
-  | .randomOracle m _ => RandomOracle.Cache m
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.Cache m
   | .sum F G => F.State × G.State
 
 def initialState : (F : OracleFamily) → ProbComp F.State
   | .permutation n _ => IdealPermutation.sample n
   | .compression n m _ _ => IdealCompression.sample n m
-  | .randomOracle _ _ => pure ∅
+  | .randomOracleFixedOutput _ _ => pure ∅
   | .sum F G => do return (← F.initialState, ← G.initialState)
 
 /-- A shared, stateful oracle handler. State persists across all phases of an experiment. -/
@@ -128,7 +128,7 @@ def sharedAnswer : (F : OracleFamily) → QueryImpl F.spec (StateT F.State ProbC
       | .inl x => do return (← get) x
       | .inr y => do return (← get).symm y
   | .compression _ _ _ _ => fun q => do return (← get) q
-  | .randomOracle m _ => RandomOracle.answer m
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.answer m
   | .sum F G => fun q => match q with
       | .inl x => do
           let (sF, sG) ← get

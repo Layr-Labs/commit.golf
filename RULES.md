@@ -29,7 +29,7 @@ has its own dimensions, measured in bits, fixed before any experiment:
   [IdealCompression](CommitGolf/Oracle/IdealCompression.lean).
 - **Random oracle:** a function `{0,1}* → {0,1}^m`, with `m > 0`, on arbitrary finite bitstrings
   including the empty string. Distinct inputs have independent uniform outputs. See
-  [RandomOracle](CommitGolf/Oracle/RandomOracle.lean).
+  [RandomOracleFixedOutput](CommitGolf/Oracle/RandomOracleFixedOutput.lean).
 
 Every instance must belong to the selected track. Queries identify their instance; distinct
 instances are independent even when their dimensions match. Repeated inputs to the same
@@ -66,14 +66,14 @@ In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instanc
 
 ## Submission
 
-Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, or `submissions/random-oracle/`. It holds `claim.json`,
+Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, or `submissions/random-oracle-fixed-output/`. It holds `claim.json`,
 with `proofBytes` and `checkCalls`, and `Solution.lean`, with optional modules under
 `CommitGolfCandidate/`. `Solution.lean` defines `CommitGolf.Challenge.submission : Scheme` and
 proves `CommitGolf.Challenge.certificate : TrackCertificate track submission proofBytes checkCalls`.
 The track certificate proves the five statements and that all declared instances belong to the
 selected track. The trusted verifier selects `track`; the submission cannot override it.
 Allowed imports are `CommitGolf`, `CommitGolfBaseline`, and the pinned dependencies (Lean,
-Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; the random-oracle starter is pending.
+Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; the random-oracle-fixed-output starter is pending.
 
 The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
 
