@@ -28,3 +28,17 @@ jobs:
           IdealPermutation IdealCompression RandomOracleFixedOutputModel IdealXofModel
       - name: Test verifier plumbing
         run: python3 -m unittest discover -s verifier/tests
+
+  comparator:
+    name: Comparator (${{ matrix.track }})
+    strategy:
+      fail-fast: false
+      matrix:
+        track:
+          - ideal-permutation
+          - ideal-compression
+          - random-oracle-fixed-output
+          - ideal-xof
+    uses: ./.github/workflows/benchmark.yml
+    with:
+      track: ${{ matrix.track }}
