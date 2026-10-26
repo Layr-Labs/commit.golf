@@ -52,17 +52,17 @@ The **honest run** ([Lean](CommitGolf/Honest.lean#L23-L28)) on `(H, m, I)` is `(
 
 ## Statements
 
-A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#L46-L53)) proves five statements. The first four hold in the honest run for every realization `H`, `m`, `I`, and all coins:
+A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#L47-L54)) proves five statements. The first four hold in the honest run for every realization `H`, `m`, `I`, and all coins:
 
 1. **Completeness** ([Lean](CommitGolf/Statements.lean#L15-L18)): `b = 1`.
 2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L20-L26)): `commit`, `opening`, and `check` make at most `COMMIT_BUDGET`, `OPEN_BUDGET(|I|)`, and `CHECK_BUDGET(|I|)` calls, respectively.
 3. **Proof size** ([Lean](CommitGolf/Statements.lean#L28-L31)): if `|I| = BATCH`, then `|pf| ≤ proofBytes`.
 4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L33-L36)): if `|I| = BATCH`, then `check` makes at most `checkCalls` calls.
-5. **Binding** ([Lean](CommitGolf/Statements.lean#L38-L42)): for every adversary `A` and every `q ≥ 1`,
+5. **Binding** ([Lean](CommitGolf/Statements.lean#L38-L43)): for every adversary `A` and every `q ≥ 1`,
 
    `Pr[A wins and makes at most q calls] ≤ q / 2^SECURITY_BITS`.
 
-In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers are sampled on first query and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L26-L28)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L16-L24)). It **wins** ([Lean](CommitGolf/Binding.lean#L49-L53)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L30-L33)). Only `A`'s calls count.
+In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers are sampled on first query and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L26-L28)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L16-L24)). It **wins** ([Lean](CommitGolf/Statements.lean#L38-L43)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L30-L33)). Only `A`'s calls count.
 
 ## Submission
 
