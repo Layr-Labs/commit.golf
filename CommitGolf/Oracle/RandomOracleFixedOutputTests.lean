@@ -1,4 +1,5 @@
 import CommitGolf.Statements
+import CommitGolf.Oracle.Finite
 
 /-! # Variable-input random-oracle-fixed-output model regressions -/
 namespace CommitGolf.RandomOracleFixedOutputTests
@@ -13,8 +14,8 @@ example : Rs.InTrack .randomOracleFixedOutput := by decide
 example : ¬ (R.sum C).InTrack .randomOracleFixedOutput := by decide
 example : ¬ (R.sum P).InTrack .idealPermutation := by decide
 example : ¬ R.InTrack .idealCompression := by decide
-example : ¬ R.Finite := by decide
-example : ¬ (C.sum R).Finite := by decide
+example : ¬ R.HasFiniteDomain := by decide
+example : ¬ (C.sum R).HasFiniteDomain := by decide
 
 -- Empty inputs and arbitrary finite lengths are valid; length is part of the input.
 example : ([] : R.Domain) ≠ [false] := by decide
@@ -98,7 +99,7 @@ private def probeAdversary : Scheme.Adversary R := do
   let _ ← (R.world.query (.inr []) :)
   return emptyClaim
 
-example : probeScheme.sharedBindingGame probeAdversary = (do
+example : probeScheme.bindingGame probeAdversary = (do
     let y ← $ᵗ BitVec 2
     return (emptyClaim, 1, y == 0, y == 0)) := by
   change (do
@@ -112,7 +113,7 @@ example : probeScheme.sharedBindingGame probeAdversary = (do
   simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
 -- A query first made by verification is sampled too, then reused by the second check.
-example : probeScheme.sharedBindingGame (pure emptyClaim) = (do
+example : probeScheme.bindingGame (pure emptyClaim) = (do
     let y ← $ᵗ BitVec 2
     return (emptyClaim, 0, y == 0, y == 0)) := by
   change (do

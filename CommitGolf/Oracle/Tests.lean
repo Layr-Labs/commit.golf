@@ -1,4 +1,5 @@
 import CommitGolf.Statements
+import CommitGolf.Oracle.Finite
 
 /-! # Oracle and track regression tests -/
 namespace CommitGolf.OracleTests

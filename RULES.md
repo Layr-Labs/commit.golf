@@ -62,7 +62,7 @@ A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#
 
    `Pr[A wins and makes at most q calls] ≤ q / 2^SECURITY_BITS`.
 
-In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers are sampled on first query and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L26-L28)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L16-L24)). It **wins** ([Lean](CommitGolf/Binding.lean#L35-L39)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L30-L33)). Only `A`'s calls count.
+In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers are sampled on first query and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L26-L28)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L16-L24)). It **wins** ([Lean](CommitGolf/Binding.lean#L49-L53)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L30-L33)). Only `A`'s calls count.
 
 ## Submission
 

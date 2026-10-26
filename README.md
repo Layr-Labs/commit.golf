@@ -32,7 +32,8 @@ lake build CommitGolf CommitGolfBaseline CommitGolfTests
 The `random-oracle-fixed-output` track accepts any finite bitstring, including the empty string. Each instance
 chooses a positive fixed output width. Fresh inputs get independent uniform answers; repeated
 inputs reuse the same answer. Every query costs one call regardless of input length. The binding
-game shares caches between the adversary and both checks and counts only adversary calls.
+game uses shared oracle state for every track and counts only adversary calls. A Lean equivalence
+proof shows that the finite-domain tracks retain their original winning probabilities.
 The model, eligibility checks, and verifier track selection are implemented. A certified Merkle
 starter for this track is still pending; `RandomOracleFixedOutputModel` checks the model, not a submission.
 

@@ -32,24 +32,9 @@ def Claim.Conflicting (claim : Claim) : Prop :=
   ∃ (i : Index) (h₀ : i ∈ claim.positions₀) (h₁ : i ∈ claim.positions₁),
     claim.values₀ ⟨i, h₀⟩ ≠ claim.values₁ ⟨i, h₁⟩
 
-/-- The claim wins against the fixed family `π`: the openings conflict, and `check` accepts both. -/
-def Breaks (π : scheme.oracles.Realization) (claim : Claim) : Prop :=
-  claim.Conflicting ∧
-    (scheme.oracles.eval π (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)).1 = true ∧
-    (scheme.oracles.eval π (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)).1 = true
-
-/-- Sample a finite-domain family and run the adversary against it. Returns the same realization,
-the claim, and the number of calls the adversary made. The two checks use that realization too. -/
-def bindingGame {family : OracleFamily} (adversary : Adversary family)
-    (finite : family.Finite := by decide) :
-    ProbComp (family.Realization × Claim × Nat) := do
-  let π ← family.sample finite
-  let (claim, calls) ← family.run π adversary
-  return (π, claim, calls)
-
-/-- Infinite-domain binding experiment. The adversary and both checks share one cache per
-instance. Only the adversary's calls are returned; verifier queries can extend the caches. -/
-def sharedBindingGame (adversary : Adversary scheme.oracles) :
+/-- Binding experiment for every oracle family. The adversary and both checks share the oracle
+state. Only the adversary's calls are returned; verifier queries can extend random-oracle caches. -/
+def bindingGame (adversary : Adversary scheme.oracles) :
     ProbComp (Claim × Nat × Bool × Bool) := do
   let initial ← scheme.oracles.initialState
   let experiment : StateT scheme.oracles.State ProbComp (Claim × Nat × Bool × Bool) := do
@@ -61,14 +46,11 @@ def sharedBindingGame (adversary : Adversary scheme.oracles) :
     return (claim, calls, accepted₀, accepted₁)
   return (← experiment.run initial).1
 
-/-- The finite-domain game retains its eager semantics. For infinite domains we sample only
-queried answers, including fresh verifier queries, consistently across the whole game. -/
+/-- The adversary wins by producing conflicting accepted openings within its query budget.
+The same event and experiment apply to every track. -/
 noncomputable def bindingProbability (adversary : Adversary scheme.oracles) (q : Nat) : ENNReal :=
-  if h : scheme.oracles.Finite then
-    Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q | bindingGame adversary h]
-  else
-    Pr[fun (claim, calls, a₀, a₁) => claim.Conflicting ∧ calls ≤ q ∧ a₀ = true ∧ a₁ = true |
-      scheme.sharedBindingGame adversary]
+  Pr[fun (claim, calls, a₀, a₁) => claim.Conflicting ∧ calls ≤ q ∧ a₀ = true ∧ a₁ = true |
+    scheme.bindingGame adversary]
 
 end Scheme
 

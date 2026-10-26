@@ -1,3 +1,4 @@
+import CommitGolf.BindingFinite
 import CommitGolfBaseline.MerkleProof.Honest
 import CommitGolfBaseline.MerkleProof.Lazy
 
@@ -139,12 +140,12 @@ theorem sum_le (q : Nat) (h1 : 1 ≤ q) (h2 : q < 2 ^ 128) :
 
 /-- The adversary's win, followed by `recheck`, leaves a table that is not `Good`. -/
 theorem probEvent_breaks_le (adversary : Adversary) (q : Nat) :
-    Pr[fun (π, claim, calls) => merkle.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤
+    Pr[fun (π, claim, calls) => merkle.Breaks π claim ∧ calls ≤ q | finiteBindingGame adversary] ≤
       Pr[fun p => ¬ Good p.2 ∧ p.2.length ≤ q + 2 * LOG_LENGTH | do
         let π ← $ᵗ Perm
         logRun π (adversary >>= recheck) []] := by
   classical
-  simp only [bindingGame, OracleFamily.sample, IdealPermutation.sample, Perm.family_run]
+  simp only [finiteBindingGame, OracleFamily.sample, IdealPermutation.sample, Perm.family_run]
   rw [probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]
   refine ENNReal.tsum_le_tsum fun π => mul_le_mul' le_rfl ?_
   rw [run_eq_logRun, logRun_bind, bind_map_left, probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]
@@ -159,7 +160,7 @@ theorem probEvent_breaks_le (adversary : Adversary) (q : Nat) :
 
 theorem merkle_binding : merkle.Binding := by
   intro adversary q hq
-  rw [Scheme.bindingProbability, dif_pos (by trivial)]
+  rw [Scheme.bindingProbability_eq_finite _ (by trivial)]
   by_cases hbig : 2 ^ 128 ≤ q
   · refine probEvent_le_one.trans ?_
     rw [ENNReal.le_div_iff_mul_le (by simp) (by simp), one_mul]
