@@ -46,6 +46,7 @@ theorem logRun_recheck (π : Perm) (claim : Claim) (hbreak : merkle.Breaks π cl
     ∃ table', logRun π (recheck claim) table = pure ((), table') ∧ ¬ Good table' ∧
       table'.length ≤ table.length + 2 * LOG_LENGTH := by
   obtain ⟨hconf, hacc₀, hacc₁⟩ := hbreak
+  simp only [Perm.family_eval] at hacc₀ hacc₁
   set i := hconf.choose
   set h₀ := hconf.choose_spec.choose
   set h₁ := hconf.choose_spec.choose_spec.choose
@@ -143,7 +144,7 @@ theorem probEvent_breaks_le (adversary : Adversary) (q : Nat) :
         let π ← $ᵗ Perm
         logRun π (adversary >>= recheck) []] := by
   classical
-  simp only [bindingGame]
+  simp only [bindingGame, OracleFamily.sample, IdealPermutation.sample, Perm.family_run]
   rw [probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]
   refine ENNReal.tsum_le_tsum fun π => mul_le_mul' le_rfl ?_
   rw [run_eq_logRun, logRun_bind, bind_map_left, probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]

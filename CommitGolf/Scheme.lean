@@ -13,12 +13,14 @@ open OracleComp OracleSpec
 - `opening td I` returns a proof `pf` for the positions `I`.
 - `check rt I a pf` decides whether `pf` proves that the committed vector has values `a` at `I`.
 
-`commit` and `opening` may flip coins; `check` may not. All three may call `π` and `π⁻¹`. -/
+`commit` and `opening` may flip coins; `check` may not. All three may query the declared family. -/
 structure Scheme where
+  /-- Public, fixed oracle declaration; the track certificate restricts its primitive types. -/
+  oracles : OracleFamily := OracleFamily.baseline
   Trapdoor : Type
-  commit : Message → OracleComp World (Commitment × Trapdoor)
-  opening : Trapdoor → (positions : Positions) → OracleComp World Proof
+  commit : Message → OracleComp oracles.world (Commitment × Trapdoor)
+  opening : Trapdoor → (positions : Positions) → OracleComp oracles.world Proof
   check : Commitment → (positions : Positions) → Values positions → Proof →
-    OracleComp PermSpec Bool
+    OracleComp oracles.spec Bool
 
 end CommitGolf

@@ -125,7 +125,7 @@ theorem eval_check (root : Commitment) (positions : Positions) (values : Values 
         ((((ordered positions).zip (paths proof)).map
           fun p => pClimb π p.1.1.1 (values p.1) p.2).all (· == root),
          (((ordered positions).zip (paths proof)).map fun p => p.2.length).sum) := by
-  simp only [merkle]
+  simp only
   split
   · simp
   · simp only [Perm.eval_bind, eval_mapM, eval_climb, Perm.eval_pure, paths]
@@ -284,11 +284,17 @@ theorem honest_spec (π : Perm) (m : Message) (positions : Positions) :
   refine ⟨⟨true, c, 0, positions.card * LOG_LENGTH, (proofOf T positions).length⟩,
     ?_, rfl, hc, rfl, rfl, length_proofOf _ _⟩
   unfold Scheme.honest
+  simp only [Perm.family_run, Perm.family_eval]
   rw [run_commit π m T c hE]
   erw [pure_bind]
   dsimp only
-  rw [merkle_opening, Perm.run_pure, pure_bind]
+  rw [Perm.run_pure, pure_bind]
   dsimp only
+  change pure (Scheme.HonestResult.mk
+    (π.eval (merkle.check (rootOf T) positions (m.restrict positions) (proofOf T positions))).1
+    c 0
+    (π.eval (merkle.check (rootOf T) positions (m.restrict positions) (proofOf T positions))).2
+    (proofOf T positions).length) = _
   rw [hk]
 
 theorem merkle_completeness : merkle.Completeness := by

@@ -1,32 +1,48 @@
 # commit.golf
 
-Optimize a **vector commitment scheme in the ideal permutation model** under the [draft rules](RULES.md).
-Schemes commit to `2^24` entries of 32 bytes and are ranked on the Pareto frontier of two worst-case
-scores, for openings of 100 positions: **opening proof bytes** and **permutation calls made by
-`check`**. Every scheme proves, in Lean, perfect completeness and position binding error at most
-`q / 2^128` against adversaries making `q` calls to the permutation or its inverse.
+Optimize a **vector commitment scheme** under the [draft rules](RULES.md), in either of two
+tracks: **ideal permutation** or **ideal compression**. A scheme declares a finite collection
+of independent instances of its track's primitive, with its own bit widths.
 
-## Contract
+Schemes commit to `2^24` entries of 32 bytes. Each track ranks schemes on the Pareto frontier of
+two worst-case scores for openings of 100 positions: **opening proof bytes** and **oracle calls
+made by `check`**. Every scheme proves perfect completeness and position binding error at most
+`q / 2^128` against adversaries making `q` calls across the declared family.
 
-`RULES.md` states the rules; `CommitGolf/` holds the Lean statements, read in the order listed in
-`CommitGolf/Parameters.lean`. `CommitGolfBaseline/` is the textbook Merkle tree at `(76800 bytes, 2400 calls)`, with its
-certificate proved in `CommitGolfBaseline/MerkleProof/`.
+## Contract and baselines
+
+`RULES.md` states the rules; `CommitGolf/` holds the Lean contract. `CommitGolf/Oracle/` defines
+both primitives and their families. `CommitGolfBaseline/` contains binary Merkle baselines:
+one 1600-bit permutation, or one 512-to-256-bit compression function. Both claim
+`(76800 bytes, 2400 calls)` with certificates in their respective proof modules.
 
 ```sh
 lake exe cache get
+# Build and check either baseline submission independently:
+lake build IdealPermutation
+lake build IdealCompression
+
+# Build both baseline libraries and the regression tests:
 lake build CommitGolf CommitGolfBaseline CommitGolfTests
 ```
 
 ## Submitting
 
-Edit `submission/`; the example there submits the baseline. `verifier/` checks it with Lean's
-`comparator`, which replays every proof through the kernel in a sandbox. On Linux with Landlock
-and user systemd:
+Edit `submissions/ideal-permutation/` or `submissions/ideal-compression/`. Each directory starts
+with its track's baseline, with `claim.json` and `Solution.lean`. Optional supporting modules go
+in that directory's `CommitGolfCandidate/`. The certificate enforces the selected track.
+
+On Linux with Landlock and user systemd:
 
 ```sh
 bash scripts/setup.sh
-python3 scripts/run.py
+python3 scripts/run.py --track ideal-permutation
+python3 scripts/run.py --track ideal-compression
 ```
+
+Omitting `--track` from `scripts/run.py` selects `ideal-permutation` for compatibility with the
+existing workflow. The workflows are unchanged; compression verification is selected locally.
+The runner writes the selected track and its scores to `scripts/score.json`.
 
 ## License
 

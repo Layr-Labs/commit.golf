@@ -21,10 +21,10 @@ structure HonestResult where
   proofBytes : Nat
 
 /-- `(rt, td) ← commit m`, then `pf ← opening td I`, then `check rt I m[I] pf`, against `π`. -/
-def honest (π : Perm) (message : Message) (positions : Positions) : ProbComp HonestResult := do
-  let ((rt, td), commitCalls) ← π.run (scheme.commit message)
-  let (pf, openCalls) ← π.run (scheme.opening td positions)
-  let (accepted, checkCalls) := π.eval (scheme.check rt positions (message.restrict positions) pf)
+def honest (π : scheme.oracles.Realization) (message : Message) (positions : Positions) : ProbComp HonestResult := do
+  let ((rt, td), commitCalls) ← scheme.oracles.run π (scheme.commit message)
+  let (pf, openCalls) ← scheme.oracles.run π (scheme.opening td positions)
+  let (accepted, checkCalls) := scheme.oracles.eval π (scheme.check rt positions (message.restrict positions) pf)
   return { accepted, commitCalls, openCalls, checkCalls, proofBytes := pf.length }
 
 end Scheme

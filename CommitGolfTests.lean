@@ -1,4 +1,5 @@
 import CommitGolf
+import CommitGolf.OracleTests
 import CommitGolfBaseline
 import Std.Tactic.BVDecide
 
@@ -78,7 +79,7 @@ computations in the pinned VCVio cannot fail: no probability mass is lost to fai
 that added failure to `OracleComp` would break these checks. -/
 
 example {α : Type} (c : ProbComp α) : Pr[⊥ | c] = 0 := probFailure_eq_zero
-example (scheme : Scheme) (π : Perm) (m : Message) (I : Positions) :
+example (scheme : Scheme) (π : scheme.oracles.Realization) (m : Message) (I : Positions) :
     Pr[⊥ | scheme.honest π m I] = 0 := probFailure_eq_zero
 example (adversary : Scheme.Adversary) : Pr[⊥ | Scheme.bindingGame adversary] = 0 :=
   probFailure_eq_zero
@@ -91,5 +92,27 @@ the three the rules allow; `#guard_msgs` fails the build otherwise (in particula
 /-- info: 'CommitGolf.Baseline.merkle_certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms merkle_certificate
+
+/-! ### Compression baseline execution -/
+
+private def toyHash (x : CompressionBaseline.Input) : CompressionBaseline.Digest :=
+  x.setWidth DIGEST_BITS ^^^ ((x >>> DIGEST_BITS).setWidth DIGEST_BITS).rotateLeft 1
+private def compressionTree :=
+  (CompressionBaseline.Hash.eval toyHash (CompressionBaseline.layers 3 toyLeaves)).1
+
+#guard compressionTree.map List.length == [8, 4, 2, 1]
+#guard (CompressionBaseline.Hash.eval toyHash (CompressionBaseline.layers 3 toyLeaves)).2 == 7
+#guard (List.range 8).all fun i =>
+  let (root, calls) := CompressionBaseline.Hash.eval toyHash
+    (CompressionBaseline.climb i (toyLeaves.getD i 0) (CompressionBaseline.copath compressionTree 3 i))
+  root == CompressionBaseline.rootOf compressionTree && calls == 3
+#guard (List.range 8).all fun i =>
+  (CompressionBaseline.Hash.eval toyHash
+    (CompressionBaseline.climb i (toyLeaves.getD i 0 + 1)
+      (CompressionBaseline.copath compressionTree 3 i))).1 != CompressionBaseline.rootOf compressionTree
+
+/-- info: 'CommitGolf.CompressionBaseline.merkle_certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms CompressionBaseline.merkle_certificate
 
 end CommitGolf.Tests

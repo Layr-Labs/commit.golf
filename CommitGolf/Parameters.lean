@@ -28,11 +28,11 @@ def LENGTH : Nat := 2 ^ LOG_LENGTH
 /-- Both scores are measured on honest openings of exactly `BATCH` positions. -/
 def BATCH : Nat := 100
 
-/-- An adversary making at most `q ≥ 1` permutation calls breaks binding with probability at most
+/-- An adversary making at most `q ≥ 1` oracle calls breaks binding with probability at most
 `q / 2 ^ SECURITY_BITS`. -/
 def SECURITY_BITS : Nat := 128
 
-/-! ### Honest budgets, in permutation calls -/
+/-! ### Honest budgets, in oracle calls -/
 
 def COMMIT_BUDGET : Nat := 100 * LENGTH
 

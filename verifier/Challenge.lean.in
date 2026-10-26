@@ -11,6 +11,6 @@ namespace CommitGolf.Challenge
 
 noncomputable def submission : CommitGolf.Scheme := sorry
 
-theorem certificate : CommitGolf.Certificate submission {{proofBytes}} {{checkCalls}} := sorry
+theorem certificate : CommitGolf.TrackCertificate .{{track}} submission {{proofBytes}} {{checkCalls}} := sorry
 
 end CommitGolf.Challenge
