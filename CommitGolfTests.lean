@@ -1,5 +1,5 @@
 import CommitGolf
-import CommitGolf.OracleTests
+import CommitGolf.Oracle.Tests
 import CommitGolfBaseline
 import Std.Tactic.BVDecide
 
