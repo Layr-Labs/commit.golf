@@ -124,7 +124,7 @@ end CommitGolf.Tests
 
 /-! Regression checks for the hiding specification, not a secure VC construction. -/
 namespace CommitGolf.HidingTests
-open OracleComp OracleSpec
+open OracleComp OracleSpec CommitGolf.Hiding
 
 -- A message-independent toy scheme witnesses that the definition is satisfiable for every
 -- oracle family. It is deliberately not binding and is not a challenge submission.
@@ -139,10 +139,10 @@ private def constantSimulator (F : OracleFamily) : HidingSimulator (constantSche
   fun _ _ => pure (0, [])
 
 example (F : OracleFamily) :
-    (constantScheme F).StatisticalHiding (constantSimulator F) (fun _ _ => 0) := by
+    StatisticalHiding (constantScheme F) (constantSimulator F) (fun _ _ => 0) := by
   intro q t hq Aux Output A hbound
-  have heq : (constantScheme F).realHidingExperiment A =
-      (constantScheme F).idealHidingExperiment (constantSimulator F) A := by
+  have heq : realHidingExperiment (constantScheme F) A =
+      idealHidingExperiment (constantScheme F) (constantSimulator F) A := by
     rfl
   rw [heq, tvDist_self]
 
@@ -158,7 +158,7 @@ private def twoStage : HidingAdversary R Unit (BitVec 2) 0 where
     return challenge
   observe _ _ _ := (R.world.query (.inr []) :)
 
-private lemma first_support : support (HidingAdversary.counted twoStage.choose) =
+private lemma first_support : support (counted twoStage.choose) =
     {(challenge, 1)} := by
   change support ((fun _ : BitVec 2 => (challenge, 1)) <$>
     (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))) = _
@@ -166,7 +166,7 @@ private lemma first_support : support (HidingAdversary.counted twoStage.choose) 
   simp
 
 private lemma last_support (root : Commitment) (proof : Proof) :
-    support (HidingAdversary.counted (twoStage.observe () root proof)) =
+    support (counted (twoStage.observe () root proof)) =
       {z | z.2 = 1} := by
   change support ((fun x : BitVec 2 => (x, 1)) <$>
     (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))) = _
@@ -174,7 +174,7 @@ private lemma last_support (root : Commitment) (proof : Proof) :
   ext ⟨x, n⟩
   simp [eq_comm]
 
-example : twoStage.QueryBound 2 := by
+example : QueryBound twoStage 2 := by
   intro first hf
   rw [first_support, Set.mem_singleton_iff] at hf
   subst first
@@ -184,12 +184,12 @@ example : twoStage.QueryBound 2 := by
   change last.2 = 1 at hl
   simp [hl]
 
-example : ¬ twoStage.QueryBound 1 := by
+example : ¬ QueryBound twoStage 1 := by
   intro h
-  have hf : (challenge, 1) ∈ support (HidingAdversary.counted twoStage.choose) := by
+  have hf : (challenge, 1) ∈ support (counted twoStage.choose) := by
     rw [first_support]; exact Set.mem_singleton _
   have hl : ((0 : BitVec 2), 1) ∈
-      support (HidingAdversary.counted (twoStage.observe () 0 [])) := by
+      support (counted (twoStage.observe () 0 [])) := by
     rw [last_support]; rfl
   have impossible := (h _ hf).2 0 [] _ hl
   norm_num at impossible
@@ -201,16 +201,16 @@ private def coinOnly : HidingAdversary R Unit Bool 0 where
     let x ← (R.world.query (.inl 1) :)
     return x.val == 0
 
-example : coinOnly.QueryBound 0 := by
+example : QueryBound coinOnly 0 := by
   intro first hf
-  have heq : HidingAdversary.counted coinOnly.choose =
+  have heq : counted coinOnly.choose =
       (pure (challenge, 0) : OracleComp R.world _) := rfl
   rw [heq] at hf
   have hf' := OracleComp.eq_of_mem_support_pure (challenge, 0) hf
   subst first
   refine ⟨by decide, ?_⟩
   intro root proof last hl
-  have heq : HidingAdversary.counted (coinOnly.observe () root proof) =
+  have heq : counted (coinOnly.observe () root proof) =
       (fun x : Fin 2 => (x.val == 0, 0)) <$>
         (liftM (R.world.query (.inl 1)) : OracleComp R.world (Fin 2)) := rfl
   rw [heq] at hl
@@ -226,14 +226,14 @@ private def remembers : HidingAdversary R (BitVec 2) (BitVec 2 × BitVec 2) 0 wh
     let y ← (R.world.query (.inr []) :)
     return (x, y)
 
-example : (constantScheme R).runHiding ((constantScheme R).realHidingExperiment remembers) =
+example : runHiding (constantScheme R) (realHidingExperiment (constantScheme R) remembers) =
     (do let x ← $ᵗ BitVec 2; return (x, x)) := by
-  simp [Scheme.realHidingExperiment, remembers, constantScheme]
-  change (constantScheme R).runHiding (do
+  simp [realHidingExperiment, remembers, constantScheme]
+  change runHiding (constantScheme R) (do
     let x ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
     let y ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
     return (x, y)) = _
-  simp [Scheme.runHiding, constantScheme, OracleFamily.initialState, OracleFamily.runShared,
+  simp [runHiding, constantScheme, OracleFamily.initialState, OracleFamily.runShared,
     map_eq_bind_pure_comp]
   change ((do
     let x ← R.sharedAnswer []
@@ -246,8 +246,8 @@ example : (constantScheme R).runHiding ((constantScheme R).realHidingExperiment 
 -- public queries. This checks the interface transport only, not a PPT claim for this profile.
 example (scheme : Scheme) (simulate : HidingSimulator scheme) (n : Nat)
     (positions : Positions) (values : Values positions) :
-    HidingSimulatorFamily.specialize
-      (parameters := fun _ => HidingParameters.ofScheme scheme)
+    specialize
+      (parameters := fun _ => parametersOfScheme scheme)
       (fun _ input => simulate input.1 input.2) scheme n rfl positions values =
         simulate positions values := rfl
 
@@ -258,8 +258,8 @@ private def dimensions (n : Nat) : HidingParameters :=
 
 private def zeroFamily : HidingSimulatorFamily dimensions := fun _ _ => pure (0, [])
 
-example (n : Nat) (input : (dimensions n).Input) :
+example (n : Nat) (input : SimulatorInput (dimensions n)) :
     SecurityFamily.packProgram zeroFamily ⟨n, input⟩ =
-      pure (⟨n, (0, [])⟩ : SecurityFamily.Output (fun n => (dimensions n).Output)) := rfl
+      pure (⟨n, (0, [])⟩ : SecurityFamily.Output (fun n => SimulatorOutput (dimensions n))) := rfl
 
 end CommitGolf.HidingTests

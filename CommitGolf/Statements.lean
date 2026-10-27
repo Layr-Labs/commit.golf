@@ -1,16 +1,32 @@
 import CommitGolf.Binding
+import CommitGolf.Hiding
 
 /-! # Statements
 
-The five statements a certificate proves, in the order of `RULES.md`, and the certificate.
+The base certificate proves statements 1–5. Hiding certificates additionally prove statement 6.
 Statements 1–4 hold in the honest run for every fixed oracle realization `π`, message, and set of positions, with
 probability `1` (for all coins). Probabilities live in `ENNReal`. -/
 
 namespace CommitGolf
 open OracleComp
+open PFunctor PFunctor.DynSystem.DynComputation
+
+section HidingEnvironment
+
+/- Public choices fixed by the challenge author: the parameter family, its challenge instance,
+and VCVio's computational model, encodings, and resource policy. -/
+variable (scheme : Scheme)
+    (parameters : Nat → Hiding.HidingParameters) (challengeParameter : Nat)
+    (atChallenge : parameters challengeParameter = Hiding.parametersOfScheme scheme)
+    {C : StepClass} [C.HasProd] [C.HasSum] [C.HasOption]
+    [DecidableEq (Hiding.HidingFamilySpec parameters).Domain]
+    (costModel : QuantitativeStepClass C)
+    (boundary : Boundary C (Hiding.HidingFamilySpec parameters).toPFunctor
+      (SecurityFamily.Input (fun n => Hiding.SimulatorInput (parameters n)))
+      (SecurityFamily.Output (fun n => Hiding.SimulatorOutput (parameters n))))
+    {label : Type} (resources : Complexity.OracleContract costModel boundary.interface label)
 
 namespace Scheme
-variable (scheme : Scheme)
 
 /-- **1. Completeness** [CY24, Lemma 18.2.1], perfect: `check` accepts the honest opening. -/
 def Completeness : Prop :=
@@ -44,10 +60,31 @@ def Binding : Prop :=
         return (claim, calls, a₀, a₁)] ≤
       (q : ENNReal) / 2 ^ SECURITY_BITS
 
+/-- **6. Hiding** [CY24, Lemma 18.6.3]. The commitment and opening proof can be simulated
+using only the opened positions and their values. For every query-bounded adversary, the real
+and simulated experiments are within `error openingSize queryBudget` in statistical distance.
+One simulator family must satisfy both this bound and VCVio's uniform, backend-relative PPT
+requirement. -/
+def Hiding (error : Nat → Nat → ℝ) : Prop :=
+  ∃ simulatorFamily : Hiding.HidingSimulatorFamily parameters,
+    Complexity.SecurityFamily.IsOraclePPTBy costModel boundary resources simulatorFamily ∧
+    (∀ openingSize queryBudget, 0 ≤ error openingSize queryBudget) ∧
+    ∀ (openingSize queryBudget : Nat),
+      openingSize ≤ LENGTH →
+      ∀ (AdversaryState Output : Type)
+        (adversary : Hiding.HidingAdversary scheme.oracles AdversaryState Output openingSize),
+        Hiding.QueryBound adversary queryBudget →
+        tvDist
+          (Hiding.runHiding scheme (Hiding.realHidingExperiment scheme adversary))
+          (Hiding.runHiding scheme
+            (Hiding.idealHidingExperiment scheme
+              (Hiding.specialize simulatorFamily scheme challengeParameter atChallenge)
+              adversary)) ≤
+          error openingSize queryBudget
+
 end Scheme
 
-/-- The competition claim: `scheme` satisfies the five statements with scores at most
-`(proofBytes, checkCalls)`. -/
+/-- Completeness, binding, and the honest resource bounds (statements 1–5). -/
 structure Certificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop where
   completeness : scheme.Completeness
   honestBudgets : scheme.HonestBudgets
@@ -55,9 +92,52 @@ structure Certificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop whe
   verificationCost : scheme.VerificationCost checkCalls
   binding : scheme.Binding
 
-/-- A certificate for the selected track, including its restriction on oracle types. -/
-structure TrackCertificate (track : Track) (scheme : Scheme) (proofBytes checkCalls : Nat)
-    : Prop extends Certificate scheme proofBytes checkCalls where
-  inTrack : scheme.oracles.InTrack track
+/-- The base certificate plus commitment-and-opening hiding (statement 6). -/
+structure HidingCertificate (proofBytes checkCalls : Nat) (error : Nat → Nat → ℝ) : Prop
+    extends Certificate scheme proofBytes checkCalls where
+  hidingProperty : scheme.Hiding parameters challengeParameter atChallenge costModel boundary resources error
+
+/-- A binding-only track additionally restricts the declared oracle model. -/
+abbrev TrackCertificate (track : Track) (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  Certificate scheme proofBytes checkCalls ∧ scheme.oracles.InTrack track
+
+/-! ### Named track certificates
+
+Import `CommitGolf.Statements` for these complete submission requirements. Non-hiding tracks
+require the base certificate and oracle membership. Hiding tracks add `HIDING_ERROR` and PPT simulation.
+The hiding environment remains explicit for the challenge author to fix, not the solver.
+-/
+
+abbrev IdealPermutationCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .idealPermutation scheme proofBytes checkCalls
+
+abbrev IdealCompressionCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .idealCompression scheme proofBytes checkCalls
+
+abbrev RandomOracleFixedOutputCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .randomOracleFixedOutput scheme proofBytes checkCalls
+
+abbrev IdealXofCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .idealXof scheme proofBytes checkCalls
+
+variable (proofBytes checkCalls : Nat)
+
+abbrev IdealPermutationHidingCertificate : Prop :=
+  HidingCertificate scheme parameters challengeParameter atChallenge costModel boundary resources
+    proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .idealPermutation
+
+abbrev IdealCompressionHidingCertificate : Prop :=
+  HidingCertificate scheme parameters challengeParameter atChallenge costModel boundary resources
+    proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .idealCompression
+
+abbrev RandomOracleFixedOutputHidingCertificate : Prop :=
+  HidingCertificate scheme parameters challengeParameter atChallenge costModel boundary resources
+    proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .randomOracleFixedOutput
+
+abbrev IdealXofHidingCertificate : Prop :=
+  HidingCertificate scheme parameters challengeParameter atChallenge costModel boundary resources
+    proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .idealXof
+
+end HidingEnvironment
 
 end CommitGolf
