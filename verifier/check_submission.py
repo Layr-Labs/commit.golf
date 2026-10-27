@@ -14,10 +14,10 @@ MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 INTEGER = re.compile(r"0|[1-9][0-9]*")
 MAX_SCORE = 2**53 - 1  # the largest integer that JSON consumers keep exact
 CLAIM_KEYS = ("proofBytes", "checkCalls")
-ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std",
-                     "CommitGolfBaseline")
+ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std")
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
-                    "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Statements"}
+                    "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Statements",
+                    "CommitGolf.BindingFinite", "CommitGolf.Oracle.Finite"}
 
 
 def strip_comments(source: str) -> str:

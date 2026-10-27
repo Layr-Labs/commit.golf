@@ -79,23 +79,29 @@ with `proofBytes` and `checkCalls`, and `Solution.lean`, with optional modules u
 proves `CommitGolf.Challenge.certificate : TrackCertificate track submission proofBytes checkCalls`.
 The track certificate proves the five statements and that all declared instances belong to the
 selected track. The trusted verifier selects `track`; the submission cannot override it.
-Allowed imports are `CommitGolf`, `CommitGolfBaseline`, and the pinned dependencies (Lean,
-Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; fixed-output RO and XOF starters are pending.
+Allowed imports are the permitted `CommitGolf` contract modules, the submission's own `CommitGolfCandidate` modules, and the pinned dependencies (Lean,
+Batteries, Mathlib, VCVio). Each track includes a certified baseline example.
 
 The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
 
 ```sh
-lake build CommitGolf CommitGolfBaseline CommitGolfTests   # build
+lake build CommitGolf CommitGolfTests   # build
 bash scripts/setup.sh && bash scripts/benchmark.sh --track ideal-permutation # verify (Linux, Landlock, user systemd)
 ```
 
 ## Baselines
 
-Both use the binary Merkle tree with unpruned paths, scoring `(76800, 2400)`:
+All four use the binary Merkle tree with unpruned paths, scoring `(76800, 2400)`:
 
-- [Permutation](CommitGolfBaseline/Merkle.lean): `C(L, R)` is the low 256 bits of
+- [Permutation](submissions/ideal-permutation/CommitGolfCandidate/Permutation/Merkle.lean): `C(L, R)` is the low 256 bits of
   `π(0¹⁰⁸⁸ ‖ L ‖ R)`, for one 1600-bit permutation. Its certificate is in
-  [MerkleProof](CommitGolfBaseline/MerkleProof/Certificate.lean).
-- [Compression](CommitGolfBaseline/Compression.lean): `C(L, R) = H(L ‖ R)`, for one 512-to-256-bit
+  [MerkleProof](submissions/ideal-permutation/CommitGolfCandidate/Permutation/MerkleProof/Certificate.lean).
+- [Compression](submissions/ideal-compression/CommitGolfCandidate/Compression/Compression.lean): `C(L, R) = H(L ‖ R)`, for one 512-to-256-bit
   ideal compression function. Its certificate is in
-  [CompressionProof](CommitGolfBaseline/CompressionProof/Certificate.lean).
+  [CompressionProof](submissions/ideal-compression/CommitGolfCandidate/Compression/CompressionProof/Certificate.lean).
+- [Fixed-output RO](submissions/random-oracle-fixed-output/CommitGolfCandidate/RandomOracle/RandomOracle.lean):
+  encode the two children as 512 input bits and obtain a 256-bit digest. Its certificate is in
+  [RandomOracleProof](submissions/random-oracle-fixed-output/CommitGolfCandidate/RandomOracle/RandomOracleProof/Certificate.lean).
+- [XOF](submissions/ideal-xof/CommitGolfCandidate/Xof/RandomOracle.lean):
+  use the same input encoding and request 256 output bits. Its certificate is in
+  [XofProof](submissions/ideal-xof/CommitGolfCandidate/Xof/XofProof/Certificate.lean).

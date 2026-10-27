@@ -23,7 +23,7 @@ jobs:
         id: cache
         with:
           path: .cache/trusted.tar.zst
-          key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
+          key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
       - name: Validate track
         run: python3 -c 'import os, sys; sys.path.insert(0, "verifier"); from tracks import track_constructor; track_constructor(os.environ["BENCHMARK_TRACK"])'
       - name: Start verifier VM

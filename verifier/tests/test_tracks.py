@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class TrackTests(unittest.TestCase):
     def test_baseline_directories_pass_intake(self):
-        for track in ("ideal-permutation", "ideal-compression"):
+        for track in TRACKS:
             with self.subTest(track=track):
                 result = check(ROOT / submission_path(track))
                 self.assertTrue(result["ok"], result["errors"])

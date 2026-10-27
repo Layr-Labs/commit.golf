@@ -1,5 +1,5 @@
 import CommitGolf
-import CommitGolfBaseline.MerkleProof.Certificate
+import CommitGolfCandidate.Permutation.MerkleProof.Certificate
 
 /-! # Example submission: the Merkle baseline
 

@@ -1,5 +1,5 @@
 import CommitGolf
-import CommitGolfBaseline.CompressionProof.Certificate
+import CommitGolfCandidate.Compression.CompressionProof.Certificate
 
 /-! Example submission for the ideal-compression track: a 512-to-256-bit Merkle tree. -/
 namespace CommitGolf.Challenge

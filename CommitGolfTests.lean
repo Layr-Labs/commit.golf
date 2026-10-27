@@ -1,6 +1,7 @@
 import CommitGolf
 import CommitGolf.Oracle.Tests
-import CommitGolfBaseline
+import CommitGolfCandidate.Permutation.MerkleProof.Certificate
+import CommitGolfCandidate.Compression.CompressionProof.Certificate
 import Std.Tactic.BVDecide
 
 /-! # Regression tests

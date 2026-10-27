@@ -24,8 +24,8 @@ jobs:
         run: lake exe cache get
       - name: Build and test all tracks
         run: >-
-          lake build CommitGolf CommitGolfBaseline CommitGolfTests
-          IdealPermutation IdealCompression RandomOracleFixedOutputModel IdealXofModel
+          lake build CommitGolf CommitGolfTests
+          IdealPermutation IdealCompression RandomOracleFixedOutput IdealXof
       - name: Test verifier plumbing
         run: python3 -m unittest discover -s verifier/tests
 

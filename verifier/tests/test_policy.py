@@ -15,7 +15,7 @@ class PolicyTests(unittest.TestCase):
         (self.root / 'CommitGolfCandidate').mkdir()
         (self.root / 'Solution.lean').write_text('import CommitGolfCandidate.Helper\n')
         (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text(
-            'import CommitGolf.Statements\nimport CommitGolfBaseline.MerkleProof.Lazy\n')
+            'import CommitGolf.Statements\nimport CommitGolf.BindingFinite\n')
         self.claim = {'proofBytes': 76800, 'checkCalls': 2400}
         self.write_claim()
 
@@ -35,6 +35,12 @@ class PolicyTests(unittest.TestCase):
         value = check(self.root)
         self.assertFalse(value['ok'])
         self.assertIn('outside the allowed modules', value['errors'][0])
+
+    def test_shared_baseline_import_is_rejected(self):
+        (self.root / 'Solution.lean').write_text('import CommitGolfBaseline.MerkleProof.Certificate\n')
+        result = check(self.root)
+        self.assertFalse(result['ok'])
+        self.assertIn('outside the allowed modules', result['errors'][0])
 
     def test_challenge_import_is_rejected(self):
         (self.root / 'Solution.lean').write_text('import CommitGolf.Challenge\n')

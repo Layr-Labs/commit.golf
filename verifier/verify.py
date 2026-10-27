@@ -199,13 +199,17 @@ def verify(args: argparse.Namespace) -> dict:
             return result
         project = work / 'project'
         project.mkdir()
-        for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'CommitGolf.lean',
-                     'CommitGolfBaseline.lean'):
+        for name in ('lean-toolchain', 'lake-manifest.json', 'CommitGolf.lean'):
             shutil.copy2(args.trusted / name, project / name)
-        for name in ('CommitGolf', 'CommitGolfBaseline'):
+        for name in ('CommitGolf',):
             shutil.copytree(args.trusted / name, project / name)
-        with (project / 'lakefile.lean').open('a') as out:
-            out.write('\nlean_lib Solution\n')
+        # Keep the pinned package/dependencies and contract; load only the selected candidate.
+        lakefile, boundary, _ = (args.trusted / 'lakefile.lean').read_text().partition(
+            '-- Submission builds')
+        if not boundary:
+            raise VerifyError('trusted lakefile is missing the submission boundary')
+        (project / 'lakefile.lean').write_text(
+            lakefile + '\nlean_lib CommitGolfCandidate\nlean_lib Solution\n')
         if (source / 'CommitGolfCandidate').is_dir():  # optional: Solution.lean may stand alone
             shutil.copytree(source / 'CommitGolfCandidate', project / 'CommitGolfCandidate')
         shutil.copy2(source / 'Solution.lean', project / 'Solution.lean')

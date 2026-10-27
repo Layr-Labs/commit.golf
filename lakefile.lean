@@ -9,14 +9,32 @@ require VCVio from git
 
 -- The contract: parameters, oracle, scheme syntax, games, and the statements a certificate proves.
 @[default_target] lean_lib CommitGolf
--- The textbook Merkle tree, the baseline scheme, and the proof of its certificate.
-lean_lib CommitGolfBaseline
--- Kernel-checked constants, runs of the baseline on small trees, and the certificate's axioms.
-lean_lib CommitGolfTests
--- Namespace for submitted proofs; the verifier copies a submission's CommitGolfCandidate/ here.
-lean_lib CommitGolfCandidate
 
--- Compile either submitted baseline independently, including its track certificate.
+-- Submission builds (the verifier supplies its own candidate library below this boundary).
+-- Kernel-checked constants, small-tree executions, and certificate axioms.
+lean_lib CommitGolfTests
+
+lean_lib PermutationCandidate where
+  srcDir := "submissions/ideal-permutation"
+  roots := #[`CommitGolfCandidate.Permutation]
+  globs := #[.andSubmodules `CommitGolfCandidate.Permutation]
+
+lean_lib CompressionCandidate where
+  srcDir := "submissions/ideal-compression"
+  roots := #[`CommitGolfCandidate.Compression]
+  globs := #[.andSubmodules `CommitGolfCandidate.Compression]
+
+lean_lib RandomOracleCandidate where
+  srcDir := "submissions/random-oracle-fixed-output"
+  roots := #[`CommitGolfCandidate.RandomOracle]
+  globs := #[.andSubmodules `CommitGolfCandidate.RandomOracle]
+
+lean_lib XofCandidate where
+  srcDir := "submissions/ideal-xof"
+  roots := #[`CommitGolfCandidate.Xof]
+  globs := #[.andSubmodules `CommitGolfCandidate.Xof]
+
+-- Compile each submitted baseline independently, including its track certificate.
 lean_lib IdealPermutation where
   roots := #[`submissions.«ideal-permutation».Solution]
 lean_lib IdealCompression where
@@ -29,3 +47,9 @@ lean_lib RandomOracleFixedOutputModel where
 
 lean_lib IdealXofModel where
   roots := #[`CommitGolf.Oracle.Tests]
+
+lean_lib RandomOracleFixedOutput where
+  roots := #[`submissions.«random-oracle-fixed-output».Solution]
+
+lean_lib IdealXof where
+  roots := #[`submissions.«ideal-xof».Solution]
