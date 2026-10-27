@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a frozen beta submission tree before any candidate Lean is compiled."""
+"""Validate a frozen submission tree before any candidate Lean is compiled."""
 from __future__ import annotations
 
 import argparse
@@ -12,12 +12,12 @@ MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 32 * 1024 * 1024
 MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 INTEGER = re.compile(r"0|[1-9][0-9]*")
-MEMORY_BYTES = 1 << 24
-CLAIM_KEYS = {"S", "W", "K", "C", "layout"}
-LAYOUT_KEYS = ("message", "secret_key", "public_key", "cache", "signature", "witness")
-ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "RiscvZkvm", "Batteries", "Lean", "Init", "Std")
-ALLOWED_CONTRACT = {"SigGolf", "SigGolf.Parameters", "SigGolf.Oracle", "SigGolf.Riscv",
-                    "SigGolf.Programs", "SigGolf.Security", "SigGolf.Statements"}
+MAX_SCORE = 2**53 - 1  # the largest integer that JSON consumers keep exact
+CLAIM_KEYS = ("proofBytes", "checkCalls")
+ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std",
+                     "CommitGolfBaseline")
+ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
+                    "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Statements"}
 
 
 def strip_comments(source: str) -> str:
@@ -54,7 +54,7 @@ def imports(source: str) -> list[str]:
         line = line.strip()
         if not line:
             continue
-        if line.startswith("prelude") or line.startswith("module "):
+        if re.match(r"(prelude|module|public|private|meta)\b", line):
             raise ValueError("alternate module headers are not allowed")
         if line.startswith("import"):
             parts = line.split()
@@ -66,39 +66,17 @@ def imports(source: str) -> list[str]:
     return found
 
 
-def claim(path: Path) -> dict[str, int | dict[str, int]]:
+def claim(path: Path) -> dict[str, int]:
     raw = path.read_bytes()
     if len(raw) > 512:
         raise ValueError("claim.json exceeds 512 bytes")
     value = json.loads(raw)
-    if not isinstance(value, dict) or set(value) != CLAIM_KEYS:
-        raise ValueError("claim.json must contain exactly S, W, K, C, and layout")
-    if any(type(value[key]) is not int or not INTEGER.fullmatch(str(value[key]))
-           for key in ("S", "W", "K", "C")):
-        raise ValueError("S, W, K, and C must be nonnegative decimal integers")
-    if (value["S"] > 2**14 or value["W"] > 2**17 or value["K"] > 2**17 or
-            value["C"] >= 2**32):
-        raise ValueError("S, W, K, or C is outside the competition bounds")
-    layout = value["layout"]
-    if not isinstance(layout, dict) or set(layout) != set(LAYOUT_KEYS):
-        raise ValueError("layout must declare exactly the six buffer offsets")
-    if any(type(layout[key]) is not int or not INTEGER.fullmatch(str(layout[key]))
-           for key in LAYOUT_KEYS):
-        raise ValueError("layout offsets must be nonnegative decimal integers")
-    lengths = {"message": 32, "secret_key": 32, "public_key": 16,
-               "cache": value["K"], "signature": value["S"], "witness": value["W"]}
-    for key in LAYOUT_KEYS:
-        start = layout[key]
-        if start % 8:
-            raise ValueError(f"{key} offset is not 8-byte aligned")
-        if start + lengths[key] > MEMORY_BYTES:
-            raise ValueError(f"{key} buffer exceeds 16 MiB memory")
-    for index, left in enumerate(LAYOUT_KEYS):
-        for right in LAYOUT_KEYS[index + 1:]:
-            if lengths[left] and lengths[right] and not (
-                    layout[left] + lengths[left] <= layout[right] or
-                    layout[right] + lengths[right] <= layout[left]):
-                raise ValueError(f"{left} and {right} buffers overlap")
+    if not isinstance(value, dict) or set(value) != set(CLAIM_KEYS):
+        raise ValueError("claim.json must contain exactly proofBytes and checkCalls")
+    if any(type(value[key]) is not int or not INTEGER.fullmatch(str(value[key])) for key in CLAIM_KEYS):
+        raise ValueError("proofBytes and checkCalls must be nonnegative decimal integers")
+    if any(value[key] > MAX_SCORE for key in CLAIM_KEYS):
+        raise ValueError("proofBytes or checkCalls exceeds 2^53 - 1")
     return value
 
 
@@ -116,13 +94,13 @@ def check(root: Path) -> dict:
             errors.append(f"{rel}: symlinks and special files are forbidden")
             continue
         if path.is_dir():
-            if rel.parts[0] != "SigGolfCandidate":
-                errors.append(f"{rel}: only SigGolfCandidate/ may contain modules")
+            if rel.parts[0] != "CommitGolfCandidate":
+                errors.append(f"{rel}: only CommitGolfCandidate/ may contain modules")
             continue
         if rel.as_posix() not in {"Solution.lean", "claim.json"} and not (
-            rel.parts[0] == "SigGolfCandidate" and path.suffix == ".lean" and
+            rel.parts[0] == "CommitGolfCandidate" and path.suffix == ".lean" and
             all(MODULE.fullmatch(part) for part in rel.with_suffix("").parts)):
-            errors.append(f"{rel}: only Solution.lean, claim.json, and SigGolfCandidate modules are admitted")
+            errors.append(f"{rel}: only Solution.lean, claim.json, and CommitGolfCandidate modules are admitted")
             continue
         size = path.stat().st_size
         total += size
@@ -151,8 +129,7 @@ def check(root: Path) -> dict:
                 errors.append(f"{path.relative_to(root)}: import {module} is outside the allowed modules")
         except (OSError, UnicodeError, ValueError) as exc:
             errors.append(f"{path.relative_to(root)}: invalid Lean source: {exc}")
-    return {"ok": not errors, "claim": values, "score": values["S"] * values["C"] if values else None,
-            "files": len(files), "bytes": total, "errors": errors}
+    return {"ok": not errors, "claim": values, "files": len(files), "bytes": total, "errors": errors}
 
 
 if __name__ == "__main__":

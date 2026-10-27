@@ -69,7 +69,7 @@ def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> st
         raise FetchError("invalid PR number or commit")
     if destination.exists():
         raise FetchError("destination must be new")
-    with tempfile.TemporaryDirectory(prefix="sig-fetch-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="commit-fetch-") as tmp:
         repo = Path(tmp) / "repo"
         bounded(["git", "init", "-q", str(repo)], 4096)
         remote = f"https://github.com/{repository}.git"
@@ -92,7 +92,7 @@ def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> st
             path = Path(name)
             if kind != b"blob" or mode not in (b"100644", b"100755") or not SHA.fullmatch(oid.decode()) or (
                 path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] not in
-                {"SigGolfCandidate", "Solution.lean", "claim.json"}):
+                {"CommitGolfCandidate", "Solution.lean", "claim.json"}):
                 raise FetchError(f"invalid submission entry: {name!r}")
             selected.append((path, oid.decode()))
             if len(selected) > MAX_FILES:

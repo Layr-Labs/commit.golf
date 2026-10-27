@@ -1,14 +1,8 @@
 {
-  "challenge_module": "SigGolf.Challenge",
+  "challenge_module": "CommitGolf.Challenge",
   "solution_module": "Solution",
-  "theorem_names": [
-    "SigGolf.Challenge.signature_bytes",
-    "SigGolf.Challenge.witness_bytes",
-    "SigGolf.Challenge.cache_bytes",
-    "SigGolf.Challenge.layout_offsets",
-    "SigGolf.Challenge.certificate"
-  ],
-  "definition_names": ["SigGolf.Challenge.submission"],
+  "theorem_names": ["CommitGolf.Challenge.certificate"],
+  "definition_names": ["CommitGolf.Challenge.submission"],
   "permitted_axioms": ["propext", "Quot.sound", "Classical.choice"],
   "enable_nanoda": false
 }

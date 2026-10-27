@@ -12,12 +12,11 @@ class PolicyTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        (self.root / 'SigGolfCandidate').mkdir()
-        (self.root / 'Solution.lean').write_text('import SigGolfCandidate.Helper\n')
-        (self.root / 'SigGolfCandidate' / 'Helper.lean').write_text('import SigGolf\n')
-        self.claim = {'S': 8, 'W': 8, 'K': 1 << 17, 'C': 100,
-                      'layout': {'message': 0, 'secret_key': 32, 'public_key': 64,
-                                 'cache': 96, 'signature': 131168, 'witness': 131176}}
+        (self.root / 'CommitGolfCandidate').mkdir()
+        (self.root / 'Solution.lean').write_text('import CommitGolfCandidate.Helper\n')
+        (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text(
+            'import CommitGolf.Statements\nimport CommitGolfBaseline.MerkleProof.Lazy\n')
+        self.claim = {'proofBytes': 76800, 'checkCalls': 2400}
         self.write_claim()
 
     def write_claim(self):
@@ -26,83 +25,60 @@ class PolicyTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_valid_layout_and_score(self):
+    def test_valid_submission(self):
         value = check(self.root)
         self.assertTrue(value['ok'], value['errors'])
-        self.assertEqual(value['score'], 800)
+        self.assertEqual(value['claim'], self.claim)
 
     def test_cross_import_is_rejected(self):
-        (self.root / 'SigGolfCandidate' / 'Helper.lean').write_text('import SigGolfCandidateX.Helper\n')
+        (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text('import CommitGolfCandidateX.Helper\n')
         value = check(self.root)
         self.assertFalse(value['ok'])
         self.assertIn('outside the allowed modules', value['errors'][0])
 
+    def test_challenge_import_is_rejected(self):
+        (self.root / 'Solution.lean').write_text('import CommitGolf.Challenge\n')
+        value = check(self.root)
+        self.assertFalse(value['ok'])
+        self.assertIn('outside the allowed modules', value['errors'][0])
+
+    def test_alternate_module_headers_are_rejected(self):
+        for header in ('module\nimport Lake\n', 'prelude\n', 'public import Lake\n', 'meta import Lake\n'):
+            (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text(header)
+            value = check(self.root)
+            self.assertFalse(value['ok'], header)
+            self.assertIn('alternate module headers', value['errors'][0])
+
     def test_symlink_and_archive_file_are_rejected(self):
-        (self.root / 'SigGolfCandidate' / 'Alias.lean').symlink_to('Helper.lean')
+        (self.root / 'CommitGolfCandidate' / 'Alias.lean').symlink_to('Helper.lean')
         (self.root / 'notes.zip').write_bytes(b'irrelevant')
         value = check(self.root)
         self.assertFalse(value['ok'])
         self.assertGreaterEqual(len(value['errors']), 2)
 
-    def test_signature_must_fit_memory_layout(self):
-        self.claim['S'] = 16
-        self.claim['layout']['signature'] = (1 << 24) - 8
+    def test_claim_needs_exactly_the_two_scores(self):
+        self.claim['extra'] = 1
         self.write_claim()
         value = check(self.root)
         self.assertFalse(value['ok'])
-        self.assertIn('signature buffer exceeds 16 MiB memory', value['errors'][0])
+        self.assertIn('exactly proofBytes and checkCalls', value['errors'][0])
 
-    def test_signature_size_is_capped(self):
-        self.claim['S'] = 1 << 14
-        self.claim['layout']['witness'] = 131168 + (1 << 14)
+    def test_scores_are_nonnegative_integers(self):
+        for bad in (-1, 1.5, '7', True):
+            self.claim['checkCalls'] = bad
+            self.write_claim()
+            value = check(self.root)
+            self.assertFalse(value['ok'], bad)
+
+    def test_scores_are_capped(self):
+        self.claim['proofBytes'] = 2**53 - 1
         self.write_claim()
-        value = check(self.root)
-        self.assertTrue(value['ok'], value['errors'])
-        self.claim['S'] += 1
+        self.assertTrue(check(self.root)['ok'])
+        self.claim['proofBytes'] = 2**53
         self.write_claim()
         value = check(self.root)
         self.assertFalse(value['ok'])
-        self.assertIn('outside the competition bounds', value['errors'][0])
-
-    def test_cache_size_is_declared_and_capped(self):
-        self.claim['K'] = 8
-        self.write_claim()
-        value = check(self.root)
-        self.assertTrue(value['ok'], value['errors'])
-        self.claim['K'] = (1 << 17) + 8
-        self.write_claim()
-        value = check(self.root)
-        self.assertFalse(value['ok'])
-        self.assertIn('outside the competition bounds', value['errors'][0])
-
-    def test_overlapping_buffers_are_rejected(self):
-        self.claim['layout']['signature'] = 96
-        self.write_claim()
-        value = check(self.root)
-        self.assertFalse(value['ok'])
-        self.assertIn('cache and signature buffers overlap', value['errors'][0])
-
-    def test_unaligned_offset_is_rejected(self):
-        self.claim['layout']['message'] = 1
-        self.write_claim()
-        value = check(self.root)
-        self.assertFalse(value['ok'])
-        self.assertIn('message offset is not 8-byte aligned', value['errors'][0])
-
-    def test_empty_witness_may_share_an_address(self):
-        self.claim['W'] = 0
-        self.claim['layout']['witness'] = self.claim['layout']['cache']
-        self.write_claim()
-        value = check(self.root)
-        self.assertTrue(value['ok'], value['errors'])
-
-    def test_custom_layout_is_accepted(self):
-        self.claim['layout'] = {'message': 0x40000, 'secret_key': 0x40100,
-                                'public_key': 0x40200, 'cache': 0x80000,
-                                'signature': 0x100000, 'witness': 0x100100}
-        self.write_claim()
-        value = check(self.root)
-        self.assertTrue(value['ok'], value['errors'])
+        self.assertIn('exceeds 2^53 - 1', value['errors'][0])
 
 
 if __name__ == '__main__':

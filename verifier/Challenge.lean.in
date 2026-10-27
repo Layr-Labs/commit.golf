@@ -1,19 +1,16 @@
-import SigGolf
+import CommitGolf
 
-namespace SigGolf.Challenge
+/-! # The challenge
 
-noncomputable def submission : SigGolf.Submission := sorry
+The verifier fills `{{proofBytes}}` and `{{checkCalls}}` from the submission's `claim.json`.
+`comparator` checks that the submission's `Solution` module proves this exact `certificate`
+statement about its own `submission`, replays every declaration through Lean's kernel, and
+admits only the axioms `propext`, `Quot.sound` and `Classical.choice`. -/
 
-theorem signature_bytes : submission.sizes.signature = {{S}} := sorry
+namespace CommitGolf.Challenge
 
-theorem witness_bytes : submission.sizes.witness = {{W}} := sorry
+noncomputable def submission : CommitGolf.Scheme := sorry
 
-theorem cache_bytes : submission.sizes.cache = {{K}} := sorry
+theorem certificate : CommitGolf.Certificate submission {{proofBytes}} {{checkCalls}} := sorry
 
-theorem layout_offsets : submission.layout =
-  { message := {{MESSAGE}}, secretKey := {{SECRET_KEY}}, publicKey := {{PUBLIC_KEY}},
-    cache := {{CACHE}}, signature := {{SIGNATURE}}, witness := {{WITNESS}} } := sorry
-
-theorem certificate : SigGolf.Certificate submission {{C}} := sorry
-
-end SigGolf.Challenge
+end CommitGolf.Challenge

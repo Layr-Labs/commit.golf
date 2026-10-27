@@ -19,8 +19,8 @@ def pid_namespace() -> str | None:
 def isolation_check() -> None:
     if sys.platform != "linux" or os.geteuid() == 0:
         raise RuntimeError("sandbox launcher requires an unprivileged Linux process")
-    host_dev = os.environ.get("SIG_VERIFIER_HOST_DEV")
-    host_shm = os.environ.get("SIG_VERIFIER_HOST_SHM_DEV")
+    host_dev = os.environ.get("COMMIT_VERIFIER_HOST_DEV")
+    host_shm = os.environ.get("COMMIT_VERIFIER_HOST_SHM_DEV")
     if not host_dev or str(Path("/dev").stat().st_dev) == host_dev:
         raise RuntimeError("systemd failed to provide private devices; refusing to compile")
     if host_shm and Path("/dev/shm").exists() and str(Path("/dev/shm").stat().st_dev) == host_shm:
@@ -28,7 +28,7 @@ def isolation_check() -> None:
     for path in (Path.cwd(), Path(__file__).resolve(), Path.home()):
         if not os.statvfs(path).f_flag & os.ST_RDONLY:
             raise RuntimeError(f"systemd failed to mount {path} read-only; refusing to compile")
-    host_pidns = os.environ.get("SIG_VERIFIER_HOST_PIDNS")
+    host_pidns = os.environ.get("COMMIT_VERIFIER_HOST_PIDNS")
     if not host_pidns or pid_namespace() in (None, host_pidns):
         raise RuntimeError("systemd failed to give the job its own PID namespace; refusing to compile")
     try:
@@ -37,13 +37,13 @@ def isolation_check() -> None:
         pass
     else:
         raise RuntimeError("systemd failed to hide /sys/kernel; refusing to compile")
-    if Path("/etc/sig-golf").exists():
+    if Path("/etc/commit-golf").exists():
         try:
-            list(Path("/etc/sig-golf").iterdir())
+            list(Path("/etc/commit-golf").iterdir())
         except OSError:
             pass
         else:
-            raise RuntimeError("systemd failed to hide /etc/sig-golf; refusing to compile")
+            raise RuntimeError("systemd failed to hide /etc/commit-golf; refusing to compile")
     for family, kind in ((socket.AF_UNIX, socket.SOCK_STREAM),
                          (socket.AF_INET, socket.SOCK_STREAM),
                          (socket.AF_INET, socket.SOCK_DGRAM),

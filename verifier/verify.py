@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check one frozen beta PR using a trusted challenge and an isolated comparator.
+"""Check one frozen submission using a trusted challenge and an isolated comparator.
 
 Local mode is for development only. Linux refuses to compile untrusted code without the
 systemd + Landlock sandbox; the checker is never given the GitHub token.
@@ -80,7 +80,7 @@ def linux_preflight(env: dict[str, str]) -> None:
 
 
 def linux_command(cmd: list[str], project: Path, env: dict[str, str], hidden: list[Path]) -> tuple[list[str], dict[str, str]]:
-    unit = 'sig-verify-' + uuid.uuid4().hex[:12]
+    unit = 'commit-verify-' + uuid.uuid4().hex[:12]
     # Lake scales its parallel builds to visible CPUs; the host has eight CPUs but the
     # verification cgroup has only 24 GiB. Keep large independent Lean modules from
     # collectively exhausting that memory limit.
@@ -91,7 +91,7 @@ def linux_command(cmd: list[str], project: Path, env: dict[str, str], hidden: li
                   'RestrictAddressFamilies=~AF_UNIX', 'NoNewPrivileges=yes', 'ProtectSystem=strict',
                   f'ReadWritePaths={project / ".lake"}', 'PrivateTmp=yes', 'PrivatePIDs=yes', 'ProcSubset=pid',
                   'InaccessiblePaths=/sys',
-                  'InaccessiblePaths=' + ' '.join(f'-{p}' for p in ['/etc/ots', '/etc/sig-golf', *hidden]),
+                  'InaccessiblePaths=' + ' '.join(f'-{p}' for p in ['/etc/commit-golf', *hidden]),
                   'PrivateDevices=yes', 'TemporaryFileSystem=/dev/shm', 'PrivateIPC=yes',
                   'SystemCallErrorNumber=EPERM',
                   'SystemCallFilter=~@network-io @debug ptrace process_vm_readv process_vm_writev '
@@ -100,9 +100,9 @@ def linux_command(cmd: list[str], project: Path, env: dict[str, str], hidden: li
              'HOME': str(Path.home()), 'LANG': 'C.UTF-8',
              'COMPARATOR_LANDRUN': env['COMPARATOR_LANDRUN'],
              'COMPARATOR_LEAN4EXPORT': env['COMPARATOR_LEAN4EXPORT'],
-             'SIG_VERIFIER_HOST_DEV': str(Path('/dev').stat().st_dev),
-             'SIG_VERIFIER_HOST_PIDNS': str(Path('/proc/self/ns/pid').stat().st_ino),
-             'SIG_VERIFIER_HOST_SHM_DEV': str(Path('/dev/shm').stat().st_dev)}
+             'COMMIT_VERIFIER_HOST_DEV': str(Path('/dev').stat().st_dev),
+             'COMMIT_VERIFIER_HOST_PIDNS': str(Path('/proc/self/ns/pid').stat().st_ino),
+             'COMMIT_VERIFIER_HOST_SHM_DEV': str(Path('/dev/shm').stat().st_dev)}
     command = ['/usr/bin/env', '-i', *[f'{k}={v}' for k, v in clean.items()],
                sys.executable, str(HERE / 'linux_exec.py'), *cmd]
     runtime = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
@@ -197,30 +197,30 @@ def verify(args: argparse.Namespace) -> dict:
             return result
         project = work / 'project'
         project.mkdir()
-        for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'SigGolf.lean'):
+        for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'CommitGolf.lean',
+                     'CommitGolfBaseline.lean'):
             shutil.copy2(args.trusted / name, project / name)
-        shutil.copytree(args.trusted / 'SigGolf', project / 'SigGolf')
+        for name in ('CommitGolf', 'CommitGolfBaseline'):
+            shutil.copytree(args.trusted / name, project / name)
         with (project / 'lakefile.lean').open('a') as out:
             out.write('\nlean_lib Solution\n')
-        if (source / 'SigGolfCandidate').is_dir():  # optional: Solution.lean may stand alone
-            shutil.copytree(source / 'SigGolfCandidate', project / 'SigGolfCandidate')
+        if (source / 'CommitGolfCandidate').is_dir():  # optional: Solution.lean may stand alone
+            shutil.copytree(source / 'CommitGolfCandidate', project / 'CommitGolfCandidate')
         shutil.copy2(source / 'Solution.lean', project / 'Solution.lean')
         challenge = (args.trusted / 'verifier' / 'Challenge.lean.in').read_text()
-        placeholders = {key: policy['claim'][key] for key in ('S', 'W', 'K', 'C')}
-        placeholders.update({key.upper(): value for key, value in policy['claim']['layout'].items()})
-        for key, value in placeholders.items():
+        for key, value in policy['claim'].items():
             challenge = challenge.replace('{{' + key + '}}', str(value))
-        (project / 'SigGolf' / 'Challenge.lean').write_text(challenge)
+        (project / 'CommitGolf' / 'Challenge.lean').write_text(challenge)
         clone_tree(args.trusted / '.lake', project / '.lake')
         # Drop every cached artifact of candidate, solution, and challenge modules: the module
         # directories and the root-module files (.olean, .ilean, .trace, .hash, .c) beside them.
         for folder in (project / '.lake' / 'build' / 'lib' / 'lean', project / '.lake' / 'build' / 'ir'):
-            for name in ('SigGolfCandidate', 'Solution'):
+            for name in ('CommitGolfCandidate', 'Solution'):
                 if (folder / name).is_dir():
                     shutil.rmtree(folder / name)
                 for stale in folder.glob(f'{name}.*'):
                     stale.unlink()
-            for stale in (folder / 'SigGolf').glob('Challenge.*'):
+            for stale in (folder / 'CommitGolf').glob('Challenge.*'):
                 stale.unlink()
         command = ['lake', 'env', env['COMPARATOR_BIN'], str(args.trusted / 'verifier' / 'comparator.json')]
         clean_env = {'PATH': f'{Path.home() / ".elan/bin"}:{os.environ.get("PATH", "/usr/bin:/bin")}',
@@ -233,7 +233,7 @@ def verify(args: argparse.Namespace) -> dict:
         if timeout:
             result['status'] = 'timeout'
         elif exit_code == 0 and 'Your solution is okay!' in log.read_text(errors='replace'):
-            result.update(status='verified', score=policy['score'])
+            result.update(status='verified')
         else:
             result.update(status='rejected', reason=log.read_text(errors='replace')[-1200:])
         return result
@@ -244,7 +244,7 @@ def verify(args: argparse.Namespace) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--repository', default='leanEthereum/sig.golf-submissions')
+    parser.add_argument('--repository', default='Layr-Labs/commit.golf')
     parser.add_argument('--pr', type=int)
     parser.add_argument('--commit')
     parser.add_argument('--local', type=Path)
@@ -257,7 +257,7 @@ def main() -> int:
         parser.error('provide either --local or both --pr and --commit')
     args.trusted = args.trusted.resolve()
     if args.work is None:
-        args.work = Path(tempfile.mkdtemp(prefix='sig-verify-'))
+        args.work = Path(tempfile.mkdtemp(prefix='commit-verify-'))
         args.work.rmdir()
     result = verify(args)
     if args.cleanup and args.work.exists():

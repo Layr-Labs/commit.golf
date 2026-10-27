@@ -2,7 +2,7 @@
 # The Blacksmith host lacks Landlock. Boot the verifier's supported OS with KVM.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-vm="${RUNNER_TEMP:?This entry point runs in GitHub Actions}/sig-verifier-vm"
+vm="${RUNNER_TEMP:?This entry point runs in GitHub Actions}/commit-verifier-vm"
 ssh_args=(-i "${vm}/key" -p 2222 -o BatchMode=yes -o ConnectTimeout=5
   -o ServerAliveInterval=15 -o ServerAliveCountMax=4
   -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="${vm}/known_hosts")
@@ -37,7 +37,7 @@ packages:
   - apparmor
   - zstd
 CLOUD
-    printf 'instance-id: sig-verifier\nlocal-hostname: sig-verifier\n' > "${vm}/meta-data"
+    printf 'instance-id: commit-verifier\nlocal-hostname: commit-verifier\n' > "${vm}/meta-data"
     cloud-localds "${vm}/seed.img" "${vm}/user-data" "${vm}/meta-data"
     sudo qemu-system-x86_64 -accel kvm -cpu host -smp 12 -m 32G \
       -drive "file=${vm}/root.qcow2,if=virtio,format=qcow2" \
@@ -54,30 +54,30 @@ CLOUD
     guest 'sudo cloud-init status --wait'
     # Credentials were removed by checkout; only the checkout enters the VM.
     tar --exclude='./.work' --exclude='./.cache' -cf - . | \
-      guest 'sudo mkdir -p /srv/sig-benchmark && sudo tar -xf - -C /srv/sig-benchmark'
+      guest 'sudo mkdir -p /srv/commit-benchmark && sudo tar -xf - -C /srv/commit-benchmark'
     ;;
   setup)
-    guest 'sudo bash /srv/sig-benchmark/scripts/vm-setup.sh'
+    guest 'sudo bash /srv/commit-benchmark/scripts/vm-setup.sh'
     if [[ -f .cache/trusted.tar.zst ]]; then
       guest 'sudo tar --zstd -xf - -C /srv' < .cache/trusted.tar.zst
-      guest 'sudo chown -R sig:sig /srv/sig /srv/sig-benchmark'
+      guest 'sudo chown -R golf:golf /srv/golf /srv/commit-benchmark'
     fi
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
-    guest 'cd /srv/sig-benchmark && sudo -u sig -H env XDG_RUNTIME_DIR=/run/user/$(id -u sig) bash scripts/setup.sh'
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env XDG_RUNTIME_DIR=/run/user/$(id -u golf) bash scripts/setup.sh'
     ;;
   cache)
     mkdir -p .cache
     # Export before any candidate code runs; only trusted dependency/build trees.
-    guest 'sudo tar --zstd -C /srv -cf - sig/.elan sig-benchmark/.lake sig-benchmark/verifier/.tools' > .cache/trusted.tar.zst
+    guest 'sudo tar --zstd -C /srv -cf - golf/.elan commit-benchmark/.lake commit-benchmark/verifier/.tools' > .cache/trusted.tar.zst
     ;;
   run)
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
-    guest 'cd /srv/sig-benchmark && sudo -u sig -H env PATH=/srv/sig/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u sig) python3 scripts/run.py'
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 scripts/run.py'
     ;;
   collect)
     if [[ -f "${vm}/qemu.pid" ]]; then
       sudo cat "${vm}/console.log" | tee .work-vm-console.log >/dev/null
-      guest 'cd /srv/sig-benchmark && sudo mkdir -p .work && sudo find scripts .work -type f \( -name score.json -o -name verify.log \) -print0 | sudo tar --null -T - -cf -' | tar -xf -
+      guest 'cd /srv/commit-benchmark && sudo mkdir -p .work && sudo find scripts .work -type f \( -name score.json -o -name verify.log \) -print0 | sudo tar --null -T - -cf -' | tar -xf -
     fi
     ;;
   stop)
