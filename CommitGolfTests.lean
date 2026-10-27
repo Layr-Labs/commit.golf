@@ -121,3 +121,145 @@ end CommitGolf.Tests
 /-- info: 'CommitGolf.Scheme.bindingProbability_eq_finite' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms CommitGolf.Scheme.bindingProbability_eq_finite
+
+/-! Regression checks for the hiding specification, not a secure VC construction. -/
+namespace CommitGolf.HidingTests
+open OracleComp OracleSpec
+
+-- A message-independent toy scheme witnesses that the definition is satisfiable for every
+-- oracle family. It is deliberately not binding and is not a challenge submission.
+private def constantScheme (F : OracleFamily) : Scheme where
+  oracles := F
+  Trapdoor := Unit
+  commit _ := pure (0, ())
+  opening _ _ := pure []
+  check _ _ _ _ := pure true
+
+private def constantSimulator (F : OracleFamily) : HidingSimulator (constantScheme F) :=
+  fun _ _ => pure (0, [])
+
+example (F : OracleFamily) :
+    (constantScheme F).StatisticalHiding (constantSimulator F) (fun _ _ => 0) := by
+  intro q t hq Aux Output A hbound
+  have heq : (constantScheme F).realHidingExperiment A =
+      (constantScheme F).idealHidingExperiment (constantSimulator F) A := by
+    rfl
+  rw [heq, tvDist_self]
+
+private def challenge : HidingChallenge Unit 0 :=
+  ⟨fun _ => 0, ∅, rfl, ()⟩
+
+private abbrev R : OracleFamily := .randomOracleFixedOutput 2 (by decide)
+
+-- One query in each stage must consume two calls in total, even for repeated inputs.
+private def twoStage : HidingAdversary R Unit (BitVec 2) 0 where
+  choose := do
+    let _ ← (R.world.query (.inr []) :)
+    return challenge
+  observe _ _ _ := (R.world.query (.inr []) :)
+
+private lemma first_support : support (HidingAdversary.counted twoStage.choose) =
+    {(challenge, 1)} := by
+  change support ((fun _ : BitVec 2 => (challenge, 1)) <$>
+    (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))) = _
+  rw [support_map]
+  simp
+
+private lemma last_support (root : Commitment) (proof : Proof) :
+    support (HidingAdversary.counted (twoStage.observe () root proof)) =
+      {z | z.2 = 1} := by
+  change support ((fun x : BitVec 2 => (x, 1)) <$>
+    (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))) = _
+  rw [support_map]
+  ext ⟨x, n⟩
+  simp [eq_comm]
+
+example : twoStage.QueryBound 2 := by
+  intro first hf
+  rw [first_support, Set.mem_singleton_iff] at hf
+  subst first
+  refine ⟨by decide, ?_⟩
+  intro root proof last hl
+  rw [last_support] at hl
+  change last.2 = 1 at hl
+  simp [hl]
+
+example : ¬ twoStage.QueryBound 1 := by
+  intro h
+  have hf : (challenge, 1) ∈ support (HidingAdversary.counted twoStage.choose) := by
+    rw [first_support]; exact Set.mem_singleton _
+  have hl : ((0 : BitVec 2), 1) ∈
+      support (HidingAdversary.counted (twoStage.observe () 0 [])) := by
+    rw [last_support]; rfl
+  have impossible := (h _ hf).2 0 [] _ hl
+  norm_num at impossible
+
+-- Ordinary computation and coins do not consume the public-query budget.
+private def coinOnly : HidingAdversary R Unit Bool 0 where
+  choose := pure challenge
+  observe _ _ _ := do
+    let x ← (R.world.query (.inl 1) :)
+    return x.val == 0
+
+example : coinOnly.QueryBound 0 := by
+  intro first hf
+  have heq : HidingAdversary.counted coinOnly.choose =
+      (pure (challenge, 0) : OracleComp R.world _) := rfl
+  rw [heq] at hf
+  have hf' := OracleComp.eq_of_mem_support_pure (challenge, 0) hf
+  subst first
+  refine ⟨by decide, ?_⟩
+  intro root proof last hl
+  have heq : HidingAdversary.counted (coinOnly.observe () root proof) =
+      (fun x : Fin 2 => (x.val == 0, 0)) <$>
+        (liftM (R.world.query (.inl 1)) : OracleComp R.world (Fin 2)) := rfl
+  rw [heq] at hl
+  obtain ⟨x, _, hx⟩ := OracleComp.mem_support_map_peel _ _ hl
+  simp [hx]
+
+-- Repeated queries across the two adversary stages reuse the same lazy cache.
+private def remembers : HidingAdversary R (BitVec 2) (BitVec 2 × BitVec 2) 0 where
+  choose := do
+    let x ← (R.world.query (.inr []) :)
+    return ⟨fun _ => 0, ∅, rfl, x⟩
+  observe x _ _ := do
+    let y ← (R.world.query (.inr []) :)
+    return (x, y)
+
+example : (constantScheme R).runHiding ((constantScheme R).realHidingExperiment remembers) =
+    (do let x ← $ᵗ BitVec 2; return (x, x)) := by
+  simp [Scheme.realHidingExperiment, remembers, constantScheme]
+  change (constantScheme R).runHiding (do
+    let x ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
+    let y ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
+    return (x, y)) = _
+  simp [Scheme.runHiding, constantScheme, OracleFamily.initialState, OracleFamily.runShared,
+    map_eq_bind_pure_comp]
+  change ((do
+    let x ← R.sharedAnswer []
+    let y ← R.sharedAnswer []
+    return ((x, y), 2)) : StateT R.State ProbComp ((BitVec 2 × BitVec 2) × Nat)).run ∅
+      >>= (fun z => pure z.1.1) = _
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+-- Specialization preserves the exact oracle program, including its private randomness and
+-- public queries. This checks the interface transport only, not a PPT claim for this profile.
+example (scheme : Scheme) (simulate : HidingSimulator scheme) (n : Nat)
+    (positions : Positions) (values : Values positions) :
+    HidingSimulatorFamily.specialize
+      (parameters := fun _ => HidingParameters.ofScheme scheme)
+      (fun _ input => simulate input.1 input.2) scheme n rfl positions values =
+        simulate positions values := rfl
+
+-- A family may genuinely vary dimensions. Packing retains the parameter in both the input
+-- and output, so a uniform witness cannot silently erase which family member was requested.
+private def dimensions (n : Nat) : HidingParameters :=
+  ⟨n, n + 1, n + 1, .idealXof⟩
+
+private def zeroFamily : HidingSimulatorFamily dimensions := fun _ _ => pure (0, [])
+
+example (n : Nat) (input : (dimensions n).Input) :
+    SecurityFamily.packProgram zeroFamily ⟨n, input⟩ =
+      pure (⟨n, (0, [])⟩ : SecurityFamily.Output (fun n => (dimensions n).Output)) := rfl
+
+end CommitGolf.HidingTests

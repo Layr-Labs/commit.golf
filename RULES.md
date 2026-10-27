@@ -68,6 +68,20 @@ A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#
 
 In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers and XOF stream bits are sampled when first needed and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L24-L26)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L14-L22)). It **wins** ([Lean](CommitGolf/Statements.lean#L38-L45)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
 
+## Hiding specification (in progress)
+
+[Hiding](CommitGolf/Hiding.lean) formalizes the statistical part of CY24, Lemma 18.6.3.
+The adversary chooses a message and `q` positions before receiving the commitment and opening
+proof. Their joint distribution must be simulatable from those positions and their values alone,
+as observed by any adversary making at most `t` public queries across both stages. The experiments
+share oracle state across all phases internally. The error is a function of `(q, t)`.
+
+`HidingCertificateBy` additionally requires VCVio’s uniform, backend-relative PPT witness for a
+parameterized simulator family. Its challenge-sized member is the simulator used in the game.
+The parameter profile, backend, encodings, and oracle resource policy are contract arguments,
+not choices inside the certificate. A concrete backend instantiation and a hiding construction
+remain pending; current track certificates do not yet require hiding.
+
 ## Submission
 
 Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, `submissions/random-oracle-fixed-output/`, or `submissions/ideal-xof/`. It holds `claim.json`,
