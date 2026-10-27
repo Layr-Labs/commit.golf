@@ -135,19 +135,15 @@ private def constantScheme (F : OracleFamily) : Scheme where
   opening _ _ := pure []
   check _ _ _ _ := pure true
 
-private def constantSimulator (F : OracleFamily) : HidingSimulator (constantScheme F) :=
-  fun _ _ => pure (0, [])
-
-example (F : OracleFamily) :
-    StatisticalHiding (constantScheme F) (constantSimulator F) (fun _ _ => 0) := by
-  intro q t hq Aux Output A hbound
-  have heq : realHidingExperiment (constantScheme F) A =
-      idealHidingExperiment (constantScheme F) (constantSimulator F) A := by
-    rfl
+example (F : OracleFamily) : (constantScheme F).Hiding (fun _ _ => 0) := by
+  refine ⟨fun _ _ => le_refl 0, ?_⟩
+  intro openingSize queryBudget _ AdversaryState Output adversary _
+  have heq : hidingExperiment (constantScheme F) adversary false =
+      hidingExperiment (constantScheme F) adversary true := rfl
   rw [heq, tvDist_self]
 
 private def challenge : HidingChallenge Unit 0 :=
-  ⟨fun _ => 0, ∅, rfl, ()⟩
+  ⟨fun _ => 0, fun _ => 0, ∅, rfl, rfl, ()⟩
 
 private abbrev R : OracleFamily := .randomOracleFixedOutput 2 (by decide)
 
@@ -221,14 +217,14 @@ example : QueryBound coinOnly 0 := by
 private def remembers : HidingAdversary R (BitVec 2) (BitVec 2 × BitVec 2) 0 where
   choose := do
     let x ← (R.world.query (.inr []) :)
-    return ⟨fun _ => 0, ∅, rfl, x⟩
+    return ⟨fun _ => 0, fun _ => 0, ∅, rfl, rfl, x⟩
   observe x _ _ := do
     let y ← (R.world.query (.inr []) :)
     return (x, y)
 
-example : runHiding (constantScheme R) (realHidingExperiment (constantScheme R) remembers) =
+example : runHiding (constantScheme R) (hidingExperiment (constantScheme R) remembers false) =
     (do let x ← $ᵗ BitVec 2; return (x, x)) := by
-  simp [realHidingExperiment, remembers, constantScheme]
+  simp [hidingExperiment, remembers, constantScheme]
   change runHiding (constantScheme R) (do
     let x ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
     let y ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
@@ -242,24 +238,44 @@ example : runHiding (constantScheme R) (realHidingExperiment (constantScheme R) 
       >>= (fun z => pure z.1.1) = _
   simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
 
--- Specialization preserves the exact oracle program, including its private randomness and
--- public queries. This checks the interface transport only, not a PPT claim for this profile.
-example (scheme : Scheme) (simulate : HidingSimulator scheme) (n : Nat)
-    (positions : Positions) (values : Values positions) :
-    specialize
-      (parameters := fun _ => parametersOfScheme scheme)
-      (fun _ input => simulate input.1 input.2) scheme n rfl positions values =
-        simulate positions values := rfl
+-- Empty openings allow different messages. The selector really changes the honest input.
+private def differentMessages : HidingChallenge Unit 0 where
+  message₀ := fun _ => 0
+  message₁ := fun _ => 1
+  positions := ∅
+  size_eq := rfl
+  agree := by funext i; exact False.elim (Finset.notMem_empty i.val i.property)
+  aux := ()
 
--- A family may genuinely vary dimensions. Packing retains the parameter in both the input
--- and output, so a uniform witness cannot silently erase which family member was requested.
-private def dimensions (n : Nat) : HidingParameters :=
-  ⟨n, n + 1, n + 1, .idealXof⟩
+private def leakingScheme : Scheme where
+  oracles := R
+  Trapdoor := Unit
+  commit message := pure (message ⟨0, by decide⟩, ())
+  opening _ _ := pure []
+  check _ _ _ _ := pure true
 
-private def zeroFamily : HidingSimulatorFamily dimensions := fun _ _ => pure (0, [])
+private def observesRoot : HidingAdversary R Unit Commitment 0 where
+  choose := pure differentMessages
+  observe _ root _ := pure root
 
-example (n : Nat) (input : SimulatorInput (dimensions n)) :
-    SecurityFamily.packProgram zeroFamily ⟨n, input⟩ =
-      pure (⟨n, (0, [])⟩ : SecurityFamily.Output (fun n => SimulatorOutput (dimensions n))) := rfl
+example : hidingExperiment leakingScheme observesRoot false = pure 0 := rfl
+example : hidingExperiment leakingScheme observesRoot true = pure 1 := rfl
+
+-- Named hiding tracks must expose the hiding obligation as well as the base certificate.
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : IdealPermutationHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
+
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : IdealCompressionHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
+
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : RandomOracleFixedOutputHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
+
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : IdealXofHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
 
 end CommitGolf.HidingTests

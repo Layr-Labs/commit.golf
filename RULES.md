@@ -56,58 +56,61 @@ The **honest run** ([Lean](CommitGolf/Honest.lean#L23-L28)) on `(H, m, I)` is `(
 
 ## Statements
 
-A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#L88-L93)) proves five statements. The first four hold in the honest run for every realization `H`, `m`, `I`, and all coins:
+A certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#L69-L74)) proves five statements. The first four hold in the honest run for every realization `H`, `m`, `I`, and all coins:
 
-1. **Completeness** ([Lean](CommitGolf/Statements.lean#L32-L34)): `b = 1`.
-2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L37-L42)): `commit`, `opening`, and `check` make at most `COMMIT_BUDGET`, `OPEN_BUDGET(|I|)`, and `CHECK_BUDGET(|I|)` calls, respectively.
-3. **Proof size** ([Lean](CommitGolf/Statements.lean#L45-L47)): if `|I| = BATCH`, then `|pf| ≤ proofBytes`.
-4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L50-L52)): if `|I| = BATCH`, then `check` makes at most `checkCalls` calls.
-5. **Binding** ([Lean](CommitGolf/Statements.lean#L55-L61)): for every adversary `A` and every `q ≥ 1`,
+1. **Completeness** ([Lean](CommitGolf/Statements.lean#L18-L20)): `b = 1`.
+2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L23-L28)): `commit`, `opening`, and `check` make at most `COMMIT_BUDGET`, `OPEN_BUDGET(|I|)`, and `CHECK_BUDGET(|I|)` calls, respectively.
+3. **Proof size** ([Lean](CommitGolf/Statements.lean#L31-L33)): if `|I| = BATCH`, then `|pf| ≤ proofBytes`.
+4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L36-L38)): if `|I| = BATCH`, then `check` makes at most `checkCalls` calls.
+5. **Binding** ([Lean](CommitGolf/Statements.lean#L41-L47)): for every adversary `A` and every `q ≥ 1`,
 
    `Pr[A wins and makes at most q calls] ≤ q / 2^SECURITY_BITS`.
 
-In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers and XOF stream bits are sampled when first needed and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L24-L26)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L14-L22)). It **wins** ([Lean](CommitGolf/Statements.lean#L55-L61)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
+In the **binding game** ([Lean](CommitGolf/Binding.lean)), finite-domain instances are sampled independently and uniformly. Random-oracle answers and XOF stream bits are sampled when first needed and cached across the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L24-L26)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L14-L22)). It **wins** ([Lean](CommitGolf/Statements.lean#L41-L47)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
 
 `Certificate` proves all five statements directly. `HidingCertificate` extends it with
-[statement 6, hiding](CommitGolf/Statements.lean#L68-L83). Track names add only the oracle-model
-restriction; `TrackCertificate` is an abbreviation retained as the comparator entry point.
+[statement 6, hiding](CommitGolf/Statements.lean#L54-L64). Track names add only the oracle-model
+restriction; the comparator selects the complete named certificate for the chosen track.
 
-## Hiding specification (in progress)
+## Hiding specification
 
-[Hiding](CommitGolf/Hiding.lean) formalizes the statistical part of CY24, Lemma 18.6.3.
-The adversary chooses a message and `q` positions before receiving the commitment and opening
-proof. Their joint distribution must be simulatable from those positions and their values alone,
-as observed by any adversary making at most `t` public queries across both stages. The experiments
-share oracle state across all phases internally. The error is a function of `(q, t)`.
+[Statement 6](CommitGolf/Statements.lean#L54-L64) uses two-message statistical hiding for
+commitments and one opening, corresponding to the privacy goal of CY24, Lemma 18.6.3.
+The adversary chooses two messages `m₀, m₁`, a set `I` of `q` positions, and retained state.
+Its choices must satisfy `m₀[I] = m₁[I]`; outside `I` they may agree or differ arbitrarily.
+Each experiment honestly commits to one of those messages, opens `I`, and lets the adversary
+observe the commitment and proof. The total variation distance between its output distributions
+must be at most `HIDING_ERROR(q, t)` for every such adversary using at most `t` public queries
+across both stages. Empty openings are included. Honest commit/open queries do not consume
+that adversary budget. Oracle state persists across all phases within each experiment.
 
-`Scheme.Hiding` additionally requires VCVio’s uniform, backend-relative PPT witness for a
-parameterized simulator family. Its challenge-sized member is the simulator used in the game.
-The parameter profile, backend, encodings, and oracle resource policy are contract arguments,
-not choices inside the certificate. A concrete backend instantiation and a hiding construction
-remain pending. The proposition in [Statements](CommitGolf/Statements.lean) directly states
-the simulator’s existence, PPT requirement, and statistical-distance bound. `HidingCertificate` adds that proposition to the base `Certificate`; current
-comparator targets still check only the binding-only `TrackCertificate`.
+There is no solver-supplied simulator or PPT environment. This is an indistinguishability
+requirement, not a runtime certificate: the honest budgets count oracle calls, not local work.
+A canonical simulator can fill unopened positions with zeros and honestly commit/open;
+its efficiency would additionally require efficient honest algorithms and padding.
+The connection to the earlier simulation definition has not been formalized here.
 
 The named certificates in `Statements.lean` expose four oracle tracks, each with a non-hiding
 and hiding variant: `IdealPermutationCertificate`, `IdealCompressionCertificate`,
 `RandomOracleFixedOutputCertificate`, `IdealXofCertificate`, and their corresponding
-`…HidingCertificate` names. Each is a complete requirement; the comparator need not compose
-individual properties. Import `CommitGolf.Statements` (also exported by `CommitGolf`).
-The hiding variants fix the provisional target in `Parameters.lean`:
-`HIDING_ERROR(q, t) = min(1, (t + 1) / 2^HIDING_SECURITY_BITS)`, with 128 bits, uniformly in `q`.
-This policy awaits review and is not a proven construction bound. Their PPT environment remains
-an explicit challenge-author parameter. These names do not register new comparator tracks.
+`…HidingCertificate` names. Each is a complete requirement. Import `CommitGolf.Statements`
+(also exported by `CommitGolf`). The hiding variants fix the provisional target in
+`Parameters.lean`: `HIDING_ERROR(q, t) = min(1, (t + 1) / 2^HIDING_SECURITY_BITS)`,
+with 128 bits, uniformly in `q`. This policy awaits review; no hiding construction is certified yet.
+The verifier selects the hiding certificates for the four `-hiding` track IDs, each using its
+own `submissions/<track>/` path, and never falls back to non-hiding checks.
 
 ## Submission
 
-Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, `submissions/random-oracle-fixed-output/`, or `submissions/ideal-xof/`. It holds `claim.json`,
+Select `submissions/ideal-permutation/`, `submissions/ideal-compression/`, `submissions/random-oracle-fixed-output/`, or `submissions/ideal-xof/`, or append `-hiding` to any of those track names. Each directory holds `claim.json`,
 with `proofBytes` and `checkCalls`, and `Solution.lean`, with optional modules under
 `CommitGolfCandidate/`. `Solution.lean` defines `CommitGolf.Challenge.submission : Scheme` and
-proves `CommitGolf.Challenge.certificate : TrackCertificate track submission proofBytes checkCalls`.
-The track certificate proves the five statements and that all declared instances belong to the
-selected track. The trusted verifier selects `track`; the submission cannot override it.
+proves `CommitGolf.Challenge.certificate` with the selected named certificate applied to
+`submission proofBytes checkCalls`. Non-hiding certificates require statements 1–5; hiding
+certificates additionally require statement 6. Both restrict the declared oracle model.
+The trusted verifier selects the certificate; the submission cannot override it.
 Allowed imports are `CommitGolf`, `CommitGolfBaseline`, and the pinned dependencies (Lean,
-Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; fixed-output RO and XOF starters are pending.
+Batteries, Mathlib, VCVio). Permutation and compression have certified baseline examples; fixed-output RO, XOF, and hiding starters are pending.
 
 The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
 
