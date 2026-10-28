@@ -21,3 +21,11 @@ lean_lib IdealPermutation where
   roots := #[`submissions.«ideal-permutation».Solution]
 lean_lib IdealCompression where
   roots := #[`submissions.«ideal-compression».Solution]
+
+-- Check the oracle models independently of the Merkle baselines.
+-- This target is model regression coverage, not a certified submission.
+lean_lib RandomOracleFixedOutputModel where
+  roots := #[`CommitGolf.Oracle.Tests]
+
+lean_lib IdealXofModel where
+  roots := #[`CommitGolf.Oracle.Tests]

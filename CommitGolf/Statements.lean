@@ -1,16 +1,18 @@
 import CommitGolf.Binding
+import CommitGolf.Hiding
 
 /-! # Statements
 
-The five statements a certificate proves, in the order of `RULES.md`, and the certificate.
+The base certificate proves statements 1–5. Hiding certificates additionally prove statement 6.
 Statements 1–4 hold in the honest run for every fixed oracle realization `π`, message, and set of positions, with
 probability `1` (for all coins). Probabilities live in `ENNReal`. -/
 
 namespace CommitGolf
 open OracleComp
 
-namespace Scheme
 variable (scheme : Scheme)
+
+namespace Scheme
 
 /-- **1. Completeness** [CY24, Lemma 18.2.1], perfect: `check` accepts the honest opening. -/
 def Completeness : Prop :=
@@ -38,13 +40,32 @@ def VerificationCost (checkCalls : Nat) : Prop :=
 /-- **5. Binding** [CY24, Lemma 18.4.1]. -/
 def Binding : Prop :=
   ∀ (adversary : Adversary scheme.oracles) (q : Nat), 1 ≤ q →
-    Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤
+    Pr[fun (claim, calls, a₀, a₁) => claim.Conflicting ∧ calls ≤ q ∧ a₀ = true ∧ a₁ = true | do
+        let (π, claim, calls) ← bindingGame adversary
+        let ((a₀, a₁), _) ← (scheme.checkClaim claim).run π
+        return (claim, calls, a₀, a₁)] ≤
       (q : ENNReal) / 2 ^ SECURITY_BITS
+
+/-- **6. Hiding**, a two-message formulation of commitment-and-opening privacy
+(cf. [CY24, Lemma 18.6.3]). The adversary chooses two messages agreeing at the opened positions.
+Honest commitment and opening of either message must give close adversary-output distributions,
+for every opening size and total public-query budget across both adversary stages.
+This states statistical indistinguishability, without a separate efficient-simulator claim. -/
+def Hiding (error : Nat → Nat → ℝ) : Prop :=
+  (∀ openingSize queryBudget, 0 ≤ error openingSize queryBudget) ∧
+  ∀ (openingSize queryBudget : Nat),
+    openingSize ≤ LENGTH →
+    ∀ (AdversaryState Output : Type)
+      (adversary : Hiding.HidingAdversary scheme.oracles AdversaryState Output openingSize),
+      Hiding.QueryBound adversary queryBudget →
+      tvDist
+        (Hiding.runHiding scheme (Hiding.hidingExperiment scheme adversary false))
+        (Hiding.runHiding scheme (Hiding.hidingExperiment scheme adversary true)) ≤
+        error openingSize queryBudget
 
 end Scheme
 
-/-- The competition claim: `scheme` satisfies the five statements with scores at most
-`(proofBytes, checkCalls)`. -/
+/-- Completeness, binding, and the honest resource bounds (statements 1–5). -/
 structure Certificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop where
   completeness : scheme.Completeness
   honestBudgets : scheme.HonestBudgets
@@ -52,9 +73,43 @@ structure Certificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop whe
   verificationCost : scheme.VerificationCost checkCalls
   binding : scheme.Binding
 
-/-- A certificate for the selected track, including its restriction on oracle types. -/
-structure TrackCertificate (track : Track) (scheme : Scheme) (proofBytes checkCalls : Nat)
-    : Prop extends Certificate scheme proofBytes checkCalls where
-  inTrack : scheme.oracles.InTrack track
+/-- The base certificate plus commitment-and-opening hiding (statement 6). -/
+structure HidingCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) (error : Nat → Nat → ℝ) : Prop
+    extends Certificate scheme proofBytes checkCalls where
+  hidingProperty : scheme.Hiding error
+
+/-- A binding-only track additionally restricts the declared oracle model. -/
+abbrev TrackCertificate (track : Track) (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  Certificate scheme proofBytes checkCalls ∧ scheme.oracles.InTrack track
+
+/-! ### Named track certificates
+
+Import `CommitGolf.Statements` for these complete submission requirements. Non-hiding tracks
+require the base certificate and oracle membership. Hiding tracks add statistical hiding with the fixed target `HIDING_ERROR`.
+-/
+
+abbrev IdealPermutationCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .idealPermutation scheme proofBytes checkCalls
+
+abbrev IdealCompressionCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .idealCompression scheme proofBytes checkCalls
+
+abbrev RandomOracleFixedOutputCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .randomOracleFixedOutput scheme proofBytes checkCalls
+
+abbrev IdealXofCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  TrackCertificate .idealXof scheme proofBytes checkCalls
+
+abbrev IdealPermutationHidingCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  HidingCertificate scheme proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .idealPermutation
+
+abbrev IdealCompressionHidingCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  HidingCertificate scheme proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .idealCompression
+
+abbrev RandomOracleFixedOutputHidingCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  HidingCertificate scheme proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .randomOracleFixedOutput
+
+abbrev IdealXofHidingCertificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop :=
+  HidingCertificate scheme proofBytes checkCalls HIDING_ERROR ∧ scheme.oracles.InTrack .idealXof
 
 end CommitGolf

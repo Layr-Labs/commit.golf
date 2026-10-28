@@ -36,12 +36,21 @@ def Breaks (π : scheme.oracles.Realization) (claim : Claim) : Prop :=
     (scheme.oracles.eval π (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)).1 = true ∧
     (scheme.oracles.eval π (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)).1 = true
 
-/-- Sample the declared family and run the adversary against it. Returns the same realization,
-the claim, and the number of calls the adversary made. The two checks use that realization too. -/
+/-- Check both openings against the shared oracle state. Fresh random-oracle queries extend
+that state, so the second check reuses answers from the adversary and the first check. -/
+def checkClaim (claim : Claim) : StateT scheme.oracles.State ProbComp (Bool × Bool) := do
+  let accepted₀ ← scheme.oracles.checkShared
+    (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)
+  let accepted₁ ← scheme.oracles.checkShared
+    (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)
+  return (accepted₀, accepted₁)
+
+/-- Initialize the declared family and run the adversary. Returns the resulting oracle state,
+the claim, and the adversary's call count. Verification continues from that same state. -/
 def bindingGame {family : OracleFamily} (adversary : Adversary family) :
-    ProbComp (family.Realization × Claim × Nat) := do
-  let π ← family.sample
-  let (claim, calls) ← family.run π adversary
+    ProbComp (family.State × Claim × Nat) := do
+  let π ← family.initialState
+  let ((claim, calls), π) ← (family.runShared adversary).run π
   return (π, claim, calls)
 
 end Scheme

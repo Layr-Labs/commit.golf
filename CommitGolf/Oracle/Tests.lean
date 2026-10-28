@@ -1,4 +1,5 @@
 import CommitGolf.Statements
+import CommitGolf.Oracle.Finite
 
 /-! # Oracle and track regression tests -/
 namespace CommitGolf.OracleTests
@@ -46,5 +47,213 @@ example : copies.callCost (.inr (.inr 7)) = 1 := rfl
 
 -- Sampling a family is the product of independent instance samples.
 example : copies.sample = (do return (← C.sample, ← C.sample)) := rfl
+
+/-! ## Variable-input, fixed-output random oracles -/
+
+private abbrev R : OracleFamily := .randomOracleFixedOutput 2 (by decide)
+private abbrev Rs := R.sum R
+
+example : Rs.InTrack .randomOracleFixedOutput := by decide
+example : ¬ (R.sum C).InTrack .randomOracleFixedOutput := by decide
+example : ¬ (R.sum P).InTrack .idealPermutation := by decide
+example : ¬ R.InTrack .idealCompression := by decide
+example : ¬ R.HasFiniteDomain := by decide
+example : ¬ (C.sum R).HasFiniteDomain := by decide
+
+-- Empty inputs and arbitrary finite lengths are valid; length is part of the input.
+example : ([] : R.Domain) ≠ [false] := by decide
+example : ([true] : R.Domain) ≠ [true, false] := by decide
+example : R.callCost (.inl 3) = 0 := rfl
+example : R.callCost (.inr []) = 1 := rfl
+example : R.callCost (.inr (List.replicate 10000 false)) = 1 := rfl
+
+-- Fresh inputs receive a uniform answer, recorded in the cache.
+example (x : RandomOracleFixedOutput.Input) :
+    (R.sharedAnswer x).run ∅ = (do
+      let y ← $ᵗ BitVec 2
+      return (y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y)) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+-- Cached answers persist, including between adversary and verifier phases.
+example (x : RandomOracleFixedOutput.Input) (y : BitVec 2) :
+    (R.sharedAnswer x).run ((∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y) =
+      pure (y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer]
+
+-- Two instances can return different answers to the same input.
+example (x : RandomOracleFixedOutput.Input) (y z : BitVec 2) :
+    (Rs.sharedAnswer (.inl x)).run
+      ((∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x z) =
+      pure (y, (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y,
+        (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x z) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer]
+
+-- Repeats consume two calls but sample just once.
+private def randomRepeats (x : RandomOracleFixedOutput.Input) : OracleComp R.world (BitVec 2 × BitVec 2) := do
+  let a ← (R.world.query (.inr x) :)
+  let b ← (R.world.query (.inr x) :)
+  return (a, b)
+
+example (x : RandomOracleFixedOutput.Input) :
+    (R.runShared (randomRepeats x)).run ∅ = (do
+      let y ← $ᵗ BitVec 2
+      return (((y, y), 2), (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x y)) := by
+  simp [OracleFamily.runShared, randomRepeats, OracleFamily.sharedAnswer,
+    RandomOracleFixedOutput.answer, OracleFamily.callCost, map_eq_bind_pure_comp]
+  change ((do
+    let a ← R.sharedAnswer x
+    let b ← R.sharedAnswer x
+    return ((a, b), 2)) : StateT R.State ProbComp ((BitVec 2 × BitVec 2) × Nat)).run ∅ = _
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+-- Independent instances sample separately even on the identical input.
+example (x : RandomOracleFixedOutput.Input) :
+    ((do
+      let a ← Rs.sharedAnswer (.inl x)
+      let b ← Rs.sharedAnswer (.inr x)
+      return (a, b)) : StateT Rs.State ProbComp (BitVec 2 × BitVec 2)).run (∅, ∅) = (do
+        let a ← $ᵗ BitVec 2
+        let b ← $ᵗ BitVec 2
+        return ((a, b), (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x a,
+          (∅ : RandomOracleFixedOutput.Cache 2).cacheQuery x b)) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+-- The binding experiment shares the adversary's cache with both verification calls.
+private def emptyClaim : Scheme.Claim where
+  root := 0
+  positions₀ := ∅
+  values₀ := fun _ => 0
+  proof₀ := []
+  positions₁ := ∅
+  values₁ := fun _ => 0
+  proof₁ := []
+
+-- A small test fixture, not a secure commitment scheme.
+private def probeScheme : Scheme where
+  oracles := R
+  Trapdoor := Unit
+  commit _ := pure (0, ())
+  opening _ _ := pure []
+  check _ _ _ _ := do
+    let y ← (R.spec.query [] :)
+    return y == 0
+
+private def probeAdversary : Scheme.Adversary R := do
+  let _ ← (R.world.query (.inr []) :)
+  return emptyClaim
+
+private def probeExperiment (adversary : Scheme.Adversary R) :
+    ProbComp (Scheme.Claim × Nat × Bool × Bool) := do
+  let (π, claim, calls) ← Scheme.bindingGame adversary
+  let ((a₀, a₁), _) ← (probeScheme.checkClaim claim).run π
+  return (claim, calls, a₀, a₁)
+
+example : probeExperiment probeAdversary = (do
+    let y ← $ᵗ BitVec 2
+    return (emptyClaim, 1, y == 0, y == 0)) := by
+  change (do
+    let result ← ((do
+      let _ ← R.sharedAnswer []
+      let a ← R.sharedAnswer []
+      let b ← R.sharedAnswer []
+      return (emptyClaim, 1, a == 0, b == 0)) :
+      StateT R.State ProbComp (Scheme.Claim × Nat × Bool × Bool)).run ∅
+    return result.1) = _
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+-- A query first made by verification is sampled too, then reused by the second check.
+example : probeExperiment (pure emptyClaim) = (do
+    let y ← $ᵗ BitVec 2
+    return (emptyClaim, 0, y == 0, y == 0)) := by
+  change (do
+    let result ← ((do
+      let a ← R.sharedAnswer []
+      let b ← R.sharedAnswer []
+      return (emptyClaim, 0, a == 0, b == 0)) :
+      StateT R.State ProbComp (Scheme.Claim × Nat × Bool × Bool)).run ∅
+    return result.1) = _
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+-- Different inputs in one instance get independent samples.
+example : ((do
+    let a ← R.sharedAnswer []
+    let b ← R.sharedAnswer [false]
+    return (a, b)) : StateT R.State ProbComp (BitVec 2 × BitVec 2)).run ∅ = (do
+      let a ← $ᵗ BitVec 2
+      let b ← $ᵗ BitVec 2
+      return ((a, b), ((∅ : RandomOracleFixedOutput.Cache 2).cacheQuery [] a).cacheQuery [false] b)) := by
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+/-! ## Ideal XOF: output lengths share a single stream per input -/
+
+private abbrev X : OracleFamily := .idealXof
+example : (X.sum X).InTrack .idealXof := by decide
+example : ¬ (X.sum R).InTrack .idealXof := by decide
+example : ¬ X.HasFiniteDomain := by decide
+example : X.callCost (.inr ([], 1000000)) = 1 := rfl
+example : X.callCost (.inr ([], 0)) = 1 := rfl
+
+-- Zero output needs no randomness and leaves even a nonempty cache untouched.
+example (x : IdealXof.Input) (cache : IdealXof.Cache) :
+    (X.sharedAnswer (x, 0)).run cache = pure (0, cache) := rfl
+
+-- Request one bit, extend to two, then shorten and repeat. Exactly two fair bits are sampled.
+example (x : IdealXof.Input) :
+    ((do
+      let a ← X.sharedAnswer (x, 1)
+      let b ← X.sharedAnswer (x, 2)
+      let c ← X.sharedAnswer (x, 1)
+      let d ← X.sharedAnswer (x, 2)
+      return (a, b, c, d)) :
+      StateT X.State ProbComp (BitVec 1 × BitVec 2 × BitVec 1 × BitVec 2)).run ∅ = (do
+        let a ← $ᵗ Bool
+        let b ← $ᵗ Bool
+        return ((BitVec.cons a 0, BitVec.cons a (BitVec.cons b 0),
+          BitVec.cons a 0, BitVec.cons a (BitVec.cons b 0)),
+          ((∅ : IdealXof.Cache).cacheQuery (x, 0) a).cacheQuery (x, 1) b)) := by
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
+
+-- Different inputs use independent bits, even at the same stream position.
+example : ((do
+    let a ← X.sharedAnswer ([], 1)
+    let b ← X.sharedAnswer ([false], 1)
+    return (a, b)) : StateT X.State ProbComp (BitVec 1 × BitVec 1)).run ∅ = (do
+      let a ← $ᵗ Bool
+      let b ← $ᵗ Bool
+      return ((BitVec.cons a 0, BitVec.cons b 0),
+        ((∅ : IdealXof.Cache).cacheQuery ([], 0) a).cacheQuery ([false], 0) b)) := by
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
+
+-- Declared instances have separate streams even for identical inputs.
+example : ((do
+    let a ← (X.sum X).sharedAnswer (.inl ([], 1))
+    let b ← (X.sum X).sharedAnswer (.inr ([], 1))
+    return (a, b)) : StateT (X.sum X).State ProbComp (BitVec 1 × BitVec 1)).run (∅, ∅) = (do
+      let a ← $ᵗ Bool
+      let b ← $ᵗ Bool
+      return ((BitVec.cons a 0, BitVec.cons b 0),
+        (∅ : IdealXof.Cache).cacheQuery ([], 0) a,
+        (∅ : IdealXof.Cache).cacheQuery ([], 0) b)) := by
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
+
+-- Public accounting counts requests, not the internal stream-bit samples.
+private def xofRequests : OracleComp X.world (BitVec 2) := do
+  let _ ← (X.world.query (.inr ([], 1)) :)
+  (X.world.query (.inr ([], 2)) :)
+
+example : (X.runShared xofRequests).run ∅ = (do
+    let a ← $ᵗ Bool
+    let b ← $ᵗ Bool
+    return ((BitVec.cons a (BitVec.cons b 0), 2),
+      ((∅ : IdealXof.Cache).cacheQuery ([], 0) a).cacheQuery ([], 1) b)) := by
+  change ((do
+    let _ ← X.sharedAnswer ([], 1)
+    let b ← X.sharedAnswer ([], 2)
+    return (b, 2)) : StateT X.State ProbComp (BitVec 2 × Nat)).run ∅ = _
+  simp [OracleFamily.sharedAnswer, IdealXof.answer, IdealXof.readBits,
+    map_eq_bind_pure_comp]
 
 end CommitGolf.OracleTests

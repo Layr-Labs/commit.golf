@@ -1,5 +1,7 @@
 import CommitGolf.Oracle.IdealPermutation
 import CommitGolf.Oracle.IdealCompression
+import CommitGolf.Oracle.RandomOracleFixedOutput
+import CommitGolf.Oracle.IdealXof
 
 /-! # Independent oracle instances and tracks
 
@@ -12,12 +14,16 @@ open OracleComp OracleSpec
 inductive Track where
   | idealPermutation
   | idealCompression
+  | randomOracleFixedOutput
+  | idealXof
   deriving DecidableEq, Repr
 
 inductive OracleFamily where
   | permutation (width : Nat) (positive : 0 < width)
   | compression (inputBits outputBits : Nat) (positive : 0 < outputBits)
       (compressing : outputBits < inputBits)
+  | randomOracleFixedOutput (outputBits : Nat) (positive : 0 < outputBits)
+  | idealXof
   | sum (left right : OracleFamily)
   deriving DecidableEq
 
@@ -30,23 +36,31 @@ abbrev baseline : OracleFamily := .permutation WIDTH (by decide)
 def InTrack : OracleFamily → Track → Prop
   | .permutation _ _, track => track = .idealPermutation
   | .compression _ _ _ _, track => track = .idealCompression
+  | .randomOracleFixedOutput _ _, track => track = .randomOracleFixedOutput
+  | .idealXof, track => track = .idealXof
   | .sum F G, track => F.InTrack track ∧ G.InTrack track
 
 instance instDecidableInTrack (F : OracleFamily) (track : Track) : Decidable (F.InTrack track) :=
   match F with
   | .permutation _ _ => inferInstanceAs (Decidable (track = .idealPermutation))
   | .compression _ _ _ _ => inferInstanceAs (Decidable (track = .idealCompression))
+  | .randomOracleFixedOutput _ _ => inferInstanceAs (Decidable (track = .randomOracleFixedOutput))
+  | .idealXof => inferInstanceAs (Decidable (track = .idealXof))
   | .sum F G => @instDecidableAnd _ _ (F.instDecidableInTrack track) (G.instDecidableInTrack track)
 
 abbrev Domain : OracleFamily → Type
   | .permutation n _ => BitVec n ⊕ BitVec n
   | .compression n _ _ _ => BitVec n
+  | .randomOracleFixedOutput _ _ => RandomOracleFixedOutput.Input
+  | .idealXof => IdealXof.Domain
   | .sum F G => F.Domain ⊕ G.Domain
 
 /-- The public interface, without private coins. -/
 abbrev spec : (F : OracleFamily) → OracleSpec F.Domain
   | .permutation n _ => IdealPermutation.Spec n
   | .compression n k _ _ => IdealCompression.Spec n k
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.Spec m
+  | .idealXof => IdealXof.Spec
   | .sum F G => F.spec + G.spec
 
 abbrev world (F : OracleFamily) := unifSpec + F.spec
@@ -55,13 +69,32 @@ abbrev world (F : OracleFamily) := unifSpec + F.spec
 abbrev Realization : OracleFamily → Type
   | .permutation n _ => IdealPermutation.Function n
   | .compression n k _ _ => IdealCompression.Function n k
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.Function m
+  | .idealXof => IdealXof.Function
   | .sum F G => F.Realization × G.Realization
 
-/-- Independent uniform sampling of all declared instances. -/
-def sample : (F : OracleFamily) → ProbComp F.Realization
-  | .permutation n _ => IdealPermutation.sample n
-  | .compression n k _ _ => IdealCompression.sample n k
-  | .sum F G => do return (← F.sample, ← G.sample)
+/-- Whole-function sampling is available only for finite-domain families. -/
+def HasFiniteDomain : OracleFamily → Prop
+  | .permutation _ _ | .compression _ _ _ _ => True
+  | .randomOracleFixedOutput _ _ => False
+  | .idealXof => False
+  | .sum F G => F.HasFiniteDomain ∧ G.HasFiniteDomain
+
+instance decidableHasFiniteDomain (F : OracleFamily) : Decidable F.HasFiniteDomain :=
+  match F with
+  | .permutation _ _ => isTrue trivial
+  | .compression _ _ _ _ => isTrue trivial
+  | .randomOracleFixedOutput _ _ => isFalse id
+  | .idealXof => isFalse id
+  | .sum F G => @instDecidableAnd _ _ F.decidableHasFiniteDomain G.decidableHasFiniteDomain
+
+/-- Independent uniform sampling of finite-domain instances. -/
+def sample : (F : OracleFamily) → (h : F.HasFiniteDomain := by decide) → ProbComp F.Realization
+  | .permutation n _, _ => IdealPermutation.sample n
+  | .compression n k _ _, _ => IdealCompression.sample n k
+  | .randomOracleFixedOutput _ _, h => False.elim h
+  | .idealXof, h => False.elim h
+  | .sum F G, h => do return (← F.sample h.1, ← G.sample h.2)
 
 def answer {m : Type → Type} [Monad m] :
     (F : OracleFamily) → F.Realization → QueryImpl F.spec m
@@ -69,6 +102,8 @@ def answer {m : Type → Type} [Monad m] :
     | .inl x => pure (π x)
     | .inr y => pure (π.symm y)
   | .compression _ _ _ _, H => fun q => pure (H q)
+  | .randomOracleFixedOutput _ _, H => fun q => pure (H q)
+  | .idealXof, H => fun q => pure (IdealXof.eval H q)
   | .sum F G, H => F.answer H.1 (m := m) + G.answer H.2 (m := m)
 
 /-- Every public query costs one, including repeats and inverse queries; coins are free. -/
@@ -84,6 +119,52 @@ def run (F : OracleFamily) (H : F.Realization) {α : Type}
 def eval (F : OracleFamily) (H : F.Realization) {α : Type}
     (c : OracleComp F.spec α) : α × Nat :=
   (simulateQ ((F.answer H (m := Id)).withAddCost fun _ => 1) c).run
+
+/-- Finite-domain primitives keep a sampled realization; random oracles keep a cache.
+A sum keeps separate state for each instance, even when their widths are identical. -/
+abbrev State : OracleFamily → Type
+  | .permutation n _ => IdealPermutation.Function n
+  | .compression n m _ _ => IdealCompression.Function n m
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.Cache m
+  | .idealXof => IdealXof.Cache
+  | .sum F G => F.State × G.State
+
+def initialState : (F : OracleFamily) → ProbComp F.State
+  | .permutation n _ => IdealPermutation.sample n
+  | .compression n m _ _ => IdealCompression.sample n m
+  | .randomOracleFixedOutput _ _ => pure ∅
+  | .idealXof => pure ∅
+  | .sum F G => do return (← F.initialState, ← G.initialState)
+
+/-- A shared, stateful oracle handler. State persists across all phases of an experiment. -/
+def sharedAnswer : (F : OracleFamily) → QueryImpl F.spec (StateT F.State ProbComp)
+  | .permutation _ _ => fun q => match q with
+      | .inl x => do return (← get) x
+      | .inr y => do return (← get).symm y
+  | .compression _ _ _ _ => fun q => do return (← get) q
+  | .randomOracleFixedOutput m _ => RandomOracleFixedOutput.answer m
+  | .idealXof => IdealXof.answer
+  | .sum F G => fun q => match q with
+      | .inl x => do
+          let (sF, sG) ← get
+          let (y, sF') ← liftM ((F.sharedAnswer x).run sF)
+          set (sF', sG)
+          return y
+      | .inr x => do
+          let (sF, sG) ← get
+          let (y, sG') ← liftM ((G.sharedAnswer x).run sG)
+          set (sF, sG')
+          return y
+
+/-- Count public queries while running against the shared state; private coins are free. -/
+def runShared (F : OracleFamily) {α : Type} (c : OracleComp F.world α) :
+    StateT F.State ProbComp (α × Nat) :=
+  (simulateQ ((HasQuery.toQueryImpl (spec := unifSpec) (m := StateT F.State ProbComp) +
+    F.sharedAnswer).withAddCost F.callCost) c).run
+
+/-- Checks use the same state but their queries do not increase the adversary's budget. -/
+def checkShared (F : OracleFamily) {α : Type} (c : OracleComp F.spec α) :
+    StateT F.State ProbComp α := simulateQ F.sharedAnswer c
 
 end OracleFamily
 end CommitGolf
