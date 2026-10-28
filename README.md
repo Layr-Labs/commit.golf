@@ -61,10 +61,27 @@ All active oracle definitions are in `CommitGolf/Oracle.lean`. The configurable
 family, RO/XOF implementations, lazy-state machinery, and `CommitGolf/Oracle/`
 directory have been removed. Oracle regression tests live in `CommitGolfTests.lean`.
 
+## RISC-V execution
+
+`CommitGolf/Riscv.lean` restores the RV64IM interpreter from this repository's
+sig.golf-derived history, using the same pinned `riscv-zkvm` dependency. It handles
+the fixed compression and forward/inverse permutation syscalls, private randomness,
+and halt/failure, recording abstract cycles and public oracle calls separately.
+Ordinary instructions cost one cycle; multiplication and division cost four.
+Private randomness retains the historical charge of `1 + ceil(bytes / 8)` cycles.
+Oracle syscall prices are explicit organizer inputs; the test prices are not policy.
+
+This restores the machine layer only. The submission-to-program interface, cycle
+certificate, 128-position scoring batch, and combined score are not connected yet.
+The existing certificate and comparator still check the abstract scheme and its
+proof-byte and verification-query bounds. The interpreter's memory ceiling is
+64 GiB: the current logical vector alone is 4 GiB, before private state and buffers.
+Memory remains a mathematical function, not an allocation of that size.
+
 ## License
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
 Oracle-query counts are not cycle costs: each primitive call still counts as one query.
-The planned cycle score must account for the concrete implementation cost of both primitives,
-including the wider permutation; no measured cycle costs are enforced yet.
+The planned cycle score must fix abstract syscall costs for both primitives, including
+the wider permutation; no cycle bounds are enforced by the submission certificate yet.

@@ -5,3 +5,4 @@ import CommitGolf.Honest
 import CommitGolf.Binding
 import CommitGolf.Statements
 import CommitGolf.Hiding
+import CommitGolf.Riscv

@@ -181,3 +181,65 @@ example (scheme : Scheme) (proofBytes checkCalls : Nat)
     scheme.Hiding HIDING_ERROR := certificate.hidingProperty
 
 end CommitGolf.HidingTests
+
+namespace CommitGolf.RiscvTests
+open OracleComp OracleSpec Riscv RiscvZkvm.Rv64
+
+-- Fixture prices exercise distinct syscall costs; these are not challenge scoring policy.
+private def costs : OracleCosts := ⟨8, 32, by decide, by decide⟩
+private def oracle : Oracle := ⟨fun x => x.setWidth COMPRESSION_OUTPUT_LENGTH, Equiv.swap 0 9⟩
+-- Fix coins to zero only in these deterministic interpreter regression tests.
+private def fixed : QueryImpl World Id
+  | .inl n => pure (⟨0, Nat.zero_lt_succ n⟩ : Fin (n + 1))
+  | .inr q => oracle.answer q
+
+private def addi (rd rs immediate : Nat) : BitVec 32 :=
+  BitVec.ofNat 32 ((immediate % 4096) * 2 ^ 20 + rs * 2 ^ 15 + rd * 2 ^ 7 + 0x13)
+private def halt : List (BitVec 32) := [addi 5 0 1, addi 10 0 0, 0x73]
+private def runSmall (code : List (BitVec 32)) (state : MachineState := initialMachine) : Execution :=
+  Id.run (simulateQ fixed (execute costs ⟨code, []⟩ 20 state))
+private def syscallState (kind bytes : Nat) : MachineState :=
+  ((initialMachine.setReg .x11 (BitVec.ofNat 64 bytes)).setReg .x12 256).setReg .x13
+    (BitVec.ofNat 64 kind)
+private def check (label : String) (condition : Bool) : IO Unit :=
+  unless condition do throw (IO.userError label)
+
+#eval do
+  let halted := runSmall [addi 5 0 1, 0x73]
+  check "HALT is charged" (halted.exit == Exit.success && halted.cycles == 2)
+  let compressed := runSmall (0x73 :: halt) (syscallState 0 64 |>.setByte 0 7)
+  check "compression routing and charge"
+    (compressed.exit == Exit.success && compressed.cycles == 11 && compressed.oracleCalls == 1 &&
+      compressed.state.getByte 256 == 7)
+  let forward := runSmall (0x73 :: halt) (syscallState 1 200)
+  check "forward permutation routing and charge"
+    (forward.exit == Exit.success && forward.cycles == 35 && forward.oracleCalls == 1 &&
+      forward.state.getByte 256 == 9)
+  let inverse := runSmall (0x73 :: halt) (syscallState 2 200 |>.setByte 0 9)
+  check "inverse permutation routing and charge"
+    (inverse.exit == Exit.success && inverse.cycles == 35 && inverse.oracleCalls == 1 &&
+      inverse.state.getByte 256 == 0)
+  let randomState := (syscallState 0 9).setReg .x5 2
+  let random := runSmall (0x73 :: halt) randomState
+  check "private randomness costs cycles but no public queries"
+    (random.exit == Exit.success && random.cycles == 6 && random.oracleCalls == 0)
+  check "multiplication and division cost four cycles"
+    ((runSmall ([0x020000b3, 0x020040b3, 0x020070bb, 0x000000b3] ++ halt)).cycles == 16)
+  let looping := runSmall [0x0000006f]
+  check "step exhaustion is not success" (looping.exit == Exit.unfinished && looping.cycles == 20)
+  for (kind, bytes) in [(0, 63), (1, 32), (2, 199), (3, 200)] do
+    let invalid := runSmall (0x73 :: halt) (syscallState kind bytes)
+    check "invalid oracle arguments reject without queries"
+      (invalid.exit == Exit.failure && invalid.oracleCalls == 0 && invalid.cycles == 1)
+  check "unaligned oracle input rejects"
+    ((runSmall (0x73 :: halt) (syscallState 0 64 |>.setReg .x10 1)).exit == Exit.failure)
+  check "oracle output beyond memory rejects"
+    ((runSmall (0x73 :: halt) (syscallState 1 200 |>.setReg .x12
+      (BitVec.ofNat 64 (MEMORY_BYTES - 8)))).exit == Exit.failure)
+  check "unsupported service rejects"
+    ((runSmall [0x73] (initialMachine.setReg .x5 7)).exit == Exit.failure)
+  check "EBREAK rejects" ((runSmall [0x00100073]).exit == Exit.failure)
+  check "malformed ECALL does not decode" (decodeInstruction 0x000000f3 |>.isNone)
+  check "CSR instructions do not decode" (decodeInstruction 0x00002073 |>.isNone)
+
+end CommitGolf.RiscvTests
