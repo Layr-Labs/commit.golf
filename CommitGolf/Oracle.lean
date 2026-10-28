@@ -53,6 +53,8 @@ def answer (oracle : Oracle) {m : Type → Type} [Monad m] : QueryImpl PublicSpe
 def world (oracle : Oracle) : QueryImpl World ProbComp :=
   HasQuery.toQueryImpl (spec := unifSpec) (m := ProbComp) + oracle.answer (m := ProbComp)
 
+/-- One unit per compression or permutation call, forward or inverse;
+private coins do not count toward the query budget. -/
 def callCost : World.Domain → Nat
   | .inl _ => 0
   | .inr _ => 1
