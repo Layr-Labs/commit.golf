@@ -86,3 +86,26 @@ See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 Oracle-query counts are not cycle costs: each primitive call still counts as one query.
 Each public syscall costs eight abstract machine cycles. The certificate enforces
 the declared commitment and opening cycle bounds.
+
+### Yukon setup
+
+`benchmark.json` defines one standalone, lower-is-better benchmark. Only `submission/`
+is editable. On the supported Linux verifier host, `yukon setup` runs `scripts/setup.sh`
+and `yukon run` runs `scripts/run.py`; successful verification writes `scripts/score.json`.
+The dispatched `benchmark.yml` runs the same setup and scoring inside the verifier VM
+and uploads that exact path inside its score artifact.
+
+`Test PR` calls the same benchmark job on the PR's exact head commit. It skips Yukon's
+`submissions/*` branches, which Yukon dispatches separately. Until a complete initial
+certificate is present, the benchmark must fail without producing a score.
+
+Before import, install the Yukon GitHub App on the repository and confirm Blacksmith
+runner access. The workflow must be available on the default branch for dispatch.
+Create the `yukon-unsafe` label for contract changes that invalidate pending scores, then
+coordinate the benchmark import with the Yukon team. Repository/app administration and
+import are separate from these local files. Yukon owns solver submission PRs and promotion;
+do not merge those PRs manually.
+
+Solvers should record reproducible results and provenance in submission notes. Use GitHub
+Discussions for partial research when enabled, and remove secrets and private data before
+posting either notes or discussions.

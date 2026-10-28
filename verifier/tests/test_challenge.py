@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -33,7 +34,8 @@ class ChallengeTests(unittest.TestCase):
             self.assertEqual(git.call_args_list[-1].args[0][-1], commit + ":submission")
 
     def test_missing_starter_is_not_accepted(self):
-        self.assertFalse(check(ROOT / "submission")["ok"])
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertFalse(check(Path(directory))["ok"])
 
 
 if __name__ == "__main__":
