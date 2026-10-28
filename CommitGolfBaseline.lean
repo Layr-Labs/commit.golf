@@ -1,3 +1,2 @@
 import CommitGolfBaseline.Merkle
-import CommitGolfBaseline.MerkleProof.Properties
-import CommitGolfBaseline.CompressionProof.Properties
+import CommitGolfBaseline.MerkleProof.Certificate

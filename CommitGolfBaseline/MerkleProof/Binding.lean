@@ -1,4 +1,3 @@
-import CommitGolf.Binding
 import CommitGolfBaseline.MerkleProof.Honest
 import CommitGolfBaseline.MerkleProof.Lazy
 
@@ -47,7 +46,6 @@ theorem logRun_recheck (π : Perm) (claim : Claim) (hbreak : merkle.Breaks π cl
     ∃ table', logRun π (recheck claim) table = pure ((), table') ∧ ¬ Good table' ∧
       table'.length ≤ table.length + 2 * LOG_LENGTH := by
   obtain ⟨hconf, hacc₀, hacc₁⟩ := hbreak
-  simp only [Perm.family_eval] at hacc₀ hacc₁
   set i := hconf.choose
   set h₀ := hconf.choose_spec.choose
   set h₁ := hconf.choose_spec.choose_spec.choose
@@ -139,13 +137,13 @@ theorem sum_le (q : Nat) (h1 : 1 ≤ q) (h2 : q < 2 ^ 128) :
 /-! ### Binding -/
 
 /-- The adversary's win, followed by `recheck`, leaves a table that is not `Good`. -/
-theorem probEvent_breaks_le (adversary : Adversary merkle.oracles) (q : Nat) :
+theorem probEvent_breaks_le (adversary : Adversary) (q : Nat) :
     Pr[fun (π, claim, calls) => merkle.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤
       Pr[fun p => ¬ Good p.2 ∧ p.2.length ≤ q + 2 * LOG_LENGTH | do
         let π ← $ᵗ Perm
         logRun π (adversary >>= recheck) []] := by
   classical
-  simp only [bindingGame, OracleFamily.sample, IdealPermutation.sample, Perm.family_run]
+  simp only [bindingGame]
   rw [probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]
   refine ENNReal.tsum_le_tsum fun π => mul_le_mul' le_rfl ?_
   rw [run_eq_logRun, logRun_bind, bind_map_left, probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]

@@ -54,10 +54,10 @@ functions. There is no separate finite/infinite binding game or compatibility la
 
 ## Preserved baseline code
 
-`CommitGolfBaseline/` and `CommitGolfBaseline.lean` preserve the old implementations,
-proofs, and baseline tests for later adaptation. They are excluded from the Lake
-build, verifier inputs, and permitted submission imports. They do not currently
-compile against the simplified oracle interface.
+`CommitGolfBaseline/` and `CommitGolfBaseline.lean` retain the Merkle baseline
+unchanged from `master`. These historical sources are excluded from the Lake build,
+verifier inputs, and permitted submission imports; they do not compile against the
+new contract. A certified submission for the new rules will follow separately.
 
 All active oracle definitions are in `CommitGolf/Oracle.lean`. The configurable
 family, RO/XOF implementations, lazy-state machinery, and `CommitGolf/Oracle/`

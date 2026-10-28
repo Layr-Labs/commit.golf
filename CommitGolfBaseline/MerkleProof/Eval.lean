@@ -9,23 +9,6 @@ open OracleComp OracleSpec
 
 variable (π : Perm)
 
-@[simp] theorem family_run {α : Type} (c : OracleComp World α) :
-    OracleFamily.baseline.run π c = π.run c := by
-  have ha : OracleFamily.baseline.answer π (m := ProbComp) = π.answer (m := ProbComp) := by
-    funext q
-    cases q <;> rfl
-  have hc : OracleFamily.baseline.callCost = callCost := by funext q; cases q <;> rfl
-  simp only [OracleFamily.run, run, counted, world, ha, hc]
-  congr 2
-
-@[simp] theorem family_eval {α : Type} (c : OracleComp PermSpec α) :
-    OracleFamily.baseline.eval π c = π.eval c := by
-  have ha : OracleFamily.baseline.answer π (m := Id) = π.answer (m := Id) := by
-    funext q
-    cases q <;> rfl
-  simp only [OracleFamily.eval, eval, ha]
-  congr 2
-
 /-- The answer `π` gives to a permutation query. -/
 def ans : (t : State ⊕ State) → PermSpec.Range t
   | .inl x => π x

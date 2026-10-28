@@ -12,8 +12,9 @@ require «riscv-zkvm» from git
 
 -- The contract: parameters, oracle, scheme syntax, games, and the statements a certificate proves.
 @[default_target] lean_lib CommitGolf
--- Historical baseline sources are retained but excluded until adapted to the fixed oracles.
+-- Historical baseline sources are retained unchanged; no baseline build target is registered.
 -- Fixed-oracle execution and security-definition regression tests.
 lean_lib CommitGolfTests
--- Namespace for submitted proofs; the verifier copies a submission's CommitGolfCandidate/ here.
+-- Verifier-only namespace: candidate modules are copied here during submission checking.
+-- The default contract build does not build or check a submission.
 lean_lib CommitGolfCandidate
