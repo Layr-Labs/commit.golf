@@ -24,7 +24,7 @@ from pathlib import Path
 
 from check_submission import check
 from fetch import FetchError, fetch_pr
-from tracks import TRACKS, track_constructor
+from tracks import TRACKS, certificate_name
 
 HERE = Path(__file__).resolve().parent
 TRUSTED = HERE.parent
@@ -177,7 +177,7 @@ def verify(args: argparse.Namespace) -> dict:
     result = {'status': 'failed', 'commit': args.commit, 'contract_commit': None,
               'log': str(log), 'claim': None, 'track': args.track}
     try:
-        constructor = track_constructor(args.track)
+        certificate = certificate_name(args.track)
         env = tools_env(args.trusted)
         if platform.system() == 'Linux':
             linux_preflight(env)
@@ -210,7 +210,7 @@ def verify(args: argparse.Namespace) -> dict:
             shutil.copytree(source / 'CommitGolfCandidate', project / 'CommitGolfCandidate')
         shutil.copy2(source / 'Solution.lean', project / 'Solution.lean')
         challenge = (args.trusted / 'verifier' / 'Challenge.lean.in').read_text()
-        challenge = challenge.replace('{{track}}', constructor)
+        challenge = challenge.replace('{{certificate}}', certificate)
         for key, value in policy['claim'].items():
             challenge = challenge.replace('{{' + key + '}}', str(value))
         (project / 'CommitGolf' / 'Challenge.lean').write_text(challenge)

@@ -1,8 +1,8 @@
 # commit.golf
 
-Optimize a **vector commitment scheme** under the [draft rules](RULES.md), in three
-tracks: **ideal permutation**, **ideal compression**, or **variable-input, fixed-output random oracle**. A scheme declares a finite collection
-of independent instances of its track's primitive, with its own bit widths.
+Optimize a **vector commitment scheme** under the [draft rules](RULES.md), in four
+tracks: **ideal permutation**, **ideal compression**, **variable-input, fixed-output random oracle**, or **ideal XOF**. A scheme declares a finite collection
+of independent instances of its track's primitive.
 
 Schemes commit to `2^24` entries of 32 bytes. Each track ranks schemes on the Pareto frontier of
 two worst-case scores for openings of 100 positions: **opening proof bytes** and **oracle calls
@@ -22,8 +22,9 @@ lake exe cache get
 lake build IdealPermutation
 lake build IdealCompression
 
-# Check the new random-oracle-fixed-output model (its certified Merkle baseline is not yet implemented):
+# Check the RO and XOF models (certified baselines are not yet implemented):
 lake build RandomOracleFixedOutputModel
+lake build IdealXofModel
 
 # Build both baseline libraries and all regression tests:
 lake build CommitGolf CommitGolfBaseline CommitGolfTests
@@ -37,12 +38,19 @@ proof shows that the finite-domain tracks retain their original winning probabil
 The model, eligibility checks, and verifier track selection are implemented. A certified Merkle
 starter for this track is still pending; `RandomOracleFixedOutputModel` checks the model, not a submission.
 
+The `ideal-xof` track accepts `(input, outputBits)` queries and returns a prefix of a random
+bit stream specific to that input. Longer outputs extend shorter outputs; zero-length output
+is allowed. Every request costs one call, regardless of output length. Internal uniform bit
+sampling uses VCVio's cached random oracle and does not add public calls. `IdealXofModel`
+checks the model; a certified baseline is not supplied yet.
+
 ## Submitting
 
 Edit `submissions/ideal-permutation/` or `submissions/ideal-compression/`. Each directory starts
 with its track's baseline, with `claim.json` and `Solution.lean`. Optional supporting modules go
 in that directory's `CommitGolfCandidate/`. The certificate enforces the selected track. Custom random-oracle-fixed-output submissions use
-`submissions/random-oracle-fixed-output/` and `--track random-oracle-fixed-output`; no certified starter is supplied there yet.
+`submissions/random-oracle-fixed-output/` and `--track random-oracle-fixed-output`; no certified starter is supplied there yet. XOF submissions use
+`submissions/ideal-xof/` and `--track ideal-xof`, also without a certified starter.
 
 On Linux with Landlock and user systemd:
 
