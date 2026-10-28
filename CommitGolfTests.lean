@@ -8,9 +8,9 @@ open OracleComp OracleSpec
 private def functions : Oracle := ⟨fun x => x.setWidth 256, Equiv.swap 7 9⟩
 
 -- Both primitives can be used together. Every call, including inverse and repeats, costs one.
-private def combined : OracleComp PublicSpec (BitVec 256 × BitVec 256 × BitVec 256) := do
+private def combined : OracleComp PublicSpec (BitVec 256 × BitVec 1600 × BitVec 1600) := do
   let hash ← (PublicSpec.query (.inl 7) :)
-  let forward ← (PublicSpec.query (.inr (.inl hash)) :)
+  let forward ← (PublicSpec.query (.inr (.inl (hash.setWidth 1600))) :)
   let inverse ← (PublicSpec.query (.inr (.inr forward)) :)
   return (hash, forward, inverse)
 #guard functions.eval combined == ((7, 9, 7), 3)

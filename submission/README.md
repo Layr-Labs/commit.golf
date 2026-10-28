@@ -8,7 +8,7 @@ Define `CommitGolf.Challenge.submission : CommitGolf.Scheme`. The scheme uses bo
 The certificate requires hiding and exactly the two fixed primitive instances.
 
 The public oracle interface `PublicSpec` routes `.inl input` to the 512→256 compression function,
-`.inr (.inl input)` to the 256-bit forward permutation, and `.inr (.inr output)`
+`.inr (.inl input)` to the 1,600-bit forward permutation, and `.inr (.inr output)`
 to its inverse. In computations with private coins (`world`), wrap these public
 queries in one further `.inr`. Every public primitive call costs one query.
 Derived functions must be implemented from these primitives, not declared as

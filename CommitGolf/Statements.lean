@@ -40,8 +40,8 @@ def VerificationCost (checkCalls : Nat) : Prop :=
 /-- **5. Binding** [CY24, Lemma 18.4.1]. -/
 def Binding : Prop :=
   ∀ (adversary : Adversary) (q : Nat), 1 ≤ q →
-    Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q |
-      bindingGame adversary] ≤ (q : ENNReal) / 2 ^ SECURITY_BITS
+    Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤
+      (q : ENNReal) / 2 ^ SECURITY_BITS
 
 /-- **6. Hiding**, a two-message formulation of commitment-and-opening privacy
 (cf. [CY24, Lemma 18.6.3]). The adversary chooses two messages agreeing at the opened positions.

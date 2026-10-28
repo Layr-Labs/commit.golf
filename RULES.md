@@ -20,7 +20,7 @@ Design a hiding vector commitment scheme with the fixed oracle pair below, with 
 | `CHECK_BUDGET(k)` | 100 · k calls  |
 
 Every scheme uses the fixed `PublicSpec` interface: one
-512→256-bit ideal compression function and one 256-bit ideal permutation. They
+512→256-bit ideal compression function and one 1,600-bit ideal permutation. They
 are sampled independently. The permutation offers forward and inverse queries.
 All parties share the same two instances throughout an experiment.
 

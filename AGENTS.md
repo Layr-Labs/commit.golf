@@ -5,7 +5,7 @@
   No other repository directory is solver-editable. Everything else is the contract; preserve it.
 - Submissions prove `CommitGolf.Certificate scheme proofBytes checkCalls`,
   requiring hiding. `Oracle.lean` fixes the 512→256 compression function and
-  256-bit permutation for every scheme. Historical baselines are preserved but
+  1,600-bit permutation for every scheme. Historical baselines are preserved but
   excluded from compilation and submission imports.
 - Scores and size/security parameters are still the old values pending the next
   consolidation step. Do not claim RISC-V cycle scoring is implemented.

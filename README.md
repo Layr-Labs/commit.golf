@@ -3,7 +3,7 @@
 Design a hiding vector commitment scheme using two independent ideal primitives:
 
 - One **512→256-bit compression function**.
-- One **256→256-bit permutation**, supporting forward and inverse queries.
+- One **1,600→1,600-bit permutation**, supporting forward and inverse queries.
 
 Both are available together through the fixed `PublicSpec` interface. Solvers can implement
 compound functions from these primitives. Every underlying primitive call counts,
@@ -64,3 +64,7 @@ directory have been removed. Oracle regression tests live in `CommitGolfTests.le
 ## License
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
+Oracle-query counts are not cycle costs: each primitive call still counts as one query.
+The planned cycle score must account for the concrete implementation cost of both primitives,
+including the wider permutation; no measured cycle costs are enforced yet.

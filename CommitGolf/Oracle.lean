@@ -6,7 +6,7 @@ import VCVio.OracleComp.Constructions.SampleableType
 
 /-! # Shared ideal oracles
 
-Every party has access to the same 512→256 compression function and 256-bit permutation.
+Every party has access to the same 512→256 compression function and 1,600-bit permutation.
 Public queries select compression, forward permutation, or inverse permutation. Each costs
 one call, including repeats. Private coins and local computation are free in this query model.
 
@@ -21,9 +21,9 @@ namespace CommitGolf
 open OracleComp OracleSpec
 
 abbrev Compression := BitVec 512 → BitVec 256
-abbrev Perm := Equiv.Perm (BitVec 256)
+abbrev Perm := Equiv.Perm (BitVec 1600)
 abbrev CompressionSpec := BitVec 512 →ₒ BitVec 256
-abbrev PermSpec := (BitVec 256 →ₒ BitVec 256) + (BitVec 256 →ₒ BitVec 256)
+abbrev PermSpec := (BitVec 1600 →ₒ BitVec 1600) + (BitVec 1600 →ₒ BitVec 1600)
 
 /-- `.inl x` compresses; `.inr (.inl x)` permutes; `.inr (.inr y)` inverts. -/
 abbrev PublicSpec := CompressionSpec + PermSpec
