@@ -24,6 +24,7 @@ from pathlib import Path
 
 from check_submission import check
 from fetch import FetchError, fetch_pr
+from tracks import TRACKS, certificate_name
 
 HERE = Path(__file__).resolve().parent
 TRUSTED = HERE.parent
@@ -174,8 +175,9 @@ def verify(args: argparse.Namespace) -> dict:
     work.mkdir(parents=True)
     log = work / 'verify.log'
     result = {'status': 'failed', 'commit': args.commit, 'contract_commit': None,
-              'log': str(log), 'claim': None}
+              'log': str(log), 'claim': None, 'track': args.track}
     try:
+        certificate = certificate_name(args.track)
         env = tools_env(args.trusted)
         if platform.system() == 'Linux':
             linux_preflight(env)
@@ -188,7 +190,7 @@ def verify(args: argparse.Namespace) -> dict:
         if args.local:
             shutil.copytree(args.local, source, symlinks=True)
         else:
-            fetch_pr(args.repository, args.pr, args.commit, source)
+            fetch_pr(args.repository, args.pr, args.commit, source, args.track)
         policy = check(source)
         result['claim'] = policy['claim']
         if not policy['ok']:
@@ -208,6 +210,7 @@ def verify(args: argparse.Namespace) -> dict:
             shutil.copytree(source / 'CommitGolfCandidate', project / 'CommitGolfCandidate')
         shutil.copy2(source / 'Solution.lean', project / 'Solution.lean')
         challenge = (args.trusted / 'verifier' / 'Challenge.lean.in').read_text()
+        challenge = challenge.replace('{{certificate}}', certificate)
         for key, value in policy['claim'].items():
             challenge = challenge.replace('{{' + key + '}}', str(value))
         (project / 'CommitGolf' / 'Challenge.lean').write_text(challenge)
@@ -244,6 +247,7 @@ def verify(args: argparse.Namespace) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--track', choices=TRACKS, required=True)
     parser.add_argument('--repository', default='Layr-Labs/commit.golf')
     parser.add_argument('--pr', type=int)
     parser.add_argument('--commit')

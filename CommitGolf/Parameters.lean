@@ -1,5 +1,6 @@
 import Mathlib.Data.FinEnum
 import Mathlib.Data.ENNReal.Inv
+import Mathlib.Data.Real.Basic
 
 /-! # Parameters
 
@@ -28,11 +29,22 @@ def LENGTH : Nat := 2 ^ LOG_LENGTH
 /-- Both scores are measured on honest openings of exactly `BATCH` positions. -/
 def BATCH : Nat := 100
 
-/-- An adversary making at most `q ≥ 1` permutation calls breaks binding with probability at most
+/-- An adversary making at most `q ≥ 1` oracle calls breaks binding with probability at most
 `q / 2 ^ SECURITY_BITS`. -/
 def SECURITY_BITS : Nat := 128
 
-/-! ### Honest budgets, in permutation calls -/
+/-! ### Hiding (provisional challenge policy) -/
+
+/-- Draft statistical hiding target; independent of the binding security parameter. -/
+def HIDING_SECURITY_BITS : Nat := 128
+
+/-- Provisional bound for `q` opened positions and `t` adversary queries.
+The query-only target is uniform in `q`; the extra one permits nonzero error at zero queries.
+This is a challenge requirement pending review, not a bound proved for a construction. -/
+noncomputable def HIDING_ERROR (_q t : Nat) : ℝ :=
+  min 1 (((t : ℝ) + 1) / 2 ^ HIDING_SECURITY_BITS)
+
+/-! ### Honest budgets, in oracle calls -/
 
 def COMMIT_BUDGET : Nat := 100 * LENGTH
 

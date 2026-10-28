@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from check_submission import MAX_FILES, MAX_FILE_BYTES, MAX_TOTAL_BYTES
+from tracks import submission_path
 
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 MAX_TREE_OUTPUT = 4 * 1024 * 1024
@@ -61,8 +62,9 @@ def bounded(cmd: list[str], limit: int, timeout: int = 600) -> bytes:
         proc.wait()
 
 
-def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> str:
+def fetch_pr(repository: str, number: int, commit: str, destination: Path, track: str) -> str:
     """Resolve pull/N/head, verify its SHA, then batch-fetch admitted blobs."""
+    subtree = submission_path(track)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+", repository):
         raise FetchError("invalid repository")
     if type(number) is not int or number < 1 or not SHA.fullmatch(commit):
@@ -79,7 +81,7 @@ def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> st
         actual = bounded(["git", "-C", str(repo), "rev-parse", "FETCH_HEAD"], 4096).decode().strip()
         if actual != commit:
             raise FetchError("PR head changed during fetch")
-        entries = bounded(["git", "-C", str(repo), "ls-tree", "-r", "-z", f"{commit}:submission"],
+        entries = bounded(["git", "-C", str(repo), "ls-tree", "-r", "-z", f"{commit}:{subtree}"],
                           MAX_TREE_OUTPUT).split(b"\0")
         selected = []
         for entry in filter(None, entries):

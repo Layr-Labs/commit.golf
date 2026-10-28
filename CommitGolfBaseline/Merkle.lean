@@ -104,7 +104,8 @@ def ordered (positions : Positions) : List positions :=
 - `opening`: read off the copaths from the stored tree (no calls).
 - `check`: reject unless the proof has exactly `|I| × 24` digests; split it into one copath per
   position; climb each to a root (24 calls each); accept when all roots equal `rt`. -/
-def merkle : Scheme where
+abbrev merkle : Scheme where
+  oracles := OracleFamily.baseline
   Trapdoor := List (List Digest)
   commit message := do
     let tree ← liftM (layers LOG_LENGTH (List.ofFn message))

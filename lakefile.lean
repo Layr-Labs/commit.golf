@@ -15,3 +15,17 @@ lean_lib CommitGolfBaseline
 lean_lib CommitGolfTests
 -- Namespace for submitted proofs; the verifier copies a submission's CommitGolfCandidate/ here.
 lean_lib CommitGolfCandidate
+
+-- Compile either submitted baseline independently, including its track certificate.
+lean_lib IdealPermutation where
+  roots := #[`submissions.«ideal-permutation».Solution]
+lean_lib IdealCompression where
+  roots := #[`submissions.«ideal-compression».Solution]
+
+-- Check the oracle models independently of the Merkle baselines.
+-- This target is model regression coverage, not a certified submission.
+lean_lib RandomOracleFixedOutputModel where
+  roots := #[`CommitGolf.Oracle.Tests]
+
+lean_lib IdealXofModel where
+  roots := #[`CommitGolf.Oracle.Tests]

@@ -1,4 +1,5 @@
 import CommitGolf
+import CommitGolf.Oracle.Tests
 import CommitGolfBaseline
 import Std.Tactic.BVDecide
 
@@ -78,7 +79,7 @@ computations in the pinned VCVio cannot fail: no probability mass is lost to fai
 that added failure to `OracleComp` would break these checks. -/
 
 example {α : Type} (c : ProbComp α) : Pr[⊥ | c] = 0 := probFailure_eq_zero
-example (scheme : Scheme) (π : Perm) (m : Message) (I : Positions) :
+example (scheme : Scheme) (π : scheme.oracles.Realization) (m : Message) (I : Positions) :
     Pr[⊥ | scheme.honest π m I] = 0 := probFailure_eq_zero
 example (adversary : Scheme.Adversary) : Pr[⊥ | Scheme.bindingGame adversary] = 0 :=
   probFailure_eq_zero
@@ -92,4 +93,189 @@ the three the rules allow; `#guard_msgs` fails the build otherwise (in particula
 #guard_msgs in
 #print axioms merkle_certificate
 
+/-! ### Compression baseline execution -/
+
+private def toyHash (x : CompressionBaseline.Input) : CompressionBaseline.Digest :=
+  x.setWidth DIGEST_BITS ^^^ ((x >>> DIGEST_BITS).setWidth DIGEST_BITS).rotateLeft 1
+private def compressionTree :=
+  (CompressionBaseline.Hash.eval toyHash (CompressionBaseline.layers 3 toyLeaves)).1
+
+#guard compressionTree.map List.length == [8, 4, 2, 1]
+#guard (CompressionBaseline.Hash.eval toyHash (CompressionBaseline.layers 3 toyLeaves)).2 == 7
+#guard (List.range 8).all fun i =>
+  let (root, calls) := CompressionBaseline.Hash.eval toyHash
+    (CompressionBaseline.climb i (toyLeaves.getD i 0) (CompressionBaseline.copath compressionTree 3 i))
+  root == CompressionBaseline.rootOf compressionTree && calls == 3
+#guard (List.range 8).all fun i =>
+  (CompressionBaseline.Hash.eval toyHash
+    (CompressionBaseline.climb i (toyLeaves.getD i 0 + 1)
+      (CompressionBaseline.copath compressionTree 3 i))).1 != CompressionBaseline.rootOf compressionTree
+
+/-- info: 'CommitGolf.CompressionBaseline.merkle_certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms CompressionBaseline.merkle_certificate
+
 end CommitGolf.Tests
+
+-- The unified game preserves finite-domain binding without additional axioms.
+/-- info: 'CommitGolf.Scheme.bindingProbability_eq_finite' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms CommitGolf.Scheme.bindingProbability_eq_finite
+
+/-! Regression checks for the hiding specification, not a secure VC construction. -/
+namespace CommitGolf.HidingTests
+open OracleComp OracleSpec CommitGolf.Hiding
+
+-- A message-independent toy scheme witnesses that the definition is satisfiable for every
+-- oracle family. It is deliberately not binding and is not a challenge submission.
+private def constantScheme (F : OracleFamily) : Scheme where
+  oracles := F
+  Trapdoor := Unit
+  commit _ := pure (0, ())
+  opening _ _ := pure []
+  check _ _ _ _ := pure true
+
+example (F : OracleFamily) : (constantScheme F).Hiding (fun _ _ => 0) := by
+  refine ⟨fun _ _ => le_refl 0, ?_⟩
+  intro openingSize queryBudget _ AdversaryState Output adversary _
+  have heq : hidingExperiment (constantScheme F) adversary false =
+      hidingExperiment (constantScheme F) adversary true := rfl
+  rw [heq, tvDist_self]
+
+private def challenge : HidingChallenge Unit 0 :=
+  ⟨fun _ => 0, fun _ => 0, ∅, rfl, rfl, ()⟩
+
+private abbrev R : OracleFamily := .randomOracleFixedOutput 2 (by decide)
+
+-- One query in each stage must consume two calls in total, even for repeated inputs.
+private def twoStage : HidingAdversary R Unit (BitVec 2) 0 where
+  choose := do
+    let _ ← (R.world.query (.inr []) :)
+    return challenge
+  observe _ _ _ := (R.world.query (.inr []) :)
+
+private lemma first_support : support (counted twoStage.choose) =
+    {(challenge, 1)} := by
+  change support ((fun _ : BitVec 2 => (challenge, 1)) <$>
+    (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))) = _
+  rw [support_map]
+  simp
+
+private lemma last_support (root : Commitment) (proof : Proof) :
+    support (counted (twoStage.observe () root proof)) =
+      {z | z.2 = 1} := by
+  change support ((fun x : BitVec 2 => (x, 1)) <$>
+    (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))) = _
+  rw [support_map]
+  ext ⟨x, n⟩
+  simp [eq_comm]
+
+example : QueryBound twoStage 2 := by
+  intro first hf
+  rw [first_support, Set.mem_singleton_iff] at hf
+  subst first
+  refine ⟨by decide, ?_⟩
+  intro root proof last hl
+  rw [last_support] at hl
+  change last.2 = 1 at hl
+  simp [hl]
+
+example : ¬ QueryBound twoStage 1 := by
+  intro h
+  have hf : (challenge, 1) ∈ support (counted twoStage.choose) := by
+    rw [first_support]; exact Set.mem_singleton _
+  have hl : ((0 : BitVec 2), 1) ∈
+      support (counted (twoStage.observe () 0 [])) := by
+    rw [last_support]; rfl
+  have impossible := (h _ hf).2 0 [] _ hl
+  norm_num at impossible
+
+-- Ordinary computation and coins do not consume the public-query budget.
+private def coinOnly : HidingAdversary R Unit Bool 0 where
+  choose := pure challenge
+  observe _ _ _ := do
+    let x ← (R.world.query (.inl 1) :)
+    return x.val == 0
+
+example : QueryBound coinOnly 0 := by
+  intro first hf
+  have heq : counted coinOnly.choose =
+      (pure (challenge, 0) : OracleComp R.world _) := rfl
+  rw [heq] at hf
+  have hf' := OracleComp.eq_of_mem_support_pure (challenge, 0) hf
+  subst first
+  refine ⟨by decide, ?_⟩
+  intro root proof last hl
+  have heq : counted (coinOnly.observe () root proof) =
+      (fun x : Fin 2 => (x.val == 0, 0)) <$>
+        (liftM (R.world.query (.inl 1)) : OracleComp R.world (Fin 2)) := rfl
+  rw [heq] at hl
+  obtain ⟨x, _, hx⟩ := OracleComp.mem_support_map_peel _ _ hl
+  simp [hx]
+
+-- Repeated queries across the two adversary stages reuse the same lazy cache.
+private def remembers : HidingAdversary R (BitVec 2) (BitVec 2 × BitVec 2) 0 where
+  choose := do
+    let x ← (R.world.query (.inr []) :)
+    return ⟨fun _ => 0, fun _ => 0, ∅, rfl, rfl, x⟩
+  observe x _ _ := do
+    let y ← (R.world.query (.inr []) :)
+    return (x, y)
+
+example : runHiding (constantScheme R) (hidingExperiment (constantScheme R) remembers false) =
+    (do let x ← $ᵗ BitVec 2; return (x, x)) := by
+  simp [hidingExperiment, remembers, constantScheme]
+  change runHiding (constantScheme R) (do
+    let x ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
+    let y ← (liftM (R.world.query (.inr [])) : OracleComp R.world (BitVec 2))
+    return (x, y)) = _
+  simp [runHiding, constantScheme, OracleFamily.initialState, OracleFamily.runShared,
+    map_eq_bind_pure_comp]
+  change ((do
+    let x ← R.sharedAnswer []
+    let y ← R.sharedAnswer []
+    return ((x, y), 2)) : StateT R.State ProbComp ((BitVec 2 × BitVec 2) × Nat)).run ∅
+      >>= (fun z => pure z.1.1) = _
+  simp [OracleFamily.sharedAnswer, RandomOracleFixedOutput.answer, map_eq_bind_pure_comp]
+
+-- Empty openings allow different messages. The selector really changes the honest input.
+private def differentMessages : HidingChallenge Unit 0 where
+  message₀ := fun _ => 0
+  message₁ := fun _ => 1
+  positions := ∅
+  size_eq := rfl
+  agree := by funext i; exact False.elim (Finset.notMem_empty i.val i.property)
+  aux := ()
+
+private def leakingScheme : Scheme where
+  oracles := R
+  Trapdoor := Unit
+  commit message := pure (message ⟨0, by decide⟩, ())
+  opening _ _ := pure []
+  check _ _ _ _ := pure true
+
+private def observesRoot : HidingAdversary R Unit Commitment 0 where
+  choose := pure differentMessages
+  observe _ root _ := pure root
+
+example : hidingExperiment leakingScheme observesRoot false = pure 0 := rfl
+example : hidingExperiment leakingScheme observesRoot true = pure 1 := rfl
+
+-- Named hiding tracks must expose the hiding obligation as well as the base certificate.
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : IdealPermutationHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
+
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : IdealCompressionHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
+
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : RandomOracleFixedOutputHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
+
+example (scheme : Scheme) (proofBytes checkCalls : Nat)
+    (certificate : IdealXofHidingCertificate scheme proofBytes checkCalls) :
+    scheme.Hiding HIDING_ERROR := certificate.1.hidingProperty
+
+end CommitGolf.HidingTests

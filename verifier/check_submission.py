@@ -17,7 +17,7 @@ CLAIM_KEYS = ("proofBytes", "checkCalls")
 ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std",
                      "CommitGolfBaseline")
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
-                    "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Statements"}
+                    "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Hiding", "CommitGolf.Statements"}
 
 
 def strip_comments(source: str) -> str:
