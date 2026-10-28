@@ -25,7 +25,8 @@ Score: `BATCH × LOG_LENGTH × DIGEST_BYTES = 100 × 24 × 32 = 76800` bytes, ch
 `BATCH × LOG_LENGTH = 2400` permutation calls.
 
 This file defines the scheme; `CommitGolfTests` runs it on small trees. `MerkleProof/` proves
-`Certificate merkle 76800 2400` (`merkle_certificate`), the sanity check of the statements. -/
+`merkle_properties`, a reference proof of correctness, query/size bounds, and binding.
+This baseline does not establish hiding or eligibility for the current challenge. -/
 
 namespace CommitGolf.Baseline
 open OracleComp OracleSpec

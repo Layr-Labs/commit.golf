@@ -10,5 +10,5 @@ fi
 toolchain="$(tr -d '[:space:]' < lean-toolchain)"
 elan toolchain install "$toolchain"
 bash verifier/setup_tools.sh
-lake exe cache get && lake build CommitGolf CommitGolfBaseline
+lake exe cache get && lake build CommitGolf
 python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "verifier"); from verify import linux_preflight, tools_env; linux_preflight(tools_env(Path(".").resolve()))'

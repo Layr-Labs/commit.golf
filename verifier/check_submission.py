@@ -14,8 +14,7 @@ MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 INTEGER = re.compile(r"0|[1-9][0-9]*")
 MAX_SCORE = 2**53 - 1  # the largest integer that JSON consumers keep exact
 CLAIM_KEYS = ("proofBytes", "checkCalls")
-ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std",
-                     "CommitGolfBaseline")
+ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std")
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
                     "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Hiding", "CommitGolf.Statements"}
 
@@ -97,10 +96,10 @@ def check(root: Path) -> dict:
             if rel.parts[0] != "CommitGolfCandidate":
                 errors.append(f"{rel}: only CommitGolfCandidate/ may contain modules")
             continue
-        if rel.as_posix() not in {"Solution.lean", "claim.json"} and not (
+        if rel.as_posix() not in {"Solution.lean", "claim.json", "README.md"} and not (
             rel.parts[0] == "CommitGolfCandidate" and path.suffix == ".lean" and
             all(MODULE.fullmatch(part) for part in rel.with_suffix("").parts)):
-            errors.append(f"{rel}: only Solution.lean, claim.json, and CommitGolfCandidate modules are admitted")
+            errors.append(f"{rel}: only Solution.lean, claim.json, README.md, and CommitGolfCandidate modules are admitted")
             continue
         size = path.stat().st_size
         total += size

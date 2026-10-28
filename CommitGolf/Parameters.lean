@@ -11,9 +11,6 @@ namespace CommitGolf
 
 /-! ### Sizes -/
 
-/-- Width of the permutation in bits: the Keccak-f[1600] state. -/
-def WIDTH : Nat := 1600
-
 /-- Bytes in an entry and in a commitment. -/
 def DIGEST_BYTES : Nat := 32
 
@@ -55,9 +52,6 @@ def OPEN_BUDGET (k : Nat) : Nat := 100 * k
 def CHECK_BUDGET (k : Nat) : Nat := 100 * k
 
 /-! ### Objects -/
-
-/-- A state of the permutation. -/
-abbrev State := BitVec WIDTH
 
 /-- A vector entry, an element of the alphabet `Σ` of [CY24]. -/
 abbrev Entry := BitVec DIGEST_BITS

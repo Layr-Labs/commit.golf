@@ -1,68 +1,65 @@
 # commit.golf
 
-Optimize a **vector commitment scheme** under the [draft rules](RULES.md), in four
-tracks: **ideal permutation**, **ideal compression**, **variable-input, fixed-output random oracle**, or **ideal XOF**. A scheme declares a finite collection
-of independent instances of its track's primitive.
+Design a hiding vector commitment scheme using two independent ideal primitives:
 
-Schemes commit to `2^24` entries of 32 bytes. Each track ranks schemes on the Pareto frontier of
-two worst-case scores for openings of 100 positions: **opening proof bytes** and **oracle calls
-made by `check`**. Every scheme proves perfect completeness and position binding error at most
-`q / 2^128` against adversaries making `q` calls across the declared family.
+- One **512→256-bit compression function**.
+- One **256→256-bit permutation**, supporting forward and inverse queries.
 
-## Contract and baselines
+Both are available together through the fixed `PublicSpec` interface. Solvers can implement
+compound functions from these primitives. Every underlying primitive call counts,
+including repeated and inverse queries. Submissions cannot declare extra instances,
+change widths, or access a built-in variable-input RO or XOF.
 
-`RULES.md` states the rules; `CommitGolf/` holds the Lean contract. `CommitGolf/Oracle/` defines
-the primitives and their families. `CommitGolfBaseline/` contains binary Merkle baselines:
-one 1600-bit permutation, or one 512-to-256-bit compression function. Both claim
-`(76800 bytes, 2400 calls)` with certificates in their respective proof modules.
+## Current consolidation stage
+
+Submissions require `Certificate`:
+completeness, binding, statistical hiding, honest budgets, and resource bounds.
+See [RULES.md](RULES.md) for the current contract.
+
+This change consolidates oracle selection only. The agreed 120-bit security,
+2,048-bit leaves, 128-element scored opening, and combined RISC-V-cycle × size
+score are subsequent changes. The current code still uses the earlier parameters
+and `(proofBytes, checkCalls)` metrics. No cycle certification is claimed here.
+The consolidated branch currently contains the noninteractive scheme interface;
+interactive work is not yet incorporated.
+
+## Submit and validate
+
+**`submission/` is the only solver-editable directory.** All supporting implementation
+and proof modules must live inside it. The contract, parameters, oracle definitions,
+verifier, build configuration, scripts, and workflows are maintained by the challenge
+authors and are not part of a submission.
+
+Use `submission/` for `Solution.lean`, `claim.json`, and optional
+`CommitGolfCandidate/` modules. There is no certified starter for this target yet.
 
 ```sh
 lake exe cache get
-# Build and check either baseline submission independently:
-lake build IdealPermutation
-lake build IdealCompression
-
-# Check the RO and XOF models (certified baselines are not yet implemented):
-lake build RandomOracleFixedOutputModel
-lake build IdealXofModel
-
-# Build both baseline libraries and all regression tests:
-lake build CommitGolf CommitGolfBaseline CommitGolfTests
-```
-
-The `random-oracle-fixed-output` track accepts any finite bitstring, including the empty string. Each instance
-chooses a positive fixed output width. Fresh inputs get independent uniform answers; repeated
-inputs reuse the same answer. Every query costs one call regardless of input length. The binding
-game uses shared oracle state for every track and counts only adversary calls. A Lean equivalence
-proof shows that the finite-domain tracks retain their original winning probabilities.
-The model, eligibility checks, and verifier track selection are implemented. A certified Merkle
-starter for this track is still pending; `RandomOracleFixedOutputModel` checks the model, not a submission.
-
-The `ideal-xof` track accepts `(input, outputBits)` queries and returns a prefix of a random
-bit stream specific to that input. Longer outputs extend shorter outputs; zero-length output
-is allowed. Every request costs one call, regardless of output length. Internal uniform bit
-sampling uses VCVio's cached random oracle and does not add public calls. `IdealXofModel`
-checks the model; a certified baseline is not supplied yet.
-
-## Submitting
-
-Edit `submissions/ideal-permutation/` or `submissions/ideal-compression/`. Each directory starts
-with its track's baseline, with `claim.json` and `Solution.lean`. Optional supporting modules go
-in that directory's `CommitGolfCandidate/`. The certificate enforces the selected track. Custom random-oracle-fixed-output submissions use
-`submissions/random-oracle-fixed-output/` and `--track random-oracle-fixed-output`; no certified starter is supplied there yet. XOF submissions use
-`submissions/ideal-xof/` and `--track ideal-xof`, also without a certified starter.
-
-On Linux with Landlock and user systemd:
-
-```sh
+lake build CommitGolf CommitGolfTests
+python3 -m unittest discover -s verifier/tests
+# Supported Linux host with Landlock and user systemd:
 bash scripts/setup.sh
-python3 scripts/run.py --track ideal-permutation
-python3 scripts/run.py --track ideal-compression
+python3 scripts/run.py
 ```
 
-Omitting `--track` from `scripts/run.py` selects `ideal-permutation` for compatibility with the
-existing workflow. The workflows are unchanged; compression verification is selected locally.
-The runner writes the selected track and its scores to `scripts/score.json`.
+The runner and Benchmark workflow verify `submission/` directly. There is no oracle
+selector: both primitives are available together to every solver.
+The score report is written to `scripts/score.json`.
+
+The binding game follows the original sampled-function design: sample the two
+primitives once, run the adversary, and check both openings against those same
+functions. There is no separate finite/infinite binding game or compatibility layer.
+
+## Preserved baseline code
+
+`CommitGolfBaseline/` and `CommitGolfBaseline.lean` preserve the old implementations,
+proofs, and baseline tests for later adaptation. They are excluded from the Lake
+build, verifier inputs, and permitted submission imports. They do not currently
+compile against the simplified oracle interface.
+
+All active oracle definitions are in `CommitGolf/Oracle.lean`. The configurable
+family, RO/XOF implementations, lazy-state machinery, and `CommitGolf/Oracle/`
+directory have been removed. Oracle regression tests live in `CommitGolfTests.lean`.
 
 ## License
 

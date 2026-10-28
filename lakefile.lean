@@ -9,23 +9,8 @@ require VCVio from git
 
 -- The contract: parameters, oracle, scheme syntax, games, and the statements a certificate proves.
 @[default_target] lean_lib CommitGolf
--- The textbook Merkle tree, the baseline scheme, and the proof of its certificate.
-lean_lib CommitGolfBaseline
--- Kernel-checked constants, runs of the baseline on small trees, and the certificate's axioms.
+-- Historical baseline sources are retained but excluded until adapted to the fixed oracles.
+-- Fixed-oracle execution and security-definition regression tests.
 lean_lib CommitGolfTests
 -- Namespace for submitted proofs; the verifier copies a submission's CommitGolfCandidate/ here.
 lean_lib CommitGolfCandidate
-
--- Compile either submitted baseline independently, including its track certificate.
-lean_lib IdealPermutation where
-  roots := #[`submissions.«ideal-permutation».Solution]
-lean_lib IdealCompression where
-  roots := #[`submissions.«ideal-compression».Solution]
-
--- Check the oracle models independently of the Merkle baselines.
--- This target is model regression coverage, not a certified submission.
-lean_lib RandomOracleFixedOutputModel where
-  roots := #[`CommitGolf.Oracle.Tests]
-
-lean_lib IdealXofModel where
-  roots := #[`CommitGolf.Oracle.Tests]

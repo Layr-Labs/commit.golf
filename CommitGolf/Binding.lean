@@ -2,7 +2,7 @@ import CommitGolf.Honest
 
 /-! # Binding game
 
-Position binding [CY24, Lemma 18.4.1]. Sample the declared oracle instances independently; the adversary outputs a commitment and two openings of it. It wins if `check` accepts both and they
+Position binding [CY24, Lemma 18.4.1]. Sample both fixed primitives independently; the adversary outputs a commitment and two openings. It wins if `check` accepts both and they
 disagree at a position both open. Only the adversary's own calls are counted, as in [CY24]. -/
 
 namespace CommitGolf
@@ -22,36 +22,25 @@ structure Claim where
   proof₁ : Proof
 
 /-- A classical adversary with unbounded computation and private coins. -/
-abbrev Adversary (family : OracleFamily := OracleFamily.baseline) :=
-  OracleComp family.world Claim
+abbrev Adversary := OracleComp World Claim
 
 /-- Some position in both `I₀` and `I₁` has different values in `a₀` and `a₁`. -/
 def Claim.Conflicting (claim : Claim) : Prop :=
   ∃ (i : Index) (h₀ : i ∈ claim.positions₀) (h₁ : i ∈ claim.positions₁),
     claim.values₀ ⟨i, h₀⟩ ≠ claim.values₁ ⟨i, h₁⟩
 
-/-- The claim wins against the fixed family `π`: the openings conflict, and `check` accepts both. -/
-def Breaks (π : scheme.oracles.Realization) (claim : Claim) : Prop :=
+/-- The claim wins against the fixed oracle pair `π`: the openings conflict, and `check` accepts both. -/
+def Breaks (π : Oracle) (claim : Claim) : Prop :=
   claim.Conflicting ∧
-    (scheme.oracles.eval π (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)).1 = true ∧
-    (scheme.oracles.eval π (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)).1 = true
+    (π.eval (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)).1 = true ∧
+    (π.eval (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)).1 = true
 
-/-- Check both openings against the shared oracle state. Fresh random-oracle queries extend
-that state, so the second check reuses answers from the adversary and the first check. -/
-def checkClaim (claim : Claim) : StateT scheme.oracles.State ProbComp (Bool × Bool) := do
-  let accepted₀ ← scheme.oracles.checkShared
-    (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)
-  let accepted₁ ← scheme.oracles.checkShared
-    (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)
-  return (accepted₀, accepted₁)
-
-/-- Initialize the declared family and run the adversary. Returns the resulting oracle state,
-the claim, and the adversary's call count. Verification continues from that same state. -/
-def bindingGame {family : OracleFamily} (adversary : Adversary family) :
-    ProbComp (family.State × Claim × Nat) := do
-  let π ← family.initialState
-  let ((claim, calls), π) ← (family.runShared adversary).run π
-  return (π, claim, calls)
+/-- Sample the oracle functions once and run the adversary against them. Both checks
+use this same realization. Only the adversary's calls contribute to the budget. -/
+def bindingGame (adversary : Adversary) : ProbComp (Oracle × Claim × Nat) := do
+  let oracle ← Oracle.sample
+  let (claim, calls) ← oracle.run adversary
+  return (oracle, claim, calls)
 
 end Scheme
 

@@ -15,7 +15,7 @@ class PolicyTests(unittest.TestCase):
         (self.root / 'CommitGolfCandidate').mkdir()
         (self.root / 'Solution.lean').write_text('import CommitGolfCandidate.Helper\n')
         (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text(
-            'import CommitGolf.Statements\nimport CommitGolfBaseline.MerkleProof.Lazy\n')
+            'import CommitGolf.Statements\nimport CommitGolf.Oracle\n')
         self.claim = {'proofBytes': 76800, 'checkCalls': 2400}
         self.write_claim()
 
@@ -29,6 +29,15 @@ class PolicyTests(unittest.TestCase):
         value = check(self.root)
         self.assertTrue(value['ok'], value['errors'])
         self.assertEqual(value['claim'], self.claim)
+
+    def test_submission_instructions_are_allowed(self):
+        (self.root / 'README.md').write_text('Submission instructions, not proof code.\n')
+        result = check(self.root)
+        self.assertTrue(result['ok'], result['errors'])
+
+    def test_preserved_baseline_cannot_be_imported(self):
+        (self.root / 'Solution.lean').write_text('import CommitGolfBaseline\n')
+        self.assertFalse(check(self.root)['ok'])
 
     def test_cross_import_is_rejected(self):
         (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text('import CommitGolfCandidateX.Helper\n')

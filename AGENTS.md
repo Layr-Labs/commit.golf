@@ -1,13 +1,16 @@
 # Agent instructions
 
-- Solvers edit only their selected `submissions/<track>/`: `claim.json`, `Solution.lean` and
-  `CommitGolfCandidate/`, where `<track>` is `ideal-permutation`, `ideal-compression`, `random-oracle-fixed-output`, or `ideal-xof`.
-  Everything else is the contract (`RULES.md`, the Lean statements in `CommitGolf/`, the baseline,
-  `verifier/`, the scripts, the workflow and the Lean project pins); preserve it.
-- A submission proves `CommitGolf.TrackCertificate track scheme proofBytes checkCalls`. The leaderboard is the
-  Pareto frontier of `(proofBytes, checkCalls)`, lower being better in both.
-- Build with `lake build CommitGolf CommitGolfBaseline CommitGolfTests`. Verify with
-  `bash scripts/setup.sh` and `python3 scripts/run.py --track ideal-permutation` (or `ideal-compression`) on a supported Linux host.
+- Solvers edit only `submission/`: `claim.json`, `Solution.lean`, and
+  supporting modules under `submission/CommitGolfCandidate/`, and the optional README.
+  No other repository directory is solver-editable. Everything else is the contract; preserve it.
+- Submissions prove `CommitGolf.Certificate scheme proofBytes checkCalls`,
+  requiring hiding. `Oracle.lean` fixes the 512→256 compression function and
+  256-bit permutation for every scheme. Historical baselines are preserved but
+  excluded from compilation and submission imports.
+- Scores and size/security parameters are still the old values pending the next
+  consolidation step. Do not claim RISC-V cycle scoring is implemented.
+- Build with `lake build CommitGolf CommitGolfTests`.
+  Verify with `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux.
 - Do not claim verification without a successful verifier run. `#print axioms` is not enough: it
   trusts declarations added with kernel checking disabled.
 - Yukon handles submission PRs and promotions.
