@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 class ChallengeTests(unittest.TestCase):
     def test_fixed_certificate(self):
         template = (ROOT / "verifier/Challenge.lean.in").read_text()
-        self.assertIn("CommitGolf.Certificate submission", template)
+        self.assertIn("submission : CommitGolf.Submission", template)
+        self.assertIn("CommitGolf.Certificate submission {{proofBytes}} {{commitCycles}} {{openingCycles}}", template)
         self.assertNotIn("{{certificate}}", template)
 
     def test_runner_has_no_oracle_selector(self):

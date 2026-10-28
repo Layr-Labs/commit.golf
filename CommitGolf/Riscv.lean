@@ -20,14 +20,6 @@ def MEMORY_BYTES : Nat := 2 ^ 36
 /-- Maximum submitted image size, including embedded data. -/
 def MAX_PROGRAM_BYTES : Nat := 2 ^ 20
 
-/-- Organizer-supplied syscall prices. They are explicit until scoring policy fixes them;
-a solver-selected value is not a cycle certificate. -/
-structure OracleCosts where
-  compression : Nat
-  permutation : Nat
-  compression_pos : 0 < compression
-  permutation_pos : 0 < permutation
-
 /-! ### Images -/
 
 /-- Instruction encodings and the data bytes loaded at `dataBase`. -/
@@ -205,9 +197,9 @@ def writeOracleAnswer (state : MachineState) (address : BitVec 64) :
   | .inr (.inl _), answer => writeBits state address answer
   | .inr (.inr _), answer => writeBits state address answer
 
-def oracleCycles (costs : OracleCosts) : PublicSpec.Domain → Nat
-  | .inl _ => costs.compression
-  | .inr _ => costs.permutation
+def oracleCycles : PublicSpec.Domain → Nat
+  | .inl _ => COMPRESSION_CYCLES
+  | .inr _ => PERMUTATION_CYCLES
 
 /-- RANDOM: t0=2, a0=destination, a1=byte count. These private coins do not consume public-query budget. -/
 def randomArgumentsValid (state : MachineState) : Bool :=
@@ -234,10 +226,11 @@ def Execution.charge (result : Execution) (cycles calls : Nat) : Execution :=
 
 /-- Execute a submitted image against the fixed oracle pair and independent private coins.
 Faults and exhausted step bounds never report successful HALT. -/
-def execute (costs : OracleCosts) (image : Image) :
-    Nat → MachineState → OracleComp World Execution
-  | 0, state => pure { exit := .unfinished, state := state, cycles := 0, oracleCalls := 0 }
-  | steps + 1, state =>
+def execute (image : Image) (steps : Nat) (state : MachineState)
+    (allowCoins : Bool := true) : OracleComp World Execution :=
+  match steps with
+  | 0 => pure { exit := .unfinished, state := state, cycles := 0, oracleCalls := 0 }
+  | steps + 1 =>
     match fetch image state with
     | none => pure { exit := .failure, state := state, cycles := 0, oracleCalls := 0 }
     | some (.base .ECALL) =>
@@ -246,22 +239,22 @@ def execute (costs : OracleCosts) (image : Image) :
         | none => pure { exit := .failure, state := state, cycles := 1, oracleCalls := 0 }
         | some input => do
           let answer ← World.query (.inr input)
-          let result ← execute costs image steps (writeOracleAnswer state (state.getReg .x12) input answer)
-          return result.charge (oracleCycles costs input) 1
+          let result ← execute image steps (writeOracleAnswer state (state.getReg .x12) input answer) allowCoins
+          return result.charge (oracleCycles input) 1
       else if state.getReg .x5 = 1 then
         pure { exit := if state.getReg .x10 = 0 then .success else .failure, state := state,
                cycles := 1, oracleCalls := 0 }
-      else if state.getReg .x5 = 2 && randomArgumentsValid state then do
+      else if allowCoins && state.getReg .x5 = 2 && randomArgumentsValid state then do
         let bytes := (state.getReg .x11).toNat
         let answer ← liftM ($ᵗ BitVec (8 * bytes) : ProbComp (BitVec (8 * bytes)))
-        let result ← execute costs image steps (writeBits state (state.getReg .x10) answer)
+        let result ← execute image steps (writeBits state (state.getReg .x10) answer) allowCoins
         return result.charge (1 + (bytes + 7) / 8) 0
       else pure { exit := .failure, state := state, cycles := 1, oracleCalls := 0 }
     | some instruction =>
       match ordinaryStep state instruction with
       | none => pure { exit := .failure, state := state, cycles := 1, oracleCalls := 0 }
       | some next => do
-          let result ← execute costs image steps next
+          let result ← execute image steps next allowCoins
           return result.charge (instructionCycles instruction) 0
 
 end CommitGolf.Riscv

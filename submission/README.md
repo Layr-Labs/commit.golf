@@ -1,23 +1,27 @@
-# Single challenge submission
+# Submission
 
-This directory is the sole solver-editable surface. Put supporting Lean modules in
-`submission/CommitGolfCandidate/`; do not edit files elsewhere in the repository.
+This is the sole solver-editable directory. Put `Solution.lean`, `claim.json`, and
+optional supporting Lean modules under `CommitGolfCandidate/` here.
 
-Define `CommitGolf.Challenge.submission : CommitGolf.Scheme`. The scheme uses both fixed primitives automatically. Prove
-`CommitGolf.Challenge.certificate : CommitGolf.Certificate submission proofBytes checkCalls`.
-The certificate requires hiding and exactly the two fixed primitive instances.
+Define `CommitGolf.Challenge.submission : CommitGolf.Submission` with three RISC-V
+images (commit, opening, check), buffer sizes/addresses, and instruction allowances.
+The scheme used in security games is derived from these images. Prove:
 
-The public oracle interface `PublicSpec` routes `.inl input` to the 512→256 compression function,
-`.inr (.inl input)` to the 1,600-bit forward permutation, and `.inr (.inr output)`
-to its inverse. In computations with private coins (`world`), wrap these public
-queries in one further `.inr`. Every public primitive call costs one query.
-Derived functions must be implemented from these primitives, not declared as
-additional oracles.
+```lean
+CommitGolf.Challenge.certificate :
+  CommitGolf.Certificate submission proofBytes commitCycles openingCycles
+```
 
-Provide `Solution.lean`, `claim.json` (`proofBytes`, `checkCalls`), and optional
-`CommitGolfCandidate/` modules here. Run `python3 scripts/run.py` on the supported
-Linux verifier host. There is no certified starter for this target yet.
+`claim.json` must contain exactly `proofBytes`, `commitCycles`, and `openingCycles`.
+These are certified worst-case honest bounds for 128-position openings. The score
+is `(commitCycles + openingCycles) * proofBytes`, including one full commitment.
+The certificate also requires hiding, binding, completeness, query budgets, successful
+honest machine execution, valid image layouts, and termination on all inputs.
 
-This is a staged consolidation: binding and hiding target 120 bits and logical leaves are 2,048 bits; batch size and scoring have
-not yet been updated to the new meeting decisions. The old baseline library is retained as reference code; its certificates do not
-establish eligibility for this challenge.
+Both fixed oracles are available together: 512→256 compression and 1,600-bit permutation
+with its inverse. Each call costs one public query and eight abstract machine cycles.
+Private coins are allowed for commitment and opening, but not checking. See
+[RULES.md](../RULES.md) for the byte layout, syscall interface, and complete requirements.
+
+Run `python3 scripts/run.py` on the supported Linux verifier host. There is no certified
+starter for this target yet; the historical baseline code is preserved but uncompiled.

@@ -3,7 +3,8 @@ import CommitGolf.Scheme
 /-! # Honest run
 
 Commit to a message, open a set of positions, check the opening, and record each stage's calls.
-Completeness, the budgets, and both scores are statements about this run. -/
+Completeness, query budgets, and proof size are statements about this run.
+Machine cycle bounds are stated separately for the same executable-derived scheme. -/
 
 namespace CommitGolf
 open OracleComp OracleSpec

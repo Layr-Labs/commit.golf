@@ -232,7 +232,7 @@ def verify(args: argparse.Namespace) -> dict:
         if timeout:
             result['status'] = 'timeout'
         elif exit_code == 0 and 'Your solution is okay!' in log.read_text(errors='replace'):
-            result.update(status='verified')
+            result.update(status='verified', score=policy['score'])
         else:
             result.update(status='rejected', reason=log.read_text(errors='replace')[-1200:])
         return result

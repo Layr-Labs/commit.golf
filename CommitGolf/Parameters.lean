@@ -35,8 +35,19 @@ def LENGTH : Nat := 2 ^ LOG_LENGTH
 
 /-! ### Scoring and security -/
 
-/-- Both scores are measured on honest openings of exactly `BATCH` positions. -/
-def BATCH : Nat := 100
+/-- Explicit cost-model assumption: abstract machine cycles charged per compression syscall.
+This is a benchmark price, not a measured hardware cycle count. -/
+def COMPRESSION_CYCLES : Nat := 8
+
+/-- Explicit cost-model assumption: abstract machine cycles charged per forward or inverse
+permutation syscall. This is a benchmark price, not a measured hardware cycle count. -/
+def PERMUTATION_CYCLES : Nat := 8
+
+/-- The combined score covers one full commitment and an opening of this many leaves. -/
+def BATCH : Nat := 128
+
+/-- Maximum instructions supplied to any machine run. Cutoff is never successful. -/
+def STEP_LIMIT : Nat := 2 ^ 48
 
 /-- An adversary making at most `q ≥ 1` oracle calls breaks binding with probability at most
 `q / 2 ^ BINDING_SECURITY_BITS`. -/

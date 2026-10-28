@@ -1,11 +1,12 @@
 import CommitGolf.Binding
 import CommitGolf.Hiding
+import CommitGolf.Programs
 
 /-! # Statements
 
-The submission certificate proves all six statements and fixes the available oracle pair.
-Statements 1–4 hold in the honest run for every fixed oracle realization `π`, message, and set of positions, with
-probability `1` (for all coins). Probabilities live in `ENNReal`. -/
+The certificate checks the submitted machine programs and their derived scheme.
+Honest-run bounds hold for every fixed oracle realization, message, and applicable set
+of positions, with probability one over private coins. Probabilities live in `ENNReal`. -/
 
 namespace CommitGolf
 open OracleComp
@@ -26,15 +27,10 @@ def HonestBudgets : Prop :=
         result.checkCalls ≤ CHECK_BUDGET positions.card |
       scheme.honest π message positions] = 1
 
-/-- **3. Proof size**, the first score, on openings of exactly `BATCH` positions. -/
+/-- **3. Proof size**, the byte bound used by the score, on openings of exactly `BATCH` positions. -/
 def ProofSize (proofBytes : Nat) : Prop :=
   ∀ (π : Oracle) (message : Message) (positions : Positions), positions.card = BATCH →
     Pr[fun result => result.proofBytes ≤ proofBytes | scheme.honest π message positions] = 1
-
-/-- **4. Verification cost**, the second score, on openings of exactly `BATCH` positions. -/
-def VerificationCost (checkCalls : Nat) : Prop :=
-  ∀ (π : Oracle) (message : Message) (positions : Positions), positions.card = BATCH →
-    Pr[fun result => result.checkCalls ≤ checkCalls | scheme.honest π message positions] = 1
 
 /-- **5. Binding** [CY24, Lemma 18.4.1]. -/
 def Binding : Prop :=
@@ -61,14 +57,46 @@ def Hiding (error : Nat → Nat → ℝ) : Prop :=
 
 end Scheme
 
-/-- The complete submission certificate: correctness, binding, hiding, resource bounds,
-and access to both fixed oracle primitives together. -/
-structure Certificate (scheme : Scheme) (proofBytes checkCalls : Nat) : Prop where
-  completeness : scheme.Completeness
-  honestBudgets : scheme.HonestBudgets
-  proofSize : scheme.ProofSize proofBytes
-  verificationCost : scheme.VerificationCost checkCalls
-  binding : scheme.Binding
-  hidingProperty : scheme.Hiding HIDING_ERROR
+/-- Valid images, nonoverlapping aligned buffers, and bounded instruction fuel. -/
+def Submission.Admission (submission : Submission) : Prop :=
+  ∀ program,
+    (submission.image program).Valid (submission.layout.buffers submission.sizes) ∧
+    0 < submission.steps program ∧ submission.steps program ≤ STEP_LIMIT
+
+/-- Honest commitment and opening must succeed for every message and opening size.
+This excludes faults, exhausted fuel, and oversized opening outputs. -/
+def Submission.MachineSuccess (submission : Submission) : Prop :=
+  ∀ (oracle : Oracle) (message : Message) (positions : Positions),
+    Pr[fun result => result.1.success = true |
+      oracle.run (submission.honestMachine message positions)] = 1
+
+/-- Every program finishes (success or failure) within its supplied fuel, including on
+adversarial inputs. This is an execution bound, not an asymptotic PPT claim. -/
+def Submission.Termination (submission : Submission) : Prop :=
+  ∀ (oracle : Oracle) (program : Program) (input : Input submission.sizes program),
+    Pr[fun result => result.1.exit ≠ Riscv.Exit.unfinished |
+      oracle.run (submission.run program input)] = 1
+
+/-- **4. Prover cycles.** Separate worst-case bounds for a full commitment and one
+opening of exactly `BATCH` positions. The score uses their sum, not an average. -/
+def Submission.ProverCycles (submission : Submission) (commitCycles openingCycles : Nat) : Prop :=
+  ∀ (oracle : Oracle) (message : Message) (positions : Positions), positions.card = BATCH →
+    Pr[fun result => result.1.commitCycles ≤ commitCycles ∧
+        result.1.openingCycles ≤ openingCycles |
+      oracle.run (submission.honestMachine message positions)] = 1
+
+/-- One complete certificate for the submitted images. Security and proof size apply to the
+scheme derived from those same images; solvers cannot supply an unrelated abstract scheme.
+The score is `(commitCycles + openingCycles) * proofBytes`. -/
+structure Certificate (submission : Submission) (proofBytes commitCycles openingCycles : Nat) : Prop where
+  admission : submission.Admission
+  machineSuccess : submission.MachineSuccess
+  termination : submission.Termination
+  completeness : submission.scheme.Completeness
+  honestBudgets : submission.scheme.HonestBudgets
+  proofSize : submission.scheme.ProofSize proofBytes
+  proverCycles : submission.ProverCycles commitCycles openingCycles
+  binding : submission.scheme.Binding
+  hidingProperty : submission.scheme.Hiding HIDING_ERROR
 
 end CommitGolf

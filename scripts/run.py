@@ -1,10 +1,13 @@
-"""Verify the submission and record its two scores in scripts/score.json."""
+"""Verify the machine certificate and record its combined cycle-times-bytes score."""
 import argparse
 import json
 from pathlib import Path
 import subprocess
 import sys
 import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
+from scoring import score_claim
 
 parser = argparse.ArgumentParser()
 parser.parse_args()
@@ -23,15 +26,18 @@ report = json.loads(result.stdout)
 if report["status"] != "verified":
     raise SystemExit("Verifier did not accept the submission")
 claim = report["claim"]
-proof_bytes, check_calls = claim["proofBytes"], claim["checkCalls"]
-if any(type(value) is not int or not 0 <= value <= 2**53 - 1 for value in (proof_bytes, check_calls)):
-    raise SystemExit("Invalid verifier metrics")
+try:
+    score = score_claim(claim)
+except ValueError as exc:
+    raise SystemExit(f"Invalid verifier metrics: {exc}")
+if type(report.get("score")) is not int or report["score"] != score:
+    raise SystemExit("Verifier reported a different score")
 contract = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 if report["contract_commit"] != contract:
     raise SystemExit("Verifier used a different contract from the repository commit")
-# The leaderboard is the Pareto frontier of the two scores, so there is no single combined score.
-metrics = {"proofBytes": proof_bytes, "checkCalls": check_calls,
+metrics = {**claim,
+           "proverCycles": claim["commitCycles"] + claim["openingCycles"],
            "contractCommit": contract, "verified": True}
 temporary = score_path.with_suffix(".tmp")
-temporary.write_text(json.dumps({"metrics": metrics}) + "\n")
+temporary.write_text(json.dumps({"score": score, "metrics": metrics}) + "\n")
 temporary.replace(score_path)

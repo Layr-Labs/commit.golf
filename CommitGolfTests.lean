@@ -176,17 +176,15 @@ set_option maxRecDepth 4096 in
 example : hidingExperiment leakingScheme observesRoot true = pure 1 := rfl
 
 -- The challenge certificate always includes hiding.
-example (scheme : Scheme) (proofBytes checkCalls : Nat)
-    (certificate : Certificate scheme proofBytes checkCalls) :
-    scheme.Hiding HIDING_ERROR := certificate.hidingProperty
+example (submission : Submission) (proofBytes commitCycles openingCycles : Nat)
+    (certificate : Certificate submission proofBytes commitCycles openingCycles) :
+    submission.scheme.Hiding HIDING_ERROR := certificate.hidingProperty
 
 end CommitGolf.HidingTests
 
 namespace CommitGolf.RiscvTests
 open OracleComp OracleSpec Riscv RiscvZkvm.Rv64
 
--- Fixture prices exercise distinct syscall costs; these are not challenge scoring policy.
-private def costs : OracleCosts := ⟨8, 32, by decide, by decide⟩
 private def oracle : Oracle := ⟨fun x => x.setWidth COMPRESSION_OUTPUT_LENGTH, Equiv.swap 0 9⟩
 -- Fix coins to zero only in these deterministic interpreter regression tests.
 private def fixed : QueryImpl World Id
@@ -197,7 +195,7 @@ private def addi (rd rs immediate : Nat) : BitVec 32 :=
   BitVec.ofNat 32 ((immediate % 4096) * 2 ^ 20 + rs * 2 ^ 15 + rd * 2 ^ 7 + 0x13)
 private def halt : List (BitVec 32) := [addi 5 0 1, addi 10 0 0, 0x73]
 private def runSmall (code : List (BitVec 32)) (state : MachineState := initialMachine) : Execution :=
-  Id.run (simulateQ fixed (execute costs ⟨code, []⟩ 20 state))
+  Id.run (simulateQ fixed (execute ⟨code, []⟩ 20 state))
 private def syscallState (kind bytes : Nat) : MachineState :=
   ((initialMachine.setReg .x11 (BitVec.ofNat 64 bytes)).setReg .x12 256).setReg .x13
     (BitVec.ofNat 64 kind)
@@ -213,11 +211,11 @@ private def check (label : String) (condition : Bool) : IO Unit :=
       compressed.state.getByte 256 == 7)
   let forward := runSmall (0x73 :: halt) (syscallState 1 200)
   check "forward permutation routing and charge"
-    (forward.exit == Exit.success && forward.cycles == 35 && forward.oracleCalls == 1 &&
+    (forward.exit == Exit.success && forward.cycles == 11 && forward.oracleCalls == 1 &&
       forward.state.getByte 256 == 9)
   let inverse := runSmall (0x73 :: halt) (syscallState 2 200 |>.setByte 0 9)
   check "inverse permutation routing and charge"
-    (inverse.exit == Exit.success && inverse.cycles == 35 && inverse.oracleCalls == 1 &&
+    (inverse.exit == Exit.success && inverse.cycles == 11 && inverse.oracleCalls == 1 &&
       inverse.state.getByte 256 == 0)
   let randomState := (syscallState 0 9).setReg .x5 2
   let random := runSmall (0x73 :: halt) randomState
@@ -243,3 +241,66 @@ private def check (label : String) (condition : Bool) : IO Unit :=
   check "CSR instructions do not decode" (decodeInstruction 0x00002073 |>.isNone)
 
 end CommitGolf.RiscvTests
+
+namespace CommitGolf.ProgramTests
+open OracleComp OracleSpec Riscv RiscvZkvm.Rv64
+
+-- Deliberately insecure executable fixture: tests the ABI and scoring, not eligibility.
+private def addi (rd rs immediate : Nat) : BitVec 32 :=
+  BitVec.ofNat 32 ((immediate % 4096) * 2 ^ 20 + rs * 2 ^ 15 + rd * 2 ^ 7 + 0x13)
+private def halt : List (BitVec 32) := [addi 5 0 1, addi 10 0 0, 0x73]
+private def submission : Submission where
+  sizes := ⟨8, 16⟩
+  layout := ⟨0, 2^32, 2^32 + 32, 2^32 + 40, 2^33, 2^34⟩
+  steps := fun _ => 30
+  image
+    | .commit => ⟨[addi 6 0 7, 0x0065b023, addi 6 0 9, 0x00663023] ++ halt, []⟩
+    | .opening => ⟨[0x00063303, 0x0067b023, addi 11 0 8] ++ halt, []⟩
+    | .check => ⟨halt, []⟩
+private def oracle : Oracle := ⟨fun _ => 0, Equiv.refl _⟩
+private def fixed : QueryImpl World Id
+  | .inl n => pure (⟨0, Nat.zero_lt_succ n⟩ : Fin (n + 1))
+  | .inr q => oracle.answer q
+private def run {α : Type} (c : OracleComp World α) : α := Id.run (simulateQ fixed c)
+private def check (label : String) (condition : Bool) : IO Unit :=
+  unless condition do throw (IO.userError label)
+
+example : BATCH = 128 := rfl
+example : score 8 7 6 = 104 := rfl
+example (s : Submission) (bytes commitCycles openingCycles : Nat)
+    (certificate : Certificate s bytes commitCycles openingCycles) :
+    s.MachineSuccess ∧ s.ProverCycles commitCycles openingCycles :=
+  ⟨certificate.machineSuccess, certificate.proverCycles⟩
+
+#eval do
+  let message : Message := fun _ => 0
+  let committed := run (submission.run .commit message)
+  let (root, trapdoor) := submission.readCommit committed
+  check "commitment and trapdoor decode from program memory"
+    (committed.exit == Exit.success && root == 7 && trapdoor == 9)
+  let opened := run (submission.run .opening (trapdoor, ∅))
+  check "opening consumes the serialized trapdoor and returns its declared proof length"
+    (submission.openingSucceeded opened && submission.readProof opened == [9, 0, 0, 0, 0, 0, 0, 0])
+  let honest := run (submission.honestMachine message ∅)
+  check "full commitment and opening cycles both count"
+    (honest.success && honest.commitCycles == 7 && honest.openingCycles == 6 && honest.proofBytes == 8)
+  let (derivedRoot, derivedTrapdoor) := run (submission.scheme.commit message)
+  check "security-game scheme uses the same programs"
+    (derivedRoot == root && (derivedTrapdoor : BitVec 64).toNat == (trapdoor : BitVec 64).toNat &&
+      run (submission.scheme.opening derivedTrapdoor ∅) == submission.readProof opened)
+  let short : Submission := { submission with steps := fun _ => 1 }
+  check "cutoff cannot count as a successful honest run" (!(run (short.honestMachine message ∅)).success)
+  let oversized : Submission := { submission with image := fun p =>
+    if p = Program.opening then ⟨[addi 11 0 17] ++ halt, []⟩ else submission.image p }
+  check "oversized proof cannot count as success" (!(run (oversized.honestMachine message ∅)).success)
+  let randomizedCheck : Submission := { submission with image := fun p =>
+    if p = Program.check then ⟨[addi 5 0 2, 0x73] ++ halt, []⟩ else submission.image p }
+  check "check forbids private randomness"
+    (!(oracle.eval (randomizedCheck.scheme.check 0 ∅ (fun i => nomatch i) [])).1)
+  check "oversized adversarial proof rejects"
+    (!(oracle.eval (submission.scheme.check 0 ∅ (fun i => nomatch i) (List.replicate 17 0))).1)
+  let buffer := positionsBuffer 0 ({(⟨5, by decide⟩ : Index), (⟨2, by decide⟩ : Index)} : Positions)
+  check "positions are sorted little-endian indices"
+    (buffer.length == 16 && buffer.byteAt 0 == 2 && buffer.byteAt 8 == 5)
+
+end CommitGolf.ProgramTests

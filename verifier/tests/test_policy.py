@@ -16,7 +16,7 @@ class PolicyTests(unittest.TestCase):
         (self.root / 'Solution.lean').write_text('import CommitGolfCandidate.Helper\n')
         (self.root / 'CommitGolfCandidate' / 'Helper.lean').write_text(
             'import CommitGolf.Statements\nimport CommitGolf.Oracle\n')
-        self.claim = {'proofBytes': 76800, 'checkCalls': 2400}
+        self.claim = {'proofBytes': 76800, 'commitCycles': 2400, 'openingCycles': 1600}
         self.write_claim()
 
     def write_claim(self):
@@ -65,29 +65,43 @@ class PolicyTests(unittest.TestCase):
         self.assertFalse(value['ok'])
         self.assertGreaterEqual(len(value['errors']), 2)
 
-    def test_claim_needs_exactly_the_two_scores(self):
+    def test_claim_needs_exactly_the_three_bounds(self):
         self.claim['extra'] = 1
         self.write_claim()
         value = check(self.root)
         self.assertFalse(value['ok'])
-        self.assertIn('exactly proofBytes and checkCalls', value['errors'][0])
+        self.assertIn('exactly proofBytes, commitCycles and openingCycles', value['errors'][0])
 
     def test_scores_are_nonnegative_integers(self):
         for bad in (-1, 1.5, '7', True):
-            self.claim['checkCalls'] = bad
+            self.claim['commitCycles'] = bad
             self.write_claim()
             value = check(self.root)
             self.assertFalse(value['ok'], bad)
 
+    def test_score_uses_proof_bytes_and_both_cycle_bounds(self):
+        result = check(self.root)
+        self.assertEqual(result['score'], 76800 * (2400 + 1600))
+
     def test_scores_are_capped(self):
-        self.claim['proofBytes'] = 2**53 - 1
+        self.claim = {'proofBytes': 2**53 - 1, 'commitCycles': 1, 'openingCycles': 0}
         self.write_claim()
         self.assertTrue(check(self.root)['ok'])
-        self.claim['proofBytes'] = 2**53
+        self.claim['proofBytes'] += 1
         self.write_claim()
-        value = check(self.root)
-        self.assertFalse(value['ok'])
-        self.assertIn('exceeds 2^53 - 1', value['errors'][0])
+        self.assertFalse(check(self.root)['ok'])
+
+    def test_product_overflow_is_rejected(self):
+        self.claim = {'proofBytes': 2**30, 'commitCycles': 2**30, 'openingCycles': 1}
+        self.write_claim()
+        self.assertFalse(check(self.root)['ok'])
+
+    def test_old_claim_and_solver_selected_commitment_size_are_rejected(self):
+        for value in ({'proofBytes': 1, 'checkCalls': 1},
+                      {**self.claim, 'commitmentBytes': 0}):
+            self.claim = value
+            self.write_claim()
+            self.assertFalse(check(self.root)['ok'])
 
 
 if __name__ == '__main__':

@@ -1,116 +1,138 @@
 # commit.golf · rules
 
-Design a hiding vector commitment scheme with the fixed oracle pair below, with the syntax and security notions of Chapter 18 of [CY24] (Chiesa and Yogev, *[Building Cryptographic Proofs from Hash Functions](https://github.com/hash-based-snargs-book/hash-based-snargs-book)*). Schemes are ranked on the Pareto frontier of two scores for openings of 100 positions, lower being better in both:
+Design a hiding vector commitment scheme using the fixed oracle pair below, following
+Chapter 18 of [CY24](https://github.com/hash-based-snargs-book/hash-based-snargs-book).
+Minimize the certified score for **one full commitment and one opening of 128 leaves**:
 
-- **proof size**: bytes in the opening proof;
-- **verification cost**: oracle calls made by `check`.
+`(commitCycles + openingCycles) × proofBytes`
 
-## Model
+The cycle bounds and opening-proof byte bound are worst-case honest-run bounds, not
+sample averages. Commitment bytes, private trapdoor storage, opened values, indices,
+and verification cycles are not included in this score.
+There is no amortization of commitment cost across multiple openings.
 
-([Parameters](CommitGolf/Parameters.lean), [Oracle](CommitGolf/Oracle.lean))
+## Parameters and oracles
 
-| Constant          | Value          |
-| ----------------- | -------------- |
-| `DIGEST_BYTES`    | 32             |
-| `LEAF_SIZE`       | 2048 bits      |
-| `LENGTH` (`ℓ`)    | 2^24           |
-| `BATCH`           | 100            |
-| `BINDING_SECURITY_BITS` | 120            |
-| `HIDING_SECURITY_BITS` | 120            |
-| `COMMIT_BUDGET`   | 100 · ℓ calls  |
-| `OPEN_BUDGET(k)`  | 100 · k calls  |
-| `CHECK_BUDGET(k)` | 100 · k calls  |
+See [Parameters](CommitGolf/Parameters.lean) and [Oracle](CommitGolf/Oracle.lean).
 
-Every scheme uses the fixed `PublicSpec` interface: one
-512→256-bit ideal compression function and one 1,600-bit ideal permutation. They
-are sampled independently. The permutation offers forward and inverse queries.
-All parties share the same two instances throughout an experiment.
+| Parameter | Value |
+| --- | --- |
+| Logical leaf size | 2,048 bits (256 bytes) |
+| Vector length | 2^24 leaves |
+| Commitment size | 32 bytes |
+| Scored opening | 128 distinct positions |
+| Binding / hiding security bits | 120 / 120 |
+| Compression | 512 → 256 bits |
+| Permutation, forward and inverse | 1,600 → 1,600 bits |
+| Commit query budget | 100 × vector length |
+| Opening / checking query budget | 100 × number of opened positions |
 
-Solvers may implement derived functions from these primitives. They cannot add
-independent instances, change primitive widths, or declare a variable-input RO/XOF.
-Every underlying primitive query costs one call, including repeats and inverse
-queries. Private coins and local computation remain free in this interim query
-accounting. Derived-function calls have no separate unit-cost shortcut.
+The compression function and permutation are sampled independently and uniformly,
+once per experiment, and shared by all parties. Solvers may build compound functions
+using them; they cannot add oracle instances or change their widths. Every underlying
+public query counts once, including repeats and inverse queries. Private randomness
+and local computation do not consume query budget, but do incur machine-cycle costs.
 
-- A message is `m ∈ Σ^ℓ` with `Σ = {0,1}^2048`. For positions `I ⊆ [ℓ] = {0, …, ℓ−1}`, `m[I] ∈ Σ^I` is its restriction.
-- A commitment is `rt ∈ {0,1}^256`; a proof `pf` is a byte string of `|pf|` bytes.
+The logical leaf size does not constrain the solver's internal tree shape or arity.
+All phases remain noninteractive.
 
-## Scheme
+## Submitted programs
 
-([Lean](CommitGolf/Scheme.lean#L10-L24))
+[Programs](CommitGolf/Programs.lean) defines a submission as three RV64IM images
+(`commit`, `opening`, `check`), buffer capacities and addresses, and an instruction
+allowance per program. The scheme used in the games is derived from these images;
+a separate abstract algorithm cannot stand in for the scored executable.
 
-- `commit^H(m) → (rt, td)`, probabilistic, where the opening trapdoor `td` has any type;
-- `opening^H(td, I) → pf`, probabilistic;
-- `check^H(rt, I, a, pf) → {0, 1}` for `a ∈ Σ^I`, deterministic.
+Each run starts with fresh zeroed memory, embedded image data, and its inputs:
 
-The **honest run** ([Lean](CommitGolf/Honest.lean#L23-L28)) on `(H, m, I)` is `(rt, td) ← commit^H(m)`, `pf ← opening^H(td, I)`, `b := check^H(rt, I, m[I], pf)`.
+- `commit` receives the full vector and writes a commitment and a fixed-capacity private trapdoor.
+- `opening` receives that trapdoor and a set of positions; it writes a variable-length proof.
+- `check` receives the commitment, positions, claimed values, and proof; it accepts or rejects.
 
-## Statements
+Positions are sorted and serialized as little-endian 64-bit indices. Leaves, commitments,
+and private state use little-endian byte encoding. The buffers are addressed by `a0`–`a5`
+(message, commitment, trapdoor, indices, values, proof); `a6` contains the position count,
+and `a7` the proof capacity, or supplied proof length for `check`. Opening returns its
+proof length in `a1`. Only serialized trapdoor bytes pass from commit to opening.
 
-The certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lean#L67)) requires the following five properties plus hiding and the fixed oracle pair. The first four hold in the honest run for every realization `H`, `m`, `I`, and all coins:
+Admission requires aligned, nonoverlapping buffers below the embedded image data,
+images smaller than 1 MiB, and positive instruction allowances at most `2^48`.
+Memory is a functional 64-GiB address space; the full input vector occupies 4 GiB.
+Input loading and output decoding are interface operations, not charged instructions.
+Every program must finish within its allowance on all inputs, including adversarial
+proofs and trapdoors. Faults reject; exhaustion is `unfinished`, never success.
+Honest commitment and opening must succeed for all messages and opening sizes.
+Oversized proofs reject. There is no uncertified starter submission yet.
 
-1. **Completeness** ([Lean](CommitGolf/Statements.lean#L18-L20)): `b = 1`.
-2. **Honest budgets** ([Lean](CommitGolf/Statements.lean#L23-L28)): `commit`, `opening`, and `check` make at most `COMMIT_BUDGET`, `OPEN_BUDGET(|I|)`, and `CHECK_BUDGET(|I|)` calls, respectively.
-3. **Proof size** ([Lean](CommitGolf/Statements.lean#L31-L33)): if `|I| = BATCH`, then `|pf| ≤ proofBytes`.
-4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L36-L38)): if `|I| = BATCH`, then `check` makes at most `checkCalls` calls.
-5. **Binding** ([Lean](CommitGolf/Statements.lean#L41-L44)): for every adversary `A` and every `q ≥ 1`,
+## Machine costs
 
-   `Pr[A wins and makes at most q calls] ≤ q / 2^BINDING_SECURITY_BITS`.
+[Riscv](CommitGolf/Riscv.lean) uses sig.golf's pinned RV64IM model and these abstract prices:
 
-In the **binding game** ([Lean](CommitGolf/Binding.lean)), the fixed compression function and permutation are sampled independently and uniformly and shared by the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L24-L26)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L14-L22)). It **wins** ([Lean](CommitGolf/Statements.lean#L41-L44)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
+| Operation | Cycles |
+| --- | --- |
+| Ordinary instruction | 1 |
+| Multiplication/division, including remainder and word forms | 4 |
+| Compression syscall | 8 |
+| Forward or inverse permutation syscall | 8 |
+| Private randomness, `n` bytes | 1 + ceil(n / 8) |
+| HALT | 1 |
 
-`Certificate` requires all six statements, including hiding, and fixes the oracle pair.
+Syscalls have no additional ordinary-instruction charge. These are benchmark model
+costs, not elapsed time or measured processor cycles. `t0=0` requests an oracle:
+`a0` input address, `a1` exact input byte length, `a2` output address, `a3` primitive
+(0 compression, 1 permutation, 2 inverse). `t0=1` halts, accepting when `a0=0`.
+`t0=2` writes `a1` random bytes at `a0`; this syscall is forbidden in `check`.
 
-## Hiding specification
+## Certificate
 
-[Statement 6](CommitGolf/Statements.lean#L51-L61) uses two-message statistical hiding for
-commitments and one opening, corresponding to the privacy goal of CY24, Lemma 18.6.3.
-The adversary chooses two messages `m₀, m₁`, a set `I` of `q` positions, and retained state.
-Its choices must satisfy `m₀[I] = m₁[I]`; outside `I` they may agree or differ arbitrarily.
-Each experiment honestly commits to one of those messages, opens `I`, and lets the adversary
-observe the commitment and proof. The total variation distance between its output distributions
-must be at most `HIDING_ERROR(q, t)` for every such adversary using at most `t` public queries
-across both stages. Empty openings are included. Honest commit/open queries do not consume
-that adversary budget. Oracle state persists across all phases within each experiment.
+[Statements](CommitGolf/Statements.lean) requires one certificate covering:
 
-There is no solver-supplied simulator or PPT environment. This is an indistinguishability
-requirement, not a runtime certificate: the honest budgets count oracle calls, not local work.
-A canonical simulator can fill unopened positions with zeros and honestly commit/open;
-its efficiency would additionally require efficient honest algorithms and padding.
-The connection to the earlier simulation definition has not been formalized here.
+1. Valid images, buffers, and instruction allowances.
+2. Successful honest machine commitment/opening and termination on all inputs.
+3. Perfect completeness of the executable-derived scheme.
+4. Honest oracle-query budgets for commit, opening, and checking at every opening size.
+5. An opening-proof bound of `proofBytes` for all 128-position honest openings.
+6. Bounds `commitCycles` and `openingCycles` for those same honest executions.
+7. Binding: for every adversary and budget `q ≥ 1`, the probability of conflicting accepted openings while making at most `q` calls is at most `q / 2^120`.
+8. Statistical hiding of commitment and opening, as described below.
 
-## Single submission target
+Honest bounds quantify over every fixed oracle realization, message, and applicable
+position set, with probability one over private coins. Binding samples the oracle
+pair once and checks both openings using that same pair. Only adversary calls count
+in its security budget. Verification retains a query budget and termination requirement,
+but its cycles are not part of the score.
 
-`Certificate scheme proofBytes checkCalls` requires all six properties. The scheme
-interface fixes the oracle pair, including widths and number of instances; there
-is no solver-selected oracle declaration. The hiding target is
-`HIDING_ERROR(q, t) = min(1, (t + 1) / 2^HIDING_SECURITY_BITS)`.
-The comparator checks this certificate directly; there is no oracle-model selector.
+## Hiding
 
-**`submission/` is the only solver-editable directory.** All supporting implementation
-and proof modules must live inside it. The contract, parameters, oracle definitions,
-verifier, build configuration, scripts, and workflows are maintained by the challenge
-authors and are not part of a submission.
+[Hiding](CommitGolf/Hiding.lean) compares two experiments. An adversary chooses two
+messages agreeing on a shared set of opened positions, plus retained state. One
+experiment commits/opens the first message; the other commits/opens the second.
+The adversary receives the commitment and proof and may query the shared oracle pair.
+Its output distributions must have total variation distance at most
+`min(1, (t + 1) / 2^120)` for every adversary making at most `t` public queries across
+both stages. Every opening size, including zero, is covered. Honest queries do not
+consume the adversary's budget. No separate simulator or PPT certificate is required.
 
-Use `submission/`. Define `CommitGolf.Challenge.submission : Scheme`
-and prove `CommitGolf.Challenge.certificate : Certificate submission
-proofBytes checkCalls`. Supply those two numbers in `claim.json`; optional modules
-live under `CommitGolfCandidate/`. The trusted verifier selects the certificate.
-There is no certified starter for this target yet.
+## Submit and verify
 
-The table above and the two existing score fields describe what is currently
-enforced. Updating to 128-element openings, and the combined cycle × size score is
-pending. RISC-V runtime is not yet part of this certificate.
+**Only `submission/` is solver-editable.** Define
+`CommitGolf.Challenge.submission : CommitGolf.Submission`, and prove
+`CommitGolf.Challenge.certificate : Certificate submission proofBytes commitCycles openingCycles`.
+Supply exactly those three nonnegative integer bounds in `claim.json`. Optional Lean
+modules live under `submission/CommitGolfCandidate/`. The combined score and all reported
+numeric metrics must fit within `2^53 - 1`.
 
-The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
+The [verifier](verifier/verify.py) runs Lean's comparator on the exact trusted
+[certificate template](verifier/Challenge.lean.in), replaying declarations through the
+kernel and permitting only `propext`, `Classical.choice`, and `Quot.sound`.
+Only accepted certificates produce `scripts/score.json`; failed verification produces no score.
 
 ```sh
-lake build CommitGolf CommitGolfTests   # build
-bash scripts/setup.sh && python3 scripts/run.py # verify (Linux, Landlock, user systemd)
+lake build CommitGolf CommitGolfTests
+python3 -m unittest discover -s verifier/tests
+# Official verification requires supported Linux, Landlock, and user systemd:
+bash scripts/setup.sh && python3 scripts/run.py
 ```
 
-## Preserved baselines
-
-The old baseline sources and proofs remain in `CommitGolfBaseline/` for later
-adaptation. They are excluded from compilation and verifier imports and are not
-current submissions. No new secure starter is supplied by this refactor.
+Historical baselines remain in `CommitGolfBaseline/`, excluded from builds and submission
+imports until adapted. The regression fixtures are not secure submissions.

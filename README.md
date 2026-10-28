@@ -10,18 +10,20 @@ compound functions from these primitives. Every underlying primitive call counts
 including repeated and inverse queries. Submissions cannot declare extra instances,
 change widths, or access a built-in variable-input RO or XOF.
 
-## Current consolidation stage
+## Score and certificate
 
-Submissions require `Certificate`:
-completeness, binding, statistical hiding, honest budgets, and resource bounds.
-See [RULES.md](RULES.md) for the current contract.
+Minimize `(commitCycles + openingCycles) × proofBytes` for one full
+commitment and an opening of **128 leaves**. Claims are certified worst-case bounds,
+not sample measurements; verification cycles are not scored.
 
-Binding and hiding both target 120-bit security, with fixed 2,048-bit logical leaves
-and 256-bit commitments. The agreed 128-element scored opening and combined
-RISC-V-cycle × size score are subsequent changes. The current code still uses the earlier batch size
-and `(proofBytes, checkCalls)` metrics. No cycle certification is claimed here.
-The consolidated branch currently contains the noninteractive scheme interface;
-interactive work is not yet incorporated.
+Each submission supplies RISC-V programs for commitment, opening, and checking.
+The security-game scheme is derived from those same images. One certificate checks
+machine admission, successful honest execution, termination, completeness, query
+budgets, proof size, prover cycles, binding, and statistical hiding.
+
+Binding and hiding target 120-bit security, with 2,048-bit logical leaves and 256-bit
+commitments. The scheme remains noninteractive. See [RULES.md](RULES.md) for the
+machine interface, cost schedule, and security requirements.
 
 ## Submit and validate
 
@@ -69,19 +71,18 @@ the fixed compression and forward/inverse permutation syscalls, private randomne
 and halt/failure, recording abstract cycles and public oracle calls separately.
 Ordinary instructions cost one cycle; multiplication and division cost four.
 Private randomness retains the historical charge of `1 + ceil(bytes / 8)` cycles.
-Oracle syscall prices are explicit organizer inputs; the test prices are not policy.
+Compression and forward/inverse permutation syscalls each cost eight cycles, with
+no additional instruction charge for the syscall. These prices are fixed in Parameters.
 
-This restores the machine layer only. The submission-to-program interface, cycle
-certificate, 128-position scoring batch, and combined score are not connected yet.
-The existing certificate and comparator still check the abstract scheme and its
-proof-byte and verification-query bounds. The interpreter's memory ceiling is
-64 GiB: the current logical vector alone is 4 GiB, before private state and buffers.
-Memory remains a mathematical function, not an allocation of that size.
+`CommitGolf/Programs.lean` defines input loading, output decoding, the executable-derived
+scheme and honest machine runs. The certificate and comparator require cycle bounds
+for those runs. The interpreter's memory ceiling is 64 GiB; memory is modeled as a
+function, not allocated at that size. A full logical vector occupies 4 GiB.
 
 ## License
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
 Oracle-query counts are not cycle costs: each primitive call still counts as one query.
-The planned cycle score must fix abstract syscall costs for both primitives, including
-the wider permutation; no cycle bounds are enforced by the submission certificate yet.
+Each public syscall costs eight abstract machine cycles. The certificate enforces
+the declared commitment and opening cycle bounds.
