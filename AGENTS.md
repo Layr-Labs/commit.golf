@@ -7,7 +7,7 @@
   requiring hiding. `Oracle.lean` fixes the 512→256 compression function and
   1,600-bit permutation for every scheme. Historical baselines are preserved but
   excluded from compilation and submission imports.
-- Binding and hiding target 120 bits. Scores and size parameters still await the next
+- Binding and hiding target 120 bits. Leaves are 2,048 bits. Scoring and batch size still await the next
   consolidation step. Do not claim RISC-V cycle scoring is implemented.
 - Build with `lake build CommitGolf CommitGolfTests`.
   Verify with `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux.

@@ -12,6 +12,7 @@ Design a hiding vector commitment scheme with the fixed oracle pair below, with 
 | Constant          | Value          |
 | ----------------- | -------------- |
 | `DIGEST_BYTES`    | 32             |
+| `LEAF_SIZE`       | 2048 bits      |
 | `LENGTH` (`ℓ`)    | 2^24           |
 | `BATCH`           | 100            |
 | `BINDING_SECURITY_BITS` | 120            |
@@ -31,7 +32,7 @@ Every underlying primitive query costs one call, including repeats and inverse
 queries. Private coins and local computation remain free in this interim query
 accounting. Derived-function calls have no separate unit-cost shortcut.
 
-- A message is `m ∈ Σ^ℓ` with `Σ = {0,1}^256`. For positions `I ⊆ [ℓ] = {0, …, ℓ−1}`, `m[I] ∈ Σ^I` is its restriction.
+- A message is `m ∈ Σ^ℓ` with `Σ = {0,1}^2048`. For positions `I ⊆ [ℓ] = {0, …, ℓ−1}`, `m[I] ∈ Σ^I` is its restriction.
 - A commitment is `rt ∈ {0,1}^256`; a proof `pf` is a byte string of `|pf|` bytes.
 
 ## Scheme
@@ -98,7 +99,7 @@ live under `CommitGolfCandidate/`. The trusted verifier selects the certificate.
 There is no certified starter for this target yet.
 
 The table above and the two existing score fields describe what is currently
-enforced. Updating to 2,048-bit entries, 128-element openings, and the combined cycle × size score is
+enforced. Updating to 128-element openings, and the combined cycle × size score is
 pending. RISC-V runtime is not yet part of this certificate.
 
 The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.

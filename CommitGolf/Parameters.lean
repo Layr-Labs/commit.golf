@@ -20,7 +20,10 @@ def COMPRESSION_INPUT_LENGTH : Nat := 512
 /-- Output length of the ideal compression function, in bits. -/
 def COMPRESSION_OUTPUT_LENGTH : Nat := 256
 
-/-- Bytes in an entry and in a commitment. -/
+/-- Bits in each logical vector leaf; independent of the solver’s internal tree layout. -/
+def LEAF_SIZE : Nat := 2048
+
+/-- Bytes in a commitment. -/
 def DIGEST_BYTES : Nat := 32
 
 def DIGEST_BITS : Nat := 8 * DIGEST_BYTES
@@ -61,7 +64,7 @@ def CHECK_BUDGET (k : Nat) : Nat := 100 * k
 /-! ### Objects -/
 
 /-- A vector entry, an element of the alphabet `Σ` of [CY24]. -/
-abbrev Entry := BitVec DIGEST_BITS
+abbrev Entry := BitVec LEAF_SIZE
 
 /-- The commitment `rt`. -/
 abbrev Commitment := BitVec DIGEST_BITS

@@ -5,6 +5,9 @@ These toy functions test execution; they are not secure submissions. -/
 namespace CommitGolf.Tests
 open OracleComp OracleSpec
 
+example : Entry = BitVec 2048 := rfl
+example : Commitment = BitVec 256 := rfl
+
 private def functions : Oracle := ⟨fun x => x.setWidth COMPRESSION_OUTPUT_LENGTH, Equiv.swap 7 9⟩
 
 -- Both primitives can be used together. Every call, including inverse and repeats, costs one.
@@ -157,7 +160,7 @@ private def differentMessages : HidingChallenge Unit 0 where
 
 private def leakingScheme : Scheme where
   Trapdoor := Unit
-  commit message := pure (message ⟨0, by decide⟩, ())
+  commit message := pure ((message ⟨0, by decide⟩).setWidth DIGEST_BITS, ())
   opening _ _ := pure []
   check _ _ _ _ := pure true
 
@@ -165,7 +168,11 @@ private def observesRoot : HidingAdversary Unit Commitment 0 where
   choose := pure differentMessages
   observe _ root _ := pure root
 
+set_option exponentiation.threshold 2048 in
+set_option maxRecDepth 4096 in
 example : hidingExperiment leakingScheme observesRoot false = pure 0 := rfl
+set_option exponentiation.threshold 2048 in
+set_option maxRecDepth 4096 in
 example : hidingExperiment leakingScheme observesRoot true = pure 1 := rfl
 
 -- The challenge certificate always includes hiding.
