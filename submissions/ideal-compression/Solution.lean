@@ -7,7 +7,7 @@ namespace CommitGolf.Challenge
 def submission : CommitGolf.Scheme := CommitGolf.CompressionBaseline.merkle
 
 theorem certificate : CommitGolf.TrackCertificate .idealCompression submission 76800 2400 :=
-  { toCertificate := CommitGolf.CompressionBaseline.merkle_certificate, inTrack := rfl }
+  ⟨CommitGolf.CompressionBaseline.merkle_certificate, rfl⟩
 
 /-- info: 'CommitGolf.Challenge.certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in

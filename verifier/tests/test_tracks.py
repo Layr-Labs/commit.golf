@@ -4,7 +4,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from tracks import TRACKS, submission_path, track_constructor
+from tracks import (TRACKS, HIDING_TRACKS, CERTIFICATES,
+                    certificate_name, submission_path, track_constructor)
 from check_submission import check
 from fetch import fetch_pr
 
@@ -39,9 +40,18 @@ class TrackTests(unittest.TestCase):
     def test_template_enforces_selected_track(self):
         template = (ROOT / "verifier/Challenge.lean.in").read_text()
         for track in TRACKS:
-            text = template.replace("{{track}}", track_constructor(track))
-            self.assertIn(f"TrackCertificate .{track_constructor(track)} submission", text)
-            self.assertNotIn("{{track}}", text)
+            text = template.replace("{{certificate}}", certificate_name(track))
+            self.assertIn(f"CommitGolf.{CERTIFICATES[track]} submission", text)
+            self.assertNotIn("{{certificate}}", text)
+
+    def test_hiding_tracks_have_distinct_paths_and_certificates(self):
+        self.assertEqual(len(HIDING_TRACKS), 4)
+        for track in HIDING_TRACKS:
+            self.assertEqual(submission_path(track), f"submissions/{track}")
+            self.assertTrue(CERTIFICATES[track].endswith("HidingCertificate"))
+            self.assertEqual(certificate_name(track), CERTIFICATES[track])
+            self.assertNotEqual(certificate_name(track), certificate_name(track.removesuffix("-hiding")))
+
 
 
 if __name__ == "__main__":

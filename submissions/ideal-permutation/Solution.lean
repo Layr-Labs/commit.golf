@@ -12,7 +12,7 @@ namespace CommitGolf.Challenge
 def submission : CommitGolf.Scheme := CommitGolf.Baseline.merkle
 
 theorem certificate : CommitGolf.TrackCertificate .idealPermutation submission 76800 2400 :=
-  { toCertificate := CommitGolf.Baseline.merkle_certificate, inTrack := rfl }
+  ⟨CommitGolf.Baseline.merkle_certificate, rfl⟩
 
 /-- info: 'CommitGolf.Challenge.certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
