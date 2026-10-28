@@ -10,9 +10,8 @@ probability `1` (for all coins). Probabilities live in `ENNReal`. -/
 namespace CommitGolf
 open OracleComp
 
-variable (scheme : Scheme)
-
 namespace Scheme
+variable (scheme : Scheme)
 
 /-- **1. Completeness** [CY24, Lemma 18.2.1], perfect: `check` accepts the honest opening. -/
 def Completeness : Prop :=
