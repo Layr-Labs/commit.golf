@@ -5,17 +5,17 @@ These toy functions test execution; they are not secure submissions. -/
 namespace CommitGolf.Tests
 open OracleComp OracleSpec
 
-private def functions : Oracle := ⟨fun x => x.setWidth 256, Equiv.swap 7 9⟩
+private def functions : Oracle := ⟨fun x => x.setWidth COMPRESSION_OUTPUT_LENGTH, Equiv.swap 7 9⟩
 
 -- Both primitives can be used together. Every call, including inverse and repeats, costs one.
-private def combined : OracleComp PublicSpec (BitVec 256 × BitVec 1600 × BitVec 1600) := do
+private def combined : OracleComp PublicSpec (BitVec COMPRESSION_OUTPUT_LENGTH × BitVec PERMUTATION_WIDTH × BitVec PERMUTATION_WIDTH) := do
   let hash ← (PublicSpec.query (.inl 7) :)
-  let forward ← (PublicSpec.query (.inr (.inl (hash.setWidth 1600))) :)
+  let forward ← (PublicSpec.query (.inr (.inl (hash.setWidth PERMUTATION_WIDTH))) :)
   let inverse ← (PublicSpec.query (.inr (.inr forward)) :)
   return (hash, forward, inverse)
 #guard functions.eval combined == ((7, 9, 7), 3)
 
-private def repeated : OracleComp PublicSpec (BitVec 256 × BitVec 256) := do
+private def repeated : OracleComp PublicSpec (BitVec COMPRESSION_OUTPUT_LENGTH × BitVec COMPRESSION_OUTPUT_LENGTH) := do
   let a ← (PublicSpec.query (.inl 3) :)
   let b ← (PublicSpec.query (.inl 3) :)
   return (a, b)
@@ -68,7 +68,7 @@ private def challenge : HidingChallenge Unit 0 :=
 
 
 -- One query in each stage must consume two calls in total, even for repeated inputs.
-private def twoStage : HidingAdversary Unit (BitVec 256) 0 where
+private def twoStage : HidingAdversary Unit (BitVec COMPRESSION_OUTPUT_LENGTH) 0 where
   choose := do
     let _ ← (World.query (.inr (.inl 0)) :)
     return challenge
@@ -76,16 +76,16 @@ private def twoStage : HidingAdversary Unit (BitVec 256) 0 where
 
 private lemma first_support : support (counted twoStage.choose) =
     {(challenge, 1)} := by
-  change support ((fun _ : BitVec 256 => (challenge, 1)) <$>
-    (liftM (World.query (.inr (.inl 0))) : OracleComp World (BitVec 256))) = _
+  change support ((fun _ : BitVec COMPRESSION_OUTPUT_LENGTH => (challenge, 1)) <$>
+    (liftM (World.query (.inr (.inl 0))) : OracleComp World (BitVec COMPRESSION_OUTPUT_LENGTH))) = _
   rw [support_map]
   simp
 
 private lemma last_support (root : Commitment) (proof : Proof) :
     support (counted (twoStage.observe () root proof)) =
       {z | z.2 = 1} := by
-  change support ((fun x : BitVec 256 => (x, 1)) <$>
-    (liftM (World.query (.inr (.inl 0))) : OracleComp World (BitVec 256))) = _
+  change support ((fun x : BitVec COMPRESSION_OUTPUT_LENGTH => (x, 1)) <$>
+    (liftM (World.query (.inr (.inl 0))) : OracleComp World (BitVec COMPRESSION_OUTPUT_LENGTH))) = _
   rw [support_map]
   ext ⟨x, n⟩
   simp [eq_comm]
@@ -104,7 +104,7 @@ example : ¬ QueryBound twoStage 1 := by
   intro h
   have hf : (challenge, 1) ∈ support (counted twoStage.choose) := by
     rw [first_support]; exact Set.mem_singleton _
-  have hl : ((0 : BitVec 256), 1) ∈
+  have hl : ((0 : BitVec COMPRESSION_OUTPUT_LENGTH), 1) ∈
       support (counted (twoStage.observe () 0 [])) := by
     rw [last_support]; rfl
   have impossible := (h _ hf).2 0 [] _ hl
@@ -134,7 +134,7 @@ example : QueryBound coinOnly 0 := by
   simp [hx]
 
 -- The entire hiding experiment uses one fixed realization, even across stages.
-private def remembers : HidingAdversary (BitVec 256) (BitVec 256 × BitVec 256) 0 where
+private def remembers : HidingAdversary (BitVec COMPRESSION_OUTPUT_LENGTH) (BitVec COMPRESSION_OUTPUT_LENGTH × BitVec COMPRESSION_OUTPUT_LENGTH) 0 where
   choose := do
     let x ← (World.query (.inr (.inl 0)) :)
     return ⟨fun _ => 0, fun _ => 0, ∅, rfl, rfl, x⟩

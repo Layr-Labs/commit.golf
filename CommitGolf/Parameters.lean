@@ -11,6 +11,15 @@ namespace CommitGolf
 
 /-! ### Sizes -/
 
+/-- Width of the ideal permutation in bits, matching the Keccak-f[1600] state. -/
+def PERMUTATION_WIDTH : Nat := 1600
+
+/-- Input length of the ideal compression function, in bits. -/
+def COMPRESSION_INPUT_LENGTH : Nat := 512
+
+/-- Output length of the ideal compression function, in bits. -/
+def COMPRESSION_OUTPUT_LENGTH : Nat := 256
+
 /-- Bytes in an entry and in a commitment. -/
 def DIGEST_BYTES : Nat := 32
 

@@ -20,10 +20,12 @@ it is not an instruction to materialize their truth tables in an implementation.
 namespace CommitGolf
 open OracleComp OracleSpec
 
-abbrev Compression := BitVec 512 → BitVec 256
-abbrev Perm := Equiv.Perm (BitVec 1600)
-abbrev CompressionSpec := BitVec 512 →ₒ BitVec 256
-abbrev PermSpec := (BitVec 1600 →ₒ BitVec 1600) + (BitVec 1600 →ₒ BitVec 1600)
+abbrev Compression := BitVec COMPRESSION_INPUT_LENGTH → BitVec COMPRESSION_OUTPUT_LENGTH
+abbrev Perm := Equiv.Perm (BitVec PERMUTATION_WIDTH)
+abbrev CompressionSpec := BitVec COMPRESSION_INPUT_LENGTH →ₒ BitVec COMPRESSION_OUTPUT_LENGTH
+abbrev PermSpec :=
+  (BitVec PERMUTATION_WIDTH →ₒ BitVec PERMUTATION_WIDTH) +
+  (BitVec PERMUTATION_WIDTH →ₒ BitVec PERMUTATION_WIDTH)
 
 /-- `.inl x` compresses; `.inr (.inl x)` permutes; `.inr (.inr y)` inverts. -/
 abbrev PublicSpec := CompressionSpec + PermSpec
