@@ -36,36 +36,33 @@ structure Oracle where
   compression : Compression
   permutation : Perm
 
-namespace Oracle
-
 /-- Independent uniform sampling of the two primitives, once per experiment. -/
-def sample : ProbComp Oracle := do
+def Oracle.sample : ProbComp Oracle := do
   let compression ← $ᵗ Compression
   let permutation ← $ᵗ Perm
   return ⟨compression, permutation⟩
 
-def answer (oracle : Oracle) {m : Type → Type} [Monad m] : QueryImpl PublicSpec m
+def Oracle.answer (oracle : Oracle) {m : Type → Type} [Monad m] : QueryImpl PublicSpec m
   | .inl x => pure (oracle.compression x)
   | .inr (.inl x) => pure (oracle.permutation x)
   | .inr (.inr y) => pure (oracle.permutation.symm y)
 
 /-- Forward private coins; answer all public queries with the fixed functions. -/
-def world (oracle : Oracle) : QueryImpl World ProbComp :=
+def Oracle.world (oracle : Oracle) : QueryImpl World ProbComp :=
   HasQuery.toQueryImpl (spec := unifSpec) (m := ProbComp) + oracle.answer (m := ProbComp)
 
 /-- One unit per compression or permutation call, forward or inverse;
 private coins do not count toward the query budget. -/
-def callCost : World.Domain → Nat
+def Oracle.callCost : World.Domain → Nat
   | .inl _ => 0
   | .inr _ => 1
 
 /-- Probabilistic execution with its public query count. -/
-def run (oracle : Oracle) {α : Type} (computation : OracleComp World α) : ProbComp (α × Nat) :=
-  (simulateQ (oracle.world.withAddCost callCost) computation).run
+def Oracle.run (oracle : Oracle) {α : Type} (computation : OracleComp World α) : ProbComp (α × Nat) :=
+  (simulateQ (oracle.world.withAddCost Oracle.callCost) computation).run
 
 /-- Deterministic execution with its public query count. -/
-def eval (oracle : Oracle) {α : Type} (computation : OracleComp PublicSpec α) : α × Nat :=
+def Oracle.eval (oracle : Oracle) {α : Type} (computation : OracleComp PublicSpec α) : α × Nat :=
   (simulateQ ((oracle.answer (m := Id)).withAddCost fun _ => 1) computation).run
 
-end Oracle
 end CommitGolf
