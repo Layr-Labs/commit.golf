@@ -18,6 +18,6 @@ Provide `Solution.lean`, `claim.json` (`proofBytes`, `checkCalls`), and optional
 `CommitGolfCandidate/` modules here. Run `python3 scripts/run.py` on the supported
 Linux verifier host. There is no certified starter for this target yet.
 
-This is a staged consolidation: leaf size, security parameters, and scoring have
+This is a staged consolidation: binding and hiding target 120 bits; leaf size and scoring have
 not yet been updated to the new meeting decisions. The old baseline library is retained as reference code; its certificates do not
 establish eligibility for this challenge.

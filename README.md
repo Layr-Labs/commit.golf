@@ -16,9 +16,9 @@ Submissions require `Certificate`:
 completeness, binding, statistical hiding, honest budgets, and resource bounds.
 See [RULES.md](RULES.md) for the current contract.
 
-This change consolidates oracle selection only. The agreed 120-bit security,
-2,048-bit leaves, 128-element scored opening, and combined RISC-V-cycle × size
-score are subsequent changes. The current code still uses the earlier parameters
+Binding and hiding both target 120-bit security. The agreed 2,048-bit leaves,
+128-element scored opening, and combined RISC-V-cycle × size score are subsequent
+changes. The current code still uses the earlier size parameters
 and `(proofBytes, checkCalls)` metrics. No cycle certification is claimed here.
 The consolidated branch currently contains the noninteractive scheme interface;
 interactive work is not yet incorporated.

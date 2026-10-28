@@ -36,17 +36,15 @@ def LENGTH : Nat := 2 ^ LOG_LENGTH
 def BATCH : Nat := 100
 
 /-- An adversary making at most `q ≥ 1` oracle calls breaks binding with probability at most
-`q / 2 ^ SECURITY_BITS`. -/
-def SECURITY_BITS : Nat := 128
+`q / 2 ^ BINDING_SECURITY_BITS`. -/
+def BINDING_SECURITY_BITS : Nat := 120
 
-/-! ### Hiding (provisional challenge policy) -/
+/-- Statistical hiding security parameter. -/
+def HIDING_SECURITY_BITS : Nat := 120
 
-/-- Draft statistical hiding target; independent of the binding security parameter. -/
-def HIDING_SECURITY_BITS : Nat := 128
-
-/-- Provisional bound for `q` opened positions and `t` adversary queries.
+/-- Statistical hiding bound for `q` opened positions and `t` adversary queries.
 The query-only target is uniform in `q`; the extra one permits nonzero error at zero queries.
-This is a challenge requirement pending review, not a bound proved for a construction. -/
+This is a challenge requirement, not a bound proved for a construction. -/
 noncomputable def HIDING_ERROR (_q t : Nat) : ℝ :=
   min 1 (((t : ℝ) + 1) / 2 ^ HIDING_SECURITY_BITS)
 

@@ -14,7 +14,8 @@ Design a hiding vector commitment scheme with the fixed oracle pair below, with 
 | `DIGEST_BYTES`    | 32             |
 | `LENGTH` (`ℓ`)    | 2^24           |
 | `BATCH`           | 100            |
-| `SECURITY_BITS`   | 128            |
+| `BINDING_SECURITY_BITS` | 120            |
+| `HIDING_SECURITY_BITS` | 120            |
 | `COMMIT_BUDGET`   | 100 · ℓ calls  |
 | `OPEN_BUDGET(k)`  | 100 · k calls  |
 | `CHECK_BUDGET(k)` | 100 · k calls  |
@@ -53,7 +54,7 @@ The certificate for `(proofBytes, checkCalls)` ([Lean](CommitGolf/Statements.lea
 4. **Verification cost** ([Lean](CommitGolf/Statements.lean#L36-L38)): if `|I| = BATCH`, then `check` makes at most `checkCalls` calls.
 5. **Binding** ([Lean](CommitGolf/Statements.lean#L41-L44)): for every adversary `A` and every `q ≥ 1`,
 
-   `Pr[A wins and makes at most q calls] ≤ q / 2^SECURITY_BITS`.
+   `Pr[A wins and makes at most q calls] ≤ q / 2^BINDING_SECURITY_BITS`.
 
 In the **binding game** ([Lean](CommitGolf/Binding.lean)), the fixed compression function and permutation are sampled independently and uniformly and shared by the adversary and both checks. `A` ([Lean](CommitGolf/Binding.lean#L24-L26)), probabilistic and computationally unbounded, queries the declared collection and outputs `(rt, I₀, a₀, pf₀, I₁, a₁, pf₁)` ([Lean](CommitGolf/Binding.lean#L14-L22)). It **wins** ([Lean](CommitGolf/Statements.lean#L41-L44)) if `check^H(rt, I₀, a₀, pf₀) = check^H(rt, I₁, a₁, pf₁) = 1` and `a₀[i] ≠ a₁[i]` for some `i ∈ I₀ ∩ I₁` ([Lean](CommitGolf/Binding.lean#L28-L31)). Only `A`'s calls count.
 
@@ -81,7 +82,7 @@ The connection to the earlier simulation definition has not been formalized here
 
 `Certificate scheme proofBytes checkCalls` requires all six properties. The scheme
 interface fixes the oracle pair, including widths and number of instances; there
-is no solver-selected oracle declaration. The hiding target remains the provisional
+is no solver-selected oracle declaration. The hiding target is
 `HIDING_ERROR(q, t) = min(1, (t + 1) / 2^HIDING_SECURITY_BITS)`.
 The comparator checks this certificate directly; there is no oracle-model selector.
 
@@ -96,9 +97,8 @@ proofBytes checkCalls`. Supply those two numbers in `claim.json`; optional modul
 live under `CommitGolfCandidate/`. The trusted verifier selects the certificate.
 There is no certified starter for this target yet.
 
-This step changes oracle eligibility only. The table above and the two existing
-score fields describe what is currently enforced. Updating to 120-bit security,
-2,048-bit entries, 128-element openings, and the combined cycle × size score is
+The table above and the two existing score fields describe what is currently
+enforced. Updating to 2,048-bit entries, 128-element openings, and the combined cycle × size score is
 pending. RISC-V runtime is not yet part of this certificate.
 
 The [verifier](verifier/verify.py) runs Lean's [`comparator`](https://github.com/leanprover/comparator) in a sandbox. It checks that the proof passes Lean's kernel with every declaration replayed, that it proves exactly the [challenge](verifier/Challenge.lean.in), and that it uses only the axioms `propext`, `Classical.choice`, and `Quot.sound`.
