@@ -389,6 +389,14 @@ behavior when buffers overlap; later memory lemmas state the required separation
 def openingCopyState (state : MachineState) : MachineState :=
   openingCopyPrefix state 8
 
+/-- Expose the eight decoded copy instructions for memory refinement. -/
+theorem opening_copy_expansion (state : MachineState) :
+    openingCopyState state =
+      ([.LD .x6 .x23 0, .SD .x25 .x6 0,
+        .LD .x6 .x23 8, .SD .x25 .x6 8,
+        .LD .x6 .x23 16, .SD .x25 .x6 16,
+        .LD .x6 .x23 24, .SD .x25 .x6 24] : List Instr).foldl execInstrBr state := rfl
+
 private theorem copy_getReg_setMem (state : MachineState) (address value : Word) (reg : Reg) :
     (state.setMem address value).getReg reg = state.getReg reg := by
   cases reg <;> rfl
@@ -820,7 +828,7 @@ private theorem opening_position_prepare (state : MachineState) (pc : state.pc =
     · rfl
   · interval_cases i <;> rfl
 
-private theorem opening_position_prepare_register (state : MachineState) (reg : Reg)
+theorem opening_position_prepare_register (state : MachineState) (reg : Reg)
     (scratch : reg ≠ .x6) (index : reg ≠ .x20) (source : reg ≠ .x23) :
     (openingPositionPreparedState state).getReg reg = state.getReg reg := by
   dsimp only [openingPositionPreparedState, openingPositionPrefix, openingPositionInstructions,
@@ -830,7 +838,7 @@ private theorem opening_position_prepare_register (state : MachineState) (reg : 
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm index),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm source)]
 
-private theorem opening_position_prepared (state : MachineState) :
+theorem opening_position_prepared (state : MachineState) :
     (openingPositionPreparedState state).getReg .x20 = state.getMem (state.getReg .x24) ∧
     (openingPositionPreparedState state).getReg .x23 =
       state.getReg .x18 + (state.getMem (state.getReg .x24) <<< 5) := by
@@ -921,7 +929,7 @@ theorem opening_position_setup (state : MachineState) (pc : state.pc = 4176)
   simp [openingPositionPathState, ready, copied, Execution.charge, ← Nat.add_assoc]
 
 
-private theorem opening_position_path_register (state : MachineState) (reg : Reg)
+theorem opening_position_path_register (state : MachineState) (reg : Reg)
     (scratch : reg ≠ .x6) (index : reg ≠ .x20) (source : reg ≠ .x23)
     (output : reg ≠ .x25) (counter : reg ≠ .x28) :
     (openingPositionPathState state).getReg reg = state.getReg reg := by
@@ -929,7 +937,7 @@ private theorem opening_position_path_register (state : MachineState) (reg : Reg
     opening_copy_register _ reg scratch,
     opening_position_prepare_register _ reg scratch index source]
 
-private theorem opening_position_path_registers (state : MachineState) :
+theorem opening_position_path_registers (state : MachineState) :
     (openingPositionPathState state).getReg .x25 = state.getReg .x25 + 32 ∧
     (openingPositionPathState state).getReg .x20 =
       state.getMem (state.getReg .x24) + state.getReg .x19 ∧

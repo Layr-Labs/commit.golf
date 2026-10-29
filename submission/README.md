@@ -23,15 +23,18 @@ with its inverse. Each call costs one public query and eight abstract machine cy
 Private coins are allowed for commitment and opening, but not checking. See
 [RULES.md](../RULES.md) for the byte layout, syscall interface, and complete requirements.
 
-Run `python3 scripts/run.py` on the supported Linux verifier host. There is no certified
-starter for this target yet; the historical baseline code is preserved but uncompiled.
+Run `bash scripts/setup.sh` and `python3 scripts/run.py` on the supported Linux
+verifier host. Historical baselines remain separate and uncompiled.
 
 ## Initial implementation status
 
-This directory now contains a **draft**, not a certified baseline. `Solution.lean`
-defines the machine submission but deliberately has no `certificate` theorem. The
-numbers in `claim.json` are targets awaiting the complete proof, not an accepted score.
-The comparator must reject this state.
+This directory contains the initial machine submission and a complete Lean
+`CommitGolf.Challenge.certificate` theorem. All nine certificate fields compile,
+including binding and hiding for the actual machine-derived scheme. The claims
+are 102400 proof bytes, 17179869184 commitment cycles, and 1048576 opening cycles.
+On 2026-10-28, the unchanged Linux verifier accepted the complete certificate
+after an isolated rebuild and Lean kernel replay. The verified score is
+**1,759,325,978,624,000**. These are certified upper bounds, not sampled timings.
 
 The construction uses a binary Merkle tree. Each 2048-bit leaf is compressed in eight
 256-bit blocks starting from an independent private 256-bit salt. A proof contains one
@@ -41,7 +44,7 @@ implementation uses compression only; access to the permutation remains availabl
 
 - `CommitGolfCandidate/Programs.lean`: instruction assembly, three machine images, layout.
 - `CommitGolfCandidate/Model.lean`: reference computation and proved path reconstruction.
-- `CommitGolfCandidate/Binding.lean`: proved collision extraction from conflicting salted-leaf openings, with exact query-trace lengths; the probabilistic security reduction is still missing.
+- `CommitGolfCandidate/Binding.lean`: proved collision extraction from conflicting salted-leaf openings, with exact query-trace lengths; `BindingSecurity.lean` completes the probabilistic reduction.
 - `CommitGolfCandidate/Execution.lean`: proved fuel-splitting equivalence, invariance under extra fuel after halting, a public-query count bounded by instruction fuel, and an eight-cycles-per-step bound for coin-free execution. The last two bounds also apply through the real submission ABI; they do not prove termination. This module also proves that oracle reply writes preserve registers and memory outside the written words.
 - `CommitGolfCandidate/Opening.lean`: interpreter proofs checked against the submitted instruction bytes, including memory safety and preservation of unread indices. Setup takes 20 cycles, each position (salt plus 24 siblings) takes 380 cycles, and the successful return costs 10 cycles. The complete position loop is proved under explicit input-buffer invariants.
 - `CommitGolfCandidate/OpeningInput.lean`: proves that the trusted ABI establishes those invariants, including exact deserialization of sorted indices. For every trapdoor and position set, the actual opening image succeeds in `30 + 380 * positions.card` cycles, makes zero queries, and returns exactly `800 * positions.card` bytes. The scored batch therefore uses 48670 cycles and 102400 bytes. This module proves the certificate's full `ProofSize 102400` field and opening-specific termination. The complete three-program termination field is proved in `Machine.lean`; cryptographic security remains separate.
@@ -59,61 +62,81 @@ implementation uses compression only; access to the permutation remains availabl
 - `CommitGolfCandidate/CheckEvaluation.lean`: connects the deterministic checker evaluator to the counted oracle runner and proves the scheme checks use at most 32 queries per opened leaf.
 - `CommitGolfCandidate/Budgets.lean`: proves the complete `HonestBudgets` field: exactly 150994943 commitment queries, zero opening queries, and at most 32 checking queries per opened leaf.
 - `CommitGolfCandidate/Memory.lean`: proves the interpreter’s byte reads recover digest words and combine the two compression-input halves in the intended order.
-- `CommitGolfCandidate/LeafRefinement.lean`: proves that both actual leaf loops compute `leafDigest`, with source-memory alignment, separation, and contents as explicit preconditions. The input-loader refinement is in `BufferRefinement.lean`; full commitment-heap correctness remains.
-- `CommitGolfCandidate/PathRefinement.lean`: proves the actual sibling-ordering operations and complete path loop compute `climb`. The loop consumes the specified sibling digests according to the position bits. Connecting those preconditions to the full commitment heap and opening ABI remains.
+- `CommitGolfCandidate/LeafRefinement.lean`: proves that both actual leaf loops compute `leafDigest`, with source-memory alignment, separation, and contents as explicit preconditions. The input-loader refinement is in `BufferRefinement.lean`; `CommitHeap.lean` connects it to the complete leaf/parent construction.
+- `CommitGolfCandidate/PathRefinement.lean`: proves the actual sibling-ordering operations and complete path loop compute `climb`. The loop consumes the specified sibling digests according to the position bits. The constructed heap is covered by `CommitHeap.lean`; `OpeningOutput.lean` and `HonestRecords.lean` connect the actual emitted path bytes to that heap.
 - `CommitGolfCandidate/InputMemory.lean`: proves byte-for-byte correctness of the trusted loader and generic serialization/slicing round trips, including the large private trapdoor.
 - `CommitGolfCandidate/BufferRefinement.lean`: connects message and opened-value blocks, commitments, proof bytes, and private-state digests to actual input memory. Proves that opening receives the same private-state digests produced by commitment, and checking receives the same proof digests returned by opening.
 - `CommitGolfCandidate/HeapModel.lean`: proves that the machine's heap-indexed sibling path reconstructs the root when stored parents equal the compression of their children; also relates heap directions to leaf-index bits.
 - `CommitGolfCandidate/CheckRefinement.lean`: proves a complete checker iteration computes the salted leaf digest followed by all 24 siblings, preserves input buffers, and compares the resulting digest against the original supplied root. Connects this to the heap reconstruction theorem under explicit heap/content invariants.
-- `CommitGolfCandidate/CheckAcceptance.lean`: proves the full checker accepts exactly when the proof length is correct and every position's root comparison succeeds, through both the actual input ABI and the security-game scheme. Establishing that commitment/opening produce matching heap records is still necessary for completeness.
+- `CommitGolfCandidate/CheckAcceptance.lean`: proves the full checker accepts exactly when the proof length is correct and every position's root comparison succeeds, through both the actual input ABI and the security-game scheme. `Completeness.lean` now supplies that ABI-level composition with commitment and opening.
+- `CommitGolfCandidate/WriteMemory.lean`: proves byte-exact syscall writes and preservation of disjoint buffers.
+- `CommitGolfCandidate/CopyRefinement.lean`: proves complete digest contents and preservation for the actual load/store copy sequence.
+- `CommitGolfCandidate/CommitRefinement.lean`: proves that a complete commitment leaf iteration loads its salt, hashes the original eight message blocks, stores the resulting digest, and preserves disjoint input/output regions.
+- `CommitGolfCandidate/LeafHeap.lean`: lifts that result to every leaf of the actual loop, with explicit non-overlapping input, output, and salt regions.
+- `CommitGolfCandidate/ParentRefinement.lean`: proves the actual descending parent loop constructs every internal node correctly and preserves leaf/salt slots. Paths through the resulting heap reconstruct its root.
+- `CommitGolfCandidate/CommitHeap.lean`: establishes message and salt contents from the real loader and random syscall, then proves the full leaf/parent construction has the correct salted leaves and consistent parents for every message, random reply, and fixed oracle.
+- `CommitGolfCandidate/OpeningRefinement.lean`: proves every sibling record emitted by the actual path loop comes from the original heap, with earlier records preserved by later writes.
+- `CommitGolfCandidate/CommitOutput.lean`: proves the returned commitment equals the constructed heap root and that the final copy preserves the tree and salts.
+- `CommitGolfCandidate/CommitSemantics.lean`: proves the exact sampled commitment distribution and its root/heap invariant for every supported execution result.
+- `CommitGolfCandidate/OpeningRecords.lean`: proves every salt and sibling record in the complete position loop, including preservation by later iterations.
+- `CommitGolfCandidate/OpeningOutput.lean`: carries those records through actual trapdoor serialization, the opening input loader, and returned output memory.
+- `CommitGolfCandidate/HonestRecords.lean`: proves the actual emitted salt and path reconstruct the actual returned commitment for every selected leaf of every supported commitment execution.
+- `CommitGolfCandidate/CheckHonest.lean`: proves the full checker loop accepts correctly encoded records from a consistent heap, including preservation of the remaining inputs between iterations. `Completeness.lean` discharges those preconditions through the actual ABI.
+- `CommitGolfCandidate/InputOrder.lean`: proves the opening indices and dependent checker values use the same sorted order, and proves exact checker index deserialization.
+- `CommitGolfCandidate/Completeness.lean`: joins the actual commitment distribution, emitted opening records, checker ABI, and whole checker loop. Proves the full `submission.scheme.Completeness` certificate field for every oracle, message, and opening set.
+- `CommitGolfCandidate/CheckSound.lean`: proves every record of an accepted checker run reconstructs the supplied root, including adversarial proof bytes.
+- `CommitGolfCandidate/CheckInputSound.lean`: carries checker soundness through the actual input ABI and locates a record for any claimed position.
+- `CommitGolfCandidate/BindingMachine.lean`: extracts a compression collision from any conflicting claim accepted by both actual machine checks, using just two 32-call records.
+- `CommitGolfCandidate/BindingReplay.lean`: implements that replay through the public query interface; proves its exact 64-call overhead and structural bound for arbitrary replies. Record selection depends only on the claim.
+- `CommitGolfCandidate/BindingReduction.lean`: bounds the binding-win probability by the replay collision event, handles large budgets, and proves the 64-call overhead fits the 120-bit target under a 256-bit birthday estimate.
+- `CommitGolfCandidate/QueryBudget.lean`: enforces public-query budgets while forwarding private coins and proves exact preservation of the original event-based budget probability.
+- `CommitGolfCandidate/CompressionROM.lean`: proves an adaptive compression-cache birthday bound with fresh private coins and both directions of any fixed permutation available.
+- `CommitGolfCandidate/CompressionSampling.lean`: proves the lazy compression model and the contract's full-table sampling have the same output distribution, for arbitrary adaptive programs and existing caches.
 - `CommitGolfCandidate/Properties.lean`: proved image admission and static arithmetic.
 - `CommitGolfCandidate/Tests.lean`: small-tree interpreter/reference comparisons and rejection tests.
 
-From the repository root, after building the contract, compile and test the draft with:
+- `CommitGolfCandidate/BindingProbe.lean`: records actual compression replies, detects the extracted collision in the lazy cache, and bounds the reduction by the adversary budget plus 128 public queries.
+- `CommitGolfCandidate/BindingSecurity.lean`: proves the complete `submission.scheme.Binding` requirement for every adversary and positive query budget, using the actual machine checker and the contract's sampled oracles.
+- `CommitGolfCandidate/HidingTree.lean`: defines the reference salted heap and proves its uniqueness from leaf contents and parent consistency.
+- `CommitGolfCandidate/HidingMachine.lean`: proves that the actual commitment root and every emitted opening byte equal the reference transcript.
+- `CommitGolfCandidate/HidingSalts.lean`: proves that the machine's packed random-bit draw is exactly a vector of independent uniform 256-bit salts.
+- `CommitGolfCandidate/HidingDistribution.lean`: proves equality between the complete machine hiding-game distributions and the reference games, including both adaptive adversary stages and the shared oracle. The required TV distance is therefore exactly the reference-game distance.
+- `CommitGolfCandidate/HidingFreshness.lean`: bounds guesses of fresh salts after an arbitrary randomized first stage, including adaptively chosen prior query sets. This does not yet handle queries made after observing the root and opening.
+- `CommitGolfCandidate/HidingQueries.lean`: translates the contract's two-stage hiding budget into structural bounds for both adversary stages, retaining the budget consumed during selection.
+
+## Verification
+
+From the repository root, on the supported Linux verifier host:
 
 ```sh
-mkdir -p .lake/build/lib/lean/CommitGolfCandidate
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Programs.olean submission/CommitGolfCandidate/Programs.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Model.olean submission/CommitGolfCandidate/Model.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/HeapModel.olean submission/CommitGolfCandidate/HeapModel.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Properties.olean submission/CommitGolfCandidate/Properties.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Binding.olean submission/CommitGolfCandidate/Binding.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Execution.olean submission/CommitGolfCandidate/Execution.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Counting.olean submission/CommitGolfCandidate/Counting.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Opening.olean submission/CommitGolfCandidate/Opening.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/OpeningInput.olean submission/CommitGolfCandidate/OpeningInput.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Check.olean submission/CommitGolfCandidate/Check.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CheckPath.olean submission/CommitGolfCandidate/CheckPath.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CheckLoop.olean submission/CommitGolfCandidate/CheckLoop.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CheckInput.olean submission/CommitGolfCandidate/CheckInput.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CommitLeaf.olean submission/CommitGolfCandidate/CommitLeaf.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Commit.olean submission/CommitGolfCandidate/Commit.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CommitLoop.olean submission/CommitGolfCandidate/CommitLoop.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CommitParents.olean submission/CommitGolfCandidate/CommitParents.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CommitTree.olean submission/CommitGolfCandidate/CommitTree.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CommitInput.olean submission/CommitGolfCandidate/CommitInput.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CommitRuntime.olean submission/CommitGolfCandidate/CommitRuntime.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Machine.olean submission/CommitGolfCandidate/Machine.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CountingCoins.olean submission/CommitGolfCandidate/CountingCoins.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CheckEvaluation.olean submission/CommitGolfCandidate/CheckEvaluation.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Budgets.olean submission/CommitGolfCandidate/Budgets.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/Memory.olean submission/CommitGolfCandidate/Memory.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/InputMemory.olean submission/CommitGolfCandidate/InputMemory.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/BufferRefinement.olean submission/CommitGolfCandidate/BufferRefinement.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/LeafRefinement.olean submission/CommitGolfCandidate/LeafRefinement.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/PathRefinement.olean submission/CommitGolfCandidate/PathRefinement.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CheckRefinement.olean submission/CommitGolfCandidate/CheckRefinement.lean
-lake env lean -o .lake/build/lib/lean/CommitGolfCandidate/CheckAcceptance.olean submission/CommitGolfCandidate/CheckAcceptance.lean
-lake env lean submission/CommitGolfCandidate/Tests.lean
-lake env lean submission/Solution.lean
+bash scripts/setup.sh
+python3 scripts/run.py
 ```
 
-Remaining certification work: prove that commitment constructs a consistent heap and
-opening copies the corresponding salts/siblings into its proof records; combine those
-facts with the loader round trips and checker acceptance theorem to prove completeness.
-The probabilistic binding and statistical hiding reductions also remain.
-Admission, successful honest machine execution, termination on all inputs, honest query
-budgets, the proof-size field, and the declared prover-cycle bounds are proved. The fixed-coin toy-oracle tests
-establish none of the statistical security claims. Once the remaining obligations are
-proved, assemble the existing contract's `CommitGolf.Certificate`; do not weaken it or
-substitute abstract algorithms for the images. No complete verifier acceptance is claimed.
+The runner freezes `submission/`, rebuilds its modules in isolation, checks the
+certificate against the trusted challenge, replays the proof in Lean's kernel,
+and writes the accepted score to `scripts/score.json`. It also rejects forbidden
+submission files and declarations. The certificate uses only Lean's standard
+`propext`, `Classical.choice`, and `Quot.sound` axioms.
+
+For the trusted contract and Python verifier regression tests:
+
+```sh
+lake build CommitGolf CommitGolfTests
+python3 -m unittest discover -s verifier/tests
+```
+
+The hiding proof now covers the complete game. `HidingLeafReplacement.lean`
+isolates an unopened leaf while preserving the exact root and proof bytes;
+`HidingCoordinate.lean` bounds one message-coordinate change, and
+`HidingHybrid.lean` composes that bound across all coordinates. Opened coordinates
+are equal in both messages. `HidingGameIntegration.lean` preserves the joint
+first-stage challenge/cache distribution and transfers the observer query bound.
+`HidingSecurity.lean` proves the accumulated loss meets `HIDING_ERROR`, then
+`Solution.lean` assembles all nine fields into the required certificate.
+
+The accepted run used Ubuntu 26.04 on aarch64, Lean 4.33.1, systemd isolation,
+and compiled Landrun. `scripts/setup.sh` and `scripts/run.py` both exited
+successfully. The verifier regression suite also passed all 21 tests. The
+verified contract commit was `b037ff7cc15b9b8b0b4b9ffc6c4ffac2981e59f6`.
+Rerun verification after changing the submission or contract.

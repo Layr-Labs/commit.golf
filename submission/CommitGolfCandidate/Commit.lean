@@ -137,6 +137,18 @@ private def commitCopyPrefix (state : MachineState) (start count : Nat) : Machin
 
 def commitCopyState (state : MachineState) (start : Nat) : MachineState := commitCopyPrefix state start 8
 
+/-- Expose the decoded salt, leaf, and root copy instructions for memory refinement. -/
+theorem commit_copy_expansion (state : MachineState) (start : Nat) :
+    commitCopyState state start =
+      let source := if start = 40 then Reg.x18 else if start = 49 then Reg.x21 else Reg.x9
+      let destination := if start = 40 then Reg.x21 else if start = 49 then Reg.x23 else Reg.x26
+      let offset := if start = 73 then 32 else 0
+      ([.LD .x6 source (BitVec.ofNat 12 offset), .SD destination .x6 0,
+        .LD .x6 source (BitVec.ofNat 12 (offset+8)), .SD destination .x6 8,
+        .LD .x6 source (BitVec.ofNat 12 (offset+16)), .SD destination .x6 16,
+        .LD .x6 source (BitVec.ofNat 12 (offset+24)), .SD destination .x6 24] : List Instr).foldl
+          execInstrBr state := rfl
+
 private theorem commit_copy_prefix_register (state : MachineState) (start count : Nat)
     (bounded : count ≤ 8) (reg : Reg) (notTemporary : reg ≠ .x6) :
     (commitCopyPrefix state start count).getReg reg = state.getReg reg := by

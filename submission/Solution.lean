@@ -5,14 +5,26 @@ import CommitGolfCandidate.OpeningInput
 import CommitGolfCandidate.CheckInput
 import CommitGolfCandidate.Budgets
 import CommitGolfCandidate.CheckAcceptance
+import CommitGolfCandidate.Completeness
+import CommitGolfCandidate.BindingSecurity
+import CommitGolfCandidate.HidingSecurity
 
-/-! Initial machine implementation. The full certificate is not yet proved: the
-comparator must reject this draft until full machine refinement, completeness, binding,
-and hiding have been established. Admission, successful honest machine runs, termination,
-honest query budgets, proof size, and the declared prover-cycle bounds are proved.
-No admission bypass or assumed proof is supplied. -/
+/-! Certified initial machine implementation. Every requirement below is proved
+for these same RISC-V images, including adaptive binding and commitment-and-opening
+hiding. The comparator replays this theorem against the fixed challenge statement. -/
 namespace CommitGolf.Challenge
 
 def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+
+theorem certificate : CommitGolf.Certificate submission 102400 17179869184 1048576 where
+  admission := CommitGolfCandidate.submission_admission
+  machineSuccess := CommitGolfCandidate.submission_machine_success
+  termination := CommitGolfCandidate.submission_termination
+  completeness := CommitGolfCandidate.submission_completeness
+  honestBudgets := CommitGolfCandidate.submission_honest_budgets
+  proofSize := CommitGolfCandidate.submission_proof_size
+  proverCycles := CommitGolfCandidate.submission_prover_cycles
+  binding := CommitGolfCandidate.submission_binding
+  hidingProperty := CommitGolfCandidate.submission_hiding
 
 end CommitGolf.Challenge
