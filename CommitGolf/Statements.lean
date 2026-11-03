@@ -17,25 +17,24 @@ variable (scheme : Scheme)
 /-- **1. Completeness** [CY24, Lemma 18.2.1], perfect: `check` accepts the honest opening. -/
 def Completeness : Prop :=
   ∀ (π : Oracle) (message : Message) (positions : Positions),
-    Pr[fun result => result.accepted = true | scheme.honest π message positions] = 1
+    Pr{let result ← scheme.honest π message positions}[result.accepted = true] = 1
 
 /-- **2. Honest budgets.** -/
 def HonestBudgets : Prop :=
   ∀ (π : Oracle) (message : Message) (positions : Positions),
-    Pr[fun result => result.commitCalls ≤ COMMIT_BUDGET ∧
+    Pr{let result ← scheme.honest π message positions}[result.commitCalls ≤ COMMIT_BUDGET ∧
         result.openCalls ≤ OPEN_BUDGET positions.card ∧
-        result.checkCalls ≤ CHECK_BUDGET positions.card |
-      scheme.honest π message positions] = 1
+        result.checkCalls ≤ CHECK_BUDGET positions.card] = 1
 
 /-- **3. Proof size**, the byte bound used by the score, on openings of exactly `BATCH` positions. -/
 def ProofSize (proofBytes : Nat) : Prop :=
   ∀ (π : Oracle) (message : Message) (positions : Positions), positions.card = BATCH →
-    Pr[fun result => result.proofBytes ≤ proofBytes | scheme.honest π message positions] = 1
+    Pr{let result ← scheme.honest π message positions}[result.proofBytes ≤ proofBytes] = 1
 
 /-- **5. Binding** [CY24, Lemma 18.4.1]. -/
 def Binding : Prop :=
   ∀ (adversary : Adversary) (q : Nat), 1 ≤ q →
-    Pr[fun (π, claim, calls) => scheme.Breaks π claim ∧ calls ≤ q | bindingGame adversary] ≤
+    Pr{let (π, claim, calls) ← bindingGame adversary}[scheme.Breaks π claim ∧ calls ≤ q] ≤
       (q : ENNReal) / 2 ^ BINDING_SECURITY_BITS
 
 /-- **6. Hiding**, a two-message formulation of commitment-and-opening privacy
@@ -50,7 +49,8 @@ def Hiding (error : Nat → Nat → ℝ) : Prop :=
     ∀ (AdversaryState Output : Type)
       (adversary : Hiding.HidingAdversary AdversaryState Output openingSize),
       Hiding.QueryBound adversary queryBudget →
-      tvDist
+      letI : MeasurableSpace Output := ⊤
+      measureTVDist
         (Hiding.runHiding (Hiding.hidingExperiment scheme adversary false))
         (Hiding.runHiding (Hiding.hidingExperiment scheme adversary true)) ≤
         error openingSize queryBudget
@@ -67,23 +67,22 @@ def Submission.Admission (submission : Submission) : Prop :=
 This excludes faults, exhausted fuel, and oversized opening outputs. -/
 def Submission.MachineSuccess (submission : Submission) : Prop :=
   ∀ (oracle : Oracle) (message : Message) (positions : Positions),
-    Pr[fun result => result.1.success = true |
-      oracle.run (submission.honestMachine message positions)] = 1
+    Pr{let result ← oracle.run (submission.honestMachine message positions)}[
+      result.1.success = true] = 1
 
 /-- Every program finishes (success or failure) within its supplied fuel, including on
 adversarial inputs. This is an execution bound, not an asymptotic PPT claim. -/
 def Submission.Termination (submission : Submission) : Prop :=
   ∀ (oracle : Oracle) (program : Program) (input : Input submission.sizes program),
-    Pr[fun result => result.1.exit ≠ Riscv.Exit.unfinished |
-      oracle.run (submission.run program input)] = 1
+    Pr{let result ← oracle.run (submission.run program input)}[
+      result.1.exit ≠ Riscv.Exit.unfinished] = 1
 
 /-- **4. Prover cycles.** Separate worst-case bounds for a full commitment and one
 opening of exactly `BATCH` positions. The score uses their sum, not an average. -/
 def Submission.ProverCycles (submission : Submission) (commitCycles openingCycles : Nat) : Prop :=
   ∀ (oracle : Oracle) (message : Message) (positions : Positions), positions.card = BATCH →
-    Pr[fun result => result.1.commitCycles ≤ commitCycles ∧
-        result.1.openingCycles ≤ openingCycles |
-      oracle.run (submission.honestMachine message positions)] = 1
+    Pr{let result ← oracle.run (submission.honestMachine message positions)}[
+      result.1.commitCycles ≤ commitCycles ∧ result.1.openingCycles ≤ openingCycles] = 1
 
 /-- One complete certificate for the submitted images. Security and proof size apply to the
 scheme derived from those same images; solvers cannot supply an unrelated abstract scheme.

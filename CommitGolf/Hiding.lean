@@ -1,5 +1,5 @@
 import CommitGolf.Scheme
-import VCVio.EvalDist.TVDist
+import VCVio.EvalDist.MeasureTVDist.Basic
 import VCVio.OracleComp.QueryTracking.CostModel
 
 /-! # Commitment and opening hiding
@@ -70,6 +70,6 @@ def runHiding {Output : Type}
 output distributions, without conditioning on successful execution. -/
 theorem runHiding_no_failure {Output : Type}
     (experiment : OracleComp World Output) :
-    Pr[⊥ | runHiding experiment] = 0 := probFailure_eq_zero
+    prFail (runHiding experiment) = 0 := OracleComp.prFail_eq_zero _
 
 end CommitGolf.Hiding

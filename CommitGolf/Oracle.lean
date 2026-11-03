@@ -1,5 +1,5 @@
 import CommitGolf.Parameters
-import VCVio.OracleComp.Coercions.Add
+import VCVio.OracleComp.Coercions.Add.Basic
 import VCVio.OracleComp.SimSemantics.Append
 import VCVio.OracleComp.QueryTracking.WriterCost
 import VCVio.OracleComp.Constructions.SampleableType
