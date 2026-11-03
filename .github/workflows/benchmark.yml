@@ -1,6 +1,12 @@
 name: Benchmark
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact candidate commit to check
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -11,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         id: cache
@@ -37,10 +43,14 @@ jobs:
       - name: Collect results
         if: always()
         run: bash scripts/blacksmith.sh collect
+      - name: Prepare score artifact
+        run: |
+          mkdir -p .work/score-artifact/scripts
+          cp scripts/score.json .work/score-artifact/scripts/score.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-score
-          path: scripts/score.json
+          path: .work/score-artifact/
           include-hidden-files: true
           if-no-files-found: error
       - name: Upload verifier logs

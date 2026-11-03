@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "name": "commit-golf",
+  "description": "Optimize a statistically hiding vector commitment with 120-bit binding and hiding security. Minimize (commitment cycles + opening cycles) times opening-proof bytes for 128 leaves of 2048 bits each.",
+  "category": "cryptography",
+  "direction": "-",
+  "editablePaths": [
+    "submission"
+  ],
+  "setupCommand": [
+    "bash",
+    "scripts/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "python3",
+    "scripts/run.py"
+  ],
+  "scorePath": "scripts/score.json",
+  "maxSubmissionBytes": 33554432,
+  "runner": {
+    "provider": "github-actions",
+    "workflow": "benchmark.yml",
+    "maxConcurrentWorkflows": 2
+  }
+}
