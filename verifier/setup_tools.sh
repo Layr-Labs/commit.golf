@@ -14,9 +14,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tools="${root}/verifier/.tools"
 export PATH="${HOME}/.elan/bin:${PATH}"
 
-# leanprover/comparator @ 2026-08-10 (merge of PR #70): declared toolchain v4.33.0, the last
-# revision before the v4.34.0-rc1 bump. Its own manifest pins the matching lean4export.
-readonly comparator_rev="c0c5a52d2aff92b457c3e5ed4a68c1ebc5795809"
+# Upstream Lean 4.35.0 release bump (#106), including its matching lean4export pin.
+readonly comparator_rev="e3dcf3083fc53d44b27a4431fabf7d43181583f5"
 # Zouuup/landrun (Linux only)
 readonly landrun_rev="811cfff51ceaf3d9843708aa6d22e9b84ccac8b4"
 
