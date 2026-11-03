@@ -4,6 +4,9 @@ import CommitGolfCandidate.HidingCompression
 cached queries. This preserves the exact continuation distribution and never
 increases its public-query budget. No restriction is made on private randomness. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingCacheDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
 
 /-- Replay known compression answers locally; forward every other query. -/
@@ -103,13 +106,13 @@ theorem fixed_cache_answers (cache : CompressionCache) (oracle : Oracle) {α : T
 low halves of the cached inputs. The block may depend on the earlier transcript. -/
 theorem cached_salt_hit_bound (cache : CompressionCache) (keys : Finset (BitVec 512))
     (covered : ∀ input, cache input ≠ none → input ∈ keys) (block : Digest) :
-    Pr[fun salt : Digest => cache (block ++ salt) ≠ none | ($ᵗ Digest)] ≤
+    (prEvent ((fun salt : Digest => cache (block ++ salt) ≠ none) <$> (($ᵗ Digest)))) ≤
       (keys.card : ENNReal) / 2^256 := by
   have included :
-      Pr[fun salt : Digest => cache (block ++ salt) ≠ none | ($ᵗ Digest)] ≤
-      Pr[fun salt : Digest => keys.toList.any
-        (fun input => decide (input.extractLsb' 0 256 = salt)) = true | ($ᵗ Digest)] := by
-    apply probEvent_mono
+      (prEvent ((fun salt : Digest => cache (block ++ salt) ≠ none) <$> (($ᵗ Digest)))) ≤
+      (prEvent ((fun salt : Digest => keys.toList.any
+        (fun input => decide (input.extractLsb' 0 256 = salt)) = true) <$> (($ᵗ Digest)))) := by
+    apply prEvent_mono_of_support
     intro salt _ hit
     apply List.any_eq_true.mpr
     exact ⟨block ++ salt, Finset.mem_toList.mpr (covered _ hit),
@@ -124,7 +127,7 @@ theorem cached_salted_compression_distance (permutation : Perm) (cache : Compres
     (keys : Finset (BitVec 512)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
     (block : Digest) {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
-    tvDist
+    measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           let oracle : Oracle := ⟨tableExtending cache table, permutation⟩
@@ -137,15 +140,15 @@ theorem cached_salted_compression_distance (permutation : Perm) (cache : Compres
     let table ← $ᵗ Compression
     let salt ← $ᵗ Digest
     fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next (combine table salt block))
-  have prior : tvDist
+  have prior : measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           let oracle : Oracle := ⟨tableExtending cache table, permutation⟩
           fixedOracleRun oracle (next (combine oracle.compression salt block)))
       intermediate ≤ ((keys.card : ENNReal) / 2^256).toReal := by
-    apply tvDist_bind_left_le_const' ($ᵗ Compression)
+    apply measureTVDist_bind_left_le_of_forall_le ($ᵗ Compression) _ _ (by positivity)
     intro table
-    refine (tvDist_bind_left_event_le ($ᵗ Digest) _ _
+    refine (measureTVDist_bind_left_le_prEvent_of_evalDistEq ($ᵗ Digest) _ _
       (fun salt => cache (block ++ salt) ≠ none) ?_).trans ?_
     · intro salt unqueried
       have empty : cache (block ++ salt) = none := Classical.not_not.mp unqueried
@@ -160,7 +163,7 @@ theorem cached_salted_compression_distance (permutation : Perm) (cache : Compres
     (fun answer => cacheAnswers cache (next answer)) budget
     (fun answer => cache_answers_bound cache (next answer) budget (bounded answer))
   simp only [fixed_cache_answers] at after
-  refine ((tvDist_triangle _ intermediate _).trans (add_le_add prior after)).trans ?_
+  refine ((measureTVDist_triangle _ intermediate _).trans (add_le_add prior after)).trans ?_
   simp only [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_pow,
     ENNReal.toReal_ofNat, Nat.cast_add]
   exact le_of_eq (add_div _ _ _).symm

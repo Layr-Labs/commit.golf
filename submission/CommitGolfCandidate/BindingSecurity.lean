@@ -1,3 +1,4 @@
+import CommitGolfCandidate.Probability
 import CommitGolfCandidate.BindingProbe
 
 /-! Full binding proof for the submitted machine images. The reduction uses at
@@ -31,18 +32,17 @@ theorem detector_birthday_le_binding_target (budget : Nat)
 available, as do unrestricted private coins. -/
 theorem fixed_permutation_search_bound (permutation : Perm) (adversary : Scheme.Adversary)
     (budget : Nat) (positive : 1 ≤ budget) (small : budget ≤ 2 ^ BINDING_SECURITY_BITS) :
-    Pr[ReplyCollision | (($ᵗ Compression) >>= fun compression =>
-      fixedOracleRun ⟨compression, permutation⟩ (boundedCollisionSearch adversary budget))] ≤
+    (prEvent ((ReplyCollision) <$> ((($ᵗ Compression) >>= fun compression =>
+      fixedOracleRun ⟨compression, permutation⟩ (boundedCollisionSearch adversary budget))))) ≤
       (budget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
-  have equivalence := congrArg (fun distribution => Pr[ReplyCollision | distribution])
-    (compression_sampling_empty permutation (boundedCollisionSearch adversary budget))
-  simp only [probEvent_evalSPMF, probEvent_map, Function.comp_def] at equivalence
+  have equivalence := (EvalDistEq.of_evalDist_eq
+    (compression_sampling_empty permutation (boundedCollisionSearch adversary budget))).prEvent_eq
+      ReplyCollision
+  simp only [prEvent_map, Function.comp_def] at equivalence
   rw [← equivalence]
-  have detected : Pr[fun result => ReplyCollision result.1 |
-      compressionRun permutation (boundedCollisionSearch adversary budget) ∅] ≤
-      Pr[fun result => CacheHasCollision result.2 |
-        compressionRun permutation (boundedCollisionSearch adversary budget) ∅] :=
-    probEvent_mono fun result reached collision =>
+  have detected : (prEvent ((fun result => ReplyCollision result.1) <$> (compressionRun permutation (boundedCollisionSearch adversary budget) ∅))) ≤
+      (prEvent ((fun result => CacheHasCollision result.2) <$> (compressionRun permutation (boundedCollisionSearch adversary budget) ∅))) :=
+    prEvent_mono_of_support _ _ _ fun result reached collision =>
       search_reply_collision_in_cache permutation adversary budget result reached collision
   have birthday := compression_collision_bound permutation (boundedCollisionSearch adversary budget)
     (budget + 128) (bounded_collision_search_bound adversary budget)
@@ -60,16 +60,15 @@ theorem fixed_permutation_search_bound (permutation : Perm) (adversary : Scheme.
 /-- Averaging over the independently sampled permutation preserves the bound. -/
 theorem sampled_search_bound (adversary : Scheme.Adversary) (budget : Nat)
     (positive : 1 ≤ budget) (small : budget ≤ 2 ^ BINDING_SECURITY_BITS) :
-    Pr[ReplyCollision | (Oracle.sample >>= fun oracle =>
-      fixedOracleRun oracle (boundedCollisionSearch adversary budget))] ≤
+    (prEvent ((ReplyCollision) <$> ((Oracle.sample >>= fun oracle =>
+      fixedOracleRun oracle (boundedCollisionSearch adversary budget))))) ≤
       (budget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
-  have swapped := evalSPMF_bind_comm ($ᵗ Compression) ($ᵗ Perm)
+  have swapped := distribution_bind_comm ($ᵗ Compression) ($ᵗ Perm)
     (fun compression permutation => fixedOracleRun ⟨compression, permutation⟩ (boundedCollisionSearch adversary budget))
-  have probabilities := congrArg (fun distribution => Pr[ReplyCollision | distribution]) swapped
-  simp only [probEvent_evalSPMF] at probabilities
+  have probabilities := (EvalDistEq.of_evalDist_eq swapped).prEvent_eq ReplyCollision
   simp only [Oracle.sample, bind_assoc, pure_bind]
   rw [probabilities]
-  apply probEvent_bind_le_of_forall_le
+  apply prEvent_bind_le_of_forall_le_of_support
   intro permutation _
   exact fixed_permutation_search_bound permutation adversary budget positive small
 
@@ -80,16 +79,15 @@ theorem submission_binding : submission.scheme.Binding := by
   by_cases large : 2 ^ BINDING_SECURITY_BITS ≤ budget
   · exact binding_large_budget adversary budget large
   · have reduction :
-        Pr[fun (oracle, claim, calls) => submission.scheme.Breaks oracle claim ∧ calls ≤ budget |
-          Scheme.bindingGame adversary] ≤
-        Pr[ReplyCollision | (Oracle.sample >>= fun oracle =>
-          fixedOracleRun oracle (boundedCollisionSearch adversary budget))] := by
+        (prEvent ((fun (oracle, claim, calls) => submission.scheme.Breaks oracle claim ∧ calls ≤ budget) <$> (Scheme.bindingGame adversary))) ≤
+        (prEvent ((ReplyCollision) <$> ((Oracle.sample >>= fun oracle =>
+          fixedOracleRun oracle (boundedCollisionSearch adversary budget))))) := by
       simp only [Scheme.bindingGame, bind_pure_comp]
-      rw [probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]
+      rw [OracleComp.prEvent_bind_eq_tsum, OracleComp.prEvent_bind_eq_tsum]
       apply ENNReal.tsum_le_tsum
       intro oracle
       apply mul_le_mul' le_rfl
-      simpa only [probEvent_map, Function.comp_def] using binding_fixed_le_search oracle adversary budget
+      simpa only [prEvent_map, Function.comp_def] using binding_fixed_le_search oracle adversary budget
     exact reduction.trans (sampled_search_bound adversary budget positive (by omega))
 
 end CommitGolfCandidate

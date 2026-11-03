@@ -42,8 +42,7 @@ and set of opened positions. Commitment uses 9*N-1 calls, opening uses zero, and
 checking uses at most 32 calls per opened leaf. -/
 theorem submission_honest_budgets : submission.scheme.HonestBudgets := by
   intro oracle message positions
-  apply probEvent_eq_one_iff.mpr
-  refine ⟨by simp, ?_⟩
+  apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
   simp only [Scheme.honest, mem_support_bind_iff] at reached
   obtain ⟨⟨⟨root, trapdoor⟩, commitCalls⟩, committed, rest⟩ := reached

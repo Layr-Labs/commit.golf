@@ -4,6 +4,9 @@ import CommitGolfCandidate.HidingGameIntegration
 the complete two-stage oracle-adaptive game and every opening size, including zero.
 The deliberately loose recomputation bound is below the fixed 120-bit requirement. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingSecurityDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
 attribute [local irreducible] heapQueryBudget
@@ -36,11 +39,13 @@ hybrid bound applies with at most the original shared public-query budget. -/
 theorem staged_hiding_distance {State Output : Type} {openingSize budget : Nat}
     (permutation : Perm) (adversary : Hiding.HidingAdversary State Output openingSize)
     (bounded : Hiding.QueryBound adversary budget) :
-    tvDist (stagedHiding permutation adversary false) (stagedHiding permutation adversary true) ≤
+    measureTVDist (stagedHiding permutation adversary false) (stagedHiding permutation adversary true) ≤
       ((budget : ℝ)+1) / 2^HIDING_SECURITY_BITS := by
   unfold stagedHiding
-  apply tvDist_bind_left_le_const
-  intro result reached
+  rw [bind_eq_attach_bind (compressionRun permutation adversary.choose ∅)]
+  rw [bind_eq_attach_bind (compressionRun permutation adversary.choose ∅)]
+  apply measureTVDist_bind_left_le_of_forall_le _ _ _ (by positivity)
+  rintro ⟨result, reached⟩
   obtain ⟨keys, size, covered⟩ := first_stage_cache_bound permutation adversary.choose budget
     (hiding_choose_query_bound adversary bounded) result reached
   have agree : ∀ index ∈ result.1.positions, result.1.message₀ index = result.1.message₁ index := by
@@ -61,11 +66,11 @@ theorem submission_hiding : submission.scheme.Hiding HIDING_ERROR := by
     apply le_min (by norm_num)
     positivity
   · intro openingSize budget _ State Output adversary bounded
-    apply le_min (tvDist_le_one _ _) ?_
-    have distance := tvDist_bind_left_le_const' ($ᵗ Perm)
+    apply le_min (measureTVDist_le_one _ _) ?_
+    have distance := measureTVDist_bind_left_le_of_forall_le ($ᵗ Perm)
       (fun permutation => stagedHiding permutation adversary false)
-      (fun permutation => stagedHiding permutation adversary true) _
+      (fun permutation => stagedHiding permutation adversary true) (by positivity)
       (fun permutation => staged_hiding_distance permutation adversary bounded)
-    simpa only [tvDist, hiding_staged_distribution] using distance
+    simpa only [measureTVDist, hiding_staged_distribution] using distance
 
 end CommitGolfCandidate

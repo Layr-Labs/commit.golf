@@ -1,10 +1,13 @@
 import CommitGolfCandidate.HidingDistribution
-import VCVio.ProgramLogic.Relational.SimulateQ.Epsilon
+import VCVio.ProgramLogic.Relational.SimulateQ.UntilBad
 
 /-! Changing an oracle at hidden inputs is detectable only after querying one of
 those inputs. These lemmas retain private coins and both permutation directions;
 the distinguishing bound applies to arbitrary adaptive oracle computations. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingReprogramDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleSpec OracleComp.ProgramLogic.Relational
 
 /-- Forward the actual oracle replies and remember whether a marked query occurred.
@@ -43,18 +46,22 @@ private theorem flagged_step_monotone (oracle : Oracle) (marked : World.Domain �
 
 private theorem flagged_good_agree (left right : Oracle) (marked : World.Domain → Bool)
     (agree : ∀ query, marked query = false → left.world query = right.world query)
-    (query : World.Domain) (state : Unit) (answer : World.Range query) (after : Unit) :
-    Pr[= (answer, (after, false)) | (flaggedHandler left marked query).run (state, false)] =
-      Pr[= (answer, (after, false)) | (flaggedHandler right marked query).run (state, false)] := by
+    (query : World.Domain) (state : Unit × Bool) (_good : ¬state.2 = true)
+    (event : World.Range query × Unit × Bool → Prop) :
+    Pr{let result ← (flaggedHandler left marked query).run state}[
+      event result ∧ ¬result.2.2 = true] =
+    Pr{let result ← (flaggedHandler right marked query).run state}[
+      event result ∧ ¬result.2.2 = true] := by
   cases hit : marked query with
   | false => rw [flagged_handler_run, flagged_handler_run, agree query hit]
   | true =>
     have zero (oracle : Oracle) :
-        Pr[= (answer, (after, false)) | (flaggedHandler oracle marked query).run (state, false)] = 0 := by
-      apply probOutput_eq_zero_of_not_mem_support
-      intro reached
-      have flag := flagged_step_support oracle marked query (state, false) _ reached
-      simp only [hit, Bool.false_or, Bool.false_eq_true] at flag
+        Pr{let result ← (flaggedHandler oracle marked query).run state}[
+          event result ∧ ¬result.2.2 = true] = 0 := by
+      apply prEvent_eq_zero_of_forall_mem_support
+      intro result reached bad
+      have flag := flagged_step_support oracle marked query state result reached
+      exact bad.2 (by simpa [hit] using flag)
     rw [zero left, zero right]
 
 private theorem flagged_projection (oracle : Oracle) (marked : World.Domain → Bool)
@@ -85,16 +92,19 @@ up to the probability of making such a query. The adversary need not be determin
 theorem oracle_change_distance_le_hit (left right : Oracle) (marked : World.Domain → Bool)
     (agree : ∀ query, marked query = false → left.world query = right.world query)
     {α : Type} (computation : OracleComp World α) :
-    tvDist (fixedOracleRun left computation) (fixedOracleRun right computation) ≤
-      Pr[fun result => result.2.2 = true | flaggedRun left marked computation].toReal := by
-  have joint := tvDist_simulateQ_run_le_probEvent_output_bad
-    (flaggedHandler left marked) (flaggedHandler right marked) computation ()
+    measureTVDist (fixedOracleRun left computation) (fixedOracleRun right computation) ≤
+      (prEvent ((fun result => result.2.2 = true) <$> (flaggedRun left marked computation))).toReal := by
+  letI : MeasurableSpace (α × Unit × Bool) := ⊤
+  have joint := measureETVDist_simulateQ_run_le_prEvent_bad
+    (flaggedHandler left marked) (flaggedHandler right marked) (fun state => state.2 = true)
     (flagged_good_agree left right marked agree)
     (flagged_step_monotone left marked) (flagged_step_monotone right marked)
-  have projected := tvDist_map_le Prod.fst
+    computation ((), false)
+  have projected := measureTVDist_map_le
     (flaggedRun left marked computation) (flaggedRun right marked computation)
+    Prod.fst Measurable.of_discrete
   rw [flagged_run_projection, flagged_run_projection] at projected
-  exact projected.trans joint
+  exact projected.trans (ENNReal.toReal_mono (prEvent_ne_top _) joint)
 
 /-- Mark all compression inputs with a given low half. This conservatively includes
 the single salted input being reprogrammed, whatever its message block is. -/
@@ -126,10 +136,9 @@ theorem program_compression_agrees (oracle : Oracle) (input : BitVec 512) (answe
 In that run a separately sampled hidden salt cannot influence the adaptive queries. -/
 theorem reprogram_compression_distance (oracle : Oracle) (input : BitVec 512) (answer : Digest)
     {α : Type} (computation : OracleComp World α) :
-    tvDist (fixedOracleRun oracle computation)
+    measureTVDist (fixedOracleRun oracle computation)
       (fixedOracleRun (programCompression oracle input answer) computation) ≤
-      Pr[fun result => result.2.2 = true |
-        flaggedRun oracle (marksSalt (input.extractLsb' 0 256)) computation].toReal :=
+      (prEvent ((fun result => result.2.2 = true) <$> (flaggedRun oracle (marksSalt (input.extractLsb' 0 256)) computation))).toReal :=
   oracle_change_distance_le_hit oracle (programCompression oracle input answer) _
     (program_compression_agrees oracle input answer) computation
 

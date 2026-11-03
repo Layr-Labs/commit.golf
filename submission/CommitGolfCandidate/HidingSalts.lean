@@ -1,10 +1,14 @@
 import CommitGolfCandidate.CommitSemantics
 import Mathlib.Data.Fintype.EquivFin
+import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 /-! The commitment machine's single random-byte request is exactly a vector of
 independent uniform salts. No pseudorandomness assumption or additional sampler
 is introduced by switching to the vector representation. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingSaltsDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf CommitGolf.Riscv OracleComp
 
 /-- Split a packed bit string into equal-width, little-endian blocks. -/
@@ -37,26 +41,25 @@ theorem split_blocks_bijective (width count : Nat) (positive : 0 < width) :
 
 /-- Uniform packed randomness becomes uniform over all salt vectors. -/
 theorem split_blocks_uniform (width count : Nat) (positive : 0 < width) :
-    𝒮[splitBlocks width count <$> ($ᵗ BitVec (width*count))] =
-      𝒮[$ᵗ (Fin count → BitVec width)] := by
-  apply evalSPMF_ext
-  intro salt
-  exact probOutput_map_bijective_uniform_cross _ _ (split_blocks_bijective width count positive) salt
+    𝒟[splitBlocks width count <$> ($ᵗ BitVec (width*count))] =
+      𝒟[$ᵗ (Fin count → BitVec width)] := by
+  exact (SampleableType.map_uniformSample_evalDistEq_of_bijective
+    (split_blocks_bijective width count positive)).evalDist_eq
 
 /-- The same equality holds inside an arbitrary randomized continuation, which
 may use the oracle and reveal salts for the selected opening positions. -/
 theorem split_blocks_uniform_bind (width count : Nat) (positive : 0 < width)
     {α : Type} (next : (Fin count → BitVec width) → ProbComp α) :
-    𝒮[($ᵗ BitVec (width*count)) >>= fun packed => next (splitBlocks width count packed)] =
-      𝒮[($ᵗ (Fin count → BitVec width)) >>= next] := by
-  apply evalSPMF_ext
-  intro output
-  exact probOutput_bind_bijective_uniform_cross _ _ (split_blocks_bijective width count positive) next output
+    𝒟[($ᵗ BitVec (width*count)) >>= fun packed => next (splitBlocks width count packed)] =
+      𝒟[($ᵗ (Fin count → BitVec width)) >>= next] := by
+  rw [← bind_map_left]
+  exact ((SampleableType.map_uniformSample_evalDistEq_of_bijective
+    (split_blocks_bijective width count positive)).bind_left next).evalDist_eq
 
 private theorem sized_salts {bits : Nat} (width : bits = 256*LENGTH)
     {α : Type} (next : (Index → Digest) → ProbComp α) :
-    𝒮[($ᵗ BitVec bits) >>= fun packed => next (fun index => packed.extractLsb' (256*index.val) 256)] =
-      𝒮[($ᵗ (Index → Digest)) >>= next] := by
+    𝒟[($ᵗ BitVec bits) >>= fun packed => next (fun index => packed.extractLsb' (256*index.val) 256)] =
+      𝒟[($ᵗ (Index → Digest)) >>= next] := by
   subst bits
   exact split_blocks_uniform_bind 256 LENGTH (by decide) next
 
@@ -64,9 +67,9 @@ private theorem sized_salts {bits : Nat} (width : bits = 256*LENGTH)
 used by the mathematical hiding experiment. -/
 theorem commit_salts_uniform {α : Type} (message : Message)
     (next : (Index → Digest) → ProbComp α) :
-    𝒮[commitSaltCoins message >>= fun packed =>
+    𝒟[commitSaltCoins message >>= fun packed =>
       next (fun index => packed.extractLsb' (256*index.val) 256)] =
-      𝒮[($ᵗ (Index → Digest)) >>= next] := by
+      𝒟[($ᵗ (Index → Digest)) >>= next] := by
   unfold commitSaltCoins
   exact sized_salts (commit_salt_width message) next
 

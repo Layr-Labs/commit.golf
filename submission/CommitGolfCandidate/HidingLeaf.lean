@@ -4,6 +4,9 @@ import CommitGolfCandidate.HidingCache
 The chain is the same eight-block fold used by the machine reference model.
 The cache variants preserve earlier compression answers and charge their count. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingLeafDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
 set_option maxHeartbeats 200000
@@ -41,7 +44,7 @@ bound. The continuation includes all subsequent uses of the oracle. -/
 theorem salted_chain_distance (permutation : Perm) (blocks : List Digest)
     {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
-    tvDist
+    measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           fixedOracleRun ⟨table, permutation⟩
@@ -52,14 +55,14 @@ theorem salted_chain_distance (permutation : Perm) (blocks : List Digest)
       (blocks.length : ℝ) * ((budget + blocks.length : Nat) : ℝ) / 2^256 := by
   induction blocks with
   | nil => simp only [List.foldl_nil, List.length_nil, Nat.cast_zero, zero_mul, zero_div,
-      tvDist_self, le_refl]
+      measureTVDist_self, le_refl]
   | cons block rest ih =>
     let continuation : Digest → OracleComp World α := fun state => hashBlocks rest state >>= next
     have continued : ∀ state, PublicQueryBound (continuation state) (rest.length + budget) :=
       fun state => public_query_bound_bind (hash_blocks_bound rest state) bounded
     have first := salted_compression_distance permutation block continuation (rest.length + budget) continued
     simp only [continuation, fixed_hash_blocks] at first
-    have triangle := tvDist_triangle (m := ProbComp)
+    have triangle := measureTVDist_triangle (m := ProbComp)
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           fixedOracleRun ⟨table, permutation⟩
@@ -86,7 +89,7 @@ the entire leaf digest by a fresh uniform digest at cost 8*(budget+8)/2^256. -/
 theorem salted_leaf_distance (permutation : Perm) (value : Entry)
     {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
-    tvDist
+    measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           fixedOracleRun ⟨table, permutation⟩ (next (leafDigest table salt value)))
@@ -105,7 +108,7 @@ theorem cached_salted_chain_distance (permutation : Perm) (cache : CompressionCa
     (blocks : List Digest)
     {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
-    tvDist
+    measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩
@@ -116,14 +119,14 @@ theorem cached_salted_chain_distance (permutation : Perm) (cache : CompressionCa
       (blocks.length : ℝ) * ((keys.card + budget + blocks.length : Nat) : ℝ) / 2^256 := by
   induction blocks with
   | nil => simp only [List.foldl_nil, List.length_nil, Nat.cast_zero, zero_mul, zero_div,
-      tvDist_self, le_refl]
+      measureTVDist_self, le_refl]
   | cons block rest ih =>
     let continuation : Digest → OracleComp World α := fun state => hashBlocks rest state >>= next
     have continued : ∀ state, PublicQueryBound (continuation state) (rest.length + budget) :=
       fun state => public_query_bound_bind (hash_blocks_bound rest state) bounded
     have first := cached_salted_compression_distance permutation cache keys covered block continuation (rest.length + budget) continued
     simp only [continuation, fixed_hash_blocks] at first
-    have triangle := tvDist_triangle (m := ProbComp)
+    have triangle := measureTVDist_triangle (m := ProbComp)
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩
@@ -151,7 +154,7 @@ theorem cached_salted_leaf_distance (permutation : Perm) (cache : CompressionCac
     (value : Entry)
     {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
-    tvDist
+    measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next (leafDigest (tableExtending cache table) salt value)))
@@ -170,7 +173,7 @@ theorem cached_leaf_indistinguishable (permutation : Perm) (cache : CompressionC
     (keys : Finset (BitVec 512)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
     (left right : Entry) {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
-    tvDist
+    measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩
@@ -182,8 +185,8 @@ theorem cached_leaf_indistinguishable (permutation : Perm) (cache : CompressionC
       16 * ((keys.card + budget + 8 : Nat) : ℝ) / 2^256 := by
   have leftBound := cached_salted_leaf_distance permutation cache keys covered left next budget bounded
   have rightBound := cached_salted_leaf_distance permutation cache keys covered right next budget bounded
-  rw [tvDist_comm] at rightBound
-  have triangle := tvDist_triangle (m := ProbComp)
+  rw [measureTVDist_comm] at rightBound
+  have triangle := measureTVDist_triangle (m := ProbComp)
     (do let table ← $ᵗ Compression
         let salt ← $ᵗ Digest
         fixedOracleRun ⟨tableExtending cache table, permutation⟩

@@ -245,8 +245,7 @@ private theorem oracle_run_pure (oracle : Oracle) {α : Type} (value : α) :
 /-- Opening termination in the same probabilistic form required by the certificate. -/
 theorem opening_termination (oracle : Oracle)
     (trapdoor : BitVec (8 * submission.sizes.trapdoor)) (positions : Positions) :
-    Pr[fun result => result.1.exit ≠ Exit.unfinished |
-      oracle.run (submission.run .opening (trapdoor, positions))] = 1 := by
+    (prEvent ((fun result => result.1.exit ≠ Exit.unfinished) <$> (oracle.run (submission.run .opening (trapdoor, positions))))) = 1 := by
   rw [opening_execution, oracle_run_pure]
   simp [openingResult]
 
@@ -255,12 +254,12 @@ even before the commitment and checking programs' correctness proofs are supplie
 theorem submission_proof_size : submission.scheme.ProofSize 102400 := by
   intro oracle message positions batch
   unfold Scheme.honest
-  rw [probEvent_bind_of_const _ (r := 1)]
-  · simp
-  · rintro ⟨⟨root, trapdoor⟩, calls⟩ _
-    dsimp only
-    rw [opening_scheme_execution trapdoor positions, oracle_run_pure]
-    simp [opening_proof_length trapdoor positions, batch, BATCH]
+  apply le_antisymm (prEvent_le_one _)
+  apply le_prEvent_bind_of_forall_le_of_support _ (OracleComp.prEvent_true_eq_one _)
+  rintro ⟨⟨root, trapdoor⟩, calls⟩ _
+  dsimp only
+  rw [opening_scheme_execution trapdoor positions, oracle_run_pure]
+  simp [opening_proof_length trapdoor positions, batch, BATCH]
 
 
 /-- Exact resources for a scored opening, expressed through the same oracle runner
@@ -268,9 +267,8 @@ used by the certificate: 48,670 cycles, zero queries, and 102,400 proof bytes. -
 theorem opening_batch_resources (oracle : Oracle)
     (trapdoor : BitVec (8 * submission.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
-    Pr[fun result => result.1.cycles = 48670 ∧ result.2 = 0 ∧
-      (submission.readProof result.1).length = 102400 |
-      oracle.run (submission.run .opening (trapdoor, positions))] = 1 := by
+    (prEvent ((fun result => result.1.cycles = 48670 ∧ result.2 = 0 ∧
+      (submission.readProof result.1).length = 102400) <$> (oracle.run (submission.run .opening (trapdoor, positions))))) = 1 := by
   rw [opening_execution, oracle_run_pure]
   simp [opening_batch_cycles trapdoor positions batch, opening_proof_length trapdoor positions,
     batch, BATCH]
