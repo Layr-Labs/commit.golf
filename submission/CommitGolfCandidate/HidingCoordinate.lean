@@ -1,9 +1,13 @@
+import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingLeafReplacement
 
 /-! Replace one unopened message coordinate in the complete public transcript.
 The other salts are sampled first; the isolated salt is still fresh and private.
 The observer sees both the root and every serialized proof byte, with the same oracle. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingCoordinateDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
 /-- Resampling one coordinate of a uniform function preserves its distribution,
@@ -12,23 +16,24 @@ challenge's enormous finite salt space during elaboration. -/
 theorem uniform_coordinate_bind {D R α : Type} [DecidableEq D] [Finite D] [Finite R]
     [Nonempty R] [SampleableType R] [SampleableType (D → R)]
     (index : D) (next : (D → R) → ProbComp α) :
-    𝒮[do let values ← $ᵗ (D → R)
+    𝒟[do let values ← $ᵗ (D → R)
          let value ← $ᵗ R
          next (Function.update values index value)] =
-    𝒮[do let values ← $ᵗ (D → R); next values] := by
-  have marginal : 𝒮[do let value ← $ᵗ R
+    𝒟[do let values ← $ᵗ (D → R); next values] := by
+  have marginal : 𝒟[do let value ← $ᵗ R
                         let values ← $ᵗ (D → R)
-                        pure (Function.update values index value)] = 𝒮[$ᵗ (D → R)] := by
-    simpa only [bind_pure] using evalSPMF_uniformSample_bind_update_map index (fun values : D → R => values)
-  trans 𝒮[do let value ← $ᵗ R
+                        pure (Function.update values index value)] = 𝒟[$ᵗ (D → R)] := by
+    simpa only [bind_pure] using evalDist_uniformSample_bind_update_map
+      SampleableType.evalDist_uniformSample SampleableType.evalDist_uniformSample index (fun values : D → R => values)
+  trans 𝒟[do let value ← $ᵗ R
               let values ← $ᵗ (D → R)
               next (Function.update values index value)]
-  · exact evalSPMF_bind_comm _ _ _
-  · trans 𝒮[(do let value ← $ᵗ R
+  · exact distribution_bind_comm _ _ _
+  · trans 𝒟[(do let value ← $ᵗ R
                 let values ← $ᵗ (D → R)
                 pure (Function.update values index value)) >>= next]
     · simp only [bind_assoc, pure_bind]
-    · rw [evalSPMF_bind, marginal, ← evalSPMF_bind]
+    · rw [evalDist_bind_of_discrete, marginal, ← evalDist_bind_of_discrete]
 
 def observeTranscript {α : Type} (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions)
@@ -76,40 +81,40 @@ the hidden coordinate. No salt is conditioned on the public transcript. -/
 theorem reference_observation_split {α : Type} (permutation : Perm) (cache : CompressionCache)
     (message : Message) (positions : Positions) (observe : Commitment → Proof → OracleComp World α)
     (hidden : Index) :
-    𝒮[referenceObservation permutation cache message positions observe] =
-      𝒮[do let salt ← $ᵗ (Index → Digest)
+    𝒟[referenceObservation permutation cache message positions observe] =
+      𝒟[do let salt ← $ᵗ (Index → Digest)
            let table ← $ᵗ Compression
            let fresh ← $ᵗ Digest
            observeTranscript ⟨tableExtending cache table, permutation⟩ message
              (Function.update salt hidden fresh) positions observe] := by
   unfold referenceObservation
-  trans 𝒮[do let table ← $ᵗ Compression
+  trans 𝒟[do let table ← $ᵗ Compression
               let salt ← $ᵗ (Index → Digest)
               let fresh ← $ᵗ Digest
               observeTranscript ⟨tableExtending cache table, permutation⟩ message
                 (Function.update salt hidden fresh) positions observe]
-  · apply evalSPMF_bind_congr_left
+  · apply _root_.evalDist_bind_congr
     intro table
     exact (uniform_coordinate_bind hidden (fun salt =>
       observeTranscript ⟨tableExtending cache table, permutation⟩ message salt positions observe)).symm
-  · exact evalSPMF_bind_comm _ _ _
+  · exact distribution_bind_comm _ _ _
 
 theorem reference_observation_update {α : Type} (permutation : Perm) (cache : CompressionCache)
     (message : Message) (positions : Positions) (observe : Commitment → Proof → OracleComp World α)
     (hidden : Index) (unopened : hidden ∉ positions) (value : Entry) :
-    𝒮[referenceObservation permutation cache (Function.update message hidden value) positions observe] =
-      𝒮[do let salt ← $ᵗ (Index → Digest)
+    𝒟[referenceObservation permutation cache (Function.update message hidden value) positions observe] =
+      𝒟[do let salt ← $ᵗ (Index → Digest)
            let table ← $ᵗ Compression
            let fresh ← $ᵗ Digest
            fixedOracleRun ⟨tableExtending cache table, permutation⟩
              (observeExcept message salt positions hidden observe
                (leafDigest (tableExtending cache table) fresh value))] := by
   rw [reference_observation_split permutation cache _ positions observe hidden]
-  apply evalSPMF_bind_congr_left
+  apply _root_.evalDist_bind_congr
   intro salt
-  apply evalSPMF_bind_congr_left
+  apply _root_.evalDist_bind_congr
   intro table
-  apply evalSPMF_bind_congr_left
+  apply _root_.evalDist_bind_congr
   intro fresh
   rw [observe_except_reference _ message salt positions hidden unopened]
 
@@ -121,11 +126,11 @@ theorem reference_observation_coordinate_distance {α : Type}
     (message : Message) (positions : Positions) (observe : Commitment → Proof → OracleComp World α)
     (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget)
     (hidden : Index) (unopened : hidden ∉ positions) (left right : Entry) :
-    tvDist
+    measureTVDist
       (referenceObservation permutation cache (Function.update message hidden left) positions observe)
       (referenceObservation permutation cache (Function.update message hidden right) positions observe) ≤
       16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256 := by
-  have distance := tvDist_bind_left_le_const' ($ᵗ (Index → Digest))
+  have distance := measureTVDist_bind_left_le_of_forall_le ($ᵗ (Index → Digest))
     (fun salt => do
       let table ← $ᵗ Compression
       let fresh ← $ᵗ Digest
@@ -136,10 +141,10 @@ theorem reference_observation_coordinate_distance {α : Type}
       let fresh ← $ᵗ Digest
       fixedOracleRun ⟨tableExtending cache table, permutation⟩
         (observeExcept message salt positions hidden observe (leafDigest (tableExtending cache table) fresh right)))
-    _ (fun salt => cached_leaf_indistinguishable permutation cache keys covered left right
+    (by positivity) (fun salt => cached_leaf_indistinguishable permutation cache keys covered left right
       (observeExcept message salt positions hidden observe)
       ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget)
       (observe_except_bound message salt positions hidden observe budget bounded))
-  simpa only [tvDist, reference_observation_update permutation cache message positions observe hidden unopened] using distance
+  simpa only [measureTVDist, reference_observation_update permutation cache message positions observe hidden unopened] using distance
 
 end CommitGolfCandidate

@@ -1,3 +1,4 @@
+import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingMachine
 import CommitGolfCandidate.HidingSalts
 import CommitGolfCandidate.CompressionSampling
@@ -6,6 +7,9 @@ import CommitGolfCandidate.CompressionSampling
 is equality of distributions, not yet a statistical-distance bound. Both adversary
 stages retain their original coins, public oracle access, and shared oracle. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingDistributionDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf CommitGolf.Riscv OracleComp OracleComp.DeferredSampling
 
 theorem fixed_oracle_run_bind (oracle : Oracle) {α β : Type}
@@ -116,11 +120,11 @@ from packed random bits to independent salts. No query bound is needed here. -/
 theorem hiding_fixed_reference {AdversaryState Output : Type} {openingSize : Nat}
     (oracle : Oracle) (adversary : Hiding.HidingAdversary AdversaryState Output openingSize)
     (selectSecond : Bool) :
-    𝒮[fixedOracleRun oracle (Hiding.hidingExperiment submission.scheme adversary selectSecond)] =
-      𝒮[referenceHiding oracle adversary selectSecond] := by
+    𝒟[fixedOracleRun oracle (Hiding.hidingExperiment submission.scheme adversary selectSecond)] =
+      𝒟[referenceHiding oracle adversary selectSecond] := by
   rw [hiding_experiment_transcript, fixed_oracle_run_bind]
   unfold referenceHiding
-  apply evalSPMF_bind_congr_left
+  apply _root_.evalDist_bind_congr
   intro challenge
   rw [fixed_oracle_run_bind, honest_transcript_distribution, bind_assoc]
   simp only [pure_bind]
@@ -135,10 +139,10 @@ theorem hiding_fixed_reference {AdversaryState Output : Type} {openingSize : Nat
 The final hiding proof must still bound the distance between the two selectors. -/
 theorem hiding_reference_distribution {AdversaryState Output : Type} {openingSize : Nat}
     (adversary : Hiding.HidingAdversary AdversaryState Output openingSize) (selectSecond : Bool) :
-    𝒮[Hiding.runHiding (Hiding.hidingExperiment submission.scheme adversary selectSecond)] =
-      𝒮[Oracle.sample >>= fun oracle => referenceHiding oracle adversary selectSecond] := by
+    𝒟[Hiding.runHiding (Hiding.hidingExperiment submission.scheme adversary selectSecond)] =
+      𝒟[Oracle.sample >>= fun oracle => referenceHiding oracle adversary selectSecond] := by
   unfold Hiding.runHiding
-  apply evalSPMF_bind_congr_left
+  apply _root_.evalDist_bind_congr
   intro oracle
   have same : (do
       let (output, _) ← oracle.run (Hiding.hidingExperiment submission.scheme adversary selectSecond)
@@ -158,12 +162,12 @@ between the reference games. This transfers any proved reference bound directly
 to the actual submitted RISC-V programs. -/
 theorem hiding_distance_reference {AdversaryState Output : Type} {openingSize : Nat}
     (adversary : Hiding.HidingAdversary AdversaryState Output openingSize) :
-    tvDist
+    measureTVDist
       (Hiding.runHiding (Hiding.hidingExperiment submission.scheme adversary false))
       (Hiding.runHiding (Hiding.hidingExperiment submission.scheme adversary true)) =
-    tvDist
+    measureTVDist
       (Oracle.sample >>= fun oracle => referenceHiding oracle adversary false)
       (Oracle.sample >>= fun oracle => referenceHiding oracle adversary true) := by
-  simp only [tvDist, hiding_reference_distribution]
+  simp only [measureTVDist, hiding_reference_distribution]
 
 end CommitGolfCandidate

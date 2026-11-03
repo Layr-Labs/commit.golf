@@ -1,3 +1,4 @@
+import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingLeaf
 import CommitGolfCandidate.BindingProbe
 
@@ -5,19 +6,22 @@ import CommitGolfCandidate.BindingProbe
 and chosen challenge are sampled jointly; there is no independence assumption
 between the adversary's choices and its earlier oracle answers. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingStagesDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
 
 /-- After any first stage, resample only the cells not fixed by its transcript.
 This preserves the exact distribution of every oracle-aware continuation. -/
 theorem staged_compression_sampling (permutation : Perm) {α β : Type}
     (first : OracleComp World α) (next : α → OracleComp World β) :
-    𝒮[do let table ← $ᵗ Compression
+    𝒟[do let table ← $ᵗ Compression
          fixedOracleRun ⟨table, permutation⟩ (first >>= next)] =
-    𝒮[do let (value, cache) ← compressionRun permutation first ∅
+    𝒟[do let (value, cache) ← compressionRun permutation first ∅
          let table ← $ᵗ Compression
          fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next value)] := by
   rw [← compression_sampling_empty, compression_run_bind, map_bind]
-  apply evalSPMF_bind_congr_left
+  apply _root_.evalDist_bind_congr
   intro result
   cases result with
   | mk value cache => exact compression_sampling_equivalence permutation (next value) cache

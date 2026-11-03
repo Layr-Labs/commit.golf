@@ -1,9 +1,13 @@
+import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingHybrid
 
 /-! Preserve the full two-stage adversary while moving its first stage to lazy
 compression sampling. The selected messages, positions, retained state, and cache
 stay jointly distributed, and the observing stage keeps its certified query bound. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingGameIntegrationDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
 def queryActualTranscript (message : Message) (salt : Index → Digest) (positions : Positions) :
@@ -74,23 +78,23 @@ def stagedHiding {State Output : Type} {openingSize : Nat} (permutation : Perm)
 assumed and neither the cache nor the full oracle is exposed in the output. -/
 theorem hiding_staged_distribution {State Output : Type} {openingSize : Nat}
     (adversary : Hiding.HidingAdversary State Output openingSize) (selectSecond : Bool) :
-    𝒮[Hiding.runHiding (Hiding.hidingExperiment submission.scheme adversary selectSecond)] =
-      𝒮[($ᵗ Perm) >>= fun permutation => stagedHiding permutation adversary selectSecond] := by
+    𝒟[Hiding.runHiding (Hiding.hidingExperiment submission.scheme adversary selectSecond)] =
+      𝒟[($ᵗ Perm) >>= fun permutation => stagedHiding permutation adversary selectSecond] := by
   rw [hiding_reference_distribution]
   simp only [Oracle.sample, bind_assoc, pure_bind, ← reference_experiment_run]
-  trans 𝒮[do let permutation ← $ᵗ Perm
+  trans 𝒟[do let permutation ← $ᵗ Perm
               let table ← $ᵗ Compression
               fixedOracleRun ⟨table, permutation⟩ (referenceExperiment adversary selectSecond)]
-  · exact evalSPMF_bind_comm _ _ _
-  · apply evalSPMF_bind_congr_left
+  · exact distribution_bind_comm _ _ _
+  · apply _root_.evalDist_bind_congr
     intro permutation
     rw [referenceExperiment, staged_compression_sampling]
     unfold stagedHiding referenceObservation
-    apply evalSPMF_bind_congr_left
+    apply _root_.evalDist_bind_congr
     intro result
     cases result with
     | mk challenge cache =>
-      apply evalSPMF_bind_congr_left
+      apply _root_.evalDist_bind_congr
       intro table
       rw [reference_continuation_run]
 

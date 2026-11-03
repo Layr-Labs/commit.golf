@@ -1,3 +1,4 @@
+import VCVio.OracleComp.EvalDist.Sum
 import CommitGolfCandidate.CountingCoins
 import VCVio.OracleComp.QueryTracking.QueryBound
 
@@ -83,23 +84,22 @@ result after enforcement is exactly its original probability with `calls ≤ bud
 This is the link needed to use structural ROM bounds for arbitrary adversaries. -/
 theorem limit_public_probability {α : Type} (oracle : Oracle) (computation : OracleComp World α)
     (budget : Nat) (event : α → Prop) :
-    Pr[fun result => ∃ value, result.1 = some value ∧ event value |
-      oracle.run (limitPublicQueries computation budget)] =
-    Pr[fun result => event result.1 ∧ result.2 ≤ budget | oracle.run computation] := by
+    (prEvent ((fun result => ∃ value, result.1 = some value ∧ event value) <$> (oracle.run (limitPublicQueries computation budget)))) =
+    (prEvent ((fun result => event result.1 ∧ result.2 ≤ budget) <$> (oracle.run computation))) := by
   classical
   induction computation using OracleComp.inductionOn generalizing budget with
   | pure value =>
     rw [limit_public_pure, oracle_run_pure, oracle_run_pure]
-    erw [probEvent_pure, probEvent_pure]
+    erw [prEvent_pure, prEvent_pure]
     simp
   | query_bind query next ih =>
     rcases query with coins | publicQuery
     · rw [limit_public_query_bind]
       simp only [Oracle.callCost, Nat.zero_le, if_true, Nat.sub_zero]
-      change Pr[_ | oracle.run ((liftM (liftM (unifSpec.query coins) : ProbComp _) : OracleComp World _) >>= _)] =
-        Pr[_ | oracle.run ((liftM (liftM (unifSpec.query coins) : ProbComp _) : OracleComp World _) >>= _)]
+      change (prEvent ((_) <$> (oracle.run ((liftM (liftM (unifSpec.query coins) : ProbComp _) : OracleComp World _) >>= _)))) =
+        (prEvent ((_) <$> (oracle.run ((liftM (liftM (unifSpec.query coins) : ProbComp _) : OracleComp World _) >>= _))))
       rw [oracle_run_coins_bind, oracle_run_coins_bind]
-      rw [probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]
+      rw [OracleComp.prEvent_bind_eq_tsum, OracleComp.prEvent_bind_eq_tsum]
       apply tsum_congr
       intro answer
       rw [ih]
@@ -107,7 +107,7 @@ theorem limit_public_probability {α : Type} (oracle : Oracle) (computation : Or
       simp only [Oracle.callCost]
       by_cases allowed : 1 ≤ budget
       · erw [if_pos allowed, oracle_run_public_bind, oracle_run_public_bind]
-        simp only [bind_pure_comp, probEvent_map, Function.comp_def]
+        simp only [bind_pure_comp, prEvent_map, Function.comp_def]
         have shifted : (fun result : α × Nat => event result.1 ∧ 1 + result.2 ≤ budget) =
             (fun result => event result.1 ∧ result.2 ≤ budget - 1) := by
           funext result
@@ -116,11 +116,11 @@ theorem limit_public_probability {α : Type} (oracle : Oracle) (computation : Or
         rw [shifted]
         exact ih _ _
       · erw [if_neg allowed, oracle_run_pure, oracle_run_public_bind]
-        erw [probEvent_pure]
+        erw [prEvent_pure]
         simp only [reduceCtorEq, false_and, exists_false, ite_false,
-          bind_pure_comp, probEvent_map, Function.comp_def]
+          bind_pure_comp, prEvent_map, Function.comp_def]
         symm
-        apply probEvent_eq_zero
+        apply prEvent_eq_zero_of_forall_mem_support
         intro result _ winning
         omega
 

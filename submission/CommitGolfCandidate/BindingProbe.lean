@@ -107,19 +107,19 @@ theorem bounded_collision_search_run (oracle : Oracle) (adversary : Scheme.Adver
     rfl
 
 theorem binding_fixed_le_search (oracle : Oracle) (adversary : Scheme.Adversary) (budget : Nat) :
-    Pr[fun result => submission.scheme.Breaks oracle result.1 ∧ result.2 ≤ budget | oracle.run adversary] ≤
-    Pr[ReplyCollision | fixedOracleRun oracle (boundedCollisionSearch adversary budget)] := by
+    (prEvent ((fun result => submission.scheme.Breaks oracle result.1 ∧ result.2 ≤ budget) <$> (oracle.run adversary))) ≤
+    (prEvent ((ReplyCollision) <$> (fixedOracleRun oracle (boundedCollisionSearch adversary budget)))) := by
   classical
   rw [← limit_public_probability oracle adversary budget (submission.scheme.Breaks oracle)]
-  simp only [fixedOracleRun, probEvent_map, Function.comp_def, bounded_collision_search_run]
-  rw [probEvent_bind_eq_tsum]
-  rw [probEvent_eq_tsum_indicator]
+  simp only [fixedOracleRun, prEvent_map, Function.comp_def, bounded_collision_search_run]
+  rw [OracleComp.prEvent_bind_eq_tsum]
+  rw [OracleComp.prEvent_eq_tsum_ite]
   apply ENNReal.tsum_le_tsum
   rintro ⟨result, calls⟩
   cases result with
-  | none => simp [probEvent_pure]
+  | none => simp [prEvent_pure]
   | some claim =>
-    simp only [probEvent_pure]
+    simp only [prEvent_pure]
     by_cases winning : submission.scheme.Breaks oracle claim
     · have collision := reply_collision_of_inputs _ _ (breaks_replay_collision oracle claim winning)
       simp [winning, collision]

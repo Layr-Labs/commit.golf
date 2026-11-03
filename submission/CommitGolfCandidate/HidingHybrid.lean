@@ -4,6 +4,9 @@ import CommitGolfCandidate.HidingCoordinate
 Coordinates opened by the verifier are equal in both messages and cost nothing.
 The fixed-cache result will be averaged over the adaptive first stage. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingHybridDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
 def hybridMessage (left right : Message) (indices : List Index) : Message :=
@@ -32,7 +35,7 @@ theorem reference_observation_hybrid {α : Type}
     (observe : Commitment → Proof → OracleComp World α)
     (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget)
     (indices : List Index) :
-    tvDist (referenceObservation permutation cache left positions observe)
+    measureTVDist (referenceObservation permutation cache left positions observe)
       (referenceObservation permutation cache (hybridMessage left right indices) positions observe) ≤
       (indices.length : ℝ) *
         (16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) := by
@@ -40,9 +43,9 @@ theorem reference_observation_hybrid {α : Type}
   have nonnegative : 0 ≤ loss := by positivity
   change _ ≤ (indices.length : ℝ)*loss
   induction indices with
-  | nil => simp only [hybrid_message_nil, tvDist_self, List.length_nil, Nat.cast_zero, zero_mul, le_refl]
+  | nil => simp only [hybrid_message_nil, measureTVDist_self, List.length_nil, Nat.cast_zero, zero_mul, le_refl]
   | cons index indices ih =>
-    have step : tvDist
+    have step : measureTVDist
         (referenceObservation permutation cache (hybridMessage left right indices) positions observe)
         (referenceObservation permutation cache (hybridMessage left right (index :: indices)) positions observe) ≤ loss := by
       rw [hybrid_message_cons]
@@ -52,13 +55,13 @@ theorem reference_observation_hybrid {α : Type}
           split
           · rfl
           · exact (agree index opened).symm
-        rw [same, Function.update_eq_self, tvDist_self]
+        rw [same, Function.update_eq_self, measureTVDist_self]
         exact nonnegative
       · have changed := reference_observation_coordinate_distance permutation cache keys covered
           (hybridMessage left right indices) positions observe budget bounded index opened
           (hybridMessage left right indices index) (right index)
         simpa only [Function.update_eq_self] using changed
-    refine ((tvDist_triangle _ _ _).trans (add_le_add ih step)).trans ?_
+    refine ((measureTVDist_triangle _ _ _).trans (add_le_add ih step)).trans ?_
     simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
     exact le_of_eq (by ring)
 
@@ -71,7 +74,7 @@ theorem reference_observation_distance {α : Type}
     (agree : ∀ index ∈ positions, left index = right index)
     (observe : Commitment → Proof → OracleComp World α)
     (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget) :
-    tvDist (referenceObservation permutation cache left positions observe)
+    measureTVDist (referenceObservation permutation cache left positions observe)
       (referenceObservation permutation cache right positions observe) ≤
       (LENGTH : ℝ) *
         (16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) := by

@@ -5,7 +5,7 @@ package CommitGolf where
   leanOptions := #[⟨`autoImplicit, false⟩]
 
 require VCVio from git
-  "https://github.com/Verified-zkEVM/VCVio" @ "25f26bfee60d6700644eb1a69f091091948f15da"
+  "https://github.com/Verified-zkEVM/VCVio" @ "88efe9715a9fa9e7d89635c38cf70259836766c2"
 
 require «riscv-zkvm» from git
   "https://github.com/Verified-zkEVM/riscv-zkvm" @ "4634e41b229da4256e4a1f1688b94133fffa4af0"

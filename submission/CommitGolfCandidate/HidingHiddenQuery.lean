@@ -1,17 +1,21 @@
+import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingTrace
-import VCVio.EvalDist.Fintype
+import VCVio.OracleComp.EvalDist.Sum
 
 /-! An independently hidden salt is hit by at most q adaptive queries with
 probability at most q/2^256. Adaptivity is handled by recording the entire
 unprogrammed run before averaging over the independent salt. -/
 namespace CommitGolfCandidate
+
+-- Observations retain the discrete measurable structure used by the contract.
+local instance hidingHiddenQueryDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
 private theorem uniform_list_guess (width : Nat) (guesses : List (BitVec width)) :
-    Pr[fun value => value ∈ guesses | ($ᵗ BitVec width)] ≤
+    (prEvent ((fun value => value ∈ guesses) <$> (($ᵗ BitVec width)))) ≤
       (guesses.length : ENNReal) / 2^width := by
   classical
-  rw [probEvent_uniformSample]
+  rw [SampleableType.prEvent_uniformSample]
   have selected : (Finset.univ.filter fun value => value ∈ guesses) = guesses.toFinset := by
     ext value
     simp
@@ -22,8 +26,7 @@ private theorem uniform_list_guess (width : Nat) (guesses : List (BitVec width))
   exact Nat.cast_le.mpr (List.toFinset_card_le guesses)
 
 theorem fresh_trace_hit_probability (trace : List (BitVec 512)) :
-    Pr[fun salt : Digest => trace.any (fun input => decide (input.extractLsb' 0 256 = salt)) = true |
-      ($ᵗ Digest)] ≤ (trace.length : ENNReal) / 2^256 := by
+    (prEvent ((fun salt : Digest => trace.any (fun input => decide (input.extractLsb' 0 256 = salt)) = true) <$> (($ᵗ Digest)))) ≤ (trace.length : ENNReal) / 2^256 := by
   have event : (fun salt : Digest =>
       trace.any (fun input => decide (input.extractLsb' 0 256 = salt)) = true) =
       (fun salt => salt ∈ trace.map (fun input => input.extractLsb' 0 256)) := by
@@ -38,23 +41,22 @@ not receive the separate hidden salt; its query trace is then independent of it.
 theorem fresh_query_hit_bound (oracle : Oracle) {α : Type}
     (computation : OracleComp World α) (budget : Nat)
     (bounded : PublicQueryBound computation budget) :
-    Pr[fun result : α × Unit × Bool => result.2.2 = true |
-      (($ᵗ Digest) >>= fun salt => flaggedRun oracle (marksSalt salt) computation)] ≤
+    (prEvent ((fun result : α × Unit × Bool => result.2.2 = true) <$> ((($ᵗ Digest) >>= fun salt => flaggedRun oracle (marksSalt salt) computation)))) ≤
       (budget : ENNReal) / 2^256 := by
+  letI : MeasurableSpace (α × Unit × Bool) := ⊤
   have reordered :
-      𝒮[($ᵗ Digest) >>= fun salt => flaggedRun oracle (marksSalt salt) computation] =
-      𝒮[do let traced ← fixedOracleRun oracle (traceCompression computation)
+      𝒟[($ᵗ Digest) >>= fun salt => flaggedRun oracle (marksSalt salt) computation] =
+      𝒟[do let traced ← fixedOracleRun oracle (traceCompression computation)
            let salt ← $ᵗ Digest
            pure (traced.1, (), traced.2.any (fun input => decide (input.extractLsb' 0 256 = salt)))] := by
     simp only [flagged_run_trace, Bool.false_or, map_eq_bind_pure_comp]
-    exact evalSPMF_bind_comm _ _ _
-  have probability := congrArg (fun distribution : SPMF (α × Unit × Bool) =>
-    Pr[fun result => result.2.2 = true | distribution]) reordered
-  simp only [probEvent_evalSPMF] at probability
+    exact distribution_bind_comm ($ᵗ Digest) (fixedOracleRun oracle (traceCompression computation)) _
+  have probability := (EvalDistEq.of_evalDist_eq reordered).prEvent_eq
+    (fun result => result.2.2 = true)
   rw [probability]
-  apply probEvent_bind_le_of_forall_le
+  apply prEvent_bind_le_of_forall_le_of_support
   intro traced reached
-  rw [bind_pure_comp, probEvent_map]
+  rw [bind_pure_comp, prEvent_map]
   refine (fresh_trace_hit_probability traced.2).trans ?_
   exact ENNReal.div_le_div_right (Nat.cast_le.mpr (trace_run_length oracle computation budget
     bounded traced reached)) _
@@ -64,18 +66,18 @@ probability. The sampled key space is finite; the observation type need not be. 
 theorem distance_bind_le_averaged_bad {Key Output : Type} [Fintype Key]
     (keys : ProbComp Key) (left right : Key → ProbComp Output)
     (tagged : Key → ProbComp (Output × Unit × Bool))
-    (bounded : ∀ key, tvDist (left key) (right key) ≤
-      Pr[fun result => result.2.2 = true | tagged key].toReal) :
-    tvDist (keys >>= left) (keys >>= right) ≤
-      Pr[fun result => result.2.2 = true | keys >>= tagged].toReal := by
-  refine (tvDist_bind_left_le keys left right).trans ?_
-  rw [tsum_fintype, probEvent_bind_eq_sum_fintype, ENNReal.toReal_sum]
+    (bounded : ∀ key, measureTVDist (left key) (right key) ≤
+      (prEvent ((fun result => result.2.2 = true) <$> (tagged key))).toReal) :
+    measureTVDist (keys >>= left) (keys >>= right) ≤
+      (prEvent ((fun result => result.2.2 = true) <$> (keys >>= tagged))).toReal := by
+  refine (measureTVDist_bind_left_le_tsum keys left right).trans ?_
+  rw [tsum_fintype, prEvent_bind_eq_sum_fintype, ENNReal.toReal_sum]
   · apply Finset.sum_le_sum
     intro key _
     rw [ENNReal.toReal_mul]
     exact mul_le_mul_of_nonneg_left (bounded key) ENNReal.toReal_nonneg
   · intro key _
-    exact ENNReal.mul_ne_top probOutput_ne_top probEvent_ne_top
+    exact ENNReal.mul_ne_top (prEvent_ne_top _) (prEvent_ne_top _)
 
 /-- Programming one input with a fresh hidden low half changes any q-query
 continuation by at most q/2^256 in statistical distance. The continuation may
@@ -83,7 +85,7 @@ know the programmed answer and message block, but not the hidden salt. -/
 theorem hidden_reprogram_distance (oracle : Oracle) (block answer : Digest)
     {α : Type} (computation : OracleComp World α) (budget : Nat)
     (bounded : PublicQueryBound computation budget) :
-    tvDist
+    measureTVDist
       (($ᵗ Digest) >>= fun _ => fixedOracleRun oracle computation)
       (($ᵗ Digest) >>= fun salt =>
         fixedOracleRun (programCompression oracle (block ++ salt) answer) computation) ≤

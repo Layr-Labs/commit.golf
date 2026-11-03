@@ -120,6 +120,7 @@ private theorem commit_copy_register (state : MachineState) (count : Nat) (bound
       MachineState.getReg_setPC, memRegister,
       MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm scratch)]
 
+set_option maxHeartbeats 800000 in
 /-- Copy the next 256-bit message block into the upper scratch half. -/
 theorem commit_leaf_copy (state : MachineState) (pc : state.pc = 4436)
     (scratch : state.getReg .x21 = 256)

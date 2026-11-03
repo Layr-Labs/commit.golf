@@ -27,10 +27,8 @@ theorem writer_support (impl : QueryImpl World (AddWriterT Nat ProbComp))
 /-- The actual counted oracle runner preserves the commitment's success and cycles,
 for every fixed oracle and message. -/
 theorem commit_oracle_resources (oracle : Oracle) (message : Message) :
-    Pr[fun result => result.1.exit = Exit.success ∧ result.1.cycles = 3959423012 |
-      oracle.run (submission.run .commit message)] = 1 := by
-  apply probEvent_eq_one_iff.mpr
-  refine ⟨by simp, ?_⟩
+    (prEvent ((fun result => result.1.exit = Exit.success ∧ result.1.cycles = 3959423012) <$> (oracle.run (submission.run .commit message)))) = 1 := by
+  apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
   have resources := commit_input_resources message result.1
     (writer_support (oracle.world.withAddCost Oracle.callCost) _ result reached)
@@ -42,8 +40,7 @@ theorem submission_termination : submission.Termination := by
   intro oracle program input
   cases program with
   | commit =>
-    apply probEvent_eq_one_iff.mpr
-    refine ⟨by simp, ?_⟩
+    apply (OracleComp.prEvent_eq_one_iff _ _).mpr
     intro result reached
     have resources := commit_input_resources input result.1
       (writer_support (oracle.world.withAddCost Oracle.callCost) _ result reached)
@@ -80,8 +77,7 @@ theorem honest_machine_resources (message : Message) (positions : Positions)
 opening set. This proves the certificate's machine-success field. -/
 theorem submission_machine_success : submission.MachineSuccess := by
   intro oracle message positions
-  apply probEvent_eq_one_iff.mpr
-  refine ⟨by simp, ?_⟩
+  apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
   exact (honest_machine_resources message positions result.1
     (writer_support (oracle.world.withAddCost Oracle.callCost) _ result reached)).1
@@ -90,8 +86,7 @@ theorem submission_machine_success : submission.MachineSuccess := by
 128-leaf opening. These are the declared claim values, not a sampled measurement. -/
 theorem submission_prover_cycles : submission.ProverCycles 17179869184 1048576 := by
   intro oracle message positions batch
-  apply probEvent_eq_one_iff.mpr
-  refine ⟨by simp, ?_⟩
+  apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
   have resources := honest_machine_resources message positions result.1
     (writer_support (oracle.world.withAddCost Oracle.callCost) _ result reached)

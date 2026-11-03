@@ -39,11 +39,11 @@ example (adversary : Scheme.Adversary) : Scheme.bindingGame adversary = (do
     let (claim, calls) ← oracle.run adversary
     return (oracle, claim, calls)) := rfl
 
-example {α : Type} (c : ProbComp α) : Pr[⊥ | c] = 0 := probFailure_eq_zero
+example {α : Type} (c : ProbComp α) : prFail (c) = 0 := OracleComp.prFail_eq_zero _
 example (scheme : Scheme) (oracle : Oracle) (m : Message) (I : Positions) :
-    Pr[⊥ | scheme.honest oracle m I] = 0 := probFailure_eq_zero
-example (adversary : Scheme.Adversary) : Pr[⊥ | Scheme.bindingGame adversary] = 0 :=
-  probFailure_eq_zero
+    prFail (scheme.honest oracle m I) = 0 := OracleComp.prFail_eq_zero _
+example (adversary : Scheme.Adversary) : prFail (Scheme.bindingGame adversary) = 0 :=
+  OracleComp.prFail_eq_zero _
 
 end CommitGolf.Tests
 
@@ -64,7 +64,7 @@ example : constantScheme.Hiding (fun _ _ => 0) := by
   intro openingSize queryBudget _ AdversaryState Output adversary _
   have heq : hidingExperiment constantScheme adversary false =
       hidingExperiment constantScheme adversary true := rfl
-  rw [heq, tvDist_self]
+  rw [heq, measureTVDist_self]
 
 private def challenge : HidingChallenge Unit 0 :=
   ⟨fun _ => 0, fun _ => 0, ∅, rfl, rfl, ()⟩

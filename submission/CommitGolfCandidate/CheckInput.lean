@@ -138,10 +138,8 @@ private theorem writer_run_support (impl : QueryImpl World (AddWriterT Nat ProbC
 /-- Checker termination in the exact probabilistic form required by the submission
 certificate, for every fixed oracle and every input (honest or adversarial). -/
 theorem check_termination (oracle : Oracle) (input : CheckInput) :
-    Pr[fun result => result.1.exit ≠ Exit.unfinished |
-      oracle.run (submission.run .check input)] = 1 := by
-  apply probEvent_eq_one_iff.mpr
-  refine ⟨by simp, ?_⟩
+    (prEvent ((fun result => result.1.exit ≠ Exit.unfinished) <$> (oracle.run (submission.run .check input)))) = 1 := by
+  apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reachable
   exact (check_input_resources input result.1
     (writer_run_support (oracle.world.withAddCost Oracle.callCost)
@@ -163,11 +161,9 @@ theorem check_counted (oracle : Oracle) (input : CheckInput) (result : Execution
 /-- Simultaneous termination and resource bounds through the security game's actual
 oracle runner. The query bound concerns the runner's counter, not a claimed counter. -/
 theorem check_oracle_resources (oracle : Oracle) (input : CheckInput) :
-    Pr[fun result => result.1.exit ≠ Exit.unfinished ∧
-      result.1.cycles ≤ 1100 * input.positions.card + 20 ∧ result.2 ≤ 32 * input.positions.card |
-      oracle.run (submission.run .check input)] = 1 := by
-  apply probEvent_eq_one_iff.mpr
-  refine ⟨by simp, ?_⟩
+    (prEvent ((fun result => result.1.exit ≠ Exit.unfinished ∧
+      result.1.cycles ≤ 1100 * input.positions.card + 20 ∧ result.2 ≤ 32 * input.positions.card) <$> (oracle.run (submission.run .check input)))) = 1 := by
+  apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reachable
   have resources := check_input_resources input result.1
     (writer_run_support (oracle.world.withAddCost Oracle.callCost)

@@ -1,3 +1,4 @@
+import VCVio.OracleComp.EvalDist.Sum
 import CommitGolfCandidate.BindingReplay
 
 /-! Probability-preserving reduction from the submitted machine's binding game
@@ -15,18 +16,17 @@ noncomputable def collisionGame (adversary : Scheme.Adversary) :
   return (oracle, inputs, calls)
 
 theorem binding_probability_le_collision (adversary : Scheme.Adversary) (queryBudget : Nat) :
-    Pr[fun (oracle, claim, calls) => submission.scheme.Breaks oracle claim ∧ calls ≤ queryBudget |
-      Scheme.bindingGame adversary] ≤
-    Pr[fun (oracle, inputs, calls) => HasCompressionCollision oracle.compression inputs ∧
-        calls ≤ queryBudget + 64 | collisionGame adversary] := by
+    (prEvent ((fun (oracle, claim, calls) => submission.scheme.Breaks oracle claim ∧ calls ≤ queryBudget) <$> (Scheme.bindingGame adversary))) ≤
+    (prEvent ((fun (oracle, inputs, calls) => HasCompressionCollision oracle.compression inputs ∧
+        calls ≤ queryBudget + 64) <$> (collisionGame adversary))) := by
   simp only [Scheme.bindingGame, collisionGame, binding_extractor_run,
     bind_pure_comp]
-  rw [probEvent_bind_eq_tsum, probEvent_bind_eq_tsum]
+  rw [OracleComp.prEvent_bind_eq_tsum, OracleComp.prEvent_bind_eq_tsum]
   apply ENNReal.tsum_le_tsum
   intro oracle
   apply mul_le_mul' le_rfl
-  simp only [probEvent_map, Function.comp_def]
-  apply probEvent_mono
+  simp only [prEvent_map, Function.comp_def]
+  apply prEvent_mono_of_support
   intro result _ winning
   exact ⟨breaks_replay_collision oracle result.1 winning.1, Nat.add_le_add_right winning.2 64⟩
 
@@ -34,9 +34,8 @@ theorem binding_probability_le_collision (adversary : Scheme.Adversary) (queryBu
 one. No collision estimate is needed in this range. -/
 theorem binding_large_budget (adversary : Scheme.Adversary) (queryBudget : Nat)
     (large : 2 ^ BINDING_SECURITY_BITS ≤ queryBudget) :
-    Pr[fun (oracle, claim, calls) => submission.scheme.Breaks oracle claim ∧ calls ≤ queryBudget |
-      Scheme.bindingGame adversary] ≤ (queryBudget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
-  apply le_trans probEvent_le_one
+    (prEvent ((fun (oracle, claim, calls) => submission.scheme.Breaks oracle claim ∧ calls ≤ queryBudget) <$> (Scheme.bindingGame adversary))) ≤ (queryBudget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
+  apply le_trans (prEvent_le_one _)
   apply (ENNReal.le_div_iff_mul_le (Or.inl (by positivity)) (Or.inl (by finiteness))).mpr
   simpa using (show ((2 ^ BINDING_SECURITY_BITS : Nat) : ENNReal) ≤ queryBudget from
     Nat.cast_le.mpr large)

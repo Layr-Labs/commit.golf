@@ -109,7 +109,7 @@ theorem scheme_check_budget (oracle : Oracle) (input : CheckInput) :
       support (oracle.run (submission.run .check input)) := by
     rw [check_run_evaluation]
     simp
-  have event := (probEvent_eq_one_iff.mp (check_oracle_resources oracle input)).2 _ reached
+  have event := ((OracleComp.prEvent_eq_one_iff _ _).mp (check_oracle_resources oracle input)) _ reached
   exact event.2.2
 
 end CommitGolfCandidate

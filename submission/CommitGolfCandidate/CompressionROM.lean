@@ -1,11 +1,12 @@
 import CommitGolfCandidate.QueryBudget
+import VCVio.OracleComp.Constructions.SampleableType.Measure
 import VCVio.OracleComp.QueryTracking.Birthday
 import VCVio.OracleComp.QueryTracking.RandomOracle.Basic
 
 /-! Lazy compression sampling for the binding reduction. Private randomness stays
 fresh, and both permutation directions use one fixed permutation. Only the
 compression table is cached. The birthday induction follows VCVio's
-`probEvent_cacheCollision_le_birthday_total_tight`, with separate cases for the
+`prEvent_cacheCollision_le_birthday_total_tight`, with separate cases for the
 other oracle operations instead of treating them as compression queries. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec
@@ -76,10 +77,9 @@ one. VCVio's finite counting lemma applies without enumerating the huge domain. 
 theorem fresh_compression_collision_bound (cache : CompressionCache) (input : CompressionSpec.Domain)
     (keys : Finset CompressionSpec.Domain) (noCollision : ¬ CacheHasCollision cache)
     (covers : ∀ key, cache key ≠ none → key ∈ keys) :
-    Pr[fun answer => CacheHasCollision (cache.cacheQuery input answer) |
-      ($ᵗ CompressionSpec.Range input)] ≤ (keys.card : ENNReal) / 2 ^ 256 := by
+    (prEvent ((fun answer => CacheHasCollision (cache.cacheQuery input answer)) <$> (($ᵗ CompressionSpec.Range input)))) ≤ (keys.card : ENNReal) / 2 ^ 256 := by
   classical
-  rw [probEvent_uniformSample]
+  rw [SampleableType.prEvent_uniformSample]
   have count := card_responses_creating_cacheCollision_le (t := input) noCollision covers
   have cardinal : Fintype.card (CompressionSpec.Range input) = 2 ^ 256 := by
     change Fintype.card (BitVec 256) = 2 ^ 256
@@ -97,20 +97,20 @@ theorem compression_collision_bound_from_cache (permutation : Perm) {α : Type}
     (noCollision : ¬ CacheHasCollision cache)
     (covered : ∃ keys : Finset CompressionSpec.Domain, keys.card ≤ known ∧
       ∀ key, cache key ≠ none → key ∈ keys) :
-    Pr[fun result => CacheHasCollision result.2 | compressionRun permutation computation cache] ≤
+    (prEvent ((fun result => CacheHasCollision result.2) <$> (compressionRun permutation computation cache))) ≤
       ∑ step ∈ Finset.range budget, ((known + step : Nat) : ENNReal) / 2 ^ 256 := by
   classical
   induction computation using OracleComp.inductionOn generalizing budget known cache with
   | pure value =>
     rw [compression_run_pure]
-    simp only [probEvent_pure, noCollision, ite_false]
+    simp only [prEvent_pure, noCollision, ite_false]
     exact zero_le
   | query_bind query next ih =>
     change Oracle.callCost query ≤ budget ∧
       (∀ answer, PublicQueryBound (next answer) (budget - Oracle.callCost query)) at bounded
     rcases query with coins | publicQuery
     · rw [compression_run_private]
-      apply probEvent_bind_le_of_forall_le
+      apply prEvent_bind_le_of_forall_le_of_support
       intro answer _
       exact ih answer budget known (by simpa only [Oracle.callCost, Nat.sub_zero] using bounded.2 answer)
         cache noCollision covered
@@ -125,15 +125,13 @@ theorem compression_collision_bound_from_cache (permutation : Perm) {α : Type}
         | some answer =>
           exact (ih answer (budget - 1) known (tails answer) cache noCollision covered).trans smaller
         | none =>
-          have fresh : Pr[fun answer => CacheHasCollision (cache.cacheQuery input answer) |
-              ($ᵗ CompressionSpec.Range input)] ≤ (known : ENNReal) / 2 ^ 256 := by
+          have fresh : (prEvent ((fun answer => CacheHasCollision (cache.cacheQuery input answer)) <$> (($ᵗ CompressionSpec.Range input)))) ≤ (known : ENNReal) / 2 ^ 256 := by
             obtain ⟨keys, size, covers⟩ := covered
             exact (fresh_compression_collision_bound cache input keys noCollision covers).trans
               (ENNReal.div_le_div_right (Nat.cast_le.mpr size) _)
           have continuation : ∀ answer ∈ support ($ᵗ CompressionSpec.Range input),
               ¬ CacheHasCollision (cache.cacheQuery input answer) →
-              Pr[fun result => CacheHasCollision result.2 |
-                compressionRun permutation (next answer) (cache.cacheQuery input answer)] ≤
+              (prEvent ((fun result => CacheHasCollision result.2) <$> (compressionRun permutation (next answer) (cache.cacheQuery input answer)))) ≤
                 ∑ step ∈ Finset.range (budget - 1), ((known + 1 + step : Nat) : ENNReal) / 2 ^ 256 := by
             intro answer _ safe
             apply ih answer (budget - 1) (known + 1) (tails answer) _ safe
@@ -144,16 +142,12 @@ theorem compression_collision_bound_from_cache (permutation : Perm) {α : Type}
             · exact same ▸ Finset.mem_insert_self _ _
             · rw [QueryCache.cacheQuery_of_ne _ _ same] at populated
               exact Finset.mem_insert_of_mem (covers key populated)
-          have combined := probEvent_bind_le_add
-            (mx := ($ᵗ CompressionSpec.Range input))
-            (my := fun answer => compressionRun permutation (next answer) (cache.cacheQuery input answer))
-            (p := fun answer => ¬ CacheHasCollision (cache.cacheQuery input answer))
-            (q := fun result => ¬ CacheHasCollision result.2)
-            (ε₁ := (known : ENNReal) / 2 ^ 256)
-            (ε₂ := ∑ step ∈ Finset.range (budget - 1), ((known + 1 + step : Nat) : ENNReal) / 2 ^ 256)
-            (by simpa only [not_not] using fresh)
-            (by simpa only [not_not] using continuation)
-          simp only [not_not] at combined
+          have combined := (prEvent_bind_le_prEvent_add_of_support
+            ($ᵗ CompressionSpec.Range input)
+            (fun answer => compressionRun permutation (next answer) (cache.cacheQuery input answer))
+            (fun answer => CacheHasCollision (cache.cacheQuery input answer))
+            (fun result => CacheHasCollision result.2) continuation).trans
+              (add_le_add fresh le_rfl)
           apply combined.trans_eq
           conv_rhs => rw [show budget = (budget - 1) + 1 from by omega]
           rw [Finset.sum_range_succ']
@@ -173,7 +167,7 @@ theorem compression_collision_bound_from_cache (permutation : Perm) {α : Type}
 uses fresh private coins and the fixed ideal permutation in both directions. -/
 theorem compression_collision_bound (permutation : Perm) {α : Type}
     (computation : OracleComp World α) (budget : Nat) (bounded : PublicQueryBound computation budget) :
-    Pr[fun result => CacheHasCollision result.2 | compressionRun permutation computation ∅] ≤
+    (prEvent ((fun result => CacheHasCollision result.2) <$> (compressionRun permutation computation ∅))) ≤
       ((budget * (budget - 1) : Nat) : ENNReal) / (2 * 2 ^ 256) := by
   have estimate := compression_collision_bound_from_cache permutation computation budget 0 bounded ∅
     (by rintro ⟨_, _, _, _, _, impossible, _⟩; simp at impossible)

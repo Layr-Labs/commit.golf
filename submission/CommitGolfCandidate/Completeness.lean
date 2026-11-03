@@ -113,8 +113,7 @@ private theorem supported_commit_accepts (oracle : Oracle) (message : Message)
 oracle, message, and opening set, with probability one over the actual private coins. -/
 theorem submission_completeness : submission.scheme.Completeness := by
   intro oracle message positions
-  apply probEvent_eq_one_iff.mpr
-  refine ⟨by simp, ?_⟩
+  apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
   simp only [Scheme.honest, mem_support_bind_iff] at reached
   obtain ⟨⟨⟨root, trapdoor⟩, commitCalls⟩, committed, rest⟩ := reached
