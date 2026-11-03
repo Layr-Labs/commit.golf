@@ -1,33 +1,88 @@
 # commit.golf
 
-Optimize a **vector commitment scheme in the ideal permutation model** under the [draft rules](RULES.md).
-Schemes commit to `2^24` entries of 32 bytes and are ranked on the Pareto frontier of two worst-case
-scores, for openings of 100 positions: **opening proof bytes** and **permutation calls made by
-`check`**. Every scheme proves, in Lean, perfect completeness and position binding error at most
-`q / 2^128` against adversaries making `q` calls to the permutation or its inverse.
+Design a hiding vector commitment scheme using two independent ideal primitives:
 
-## Contract
+- One **512→256-bit compression function**.
+- One **1,600→1,600-bit permutation**, supporting forward and inverse queries.
 
-`RULES.md` states the rules; `CommitGolf/` holds the Lean statements, read in the order listed in
-`CommitGolf/Parameters.lean`. `CommitGolfBaseline/` is the textbook Merkle tree at `(76800 bytes, 2400 calls)`, with its
-certificate proved in `CommitGolfBaseline/MerkleProof/`.
+Both are available together through the fixed `PublicSpec` interface. Solvers can implement
+compound functions from these primitives. Every underlying primitive call counts,
+including repeated and inverse queries. Submissions cannot declare extra instances,
+change widths, or access a built-in variable-input RO or XOF.
+
+## Score and certificate
+
+Minimize `(commitCycles + openingCycles) × proofBytes` for one full
+commitment and an opening of **128 leaves**. Claims are certified worst-case bounds,
+not sample measurements; verification cycles are not scored.
+
+Each submission supplies RISC-V programs for commitment, opening, and checking.
+The security-game scheme is derived from those same images. One certificate checks
+machine admission, successful honest execution, termination, completeness, query
+budgets, proof size, prover cycles, binding, and statistical hiding.
+
+Binding and hiding target 120-bit security, with 2,048-bit logical leaves and 256-bit
+commitments. The scheme remains noninteractive. See [RULES.md](RULES.md) for the
+machine interface, cost schedule, and security requirements.
+
+## Submit and validate
+
+**`submission/` is the only solver-editable directory.** All supporting implementation
+and proof modules must live inside it. The contract, parameters, oracle definitions,
+verifier, build configuration, scripts, and workflows are maintained by the challenge
+authors and are not part of a submission.
+
+Use `submission/` for `Solution.lean`, `claim.json`, and optional
+`CommitGolfCandidate/` modules. There is no certified starter for this target yet.
 
 ```sh
 lake exe cache get
-lake build CommitGolf CommitGolfBaseline CommitGolfTests
-```
-
-## Submitting
-
-Edit `submission/`; the example there submits the baseline. `verifier/` checks it with Lean's
-`comparator`, which replays every proof through the kernel in a sandbox. On Linux with Landlock
-and user systemd:
-
-```sh
+lake build CommitGolf CommitGolfTests
+python3 -m unittest discover -s verifier/tests
+# Supported Linux host with Landlock and user systemd:
 bash scripts/setup.sh
 python3 scripts/run.py
 ```
 
+The runner and Benchmark workflow verify `submission/` directly. There is no oracle
+selector: both primitives are available together to every solver.
+The score report is written to `scripts/score.json`.
+
+The binding game follows the original sampled-function design: sample the two
+primitives once, run the adversary, and check both openings against those same
+functions. There is no separate finite/infinite binding game or compatibility layer.
+
+## Preserved baseline code
+
+`CommitGolfBaseline/` and `CommitGolfBaseline.lean` retain the Merkle baseline
+unchanged from `master`. These historical sources are excluded from the Lake build,
+verifier inputs, and permitted submission imports; they do not compile against the
+new contract. A certified submission for the new rules will follow separately.
+
+All active oracle definitions are in `CommitGolf/Oracle.lean`. The configurable
+family, RO/XOF implementations, lazy-state machinery, and `CommitGolf/Oracle/`
+directory have been removed. Oracle regression tests live in `CommitGolfTests.lean`.
+
+## RISC-V execution
+
+`CommitGolf/Riscv.lean` restores the RV64IM interpreter from this repository's
+sig.golf-derived history, using the same pinned `riscv-zkvm` dependency. It handles
+the fixed compression and forward/inverse permutation syscalls, private randomness,
+and halt/failure, recording abstract cycles and public oracle calls separately.
+Ordinary instructions cost one cycle; multiplication and division cost four.
+Private randomness retains the historical charge of `1 + ceil(bytes / 8)` cycles.
+Compression and forward/inverse permutation syscalls each cost eight cycles, with
+no additional instruction charge for the syscall. These prices are fixed in Parameters.
+
+`CommitGolf/Programs.lean` defines input loading, output decoding, the executable-derived
+scheme and honest machine runs. The certificate and comparator require cycle bounds
+for those runs. The interpreter's memory ceiling is 64 GiB; memory is modeled as a
+function, not allocated at that size. A full logical vector occupies 4 GiB.
+
 ## License
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
+Oracle-query counts are not cycle costs: each primitive call still counts as one query.
+Each public syscall costs eight abstract machine cycles. The certificate enforces
+the declared commitment and opening cycle bounds.

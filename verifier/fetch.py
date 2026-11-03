@@ -63,6 +63,7 @@ def bounded(cmd: list[str], limit: int, timeout: int = 600) -> bytes:
 
 def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> str:
     """Resolve pull/N/head, verify its SHA, then batch-fetch admitted blobs."""
+    subtree = "submission"
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+", repository):
         raise FetchError("invalid repository")
     if type(number) is not int or number < 1 or not SHA.fullmatch(commit):
@@ -79,7 +80,7 @@ def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> st
         actual = bounded(["git", "-C", str(repo), "rev-parse", "FETCH_HEAD"], 4096).decode().strip()
         if actual != commit:
             raise FetchError("PR head changed during fetch")
-        entries = bounded(["git", "-C", str(repo), "ls-tree", "-r", "-z", f"{commit}:submission"],
+        entries = bounded(["git", "-C", str(repo), "ls-tree", "-r", "-z", f"{commit}:{subtree}"],
                           MAX_TREE_OUTPUT).split(b"\0")
         selected = []
         for entry in filter(None, entries):
@@ -92,7 +93,7 @@ def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> st
             path = Path(name)
             if kind != b"blob" or mode not in (b"100644", b"100755") or not SHA.fullmatch(oid.decode()) or (
                 path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] not in
-                {"CommitGolfCandidate", "Solution.lean", "claim.json"}):
+                {"CommitGolfCandidate", "Solution.lean", "claim.json", "README.md"}):
                 raise FetchError(f"invalid submission entry: {name!r}")
             selected.append((path, oid.decode()))
             if len(selected) > MAX_FILES:

@@ -1,65 +1,70 @@
 import CommitGolf.Parameters
+import VCVio.OracleComp.Coercions.Add
+import VCVio.OracleComp.SimSemantics.Append
 import VCVio.OracleComp.QueryTracking.WriterCost
-import VCVio.OracleComp.QueryTracking.RandomOracle.Simulation
 import VCVio.OracleComp.Constructions.SampleableType
 
-/-! # Oracle
+/-! # Shared ideal oracles
 
-The permutation `π` of the states that all parties share. Everyone may query `π` and `π⁻¹`, and
-each query of either kind is one *call*: the only cost, local computation being free. Statements
-about the honest run hold for every fixed `π`; the binding game draws `π` uniformly from all
-permutations.
+Every party has access to the same 512→256 compression function and 1,600-bit permutation.
+Public queries select compression, forward permutation, or inverse permutation. Each costs
+one call, including repeats. Private coins and local computation are free in this query model.
 
-VCVio vocabulary used here and below. An `OracleComp spec α` is a computation that may query the
-oracles in `spec`; `A →ₒ B` specifies one oracle from `A` to `B`, and `spec₁ + spec₂` offers both,
-a query being tagged `.inl` or `.inr`. `unifSpec` is the coin oracle (the query `n` returns a
-uniform element of `Fin (n + 1)`) and `ProbComp` is `OracleComp unifSpec`. A `QueryImpl spec m`
-answers each query of `spec` by a computation in the monad `m`, and `simulateQ impl c` runs `c`
-with every query answered by `impl`. `liftM` embeds a computation over fewer oracles into one over
-more. `$ᵗ T` draws a uniform element of `T`; `Pr[p | c]` is the probability that `c` returns a
-value satisfying `p`. -/
+`OracleComp spec α` describes a computation using `spec`; `A →ₒ B` specifies an oracle from
+`A` to `B`. The sum `spec₁ + spec₂` provides both, tagged `.inl` and `.inr`. `unifSpec` supplies
+private coins, and `ProbComp` is a computation over those coins. `$ᵗ T` samples uniformly from
+finite `T`. Sampling whole functions below defines the security experiment mathematically;
+it is not an instruction to materialize their truth tables in an implementation.
+-/
 
 namespace CommitGolf
 open OracleComp OracleSpec
 
-/-- Forward queries `.inl x ↦ π x` and inverse queries `.inr y ↦ π⁻¹ y`. -/
-abbrev PermSpec : OracleSpec (State ⊕ State) := (State →ₒ State) + (State →ₒ State)
+abbrev Compression := BitVec COMPRESSION_INPUT_LENGTH → BitVec COMPRESSION_OUTPUT_LENGTH
+abbrev Perm := Equiv.Perm (BitVec PERMUTATION_WIDTH)
+abbrev CompressionSpec := BitVec COMPRESSION_INPUT_LENGTH →ₒ BitVec COMPRESSION_OUTPUT_LENGTH
+abbrev PermSpec :=
+  (BitVec PERMUTATION_WIDTH →ₒ BitVec PERMUTATION_WIDTH) +
+  (BitVec PERMUTATION_WIDTH →ₒ BitVec PERMUTATION_WIDTH)
 
-/-- Private coins and the permutation. `commit`, `opening`, and the adversary run over `World`;
-`check` runs over `PermSpec` alone, so it flips no coins. -/
-abbrev World := unifSpec + PermSpec
+/-- `.inl x` compresses; `.inr (.inl x)` permutes; `.inr (.inr y)` inverts. -/
+abbrev PublicSpec := CompressionSpec + PermSpec
 
-abbrev Perm := Equiv.Perm State
+/-- Commitment, opening, and adversaries may use coins; verification uses `PublicSpec`. -/
+abbrev World := unifSpec + PublicSpec
 
-namespace Perm
+/-- One realization of the two functions, shared by all parties. -/
+structure Oracle where
+  compression : Compression
+  permutation : Perm
 
-/-- Answer permutation queries with `π` (`π⁻¹` is `π.symm`). -/
-def answer (π : Perm) {m : Type → Type} [Monad m] : QueryImpl PermSpec m
-  | .inl x => pure (π x)
-  | .inr y => pure (π.symm y)
+/-- Independent uniform sampling of the two primitives, once per experiment. -/
+def Oracle.sample : ProbComp Oracle := do
+  let compression ← $ᵗ Compression
+  let permutation ← $ᵗ Perm
+  return ⟨compression, permutation⟩
 
-/-- Forward the coins, answer permutation queries with `π`. -/
-def world (π : Perm) : QueryImpl World ProbComp :=
-  HasQuery.toQueryImpl (spec := unifSpec) (m := ProbComp) + π.answer (m := ProbComp)
+def Oracle.answer (oracle : Oracle) {m : Type → Type} [Monad m] : QueryImpl PublicSpec m
+  | .inl x => pure (oracle.compression x)
+  | .inr (.inl x) => pure (oracle.permutation x)
+  | .inr (.inr y) => pure (oracle.permutation.symm y)
 
-/-- One unit per permutation call, forward or inverse; coins are free. -/
-def callCost : World.Domain → Nat
+/-- Forward private coins; answer all public queries with the fixed functions. -/
+def Oracle.world (oracle : Oracle) : QueryImpl World ProbComp :=
+  HasQuery.toQueryImpl (spec := unifSpec) (m := ProbComp) + oracle.answer (m := ProbComp)
+
+/-- One unit per compression or permutation call, forward or inverse;
+private coins do not count toward the query budget. -/
+def Oracle.callCost : World.Domain → Nat
   | .inl _ => 0
   | .inr _ => 1
 
-/-- `world π` with a running total of `callCost`. -/
-def counted (π : Perm) : QueryImpl World (AddWriterT Nat ProbComp) :=
-  π.world.withAddCost callCost
+/-- Probabilistic execution with its public query count. -/
+def Oracle.run (oracle : Oracle) {α : Type} (computation : OracleComp World α) : ProbComp (α × Nat) :=
+  (simulateQ (oracle.world.withAddCost Oracle.callCost) computation).run
 
-/-- Run a probabilistic computation against `π`: its result and its number of calls. -/
-def run (π : Perm) {α : Type} (c : OracleComp World α) : ProbComp (α × Nat) :=
-  (simulateQ π.counted c).run
-
-/-- Run a coin-free computation, such as `check`, against `π`: its result and its number of
-calls. -/
-def eval (π : Perm) {α : Type} (c : OracleComp PermSpec α) : α × Nat :=
-  (simulateQ ((π.answer (m := Id)).withAddCost fun _ => 1) c).run
-
-end Perm
+/-- Deterministic execution with its public query count. -/
+def Oracle.eval (oracle : Oracle) {α : Type} (computation : OracleComp PublicSpec α) : α × Nat :=
+  (simulateQ ((oracle.answer (m := Id)).withAddCost fun _ => 1) computation).run
 
 end CommitGolf

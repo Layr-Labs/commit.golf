@@ -2,8 +2,7 @@ import CommitGolf.Honest
 
 /-! # Binding game
 
-Position binding [CY24, Lemma 18.4.1]. Draw a uniform `π`; the adversary, with access to `π` and
-`π⁻¹`, outputs a commitment and two openings of it. It wins if `check` accepts both and they
+Position binding [CY24, Lemma 18.4.1]. Sample both fixed primitives independently; the adversary outputs a commitment and two openings. It wins if `check` accepts both and they
 disagree at a position both open. Only the adversary's own calls are counted, as in [CY24]. -/
 
 namespace CommitGolf
@@ -30,18 +29,18 @@ def Claim.Conflicting (claim : Claim) : Prop :=
   ∃ (i : Index) (h₀ : i ∈ claim.positions₀) (h₁ : i ∈ claim.positions₁),
     claim.values₀ ⟨i, h₀⟩ ≠ claim.values₁ ⟨i, h₁⟩
 
-/-- The claim wins against `π`: the openings conflict, and `check` accepts both. -/
-def Breaks (π : Perm) (claim : Claim) : Prop :=
+/-- The claim wins against the fixed oracle pair `π`: the openings conflict, and `check` accepts both. -/
+def Breaks (π : Oracle) (claim : Claim) : Prop :=
   claim.Conflicting ∧
     (π.eval (scheme.check claim.root claim.positions₀ claim.values₀ claim.proof₀)).1 = true ∧
     (π.eval (scheme.check claim.root claim.positions₁ claim.values₁ claim.proof₁)).1 = true
 
-/-- Draw a uniform `π` and run the adversary against it. Returns `π`, the claim, and the number of
-calls the adversary made. -/
-def bindingGame (adversary : Adversary) : ProbComp (Perm × Claim × Nat) := do
-  let π ← $ᵗ Perm
-  let (claim, calls) ← π.run adversary
-  return (π, claim, calls)
+/-- Sample the oracle functions once and run the adversary against them. Both checks
+use this same realization. Only the adversary's calls contribute to the budget. -/
+def bindingGame (adversary : Adversary) : ProbComp (Oracle × Claim × Nat) := do
+  let oracle ← Oracle.sample
+  let (claim, calls) ← oracle.run adversary
+  return (oracle, claim, calls)
 
 end Scheme
 

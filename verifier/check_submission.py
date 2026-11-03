@@ -12,12 +12,11 @@ MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 32 * 1024 * 1024
 MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 INTEGER = re.compile(r"0|[1-9][0-9]*")
-MAX_SCORE = 2**53 - 1  # the largest integer that JSON consumers keep exact
-CLAIM_KEYS = ("proofBytes", "checkCalls")
-ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std",
-                     "CommitGolfBaseline")
+from scoring import score_claim
+ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std", "RiscvZkvm")
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
-                    "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Statements"}
+                    "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Hiding", "CommitGolf.Statements",
+                    "CommitGolf.Riscv", "CommitGolf.Programs"}
 
 
 def strip_comments(source: str) -> str:
@@ -71,12 +70,7 @@ def claim(path: Path) -> dict[str, int]:
     if len(raw) > 512:
         raise ValueError("claim.json exceeds 512 bytes")
     value = json.loads(raw)
-    if not isinstance(value, dict) or set(value) != set(CLAIM_KEYS):
-        raise ValueError("claim.json must contain exactly proofBytes and checkCalls")
-    if any(type(value[key]) is not int or not INTEGER.fullmatch(str(value[key])) for key in CLAIM_KEYS):
-        raise ValueError("proofBytes and checkCalls must be nonnegative decimal integers")
-    if any(value[key] > MAX_SCORE for key in CLAIM_KEYS):
-        raise ValueError("proofBytes or checkCalls exceeds 2^53 - 1")
+    score_claim(value)
     return value
 
 
@@ -97,10 +91,10 @@ def check(root: Path) -> dict:
             if rel.parts[0] != "CommitGolfCandidate":
                 errors.append(f"{rel}: only CommitGolfCandidate/ may contain modules")
             continue
-        if rel.as_posix() not in {"Solution.lean", "claim.json"} and not (
+        if rel.as_posix() not in {"Solution.lean", "claim.json", "README.md"} and not (
             rel.parts[0] == "CommitGolfCandidate" and path.suffix == ".lean" and
             all(MODULE.fullmatch(part) for part in rel.with_suffix("").parts)):
-            errors.append(f"{rel}: only Solution.lean, claim.json, and CommitGolfCandidate modules are admitted")
+            errors.append(f"{rel}: only Solution.lean, claim.json, README.md, and CommitGolfCandidate modules are admitted")
             continue
         size = path.stat().st_size
         total += size
@@ -129,7 +123,8 @@ def check(root: Path) -> dict:
                 errors.append(f"{path.relative_to(root)}: import {module} is outside the allowed modules")
         except (OSError, UnicodeError, ValueError) as exc:
             errors.append(f"{path.relative_to(root)}: invalid Lean source: {exc}")
-    return {"ok": not errors, "claim": values, "files": len(files), "bytes": total, "errors": errors}
+    return {"ok": not errors, "claim": values, "score": score_claim(values) if values is not None else None,
+            "files": len(files), "bytes": total, "errors": errors}
 
 
 if __name__ == "__main__":

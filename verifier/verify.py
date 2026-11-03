@@ -197,10 +197,9 @@ def verify(args: argparse.Namespace) -> dict:
             return result
         project = work / 'project'
         project.mkdir()
-        for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'CommitGolf.lean',
-                     'CommitGolfBaseline.lean'):
+        for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'CommitGolf.lean'):
             shutil.copy2(args.trusted / name, project / name)
-        for name in ('CommitGolf', 'CommitGolfBaseline'):
+        for name in ('CommitGolf',):
             shutil.copytree(args.trusted / name, project / name)
         with (project / 'lakefile.lean').open('a') as out:
             out.write('\nlean_lib Solution\n')
@@ -233,7 +232,7 @@ def verify(args: argparse.Namespace) -> dict:
         if timeout:
             result['status'] = 'timeout'
         elif exit_code == 0 and 'Your solution is okay!' in log.read_text(errors='replace'):
-            result.update(status='verified')
+            result.update(status='verified', score=policy['score'])
         else:
             result.update(status='rejected', reason=log.read_text(errors='replace')[-1200:])
         return result

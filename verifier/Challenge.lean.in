@@ -2,15 +2,16 @@ import CommitGolf
 
 /-! # The challenge
 
-The verifier fills `{{proofBytes}}` and `{{checkCalls}}` from the submission's `claim.json`.
+The trusted challenge fixes the certificate; submissions cannot select it.
+The verifier fills `{{proofBytes}}`, `{{commitCycles}}`, and `{{openingCycles}}` from the submission's `claim.json`.
 `comparator` checks that the submission's `Solution` module proves this exact `certificate`
 statement about its own `submission`, replays every declaration through Lean's kernel, and
 admits only the axioms `propext`, `Quot.sound` and `Classical.choice`. -/
 
 namespace CommitGolf.Challenge
 
-noncomputable def submission : CommitGolf.Scheme := sorry
+noncomputable def submission : CommitGolf.Submission := sorry
 
-theorem certificate : CommitGolf.Certificate submission {{proofBytes}} {{checkCalls}} := sorry
+theorem certificate : CommitGolf.Certificate submission {{proofBytes}} {{commitCycles}} {{openingCycles}} := sorry
 
 end CommitGolf.Challenge
