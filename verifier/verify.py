@@ -17,7 +17,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -30,6 +29,7 @@ TRUSTED = HERE.parent
 LOG_CAP = 4 * 1024 * 1024
 WALL_SECONDS = 4 * 3600
 MEMORY_BYTES = 24 * 1024**3
+MIN_SYSTEMD_VERSION = 257  # PrivatePIDs, also required by scripts/vm-setup.sh
 
 
 class VerifyError(ValueError):
@@ -60,11 +60,26 @@ def clone_tree(src: Path, dst: Path) -> None:
     subprocess.run(cmd, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
 
+def linux_systemd_preflight() -> None:
+    if not shutil.which('systemd-run') or not shutil.which('systemctl'):
+        raise VerifyError('systemd user services are required on Linux')
+    try:
+        result = subprocess.run(['systemd-run', '--version'], check=True, text=True,
+                                capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise VerifyError('could not determine systemd version; systemd 257 or newer is required') from exc
+    version = re.match(r'systemd\s+([0-9]+)\b', result.stdout)
+    if version is None:
+        raise VerifyError('unrecognized systemd version; systemd 257 or newer is required')
+    if int(version[1]) < MIN_SYSTEMD_VERSION:
+        raise VerifyError(f'systemd {MIN_SYSTEMD_VERSION} or newer is required for PrivatePIDs '
+                          f'(found {version[1]})')
+
+
 def linux_preflight(env: dict[str, str]) -> None:
     if os.geteuid() == 0:
         raise VerifyError('refusing to compile candidate code as root')
-    if not shutil.which('systemd-run') or not shutil.which('systemctl'):
-        raise VerifyError('systemd user services are required on Linux')
+    linux_systemd_preflight()
     lsm = Path('/sys/kernel/security/lsm')
     if not lsm.is_file() or 'landlock' not in lsm.read_text().strip().split(','):
         raise VerifyError('Landlock is not enabled')
@@ -256,8 +271,7 @@ def main() -> int:
         parser.error('provide either --local or both --pr and --commit')
     args.trusted = args.trusted.resolve()
     if args.work is None:
-        args.work = Path(tempfile.mkdtemp(prefix='commit-verify-'))
-        args.work.rmdir()
+        args.work = Path.cwd() / '.work' / uuid.uuid4().hex
     result = verify(args)
     if args.cleanup and args.work.exists():
         try:

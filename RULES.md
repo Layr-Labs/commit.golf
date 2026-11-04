@@ -131,9 +131,12 @@ Only accepted certificates produce `scripts/score.json`; failed verification pro
 ```sh
 lake build CommitGolf CommitGolfTests
 python3 -m unittest discover -s verifier/tests
-# Official verification requires supported Linux, Landlock, and user systemd:
+# Official verification requires Linux, Landlock, and user systemd 257 or newer:
 bash scripts/setup.sh && python3 scripts/run.py
 ```
+
+Keep the checkout and verifier work directory outside `/tmp` and `/var/tmp`, which
+the sandbox hides. Default work directories are created under the current directory's `.work/`.
 
 Historical baselines remain in `CommitGolfBaseline/`, excluded from builds and submission
 imports until adapted. The regression fixtures are not secure submissions.

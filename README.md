@@ -41,10 +41,14 @@ check the submission against the exact checkout and toolchain being used.
 lake exe cache get
 lake build CommitGolf CommitGolfTests
 python3 -m unittest discover -s verifier/tests
-# Supported Linux host with Landlock and user systemd:
+# Supported Linux host with Landlock and user systemd 257 or newer:
 bash scripts/setup.sh
 python3 scripts/run.py
 ```
+
+Keep the checkout and verifier work directory outside `/tmp` and `/var/tmp`:
+the sandbox's `PrivateTmp` setting hides those host directories. The verifier
+uses a fresh directory under the current directory's `.work/` by default.
 
 The runner and Benchmark workflow verify `submission/` directly. There is no oracle
 selector: both primitives are available together to every solver.
