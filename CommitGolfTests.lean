@@ -62,6 +62,7 @@ private def constantScheme : Scheme where
 example : constantScheme.Hiding (fun _ _ => 0) := by
   refine ⟨fun _ _ => le_refl 0, ?_⟩
   intro openingSize queryBudget _ AdversaryState Output adversary _
+  let : MeasurableSpace Output := ⊤
   have heq : hidingExperiment constantScheme adversary false =
       hidingExperiment constantScheme adversary true := rfl
   rw [heq, measureTVDist_self]

@@ -25,7 +25,12 @@ elan() {
     return 90
   fi
 }
-lake() { printf 'lake %s\n' "$*" >> "$SETUP_TEST_LOG"; }
+lake() {
+  printf 'lake %s\n' "$*" >> "$SETUP_TEST_LOG"
+  if [[ "$SETUP_TEST_MODE" == cache_failure && "$*" == 'exe cache get' ]]; then return 19; fi
+  if [[ "$SETUP_TEST_MODE" == build_failure && "$1" == build ]]; then return 23; fi
+  return 0
+}
 python3() { printf 'preflight\n' >> "$SETUP_TEST_LOG"; }
 export -f elan lake python3
 exec bash scripts/setup.sh
@@ -56,7 +61,7 @@ class SetupTests(unittest.TestCase):
 
     def assert_build_finished(self, calls):
         self.assertEqual(calls[-4:], ['tools', 'lake exe cache get',
-                                     'lake build CommitGolf', 'preflight'])
+                                     'lake build CommitGolf CommitGolfTests', 'preflight'])
 
     def assert_build_not_started(self, calls):
         self.assertFalse(any(call == 'tools' or call.startswith('lake ') or
@@ -91,6 +96,19 @@ class SetupTests(unittest.TestCase):
         status, calls = self.run_setup('broken_existing')
         self.assertNotEqual(status, 0)
         self.assert_build_not_started(calls)
+
+    def test_cache_failure_stops_before_build_and_preflight(self):
+        status, calls = self.run_setup('cache_failure')
+        self.assertEqual(status, 19)
+        self.assertEqual(calls[-2:], ['tools', 'lake exe cache get'])
+        self.assertFalse(any(call.startswith('lake build ') or call == 'preflight' for call in calls))
+
+    def test_build_failure_stops_before_preflight(self):
+        status, calls = self.run_setup('build_failure')
+        self.assertEqual(status, 23)
+        self.assertEqual(calls[-3:], ['tools', 'lake exe cache get',
+                                     'lake build CommitGolf CommitGolfTests'])
+        self.assertNotIn('preflight', calls)
 
 
 if __name__ == '__main__':
