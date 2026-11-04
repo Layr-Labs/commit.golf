@@ -55,6 +55,9 @@ The verifier freezes this file, generates a concrete `CommitGolf.Artifact.submis
 from the delivered bytes and ABI, and requires the equality theorem above in addition
 to the security certificate. It generates that module inside its isolated build project.
 Import `CommitGolf.Artifact` in `Solution.lean`; do not provide that module yourself.
+The generated module packs bounded little-endian chunks, with exact counts, into balanced
+named trees. Its pure Lean decoder yields the same image lists; this internal encoding
+does not change the delivered manifest or image-size limits.
 Classical reasoning in proofs is permitted. The manifest supplies the executable
 even if the proof chooses its equal value noncomputably.
 The accepted score report includes `artifactDigest`, the SHA-256 of the exact manifest

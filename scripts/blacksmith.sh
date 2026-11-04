@@ -81,6 +81,11 @@ CLOUD
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
     guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_artifact_linkage.py'
     ;;
+  test-scale)
+    # Admission and byte-read checks at the image limit; this produces no security score.
+    # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_artifact_scale.py'
+    ;;
   collect)
     if [[ -f "${vm}/qemu.pid" ]]; then
       sudo cat "${vm}/console.log" | tee .work-vm-console.log >/dev/null
@@ -90,5 +95,5 @@ CLOUD
   stop)
     if [[ -f "${vm}/qemu.pid" ]]; then sudo kill "$(sudo cat "${vm}/qemu.pid")"; fi
     ;;
-  *) echo 'Usage: blacksmith.sh start | setup | cache | run | test-linkage | collect | stop' >&2; exit 2 ;;
+  *) echo 'Usage: blacksmith.sh start | setup | cache | run | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
 esac

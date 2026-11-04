@@ -12,9 +12,13 @@ from check_artifact_linkage import case_passes, linkage_config, make_cases, remo
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Lean 4.35.0 and the pinned exporter produced these diagnostics in independent focused
-# comparator runs. Requiring them prevents OOM/dependency/process errors from passing negatives.
-RFL_FAILURE = '''error: Solution.lean:22:88: Tactic `rfl` failed: The left-hand side
+# The diagnostic body comes from independent Lean 4.35.0 comparator runs. Coordinates follow
+# the fixed generated fixture as its trusted representation evolves.
+_direct_source = make_cases(json.dumps(manifest()).encode())[0].source.splitlines()
+_proof_line = next(i for i, line in enumerate(_direct_source, 1)
+                   if line.startswith('theorem submission_matches_artifact '))
+_proof_column = _direct_source[_proof_line - 1].index('rfl')
+RFL_FAILURE = f'''error: Solution.lean:{_proof_line}:{_proof_column}: Tactic `rfl` failed: The left-hand side
   submission
 is not definitionally equal to the right-hand side
   Artifact.submission
@@ -77,7 +81,8 @@ class LinkageHarnessTests(unittest.TestCase):
 
     def test_rfl_rejection_must_be_the_required_equality_without_other_failures(self):
         negative = make_cases(json.dumps(manifest()).encode())[2]
-        for diagnostic in (RFL_FAILURE.replace('22:88', '23:88'),
+        for diagnostic in (RFL_FAILURE.replace(f'{_proof_line}:{_proof_column}',
+                                               f'{_proof_line + 1}:{_proof_column}'),
                            RFL_FAILURE.replace('⊢ submission = Artifact.submission', '⊢ True'),
                            'error: Dependency.lean:1:0: missing declaration\n' + RFL_FAILURE,
                            'OOM killed unrelated job\n' + RFL_FAILURE,

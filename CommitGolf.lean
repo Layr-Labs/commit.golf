@@ -7,3 +7,4 @@ import CommitGolf.Statements
 import CommitGolf.Hiding
 import CommitGolf.Riscv
 import CommitGolf.Programs
+import CommitGolf.ArtifactEncoding

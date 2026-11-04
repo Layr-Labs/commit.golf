@@ -17,6 +17,49 @@ PROGRAMS = ('commit', 'opening', 'check')
 SIZE_FIELDS = ('trapdoor', 'proof')
 LAYOUT_FIELDS = ('message', 'commitment', 'trapdoor', 'indices', 'values', 'proof')
 HEX_BYTES = re.compile(r'(?:[0-9a-f]{2})*')
+PACKED_CHUNK_BYTES = 256
+PACKED_DECLARATION_FANOUT = 8
+
+
+def packed_declarations(name: str, raw: bytes, bits: int) -> list[str]:
+    """Bound both literal size and work per Lean declaration; balance joins within each block."""
+    width = bits // 8
+    if bits not in (8, 32) or len(raw) % width:
+        raise ValueError('internal packed element width mismatch')
+    chunks = [(len(raw[i:i + PACKED_CHUNK_BYTES]) // width,
+               int.from_bytes(raw[i:i + PACKED_CHUNK_BYTES], 'little'))
+              for i in range(0, len(raw), PACKED_CHUNK_BYTES)]
+    if not chunks:
+        chunks = [(0, 0)]
+
+    def render(entries, start, stop, indent):
+        if stop - start == 1:
+            return entries[start]
+        middle = (start + stop) // 2
+        left_count, left = render(entries, start, middle, indent + '  ')
+        right_count, right = render(entries, middle, stop, indent + '  ')
+        return (left_count + right_count,
+                f'(@ArtifactEncoding.Packed.join {left_count} {right_count}\n'
+                f'{indent}  {left}\n{indent}  {right})')
+
+    entries = [(count, f'(ArtifactEncoding.Packed.chunk {count} {payload})')
+               for count, payload in chunks]
+    declarations = []
+    level = 0
+    while len(entries) > PACKED_DECLARATION_FANOUT:
+        next_entries = []
+        for start in range(0, len(entries), PACKED_DECLARATION_FANOUT):
+            count, body = render(entries, start, min(start + PACKED_DECLARATION_FANOUT,
+                                                    len(entries)), '  ')
+            part = f'{name}_{level}_{len(next_entries)}'
+            declarations.extend([f'def {part} : ArtifactEncoding.Packed {count} :=',
+                                 '  ' + body, ''])
+            next_entries.append((count, part))
+        entries = next_entries
+        level += 1
+    count, body = render(entries, 0, len(entries), '  ')
+    declarations.extend([f'def {name} : ArtifactEncoding.Packed {count} :=', '  ' + body, ''])
+    return declarations
 
 
 def unique_object(pairs):
@@ -71,16 +114,20 @@ class Artifact:
 
     def lean_source(self):
         """Only validated integers enter generated code; solver source is never interpolated."""
-        lines = ['import CommitGolf.Programs', '', 'namespace CommitGolf.Artifact', '',
+        lines = ['import CommitGolf.Programs', 'import CommitGolf.ArtifactEncoding', '',
+                 'namespace CommitGolf.Artifact', '']
+        for name, image in zip(PROGRAMS, self.images):
+            raw_code = b''.join(word.to_bytes(4, 'little') for word in image.code)
+            for suffix, raw, bits in (('Code', raw_code, 32), ('Data', image.data, 8)):
+                lines.extend(packed_declarations(name + suffix, raw, bits))
+        lines.extend([
                  '/-- Exact machine bytes and ABI decoded from submission/programs.json. -/',
                  'def submission : CommitGolf.Submission where',
                  '  sizes := ⟨' + ', '.join(map(str, self.sizes)) + '⟩',
                  '  layout := ⟨' + ', '.join(map(str, self.layout)) + '⟩',
-                 '  image']
-        for name, image in zip(PROGRAMS, self.images):
-            code = '[' + ', '.join(map(str, image.code)) + ']'
-            data = '[' + ', '.join(map(str, image.data)) + ']'
-            lines.append(f'    | .{name} => ⟨{code}, {data}⟩')
+                 '  image'])
+        lines.extend(f'    | .{name} => ⟨ArtifactEncoding.decode 32 {name}Code, '
+                     f'ArtifactEncoding.decode 8 {name}Data⟩' for name in PROGRAMS)
         lines.append('  steps')
         lines.extend(f'    | .{name} => {steps}' for name, steps in zip(PROGRAMS, self.steps))
         lines.extend(['', 'end CommitGolf.Artifact', ''])

@@ -3,12 +3,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from artifact import MAX_MANIFEST_BYTES, MAX_PROGRAM_BYTES, MEMORY_BYTES, STEP_LIMIT
+from artifact import PACKED_CHUNK_BYTES, PACKED_DECLARATION_FANOUT, packed_declarations
 from artifact import load_artifact, parse_artifact, purge_artifact_cache, write_artifact_module
 from artifact_fixture import manifest
 
@@ -25,7 +27,11 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(artifact.images[0].code, (0x12345678, 0xffffffff))
         self.assertEqual(artifact.images[0].data, bytes([0, 255]))
         source = artifact.lean_source()
-        self.assertIn('| .commit => ⟨[305419896, 4294967295], [0, 255]⟩', source)
+        self.assertIn('def commitCode : ArtifactEncoding.Packed 2', source)
+        self.assertIn(f'ArtifactEncoding.Packed.chunk 2 {int.from_bytes(bytes.fromhex("78563412ffffffff"), "little")}', source)
+        self.assertIn('ArtifactEncoding.Packed.chunk 2 65280', source)
+        self.assertIn('| .commit => ⟨ArtifactEncoding.decode 32 commitCode, '
+                      'ArtifactEncoding.decode 8 commitData⟩', source)
         self.assertNotIn('sorry', source)
         self.assertNotIn('noncomputable', source)
         self.assertEqual(artifact.digest, hashlib.sha256(encoded(value)).hexdigest())
@@ -36,6 +42,34 @@ class ArtifactTests(unittest.TestCase):
         right = parse_artifact(json.dumps(value, indent=2).encode())
         self.assertNotEqual(left.digest, right.digest)
         self.assertEqual(left.lean_source(), right.lean_source())
+
+    def test_packed_boundary_counts_and_trailing_zeros_preserve_exact_bytes(self):
+        for bits, counts in ((32, (0, 1, 63, 64, 65)), (8, (0, 1, 2, 3, 255, 256, 257))):
+            for count in counts:
+                with self.subTest(bits=bits, count=count):
+                    size = count * (bits // 8)
+                    raw = bytearray(hashlib.shake_256(f'{bits}/{count}'.encode()).digest(size))
+                    if raw:
+                        raw[-1] = 0
+                    source = '\n'.join(packed_declarations('probe', bytes(raw), bits))
+                    leaves = [(int(n), int(payload)) for n, payload in
+                              re.findall(r'Packed\.chunk ([0-9]+) ([0-9]+)', source)]
+                    self.assertEqual(sum(n for n, _ in leaves), count)
+                    self.assertEqual(b''.join(payload.to_bytes(n * (bits // 8), 'little')
+                                              for n, payload in leaves), raw)
+                    self.assertTrue(all(n <= PACKED_CHUNK_BYTES // (bits // 8) for n, _ in leaves))
+
+    def test_large_packed_source_bounds_work_per_declaration(self):
+        raw = hashlib.shake_256(b'named packed declarations').digest(PACKED_CHUNK_BYTES * 129 - 3)
+        source = '\n'.join(packed_declarations('probe', raw, 8))
+        blocks = source.split('def ')[1:]
+        self.assertGreater(len(blocks), 16)
+        for block in blocks:
+            self.assertLessEqual(block.count('Packed.chunk '), PACKED_DECLARATION_FANOUT)
+            self.assertLessEqual(block.count('Packed.join '), PACKED_DECLARATION_FANOUT - 1)
+        leaves = [(int(n), int(payload)) for n, payload in
+                  re.findall(r'Packed\.chunk ([0-9]+) ([0-9]+)', source)]
+        self.assertEqual(b''.join(payload.to_bytes(n, 'little') for n, payload in leaves), raw)
 
     def test_code_and_abi_tampering_change_certified_value(self):
         original = manifest()

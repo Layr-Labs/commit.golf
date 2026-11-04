@@ -305,3 +305,34 @@ example (s : Submission) (bytes commitCycles openingCycles : Nat)
     (buffer.length == 16 && buffer.byteAt 0 == 2 && buffer.byteAt 8 == 5)
 
 end CommitGolf.ProgramTests
+
+namespace CommitGolf.ArtifactEncodingTests
+open ArtifactEncoding
+
+-- Counts preserve trailing zero elements, and concatenation preserves little-endian order.
+private def bytes : Packed 5 := .join (.chunk 2 0x3412) (.chunk 3 0x007856)
+example : decode 8 bytes = [0x12, 0x34, 0x56, 0x78, 0] := by decide
+example : (decode 8 bytes).length = 5 := length_decode 8 bytes
+example : (decode 8 bytes).getD 2 0 = 0x56 := by
+  rw [getD_decode 8 bytes 2 (by decide)]
+  decide
+example : decode 32 (.chunk 3 0x00000000ffffffff12345678) = [0x12345678, 0xffffffff, 0] := by decide
+example : decode 8 (.chunk 0 0) = [] := rfl
+
+private def wordBoundary : Packed 65 :=
+  .join (.chunk 64 (0x12345678 <<< (32 * 63))) (.chunk 1 0x90abcdef)
+example : (decode 32 wordBoundary).getD 63 0 = 0x12345678 := by
+  rw [getD_decode 32 wordBoundary 63 (by decide)]
+  decide
+example : (decode 32 wordBoundary).getD 64 0 = 0x90abcdef := by
+  rw [getD_decode 32 wordBoundary 64 (by decide)]
+  decide
+private def byteBoundary : Packed 257 := .join (.chunk 256 (0xa5 <<< (8 * 255))) (.chunk 1 0)
+example : (decode 8 byteBoundary).getD 255 0 = 0xa5 := by
+  rw [getD_decode 8 byteBoundary 255 (by decide)]
+  decide
+example : (decode 8 byteBoundary).getD 256 0 = 0 := by
+  rw [getD_decode 8 byteBoundary 256 (by decide)]
+  decide
+
+end CommitGolf.ArtifactEncodingTests
