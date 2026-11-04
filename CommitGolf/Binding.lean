@@ -12,8 +12,8 @@ In that bounded-query two-phase game, failure includes inconsistent accepted val
 proof differing from the canonical proof regenerated from the extracted trapdoor. The lemma
 also bounds extractor runtime. This causal extraction contract is not required here.
 [Remark 18.5.6][cy24-binding] derives position binding with at most twice the extraction
-error, for the same adversary query budget. This certificate supplies position binding alone,
-not a drop-in premise for those SNARG theorems.
+error at the same adversary query budget using private coins. This certificate supplies
+position binding alone, not a drop-in premise for those SNARG theorems.
 
 [cy24-extraction]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=214
 [cy24-binding]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=218

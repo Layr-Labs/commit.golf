@@ -2,6 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -91,6 +92,42 @@ class ArtifactPipelineTests(unittest.TestCase):
             comparator.assert_not_called()
             self.assertEqual(result['status'], 'failed')
             self.assertIn('changed after policy validation', result['reason'])
+
+    def test_local_generated_module_is_replaced_by_the_delivered_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args, raw = self.fixture(Path(directory))
+            (args.trusted / 'scripts').mkdir()
+            (args.trusted / 'submission').mkdir()
+            shutil.copy2(ROOT / 'scripts/generate_artifact.py',
+                         args.trusted / 'scripts/generate_artifact.py')
+            shutil.copy2(ROOT / 'verifier/artifact.py', args.trusted / 'verifier/artifact.py')
+            local_manifest = manifest()
+            local_manifest['steps']['check'] += 1
+            (args.trusted / 'submission/programs.json').write_text(json.dumps(local_manifest))
+            generated = subprocess.run([sys.executable,
+                                       str(args.trusted / 'scripts/generate_artifact.py')],
+                                      text=True, capture_output=True, timeout=10)
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            local_source = args.trusted / 'CommitGolf/Artifact.lean'
+            self.assertEqual(local_source.stat().st_mode & 0o777, 0o644)
+            for folder in ('lib/lean', 'ir'):
+                (args.trusted / '.lake/build' / folder /
+                 'CommitGolf/Artifact.olean').write_bytes(b'locally compiled artifact')
+
+            def inspect(command, project, env, log):
+                source = project / 'CommitGolf/Artifact.lean'
+                self.assertEqual(source.read_text(), parse_artifact(raw).lean_source())
+                self.assertNotEqual(source.read_text(), local_source.read_text())
+                self.assertEqual(source.stat().st_mode & 0o222, 0)
+                for folder in ('lib/lean', 'ir'):
+                    self.assertFalse((project / '.lake/build' / folder /
+                                      'CommitGolf/Artifact.olean').exists())
+                log.write_text('Your solution is okay!\n')
+                return 0, False
+
+            result, comparator = self.execute(args, inspect)
+            self.assertEqual(result['status'], 'verified')
+            self.assertEqual(comparator.call_count, 1)
 
     def test_malformed_change_after_policy_validation_returns_structured_failure(self):
         for malformed in (b'{', b'\xff', b'{"schemaVersion": 2}'):

@@ -10,3 +10,4 @@ scripts/score.json
 scripts/score.tmp
 verifier/.tools
 verifier/.work/
+/CommitGolf/Artifact.lean

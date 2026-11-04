@@ -42,6 +42,10 @@ the submission named in the certificate, and reports the manifest's SHA-256 dige
 It generates `CommitGolf.Artifact` inside its isolated build project before compiling
 the submission. The contract/test build below checks the trusted definitions and
 regressions; `scripts/run.py` checks the submitted certificate and artifact equality.
+For local development, `python3 scripts/generate_artifact.py` generates the same ignored
+module from `submission/programs.json`; use `--refresh` after changing the manifest.
+See the [submission README](submission/README.md#delivered-programs) for the recommended
+large-image alias and the limits of equality checking across different representations.
 
 ```sh
 lake exe cache get
@@ -104,6 +108,12 @@ and uploads that exact path inside its score artifact.
 `Test PR` calls the same benchmark job on the PR's exact head commit. It skips Yukon's
 `submissions/*` branches, which Yukon dispatches separately. A failed certificate
 check produces no score.
+
+`Contract regressions` runs the artifact-linkage matrix and maximum-image admission test
+when the PR's head and target commits differ outside `submission/`. It skips those stress
+tests when all differences are under `submission/`. Routine Benchmark dispatches still
+verify the full submitted certificate; maintainers can explicitly enable
+`contract_regressions` for a manual run.
 
 Before import, install the Yukon GitHub App on the repository and confirm Blacksmith
 runner access. The workflow must be available on the default branch for dispatch.

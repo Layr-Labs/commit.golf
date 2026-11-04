@@ -58,6 +58,48 @@ Import `CommitGolf.Artifact` in `Solution.lean`; do not provide that module your
 The generated module packs bounded little-endian chunks, with exact counts, into balanced
 named trees. Its pure Lean decoder yields the same image lists; this internal encoding
 does not change the delivered manifest or image-size limits.
+
+For large images, define the certified submission directly from the generated value:
+
+```lean
+import CommitGolf.Artifact
+
+namespace CommitGolf.Challenge
+
+def submission : CommitGolf.Submission := CommitGolf.Artifact.submission
+
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
+  rfl
+
+end CommitGolf.Challenge
+```
+
+The full `certificate` theorem is still required. Build the correctness and security proofs
+around this value, using symbolic image properties and the decoder's length/index lemmas
+where useful. Maximum-size admission tests use this alias; they do not establish practical
+equality checking against an independently constructed large image. In an independent review,
+`decide +kernel` comparing the same maximum-size code packed in different chunks had not
+finished after 20 minutes. Other proof strategies may work; avoid relying on whole-image
+normalization when designing a large submission.
+
+To generate the same module for local proof development, run from the repository root:
+
+```sh
+python3 scripts/generate_artifact.py
+lake build CommitGolf.Artifact
+# After changing submission/programs.json:
+python3 scripts/generate_artifact.py --refresh
+```
+
+The command uses the verifier's manifest parser and renderer and writes the ignored local
+`CommitGolf/Artifact.lean`. Creating or refreshing it clears its compiled artifacts;
+when content and permissions are already current, it is left in place. Rebuild after refreshing.
+A standalone file importing that module can then be checked with `lake env lean path/to/file.lean`;
+this does not stage the supporting modules under `submission/CommitGolfCandidate/` as a Lake
+library. Do not include the generated module in your submission. Official verification
+regenerates it from the frozen manifest and checks the full certificate and equality again;
+local generation or compilation does not certify a submission.
+
 Classical reasoning in proofs is permitted. The manifest supplies the executable
 even if the proof chooses its equal value noncomputably.
 The accepted score report includes `artifactDigest`, the SHA-256 of the exact manifest

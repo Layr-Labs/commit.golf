@@ -4,34 +4,27 @@ import VCVio.OracleComp.QueryTracking.CostModel
 
 /-! # Commitment and opening hiding
 
-Two-message statistical hiding for a commitment and one opening. The messages must agree at
-all opened positions. Positions are chosen before the commitment, not adaptively afterwards.
-`Scheme.Hiding` in Statements.lean bounds the distance between the two output distributions.
-This formulation has no separate simulator or computational-complexity requirement.
+Two-message statistical hiding for a commitment and one opening. Each adversary has a
+fixed opening cardinality. It chooses messages and positions before commitment, possibly
+using oracle replies; the messages must agree at every opened position. `Scheme.Hiding`
+in Statements.lean bounds the distance between its output distributions.
 
-The static, single-opening shape follows [CY24 v1.2, Lemma 18.6.3][cy24-hiding]. Each
-adversary has a fixed opening cardinality; messages and positions precede commitment but
-may depend on precommitment oracle replies. CY24 uses a variable-input random oracle and a
-polynomial-time simulator; this challenge uses its fixed compression/permutation pair and
-two honest views.
-The target error is uniform in cardinality, unlike CY24's construction-dependent bound.
+This ordering follows [CY24 v1.2, Lemma 18.6.3][cy24-hiding]. CY24 uses a variable-input
+random oracle and a polynomial-time simulator; here the oracles are the fixed compression/
+permutation pair, the views are honest, and the target error is uniform in cardinality.
 
-An informal distributional bridge, retaining this game's first-stage/auxiliary-state and
-unchanged-oracle query model, is to honestly commit and open a canonical completion: keep
-the opened values and fill every other entry with zero.
-The two-message bound gives that candidate simulator the same error. Conversely, a common
-simulator within error δ of both honest views gives distance at most min(1, 2δ) by the triangle
-inequality. This is not a Lean simulator theorem or an efficient-simulation claim: canonical
-completion runs the full honest commitment/opening, and transferring to CY24 needs a proved
-oracle-model and resource bridge.
+Informally, in this same shared-oracle model with the same first-stage state, a simulator
+can honestly commit and open the disclosed entries with zeros elsewhere, with the same
+error. Conversely, a common simulator within δ of both views gives distance at most
+min(1, 2δ). Neither reduction is formalized here. Full honest computation does not establish
+an efficient simulator; transferring to CY24 also needs oracle-model and resource proofs.
 
-CY24's Fiat–Shamir zero-knowledge applications ([§22.2][cy24-micali], [§26.2][cy24-bcs]) use
-proof hybrids that decouple queried positions from the root, with additional programming and
-bad-event error. Those application arguments are not certified here. Post-commitment
-positions and repeated openings require different games. A single adversary selecting its
-cardinality during the first stage is not this interface; a generic reduction can sum the
-per-cardinality errors over at most `LENGTH + 1` sizes (capped at one). This is a proof loss,
-not an attack on a construction.
+CY24's Fiat–Shamir applications ([§22.2][cy24-micali], [§26.2][cy24-bcs]) use hybrids that
+decouple positions from the root, with additional programming and bad-event errors. Those
+arguments, post-commitment positions and repeated-opening privacy are not certified here.
+One adversary choosing its cardinality from oracle replies is also outside this interface.
+A generic reduction sums errors over at most `LENGTH + 1` sizes, capped at one: a proof
+loss, not an attack.
 
 [cy24-hiding]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=229
 [cy24-micali]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=267
