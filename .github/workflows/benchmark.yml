@@ -40,6 +40,8 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Benchmark
         run: bash scripts/blacksmith.sh run
+      - name: Verifier regressions and artifact linkage
+        run: bash scripts/blacksmith.sh test-linkage
       - name: Collect results
         if: always()
         run: bash scripts/blacksmith.sh collect
