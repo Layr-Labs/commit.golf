@@ -96,6 +96,20 @@ class LinkageHarnessTests(unittest.TestCase):
                            MISSING_TARGET + 'PANIC at unrelated location\n'):
             self.assertFalse(case_passes(missing, {'status': 'rejected'}, diagnostic))
 
+    def test_official_missing_target_exit_requires_the_same_specific_rejection(self):
+        missing = make_cases(json.dumps(manifest()).encode())[-1]
+        official = MISSING_TARGET.replace('Child exited with 134', 'Child exited with 139')
+        self.assertTrue(case_passes(missing, {'status': 'rejected'}, official))
+        for diagnostic in ('uncaught exception: Child exited with 139\n',
+                           official.replace('submission_matches_artifact', 'unrelated_target'),
+                           official.replace('PANIC at dumpConstant Export:237:48: Constant '
+                                            'CommitGolf.Challenge.submission_matches_artifact '
+                                            'not found in environment.\n', ''),
+                           'error: Dependency.lean:1:0: missing declaration\n' + official,
+                           'PANIC at unrelated location\n' + official,
+                           official.replace('Child exited with 139', 'Child exited with 140')):
+            self.assertFalse(case_passes(missing, {'status': 'rejected'}, diagnostic))
+
     def test_cleanup_is_limited_to_owned_direct_children(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
