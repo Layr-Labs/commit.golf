@@ -61,15 +61,20 @@ The accepted score report includes `artifactDigest`, the SHA-256 of the exact ma
 bytes, including JSON formatting. Re-run verification after changing either the
 manifest or its equality proof.
 
-## Initial implementation status
+## Initial implementation
 
 This directory contains the initial machine submission and a complete Lean
-`CommitGolf.Challenge.certificate` theorem. All nine certificate fields compile,
-including binding and hiding for the actual machine-derived scheme. The claims
-are 102400 proof bytes, 17179869184 commitment cycles, and 1048576 opening cycles.
-On 2026-10-28, the unchanged Linux verifier accepted the complete certificate
-after an isolated rebuild and Lean kernel replay. The verified score is
-**1,759,325,978,624,000**. These are certified upper bounds, not sampled timings.
+`CommitGolf.Challenge.certificate` theorem, including binding and hiding for the
+actual machine-derived scheme. The current claims are 102400 proof bytes,
+3959423012 commitment cycles, and 48670 opening cycles, giving a score of
+**405,449,900,236,800**. The cycle bounds use the exact resource counts already
+proved for the images; tightening these claims does not change the programs.
+Run the verifier below before treating a changed claim as accepted.
+
+On 2026-10-28, the Linux verifier accepted the original complete certificate
+after an isolated rebuild and Lean kernel replay. That historical claim used
+17179869184 commitment cycles and 1048576 opening cycles, scoring
+**1,759,325,978,624,000**. It does not verify the tightened claim or a later checkout.
 
 The construction uses a binary Merkle tree. Each 2048-bit leaf is compressed in eight
 256-bit blocks starting from an independent private 256-bit salt. A proof contains one
@@ -92,7 +97,7 @@ implementation uses compression only; access to the permutation remains availabl
 - `CommitGolfCandidate/CommitLoop.lean`, `CommitParents.lean`, and `CommitTree.lean`: all leaf and internal-node iterations, root output, and successful HALT. After salt/scratch initialization, tree construction takes `169*N + 3` instructions, `232*N - 4` cycles, and `9*N - 1` queries. These are execution proofs for all oracle answers, not tests or a cryptographic refinement proof.
 - `CommitGolfCandidate/CommitInput.lean`: establishes every loop, alignment, and buffer-safety invariant from the actual input loader, for arbitrary messages and salt contents.
 - `CommitGolfCandidate/CommitRuntime.lean`: connects setup, private randomness, tree construction, and the actual submitted instruction allowance. Every commitment succeeds in exactly 3959423012 cycles and records 150994943 public queries in the interpreter. `CountingCoins.lean` and `Budgets.lean` connect this to the independent security-game query counter, including private randomness.
-- `CommitGolfCandidate/Machine.lean`: proves the complete certificate fields `MachineSuccess`, `Termination`, and `ProverCycles 17179869184 1048576`, using the real machine-derived scheme and oracle runner. These are now checked for every required input; they do not yet prove completeness or security.
+- `CommitGolfCandidate/Machine.lean`: proves the complete certificate fields `MachineSuccess`, `Termination`, and `ProverCycles 3959423012 48670`, using the real machine-derived scheme and oracle runner. Completeness, binding, and hiding are supplied by their corresponding modules.
 - `CommitGolfCandidate/CountingCoins.lean`: extends the independent counter equality to executions with private randomness.
 - `CommitGolfCandidate/CheckEvaluation.lean`: connects the deterministic checker evaluator to the counted oracle runner and proves the scheme checks use at most 32 queries per opened leaf.
 - `CommitGolfCandidate/Budgets.lean`: proves the complete `HonestBudgets` field: exactly 150994943 commitment queries, zero opening queries, and at most 32 checking queries per opened leaf.
@@ -177,7 +182,7 @@ first-stage challenge/cache distribution and transfers the observer query bound.
 `HidingSecurity.lean` proves the accumulated loss meets `HIDING_ERROR`, then
 `Solution.lean` assembles all nine fields into the required certificate.
 
-The accepted run used Ubuntu 26.04 on aarch64, Lean 4.33.1, systemd isolation,
+The historical 2026-10-28 accepted run used Ubuntu 26.04 on aarch64, Lean 4.33.1, systemd isolation,
 and compiled Landrun. `scripts/setup.sh` and `scripts/run.py` both exited
 successfully. The verifier regression suite also passed all 21 tests. The
 verified contract commit was `b037ff7cc15b9b8b0b4b9ffc6c4ffac2981e59f6`.
