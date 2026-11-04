@@ -184,13 +184,16 @@ def run_checked(cmd: list[str], cwd: Path, env: dict[str, str], log: Path) -> tu
 
 def verify(args: argparse.Namespace) -> dict:
     work = args.work.resolve()
-    if work.exists():
-        raise VerifyError('work directory must not exist')
-    work.mkdir(parents=True)
     log = work / 'verify.log'
     result = {'status': 'failed', 'commit': args.commit, 'contract_commit': None,
-              'log': str(log), 'claim': None}
+              'log': str(log), 'claim': None, 'work_created': False}
     try:
+        if args.local and work.is_relative_to(args.local.resolve()):
+            raise VerifyError('work directory must be outside the local submission directory')
+        if work.exists():
+            raise VerifyError('work directory must not exist')
+        work.mkdir(parents=True)
+        result['work_created'] = True
         env = tools_env(args.trusted)
         if platform.system() == 'Linux':
             linux_preflight(env)
@@ -273,16 +276,17 @@ def main() -> int:
     if args.work is None:
         args.work = Path.cwd() / '.work' / uuid.uuid4().hex
     result = verify(args)
-    if args.cleanup and args.work.exists():
+    cleanup_work = Path(result['log']).parent if result.get('work_created') is True else None
+    if args.cleanup and cleanup_work is not None and cleanup_work.exists():
         try:
             # Candidate code can change permissions inside its writable build tree.
-            for directory, children, _ in os.walk(args.work, followlinks=False):
+            for directory, children, _ in os.walk(cleanup_work, followlinks=False):
                 os.chmod(directory, os.stat(directory).st_mode | 0o700)
                 for child in children:
                     path = Path(directory) / child
                     if not path.is_symlink():
                         os.chmod(path, path.stat().st_mode | 0o700)
-            shutil.rmtree(args.work)
+            shutil.rmtree(cleanup_work)
         except OSError as exc:
             result.update(status='failed', reason=f'workspace cleanup failed: {exc}')
     print(json.dumps(result, sort_keys=True))
