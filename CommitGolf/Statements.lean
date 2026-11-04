@@ -31,7 +31,7 @@ def ProofSize (proofBytes : Nat) : Prop :=
   ∀ (π : Oracle) (message : Message) (positions : Positions), positions.card = BATCH →
     Pr{let result ← scheme.honest π message positions}[result.proofBytes ≤ proofBytes] = 1
 
-/-- **5. Binding** [CY24, Lemma 18.4.1]. -/
+/-- **5. Position binding** [CY24, Lemma 18.4.1], without an extractor contract. -/
 def Binding : Prop :=
   ∀ (adversary : Adversary) (q : Nat), 1 ≤ q →
     Pr{let (π, claim, calls) ← bindingGame adversary}[scheme.Breaks π claim ∧ calls ≤ q] ≤
@@ -40,7 +40,8 @@ def Binding : Prop :=
 /-- **6. Hiding**, a two-message formulation of commitment-and-opening privacy
 (cf. [CY24, Lemma 18.6.3]). The adversary chooses two messages agreeing at the opened positions.
 Honest commitment and opening of either message must give close adversary-output distributions,
-for every opening size and total public-query budget across both adversary stages.
+for every fixed opening cardinality and total public-query budget across both adversary stages.
+The cardinality is fixed outside the adversary's computation; positions precede commitment.
 This states statistical indistinguishability, without a separate efficient-simulator claim. -/
 def Hiding (error : Nat → Nat → ℝ) : Prop :=
   (∀ openingSize queryBudget, 0 ≤ error openingSize queryBudget) ∧

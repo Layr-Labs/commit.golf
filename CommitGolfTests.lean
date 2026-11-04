@@ -169,6 +169,36 @@ private def observesRoot : HidingAdversary Unit Commitment 0 where
   choose := pure differentMessages
   observe _ root _ := pure root
 
+-- Observing the supplied commitment is admissible even with no public queries.
+example : QueryBound observesRoot 0 := by
+  intro first hf
+  have first_eq : counted observesRoot.choose =
+      (pure (differentMessages, 0) : OracleComp World _) := rfl
+  rw [first_eq] at hf
+  have hf' := OracleComp.eq_of_mem_support_pure (differentMessages, 0) hf
+  subst first
+  refine ⟨by decide, ?_⟩
+  intro root proof last hl
+  have last_eq : counted (observesRoot.observe () root proof) =
+      (pure (root, 0) : OracleComp World _) := rfl
+  rw [last_eq] at hl
+  have hl' := OracleComp.eq_of_mem_support_pure (root, 0) hl
+  subst last
+  simp
+
+-- Discrete observations remain distinguishable after conversion to real-valued TV.
+example : letI : MeasurableSpace Bool := ⊤
+    measureTVDist (pure false : ProbComp Bool) (pure true) = 1 := by
+  let : MeasurableSpace Bool := ⊤
+  have lower : (1 : ENNReal) ≤ measureETVDist (pure false : ProbComp Bool) (pure true) := by
+    have h := measure_absDiff_apply_le_measureETVDist
+      (pure false : ProbComp Bool) (pure true) (s := {false}) (by trivial)
+    simpa [evalDist_pure, MeasureTheory.Measure.dirac_apply, ENNReal.absDiff] using h
+  have extended : measureETVDist (pure false : ProbComp Bool) (pure true) = 1 :=
+    le_antisymm (measureETVDist_le_one _ _) lower
+  rw [measureTVDist_eq_toReal_measureETVDist, extended]
+  simp
+
 set_option exponentiation.threshold 2048 in
 set_option maxRecDepth 4096 in
 example : hidingExperiment leakingScheme observesRoot false = pure 0 := rfl

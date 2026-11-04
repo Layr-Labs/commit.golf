@@ -1,7 +1,7 @@
 # commit.golf · rules
 
 Design a hiding vector commitment scheme using the fixed oracle pair below, following
-Chapter 18 of [CY24](https://github.com/hash-based-snargs-book/hash-based-snargs-book).
+Chapter 18 of [CY24](https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf).
 Minimize the certified score for **one full commitment and one opening of 128 leaves**:
 
 `(commitCycles + openingCycles) × proofBytes`
@@ -77,6 +77,7 @@ Oversized proofs reject.
 | Private randomness, `n` bytes | 1 + ceil(n / 8) |
 | HALT | 1 |
 
+The eight-cycle oracle price includes fixed input/output handling, with no extra per-byte charge.
 Syscalls have no additional ordinary-instruction charge. These are benchmark model
 costs, not elapsed time or measured processor cycles. `t0=0` requests an oracle:
 `a0` input address, `a1` exact input byte length, `a2` output address, `a3` primitive
@@ -96,6 +97,10 @@ costs, not elapsed time or measured processor cycles. `t0=0` requests an oracle:
 7. Binding: for every adversary and budget `q ≥ 1`, the probability of conflicting accepted openings while making at most `q` calls is at most `q / 2^120`.
 8. Statistical hiding of commitment and opening, as described below.
 
+Binding is position binding, not CY24's extraction contract with its causal query trace,
+canonical-proof consistency and runtime bound; position binding alone does not supply the
+extraction premise of CY24's SNARG soundness theorems. See [Binding](CommitGolf/Binding.lean).
+
 Honest bounds quantify over every fixed oracle realization, message, and applicable
 position set, with probability one over private coins. Binding samples the oracle
 pair once and checks both openings using that same pair. Only adversary calls count
@@ -107,12 +112,16 @@ but its cycles are not part of the score.
 [Hiding](CommitGolf/Hiding.lean) compares two experiments. An adversary chooses two
 messages agreeing on a shared set of opened positions, plus retained state. One
 experiment commits/opens the first message; the other commits/opens the second.
-The opened positions are selected before commitment.
+Each adversary has a fixed opening cardinality. It selects messages and positions before
+commitment, possibly using precommitment oracle replies.
 The adversary receives the commitment and proof and may query the shared oracle pair.
 Its output distributions must have total variation distance at most
 `min(1, (t + 1) / 2^120)` for every adversary making at most `t` public queries across
 both stages. Every opening size, including zero, is covered. Honest queries do not
 consume the adversary's budget. No separate simulator or PPT certificate is required.
+This preserves CY24's static, per-cardinality single-opening scope; the oracle model and
+two-message formulation differ. [Hiding](CommitGolf/Hiding.lean) records the comparison and
+application limits, including adaptive-cardinality and repeated-opening guarantees not required.
 
 ## Submit and verify
 
