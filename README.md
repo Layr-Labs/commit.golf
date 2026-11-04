@@ -105,15 +105,35 @@ and `yukon run` runs `scripts/run.py`; successful verification writes `scripts/s
 The dispatched `benchmark.yml` runs the same setup and scoring inside the verifier VM
 and uploads that exact path inside its score artifact.
 
-`Test PR` calls the same benchmark job on the PR's exact head commit. It skips Yukon's
-`submissions/*` branches, which Yukon dispatches separately. A failed certificate
-check produces no score.
+`Test PR` compares the PR's exact head and target commits and runs at most one Benchmark job.
+Differences outside `submission/` enable the artifact-linkage matrix and maximum-image
+admission test. Submission-only PRs on Yukon's same-repository `submissions/*` branches
+leave Benchmark execution to Yukon; contract changes on those branches still run the
+full checks here. Forks and other branches run Benchmark here.
+The final `contract-regressions` check fails if detection or a required Benchmark fails.
 
-`Contract regressions` runs the artifact-linkage matrix and maximum-image admission test
-when the PR's head and target commits differ outside `submission/`. It skips those stress
-tests when all differences are under `submission/`. Routine Benchmark dispatches still
-verify the full submitted certificate; maintainers can explicitly enable
+Every Benchmark run verifies the full submitted certificate; failed verification produces
+no score. Routine dispatches omit the stress tests. Maintainers can explicitly enable
 `contract_regressions` for a manual run.
+
+The workflow file alone does not make its final check required. After it lands on the
+default branch, an administrator must activate the additive
+[ruleset](.github/contract-regressions.ruleset.json). First update existing PRs so they
+include the gate and produce a fresh `pull_request` check; a manual Benchmark dispatch
+[does not substitute for that check](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks#checks-from-some-workflow-jobs-are-not-evaluated).
+Then, from this checkout, run:
+
+```sh
+gh api --method POST repos/Layr-Labs/commit.golf/rulesets \
+  --input .github/contract-regressions.ruleset.json
+gh api repos/Layr-Labs/commit.golf/rules/branches/master
+```
+
+Confirm that the effective rules include both the existing signed-commit requirement
+and `contract-regressions` from GitHub Actions (app 15368). The new rule has no bypass
+actors and adds no PR-review or up-to-date-branch requirement. Creating it requires
+[repository administration permission](https://docs.github.com/en/rest/repos/rules#create-a-repository-ruleset);
+committing this JSON does not activate it.
 
 Before import, install the Yukon GitHub App on the repository and confirm Blacksmith
 runner access. The workflow must be available on the default branch for dispatch.
