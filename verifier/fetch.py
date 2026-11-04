@@ -93,7 +93,7 @@ def fetch_pr(repository: str, number: int, commit: str, destination: Path) -> st
             path = Path(name)
             if kind != b"blob" or mode not in (b"100644", b"100755") or not SHA.fullmatch(oid.decode()) or (
                 path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] not in
-                {"CommitGolfCandidate", "Solution.lean", "claim.json", "README.md"}):
+                {"CommitGolfCandidate", "Solution.lean", "claim.json", "programs.json", "README.md"}):
                 raise FetchError(f"invalid submission entry: {name!r}")
             selected.append((path, oid.decode()))
             if len(selected) > MAX_FILES:

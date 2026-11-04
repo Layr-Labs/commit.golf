@@ -1,6 +1,6 @@
 # Submission
 
-This is the sole solver-editable directory. Put `Solution.lean`, `claim.json`, and
+This is the sole solver-editable directory. Put `Solution.lean`, `claim.json`, `programs.json`, and
 optional supporting Lean modules under `CommitGolfCandidate/` here.
 
 Define `CommitGolf.Challenge.submission : CommitGolf.Submission` with three RISC-V
@@ -10,6 +10,9 @@ The scheme used in security games is derived from these images. Prove:
 ```lean
 CommitGolf.Challenge.certificate :
   CommitGolf.Certificate submission proofBytes commitCycles openingCycles
+
+CommitGolf.Challenge.submission_matches_artifact :
+  submission = CommitGolf.Artifact.submission
 ```
 
 `claim.json` must contain exactly `proofBytes`, `commitCycles`, and `openingCycles`.
@@ -25,6 +28,38 @@ Private coins are allowed for commitment and opening, but not checking. See
 
 Run `bash scripts/setup.sh` and `python3 scripts/run.py` on the supported Linux
 verifier host. Historical baselines remain separate and uncompiled.
+
+## Delivered programs
+
+`programs.json` contains exactly these fields:
+
+- `schemaVersion`: the integer `1`.
+- `sizes`: integer byte capacities `trapdoor` and `proof`.
+- `layout`: integer byte addresses `message`, `commitment`, `trapdoor`, `indices`, `values`, and `proof`.
+- `steps`: positive instruction allowances `commit`, `opening`, and `check`.
+- `images`: `commit`, `opening`, and `check`, each containing `code` and `data` strings.
+
+Both strings use lowercase hexadecimal bytes, with no prefix or whitespace. `code`
+contains complete 32-bit instructions in little-endian byte order: the instruction
+`0x00000073` is encoded as `"73000000"`. `data` contains the embedded bytes in increasing
+address order. An empty byte string is `""`. Each image's combined code and data must
+be smaller than 1 MiB. Capacities and addresses are at most `2^36`; instruction
+allowances are at most `2^48`. The certificate additionally enforces the layout and
+machine requirements in `RULES.md`.
+
+Unknown or duplicate fields, noninteger metadata, noncanonical hexadecimal, and
+truncated instructions are rejected before compilation. The manifest is at most 8 MiB
+and counts toward the submission's existing 32-MiB limit.
+
+The verifier freezes this file, generates a concrete `CommitGolf.Artifact.submission`
+from the delivered bytes and ABI, and requires the equality theorem above in addition
+to the security certificate. It generates that module inside its isolated build project.
+Import `CommitGolf.Artifact` in `Solution.lean`; do not provide that module yourself.
+Classical reasoning in proofs is permitted. The manifest supplies the executable
+even if the proof chooses its equal value noncomputably.
+The accepted score report includes `artifactDigest`, the SHA-256 of the exact manifest
+bytes, including JSON formatting. Re-run verification after changing either the
+manifest or its equality proof.
 
 ## Initial implementation status
 
@@ -101,23 +136,26 @@ implementation uses compression only; access to the permutation remains availabl
 - `CommitGolfCandidate/HidingMachine.lean`: proves that the actual commitment root and every emitted opening byte equal the reference transcript.
 - `CommitGolfCandidate/HidingSalts.lean`: proves that the machine's packed random-bit draw is exactly a vector of independent uniform 256-bit salts.
 - `CommitGolfCandidate/HidingDistribution.lean`: proves equality between the complete machine hiding-game distributions and the reference games, including both adaptive adversary stages and the shared oracle. The required TV distance is therefore exactly the reference-game distance.
-- `CommitGolfCandidate/HidingFreshness.lean`: bounds guesses of fresh salts after an arbitrary randomized first stage, including adaptively chosen prior query sets. This does not yet handle queries made after observing the root and opening.
+- `CommitGolfCandidate/HidingFreshness.lean`: bounds guesses of fresh salts after an arbitrary randomized first stage, including adaptively chosen prior query sets. The later hiding modules handle queries made after observing the root and opening.
 - `CommitGolfCandidate/HidingQueries.lean`: translates the contract's two-stage hiding budget into structural bounds for both adversary stages, retaining the budget consumed during selection.
 
 ## Verification
 
-From the repository root, on the supported Linux verifier host:
+From the repository root, on Linux with Landlock and user systemd 257 or newer:
 
 ```sh
 bash scripts/setup.sh
 python3 scripts/run.py
 ```
 
+Keep the checkout and verifier work directory outside `/tmp` and `/var/tmp`, which
+the sandbox hides. The verifier defaults to a fresh directory under `.work/`.
+
 The runner freezes `submission/`, rebuilds its modules in isolation, checks the
-certificate against the trusted challenge, replays the proof in Lean's kernel,
-and writes the accepted score to `scripts/score.json`. It also rejects forbidden
-submission files and declarations. The certificate uses only Lean's standard
-`propext`, `Classical.choice`, and `Quot.sound` axioms.
+certificate and artifact equality against the trusted challenge, replays the proofs
+in Lean's kernel, and writes the accepted score to `scripts/score.json`. It checks the
+admitted files and permits only `propext`, `Classical.choice`, and `Quot.sound` in the
+checked theorems' axiom dependencies.
 
 For the trusted contract and Python verifier regression tests:
 
@@ -126,7 +164,11 @@ lake build CommitGolf CommitGolfTests
 python3 -m unittest discover -s verifier/tests
 ```
 
-The hiding proof now covers the complete game. `HidingLeafReplacement.lean`
+These commands check trusted definitions and regression tests. They do not compile
+`Solution.lean` or establish submission acceptance; the isolated verifier supplies
+the generated artifact module and checks both submitted theorems.
+
+The hiding proof covers the complete game. `HidingLeafReplacement.lean`
 isolates an unopened leaf while preserving the exact root and proof bytes;
 `HidingCoordinate.lean` bounds one message-coordinate change, and
 `HidingHybrid.lean` composes that bound across all coordinates. Opened coordinates

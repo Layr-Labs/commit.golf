@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from check_submission import check
+from artifact_fixture import manifest
 
 
 class PolicyTests(unittest.TestCase):
@@ -18,6 +19,7 @@ class PolicyTests(unittest.TestCase):
             'import CommitGolf.Statements\nimport CommitGolf.Oracle\n')
         self.claim = {'proofBytes': 76800, 'commitCycles': 2400, 'openingCycles': 1600}
         self.write_claim()
+        (self.root / 'programs.json').write_text(json.dumps(manifest()))
 
     def write_claim(self):
         (self.root / 'claim.json').write_text(json.dumps(self.claim))
@@ -50,6 +52,21 @@ class PolicyTests(unittest.TestCase):
         value = check(self.root)
         self.assertFalse(value['ok'])
         self.assertIn('outside the allowed modules', value['errors'][0])
+
+    def test_generated_artifact_import_is_allowed(self):
+        (self.root / 'Solution.lean').write_text('import CommitGolf.Artifact\n')
+        self.assertTrue(check(self.root)['ok'])
+
+    def test_delivered_program_manifest_is_required(self):
+        (self.root / 'programs.json').unlink()
+        value = check(self.root)
+        self.assertFalse(value['ok'])
+        self.assertTrue(any('programs.json' in error for error in value['errors']))
+
+    def test_candidate_cannot_supply_generated_artifact_module(self):
+        (self.root / 'CommitGolf').mkdir()
+        (self.root / 'CommitGolf' / 'Artifact.lean').write_text('axiom replacement : Nat\n')
+        self.assertFalse(check(self.root)['ok'])
 
     def test_alternate_module_headers_are_rejected(self):
         for header in ('module\nimport Lake\n', 'prelude\n', 'public import Lake\n', 'meta import Lake\n'):

@@ -22,6 +22,7 @@ import uuid
 from pathlib import Path
 
 from check_submission import check
+from artifact import load_artifact, purge_artifact_cache, write_artifact_module
 from fetch import FetchError, fetch_pr
 
 HERE = Path(__file__).resolve().parent
@@ -186,7 +187,7 @@ def verify(args: argparse.Namespace) -> dict:
     work = args.work.resolve()
     log = work / 'verify.log'
     result = {'status': 'failed', 'commit': args.commit, 'contract_commit': None,
-              'log': str(log), 'claim': None, 'work_created': False}
+              'log': str(log), 'claim': None, 'artifact_digest': None, 'work_created': False}
     try:
         if args.local and work.is_relative_to(args.local.resolve()):
             raise VerifyError('work directory must be outside the local submission directory')
@@ -213,12 +214,17 @@ def verify(args: argparse.Namespace) -> dict:
             result.update(status='policy_rejected', errors=policy['errors'])
             log.write_text('\n'.join(policy['errors']) + '\n')
             return result
+        artifact = load_artifact(source / 'programs.json')
+        if artifact.digest != policy['artifactDigest']:
+            raise VerifyError('programs.json changed after policy validation')
+        result['artifact_digest'] = artifact.digest
         project = work / 'project'
         project.mkdir()
         for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'CommitGolf.lean'):
             shutil.copy2(args.trusted / name, project / name)
         for name in ('CommitGolf',):
             shutil.copytree(args.trusted / name, project / name)
+        write_artifact_module(artifact, project)
         with (project / 'lakefile.lean').open('a') as out:
             out.write('\nlean_lib Solution\n')
         if (source / 'CommitGolfCandidate').is_dir():  # optional: Solution.lean may stand alone
@@ -229,6 +235,7 @@ def verify(args: argparse.Namespace) -> dict:
             challenge = challenge.replace('{{' + key + '}}', str(value))
         (project / 'CommitGolf' / 'Challenge.lean').write_text(challenge)
         clone_tree(args.trusted / '.lake', project / '.lake')
+        purge_artifact_cache(project)
         # Drop every cached artifact of candidate, solution, and challenge modules: the module
         # directories and the root-module files (.olean, .ilean, .trace, .hash, .c) beside them.
         for folder in (project / '.lake' / 'build' / 'lib' / 'lean', project / '.lake' / 'build' / 'ir'):
@@ -254,7 +261,7 @@ def verify(args: argparse.Namespace) -> dict:
         else:
             result.update(status='rejected', reason=log.read_text(errors='replace')[-1200:])
         return result
-    except (FetchError, VerifyError, OSError, subprocess.SubprocessError) as exc:
+    except (FetchError, ValueError, OSError, subprocess.SubprocessError) as exc:
         result.update(status='failed', reason=str(exc)[:1200])
         return result
 

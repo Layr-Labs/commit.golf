@@ -32,10 +32,16 @@ and proof modules must live inside it. The contract, parameters, oracle definiti
 verifier, build configuration, scripts, and workflows are maintained by the challenge
 authors and are not part of a submission.
 
-Use `submission/` for `Solution.lean`, `claim.json`, and optional
+Use `submission/` for `Solution.lean`, `claim.json`, `programs.json`, and optional
 `CommitGolfCandidate/` modules. The included [salted Merkle submission](submission/README.md)
 provides a complete certificate for the current contract. Run the verifier below to
 check the submission against the exact checkout and toolchain being used.
+`programs.json` delivers the code bytes and ABI described in the submission README.
+The verifier requires a kernel-checked equality between those delivered programs and
+the submission named in the certificate, and reports the manifest's SHA-256 digest.
+It generates `CommitGolf.Artifact` inside its isolated build project before compiling
+the submission. The contract/test build below checks the trusted definitions and
+regressions; `scripts/run.py` checks the submitted certificate and artifact equality.
 
 ```sh
 lake exe cache get
@@ -87,15 +93,7 @@ function, not allocated at that size. A full logical vector occupies 4 GiB.
 These fixed-parameter bounds measure the specified interpreter's abstract costs;
 they do not claim elapsed time on a physical processor.
 
-## License
-
-See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
-
-Oracle-query counts are not cycle costs: each primitive call still counts as one query.
-Each public syscall costs eight abstract machine cycles. The certificate enforces
-the declared commitment and opening cycle bounds.
-
-### Yukon setup
+## Yukon setup
 
 `benchmark.json` defines one standalone, lower-is-better benchmark. Only `submission/`
 is editable. On the supported Linux verifier host, `yukon setup` runs `scripts/setup.sh`
@@ -117,3 +115,7 @@ do not merge those PRs manually.
 Solvers should record reproducible results and provenance in submission notes. Use GitHub
 Discussions for partial research when enabled, and remove secrets and private data before
 posting either notes or discussions.
+
+## License
+
+See `LICENSE` and `THIRD_PARTY_NOTICES.md`.

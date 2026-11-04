@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import runpy
 import sys
@@ -18,6 +19,8 @@ class RunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             (root / 'scripts').mkdir()
+            (root / 'submission').mkdir()
+            (root / 'submission/programs.json').write_bytes(b'delivered program fixture')
             output = root / 'scripts/score.json'
             output.write_text('{"score": 1}')  # stale output must never survive a failure
             old = Path.cwd()
@@ -37,7 +40,8 @@ class RunnerTests(unittest.TestCase):
     def report(self):
         claim = {'proofBytes': 8, 'commitCycles': 7, 'openingCycles': 6}
         return {'status': 'verified', 'claim': claim, 'score': score_claim(claim),
-                'contract_commit': 'contract'}
+                'contract_commit': 'contract',
+                'artifact_digest': hashlib.sha256(b'delivered program fixture').hexdigest()}
 
     def test_verified_certificate_emits_combined_score(self):
         status, exists, result = self.run_runner(self.report())
@@ -46,6 +50,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result['score'], 104)
         self.assertEqual(result['metrics']['proofBytes'], 8)
         self.assertEqual(result['metrics']['proverCycles'], 13)
+        self.assertEqual(result['metrics']['artifactDigest'], self.report()['artifact_digest'])
 
     def test_rejection_leaves_no_score(self):
         for code in (0, 1):
@@ -55,7 +60,8 @@ class RunnerTests(unittest.TestCase):
             self.assertFalse(exists)
 
     def test_mismatched_score_or_contract_leaves_no_score(self):
-        for field, value in [('score', 1), ('score', 104.0), ('contract_commit', 'other')]:
+        for field, value in [('score', 1), ('score', 104.0), ('contract_commit', 'other'),
+                             ('artifact_digest', '0' * 64), ('artifact_digest', None)]:
             report = self.report()
             report[field] = value
             status, exists, _ = self.run_runner(report)

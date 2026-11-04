@@ -119,6 +119,10 @@ consume the adversary's budget. No separate simulator or PPT certificate is requ
 **Only `submission/` is solver-editable.** Define
 `CommitGolf.Challenge.submission : CommitGolf.Submission`, and prove
 `CommitGolf.Challenge.certificate : Certificate submission proofBytes commitCycles openingCycles`.
+Deliver all image bytes and ABI fields in `programs.json` ([encoding](submission/README.md#delivered-programs)).
+The verifier generates `CommitGolf.Artifact.submission` from that file. Also prove
+`CommitGolf.Challenge.submission_matches_artifact : submission = CommitGolf.Artifact.submission`;
+the generated artifact is fixed, not a comparator definition hole.
 Supply exactly those three nonnegative integer bounds in `claim.json`. Optional Lean
 modules live under `submission/CommitGolfCandidate/`. The combined score and all reported
 numeric metrics must fit within `2^53 - 1`.
@@ -127,6 +131,7 @@ The [verifier](verifier/verify.py) runs Lean's comparator on the exact trusted
 [certificate template](verifier/Challenge.lean.in), replaying declarations through the
 kernel and permitting only `propext`, `Classical.choice`, and `Quot.sound`.
 Only accepted certificates produce `scripts/score.json`; failed verification produces no score.
+Accepted reports include the SHA-256 digest of the exact delivered manifest.
 
 ```sh
 lake build CommitGolf CommitGolfTests
