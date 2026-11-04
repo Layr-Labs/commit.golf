@@ -62,7 +62,7 @@ Input loading and output decoding are interface operations, not charged instruct
 Every program must finish within its allowance on all inputs, including adversarial
 proofs and trapdoors. Faults reject; exhaustion is `unfinished`, never success.
 Honest commitment and opening must succeed for all messages and opening sizes.
-Oversized proofs reject. There is no uncertified starter submission yet.
+Oversized proofs reject.
 
 ## Machine costs
 
@@ -107,6 +107,7 @@ but its cycles are not part of the score.
 [Hiding](CommitGolf/Hiding.lean) compares two experiments. An adversary chooses two
 messages agreeing on a shared set of opened positions, plus retained state. One
 experiment commits/opens the first message; the other commits/opens the second.
+The opened positions are selected before commitment.
 The adversary receives the commitment and proof and may query the shared oracle pair.
 Its output distributions must have total variation distance at most
 `min(1, (t + 1) / 2^120)` for every adversary making at most `t` public queries across

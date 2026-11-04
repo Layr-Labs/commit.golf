@@ -33,7 +33,9 @@ verifier, build configuration, scripts, and workflows are maintained by the chal
 authors and are not part of a submission.
 
 Use `submission/` for `Solution.lean`, `claim.json`, and optional
-`CommitGolfCandidate/` modules. There is no certified starter for this target yet.
+`CommitGolfCandidate/` modules. The included [salted Merkle submission](submission/README.md)
+provides a complete certificate for the current contract. Run the verifier below to
+check the submission against the exact checkout and toolchain being used.
 
 ```sh
 lake exe cache get
@@ -54,10 +56,10 @@ functions. There is no separate finite/infinite binding game or compatibility la
 
 ## Preserved baseline code
 
-`CommitGolfBaseline/` and `CommitGolfBaseline.lean` retain the Merkle baseline
-unchanged from `master`. These historical sources are excluded from the Lake build,
-verifier inputs, and permitted submission imports; they do not compile against the
-new contract. A certified submission for the new rules will follow separately.
+`CommitGolfBaseline/` and `CommitGolfBaseline.lean` preserve the earlier unsalted Merkle
+baseline. These historical sources are excluded from the Lake build, verifier inputs,
+and permitted submission imports; they target the superseded contract. The current
+salted Merkle implementation and its proofs live under `submission/`.
 
 All active oracle definitions are in `CommitGolf/Oracle.lean`. The configurable
 family, RO/XOF implementations, lazy-state machinery, and `CommitGolf/Oracle/`
@@ -78,6 +80,8 @@ no additional instruction charge for the syscall. These prices are fixed in Para
 scheme and honest machine runs. The certificate and comparator require cycle bounds
 for those runs. The interpreter's memory ceiling is 64 GiB; memory is modeled as a
 function, not allocated at that size. A full logical vector occupies 4 GiB.
+These fixed-parameter bounds measure the specified interpreter's abstract costs;
+they do not claim elapsed time on a physical processor.
 
 ## License
 
@@ -96,8 +100,8 @@ The dispatched `benchmark.yml` runs the same setup and scoring inside the verifi
 and uploads that exact path inside its score artifact.
 
 `Test PR` calls the same benchmark job on the PR's exact head commit. It skips Yukon's
-`submissions/*` branches, which Yukon dispatches separately. Until a complete initial
-certificate is present, the benchmark must fail without producing a score.
+`submissions/*` branches, which Yukon dispatches separately. A failed certificate
+check produces no score.
 
 Before import, install the Yukon GitHub App on the repository and confirm Blacksmith
 runner access. The workflow must be available on the default branch for dispatch.
