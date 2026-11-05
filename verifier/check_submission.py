@@ -15,11 +15,11 @@ MAX_TOTAL_BYTES = 32 * 1024 * 1024
 MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 INTEGER = re.compile(r"0|[1-9][0-9]*")
 from scoring import score_claim
-ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std", "RiscvZkvm")
+ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std", "RiscvZkvm", "ArkLib", "CompPoly")
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
                     "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Hiding", "CommitGolf.Statements",
                     "CommitGolf.Riscv", "CommitGolf.Programs", "CommitGolf.Artifact",
-                    "CommitGolf.ArtifactEncoding"}
+                    "CommitGolf.ArtifactEncoding", "CommitGolf.Resources"}
 
 
 def strip_comments(source: str) -> str:

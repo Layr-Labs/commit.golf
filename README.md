@@ -97,6 +97,23 @@ function, not allocated at that size. A full logical vector occupies 4 GiB.
 These fixed-parameter bounds measure the specified interpreter's abstract costs;
 they do not claim elapsed time on a physical processor.
 
+## Resource proofs
+
+[Resources](CommitGolf/Resources.lean) applies the upstream stage-composition design to
+the included salted Merkle candidate's eight-block leaf. VCVio composes query bounds through intermediate
+results and transfers them to the public oracle; ArkLib supplies the immutable entry
+source, and CompPoly stores its eight blocks without discarding zero padding. The
+candidate connects this exact query program to the hiding proof's leaf budget. Other
+submissions may use different constructions; the certificate fields are unchanged.
+
+These are concrete worst-case operation counts. Source/view construction, encoding and
+other pure work are outside that profile. Separate instruction proofs establish machine
+cycles, including the checker leaf segment's 194 cycles and eight public calls under its
+memory and entry conditions. That segment excludes caller preparation and the continuation;
+the full certificate still checks the complete programs' bounds. ArkLib's extractor-specific
+typed paths are available at the pinned revisions; an extraction security contract and
+its efficiency proof remain separate work.
+
 ## Yukon setup
 
 `benchmark.json` defines one standalone, lower-is-better benchmark. Only `submission/`
@@ -116,10 +133,12 @@ Every Benchmark run verifies the full submitted certificate; failed verification
 no score. Routine dispatches omit the stress tests. Maintainers can explicitly enable
 `contract_regressions` for a manual run.
 
-The workflow file alone does not make its final check required. After it lands on the
-default branch, an administrator must activate the additive
-[ruleset](.github/contract-regressions.ruleset.json). First update existing PRs so they
-include the gate and produce a fresh `pull_request` check; a manual Benchmark dispatch
+The workflow file alone does not make its final check required. Once a recent eligible
+PR run has reported the check, an administrator can activate the additive
+[ruleset](.github/contract-regressions.ruleset.json) before or after the workflow lands.
+Landing it on the default branch first avoids blocking PRs that cannot yet report the
+gate. Update affected PRs to include the gate and produce fresh `pull_request` checks;
+a manual Benchmark dispatch
 [does not substitute for that check](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks#checks-from-some-workflow-jobs-are-not-evaluated).
 Then, from this checkout, run:
 

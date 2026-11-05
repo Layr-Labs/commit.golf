@@ -57,6 +57,17 @@ class PolicyTests(unittest.TestCase):
         (self.root / 'Solution.lean').write_text('import CommitGolf.Artifact\n')
         self.assertTrue(check(self.root)['ok'])
 
+    def test_resource_libraries_and_contract_imports_have_exact_namespace_boundaries(self):
+        for module in ('CommitGolf.Resources', 'ArkLib.Interaction.Oracle.Source',
+                       'CompPoly.Univariate.Raw.Size'):
+            with self.subTest(module=module):
+                (self.root / 'Solution.lean').write_text(f'import {module}\n')
+                self.assertTrue(check(self.root)['ok'])
+        for module in ('CommitGolf.ResourcesExtra', 'ArkLibExtra.Source', 'CompPolyExtra.Raw'):
+            with self.subTest(module=module):
+                (self.root / 'Solution.lean').write_text(f'import {module}\n')
+                self.assertFalse(check(self.root)['ok'])
+
     def test_delivered_program_manifest_is_required(self):
         (self.root / 'programs.json').unlink()
         value = check(self.root)
