@@ -1,11 +1,11 @@
-import CommitGolf.Resources
+import CommitGolfCandidate.Resources
 import CommitGolfCandidate.LeafRefinement
 import CommitGolfCandidate.HidingLeaf
 import CommitGolfCandidate.HidingQueries
 
 /-! # Resource bounds for the actual salted leaf
 
-The security reduction below uses the same public-query syntax as the trusted resource program.
+The security reduction below uses the same public-query syntax as the candidate resource program.
 Its structural budget follows from VCVio's completed-path bound through the existing World-support
 bridge, whose reply types are inhabited. Equality of final values alone would not transfer costs.
 

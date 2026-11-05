@@ -19,7 +19,7 @@ ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
                     "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Hiding", "CommitGolf.Statements",
                     "CommitGolf.Riscv", "CommitGolf.Programs", "CommitGolf.Artifact",
-                    "CommitGolf.ArtifactEncoding", "CommitGolf.Resources"}
+                    "CommitGolf.ArtifactEncoding"}
 
 
 def strip_comments(source: str) -> str:

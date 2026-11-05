@@ -10,6 +10,7 @@ import CommitGolfCandidate.BindingSecurity
 import CommitGolfCandidate.HidingSecurity
 import CommitGolf.Artifact
 import CommitGolfCandidate.LeafResourceBridge
+import CommitGolfCandidate.ResourceTests
 
 /-! Certified initial machine implementation. Every requirement below is proved
 for these same RISC-V images, including adaptive binding and commitment-and-opening

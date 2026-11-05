@@ -57,16 +57,30 @@ class PolicyTests(unittest.TestCase):
         (self.root / 'Solution.lean').write_text('import CommitGolf.Artifact\n')
         self.assertTrue(check(self.root)['ok'])
 
-    def test_resource_libraries_and_contract_imports_have_exact_namespace_boundaries(self):
-        for module in ('CommitGolf.Resources', 'ArkLib.Interaction.Oracle.Source',
+    def test_resource_libraries_and_candidate_imports_have_exact_namespace_boundaries(self):
+        resource = self.root / 'CommitGolfCandidate' / 'Resources.lean'
+        resource.write_text('import CommitGolf.Oracle\n')
+        for module in ('CommitGolfCandidate.Resources', 'ArkLib.Interaction.Oracle.Source',
                        'CompPoly.Univariate.Raw.Size'):
             with self.subTest(module=module):
                 (self.root / 'Solution.lean').write_text(f'import {module}\n')
                 self.assertTrue(check(self.root)['ok'])
-        for module in ('CommitGolf.ResourcesExtra', 'ArkLibExtra.Source', 'CompPolyExtra.Raw'):
+        for module in ('CommitGolf.Resources', 'CommitGolf.ResourcesExtra',
+                       'CommitGolfCandidate.ResourcesExtra', 'ArkLibExtra.Source', 'CompPolyExtra.Raw'):
             with self.subTest(module=module):
                 (self.root / 'Solution.lean').write_text(f'import {module}\n')
                 self.assertFalse(check(self.root)['ok'])
+        resource.unlink()
+        (self.root / 'Solution.lean').write_text('import CommitGolfCandidate.Resources\n')
+        self.assertFalse(check(self.root)['ok'])
+
+    def test_candidate_cannot_supply_contract_resource_module(self):
+        (self.root / 'CommitGolf').mkdir()
+        (self.root / 'CommitGolf' / 'Resources.lean').write_text('import CommitGolf.Oracle\n')
+        value = check(self.root)
+        self.assertFalse(value['ok'])
+        self.assertTrue(any('CommitGolf/Resources.lean: only' in error
+                            for error in value['errors']))
 
     def test_delivered_program_manifest_is_required(self):
         (self.root / 'programs.json').unlink()

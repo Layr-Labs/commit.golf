@@ -97,23 +97,6 @@ function, not allocated at that size. A full logical vector occupies 4 GiB.
 These fixed-parameter bounds measure the specified interpreter's abstract costs;
 they do not claim elapsed time on a physical processor.
 
-## Resource proofs
-
-[Resources](CommitGolf/Resources.lean) applies the upstream stage-composition design to
-the included salted Merkle candidate's eight-block leaf. VCVio composes query bounds through intermediate
-results and transfers them to the public oracle; ArkLib supplies the immutable entry
-source, and CompPoly stores its eight blocks without discarding zero padding. The
-candidate connects this exact query program to the hiding proof's leaf budget. Other
-submissions may use different constructions; the certificate fields are unchanged.
-
-These are concrete worst-case operation counts. Source/view construction, encoding and
-other pure work are outside that profile. Separate instruction proofs establish machine
-cycles, including the checker leaf segment's 194 cycles and eight public calls under its
-memory and entry conditions. That segment excludes caller preparation and the continuation;
-the full certificate still checks the complete programs' bounds. ArkLib's extractor-specific
-typed paths are available at the pinned revisions; an extraction security contract and
-its efficiency proof remain separate work.
-
 ## Yukon setup
 
 `benchmark.json` defines one standalone, lower-is-better benchmark. Only `submission/`

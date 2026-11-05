@@ -106,6 +106,27 @@ The accepted score report includes `artifactDigest`, the SHA-256 of the exact ma
 bytes, including JSON formatting. Re-run verification after changing either the
 manifest or its equality proof.
 
+## Resource proofs for this implementation
+
+[Resources](CommitGolfCandidate/Resources.lean) applies the upstream stage-composition design to
+the included salted Merkle candidate's eight-block leaf. VCVio composes query bounds through intermediate
+results and transfers them to the public oracle; ArkLib supplies the immutable entry
+source, and CompPoly stores its eight blocks without discarding zero padding. The
+candidate [bridge](CommitGolfCandidate/LeafResourceBridge.lean) connects this exact query
+program to the hiding proof's leaf budget. These helpers belong to this submission;
+other submissions may use different constructions and the certificate fields are unchanged.
+
+These are concrete worst-case operation counts. Source/view construction, encoding and
+other pure work are outside that profile. Separate instruction proofs establish machine
+cycles, including the checker leaf segment's 194 cycles and eight public calls under its
+memory and entry conditions. That segment excludes caller preparation and the continuation;
+the full certificate still checks the complete programs' bounds. ArkLib's extractor-specific
+typed paths are available at the pinned revisions; an extraction security contract and
+its efficiency proof remain separate work. The stored-product helper and isolated machine
+segment are compiled supporting lemmas; their imports do not establish separate kernel-replay
+evidence. [ResourceTests](CommitGolfCandidate/ResourceTests.lean), imported by `Solution.lean`,
+checks that seven calls do not suffice and that block order and trailing zero blocks are preserved.
+
 ## Initial implementation
 
 This directory contains the initial machine submission and a complete Lean

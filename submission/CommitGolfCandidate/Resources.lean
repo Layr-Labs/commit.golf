@@ -5,9 +5,9 @@ import ArkLib.Interaction.Oracle.Source
 import CompPoly.Univariate.Raw.Size
 import Mathlib.Data.List.FinRange
 
-/-! # The salted leaf's declared compression resources
+/-! # This candidate's salted-leaf compression resources
 
-This named program reads the eight ordered blocks of an entry through ArkLib's immutable source,
+This candidate helper reads the eight ordered blocks of an entry through ArkLib's immutable source,
 stores them in a CompPoly raw coefficient array, and hashes the stored elements. Its scalar `Nat`
 profile counts one per compression query, with standard addition and order. VCVio bounds every
 possible response path, then transfers that bound to the challenge's actual public oracle route.
@@ -18,8 +18,8 @@ The separate RISC-V proof remains the authority for charged machine cycles. ArkL
 extractor paths require an extractor contract; no knowledge or extractor claim is introduced here.
 -/
 
-namespace CommitGolf.Resources
-open OracleComp OracleSpec
+namespace CommitGolfCandidate.Resources
+open CommitGolf OracleComp OracleSpec
 
 abbrev Digest := BitVec COMPRESSION_OUTPUT_LENGTH
 
@@ -246,4 +246,4 @@ theorem leafWorld_run (oracle : Oracle) (input : Digest × Entry) :
   rw [leafWorld_eq_hashWorld, hashWorld_run]
   simp only [referenceLeaf, blocks, List.length_map, List.length_range]
 
-end CommitGolf.Resources
+end CommitGolfCandidate.Resources
