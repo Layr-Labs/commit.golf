@@ -1,0 +1,17 @@
+# Temporary end-to-end PR check; remove after validating the cache workflow.
+name: Temporary PR Verification Flow
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+concurrency:
+  group: temporary-pr-verification-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: Full verification flow
+    uses: ./.github/workflows/benchmark.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+      contract_regressions: true
