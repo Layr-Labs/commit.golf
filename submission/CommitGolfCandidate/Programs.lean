@@ -123,8 +123,9 @@ def openingCode (depth : Nat) : List Asm :=
    shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
   [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
    .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
-   .label "open-done"] ++ li 6 (openingBytes depth) ++
-  [regop 11 16 6 0 1] ++ halt true
+   .label "open-done",
+   -- The output cursor advanced by exactly the serialized proof length.
+   regop 11 25 15 0 32] ++ halt true
 
 /-- Reject malformed lengths and every mismatching root. Values/indices are supplied
 by the trusted ABI; their validity and sorting do not depend on proof bytes. -/
