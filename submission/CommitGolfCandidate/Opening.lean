@@ -1283,7 +1283,8 @@ theorem opening_positions_output (iterations : Nat) (state : MachineState) :
   | zero => simp
   | succ iterations ih =>
     rw [Function.iterate_succ_apply, ih, (opening_position_progress state).2.1]
-    simp [Nat.mul_succ, BitVec.ofNat_add, BitVec.add_assoc, BitVec.add_comm,
-      BitVec.add_left_comm]
+    simp only [Nat.mul_succ, BitVec.ofNat_add]
+    rw [BitVec.add_assoc, BitVec.add_comm (800 : Word) (BitVec.ofNat 64 (800 * iterations))]
+    rfl
 
 end CommitGolfCandidate
