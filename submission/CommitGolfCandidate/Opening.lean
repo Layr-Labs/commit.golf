@@ -217,17 +217,24 @@ theorem opening_next_counter (state : MachineState) (remaining : Nat)
     omega
   · omega
 
+/-- The immutable proof-buffer base survives opening setup. -/
+theorem opening_setup_proof_base (state : MachineState) :
+    (openingInitializedState state).getReg .x15 = state.getReg .x15 := by
+  simp [openingInitializedState, openingSetupPrefix, openingSetupInstructions,
+    execInstrBr, MachineState.getReg, MachineState.setReg, MachineState.setPC]
+
 /-- Final machine state after reporting the opening length and requesting success. -/
 def openingExitState (state : MachineState) : MachineState :=
   ((((state.setReg .x6 800).setReg .x11 (state.getReg .x16 * 800)).setReg .x5 1).setReg
     .x10 0).setPC 4340
 
 /-- The actual return block halts successfully, reports 800 bytes per position,
-and costs exactly ten cycles (including the four-cycle multiplication). -/
+and costs exactly seven cycles. Pointer subtraction replaces multiplication. -/
 theorem opening_exit (state : MachineState) (pc : state.pc = 4316)
+    (length : state.getReg .x25 - state.getReg .x15 = state.getReg .x16 * 800)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .opening) (7 + fuel) state allowCoins =
-      pure ⟨.success, openingExitState state, 10, 0⟩ := by
+      pure ⟨.success, openingExitState state, 7, 0⟩ := by
   let s₁ := (state.setReg .x6 0).setPC 4320
   let s₂ := (state.setReg .x6 0).setPC 4324
   let s₃ := (state.setReg .x6 800).setPC 4328
@@ -248,7 +255,7 @@ theorem opening_exit (state : MachineState) (pc : state.pc = 4316)
     apply opening_fetch s₂ 57 _ (by decide) rfl
     rfl
   have fetch3 : fetch (submission.image .opening) s₃ =
-      some (.base (.MUL .x11 .x16 .x6)) := by
+      some (.base (.SUB .x11 .x25 .x15)) := by
     apply opening_fetch s₃ 58 _ (by decide) rfl
     rfl
   have fetch4 : fetch (submission.image .opening) s₄ =
@@ -279,10 +286,10 @@ theorem opening_exit (state : MachineState) (pc : state.pc = 4316)
     simp
     funext reg
     by_cases h : reg = .x6 <;> simp [h]
-  have step3 : ordinaryStep s₃ (.base (.MUL .x11 .x16 .x6)) = some s₄ := by
+  have step3 : ordinaryStep s₃ (.base (.SUB .x11 .x25 .x15)) = some s₄ := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       s₃, s₄, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    simp
+    simp [show state.regs .x25 - state.regs .x15 = state.regs .x16 * 800 from length]
   have step4 : ordinaryStep s₄ (.base (.ADDI .x5 .x0 1)) = some s₅ := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       s₄, s₅, MachineState.getReg, MachineState.setReg, MachineState.setPC]
@@ -341,9 +348,9 @@ theorem opening_entry_count (trapdoor : BitVec (8 * submission.sizes.trapdoor))
 /-- Full result of the empty-opening path, including its actual final machine state. -/
 def emptyOpeningResult (trapdoor : BitVec (8 * submission.sizes.trapdoor)) : Execution :=
   ⟨.success, openingExitState (openingInitializedState
-    (submission.initialState .opening (trapdoor, ∅))), 30, 0⟩
+    (submission.initialState .opening (trapdoor, ∅))), 27, 0⟩
 
-/-- The complete submitted opening program handles an empty position set in thirty
+/-- The complete submitted opening program handles an empty position set in twenty-seven
 cycles, succeeds, and makes no queries, for every serialized trapdoor. -/
 theorem opening_empty_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor)) :
     submission.run .opening (trapdoor, ∅) = pure (emptyOpeningResult trapdoor) := by
@@ -355,7 +362,10 @@ theorem opening_empty_execution (trapdoor : BitVec (8 * submission.sizes.trapdoo
   change execute (submission.image .opening) (submission.steps .opening) initial true = _
   have steps : submission.steps .opening = 20 + (7 + (submission.steps .opening - 27)) := by
     norm_num [submission, candidate, LOG_LENGTH, LENGTH]
-  rw [steps, opening_setup initial pc, opening_exit _ readyPC]
+  rw [steps, opening_setup initial pc, opening_exit _ readyPC (by
+      rw [(opening_setup_registers initial).2.2.1, opening_setup_proof_base,
+        (opening_setup_registers initial).2.2.2.2.2.2.1, count]
+      simp) ]
   simp [emptyOpeningResult, initial, Execution.charge]
 
 /-- The scheme derived from the image produces the empty proof on this path. -/
@@ -1290,5 +1300,26 @@ theorem opening_positions_preserves_count (iterations : Nat) (state : MachineSta
   | zero => rfl
   | succ iterations ih =>
     rw [Function.iterate_succ_apply', (opening_position_progress _).2.2.2, ih]
+
+/-- The immutable proof-buffer base survives every position iteration. -/
+theorem opening_position_proof_base (state : MachineState) :
+    (openingPositionState state).getReg .x15 = state.getReg .x15 := by
+  simp [-Function.iterate_succ, openingPositionState, openingNextState,
+    MachineState.getReg_setReg_ne, opening_path_preserves_register,
+    opening_position_path_register]
+
+/-- Pointer difference reports the bytes written by all completed positions. -/
+theorem opening_positions_pointers (iterations : Nat) (state : MachineState) :
+    (openingPositionState^[iterations] state).getReg .x25 =
+      state.getReg .x25 + BitVec.ofNat 64 (800 * iterations) ∧
+    (openingPositionState^[iterations] state).getReg .x15 = state.getReg .x15 := by
+  induction iterations with
+  | zero => simp
+  | succ iterations ih =>
+    rw [Function.iterate_succ_apply', (opening_position_progress _).2.1,
+      opening_position_proof_base, ih.1, ih.2]
+    constructor
+    · simp [Nat.mul_add, BitVec.ofNat_add, BitVec.add_assoc]
+    · rfl
 
 end CommitGolfCandidate
