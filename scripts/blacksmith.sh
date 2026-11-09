@@ -3,6 +3,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 vm="${RUNNER_TEMP:?This entry point runs in GitHub Actions}/commit-verifier-vm"
+image_sha256=4908fb59ccd4e87ae4e8e973b7ef56f535448eacb24a87fd787270c0048987bc
+image="${PWD}/.cache/vm-image/${image_sha256}.img"
+prepare_image() {
+  mkdir -p "$(dirname "${image}")"
+  if [[ -f "${image}" ]] && echo "${image_sha256}  ${image}" | sha256sum --check; then
+    echo 'Using checksum-verified cached Ubuntu image'
+    return
+  fi
+  # A partial or invalid download must never become the cached base image.
+  rm -f "${image}" "${image}.part"
+  curl --fail --location --show-error --silent --retry 2 \
+    --connect-timeout 30 --max-time 600 --retry-max-time 1200 \
+    --speed-limit 102400 --speed-time 60 \
+    https://cloud-images.ubuntu.com/releases/resolute/release-20260918/ubuntu-26.04-server-cloudimg-amd64.img \
+    -o "${image}.part"
+  echo "${image_sha256}  ${image}.part" | sha256sum --check
+  mv "${image}.part" "${image}"
+}
 ssh_args=(-i "${vm}/key" -p 2222 -o BatchMode=yes -o ConnectTimeout=5
   -o ServerAliveInterval=15 -o ServerAliveCountMax=4
   -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="${vm}/known_hosts")
@@ -11,15 +29,15 @@ ssh_args=(-i "${vm}/key" -p 2222 -o BatchMode=yes -o ConnectTimeout=5
 guest() { ssh "${ssh_args[@]}" ubuntu@127.0.0.1 "$@"; }
 
 case "${1:-}" in
+  image-key) echo "${image_sha256}" ;;
+  prepare-image) prepare_image ;;
   start)
     test -c /dev/kvm || { echo 'Blacksmith x64 nested KVM is required' >&2; exit 1; }
     sudo apt-get update -qq
     sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils
     mkdir -m 700 "${vm}"
-    curl --fail --location --retry 3 \
-      https://cloud-images.ubuntu.com/releases/resolute/release-20260918/ubuntu-26.04-server-cloudimg-amd64.img \
-      -o "${vm}/ubuntu.img"
-    echo "4908fb59ccd4e87ae4e8e973b7ef56f535448eacb24a87fd787270c0048987bc  ${vm}/ubuntu.img" | sha256sum --check
+    prepare_image
+    cp "${image}" "${vm}/ubuntu.img"
     qemu-img create -f qcow2 -F qcow2 -b "${vm}/ubuntu.img" "${vm}/root.qcow2" 100G
     ssh-keygen -q -t ed25519 -N '' -f "${vm}/key"
     cat > "${vm}/user-data" <<CLOUD
@@ -95,5 +113,5 @@ CLOUD
   stop)
     if [[ -f "${vm}/qemu.pid" ]]; then sudo kill "$(sudo cat "${vm}/qemu.pid")"; fi
     ;;
-  *) echo 'Usage: blacksmith.sh start | setup | cache | run | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
+  *) echo 'Usage: blacksmith.sh image-key | prepare-image | start | setup | cache | run | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
 esac
