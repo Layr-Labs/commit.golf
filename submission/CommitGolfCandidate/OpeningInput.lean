@@ -200,7 +200,6 @@ theorem opening_result_length (trapdoor : BitVec (8 * submission.sizes.trapdoor)
   · rw [opening_positions_output, opening_positions_preserves_proof_base,
       (opening_setup_registers _).2.2.1]
     rw [opening_setup_proof_base]
-    rfl
 
 /-- No opening is rejected or cut off, and its reported length fits the declared buffer. -/
 theorem opening_result_succeeded (trapdoor : BitVec (8 * submission.sizes.trapdoor))
