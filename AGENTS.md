@@ -1,11 +1,14 @@
 # Agent instructions
 
-- Solvers edit only `submission/`: `claim.json`, `Solution.lean`, and
+- Solvers edit only `submission/`: `claim.json`, `programs.json`, `Solution.lean`, and
   supporting modules under `submission/CommitGolfCandidate/`, and the optional README.
   No other repository directory is solver-editable. Everything else is the contract; preserve it.
 - Submissions prove `CommitGolf.Certificate submission proofBytes commitCycles openingCycles`
   about a `CommitGolf.Submission` of machine images. The security-game scheme must be
   derived from those images; do not accept unrelated abstract functions or claimed timings.
+- `programs.json` delivers the instruction bytes, embedded data and ABI. The verifier generates
+  `CommitGolf.Artifact.submission`; `submission_matches_artifact` must prove that the certified
+  submission equals this exact value. The generated artifact is not a comparator definition hole.
 - The score is `(commitCycles + openingCycles) * proofBytes` for a full commitment
   and one opening of 128 leaves. Binding and hiding target 120 bits; leaves are 2,048 bits.
 - `Oracle.lean` fixes a 512→256 compression function and 1,600-bit permutation. Both public

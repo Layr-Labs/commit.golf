@@ -1,12 +1,23 @@
 name: Benchmark
 on:
   workflow_dispatch:
+    inputs:
+      contract_regressions:
+        description: Run the maintainer artifact linkage and maximum-image regressions
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       ref:
         description: Exact candidate commit to check
         required: true
         type: string
+      contract_regressions:
+        description: Run the maintainer artifact linkage and maximum-image regressions
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 jobs:
@@ -40,6 +51,12 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Benchmark
         run: bash scripts/blacksmith.sh run
+      - name: Verifier regressions and artifact linkage
+        if: inputs.contract_regressions
+        run: bash scripts/blacksmith.sh test-linkage
+      - name: Maximum artifact admission and byte linkage
+        if: inputs.contract_regressions
+        run: bash scripts/blacksmith.sh test-scale
       - name: Collect results
         if: always()
         run: bash scripts/blacksmith.sh collect

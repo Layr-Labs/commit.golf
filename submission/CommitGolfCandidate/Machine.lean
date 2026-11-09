@@ -84,7 +84,7 @@ theorem submission_machine_success : submission.MachineSuccess := by
 
 /-- Certified upper bounds from the actual images for a complete commitment and a
 128-leaf opening. These are the declared claim values, not a sampled measurement. -/
-theorem submission_prover_cycles : submission.ProverCycles 17179869184 1048576 := by
+theorem submission_prover_cycles : submission.ProverCycles 3959423012 48670 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached

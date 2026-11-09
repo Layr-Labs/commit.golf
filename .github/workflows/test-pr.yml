@@ -7,9 +7,92 @@ concurrency:
   group: test-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      contract: ${{ steps.paths.outputs.contract }}
+      solver_branch: ${{ steps.paths.outputs.solver_branch }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect contract changes
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          BASE_REPO_ID: ${{ github.event.pull_request.base.repo.id }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+
+          base, head = os.environ['BASE_SHA'], os.environ['HEAD_SHA']
+          if not all(re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', sha)
+                     for sha in (base, head)):
+              raise SystemExit('expected exact base and head commit IDs')
+          # Inspect the complete endpoint diff, without the API/path-filter file cap.
+          # Disabling renames retains deletions when contract files move into submission/.
+          paths = subprocess.check_output([
+              'git', 'diff', '--no-ext-diff', '--no-textconv', '--no-renames',
+              '--name-only', '-z', base, head, '--']).split(b'\0')
+          contract = any(path and not path.startswith(b'submission/') for path in paths)
+          # A fork or differently cased lookalike is not a Yukon-owned submission branch.
+          head_repo = os.environ['HEAD_REPO_ID']
+          solver_branch = bool(re.fullmatch(r'[1-9][0-9]*', head_repo)) and (
+              head_repo == os.environ['BASE_REPO_ID'] and
+              os.environ['HEAD_REF'].startswith('submissions/'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'contract={str(contract).lower()}\n'
+                           f'solver_branch={str(solver_branch).lower()}\n')
+          print(f'Contract regressions required: {contract}')
+          print(f'Yukon submission branch: {solver_branch}')
+          PY
   benchmark:
-    # Yukon dispatches benchmark.yml itself for solver submissions.
-    if: ${{ !startsWith(github.head_ref, 'submissions/') }}
+    needs: changes
+    # Yukon owns submission-only managed branches; contract changes always run here.
+    if: needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true'
     uses: ./.github/workflows/benchmark.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
+      contract_regressions: ${{ needs.changes.outputs.contract == 'true' }}
+  contract-regressions:
+    # Preserve this completed check name when a managed submission legitimately skips Benchmark.
+    name: contract-regressions
+    if: always()
+    needs: [changes, benchmark]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check contract regression result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CONTRACT_CHANGED: ${{ needs.changes.outputs.contract }}
+          BENCHMARK_RESULT: ${{ needs.benchmark.result }}
+          SOLVER_BRANCH: ${{ needs.changes.outputs.solver_branch }}
+        run: |
+          if [[ "$CHANGES_RESULT" != success ]]; then
+            echo 'Contract change detection did not succeed.' >&2
+            exit 1
+          fi
+          case "$SOLVER_BRANCH" in
+            true|false) ;;
+            *) echo 'Unknown submission-branch classification.' >&2; exit 1 ;;
+          esac
+          case "$CONTRACT_CHANGED:$BENCHMARK_RESULT" in
+            true:success|false:success) echo 'Required benchmark checks passed.' ;;
+            false:skipped)
+              if [[ "$SOLVER_BRANCH" == true ]]; then
+                echo 'Submission-only managed branch; Yukon dispatches Benchmark.'
+              else
+                echo 'Benchmark unexpectedly skipped.' >&2
+                exit 1
+              fi ;;
+            *) echo 'Contract change detection or required benchmark did not succeed.' >&2; exit 1 ;;
+          esac

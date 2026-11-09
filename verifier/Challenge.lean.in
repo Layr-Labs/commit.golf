@@ -1,4 +1,5 @@
 import CommitGolf
+import CommitGolf.Artifact
 
 /-! # The challenge
 
@@ -11,6 +12,8 @@ admits only the axioms `propext`, `Quot.sound` and `Classical.choice`. -/
 namespace CommitGolf.Challenge
 
 noncomputable def submission : CommitGolf.Submission := sorry
+
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := sorry
 
 theorem certificate : CommitGolf.Certificate submission {{proofBytes}} {{commitCycles}} {{openingCycles}} := sorry
 

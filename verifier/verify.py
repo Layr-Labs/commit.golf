@@ -17,12 +17,12 @@ import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 import uuid
 from pathlib import Path
 
 from check_submission import check
+from artifact import load_artifact, purge_artifact_cache, write_artifact_module
 from fetch import FetchError, fetch_pr
 
 HERE = Path(__file__).resolve().parent
@@ -30,6 +30,7 @@ TRUSTED = HERE.parent
 LOG_CAP = 4 * 1024 * 1024
 WALL_SECONDS = 4 * 3600
 MEMORY_BYTES = 24 * 1024**3
+MIN_SYSTEMD_VERSION = 257  # PrivatePIDs, also required by scripts/vm-setup.sh
 
 
 class VerifyError(ValueError):
@@ -60,11 +61,26 @@ def clone_tree(src: Path, dst: Path) -> None:
     subprocess.run(cmd, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
 
+def linux_systemd_preflight() -> None:
+    if not shutil.which('systemd-run') or not shutil.which('systemctl'):
+        raise VerifyError('systemd user services are required on Linux')
+    try:
+        result = subprocess.run(['systemd-run', '--version'], check=True, text=True,
+                                capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise VerifyError('could not determine systemd version; systemd 257 or newer is required') from exc
+    version = re.match(r'systemd\s+([0-9]+)\b', result.stdout)
+    if version is None:
+        raise VerifyError('unrecognized systemd version; systemd 257 or newer is required')
+    if int(version[1]) < MIN_SYSTEMD_VERSION:
+        raise VerifyError(f'systemd {MIN_SYSTEMD_VERSION} or newer is required for PrivatePIDs '
+                          f'(found {version[1]})')
+
+
 def linux_preflight(env: dict[str, str]) -> None:
     if os.geteuid() == 0:
         raise VerifyError('refusing to compile candidate code as root')
-    if not shutil.which('systemd-run') or not shutil.which('systemctl'):
-        raise VerifyError('systemd user services are required on Linux')
+    linux_systemd_preflight()
     lsm = Path('/sys/kernel/security/lsm')
     if not lsm.is_file() or 'landlock' not in lsm.read_text().strip().split(','):
         raise VerifyError('Landlock is not enabled')
@@ -169,13 +185,16 @@ def run_checked(cmd: list[str], cwd: Path, env: dict[str, str], log: Path) -> tu
 
 def verify(args: argparse.Namespace) -> dict:
     work = args.work.resolve()
-    if work.exists():
-        raise VerifyError('work directory must not exist')
-    work.mkdir(parents=True)
     log = work / 'verify.log'
     result = {'status': 'failed', 'commit': args.commit, 'contract_commit': None,
-              'log': str(log), 'claim': None}
+              'log': str(log), 'claim': None, 'artifact_digest': None, 'work_created': False}
     try:
+        if args.local and work.is_relative_to(args.local.resolve()):
+            raise VerifyError('work directory must be outside the local submission directory')
+        if work.exists():
+            raise VerifyError('work directory must not exist')
+        work.mkdir(parents=True)
+        result['work_created'] = True
         env = tools_env(args.trusted)
         if platform.system() == 'Linux':
             linux_preflight(env)
@@ -195,12 +214,17 @@ def verify(args: argparse.Namespace) -> dict:
             result.update(status='policy_rejected', errors=policy['errors'])
             log.write_text('\n'.join(policy['errors']) + '\n')
             return result
+        artifact = load_artifact(source / 'programs.json')
+        if artifact.digest != policy['artifactDigest']:
+            raise VerifyError('programs.json changed after policy validation')
+        result['artifact_digest'] = artifact.digest
         project = work / 'project'
         project.mkdir()
         for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'CommitGolf.lean'):
             shutil.copy2(args.trusted / name, project / name)
         for name in ('CommitGolf',):
             shutil.copytree(args.trusted / name, project / name)
+        write_artifact_module(artifact, project)
         with (project / 'lakefile.lean').open('a') as out:
             out.write('\nlean_lib Solution\n')
         if (source / 'CommitGolfCandidate').is_dir():  # optional: Solution.lean may stand alone
@@ -211,6 +235,7 @@ def verify(args: argparse.Namespace) -> dict:
             challenge = challenge.replace('{{' + key + '}}', str(value))
         (project / 'CommitGolf' / 'Challenge.lean').write_text(challenge)
         clone_tree(args.trusted / '.lake', project / '.lake')
+        purge_artifact_cache(project)
         # Drop every cached artifact of candidate, solution, and challenge modules: the module
         # directories and the root-module files (.olean, .ilean, .trace, .hash, .c) beside them.
         for folder in (project / '.lake' / 'build' / 'lib' / 'lean', project / '.lake' / 'build' / 'ir'):
@@ -236,7 +261,7 @@ def verify(args: argparse.Namespace) -> dict:
         else:
             result.update(status='rejected', reason=log.read_text(errors='replace')[-1200:])
         return result
-    except (FetchError, VerifyError, OSError, subprocess.SubprocessError) as exc:
+    except (FetchError, ValueError, OSError, subprocess.SubprocessError) as exc:
         result.update(status='failed', reason=str(exc)[:1200])
         return result
 
@@ -256,19 +281,19 @@ def main() -> int:
         parser.error('provide either --local or both --pr and --commit')
     args.trusted = args.trusted.resolve()
     if args.work is None:
-        args.work = Path(tempfile.mkdtemp(prefix='commit-verify-'))
-        args.work.rmdir()
+        args.work = Path.cwd() / '.work' / uuid.uuid4().hex
     result = verify(args)
-    if args.cleanup and args.work.exists():
+    cleanup_work = Path(result['log']).parent if result.get('work_created') is True else None
+    if args.cleanup and cleanup_work is not None and cleanup_work.exists():
         try:
             # Candidate code can change permissions inside its writable build tree.
-            for directory, children, _ in os.walk(args.work, followlinks=False):
+            for directory, children, _ in os.walk(cleanup_work, followlinks=False):
                 os.chmod(directory, os.stat(directory).st_mode | 0o700)
                 for child in children:
                     path = Path(directory) / child
                     if not path.is_symlink():
                         os.chmod(path, path.stat().st_mode | 0o700)
-            shutil.rmtree(args.work)
+            shutil.rmtree(cleanup_work)
         except OSError as exc:
             result.update(status='failed', reason=f'workspace cleanup failed: {exc}')
     print(json.dumps(result, sort_keys=True))

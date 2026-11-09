@@ -62,6 +62,7 @@ private def constantScheme : Scheme where
 example : constantScheme.Hiding (fun _ _ => 0) := by
   refine ⟨fun _ _ => le_refl 0, ?_⟩
   intro openingSize queryBudget _ AdversaryState Output adversary _
+  let : MeasurableSpace Output := ⊤
   have heq : hidingExperiment constantScheme adversary false =
       hidingExperiment constantScheme adversary true := rfl
   rw [heq, measureTVDist_self]
@@ -167,6 +168,36 @@ private def leakingScheme : Scheme where
 private def observesRoot : HidingAdversary Unit Commitment 0 where
   choose := pure differentMessages
   observe _ root _ := pure root
+
+-- Observing the supplied commitment is admissible even with no public queries.
+example : QueryBound observesRoot 0 := by
+  intro first hf
+  have first_eq : counted observesRoot.choose =
+      (pure (differentMessages, 0) : OracleComp World _) := rfl
+  rw [first_eq] at hf
+  have hf' := OracleComp.eq_of_mem_support_pure (differentMessages, 0) hf
+  subst first
+  refine ⟨by decide, ?_⟩
+  intro root proof last hl
+  have last_eq : counted (observesRoot.observe () root proof) =
+      (pure (root, 0) : OracleComp World _) := rfl
+  rw [last_eq] at hl
+  have hl' := OracleComp.eq_of_mem_support_pure (root, 0) hl
+  subst last
+  simp
+
+-- Discrete observations remain distinguishable after conversion to real-valued TV.
+example : letI : MeasurableSpace Bool := ⊤
+    measureTVDist (pure false : ProbComp Bool) (pure true) = 1 := by
+  let : MeasurableSpace Bool := ⊤
+  have lower : (1 : ENNReal) ≤ measureETVDist (pure false : ProbComp Bool) (pure true) := by
+    have h := measure_absDiff_apply_le_measureETVDist
+      (pure false : ProbComp Bool) (pure true) (s := {false}) (by trivial)
+    simpa [evalDist_pure, MeasureTheory.Measure.dirac_apply, ENNReal.absDiff] using h
+  have extended : measureETVDist (pure false : ProbComp Bool) (pure true) = 1 :=
+    le_antisymm (measureETVDist_le_one _ _) lower
+  rw [measureTVDist_eq_toReal_measureETVDist, extended]
+  simp
 
 set_option exponentiation.threshold 2048 in
 set_option maxRecDepth 4096 in
@@ -304,3 +335,34 @@ example (s : Submission) (bytes commitCycles openingCycles : Nat)
     (buffer.length == 16 && buffer.byteAt 0 == 2 && buffer.byteAt 8 == 5)
 
 end CommitGolf.ProgramTests
+
+namespace CommitGolf.ArtifactEncodingTests
+open ArtifactEncoding
+
+-- Counts preserve trailing zero elements, and concatenation preserves little-endian order.
+private def bytes : Packed 5 := .join (.chunk 2 0x3412) (.chunk 3 0x007856)
+example : decode 8 bytes = [0x12, 0x34, 0x56, 0x78, 0] := by decide
+example : (decode 8 bytes).length = 5 := length_decode 8 bytes
+example : (decode 8 bytes).getD 2 0 = 0x56 := by
+  rw [getD_decode 8 bytes 2 (by decide)]
+  decide
+example : decode 32 (.chunk 3 0x00000000ffffffff12345678) = [0x12345678, 0xffffffff, 0] := by decide
+example : decode 8 (.chunk 0 0) = [] := rfl
+
+private def wordBoundary : Packed 65 :=
+  .join (.chunk 64 (0x12345678 <<< (32 * 63))) (.chunk 1 0x90abcdef)
+example : (decode 32 wordBoundary).getD 63 0 = 0x12345678 := by
+  rw [getD_decode 32 wordBoundary 63 (by decide)]
+  decide
+example : (decode 32 wordBoundary).getD 64 0 = 0x90abcdef := by
+  rw [getD_decode 32 wordBoundary 64 (by decide)]
+  decide
+private def byteBoundary : Packed 257 := .join (.chunk 256 (0xa5 <<< (8 * 255))) (.chunk 1 0)
+example : (decode 8 byteBoundary).getD 255 0 = 0xa5 := by
+  rw [getD_decode 8 byteBoundary 255 (by decide)]
+  decide
+example : (decode 8 byteBoundary).getD 256 0 = 0 := by
+  rw [getD_decode 8 byteBoundary 256 (by decide)]
+  decide
+
+end CommitGolf.ArtifactEncodingTests

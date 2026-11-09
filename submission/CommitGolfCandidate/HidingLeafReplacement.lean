@@ -1,5 +1,6 @@
 import CommitGolfCandidate.HidingOpeningQueries
 import CommitGolfCandidate.HidingStages
+import CommitGolfCandidate.LeafResourceBridge
 
 /-! Isolate one unopened leaf inside the full root-and-opening continuation.
 Its salt is absent from the public proof, and the continuation uses that leaf only
@@ -65,9 +66,8 @@ theorem query_leaf_bound (message : Message) (salt : Index → Digest) (index : 
     PublicQueryBound (queryLeaf message salt index) 8 := by
   unfold queryLeaf
   split
-  · simpa only [List.length_map, List.length_range] using hash_blocks_bound
-      ((List.range 8).map fun block => (message ⟨index, by assumption⟩).extractLsb' (256*block) 256)
-      (salt ⟨index, by assumption⟩)
+  · exact ResourceBridge.leaf_public_query_bound
+      (salt ⟨index, by assumption⟩) (message ⟨index, by assumption⟩)
   · trivial
 
 theorem query_leaf_except_bound (message : Message) (salt : Index → Digest)

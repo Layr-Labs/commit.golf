@@ -1,5 +1,6 @@
 """Verify the machine certificate and record its combined cycle-times-bytes score."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -35,9 +36,12 @@ if type(report.get("score")) is not int or report["score"] != score:
 contract = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 if report["contract_commit"] != contract:
     raise SystemExit("Verifier used a different contract from the repository commit")
+artifact_digest = hashlib.sha256(Path('submission/programs.json').read_bytes()).hexdigest()
+if report.get('artifact_digest') != artifact_digest:
+    raise SystemExit('Verifier used a different delivered program manifest')
 metrics = {**claim,
            "proverCycles": claim["commitCycles"] + claim["openingCycles"],
-           "contractCommit": contract, "verified": True}
+           "contractCommit": contract, "artifactDigest": artifact_digest, "verified": True}
 temporary = score_path.with_suffix(".tmp")
 temporary.write_text(json.dumps({"score": score, "metrics": metrics}) + "\n")
 temporary.replace(score_path)

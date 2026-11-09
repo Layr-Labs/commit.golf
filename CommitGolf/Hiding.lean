@@ -4,10 +4,31 @@ import VCVio.OracleComp.QueryTracking.CostModel
 
 /-! # Commitment and opening hiding
 
-Two-message statistical hiding for a commitment and one opening. The messages must agree at
-all opened positions. Positions are chosen before the commitment, not adaptively afterwards.
-`Scheme.Hiding` in Statements.lean bounds the distance between the two output distributions.
-This formulation has no separate simulator or computational-complexity requirement.
+Two-message statistical hiding for a commitment and one opening. Each adversary has a
+fixed opening cardinality. It chooses messages and positions before commitment, possibly
+using oracle replies; the messages must agree at every opened position. `Scheme.Hiding`
+in Statements.lean bounds the distance between its output distributions.
+
+This ordering follows [CY24 v1.2, Lemma 18.6.3][cy24-hiding]. CY24 uses a variable-input
+random oracle and a polynomial-time simulator; here the oracles are the fixed compression/
+permutation pair, the views are honest, and the target error is uniform in cardinality.
+
+Informally, in this same shared-oracle model with the same first-stage state, a simulator
+can honestly commit and open the disclosed entries with zeros elsewhere, with the same
+error. Conversely, a common simulator within δ of both views gives distance at most
+min(1, 2δ). Neither reduction is formalized here. Full honest computation does not establish
+an efficient simulator; transferring to CY24 also needs oracle-model and resource proofs.
+
+CY24's Fiat–Shamir applications ([§22.2][cy24-micali], [§26.2][cy24-bcs]) use hybrids that
+decouple positions from the root, with additional programming and bad-event errors. Those
+arguments, post-commitment positions and repeated-opening privacy are not certified here.
+One adversary choosing its cardinality from oracle replies is also outside this interface.
+A generic reduction sums errors over at most `LENGTH + 1` sizes, capped at one: a proof
+loss, not an attack.
+
+[cy24-hiding]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=229
+[cy24-micali]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=267
+[cy24-bcs]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=313
 -/
 
 namespace CommitGolf.Hiding

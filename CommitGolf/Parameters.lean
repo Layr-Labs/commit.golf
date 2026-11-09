@@ -57,7 +57,9 @@ def BINDING_SECURITY_BITS : Nat := 120
 def HIDING_SECURITY_BITS : Nat := 120
 
 /-- Statistical hiding bound for `q` opened positions and `t` adversary queries.
-The query-only target is uniform in `q`; the extra one permits nonzero error at zero queries.
+The query-only target is uniform in `q`; each cardinality still has its own adversary class.
+It does not assert a single oracle-dependent-cardinality experiment. The extra one permits
+nonzero error at zero queries.
 This is a challenge requirement, not a bound proved for a construction. -/
 noncomputable def HIDING_ERROR (_q t : Nat) : ℝ :=
   min 1 (((t : ℝ) + 1) / 2 ^ HIDING_SECURITY_BITS)

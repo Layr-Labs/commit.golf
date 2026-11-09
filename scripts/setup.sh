@@ -8,7 +8,12 @@ if ! command -v elan >/dev/null 2>&1; then
     | sh -s -- -y --default-toolchain none
 fi
 toolchain="$(tr -d '[:space:]' < lean-toolchain)"
-elan toolchain install "$toolchain"
+if ! elan run "$toolchain" lean --version >/dev/null 2>&1; then
+  elan toolchain install "$toolchain"
+fi
+# Confirm that installation supplied a runnable compiler before building the verifier.
+elan run "$toolchain" lean --version
 bash verifier/setup_tools.sh
-lake exe cache get && lake build CommitGolf
+lake exe cache get
+lake build CommitGolf CommitGolfTests
 python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "verifier"); from verify import linux_preflight, tools_env; linux_preflight(tools_env(Path(".").resolve()))'

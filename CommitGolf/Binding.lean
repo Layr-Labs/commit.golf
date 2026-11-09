@@ -3,7 +3,21 @@ import CommitGolf.Honest
 /-! # Binding game
 
 Position binding [CY24, Lemma 18.4.1]. Sample both fixed primitives independently; the adversary outputs a commitment and two openings. It wins if `check` accepts both and they
-disagree at a position both open. Only the adversary's own calls are counted, as in [CY24]. -/
+disagree at a position both open. Only the adversary's own calls are counted, as in [CY24].
+
+CY24's SNARG soundness arguments use [extractability, Lemma 18.5.1][cy24-extraction]. Its
+deterministic extractor sees the commitment and the query/answer trace available when that
+commitment is output, then returns a message and trapdoor before the opening continuation.
+In that bounded-query two-phase game, failure includes inconsistent accepted values or a
+proof differing from the canonical proof regenerated from the extracted trapdoor. The lemma
+also bounds extractor runtime. This causal extraction contract is not required here.
+[Remark 18.5.6][cy24-binding] derives position binding with at most twice the extraction
+error at the same adversary query budget using private coins. This certificate supplies
+position binding alone, not a drop-in premise for those SNARG theorems.
+
+[cy24-extraction]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=214
+[cy24-binding]: https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf#page=218
+-/
 
 namespace CommitGolf
 open OracleComp OracleSpec

@@ -7,16 +7,19 @@ import json
 import re
 from pathlib import Path
 
+from artifact import load_artifact
+
 MAX_FILES = 1000
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 32 * 1024 * 1024
 MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 INTEGER = re.compile(r"0|[1-9][0-9]*")
 from scoring import score_claim
-ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std", "RiscvZkvm")
+ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std", "RiscvZkvm", "ArkLib", "CompPoly")
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
                     "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Hiding", "CommitGolf.Statements",
-                    "CommitGolf.Riscv", "CommitGolf.Programs"}
+                    "CommitGolf.Riscv", "CommitGolf.Programs", "CommitGolf.Artifact",
+                    "CommitGolf.ArtifactEncoding"}
 
 
 def strip_comments(source: str) -> str:
@@ -91,10 +94,10 @@ def check(root: Path) -> dict:
             if rel.parts[0] != "CommitGolfCandidate":
                 errors.append(f"{rel}: only CommitGolfCandidate/ may contain modules")
             continue
-        if rel.as_posix() not in {"Solution.lean", "claim.json", "README.md"} and not (
+        if rel.as_posix() not in {"Solution.lean", "claim.json", "programs.json", "README.md"} and not (
             rel.parts[0] == "CommitGolfCandidate" and path.suffix == ".lean" and
             all(MODULE.fullmatch(part) for part in rel.with_suffix("").parts)):
-            errors.append(f"{rel}: only Solution.lean, claim.json, README.md, and CommitGolfCandidate modules are admitted")
+            errors.append(f"{rel}: only Solution.lean, claim.json, programs.json, README.md, and CommitGolfCandidate modules are admitted")
             continue
         size = path.stat().st_size
         total += size
@@ -109,6 +112,11 @@ def check(root: Path) -> dict:
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         values = None
         errors.append(f"invalid claim.json: {exc}")
+    try:
+        artifact_digest = load_artifact(root / 'programs.json').digest
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        artifact_digest = None
+        errors.append(f"invalid programs.json: {exc}")
     modules = {".".join(path.relative_to(root).with_suffix("").parts)
                for path in files if path.is_file() and path.suffix == ".lean"}
     for path in files:
@@ -123,7 +131,8 @@ def check(root: Path) -> dict:
                 errors.append(f"{path.relative_to(root)}: import {module} is outside the allowed modules")
         except (OSError, UnicodeError, ValueError) as exc:
             errors.append(f"{path.relative_to(root)}: invalid Lean source: {exc}")
-    return {"ok": not errors, "claim": values, "score": score_claim(values) if values is not None else None,
+    return {"ok": not errors, "claim": values, "artifactDigest": artifact_digest,
+            "score": score_claim(values) if values is not None else None,
             "files": len(files), "bytes": total, "errors": errors}
 
 
