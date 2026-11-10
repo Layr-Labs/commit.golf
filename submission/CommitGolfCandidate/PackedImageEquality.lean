@@ -2544,18 +2544,6 @@ theorem packed_code_matches_image :
     simpa only [Nat.zero_add] using (packed_complete_matches ⟨index,bounded⟩).symm
 
 
-theorem packed_submission_matches : submission=Artifact.submission := by
-  have images : submission.image=Artifact.submission.image := by
-    funext program
-    cases program with
-    | commit =>
-      change (⟨group341ImageWords,[]⟩ : Riscv.Image)=
-        ⟨ArtifactEncoding.decode 32 Artifact.commitCode,ArtifactEncoding.decode 8 Artifact.commitData⟩
-      exact congrArg (fun code => (⟨code,[]⟩ : Riscv.Image)) packed_code_matches_image
-    | opening => rfl
-    | check => rfl
-  change (Submission.mk submission.sizes submission.layout submission.image submission.steps)=
-    (Submission.mk submission.sizes submission.layout Artifact.submission.image submission.steps)
-  exact congrArg (fun image => Submission.mk submission.sizes submission.layout image submission.steps) images
-
+/- The reference opening remains available for semantic equivalence.
+The full equality for the actual unrolled image is in FastOpeningArtifact. -/
 end CommitGolfCandidate
