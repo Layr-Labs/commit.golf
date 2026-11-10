@@ -94,7 +94,7 @@ def leafSubroutine : List Asm :=
 
 /-- Commitment keeps fixed oracle arguments live across all eight leaf blocks. -/
 def commitLeafSubroutine : List Asm :=
-  [.label "leaf", addi 28 0 0] ++ compressScratch.take 5 ++
+  [.label "leaf"] ++
   ((List.range 8).flatMap fun block =>
     (List.range 4).flatMap (fun word =>
       [ld 6 8 (32*block+8*word), sd 6 21 (32+8*word)]) ++ [insn 0x73]) ++
@@ -117,7 +117,8 @@ def commitCode (depth : Nat) : List Asm :=
   [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
-  li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
+  li 21 256 ++ [addi 20 0 0] ++ compressScratch.take 5 ++
+  [addi 28 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
    addi 5 0 0, addi 11 0 64, addi 13 0 0,

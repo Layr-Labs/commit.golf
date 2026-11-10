@@ -11,10 +11,10 @@ theorem commit_output_root (state : MachineState) (base output : Nat)
     (outputPointer : state.getReg .x26 = BitVec.ofNat 64 output)
     (heapAligned : base % 8 = 0) (outputAligned : output % 8 = 0)
     (bounded : base+64 ≤ 2^64) (separated : output+32 ≤ base) :
-    readBuffer (commitExitState (commitCopyState state 73)) output 32 = heapDigest state base 1 := by
-  change readBuffer (commitCopyState state 73) output 32 = readBuffer state (base+32*1) 32
-  apply commit_copy_digest state 73 (base+32) output (by simp)
-  · simp only [show (73 : Nat) ≠ 40 by decide, show (73 : Nat) ≠ 49 by decide, ite_false]
+    readBuffer (commitExitState (commitCopyState state 79)) output 32 = heapDigest state base 1 := by
+  change readBuffer (commitCopyState state 79) output 32 = readBuffer state (base+32*1) 32
+  apply commit_copy_digest state 79 (base+32) output (by simp)
+  · simp only [show (79 : Nat) ≠ 46 by decide, show (79 : Nat) ≠ 55 by decide, ite_false]
     rw [heapPointer, BitVec.ofNat_add]
     rfl
   · exact outputPointer
@@ -29,9 +29,9 @@ theorem commit_output_preserves_digest (state : MachineState) (output address : 
     (outputPointer : state.getReg .x26 = BitVec.ofNat 64 output)
     (aligned : address % 8 = 0) (bounded : address+32 ≤ 2^64)
     (separated : output+32 ≤ address) :
-    readBuffer (commitExitState (commitCopyState state 73)) address 32 = readBuffer state address 32 := by
-  change readBuffer (commitCopyState state 73) address 32 = _
-  exact commit_copy_preserves_digest state 73 output address (by simp) outputPointer aligned
+    readBuffer (commitExitState (commitCopyState state 79)) address 32 = readBuffer state address 32 := by
+  change readBuffer (commitCopyState state 79) address 32 = _
+  exact commit_copy_preserves_digest state 79 output address (by simp) outputPointer aligned
     (by omega) bounded (Or.inr separated)
 
 /-- Evaluate the full post-randomness body through its actual two loops and return. -/
@@ -39,7 +39,7 @@ theorem commit_body_evaluation (oracle : Oracle) (state : MachineState) (count :
     checkEvaluation oracle (commitBody state count) =
       let leaves := checkEvaluation oracle (commitLeaves state count)
       let parents := checkEvaluation oracle (commitParents (commitParentsStartState leaves.1) (count-1))
-      (commitExitState (commitCopyState parents.1 73), leaves.2+parents.2) := by
+      (commitExitState (commitCopyState parents.1 79), leaves.2+parents.2) := by
   rw [commitBody, check_evaluation_bind]
   simp only [check_evaluation_bind, check_evaluation_pure, Nat.add_zero]
 
@@ -111,8 +111,8 @@ theorem commit_output_matches (oracle : Oracle) (message : Message) (state : Mac
     (parents : HeapParents oracle.compression state 4294971424 LENGTH 0)
     (leaves : ∀ index : Index, heapDigest state 4294971424 (LENGTH+index.val) =
       leafDigest oracle.compression (readBuffer state (5368713248+32*index.val) 32) (message index)) :
-    CommittedState oracle message (commitExitState (commitCopyState state 73)) := by
-  let finished := commitExitState (commitCopyState state 73)
+    CommittedState oracle message (commitExitState (commitCopyState state 79)) := by
+  let finished := commitExitState (commitCopyState state 79)
   have preserved (node : Nat) (below : node < 3*LENGTH) :
       heapDigest finished 4294971424 node = heapDigest state 4294971424 node := by
     unfold heapDigest

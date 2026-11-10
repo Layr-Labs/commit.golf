@@ -33,7 +33,7 @@ theorem commit_parent_written_memory (state : MachineState) (answer : BitVec 256
 /-- Read two consecutive child digests and write their compression at the parent
 index. Four address instructions plus the syscall cost twelve cycles. The three fixed
 arguments are provided by the loop invariant. -/
-theorem commit_parent_compression (state : MachineState) (pc : state.pc = 4360)
+theorem commit_parent_compression (state : MachineState) (pc : state.pc = 4384)
     (constants : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
     (sourceValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 6)) 64 = true)
     (destinationValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 5)) 32 = true)
@@ -51,14 +51,14 @@ theorem commit_parent_compression (state : MachineState) (pc : state.pc = 4360)
     apply execute_unit_steps (states := parentPrefix state)
     intro i hi
     refine ⟨.base ((parentInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (66 + i) _ (by omega)
+    · apply commit_fetch _ (72 + i) _ (by omega)
       · interval_cases i <;> simp [parentPrefix, parentInstructions, execInstrBr, pc, MachineState.setPC]
       · interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
   let ready := parentPrefix state 4
   have fetched : fetch (submission.image .commit) ready = some (.base .ECALL) := by
-    apply commit_fetch _ 70 _ (by decide)
+    apply commit_fetch _ 76 _ (by decide)
     · simp [ready, parentPrefix, parentInstructions, execInstrBr, pc, MachineState.setPC]
     · rfl
   have registers : ready.getReg .x5 = 0 ∧
@@ -101,17 +101,17 @@ theorem commit_parent_register (state : MachineState) (answer : BitVec 256) (reg
 
 def commitParentNextState (state : MachineState) : MachineState :=
   (state.setReg .x20 (state.getReg .x20 - 1)).setPC
-    (if state.getReg .x20 - 1 = 0 then 4388 else 4360)
+    (if state.getReg .x20 - 1 = 0 then 4412 else 4384)
 
-theorem commit_parent_next (state : MachineState) (pc : state.pc = 4380) (fuel : Nat) :
+theorem commit_parent_next (state : MachineState) (pc : state.pc = 4404) (fuel : Nat) :
     execute (submission.image .commit) (2 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitParentNextState state) true
           return result.charge 2 0) := by
-  let next := (state.setReg .x20 (state.getReg .x20 - 1)).setPC 4384
+  let next := (state.setReg .x20 (state.getReg .x20 - 1)).setPC 4408
   have f0 : fetch (submission.image .commit) state = some (.base (.ADDI .x20 .x20 4095)) := by
-    apply commit_fetch _ 71 _ (by decide) pc; rfl
+    apply commit_fetch _ 77 _ (by decide) pc; rfl
   have f1 : fetch (submission.image .commit) next = some (.base (.BNE .x20 .x0 8168)) := by
-    apply commit_fetch _ 72 _ (by decide) rfl; rfl
+    apply commit_fetch _ 78 _ (by decide) rfl; rfl
   have s0 : ordinaryStep state (.base (.ADDI .x20 .x20 4095)) = some next := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       next, pc, BitVec.sub_eq_add_neg]
@@ -124,7 +124,7 @@ theorem commit_parent_next (state : MachineState) (pc : state.pc = 4380) (fuel :
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
 /-- One parent costs fourteen cycles and one public query. -/
-theorem commit_parent (state : MachineState) (pc : state.pc = 4360)
+theorem commit_parent (state : MachineState) (pc : state.pc = 4384)
     (constants : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
     (sourceValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 6)) 64 = true)
     (destinationValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 5)) 32 = true)
@@ -143,7 +143,7 @@ theorem commit_parent (state : MachineState) (pc : state.pc = 4360)
       OracleComp World (BitVec 256)) >>= continuation)
   funext answer
   change BitVec 256 at answer
-  have nextPC : (commitParentState state answer).pc = 4380 := by rw [commit_parent_pc, pc]; rfl
+  have nextPC : (commitParentState state answer).pc = 4404 := by rw [commit_parent_pc, pc]; rfl
   rw [commit_parent_next _ nextPC]
   simp [Execution.charge, ← Nat.add_assoc]
 
