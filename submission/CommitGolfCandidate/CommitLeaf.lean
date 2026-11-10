@@ -99,7 +99,7 @@ def commitCompressionState (state : MachineState) (answer : BitVec 256) : Machin
 
 /-- With hoisted arguments the block executes only the eight-cycle syscall. -/
 theorem commit_compression (state : MachineState) (block : Nat) (blockBound : block < 8)
-    (pc : state.pc = BitVec.ofNat 64 (4488 + 44*block))
+    (pc : state.pc = BitVec.ofNat 64 (4488 + 40*block))
     (scratch : state.getReg .x21 = 256) (ready : CommitLeafOracleReady state)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .commit) (1 + fuel) state allowCoins =
@@ -108,7 +108,7 @@ theorem commit_compression (state : MachineState) (block : Nat) (blockBound : bl
             ((commitCompressionState state answer).setPC (state.pc + 4)) allowCoins
           return result.charge 8 1) := by
   have fetched : fetch (submission.image .commit) state = some (.base .ECALL) := by
-    apply commit_fetch _ (98+11*block) _ (by omega)
+    apply commit_fetch _ (98+10*block) _ (by omega)
     · rw [pc]; congr 1 <;> omega
     · interval_cases block <;> rfl
   rcases ready with ⟨r5,r10,r11,r12,r13⟩
@@ -179,7 +179,7 @@ private theorem commit_copy_register (state : MachineState) (count : Nat) (bound
 set_option maxHeartbeats 8000000 in
 /-- Copy the next 256-bit message block into the upper scratch half. -/
 theorem commit_leaf_copy (state : MachineState) (block : Nat) (blockBound : block < 8)
-    (pc : state.pc = BitVec.ofNat 64 (4456+44*block))
+    (pc : state.pc = BitVec.ofNat 64 (4456+40*block))
     (scratch : state.getReg .x21 = 256)
     (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
@@ -190,7 +190,7 @@ theorem commit_leaf_copy (state : MachineState) (block : Nat) (blockBound : bloc
   apply execute_unit_steps (states := commitLeafCopyPrefix state)
   intro i hi
   refine ⟨.base ((commitLeafCopyInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ (90 + 11*block + i) _ (by omega)
+  · apply commit_fetch _ (90 + 10*block + i) _ (by omega)
     · interval_cases block <;> interval_cases i <;>
         simp [commitLeafCopyPrefix, commitLeafCopyInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases block <;> interval_cases i <;> rfl
@@ -222,50 +222,48 @@ theorem commit_leaf_next_pc_irrel (state : MachineState) (pc : Word) :
     commitLeafNextState (state.setPC pc) = commitLeafNextState state := by
   cases state; rfl
 
-/-- The unrolled image advances to the next block with two ordinary instructions. -/
+/-- The unrolled image advances the source pointer with one instruction;
+its counter register remains zero throughout the actual execution. -/
 theorem commit_leaf_next (state : MachineState) (block : Nat) (blockBound : block < 8)
-    (pc : state.pc = BitVec.ofNat 64 (4492+44*block))
+    (pc : state.pc = BitVec.ofNat 64 (4492+40*block))
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (2 + fuel) state allowCoins =
+    execute (submission.image .commit) (1 + fuel) state allowCoins =
       (do let result ← execute (submission.image .commit) fuel
-            ((commitLeafNextState state).setPC (state.pc + 8)) allowCoins
-          return result.charge 2 0) := by
-  let advanced := (state.setReg .x8 (state.getReg .x8 + 32)).setPC (state.pc + 4)
-  have f0 : fetch (submission.image .commit) state = some (.base (.ADDI .x8 .x8 32)) := by
-    apply commit_fetch _ (99+11*block) _ (by omega)
+            (((commitLeafNextState state).setReg .x28 (state.getReg .x28)).setPC (state.pc + 4)) allowCoins
+          return result.charge 1 0) := by
+  have fetched : fetch (submission.image .commit) state = some (.base (.ADDI .x8 .x8 32)) := by
+    apply commit_fetch _ (99+10*block) _ (by omega)
     · rw [pc]; congr 1 <;> omega
     · interval_cases block <;> rfl
-  have f1 : fetch (submission.image .commit) advanced = some (.base (.ADDI .x28 .x28 4095)) := by
-    apply commit_fetch _ (100+11*block) _ (by omega)
-    · interval_cases block <;> simp [advanced,pc,MachineState.setPC]
-    · interval_cases block <;> rfl
-  have s0 : ordinaryStep state (.base (.ADDI .x8 .x8 32)) = some advanced := by
-    simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,advanced]
-  have s1 : ordinaryStep advanced (.base (.ADDI .x28 .x28 4095)) =
-      some ((commitLeafNextState state).setPC (state.pc + 8)) := by
-    simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,
-      advanced,commitLeafNextState,MachineState.getReg,MachineState.setReg,MachineState.setPC,
-      BitVec.sub_eq_add_neg,BitVec.add_assoc]
-  rw [show 2 + fuel = (fuel + 1) + 1 by omega,
-    execute_ordinary_step _ _ _ _ _ _ f0 s0,execute_ordinary_step _ _ _ _ _ _ f1 s1]
-  simp [instructionCycles,Execution.charge,← Nat.add_assoc]
+  have stepped : ordinaryStep state (.base (.ADDI .x8 .x8 32)) =
+      some (((commitLeafNextState state).setReg .x28 (state.getReg .x28)).setPC (state.pc + 4)) := by
+    simp only [ordinaryStep,memoryArgumentsValid,memAccess,reduceIte]
+    cases state
+    dsimp [execInstrBr,signExtend12,commitLeafNextState,MachineState.getReg,
+      MachineState.setReg,MachineState.setPC]
+    congr 2
+    funext reg
+    cases reg <;> rfl
+  rw [Nat.add_comm 1 fuel,execute_ordinary_step _ _ _ _ _ _ fetched stepped]
+  rfl
 
 /-- One leaf block: copy 32 bytes, compress, then advance the pointer and counter. -/
 def commitLeafStepState (state : MachineState) (answer : BitVec 256) : MachineState :=
   commitLeafNextState (commitCompressionState (commitLeafCopyState state) answer)
 
 theorem commit_leaf_block (state : MachineState) (block : Nat) (blockBound : block < 8)
-    (pc : state.pc = BitVec.ofNat 64 (4456+44*block))
+    (pc : state.pc = BitVec.ofNat 64 (4456+40*block))
     (scratch : state.getReg .x21 = 256) (ready : CommitLeafOracleReady state)
+    (counter : state.getReg .x28 = 0)
     (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (11 + fuel) state allowCoins =
+    execute (submission.image .commit) (10 + fuel) state allowCoins =
       (do let answer ← World.query (.inr (.inl (readBuffer (commitLeafCopyState state) 256 64)))
-          let result ← execute (submission.image .commit) fuel ((commitLeafStepState state answer).setPC
-            (BitVec.ofNat 64 (4456+44*(block+1)))) allowCoins
-          return result.charge 18 1) := by
-  have copyPC : (commitLeafCopyState state).pc = BitVec.ofNat 64 (4488+44*block) := by
+          let result ← execute (submission.image .commit) fuel (((commitLeafStepState state answer).setReg .x28 0).setPC
+            (BitVec.ofNat 64 (4456+40*(block+1)))) allowCoins
+          return result.charge 17 1) := by
+  have copyPC : (commitLeafCopyState state).pc = BitVec.ofNat 64 (4488+40*block) := by
     interval_cases block <;> simp [commitLeafCopyState, commitLeafCopyPrefix, commitLeafCopyInstructions, execInstrBr,
       MachineState.setPC, pc]
   have copyScratch : (commitLeafCopyState state).getReg .x21 = 256 :=
@@ -280,7 +278,7 @@ theorem commit_leaf_block (state : MachineState) (block : Nat) (blockBound : blo
       commit_copy_register state 8 (by decide) .x12 (by decide),
       commit_copy_register state 8 (by decide) .x13 (by decide)] using
       And.intro r5 ⟨r10,r11,r12,r13⟩
-  rw [show 11 + fuel = 8 + (1 + (2 + fuel)) by omega,
+  rw [show 10 + fuel = 8 + (1 + (1 + fuel)) by omega,
     commit_leaf_copy state block blockBound pc scratch sourceValid,
     commit_compression _ block blockBound copyPC copyScratch copyReady]
   simp only [bind_assoc, pure_bind]
@@ -289,21 +287,32 @@ theorem commit_leaf_block (state : MachineState) (block : Nat) (blockBound : blo
       OracleComp World (BitVec 256)) >>= continuation)
   funext answer
   have queryPC : ((commitCompressionState (commitLeafCopyState state) answer).setPC
-      ((commitLeafCopyState state).pc + 4)).pc = BitVec.ofNat 64 (4492+44*block) := by
+      ((commitLeafCopyState state).pc + 4)).pc = BitVec.ofNat 64 (4492+40*block) := by
     change (commitLeafCopyState state).pc + 4 = _
     rw [copyPC]; interval_cases block <;> rfl
   rw [commit_leaf_next _ block blockBound queryPC]
-  have targetPC : (commitLeafCopyState state).pc + 4 + 8 =
-      BitVec.ofNat 64 (4456+44*(block+1)) := by
+  have targetPC : (commitLeafCopyState state).pc + 4 + 4 =
+      BitVec.ofNat 64 (4456+40*(block+1)) := by
     rw [copyPC]; interval_cases block <;> rfl
+  have queryCounter :
+      ((commitCompressionState (commitLeafCopyState state) answer).setPC
+        ((commitLeafCopyState state).pc + 4)).getReg .x28 = 0 := by
+    rw [MachineState.getReg_setPC,
+      commit_compression_register _ answer .x28 (by decide) (by decide) (by decide) (by decide) (by decide),
+      commitLeafCopyState,commit_copy_register state 8 (by decide) .x28 (by decide)]
+    exact counter
   have nextEq :
-      (commitLeafNextState ((commitCompressionState (commitLeafCopyState state) answer).setPC
-        ((commitLeafCopyState state).pc + 4))).setPC
+      ((commitLeafNextState ((commitCompressionState (commitLeafCopyState state) answer).setPC
+        ((commitLeafCopyState state).pc + 4))).setReg .x28
           (((commitCompressionState (commitLeafCopyState state) answer).setPC
-            ((commitLeafCopyState state).pc + 4)).pc + 8) =
-      (commitLeafStepState state answer).setPC (BitVec.ofNat 64 (4456+44*(block+1))) := by
-    rw [commit_leaf_next_pc_irrel]
-    change (commitLeafStepState state answer).setPC ((commitLeafCopyState state).pc + 4 + 8) = _
+            ((commitLeafCopyState state).pc + 4)).getReg .x28)).setPC
+          (((commitCompressionState (commitLeafCopyState state) answer).setPC
+            ((commitLeafCopyState state).pc + 4)).pc + 4) =
+      ((commitLeafStepState state answer).setReg .x28 0).setPC
+        (BitVec.ofNat 64 (4456+40*(block+1))) := by
+    rw [queryCounter,commit_leaf_next_pc_irrel]
+    change ((commitLeafStepState state answer).setReg .x28 0).setPC
+      ((commitLeafCopyState state).pc + 4 + 4) = _
     rw [targetPC]
   rw [nextEq]
   simp [Execution.charge, bind_assoc, pure_bind, ← Nat.add_assoc]
@@ -424,23 +433,142 @@ theorem unroll_loop_pc_bind {α : Type} (state : MachineState) (target finalPC :
   | zero => simp [commitLeafLoop,hoist_pc_pc]
   | succ count => rw [unroll_loop_pc_positive]
 
+theorem counter_write {bits : Nat} (state : MachineState) (address : Word)
+    (answer : BitVec bits) (value : Word) :
+    writeBits (state.setReg .x28 value) address answer =
+      (writeBits state address answer).setReg .x28 value := by
+  have byte_reg (s : MachineState) (a : Word) (b : BitVec 8) :
+      (s.setReg .x28 value).setByte a b = (s.setByte a b).setReg .x28 value := by
+    cases s; rfl
+  have fold (indices : List Nat) (current : MachineState) :
+      indices.foldl (fun s i => s.setByte (address + BitVec.ofNat 64 i)
+        (BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i)))) (current.setReg .x28 value) =
+      (indices.foldl (fun s i => s.setByte (address + BitVec.ofNat 64 i)
+        (BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i)))) current).setReg .x28 value := by
+    induction indices generalizing current with
+    | nil => rfl
+    | cons i rest ih =>
+      simpa only [List.foldl_cons,byte_reg] using ih
+        (current.setByte (address + BitVec.ofNat 64 i)
+          (BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))))
+  unfold writeBits
+  rw [fold]
+  rfl
+
+theorem counter_copy (state : MachineState) (value : Word) :
+    commitLeafCopyState (state.setReg .x28 value) =
+      (commitLeafCopyState state).setReg .x28 value := by
+  change commitLeafCopyInstructions.foldl execInstrBr (state.setReg .x28 value) =
+    (commitLeafCopyInstructions.foldl execInstrBr state).setReg .x28 value
+  cases state
+  dsimp [commitLeafCopyInstructions,List.foldl,execInstrBr,signExtend12,MachineState.getReg,
+    MachineState.setReg,MachineState.getMem,MachineState.setMem,MachineState.setPC]
+  congr 1
+  funext reg
+  cases reg <;> rfl
+
+theorem counter_compression (state : MachineState) (value : Word) (answer : BitVec 256) :
+    commitCompressionState (state.setReg .x28 value) answer =
+      (commitCompressionState state answer).setReg .x28 value := by
+  have argsShift : commitCompressionInstructions.foldl execInstrBr (state.setReg .x28 value) =
+      (commitCompressionInstructions.foldl execInstrBr state).setReg .x28 value := by
+    cases state
+    dsimp [commitCompressionInstructions,List.foldl,execInstrBr,signExtend12,MachineState.getReg,
+      MachineState.setReg,MachineState.setPC]
+    congr 1
+    funext reg
+    cases reg <;> rfl
+  change writeBits (commitCompressionInstructions.foldl execInstrBr (state.setReg .x28 value)) 256 answer =
+    (writeBits (commitCompressionInstructions.foldl execInstrBr state) 256 answer).setReg .x28 value
+  rw [argsShift,counter_write]
+theorem counter_step (state : MachineState) (value : Word) (answer : BitVec 256) :
+    commitLeafStepState (state.setReg .x28 value) answer =
+      ((commitLeafStepState state answer).setReg .x28 (value-1)).setPC
+        (if value-1=0 then 4504 else 4456) := by
+  unfold commitLeafStepState
+  rw [counter_copy,counter_compression]
+  generalize commitCompressionState (commitLeafCopyState state) answer = base
+  cases base
+  dsimp [commitLeafNextState,MachineState.getReg,MachineState.setReg,MachineState.setPC]
+  congr 1
+  funext reg
+  cases reg <;> rfl
+theorem counter_loop_bind {α : Type} (state : MachineState) (value target finalPC : Word)
+    (count : Nat) (continuation : MachineState → OracleComp World α) :
+    (do let finished ← commitLeafLoop ((state.setReg .x28 value).setPC target) count
+        continuation ((finished.setReg .x28 0).setPC finalPC)) =
+      (do let finished ← commitLeafLoop state count
+          continuation ((finished.setReg .x28 0).setPC finalPC)) := by
+  induction count generalizing state value target with
+  | zero =>
+    simp only [commitLeafLoop,pure_bind]
+    apply congrArg continuation
+    cases state
+    dsimp [MachineState.setReg,MachineState.setPC]
+    congr 1
+    funext reg
+    cases reg <;> rfl
+  | succ count ih =>
+    have inputEq :
+        readBuffer (commitLeafCopyState ((state.setReg .x28 value).setPC target)) 256 64 =
+          readBuffer (commitLeafCopyState state) 256 64 := by
+      rw [unroll_copy_pc,counter_copy]
+      rfl
+    have tailEq :
+        (fun answer : BitVec 256 => do
+          let finished ← commitLeafLoop
+            (commitLeafStepState ((state.setReg .x28 value).setPC target) answer) count
+          continuation ((finished.setReg .x28 0).setPC finalPC)) =
+        (fun answer : BitVec 256 => do
+          let finished ← commitLeafLoop (commitLeafStepState state answer) count
+          continuation ((finished.setReg .x28 0).setPC finalPC)) := by
+      funext answer
+      rw [unroll_step_pc,counter_step]
+      exact ih _ _ _
+    exact congrArg₂ (fun (input : BitVec COMPRESSION_INPUT_LENGTH)
+        (tail : BitVec 256 → OracleComp World α) =>
+          (liftM (World.query (.inr (.inl input))) : OracleComp World (BitVec 256)) >>= tail)
+      inputEq tailEq
+theorem counter_reg_self (state : MachineState) (value : Word)
+    (equal : state.getReg .x28 = value) : state.setReg .x28 value = state := by
+  cases state
+  dsimp [MachineState.setReg,MachineState.getReg] at equal ⊢
+  congr 1
+  funext reg
+  cases reg <;> simp_all
+
+theorem counter_loop_plain_bind {α : Type} (state : MachineState) (value finalPC : Word)
+    (count : Nat) (continuation : MachineState → OracleComp World α) :
+    (do let finished ← commitLeafLoop (state.setReg .x28 value) count
+        continuation ((finished.setReg .x28 0).setPC finalPC)) =
+      (do let finished ← commitLeafLoop state count
+          continuation ((finished.setReg .x28 0).setPC finalPC)) := by
+  have currentPC : (state.setReg .x28 value).pc = state.pc := rfl
+  have initialEq : (state.setReg .x28 value).setPC state.pc = state.setReg .x28 value := by
+    rw [← currentPC,hoist_pc_self]
+  have result := counter_loop_bind state value state.pc finalPC count continuation
+  rw [initialEq] at result
+  exact result
+
 set_option maxHeartbeats 2000000 in
-/-- The eight blocks occupy consecutive addresses and omit their branch instructions. -/
+/-- The eight blocks occupy consecutive addresses without branches or decrements.
+The reference loop counter is erased at continuation boundaries; actual x28 stays zero. -/
 theorem commit_leaf_loop (state : MachineState) (count first : Nat) (total : first + count = 8)
-    (pc : state.pc = BitVec.ofNat 64 (4456+44*first)) (counter : state.getReg .x28 = BitVec.ofNat 64 count)
+    (pc : state.pc = BitVec.ofNat 64 (4456+40*first)) (counter : state.getReg .x28 = 0)
     (scratch : state.getReg .x21 = 256) (ready : CommitLeafOracleReady state)
     (sourceValid : ∀ word < 4 * count,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (11 * count + fuel) state allowCoins =
+    execute (submission.image .commit) (10 * count + fuel) state allowCoins =
       (do let finished ← commitLeafLoop state count
-          let result ← execute (submission.image .commit) fuel (finished.setPC 4808) allowCoins
-          return result.charge (18 * count) count) := by
+          let result ← execute (submission.image .commit) fuel ((finished.setReg .x28 0).setPC 4776) allowCoins
+          return result.charge (17 * count) count) := by
   induction count generalizing state first with
   | zero =>
     have firstEq : first = 8 := by omega
-    have statePC : state.pc = 4808 := by simpa [firstEq] using pc
-    have normalized : state.setPC 4808 = state := by rw [← statePC,hoist_pc_self]
+    have statePC : state.pc = 4776 := by simpa [firstEq] using pc
+    have normalized : (state.setReg .x28 0).setPC 4776 = state := by
+      rw [counter_reg_self state 0 counter,← statePC,hoist_pc_self]
     simp only [Nat.mul_zero, Nat.zero_add, commitLeafLoop, pure_bind]
     rw [normalized]
     simp [Execution.charge]
@@ -448,12 +576,6 @@ theorem commit_leaf_loop (state : MachineState) (count first : Nat) (total : fir
     have currentValid (word : Fin 4) :
         accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word.val)) 8 = true :=
       sourceValid word.val (by omega)
-    have nextCounter (answer : BitVec 256) :
-        (commitLeafStepState state answer).getReg .x28 = BitVec.ofNat 64 count := by
-      rw [(commit_leaf_block_registers state answer).2.1, counter]
-      change BitVec.ofNat 64 (count + 1) - BitVec.ofNat 64 1 = BitVec.ofNat 64 count
-      rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (count + 1) 1 (by decide) (by omega)]
-      congr 1
     have nextValid (answer : BitVec 256) (word : Nat) (bound : word < 4 * count) :
         accessValid ((commitLeafStepState state answer).getReg .x8 +
           BitVec.ofNat 64 (8 * word)) 8 = true := by
@@ -465,8 +587,8 @@ theorem commit_leaf_loop (state : MachineState) (count first : Nat) (total : fir
         rfl
       rw [address]
       exact valid
-    rw [show 11 * (count + 1) + fuel = 11 + (11 * count + fuel) by omega,
-      commit_leaf_block state first (by omega) pc scratch ready currentValid]
+    rw [show 10 * (count + 1) + fuel = 10 + (10 * count + fuel) by omega,
+      commit_leaf_block state first (by omega) pc scratch ready counter currentValid]
     simp only [commitLeafLoop, bind_assoc]
     apply congrArg (fun continuation =>
       (liftM (World.query (.inr (.inl (readBuffer (commitLeafCopyState state) 256 64)))) :
@@ -476,23 +598,30 @@ theorem commit_leaf_loop (state : MachineState) (count first : Nat) (total : fir
     have nextScratch : next.getReg .x21 = 256 :=
       (commit_leaf_block_registers state answer).2.2.1.trans scratch
     have nextReady : CommitLeafOracleReady next := commit_leaf_step_ready state answer scratch
-    let actualNext := next.setPC (BitVec.ofNat 64 (4456+44*(first+1)))
-    have actualCounter : actualNext.getReg .x28 = BitVec.ofNat 64 count := by
-      simpa only [actualNext,MachineState.getReg_setPC] using nextCounter answer
+    let actualNext := (next.setReg .x28 0).setPC (BitVec.ofNat 64 (4456+40*(first+1)))
+    have actualCounter : actualNext.getReg .x28 = 0 := by
+      simp only [actualNext,MachineState.getReg_setPC,MachineState.getReg_setReg_eq (by decide : Reg.x28 ≠ .x0)]
     have actualScratch : actualNext.getReg .x21 = 256 := by
-      simpa only [actualNext,MachineState.getReg_setPC] using nextScratch
+      simpa only [actualNext,MachineState.getReg_setPC,
+        MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x21)] using nextScratch
     have actualReady : CommitLeafOracleReady actualNext := by
-      simpa only [actualNext,CommitLeafOracleReady,MachineState.getReg_setPC] using nextReady
+      simpa only [actualNext,CommitLeafOracleReady,MachineState.getReg_setPC,
+        MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x5),
+        MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x10),
+        MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x11),
+        MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x12),
+        MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x13)] using nextReady
     have actualValid : ∀ word < 4*count,
         accessValid (actualNext.getReg .x8 + BitVec.ofNat 64 (8*word)) 8 = true := by
-      simpa only [actualNext,MachineState.getReg_setPC] using nextValid answer
+      simpa only [actualNext,MachineState.getReg_setPC,
+        MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x8)] using nextValid answer
     rw [ih actualNext (first+1) (by omega) rfl actualCounter actualScratch actualReady actualValid]
     dsimp only [actualNext]
-    have tailEq := unroll_loop_pc_bind next
-      (BitVec.ofNat 64 (4456+44*(first+1))) 4808 count
+    have tailEq := counter_loop_bind next 0
+      (BitVec.ofNat 64 (4456+40*(first+1))) 4776 count
       (fun finished => do
         let result ← execute (submission.image .commit) fuel finished allowCoins
-        return result.charge (18*count) count)
+        return result.charge (17*count) count)
     rw [tailEq]
     simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc, next]
 
@@ -527,15 +656,27 @@ theorem commit_leaf_loop_finished (state : MachineState) (count : Nat) (bounded 
       rfl
     · exact remaining.2.2 (by omega)
 
+theorem counter_ready_prefix (state : MachineState) :
+    commitCompressionPrefix ((state.setReg .x28 0).setPC 4436) 5 =
+      (commitLeafReadyState state).setReg .x28 0 := by
+  change commitCompressionInstructions.foldl execInstrBr ((state.setReg .x28 0).setPC 4436) =
+    (commitCompressionInstructions.foldl execInstrBr ((state.setReg .x28 8).setPC 4436)).setReg .x28 0
+  cases state
+  dsimp [commitCompressionInstructions,List.foldl,execInstrBr,signExtend12,MachineState.getReg,
+    MachineState.setReg,MachineState.setPC]
+  congr 1
+  funext reg
+  cases reg <;> rfl
+
 /-- The leaf subroutine returns to its caller using the preserved link register. -/
-theorem commit_leaf_return (state : MachineState) (pc : state.pc = 4808)
+theorem commit_leaf_return (state : MachineState) (pc : state.pc = 4776)
     (link : state.getReg .x1 = 4292) (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .commit) (1 + fuel) state allowCoins =
       (do let result ← execute (submission.image .commit) fuel (state.setPC 4292) allowCoins
           return result.charge 1 0) := by
   have fetched : fetch (submission.image .commit) state =
       some (.base (.JALR .x0 .x1 0)) := by
-    apply commit_fetch _ 178 _ (by decide) pc
+    apply commit_fetch _ 170 _ (by decide) pc
     rfl
   have stepped : ordinaryStep state (.base (.JALR .x0 .x1 0)) = some (state.setPC 4292) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
@@ -543,22 +684,23 @@ theorem commit_leaf_return (state : MachineState) (pc : state.pc = 4808)
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   rfl
 
-/-- Hoisted arguments cost five cycles once; eight eleven-instruction blocks follow. -/
+/-- Hoisted arguments cost five cycles once; eight ten-instruction blocks follow.
+The actual zero counter is related to the reference eight-block counter by the frame lemma. -/
 theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4432)
     (link : state.getReg .x1 = 4292) (scratch : state.getReg .x21 = 256)
     (sourceValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (95 + fuel) state allowCoins =
+    execute (submission.image .commit) (87 + fuel) state allowCoins =
       (do let finished ← commitLeafLoop (commitLeafReadyState state) 8
           let result ← execute (submission.image .commit) fuel (finished.setPC 4292) allowCoins
-          return result.charge 151 8) := by
-  let initialized := (state.setReg .x28 8).setPC 4436
+          return result.charge 143 8) := by
+  let initialized := (state.setReg .x28 0).setPC 4436
   let ready := commitLeafReadyState state
   have fetched : fetch (submission.image .commit) state =
-      some (.base (.ADDI .x28 .x0 8)) := by
+      some (.base (.ADDI .x28 .x0 0)) := by
     apply commit_fetch _ 84 _ (by decide) pc; rfl
-  have stepped : ordinaryStep state (.base (.ADDI .x28 .x0 8)) = some initialized := by
+  have stepped : ordinaryStep state (.base (.ADDI .x28 .x0 0)) = some initialized := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       initialized, pc, MachineState.getReg]
   have initCounter : ready.getReg .x28 = BitVec.ofNat 64 8 := by simp [ready]
@@ -567,11 +709,31 @@ theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4432)
       accessValid (ready.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true := by
     simpa [ready] using sourceValid
   have oracleReady : CommitLeafOracleReady ready := commit_leaf_ready_oracle state scratch
-  rw [show 95 + fuel = (5 + (11 * 8 + (1 + fuel))) + 1 by omega,
+  let actualReady := ready.setReg .x28 0
+  have actualCounter : actualReady.getReg .x28 = 0 := by
+    simp [actualReady,MachineState.getReg_setReg_eq]
+  have actualScratch : actualReady.getReg .x21 = 256 := by
+    simpa only [actualReady,MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x21)] using initScratch
+  have actualSource : ∀ word < 4*8,
+      accessValid (actualReady.getReg .x8 + BitVec.ofNat 64 (8*word)) 8 = true := by
+    simpa only [actualReady,MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x8)] using initSource
+  have actualOracle : CommitLeafOracleReady actualReady := by
+    simpa only [actualReady,CommitLeafOracleReady,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x5),
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x10),
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x11),
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x12),
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x13)] using oracleReady
+  rw [show 87 + fuel = (5 + (10 * 8 + (1 + fuel))) + 1 by omega,
     execute_ordinary_step _ _ _ _ _ _ fetched stepped,
     commit_leaf_ready initialized rfl]
-  rw [show commitCompressionPrefix initialized 5 = ready by rfl,
-    commit_leaf_loop ready 8 0 (by decide) rfl initCounter initScratch oracleReady initSource]
+  rw [show commitCompressionPrefix initialized 5 = actualReady from counter_ready_prefix state,
+    commit_leaf_loop actualReady 8 0 (by decide) rfl actualCounter actualScratch actualOracle actualSource]
+  have frame := counter_loop_plain_bind ready 0 4776 8
+    (fun finished => do
+      let result ← execute (submission.image .commit) (1+fuel) finished allowCoins
+      return result.charge (17*8) 8)
+  rw [frame]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro finished reachable
@@ -579,7 +741,7 @@ theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4432)
   have finalLink : finished.getReg .x1 = 4292 := by
     rw [done.2.1]
     simpa [ready] using link
-  rw [commit_leaf_return (finished.setPC 4808) rfl finalLink]
+  rw [counter_reg_self finished 0 done.1,commit_leaf_return (finished.setPC 4776) rfl finalLink]
   rw [hoist_pc_pc]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
