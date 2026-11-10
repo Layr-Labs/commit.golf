@@ -1,4 +1,4 @@
-import CommitGolfCandidate.PointerStart
+import CommitGolfCandidate.HeapLatch
 
 /-! The full pointer-based parent phase and successful commitment return. -/
 namespace CommitGolfCandidate
@@ -93,6 +93,8 @@ setup and terminal jump. Address conditions cover every message and salt. -/
 theorem commit_body (state : MachineState) (count : Nat)
     (positive : 2 ≤ count) (bounded : count ≤ 2 ^ 24)
     (leaves : CommitLeavesInvariant state count)
+    (zeroCounter : state.getReg .x20=0)
+    (heapWindow : (state.getReg .x23).toNat+32*count=(state.getReg .x22).toNat)
     (total : state.getReg .x19 = BitVec.ofNat 64 count)
     (parents : ParentBuffers (state.getReg .x9) (count - 1))
     (rootValid : ∀ word : Fin 4,
@@ -100,12 +102,16 @@ theorem commit_body (state : MachineState) (count : Nat)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (44 * count + 14 + fuel) state true =
+    execute (submission.image .commit) (43 * count + 15 + fuel) state true =
       (do let finished ← commitBody state count
-          return ⟨.success, finished, 107 * count + 7, 9 * count - 1⟩) := by
-  rw [show 44 * count + 14 + fuel =
-    40 * count + (6 + (4 * (count - 1) + (12 + fuel))) by omega,
-    commit_leaves state count leaves]
+          return ⟨.success, finished, 106 * count + 8, 9 * count - 1⟩) := by
+  have leavesRun := heap_latch_leaves state count leaves heapWindow
+    (7+(4*(count-1)+(12+fuel)))
+  have nonzero : count ≠ 0 := by omega
+  simp only [if_neg nonzero] at leavesRun
+  rw [heap_normalize_state state 4280 zeroCounter,
+    ← (show state.pc=4280 by simpa [nonzero] using leaves.pc),hoist_pc_self] at leavesRun
+  rw [show 43*count+15+fuel=39*count+(7+(4*(count-1)+(12+fuel))) by omega,leavesRun]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro hashed reached
@@ -137,7 +143,7 @@ theorem commit_body (state : MachineState) (count : Nat)
     (readyRegister .x26 (by simp)).trans (leafDone.2 .x26 (by simp))
   have readyBuffers : ParentBuffers (ready.getReg .x9) (count - 1) := by
     rw [readyHeap]; exact parents
-  rw [commit_parents_start hashed leafDone.1 nonempty,
+  rw [heap_latch_parent_setup hashed leafDone.1 nonempty,
     commit_parents ready (count - 1) (by omega) readyPC readyPointers
       (commit_parents_start_constants hashed leafInvariant.oracleReady) readyBuffers]
   simp only [bind_assoc, pure_bind]

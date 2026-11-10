@@ -1,6 +1,7 @@
 import CommitGolfCandidate.Commit
 
-/-! Execution of every leaf iteration of the submitted commitment image. -/
+/-! Reference leaf distribution and safety invariants. HeapLatch connects its
+virtual index to the submitted machine's actual heap-end branch. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
@@ -202,31 +203,6 @@ def commitLeaves : MachineState → Nat → OracleComp World MachineState
   | state, remaining + 1 => do
       let next ← commitPositionRun state
       commitLeaves next remaining
-
-attribute [local irreducible] execute commitPositionRun
-
-/-- Every leaf is processed. This is an exact execution equality, not a sampled
-benchmark: 40 instructions, 96 cycles and eight queries per leaf. -/
-theorem commit_leaves (state : MachineState) (remaining : Nat)
-    (invariant : CommitLeavesInvariant state remaining) (fuel : Nat) :
-    execute (submission.image .commit) (40 * remaining + fuel) state true =
-      (do let finished ← commitLeaves state remaining
-          let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (96 * remaining) (8 * remaining)) := by
-  induction remaining generalizing state with
-  | zero => simp [commitLeaves, Execution.charge]
-  | succ remaining ih =>
-    have pc : state.pc = 4280 := by simpa using invariant.pc
-    rw [show 40 * (remaining + 1) + fuel = 40 + (40 * remaining + fuel) by omega,
-      commit_position state pc invariant.scratch invariant.sourceAbove invariant.oracleReady invariant.blockCounter
-        (fun word => invariant.salts word.val (by omega))
-        (fun word => invariant.heap word.val (by omega))
-        (fun word bounded => invariant.message word (by omega))]
-    simp only [commitLeaves, bind_assoc]
-    apply bind_congr_of_forall_mem_support
-    intro next reached
-    rw [ih next (commit_leaves_next_invariant state next remaining invariant reached)]
-    simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm]
 
 /-- The leaf loop reaches the parent-building phase and preserves its pointers. -/
 theorem commit_leaves_finished (state : MachineState) (remaining : Nat)

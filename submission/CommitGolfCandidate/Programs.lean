@@ -120,10 +120,10 @@ def commitCode (depth : Nat) : List Asm :=
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
   -- Keep three physical setup slots so the main-loop addresses remain stable.
-  [addi 21 8 (-32), addi 0 0 0, addi 0 0 0, addi 20 0 0] ++ compressScratch.take 5 ++
+  [addi 21 8 (-32), mv 22 18, addi 0 0 0, addi 20 0 0] ++ compressScratch.take 5 ++
   [addi 28 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
-  [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
+  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "commit-leaf", addi 0 0 0,
    -- Fixed syscall selectors survive the leaf loop. Initialize descending
    -- parent addresses once, then advance them by subtraction after each query.
    addi 20 19 (-1), shift 6 20 6, regop 10 9 6, shift 7 20 5,

@@ -35,7 +35,7 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
   dsimp only
   have regs := commit_setup_registers initial
   have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20)
-      (notArguments : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28]) :
+      (notArguments : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28,.x22]) :
       (commitReadyState (writeBits (commitSetupState initial)
         ((commitSetupState initial).getReg .x10) answer)).getReg reg =
           (commitSetupState initial).getReg reg := by
@@ -70,6 +70,18 @@ theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec
   exact ⟨regs.1.trans messagePtr, regs.2.1.trans heapPtr, regs.2.2.1.trans saltPtr,
     regs.2.2.2.1, regs.2.2.2.2.1.trans leafPtr, regs.2.2.2.2.2.1.trans outputPtr,
     regs.2.2.2.2.2.2.1.trans (by rw [messagePtr]; rfl), regs.2.2.2.2.2.2.2⟩
+
+/-- The admitted ABI initializes a nonwrapping heap window ending at the salt buffer. -/
+theorem commit_input_heap_window (message : Message) {bits : Nat} (answer : BitVec bits) :
+    ((commitInputReady message answer).getReg .x23).toNat+32*(2^24)=
+      ((commitInputReady message answer).getReg .x22).toNat := by
+  have regs := commit_input_registers message answer
+  have saved : (commitInputReady message answer).getReg .x22=
+      (commitInputReady message answer).getReg .x18 := by
+    unfold commitInputReady
+    rw [commit_ready_heap_end,commit_ready_register _ .x18 (by decide) (by decide) (by decide)]
+  rw [regs.2.2.2.2.1,saved,regs.2.2.1]
+  decide
 
 /-- The first iteration has space for every remaining message block, salt, and
 leaf digest, for all actual messages and every private random answer. -/

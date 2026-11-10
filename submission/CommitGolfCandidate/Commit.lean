@@ -78,7 +78,7 @@ theorem commit_random (state : MachineState) (pc : state.pc = 4236)
   rfl
 
 private def commitReadyInstructions : List Instr :=
-  [.ADDI .x21 .x8 (-32), .ADDI .x0 .x0 0, .ADDI .x0 .x0 0, .ADDI .x20 .x0 0,
+  [.ADDI .x21 .x8 (-32), .ADDI .x22 .x18 0, .ADDI .x0 .x0 0, .ADDI .x20 .x0 0,
    .ADDI .x5 .x0 0, .ADDI .x10 .x21 0, .ADDI .x11 .x0 64,
    .ADDI .x12 .x21 0, .ADDI .x13 .x0 0, .ADDI .x28 .x0 0]
 
@@ -87,8 +87,8 @@ private def commitReadyPrefix (state : MachineState) (count : Nat) : MachineStat
 
 def commitReadyState (state : MachineState) : MachineState := commitReadyPrefix state 10
 
-/-- Initialize the moving chain pointer, the outer counter, fixed syscall arguments, and the zero
-block counter once after sampling salts. -/
+/-- Initialize the moving chain pointer, saved heap end, virtual-reference counter, fixed syscall
+arguments and zero block counter once after sampling salts. -/
 theorem commit_ready (state : MachineState) (pc : state.pc = 4240) (fuel : Nat) :
     execute (submission.image .commit) (10 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitReadyState state) true
@@ -114,10 +114,10 @@ theorem commit_ready_counters (state : MachineState) :
 
 theorem commit_ready_register (state : MachineState) (reg : Reg)
     (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20)
-    (notArguments : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28]) :
+    (notArguments : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28,.x22]) :
     (commitReadyState state).getReg reg = state.getReg reg := by
   simp only [List.mem_cons,List.not_mem_nil,or_false,not_or] at notArguments
-  rcases notArguments with ⟨not5,not10,not11,not12,not13,not28⟩
+  rcases notArguments with ⟨not5,not10,not11,not12,not13,not28,not22⟩
   simp only [commitReadyState,commitReadyPrefix,commitReadyInstructions,List.take,List.foldl,execInstrBr,
     MachineState.getReg_setPC,
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm notScratch),
@@ -127,8 +127,15 @@ theorem commit_ready_register (state : MachineState) (reg : Reg)
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not11),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not12),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not13),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not28)]
+    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not28),
+    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not22)]
   cases reg <;> simp_all [MachineState.setReg, MachineState.getReg, MachineState.setPC]
+
+/-- Save the original salt base, the exclusive end of all leaf heap slots. -/
+theorem commit_ready_heap_end (state : MachineState) :
+    (commitReadyState state).getReg .x22=state.getReg .x18 := by
+  simp [commitReadyState,commitReadyPrefix,commitReadyInstructions,List.foldl,execInstrBr,
+    signExtend12,MachineState.getReg,MachineState.setReg,MachineState.setPC]
 
 /-- The fixed oracle arguments and zero leaf counter are initialized once. -/
 theorem commit_ready_oracle (state : MachineState) : CommitLeafOracleReady (commitReadyState state) := by
@@ -254,46 +261,13 @@ theorem commit_leaf_call (state : MachineState) (pc : state.pc = 4312)
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   rfl
 
-/-- Advance the salt and heap pointers after storing a digest; loop while more
-leaves remain. Both outcomes of the unsigned branch are represented. -/
+/-- Reference transition after one leaf: advance live pointers and a virtual leaf
+index. HeapLatch proves that the actual end-pointer branch has the same queries
+and memory effects while normalizing this reference counter and program counter. -/
 def commitPositionNextState (state : MachineState) : MachineState :=
   (((state.setReg .x18 (state.getReg .x18 + 32)).setReg .x23 (state.getReg .x23 + 32)).setReg
     .x20 (state.getReg .x20 + 1)).setPC
       (if BitVec.ult (state.getReg .x20 + 1) (state.getReg .x19) then 4280 else 4364)
-
-private def commitNextPrefix (state : MachineState) (count : Nat) : MachineState :=
-  ([.ADDI .x18 .x18 32, .ADDI .x23 .x23 32, .ADDI .x20 .x20 1].take count).foldl execInstrBr state
-
-theorem commit_leaf_next_position (state : MachineState) (pc : state.pc = 4348) (fuel : Nat) :
-    execute (submission.image .commit) (4 + fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (commitPositionNextState state) true
-          return result.charge 4 0) := by
-  have setup (remaining : Nat) :
-      execute (submission.image .commit) (3 + remaining) state true =
-        (do let result ← execute (submission.image .commit) remaining (commitNextPrefix state 3) true
-            return result.charge 3 0) := by
-    apply execute_unit_steps (states := commitNextPrefix state)
-    intro i hi
-    refine ⟨.base (([.ADDI .x18 .x18 32, .ADDI .x23 .x23 32, .ADDI .x20 .x20 1][i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (63 + i) _ (by omega)
-      · interval_cases i <;> simp [commitNextPrefix, execInstrBr, pc, MachineState.setPC]
-      · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  have fetched : fetch (submission.image .commit) (commitNextPrefix state 3) =
-      some (.base (.BLTU .x20 .x19 8112)) := by
-    apply commit_fetch _ 66 _ (by decide)
-    · simp [commitNextPrefix, execInstrBr, pc, MachineState.setPC]
-    · rfl
-  have stepped : ordinaryStep (commitNextPrefix state 3) (.base (.BLTU .x20 .x19 8112)) =
-      some (commitPositionNextState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, signExtend12,
-      commitNextPrefix, commitPositionNextState, MachineState.getReg, MachineState.setReg,
-      MachineState.setPC, pc]
-    split <;> simp_all
-  rw [show 4 + fuel = 3 + (fuel + 1) by omega, setup,
-    execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
 def commitPositionState (state : MachineState) : MachineState :=
   commitLeafCallState (commitCopyState state 46)
@@ -309,74 +283,5 @@ theorem commit_position_register (state : MachineState) (reg : Reg)
 def commitPositionRun (state : MachineState) : OracleComp World MachineState := do
   let leaf ← commitLeafLoop (commitLeafReadyState (commitPositionState state)) 8
   return commitPositionNextState (leaf.setPC 4348)
-
-set_option maxHeartbeats 1000000 in
-/-- Load the salt into the consumed prefix, stream eight compression queries,
-store the digest, and advance. The exact cost is 40 instructions and 96 cycles. -/
-theorem commit_position (state : MachineState) (pc : state.pc = 4280)
-    (scratch : state.getReg .x21 = state.getReg .x8 - 32)
-    (above : 32 ≤ (state.getReg .x8).toNat)
-    (oracleReady : CommitLeafOracleReady state) (blockCounter : state.getReg .x28=0)
-    (saltValid : ∀ word : Fin 4,
-      accessValid (state.getReg .x18 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
-    (heapValid : ∀ word : Fin 4,
-      accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
-    (messageValid : ∀ word < 32,
-      accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (fuel : Nat) :
-    execute (submission.image .commit) (40 + fuel) state true =
-      (do let finished ← commitPositionRun state
-          let result ← execute (submission.image .commit) fuel finished true
-          return result.charge 96 8) := by
-  let ready := commitPositionState state
-  let initialized := commitLeafReadyState ready
-  obtain ⟨aligned, bounded⟩ := commit_leaf_source_range state messageValid
-  have source : state.getReg .x8 = BitVec.ofNat 64 (state.getReg .x8).toNat := by
-    simp
-  have chainPrefix : state.getReg .x21 = BitVec.ofNat 64 ((state.getReg .x8).toNat - 32) := by
-    rw [scratch]
-    calc
-      state.getReg .x8 - 32 = BitVec.ofNat 64 (state.getReg .x8).toNat - BitVec.ofNat 64 32 :=
-        congrArg (fun value : Word => value - 32) source
-      _ = _ := BitVec.ofNat_sub_ofNat_of_le (w := 64) _ 32 (by decide) above
-  have scratchValid : ∀ word : Fin 4,
-      accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
-    intro word
-    rw [chainPrefix, ← BitVec.ofNat_add]
-    have small : (state.getReg .x8).toNat - 32 + 8 * word.val < 2^64 := by
-      have hw := word.isLt; unfold MEMORY_BYTES at bounded; omega
-    simp only [accessValid, rangeValid, BitVec.toNat_ofNat, Nat.mod_eq_of_lt small,
-      Bool.and_eq_true, decide_eq_true_eq]
-    constructor
-    · have hw := word.isLt; omega
-    · omega
-  have copyPC : (commitCopyState state 46).pc = 4312 := by rw [commit_copy_pc, pc]; rfl
-  have readyPC : ready.pc = 4456 := rfl
-  have readyLink : ready.getReg .x1 = 4316 := by
-    simp only [ready, commitPositionState, commitLeafCallState, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_eq (by decide : Reg.x1 ≠ .x0)]
-  have readySource : ready.getReg .x8 = state.getReg .x8 :=
-    commit_position_register state .x8 (by decide) (by decide)
-  have readyOracle : CommitLeafOracleReady ready := by
-    rcases oracleReady with ⟨r5,r11,r13⟩
-    exact ⟨(commit_position_register state .x5 (by decide) (by decide)).trans r5,
-      (commit_position_register state .x11 (by decide) (by decide)).trans r11,
-      (commit_position_register state .x13 (by decide) (by decide)).trans r13⟩
-  have readyHeap : rangeValid (ready.getReg .x23) 32 = true ∧
-      (ready.getReg .x23).toNat % 8 = 0 := by
-    rw [commit_position_register state .x23 (by decide) (by decide)]
-    exact commit_leaf_heap_range state heapValid
-  have leafRun := commit_leaf_subroutine ready readyPC readyLink readyOracle
-    (by simpa [readySource] using aligned) (by simpa [readySource] using above)
-    (by simpa [readySource] using bounded) readyHeap (4 + fuel) true
-  dsimp only [ready, commitPositionState] at leafRun
-  rw [show 40 + fuel = 8 + (1 + (27 + (4 + fuel))) by omega,
-    commit_copy state 46 (Or.inl rfl) pc (by simpa [commitCopySource, commitCopyOffset] using saltValid) scratchValid,
-    commit_leaf_call _ copyPC, leafRun]
-  simp only [commitPositionRun, bind_assoc, pure_bind]
-  apply bind_congr_of_forall_mem_support
-  intro leaf reached
-  rw [commit_leaf_next_position (leaf.setPC 4348) rfl]
-  simp [Execution.charge, ← Nat.add_assoc]
 
 end CommitGolfCandidate
