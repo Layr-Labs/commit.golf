@@ -18,8 +18,8 @@ set_option maxRecDepth 4096 in
 /-- The leaf loop preserves every digest outside consumed inputs and heap outputs. -/
 theorem commit_leaves_preserves_digest (oracle : Oracle) (state : MachineState)
     (source destination count address : Nat)
-    (scratch : state.getReg .x10 = state.getReg .x12 - 32)
-    (messagePointer : state.getReg .x12 = BitVec.ofNat 64 source)
+    (scratch : state.getReg .x21 = state.getReg .x8 - 32)
+    (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (sourceAbove : 32 ≤ source) (sourceBound : source+256*count < 2^64)
     (aligned : address % 8 = 0)
@@ -36,7 +36,7 @@ theorem commit_leaves_preserves_digest (oracle : Oracle) (state : MachineState)
     have reached := check_evaluation_support oracle (commitPositionRun state)
     have regs := commit_position_registers state next reached
     have nextScratch := commit_position_chain state next reached
-    have nextSource : next.getReg .x12 = BitVec.ofNat 64 (source+256) := by
+    have nextSource : next.getReg .x8 = BitVec.ofNat 64 (source+256) := by
       rw [regs.1, messagePointer, BitVec.ofNat_add]; rfl
     have nextPointer : next.getReg .x23 = BitVec.ofNat 64 (destination+32) := by
       rw [regs.2.2.1, heapPointer, BitVec.ofNat_add]; rfl
@@ -53,8 +53,8 @@ set_option maxRecDepth 4096 in
 The source vector, leaf-output range, and salt range occur in that order in memory. -/
 theorem commit_leaves_digests (oracle : Oracle) (state : MachineState)
     (source destination saltAddress count : Nat) (message : Nat → Entry) (salts : Nat → Digest)
-    (scratch : state.getReg .x10 = state.getReg .x12 - 32)
-    (messagePointer : state.getReg .x12 = BitVec.ofNat 64 source)
+    (scratch : state.getReg .x21 = state.getReg .x8 - 32)
+    (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
     (sourceAligned : source % 8 = 0) (destinationAligned : destination % 8 = 0)
@@ -74,7 +74,7 @@ theorem commit_leaves_digests (oracle : Oracle) (state : MachineState)
     let next := (checkEvaluation oracle (commitPositionRun state)).1
     have regs := commit_position_registers state next (check_evaluation_support oracle _)
     have nextScratch := commit_position_chain state next (check_evaluation_support oracle _)
-    have nextSource : next.getReg .x12 = BitVec.ofNat 64 (source+256) := by
+    have nextSource : next.getReg .x8 = BitVec.ofNat 64 (source+256) := by
       rw [regs.1, messagePointer, BitVec.ofNat_add]
       rfl
     have nextDestination : next.getReg .x23 = BitVec.ofNat 64 (destination+32) := by

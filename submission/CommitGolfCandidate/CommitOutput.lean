@@ -11,10 +11,10 @@ theorem commit_output_root (state : MachineState) (base output : Nat)
     (outputPointer : state.getReg .x26 = BitVec.ofNat 64 output)
     (heapAligned : base % 8 = 0) (outputAligned : output % 8 = 0)
     (bounded : base+64 ≤ 2^64) (separated : output+32 ≤ base) :
-    readBuffer (commitExitState (commitCopyState state 91)) output 32 = heapDigest state base 1 := by
-  change readBuffer (commitCopyState state 91) output 32 = readBuffer state (base+32*1) 32
-  apply commit_copy_digest state 91 (base+32) output (by simp)
-  · simp only [show (91 : Nat) ≠ 46 by decide, show (91 : Nat) ≠ 55 by decide, ite_false]
+    readBuffer (commitExitState (commitCopyState state 79)) output 32 = heapDigest state base 1 := by
+  change readBuffer (commitCopyState state 79) output 32 = readBuffer state (base+32*1) 32
+  apply commit_copy_digest state 79 (base+32) output (by simp)
+  · simp only [show (79 : Nat) ≠ 46 by decide, show (79 : Nat) ≠ 55 by decide, ite_false]
     rw [heapPointer, BitVec.ofNat_add]
     rfl
   · exact outputPointer
@@ -29,9 +29,9 @@ theorem commit_output_preserves_digest (state : MachineState) (output address : 
     (outputPointer : state.getReg .x26 = BitVec.ofNat 64 output)
     (aligned : address % 8 = 0) (bounded : address+32 ≤ 2^64)
     (separated : output+32 ≤ address) :
-    readBuffer (commitExitState (commitCopyState state 91)) address 32 = readBuffer state address 32 := by
-  change readBuffer (commitCopyState state 91) address 32 = _
-  exact commit_copy_preserves_digest state 91 output address (by simp) outputPointer aligned
+    readBuffer (commitExitState (commitCopyState state 79)) address 32 = readBuffer state address 32 := by
+  change readBuffer (commitCopyState state 79) address 32 = _
+  exact commit_copy_preserves_digest state 79 output address (by simp) outputPointer aligned
     (by omega) bounded (Or.inr separated)
 
 /-- Evaluate the full post-randomness body through its actual two loops and return. -/
@@ -39,7 +39,7 @@ theorem commit_body_evaluation (oracle : Oracle) (state : MachineState) (count :
     checkEvaluation oracle (commitBody state count) =
       let leaves := checkEvaluation oracle (commitLeaves state count)
       let parents := checkEvaluation oracle (commitParents (commitParentsStartState leaves.1) (count-1))
-      (commitExitState (commitCopyState parents.1 91), leaves.2+parents.2) := by
+      (commitExitState (commitCopyState parents.1 79), leaves.2+parents.2) := by
   rw [commitBody, check_evaluation_bind]
   simp only [check_evaluation_bind, check_evaluation_pure, Nat.add_zero]
 
@@ -64,7 +64,7 @@ private theorem parents_start_counter (state : MachineState) :
   commit_parents_start_counter state
 
 private theorem parents_start_memory (state : MachineState) :
-    (commitParentsStartState state).mem = state.mem := rfl
+    (commitParentsStartState state).mem = state.mem := commit_parents_start_memory state
 
 attribute [local irreducible] commitBody commitLeaves commitParents commitInputReady checkEvaluation
 
@@ -82,9 +82,11 @@ theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : B
     (check_evaluation_support oracle _)).2
   have heap : parents.getReg .x9 = BitVec.ofNat 64 4294971424 :=
     (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
-  have counter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parents_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have counter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · decide
+    · decide
   have indexBound : index.val < 2^24 := index.isLt
   have address : 5368713248+32*index.val = 4294971424+32*(2*LENGTH+index.val) := by
     change _ = 4294971424+32*(2*16777216+index.val)
@@ -113,8 +115,8 @@ theorem commit_output_matches (oracle : Oracle) (message : Message) (state : Mac
     (parents : HeapParents oracle.compression state 4294971424 LENGTH 0)
     (leaves : ∀ index : Index, heapDigest state 4294971424 (LENGTH+index.val) =
       leafDigest oracle.compression (readBuffer state (5368713248+32*index.val) 32) (message index)) :
-    CommittedState oracle message (commitExitState (commitCopyState state 91)) := by
-  let finished := commitExitState (commitCopyState state 91)
+    CommittedState oracle message (commitExitState (commitCopyState state 79)) := by
+  let finished := commitExitState (commitCopyState state 79)
   have preserved (node : Nat) (below : node < 3*LENGTH) :
       heapDigest finished 4294971424 node = heapDigest state 4294971424 node := by
     unfold heapDigest
@@ -151,9 +153,11 @@ theorem commit_body_matches (oracle : Oracle) (message : Message) (answer : BitV
     (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
   have output : parents.getReg .x26 = BitVec.ofNat 64 4294971392 :=
     (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans input.2.2.2.2.2.1)
-  have counter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parents_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have counter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · decide
+    · decide
   have parentRegs := (commit_parents_finished parents (LENGTH-1) (by decide) counter finished
     (check_evaluation_support oracle _)).2
   have tree := commit_input_tree oracle message answer
@@ -181,9 +185,11 @@ theorem commit_body_salt (oracle : Oracle) (message : Message)
     (check_evaluation_support oracle _)).2
   have output : parents.getReg .x26 = BitVec.ofNat 64 4294971392 :=
     (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans input.2.2.2.2.2.1)
-  have counter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parents_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have counter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · decide
+    · decide
   have parentRegs := (commit_parents_finished parents (LENGTH-1) (by decide) counter finished
     (check_evaluation_support oracle _)).2
   have indexBound : index.val < 16777216 := index.isLt

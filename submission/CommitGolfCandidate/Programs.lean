@@ -93,13 +93,17 @@ def leafSubroutine : List Asm :=
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
 /-- Commitment streams seven replies through consumed message blocks. The final
-reply goes directly to the heap, and the return skips the caller's digest copy.
-The input is captured before the heap write. Fixed selectors remain live. -/
+reply goes directly to the heap; the tail advances both output pointers and
+branches directly to the contiguous salt copy at the leaf entry.
+The carried x10 input advances after each captured query. Fixed selectors remain
+live. The final fall-through jump enters parent setup. -/
 def commitLeafSubroutine : List Asm :=
-  [.label "leaf",insn 0x73] ++
-  ((List.range 7).flatMap fun step =>
-    [addi 10 10 32,if step=6 then addi 12 23 0 else addi 12 12 32,insn 0x73]) ++
-  [addi 10 10 32,addi 12 10 32]
+  [.label "leaf"] ++ copyDigest 18 10 ++
+  ((List.range 8).flatMap fun block =>
+    [if block = 7 then addi 12 23 0 else addi 12 10 32,
+     insn 0x73, addi 10 10 32]) ++
+  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "leaf",
+   .jump 0 "commit-parent-start"]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
@@ -114,19 +118,26 @@ def commitLi (rd value : Nat) : List Asm :=
 
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 9 12, mv 12 10, mv 26 11] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
+  [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
   [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
-  -- Five useful setup instructions skip five padding words.
-  [addi 10 12 (-32), addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x0180006f] ++
-  List.replicate 5 (addi 0 0 0) ++ [.label "commit-leaf"] ++
-  copyDigest 18 10 ++ commitLeafSubroutine ++
-  [addi 18 18 32, addi 23 23 32, .branch 6 12 26 "commit-leaf",
-   addi 6 19 (-1), .branch 0 6 0 "commit-root",
-   shift 7 6 5, regop 12 9 7, shift 6 6 6, regop 10 9 6, .label "commit-parent", insn 0x73,
-   addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true
+  -- Keep three physical setup slots so the main-loop addresses remain stable.
+  [addi 21 8 (-32), mv 22 18, addi 0 0 0, addi 20 0 0] ++ compressScratch.take 5 ++
+  [addi 28 0 0, .label "commit-leaf"] ++
+  [.jump 0 "commit-initial-call"] ++ (copyDigest 18 10).drop 1 ++
+  [.label "commit-initial-call", .jump 1 "leaf", .label "commit-parent-pair", insn 0x73,
+    addi 10 10 (-64), addi 12 12 (-32), insn 0x73,
+    addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-pair",
+    .jump 0 "commit-root"] ++
+  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "commit-leaf", addi 0 0 0,
+   -- Fixed syscall selectors survive the leaf loop. Initialize descending
+   -- parent addresses once, then advance them by subtraction after each query.
+    .label "commit-parent-start", addi 20 19 (-1), shift 6 20 6, regop 10 9 6, shift 7 20 5,
+   .branch 0 20 0 "commit-root", regop 12 9 7, .label "commit-parent", insn 0x73,
+   addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-pair",
+   .jump 0 "commit-root", addi 0 0 0, .label "commit-root"] ++
+  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth

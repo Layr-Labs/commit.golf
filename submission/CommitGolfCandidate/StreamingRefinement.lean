@@ -10,7 +10,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 slot. Source and destination casts are explicitly nonwrapping. -/
 theorem streaming_commit_leaf_digest (oracle : Oracle) (state : MachineState)
     (address count destination : Nat) (blocks : Nat → Digest)
-    (pointer : state.getReg .x12 = BitVec.ofNat 64 address)
+    (pointer : state.getReg .x8 = BitVec.ofNat 64 address)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0) (above : 32 ≤ address)
     (bounded : address + 32 * (count + 1) < 2^64)
@@ -21,7 +21,7 @@ theorem streaming_commit_leaf_digest (oracle : Oracle) (state : MachineState)
       (List.range (count + 1)).foldl
         (fun digest i => combine oracle.compression digest (blocks i))
         (readBuffer state (address - 32) 32) := by
-  have pointerNat : (state.getReg .x12).toNat = address := by
+  have pointerNat : (state.getReg .x8).toNat = address := by
     rw [pointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   have heapNat : (state.getReg .x23).toNat = destination := by
     rw [heapPointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
@@ -37,7 +37,7 @@ theorem streaming_commit_leaf_digest (oracle : Oracle) (state : MachineState)
 survive the actual leaf execution. The source exclusion is a safe overestimate. -/
 theorem streaming_commit_leaf_read_outside (oracle : Oracle) (state : MachineState)
     (source count destination address bytes : Nat)
-    (pointer : state.getReg .x12 = BitVec.ofNat 64 source)
+    (pointer : state.getReg .x8 = BitVec.ofNat 64 source)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (above : 32 ≤ source) (writeBound : source + 32 * (count + 1) < 2^64)
     (heapBound : destination + 32 ≤ 2^64) (readBound : address + bytes ≤ 2^64)
@@ -45,7 +45,7 @@ theorem streaming_commit_leaf_read_outside (oracle : Oracle) (state : MachineSta
     (heapSeparate : address + bytes ≤ destination ∨ destination + 32 ≤ address) :
     readBuffer (checkEvaluation oracle (commitLeafLoop state (count + 1))).1 address bytes =
       readBuffer state address bytes := by
-  have pointerNat : (state.getReg .x12).toNat = source := by
+  have pointerNat : (state.getReg .x8).toNat = source := by
     rw [pointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   have heapNat : (state.getReg .x23).toNat = destination := by
     rw [heapPointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
@@ -59,7 +59,7 @@ theorem streaming_commit_leaf_read_outside (oracle : Oracle) (state : MachineSta
 block leaf hash. No final caller copy or temporary-register equality is used. -/
 theorem streaming_commit_leaf_hash (oracle : Oracle) (state : MachineState)
     (address destination : Nat) (salt : Digest) (value : Entry)
-    (pointer : state.getReg .x12 = BitVec.ofNat 64 address)
+    (pointer : state.getReg .x8 = BitVec.ofNat 64 address)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0) (above : 32 ≤ address)
     (bounded : address + 256 < 2^64) (heapBound : destination + 32 ≤ 2^64)

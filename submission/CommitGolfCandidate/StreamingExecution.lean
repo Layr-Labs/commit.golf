@@ -72,16 +72,16 @@ theorem streaming_oracle_input (state : MachineState) (cursor : Nat)
 /-- Two single-cycle address instructions and one eight-cycle ECALL: exactly
 three instructions, ten cycles, one query, and an arbitrary 256-bit reply. -/
 theorem streaming_machine_block (image : Image) (state : MachineState) (cursor : Nat)
-    (inputBase outputBase : Reg) (inputOffset outputOffset : BitVec 12)
+    (inputOffset outputOffset : BitVec 12)
     (ready : StreamingOracleReady state) (aligned : cursor % 8 = 0)
     (bounded : cursor + 64 ≤ MEMORY_BYTES)
-    (fetchInput : fetch image state = some (.base (.ADDI .x10 inputBase inputOffset)))
-    (stepInput : ordinaryStep state (.base (.ADDI .x10 inputBase inputOffset)) =
+    (fetchInput : fetch image state = some (.base (.ADDI .x10 .x8 inputOffset)))
+    (stepInput : ordinaryStep state (.base (.ADDI .x10 .x8 inputOffset)) =
       some (streamingFirstState state cursor))
     (fetchOutput : fetch image (streamingFirstState state cursor) =
-      some (.base (.ADDI .x12 outputBase outputOffset)))
+      some (.base (.ADDI .x12 .x8 outputOffset)))
     (stepOutput : ordinaryStep (streamingFirstState state cursor)
-      (.base (.ADDI .x12 outputBase outputOffset)) = some (streamingArgsState state cursor))
+      (.base (.ADDI .x12 .x8 outputOffset)) = some (streamingArgsState state cursor))
     (fetchCall : fetch image (streamingArgsState state cursor) = some (.base .ECALL))
     (fuel : Nat) (allowCoins : Bool) :
     execute image (3 + fuel) state allowCoins =
@@ -113,27 +113,6 @@ def streamingMachineBlocks : MachineState → Nat → Nat → OracleComp World M
   | state, cursor, count + 1 => do
       let answer ← World.query (.inr (.inl (readBuffer state cursor 64)))
       streamingMachineBlocks (streamingReplyState state cursor answer) (cursor + 32) count
-
-/-- The last block leaves its two absolute argument values in the machine. -/
-theorem streaming_machine_addresses (state : MachineState) (cursor count : Nat)
-    (finished : MachineState) (reachable : finished ∈ support (streamingMachineBlocks state cursor (count+1))) :
-    finished.getReg .x10=BitVec.ofNat 64 (cursor+32*count) ∧
-    finished.getReg .x12=BitVec.ofNat 64 (cursor+32*(count+1)) := by
-  induction count generalizing state cursor with
-  | zero =>
-    simp only [streamingMachineBlocks,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reachable
-    obtain ⟨answer,_,rfl⟩ := reachable
-    constructor <;> rfl
-  | succ count ih =>
-    rw [streamingMachineBlocks] at reachable
-    simp only [mem_support_bind_iff] at reachable
-    obtain ⟨answer,_,rest⟩ := reachable
-    have done := ih (streamingReplyState state cursor answer) (cursor+32) rest
-    constructor
-    · rw [done.1]
-      congr 1 <;> omega
-    · rw [done.2]
-      congr 1 <;> omega
 
 theorem streaming_reply_pc (state : MachineState) (cursor : Nat) (answer : BitVec 256) :
     (streamingReplyState state cursor answer).pc = state.pc + 12 := by

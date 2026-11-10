@@ -1,4 +1,4 @@
-import CommitGolfCandidate.CommitTree
+import CommitGolfCandidate.ContiguousImage
 
 /-! The trusted commitment ABI establishes every tree-building address invariant. -/
 namespace CommitGolfCandidate
@@ -25,40 +25,40 @@ def commitInputReady (message : Message) {bits : Nat} (answer : BitVec bits) : M
 private theorem initialized_registers (initial : MachineState) {bits : Nat} (answer : BitVec bits) :
     let setup := commitSetupState initial
     let ready := commitReadyState (writeBits setup (setup.getReg .x10) answer)
-    ready.getReg .x12 = initial.getReg .x10 ∧
+    ready.getReg .x8 = initial.getReg .x10 ∧
     ready.getReg .x9 = initial.getReg .x12 ∧
     ready.getReg .x18 = initial.getReg .x12 + 1073741824 ∧
     ready.getReg .x19 = 16777216 ∧
     ready.getReg .x23 = initial.getReg .x12 + 536870912 ∧
     ready.getReg .x26 = initial.getReg .x11 ∧
-    ready.getReg .x10 = initial.getReg .x10 - 32 ∧ ready.getReg .x20 = initial.getReg .x20 := by
+    ready.getReg .x21 = initial.getReg .x10 - 32 ∧ ready.getReg .x20 = 0 := by
   dsimp only
   have regs := commit_setup_registers initial
-  have readyReg (reg : Reg) (notScratch : reg ≠ .x10) (notCounter : reg ≠ .x20)
-      (notArguments : reg ∉ [.x5,.x10,.x11,.x13,.x28]) :
+  have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20)
+      (notArguments : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28,.x22]) :
       (commitReadyState (writeBits (commitSetupState initial)
         ((commitSetupState initial).getReg .x10) answer)).getReg reg =
           (commitSetupState initial).getReg reg := by
     rw [commit_ready_register _ reg notScratch notCounter notArguments, writeBits_register]
   have counters := commit_ready_counters (writeBits (commitSetupState initial)
     ((commitSetupState initial).getReg .x10) answer)
-  exact ⟨(readyReg .x12 (by decide) (by decide) (by decide)).trans regs.2.1,
+  exact ⟨(readyReg .x8 (by decide) (by decide) (by decide)).trans regs.2.1,
     (readyReg .x9 (by decide) (by decide) (by decide)).trans regs.2.2.1,
     (readyReg .x18 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.1,
     (readyReg .x19 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
     (readyReg .x23 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.1,
     (readyReg .x26 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.2,
-    (by rw [counters.1, writeBits_register, regs.2.1]), (by rw [counters.2, writeBits_register]; rfl)⟩
+    (by rw [counters.1, writeBits_register, regs.2.1]), counters.2⟩
 
 /-- Fixed ABI pointers and loop registers, independent of sampled salt bytes. -/
 theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec bits) :
-    (commitInputReady message answer).getReg .x12 = 4096 ∧
+    (commitInputReady message answer).getReg .x8 = 4096 ∧
     (commitInputReady message answer).getReg .x9 = 4294971424 ∧
     (commitInputReady message answer).getReg .x18 = 5368713248 ∧
     (commitInputReady message answer).getReg .x19 = 16777216 ∧
     (commitInputReady message answer).getReg .x23 = 4831842336 ∧
     (commitInputReady message answer).getReg .x26 = 4294971392 ∧
-    (commitInputReady message answer).getReg .x10 = 4064 ∧
+    (commitInputReady message answer).getReg .x21 = 4064 ∧
     (commitInputReady message answer).getReg .x20 = 0 := by
   let initial := submission.initialState .commit message
   have regs := initialized_registers initial answer
@@ -71,18 +71,30 @@ theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec
     regs.2.2.2.1, regs.2.2.2.2.1.trans leafPtr, regs.2.2.2.2.2.1.trans outputPtr,
     regs.2.2.2.2.2.2.1.trans (by rw [messagePtr]; rfl), regs.2.2.2.2.2.2.2⟩
 
+/-- The admitted ABI initializes a nonwrapping heap window ending at the salt buffer. -/
+theorem commit_input_heap_window (message : Message) {bits : Nat} (answer : BitVec bits) :
+    ((commitInputReady message answer).getReg .x23).toNat+32*(2^24)=
+      ((commitInputReady message answer).getReg .x22).toNat := by
+  have regs := commit_input_registers message answer
+  have saved : (commitInputReady message answer).getReg .x22=
+      (commitInputReady message answer).getReg .x18 := by
+    unfold commitInputReady
+    rw [commit_ready_heap_end,commit_ready_register _ .x18 (by decide) (by decide) (by decide)]
+  rw [regs.2.2.2.2.1,saved,regs.2.2.1]
+  decide
+
 /-- The first iteration has space for every remaining message block, salt, and
 leaf digest, for all actual messages and every private random answer. -/
 theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bits) :
     CommitLeavesInvariant (commitInputReady message answer) (2 ^ 24) := by
   have regs := commit_input_registers message answer
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have setupPC := commit_setup_pc (submission.initialState .commit message) rfl
     change (commitReadyState _).pc = 4280
     apply commit_ready_pc
     simp only [writeBits, MachineState.setPC]
     rw [setupPC]; rfl
-  · exact regs.2.2.2.2.2.2.2
+  · rw [regs.2.2.2.2.2.2.2, regs.2.2.2.1]; rfl
   · rw [regs.2.2.2.1]; decide
   · rw [regs.2.2.2.2.2.2.1, regs.1]; rfl
   · rw [regs.1]; decide
@@ -94,11 +106,7 @@ theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bi
     exact fun word inside => commit_buffer_access 4831842336 (4 * 2 ^ 24) word (by decide) (by decide) inside
 
   · exact commit_ready_oracle _
-  · unfold commitInputReady
-    rw [commit_ready_block_counter, writeBits_register]
-    rfl
-  · rw [regs.1, regs.2.2.2.2.2.1]
-    rfl
+  · exact commit_ready_block_counter _
 
 /-- The complete fixed heap allocation meets the oracle syscall's size and
 alignment requirements for every internal node. -/
