@@ -308,11 +308,11 @@ theorem commit_position_register (state : MachineState) (reg : Reg)
 /-- The exact state distribution after one salt/leaf/digest iteration. -/
 def commitPositionRun (state : MachineState) : OracleComp World MachineState := do
   let leaf ← commitLeafLoop (commitLeafReadyState (commitPositionState state)) 8
-  return commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)
+  return commitPositionNextState (leaf.setPC 4348)
 
 set_option maxHeartbeats 1000000 in
 /-- Load the salt into the consumed prefix, stream eight compression queries,
-store the digest, and advance. The exact cost is 48 instructions and 104 cycles. -/
+store the digest, and advance. The exact cost is 40 instructions and 96 cycles. -/
 theorem commit_position (state : MachineState) (pc : state.pc = 4280)
     (scratch : state.getReg .x21 = state.getReg .x8 - 32)
     (above : 32 ≤ (state.getReg .x8).toNat)
@@ -324,10 +324,10 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4280)
     (messageValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (48 + fuel) state true =
+    execute (submission.image .commit) (40 + fuel) state true =
       (do let finished ← commitPositionRun state
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge 104 8) := by
+          return result.charge 96 8) := by
   let ready := commitPositionState state
   let initialized := commitLeafReadyState ready
   obtain ⟨aligned, bounded⟩ := commit_leaf_source_range state messageValid
@@ -362,43 +362,21 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4280)
     exact ⟨(commit_position_register state .x5 (by decide) (by decide)).trans r5,
       (commit_position_register state .x11 (by decide) (by decide)).trans r11,
       (commit_position_register state .x13 (by decide) (by decide)).trans r13⟩
+  have readyHeap : rangeValid (ready.getReg .x23) 32 = true ∧
+      (ready.getReg .x23).toNat % 8 = 0 := by
+    rw [commit_position_register state .x23 (by decide) (by decide)]
+    exact commit_leaf_heap_range state heapValid
   have leafRun := commit_leaf_subroutine ready readyPC readyLink readyOracle
     (by simpa [readySource] using aligned) (by simpa [readySource] using above)
-    (by simpa [readySource] using bounded) (8 + (4 + fuel)) true
+    (by simpa [readySource] using bounded) readyHeap (4 + fuel) true
   dsimp only [ready, commitPositionState] at leafRun
-  rw [show 48 + fuel = 8 + (1 + (27 + (8 + (4 + fuel)))) by omega,
+  rw [show 40 + fuel = 8 + (1 + (27 + (4 + fuel))) by omega,
     commit_copy state 46 (Or.inl rfl) pc (by simpa [commitCopySource, commitCopyOffset] using saltValid) scratchValid,
     commit_leaf_call _ copyPC, leafRun]
   simp only [commitPositionRun, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro leaf reached
-  have registers := (commit_leaf_loop_registers initialized 8 leaf reached).2
-  have initRegister (reg : Reg) : initialized.getReg reg = ready.getReg reg :=
-    commit_leaf_ready_register ready reg
-  have leafChain : (leaf.setPC 4316).getReg .x21 = state.getReg .x8 + 224 := by
-    rw [MachineState.getReg_setPC, commit_leaf_loop_chain initialized 8 leaf reached,
-      initRegister .x8, readySource]
-    change state.getReg .x8 + BitVec.ofNat 64 256 - BitVec.ofNat 64 32 = _
-    simp only [BitVec.sub_eq_add_neg, BitVec.add_assoc]
-    rfl
-  have sourceValid : ∀ word : Fin 4,
-      accessValid ((leaf.setPC 4316).getReg .x21 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
-    intro word
-    rw [leafChain]
-    have address : state.getReg .x8 + 224 + BitVec.ofNat 64 (8 * word.val) =
-        state.getReg .x8 + BitVec.ofNat 64 (8 * (28 + word.val)) := by
-      rw [show 8 * (28 + word.val) = 224 + 8 * word.val by omega, BitVec.ofNat_add, BitVec.add_assoc]; rfl
-    rw [address]
-    exact messageValid (28 + word.val) (by have := word.isLt; omega)
-  have destinationValid : ∀ word : Fin 4,
-      accessValid ((leaf.setPC 4316).getReg .x23 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
-    rw [MachineState.getReg_setPC, registers .x23 (by decide), initRegister .x23,
-      commit_position_register state .x23 (by decide) (by decide)]
-    exact heapValid
-  have storePC : (commitCopyState (leaf.setPC 4316) 55).pc = 4348 := by
-    rw [commit_copy_pc]; rfl
-  rw [commit_copy _ 55 (Or.inr (Or.inl rfl)) rfl (by simpa [commitCopySource, commitCopyOffset] using sourceValid) destinationValid,
-    commit_leaf_next_position _ storePC]
+  rw [commit_leaf_next_position (leaf.setPC 4348) rfl]
   simp [Execution.charge, ← Nat.add_assoc]
 
 end CommitGolfCandidate

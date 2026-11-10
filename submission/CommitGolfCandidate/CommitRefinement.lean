@@ -51,13 +51,13 @@ theorem commit_copy_preserves_digest (state : MachineState) (start destination a
     aligned destinationBound readBound separate]
   rfl
 
-/-- A complete leaf iteration evaluates the leaf subroutine, then copies its
-result into the heap. This equality retains the actual interpreter memory state. -/
+/-- A complete leaf iteration writes its result directly to the heap, then
+advances pointers. This equality retains the actual interpreter memory state. -/
 theorem commit_position_evaluation (oracle : Oracle) (state : MachineState) :
     checkEvaluation oracle (commitPositionRun state) =
       let leaf := checkEvaluation oracle
         (commitLeafLoop (commitLeafReadyState (commitPositionState state)) 8)
-      (commitPositionNextState (commitCopyState (leaf.1.setPC 4316) 55), leaf.2) := by
+      (commitPositionNextState (leaf.1.setPC 4348), leaf.2) := by
   rw [commitPositionRun, check_evaluation_bind]
   simp only [check_evaluation_pure, Nat.add_zero]
 
@@ -94,29 +94,6 @@ theorem commit_position_input_digest (state : MachineState) (source address : Na
   exact commit_copy_preserves_digest state 46 (source-32) address (by simp) chain aligned
     (by omega) bounded (by rcases separate with h | h <;> omega)
 
-/-- Copy the final consumed block into the heap before the next salt overwrites it. -/
-theorem commit_leaf_heap_write (leaf : MachineState) (source destination : Nat)
-    (chain : leaf.getReg .x21 = BitVec.ofNat 64 (source+224))
-    (heapPointer : leaf.getReg .x23 = BitVec.ofNat 64 destination)
-    (sourceAligned : source % 8 = 0) (aligned : destination % 8 = 0)
-    (separate : source+256 ≤ destination) (bounded : destination+32 ≤ 2^64) :
-    readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)) destination 32 =
-      readBuffer leaf (source+224) 32 := by
-  change readBuffer (commitCopyState (leaf.setPC 4316) 55) destination 32 = _
-  exact commit_copy_digest (leaf.setPC 4316) 55 (source+224) destination (by simp) chain heapPointer
-    (by omega) aligned (by omega) bounded (Or.inl separate)
-
-private theorem commit_heap_write_preserves (leaf : MachineState) (destination address : Nat)
-    (heapPointer : leaf.getReg .x23 = BitVec.ofNat 64 destination)
-    (aligned : address % 8 = 0)
-    (destinationBound : destination+32 ≤ 2^64) (readBound : address+32 ≤ 2^64)
-    (separate : address+32 ≤ destination ∨ destination+32 ≤ address) :
-    readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)) address 32 =
-      readBuffer leaf address 32 := by
-  change readBuffer (commitCopyState (leaf.setPC 4316) 55) address 32 = _
-  exact commit_copy_preserves_digest (leaf.setPC 4316) 55 destination address (by simp)
-    heapPointer aligned destinationBound readBound separate
-
 attribute [local irreducible] commitPositionState commitLeafLoop checkEvaluation
 
 /-- The actual streamed iteration computes the existing salted leaf hash. -/
@@ -143,28 +120,19 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
     rw [commit_leaf_ready_register]
     exact commit_position_register state reg notLink notTemporary
   have readyPointer := (readyReg .x8 (by decide) (by decide)).trans messagePointer
-  have hashed : readBuffer leaf (source+224) 32 =
+  have hashed : readBuffer leaf destination 32 =
       leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
-    apply streaming_commit_leaf_hash oracle ready source _ value readyPointer
-      sourceAligned sourceAbove sourceBound
+    apply streaming_commit_leaf_hash oracle ready source destination _ value readyPointer
+      ((readyReg .x23 (by decide) (by decide)).trans heapPointer)
+      sourceAligned sourceAbove sourceBound destinationBound
     · exact commit_position_salt state source saltAddress chain saltPointer
         sourceAligned saltAligned sourceAbove (by omega) saltBound
     · intro block inside
       rw [commit_position_input_digest state source (source+32*block) chain sourceAbove
         (by omega) (by omega) (by omega) (Or.inr (by omega))]
       exact data block inside
-  have reached := check_evaluation_support oracle (commitLeafLoop ready 8)
-  have leafRegs := commit_leaf_loop_registers ready 8 leaf reached
-  have finalChain : leaf.getReg .x21 = BitVec.ofNat 64 (source+224) := by
-    rw [commit_leaf_loop_chain ready 8 leaf reached, readyPointer]
-    change BitVec.ofNat 64 source + BitVec.ofNat 64 256 - BitVec.ofNat 64 32 = _
-    rw [← BitVec.ofNat_add, BitVec.ofNat_sub_ofNat_of_le (w := 64) (source+256) 32 (by decide) (by omega)]
-    congr 1
   rw [commit_position_evaluation]
-  change readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)) destination 32 = _
-  rw [commit_leaf_heap_write leaf source destination finalChain
-    ((leafRegs.2 .x23 (by decide)).trans ((readyReg .x23 (by decide) (by decide)).trans heapPointer))
-    sourceAligned destinationAligned destinationAfter destinationBound]
+  change readBuffer leaf destination 32 = _
   exact hashed
 
 /-- A full iteration writes only its consumed prefix/leaf and one heap slot. -/
@@ -189,14 +157,11 @@ theorem commit_position_preserves_digest (oracle : Oracle) (state : MachineState
   have readyPointer : ready.getReg .x23 = BitVec.ofNat 64 destination := by
     rw [commit_leaf_ready_register]
     exact (commit_position_register state .x23 (by decide) (by decide)).trans heapPointer
-  have leafPointer : leaf.getReg .x23 = BitVec.ofNat 64 destination :=
-    ((commit_leaf_loop_registers ready 8 leaf (check_evaluation_support oracle _)).2 .x23
-      (by decide)).trans readyPointer
   rw [commit_position_evaluation]
-  change readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)) address 32 = _
-  rw [commit_heap_write_preserves leaf destination address leafPointer aligned destinationBound readBound separate]
-  rw [streaming_commit_leaf_read_outside oracle ready source 8 address 32 readySource sourceAbove
-    (by simpa using sourceBound) readBound (by rcases sourceSeparate with h | h <;> omega)]
+  change readBuffer leaf address 32 = _
+  rw [streaming_commit_leaf_read_outside oracle ready source 7 destination address 32
+    readySource readyPointer sourceAbove (by simpa using sourceBound) destinationBound readBound
+    (by rcases sourceSeparate with h | h <;> omega) separate]
   exact commit_position_input_digest state source address chain sourceAbove aligned (by omega) readBound
     (by rcases sourceSeparate with h | h <;> omega)
 

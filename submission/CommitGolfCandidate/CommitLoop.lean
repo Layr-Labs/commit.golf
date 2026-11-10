@@ -31,8 +31,8 @@ theorem commit_position_registers (state finished : MachineState)
   have value : leaf.getReg .x8 = state.getReg .x8 + 256 := by
     rw [regs.1, preserved .x8 (by decide) (by decide) (by decide) (by decide)]; rfl
   have copied (reg : Reg) (notTemporary : reg ≠ .x6) :
-      (commitCopyState (leaf.setPC 4316) 55).getReg reg = leaf.getReg reg := by
-    rw [commit_copy_register _ _ reg notTemporary, MachineState.getReg_setPC]
+      (leaf.setPC 4348).getReg reg = leaf.getReg reg := by
+    rfl
   have advance (current : MachineState) (reg : Reg) :
       (commitPositionNextState current).getReg reg =
         if reg = .x18 then current.getReg .x18 + 32 else
@@ -41,19 +41,19 @@ theorem commit_position_registers (state finished : MachineState)
     cases reg <;> rfl
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [advance]
-    change (commitCopyState (leaf.setPC 4316) 55).getReg .x8 = _
+    change (leaf.setPC 4348).getReg .x8 = _
     exact (copied .x8 (by decide)).trans value
   · rw [advance]
-    change (commitCopyState (leaf.setPC 4316) 55).getReg .x18 + 32 = _
+    change (leaf.setPC 4348).getReg .x18 + 32 = _
     rw [copied .x18 (by decide), leafReg .x18 (by simp)]
   · rw [advance]
-    change (commitCopyState (leaf.setPC 4316) 55).getReg .x23 + 32 = _
+    change (leaf.setPC 4348).getReg .x23 + 32 = _
     rw [copied .x23 (by decide), leafReg .x23 (by simp)]
   · rw [advance]
-    change (commitCopyState (leaf.setPC 4316) 55).getReg .x20 + 1 = _
+    change (leaf.setPC 4348).getReg .x20 + 1 = _
     rw [copied .x20 (by decide), leafReg .x20 (by simp)]
-  · change (if BitVec.ult ((commitCopyState (leaf.setPC 4316) 55).getReg .x20 + 1)
-        ((commitCopyState (leaf.setPC 4316) 55).getReg .x19) then 4280 else 4364) = _
+  · change (if BitVec.ult ((leaf.setPC 4348).getReg .x20 + 1)
+        ((leaf.setPC 4348).getReg .x19) then 4280 else 4364) = _
     rw [copied .x20 (by decide), copied .x19 (by decide),
       leafReg .x20 (by simp), leafReg .x19 (by simp)]
   · intro reg member
@@ -75,13 +75,12 @@ theorem commit_position_chain (state finished : MachineState)
   obtain ⟨leaf, reached, rfl⟩ := reachable
   have chain := commit_leaf_loop_chain (commitLeafReadyState (commitPositionState state)) 8 leaf reached
   rw [commit_leaf_ready_register, commit_position_register _ .x8 (by decide) (by decide)] at chain
-  have finalChain : (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)).getReg .x21 =
+  have finalChain : (commitPositionNextState (leaf.setPC 4348)).getReg .x21 =
       leaf.getReg .x21 := by
     simp only [commitPositionNextState, MachineState.getReg_setPC,
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x20 ≠ .x21),
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x23 ≠ .x21),
-      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x18 ≠ .x21),
-      commit_copy_register _ _ .x21 (by decide)]
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x18 ≠ .x21)]
   rw [finalChain, source, chain]
   rfl
 
@@ -106,13 +105,13 @@ theorem commit_position_oracle_ready (state finished : MachineState)
     ((inputReg .x28 (by decide) (by decide)).trans counter)
   have preserved (reg : Reg) (not6 : Reg.x6 ≠ reg) (not18 : Reg.x18 ≠ reg)
       (not23 : Reg.x23 ≠ reg) (not20 : Reg.x20 ≠ reg) :
-      (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)).getReg reg = leaf.getReg reg := by
+      (commitPositionNextState (leaf.setPC 4348)).getReg reg = leaf.getReg reg := by
     unfold commitPositionNextState
     rw [MachineState.getReg_setPC,
       MachineState.getReg_setReg_ne _ _ _ _ not20,
       MachineState.getReg_setReg_ne _ _ _ _ not23,
       MachineState.getReg_setReg_ne _ _ _ _ not18,
-      commit_copy_register _ _ reg (Ne.symm not6),MachineState.getReg_setPC]
+      MachineState.getReg_setPC]
   rcases leafReady with ⟨r5,r11,r13⟩
   exact ⟨⟨(preserved .x5 (by decide) (by decide) (by decide) (by decide)).trans r5,
     (preserved .x11 (by decide) (by decide) (by decide) (by decide)).trans r11,
@@ -207,18 +206,18 @@ def commitLeaves : MachineState → Nat → OracleComp World MachineState
 attribute [local irreducible] execute commitPositionRun
 
 /-- Every leaf is processed. This is an exact execution equality, not a sampled
-benchmark: 48 instructions, 104 cycles and eight queries per leaf. -/
+benchmark: 40 instructions, 96 cycles and eight queries per leaf. -/
 theorem commit_leaves (state : MachineState) (remaining : Nat)
     (invariant : CommitLeavesInvariant state remaining) (fuel : Nat) :
-    execute (submission.image .commit) (48 * remaining + fuel) state true =
+    execute (submission.image .commit) (40 * remaining + fuel) state true =
       (do let finished ← commitLeaves state remaining
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (104 * remaining) (8 * remaining)) := by
+          return result.charge (96 * remaining) (8 * remaining)) := by
   induction remaining generalizing state with
   | zero => simp [commitLeaves, Execution.charge]
   | succ remaining ih =>
     have pc : state.pc = 4280 := by simpa using invariant.pc
-    rw [show 48 * (remaining + 1) + fuel = 48 + (48 * remaining + fuel) by omega,
+    rw [show 40 * (remaining + 1) + fuel = 40 + (40 * remaining + fuel) by omega,
       commit_position state pc invariant.scratch invariant.sourceAbove invariant.oracleReady invariant.blockCounter
         (fun word => invariant.salts word.val (by omega))
         (fun word => invariant.heap word.val (by omega))

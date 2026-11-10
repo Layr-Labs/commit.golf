@@ -1,8 +1,9 @@
-import CommitGolfCandidate.StreamingExecution
+import CommitGolfCandidate.DirectHeapExecution
 
 /-! Execution of the emitted commitment streaming leaf. The source base remains
-fixed during eight unrolled blocks; x21 is restored to the final chain location
-before returning. All bounds and replies are checked by the real interpreter. -/
+fixed during eight unrolled blocks. The final digest goes to x23; x21 advances
+to the consumed final message block for the next salt. Return skips the caller
+copy. All bounds and replies are checked by the real interpreter. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
@@ -42,8 +43,8 @@ private theorem streaming_commit_code : (submission.image .commit).code =
   0xfe040513#32, 0x00040613#32, 0x00000073#32, 0x00040513#32, 0x02040613#32, 0x00000073#32,
   0x02040513#32, 0x04040613#32, 0x00000073#32, 0x04040513#32, 0x06040613#32, 0x00000073#32,
   0x06040513#32, 0x08040613#32, 0x00000073#32, 0x08040513#32, 0x0a040613#32, 0x00000073#32,
-  0x0a040513#32, 0x0c040613#32, 0x00000073#32, 0x0c040513#32, 0x0e040613#32, 0x00000073#32,
-  0x10040413#32, 0xfe040a93#32, 0x00008067#32 ] := by rfl
+  0x0a040513#32, 0x0c040613#32, 0x00000073#32, 0x0c040513#32, 0x000b8613#32, 0x00000073#32,
+  0x10040413#32, 0xfe040a93#32, 0x02008067#32 ] := by rfl
 
 /-- Only three syscall arguments remain fixed. The two address registers are
 computed independently before each compression. -/
@@ -67,30 +68,30 @@ def commitLeafFinishState (state : MachineState) (count : Nat) : MachineState :=
     (state.getReg .x8 + BitVec.ofNat 64 (32 * count) - 32)).setPC (state.pc + 8)
 
 def commitLeafLoop (state : MachineState) (count : Nat) : OracleComp World MachineState := do
-  let finished ← streamingMachineBlocks state ((state.getReg .x8).toNat - 32) count
+  let finished ← heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count
   return commitLeafFinishState finished count
 
-/-- The returned pointers and PC do not affect the streaming memory transform. -/
+/-- Pointer and PC updates preserve the direct-to-heap memory transform. -/
 theorem commit_leaf_loop_memory (oracle : Oracle) (state : MachineState) (count : Nat) :
     (checkEvaluation oracle (commitLeafLoop state count)).1.mem =
       (checkEvaluation oracle
-        (streamingBlocks state ((state.getReg .x8).toNat - 32) count)).1.mem := by
+        (heapStreamingBlocks state ((state.getReg .x8).toNat - 32) count (state.getReg .x23).toNat)).1.mem := by
   rw [commitLeafLoop, check_evaluation_bind]
   change (commitLeafFinishState
-    (checkEvaluation oracle (streamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)).1
+    (checkEvaluation oracle (heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)).1
     count).mem = _
   change (checkEvaluation oracle
-    (streamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)).1.mem = _
-  exact (streaming_machine_memory oracle state state _ count rfl).1
+    (heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)).1.mem = _
+  exact (heap_streaming_machine_memory oracle state state _ count rfl).1
 
 /-- The actual leaf's public-query accounting agrees with its memory reference. -/
 theorem commit_leaf_loop_queries (oracle : Oracle) (state : MachineState) (count : Nat) :
     (checkEvaluation oracle (commitLeafLoop state count)).2 = count := by
   rw [commitLeafLoop, check_evaluation_bind]
   change (checkEvaluation oracle
-    (streamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)).2 + 0 = count
-  rw [Nat.add_zero, (streaming_machine_memory oracle state state _ count rfl).2,
-    streaming_blocks_queries]
+    (heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)).2 + 0 = count
+  rw [Nat.add_zero, (heap_streaming_machine_memory oracle state state _ count rfl).2,
+    heap_streaming_queries]
 
 private theorem commit_streaming_offsets (block : Nat) (bounded : block < 8) :
     signExtend12 (BitVec.ofInt 12 ((32 * block : Int) - 32)) =
@@ -120,10 +121,35 @@ theorem commit_leaf_source_range (state : MachineState)
   rw [finalNat, Nat.mod_eq_of_lt noWrap] at last
   exact ⟨first.2, by have := last.1; omega⟩
 
+/-- Four checked heap word stores imply the final syscall's 32-byte range and
+eight-byte alignment. No stronger 32-byte alignment assumption is needed. -/
+theorem commit_leaf_heap_range (state : MachineState)
+    (valid : ∀ word : Fin 4,
+      accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word.val)) 8 = true) :
+    rangeValid (state.getReg .x23) 32 = true ∧
+      (state.getReg .x23).toNat % 8 = 0 := by
+  have first := valid ⟨0, by decide⟩
+  simp only [Nat.mul_zero, BitVec.add_zero, accessValid, rangeValid,
+    Bool.and_eq_true, decide_eq_true_eq] at first
+  have noWrap : (state.getReg .x23).toNat + 24 < 2^64 := by
+    have bound := first.1
+    unfold MEMORY_BYTES at bound
+    omega
+  have last := valid ⟨3, by decide⟩
+  simp only [Nat.reduceMul, accessValid, rangeValid, Bool.and_eq_true, decide_eq_true_eq,
+    BitVec.toNat_add] at last
+  have finalNat : (state.getReg .x23).toNat + (24#64).toNat =
+      (state.getReg .x23).toNat + 24 := rfl
+  rw [finalNat, Nat.mod_eq_of_lt noWrap] at last
+  refine ⟨?_, first.2⟩
+  simp only [rangeValid, decide_eq_true_eq]
+  have := last.1
+  omega
+
 /-- The emitted three-word block reads the original message block beside the
 previous reply, then overwrites only that consumed block. -/
 theorem commit_streaming_block (state : MachineState) (base block : Nat)
-    (blockBound : block < 8) (pc : state.pc = BitVec.ofNat 64 (4456 + 12 * block))
+    (blockBound : block < 7) (pc : state.pc = BitVec.ofNat 64 (4456 + 12 * block))
     (pointer : state.getReg .x8 = BitVec.ofNat 64 base)
     (ready : CommitLeafOracleReady state) (aligned : base % 8 = 0)
     (above : 32 ≤ base) (bounded : base + 256 ≤ MEMORY_BYTES)
@@ -134,7 +160,7 @@ theorem commit_streaming_block (state : MachineState) (base block : Nat)
             (streamingReplyState state (base - 32 + 32 * block) answer) allowCoins
           return result.charge 10 1) := by
   let cursor := base - 32 + 32 * block
-  have offsets := commit_streaming_offsets block blockBound
+  have offsets := commit_streaming_offsets block (by omega)
   have source : state.getReg .x8 +
       signExtend12 (BitVec.ofInt 12 ((32 * block : Int) - 32)) =
       BitVec.ofNat 64 cursor := by
@@ -185,10 +211,49 @@ theorem commit_streaming_block (state : MachineState) (base block : Nat)
     · rw [streaming_commit_code]
       interval_cases block <;> rfl
 
-/-- Execute any suffix of the eight unrolled blocks. Address setup is counted
+/-- The eighth compression reads the last original block, then writes directly
+to the caller's checked heap slot. It still costs three instructions/ten cycles. -/
+theorem commit_heap_streaming_block (state : MachineState) (base : Nat)
+    (pc : state.pc = 4540) (pointer : state.getReg .x8 = BitVec.ofNat 64 base)
+    (ready : CommitLeafOracleReady state) (aligned : base % 8 = 0)
+    (above : 32 ≤ base) (bounded : base + 256 ≤ MEMORY_BYTES)
+    (heapValid : rangeValid (state.getReg .x23) 32 = true ∧
+      (state.getReg .x23).toNat % 8 = 0)
+    (fuel : Nat) (allowCoins : Bool) :
+    execute (submission.image .commit) (3 + fuel) state allowCoins =
+      (do let answer ← World.query (.inr (.inl (readBuffer state (base + 192) 64)))
+          let result ← execute (submission.image .commit) fuel
+            (heapStreamingReplyState state (base + 192) answer) allowCoins
+          return result.charge 10 1) := by
+  have source : state.getReg .x8 + signExtend12 (192#12) =
+      BitVec.ofNat 64 (base + 192) := by
+    rw [pointer]
+    change BitVec.ofNat 64 base + BitVec.ofNat 64 192 = _
+    rw [BitVec.ofNat_add]
+  apply heap_streaming_machine_block _ state (base + 192) 192 ready
+    (by omega) (by omega) heapValid
+  · apply commit_fetch _ 111 _ (by decide) pc
+    rw [streaming_commit_code]; rfl
+  · simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, source,
+      heapStreamingFirstState]
+  · apply commit_fetch _ 112 _ (by decide)
+    · change state.pc + 4 = _; rw [pc]; rfl
+    · rw [streaming_commit_code]; rfl
+  · simp only [ordinaryStep, memoryArgumentsValid, memAccess, reduceIte, execInstrBr,
+      heapStreamingFirstState, MachineState.getReg_setPC,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x10 ≠ .x23)]
+    change some (((state.setReg .x10 (BitVec.ofNat 64 (base + 192))).setReg .x12
+      (state.getReg .x23 + signExtend12 0)).setPC (state.pc + 4 + 4)) =
+      some (heapStreamingArgsState state (base + 192))
+    simp [signExtend12, heapStreamingArgsState, BitVec.add_assoc]
+  · apply commit_fetch _ 113 _ (by decide)
+    · change state.pc + 8 = _; rw [pc]; rfl
+    · rw [streaming_commit_code]; rfl
+
+/-- Execute any suffix of the seven streaming prefix blocks. Address setup is counted
 explicitly, and the query continuation includes every possible compression reply. -/
 theorem commit_streaming_loop (state : MachineState) (base first count : Nat)
-    (blocks : first + count ≤ 8)
+    (blocks : first + count ≤ 7)
     (pc : state.pc = BitVec.ofNat 64 (4456 + 12 * first))
     (pointer : state.getReg .x8 = BitVec.ofNat 64 base)
     (ready : CommitLeafOracleReady state) (aligned : base % 8 = 0)
@@ -224,14 +289,14 @@ theorem commit_streaming_loop (state : MachineState) (base first count : Nat)
     rw [show base - 32 + 32 * first + 32 = base - 32 + 32 * (first + 1) by omega]
     simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc, next]
 
-/-- The final chain pointer moves with x8; all unrelated registers are preserved. -/
+/-- The next salt prefix pointer moves with x8; unrelated registers are preserved. -/
 theorem commit_leaf_loop_registers (state : MachineState) (count : Nat)
     (finished : MachineState) (reachable : finished ∈ support (commitLeafLoop state count)) :
     finished.getReg .x8 = state.getReg .x8 + BitVec.ofNat 64 (32 * count) ∧
     ∀ reg ∉ [Reg.x8, .x21, .x10, .x12], finished.getReg reg = state.getReg reg := by
   simp only [commitLeafLoop, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨body, reached, rfl⟩ := reachable
-  have regs := streaming_machine_registers state _ count body reached
+  have regs := heap_streaming_machine_registers state _ count body reached
   constructor
   · change body.getReg .x8 + BitVec.ofNat 64 (32 * count) = _
     rw [regs.2 .x8 (by decide)]
@@ -252,7 +317,7 @@ theorem commit_leaf_loop_chain (state : MachineState) (count : Nat)
   simp only [commitLeafLoop, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨body, reached, rfl⟩ := reachable
   change body.getReg .x8 + BitVec.ofNat 64 (32 * count) - 32 = _
-  rw [(streaming_machine_registers state _ count body reached).2 .x8 (by decide)]
+  rw [(heap_streaming_machine_registers state _ count body reached).2 .x8 (by decide)]
 
 theorem commit_leaf_loop_ready (state : MachineState) (count : Nat)
     (ready : CommitLeafOracleReady state) (finished : MachineState)
@@ -298,13 +363,13 @@ theorem commit_leaf_finish (state : MachineState) (pc : state.pc = 4552)
 theorem commit_leaf_return (state : MachineState) (pc : state.pc = 4560)
     (link : state.getReg .x1 = 4316) (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .commit) (1 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .commit) fuel (state.setPC 4316) allowCoins
+      (do let result ← execute (submission.image .commit) fuel (state.setPC 4348) allowCoins
           return result.charge 1 0) := by
-  have fetched : fetch (submission.image .commit) state = some (.base (.JALR .x0 .x1 0)) := by
+  have fetched : fetch (submission.image .commit) state = some (.base (.JALR .x0 .x1 32)) := by
     apply commit_fetch _ 116 _ (by decide) pc
     rw [streaming_commit_code]
     rfl
-  have stepped : ordinaryStep state (.base (.JALR .x0 .x1 0)) = some (state.setPC 4316) := by
+  have stepped : ordinaryStep state (.base (.JALR .x0 .x1 32)) = some (state.setPC 4348) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       MachineState.setReg, link]
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
@@ -317,30 +382,52 @@ theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4456)
     (ready : CommitLeafOracleReady state) (aligned : (state.getReg .x8).toNat % 8 = 0)
     (above : 32 ≤ (state.getReg .x8).toNat)
     (bounded : (state.getReg .x8).toNat + 256 ≤ MEMORY_BYTES)
+    (heapValid : rangeValid (state.getReg .x23) 32 = true ∧
+      (state.getReg .x23).toNat % 8 = 0)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .commit) (27 + fuel) state allowCoins =
       (do let finished ← commitLeafLoop (commitLeafReadyState state) 8
-          let result ← execute (submission.image .commit) fuel (finished.setPC 4316) allowCoins
+          let result ← execute (submission.image .commit) fuel (finished.setPC 4348) allowCoins
           return result.charge 83 8) := by
   have entry : commitLeafReadyState state = state := by
     rw [commitLeafReadyState, ← pc, hoist_pc_self]
-  rw [entry, show 27 + fuel = 3 * 8 + (2 + (1 + fuel)) by omega,
-    commit_streaming_loop state (state.getReg .x8).toNat 0 8 (by decide)
+  rw [entry, show 27 + fuel = 3 * 7 + (3 + (2 + (1 + fuel))) by omega,
+    commit_streaming_loop state (state.getReg .x8).toNat 0 7 (by decide)
       (by simpa using pc) (by simp) ready aligned above bounded]
-  simp only [Nat.mul_zero, Nat.add_zero, commitLeafLoop, bind_assoc, pure_bind]
+  simp only [Nat.mul_zero, Nat.add_zero, commitLeafLoop, heapStreamingMachineBlocks,
+    bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro body reached
-  have regs := streaming_machine_registers state _ 8 body reached
-  have endPC : body.pc = 4552 := by rw [regs.1, pc]; rfl
-  have endLink : (commitLeafFinishState body 8).getReg .x1 = 4316 := by
-    change body.getReg .x1 = _
-    exact (regs.2 .x1 (by decide)).trans link
-  have returnPC : (commitLeafFinishState body 8).pc = 4560 := by
-    change body.pc + 8 = _
+  have regs := streaming_machine_registers state _ 7 body reached
+  have lastPC : body.pc = 4540 := by rw [regs.1, pc]; rfl
+  have lastPointer : body.getReg .x8 = BitVec.ofNat 64 (state.getReg .x8).toNat := by
+    rw [regs.2 .x8 (by decide)]
+    simp
+  have lastReady : CommitLeafOracleReady body :=
+    ⟨(regs.2 .x5 (by decide)).trans ready.1,
+      (regs.2 .x11 (by decide)).trans ready.2.1,
+      (regs.2 .x13 (by decide)).trans ready.2.2⟩
+  have lastHeap : rangeValid (body.getReg .x23) 32 = true ∧
+      (body.getReg .x23).toNat % 8 = 0 := by
+    rw [regs.2 .x23 (by decide)]; exact heapValid
+  rw [commit_heap_streaming_block body (state.getReg .x8).toNat lastPC lastPointer
+    lastReady aligned above bounded lastHeap]
+  rw [show (state.getReg .x8).toNat - 32 + 32 * 7 =
+    (state.getReg .x8).toNat + 192 by omega]
+  simp only [bind_assoc]
+  apply bind_congr_of_forall_mem_support
+  intro answer _
+  change BitVec 256 at answer
+  let final := heapStreamingReplyState body ((state.getReg .x8).toNat + 192) answer
+  have endPC : final.pc = 4552 := by rw [heap_streaming_reply_pc, lastPC]; rfl
+  have endLink : (commitLeafFinishState final 8).getReg .x1 = 4316 := by
+    change final.getReg .x1 = _
+    exact (heap_streaming_reply_register _ _ _ .x1 (by decide)).trans
+      ((regs.2 .x1 (by decide)).trans link)
+  have returnPC : (commitLeafFinishState final 8).pc = 4560 := by
+    change final.pc + 8 = _
     rw [endPC]; rfl
-  rw [commit_leaf_finish body endPC,
-    commit_leaf_return _ returnPC endLink]
-  simp [Execution.charge, ← Nat.add_assoc]
+  rw [commit_leaf_finish final endPC, commit_leaf_return _ returnPC endLink]
+  simp [Execution.charge, ← Nat.add_assoc, final]
 
 end CommitGolfCandidate
-
