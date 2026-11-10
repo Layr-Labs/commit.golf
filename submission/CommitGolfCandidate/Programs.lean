@@ -1,4 +1,5 @@
 import CommitGolf.Programs
+import CommitGolfCandidate.Group341Words
 
 /-! A salted binary Merkle baseline, implemented as RV64IM images.
 
@@ -160,8 +161,27 @@ def octParentCode : List Asm :=
   [.branch 1 12 9 "commit-parent-oct",.jump 0 "commit-root"]
 
 /-- Seven peeled parents leave N-8, a multiple of eight at the challenge depth. -/
-def commitCode (depth : Nat) : List Asm :=
+def octCommitCode (depth : Nat) : List Asm :=
   patchOctEntry (quadCommitCode depth) false ++ octParentCode
+
+/-- Execute the eight-parent prefix once, then enter the maximal short-branch group. -/
+def patchGroup341Entry : List Asm → Bool → List Asm
+  | [], _ => []
+  | .label name :: rest, _ => .label name :: patchGroup341Entry rest (name == "commit-parent-oct")
+  | .branch condition left right _ :: rest, true =>
+      .branch condition left right "commit-parent-group341" :: patchGroup341Entry rest false
+  | instruction :: rest, active => instruction :: patchGroup341Entry rest active
+
+def group341ParentCode : List Asm :=
+  [.label "commit-parent-group341"] ++
+  ((List.range 341).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
+  [.branch 1 12 9 "commit-parent-group341",.jump 0 "commit-root"]
+
+/-- 2^depth is 16 modulo 341 exactly when depth is 4 modulo 10.
+Other development depths retain the promoted eight-parent program. -/
+def commitCode (depth : Nat) : List Asm :=
+  if depth%10=4 then patchGroup341Entry (octCommitCode depth) false ++ group341ParentCode
+  else octCommitCode depth
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
@@ -217,7 +237,7 @@ def candidate (depth : Nat) : Submission where
   sizes := sizes depth
   layout := layout depth
   image
-    | .commit => ⟨assemble (commitCode depth), []⟩
+    | .commit => ⟨if depth=24 then group341ImageWords else assemble (commitCode depth), []⟩
     | .opening => ⟨assemble (openingCode depth), []⟩
     | .check => ⟨assemble (checkCode depth), []⟩
   steps

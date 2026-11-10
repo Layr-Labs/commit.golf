@@ -1,43 +1,42 @@
-# Eight-parent branch sharing
+# 341-parent branch sharing
 
-This candidate builds on promoted submission 8721ff74-81ed-494d-ad8f-e0e3d7d0b22a.
-It preserves the salted binary Merkle construction, all compression inputs and
-their order, the private salt distribution, ABI, opening/checker images, and
-102400-byte proof for 128 leaves. Only parent branch sharing changes.
+This candidate builds directly on promoted submission cf55df9c-8997-454b-b49f-a38d3d323b55.
+It preserves the salted binary Merkle construction, compression inputs and query
+order, private salt distribution, ABI, opening/checker images, and 102400-byte
+proof for 128 leaves. The parent loop shares one branch among 341 parents.
 
-The original peeled parent and pair remain. The first four-parent block now runs
-once, leaving N-8 parents. Word138 changes its backward BNE into a forward BNE+8,
-which enters the appended eight-parent block at word140 when work remains.
-Words140-163 are eight [ECALL, ADDI x10,-64, ADDI x12,-32] triples. Word164 tests
-the output pointer and branches -96 to140. Word165 jumps -344 to the unchanged
-root-copy entry at word79. A zero residual after the first quartet uses the
-unchanged root jump at word139. N=1,2,4 retain their earlier exits; N=8 executes
-seven parents and falls through at139. The challenge certificate specializes
-N=16777216=8*g+8, g=2097151.
+The initial one-, two-, four- and eight-parent blocks execute once, producing
+15 parents. Word164 now branches forward by eight bytes to word166 when work
+remains. Words166 through1188 contain341 triples of ECALL, ADDI x10,-64 and
+ADDI x12,-32. Word1189 branches back4092 bytes to word166; word1190 jumps back
+to root-copy word79. Earlier small-tree exits remain. Since2^24=341*49200+16,
+the repeated loop executes49200 times. The backwards BNE uses its full signed
+13-bit range without splitting the loop into extra jumps.
 
-The eight-parent block costs25 instructions,81 cycles and8 public queries.
-Including the seven initial parents and one terminal jump, parents cost25*g+25
-instructions,81*g+74 cycles and8*g+7 queries. Full commitment costs639631406
-instructions and1763704871 cycles. Opening costs48664 cycles and102400 bytes.
-The claimed score is (1763704871+48664)*102400=180608361984000. Relative to8721ff74,
-the net saving is2097151 commitment cycles, including every initial and terminal
-branch/jump. The instruction allowance remains8589935616 with7950304210 spare.
-Public compression queries remain150994943; no oracle or private-randomness
-accounting rule changes.
+The retained prefix costs49 instructions and154 cycles. Including the repeated
+loop and terminal root jump, parents cost1024*g+50 instructions,3411*g+155
+cycles and341*g+15 public queries. Full commitment costs637583456 instructions
+and1761656921 cycles; opening costs48664 cycles. The claimed score is
+(1761656921+48664)*102400=180398651904000. This saves2047950 commitment cycles
+relative to the eight-parent source. Instruction allowance8589935616 leaves
+7952352160 spare steps. Public compression queries remain150994943.
 
-OctParentStep proves the actual initial and repeated pointer branches.
-OctParentLoop composes arbitrary successive oracle replies through each group.
-OctParentExit and OctPairRemainder compose the retained prefix and both exits.
-OctParents carries the existing x8/x21 reference frame; OctTree composes leaves,
-parents and root serialization. OctImage checks every changed fetch against the
-assembled instruction bytes. CommitRuntime derives the new exact resources;
-CommitSemantics carries the same cycle count through the probabilistic runner.
-The retained completeness, binding and hiding proofs use these actual images.
-The obsolete concrete backward-quartet fetch witness is removed from QuadImage.
+ParentGroupBranch, ParentGroupLoop, ParentGroupPrefix, ParentGroupPlan,
+ParentGroupComplete and ParentGroupSchedule prove generic schedules using the
+actual decoded branches, arbitrary oracle replies and exact resources.
+ParentGroupTree transports the existing leaf/reference frames and serializes
+the root. Group341Schedule, Group341Tree and Group341Image instantiate those
+lemmas against the delivered image. Group341Words represents the long repeated
+image as a finite literal head and indexed repeated body. Group341Encoding
+proves in ordinary Lean that this image equals assemble(commitCode24), and
+proves the indexed instruction fetches without repeatedly expanding the large
+assembler. The fixed candidate image is exactly those words, and Solution must
+still prove equality with Artifact generated from programs.json.
 
-Independent development simulation compares actual assembled images at depths
-0..10 with three coin/message seeds per depth. It checks every public query,
-complete final memory, all32 final registers, PC, random-byte count and cycle
-change. These finite model checks complement the ordinary Lean certificate;
-the official verifier regenerates its own Artifact from programs.json. Verification
-receipts and dependency citations are recorded in the public Yukon submission note.
+For other development depths the builder uses this schedule only when depth
+is4 modulo10, retaining the prior eight-parent schedule otherwise. Independent
+machine simulation at depths4 and14 compares both schedules' complete query
+traces, final memory, registers, PC, randomness consumption and resource deltas.
+Those checks support development; they do not constitute official verification.
+The full certificate retains the machine-derived completeness, binding and
+hiding proofs. Official verifier receipts are recorded in the submission note.

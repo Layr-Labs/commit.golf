@@ -35,11 +35,6 @@ theorem oct_image_sequence : ParentSequenceFetched (submission.image .commit) 46
     oct_image_triple 4 (by decide),oct_image_triple 5 (by decide),
     oct_image_triple 6 (by decide),oct_image_triple 7 (by decide),trivial⟩
 
-theorem oct_image_branch : OctBranchFetched (submission.image .commit) false := by
-  intro state pc
-  apply commit_fetch state 164 _ (by decide) pc
-  rfl
-
 theorem oct_image_exit : OctExitFetched (submission.image .commit) := by
   intro state
   constructor
@@ -49,9 +44,5 @@ theorem oct_image_exit : OctExitFetched (submission.image .commit) := by
   · intro pc
     apply commit_fetch state 165 _ (by decide) pc
     rfl
-
-theorem oct_image_parents : OctParentFetched (submission.image .commit) :=
-  ⟨fused_image_peeled,fused_image_peel_branch,quad_image_pair,quad_image_entry_branch,
-    quad_image_sequence,oct_image_first_branch,oct_image_sequence,oct_image_branch,oct_image_exit⟩
 
 end CommitGolfCandidate
