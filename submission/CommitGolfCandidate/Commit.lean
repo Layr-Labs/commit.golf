@@ -7,8 +7,7 @@ namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 private def commitLoad (reg : Reg) (high : BitVec 12) : List Instr :=
-  [.ADDI reg .x0 0, .SLLI reg reg 11, .ADDI reg reg high,
-   .SLLI reg reg 11, .ADDI reg reg 0, .SLLI reg reg 11, .ADDI reg reg 0]
+  [.ADDI reg .x0 high, .SLLI reg reg 22, .JAL .x0 20]
 
 private def commitSetupInstructions : List Instr :=
   [.ADDI .x8 .x10 0, .ADDI .x26 .x11 0, .ADDI .x9 .x12 0] ++
@@ -19,22 +18,22 @@ private def commitSetupInstructions : List Instr :=
 private def commitSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
   (commitSetupInstructions.take count).foldl execInstrBr state
 
-def commitSetupState (state : MachineState) : MachineState := commitSetupPrefix state 35
+def commitSetupState (state : MachineState) : MachineState := commitSetupPrefix state 19
 
 set_option maxHeartbeats 1000000 in
-/-- The 35-instruction setup computes pointers into the admitted private trapdoor
+/-- The 19-instruction setup computes pointers into the admitted private trapdoor
 and the total salt length; it performs no memory access or oracle call. -/
 theorem commit_setup (state : MachineState) (pc : state.pc = 4096)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (35 + fuel) state allowCoins =
+    execute (submission.image .commit) (19 + fuel) state allowCoins =
       (do let result ← execute (submission.image .commit) fuel (commitSetupState state) allowCoins
-          return result.charge 35 0) := by
+          return result.charge 19 0) := by
   apply execute_unit_steps (states := commitSetupPrefix state)
   intro i hi
   refine ⟨.base ((commitSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ i _ (by omega)
+  · apply commit_fetch _ (([0,1,2,3,4,5,10,11,12,17,18,19,20,25,26,27,28,29,30] : List Nat)[i]!) _ (by interval_cases i <;> decide)
     · interval_cases i <;>
-        simp [commitSetupPrefix, commitSetupInstructions, commitLoad, execInstrBr, pc,
+        simp [commitSetupPrefix, commitSetupInstructions, commitLoad, execInstrBr, signExtend21, pc,
           MachineState.setPC]
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
@@ -59,7 +58,7 @@ theorem commit_setup_registers (state : MachineState) :
 theorem commit_setup_pc (state : MachineState) (pc : state.pc = 4096) :
     (commitSetupState state).pc = 4236 := by
   simp [commitSetupState, commitSetupPrefix, commitSetupInstructions, commitLoad,
-    execInstrBr, MachineState.setPC, pc]
+    execInstrBr, signExtend21, MachineState.setPC, pc]
 
 /-- The real RANDOM syscall samples the salt buffer with private coins. Its cost is
 one cycle plus one cycle per eight bytes; it makes no public oracle queries. -/

@@ -96,12 +96,20 @@ def leafSubroutine : List Asm :=
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
 
+/-- Load a large constant in three executed instructions while retaining seven image
+slots. The jump preserves every later program address. -/
+def commitLi (rd value : Nat) : List Asm :=
+  if value % (2^22) = 0 ∧ value / (2^22) < 2048 then
+    [addi rd 0 (value / (2^22)), shift rd rd 22, insn 0x0140006f] ++
+      List.replicate 4 (addi 0 0 0)
+  else li rd value
+
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 8 10, mv 26 11, mv 9 12] ++ li 19 n ++ li 6 (64*n) ++
-  [regop 18 9 6] ++ li 6 (32*n) ++ [regop 23 9 6] ++
+  [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
+  [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
-  [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
+  [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
   li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
@@ -123,9 +131,8 @@ def openingCode (depth : Nat) : List Asm :=
    shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
   [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
    .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
-   .label "open-done",
-   -- The output cursor advanced by exactly the serialized proof length.
-   regop 11 25 15 0 32] ++ halt true
+   .label "open-done"] ++ li 6 (openingBytes depth) ++
+  [regop 11 16 6 0 1] ++ halt true
 
 /-- Reject malformed lengths and every mismatching root. Values/indices are supplied
 by the trusted ABI; their validity and sorting do not depend on proof bytes. -/
