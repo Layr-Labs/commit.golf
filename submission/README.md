@@ -127,18 +127,31 @@ segment are compiled supporting lemmas; their imports do not establish separate 
 evidence. [ResourceTests](CommitGolfCandidate/ResourceTests.lean), imported by `Solution.lean`,
 checks that seven calls do not suffice and that block order and trailing zero blocks are preserved.
 
-## Optimized opening return
+## Commitment loop hoisting and opening return
 
-This directory contains the salted binary Merkle machine submission and a complete Lean
-`CommitGolf.Challenge.certificate` theorem, including binding and hiding for the
-actual machine-derived scheme. The current claims are 102400 proof bytes,
-3959423012 commitment cycles, and 48664 opening cycles, giving a score of
-**405,449,899,622,400**. The opening image now reports the proof-buffer cursor
-difference with one SUB instead of a four-cycle MUL and removes the three unused
-constant-load instructions. Its return block costs four cycles, saving six cycles
-for every opening, including the empty opening. The setup and position loops,
-commitment/checker images, proof format, ABI and security construction are preserved.
-Run the verifier below before treating a changed claim as accepted.
+This candidate combines the published commitment leaf-argument hoist from submission
+`d8ca4af1-957f-4c74-aaa4-00b0b9f183ac`, the opening return from our published submission
+`a680ad07-b3cc-4fc6-9cc5-b759d5e676c6`, and a new parent-loop constant hoist.
+The certificate targets 102400 proof bytes, 3321888810 commitment cycles, and
+48664 opening cycles, giving **340,166,397,337,600** byte-cycles. These numbers require
+successful official verification of this exact candidate before acceptance is claimed.
+
+The leaf loop sets its five syscall arguments once per leaf, saving 35 cycles per leaf.
+The parent loop now sets x5=0, x11=64 and x13=0 once before traversing internal nodes;
+its four address instructions, syscall and two latch instructions cost 14 cycles per
+node. Moving three assignments to initialization saves 3*(2^24-2)=50331642 cycles
+against the published leaf-hoist candidate. The parent image retains every physical
+instruction slot and all later addresses. The initialization executes five instructions,
+and the parent loop begins at PC 4360. Its invariant proves the three syscall constants
+remain valid for every iteration and oracle answer.
+
+The opening return reports the output cursor minus its original base with one SUB,
+removing a four-cycle multiplication and three dead load instructions. It costs four
+cycles, saving six cycles per opening, including an empty opening. Its design was
+originally acknowledged to submission `64e301a2-80fb-49f6-8083-c0bfd088633c`;
+the formal attribution correction for our earlier submission is pending judgment.
+The checker, proof records, ABI, cryptographic construction and public query count
+are preserved. A full commitment costs 198*2^24+42 cycles and 9*2^24-1 public calls.
 
 On 2026-10-28, the Linux verifier accepted the original complete certificate
 after an isolated rebuild and Lean kernel replay. That historical claim used

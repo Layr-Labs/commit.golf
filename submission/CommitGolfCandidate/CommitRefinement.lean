@@ -56,7 +56,7 @@ result into the heap. This equality retains the actual interpreter memory state.
 theorem commit_position_evaluation (oracle : Oracle) (state : MachineState) :
     checkEvaluation oracle (commitPositionRun state) =
       let leaf := checkEvaluation oracle
-        (commitLeafLoop (((commitPositionState state).setReg .x28 8).setPC 4436) 8)
+        (commitLeafLoop (commitLeafReadyState (commitPositionState state)) 8)
       (commitPositionNextState (commitCopyState (leaf.1.setPC 4292) 49), leaf.2) := by
   rw [commitPositionRun, check_evaluation_bind]
   simp only [check_evaluation_pure, Nat.add_zero]
@@ -67,7 +67,7 @@ theorem commit_position_salt (state : MachineState) (saltAddress : Nat)
     (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
     (aligned : saltAddress % 8 = 0) (above : 288 ≤ saltAddress)
     (bounded : saltAddress+32 ≤ 2^64) :
-    readBuffer (((commitPositionState state).setReg .x28 8).setPC 4436) 256 32 =
+    readBuffer (commitLeafReadyState (commitPositionState state)) 256 32 =
       readBuffer state saltAddress 32 := by
   change readBuffer (commitCopyState state 40) 256 32 = _
   exact commit_copy_digest state 40 saltAddress 256 (by simp) saltPointer scratch
@@ -77,7 +77,7 @@ theorem commit_position_salt (state : MachineState) (saltAddress : Nat)
 theorem commit_position_input_digest (state : MachineState) (address : Nat)
     (scratch : state.getReg .x21 = 256) (aligned : address % 8 = 0)
     (above : 288 ≤ address) (bounded : address+32 ≤ 2^64) :
-    readBuffer (((commitPositionState state).setReg .x28 8).setPC 4436) address 32 =
+    readBuffer (commitLeafReadyState (commitPositionState state)) address 32 =
       readBuffer state address 32 := by
   change readBuffer (commitCopyState state 40) address 32 = _
   exact commit_copy_preserves_digest state 40 256 address (by simp) scratch aligned
@@ -139,18 +139,18 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
     (data : ∀ block < 8, readBuffer state (source+32*block) 32 = value.extractLsb' (256*block) 256) :
     readBuffer (checkEvaluation oracle (commitPositionRun state)).1 destination 32 =
       leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
-  let ready := ((commitPositionState state).setReg .x28 8).setPC 4436
+  let ready := commitLeafReadyState (commitPositionState state)
   let leaf := (checkEvaluation oracle (commitLeafLoop ready 8)).1
   have readyReg (reg : Reg) (notCounter : reg ≠ .x28) (notLink : reg ≠ .x1)
-      (notTemporary : reg ≠ .x6) : ready.getReg reg = state.getReg reg := by
-    simp only [ready, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm notCounter),
-      commit_position_register state reg notLink notTemporary]
+      (notTemporary : reg ≠ .x6) (notOracle : reg ∉ [.x5,.x10,.x11,.x12,.x13]) :
+      ready.getReg reg = state.getReg reg := by
+    rw [commit_leaf_ready_register _ reg (by simp_all)]
+    exact commit_position_register state reg notLink notTemporary
   have hashed : readBuffer leaf 256 32 =
       leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
     apply commit_leaf_digest oracle ready source _ value
-      ((readyReg .x21 (by decide) (by decide) (by decide)).trans scratch)
-      ((readyReg .x8 (by decide) (by decide) (by decide)).trans messagePointer)
+      ((readyReg .x21 (by decide) (by decide) (by decide) (by decide)).trans scratch)
+      ((readyReg .x8 (by decide) (by decide) (by decide) (by decide)).trans messagePointer)
       sourceAligned sourceAbove sourceBound
     · exact commit_position_salt state saltAddress scratch saltPointer saltAligned saltAbove saltBound
     · intro block inside
@@ -160,8 +160,8 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
   rw [commit_position_evaluation]
   change readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4292) 49)) destination 32 = _
   rw [commit_leaf_heap_write leaf destination
-    ((leafRegs.2 .x21 (by decide)).trans ((readyReg .x21 (by decide) (by decide) (by decide)).trans scratch))
-    ((leafRegs.2 .x23 (by decide)).trans ((readyReg .x23 (by decide) (by decide) (by decide)).trans heapPointer))
+    ((leafRegs.2 .x21 (by decide)).trans ((readyReg .x21 (by decide) (by decide) (by decide) (by decide)).trans scratch))
+    ((leafRegs.2 .x23 (by decide)).trans ((readyReg .x23 (by decide) (by decide) (by decide) (by decide)).trans heapPointer))
     destinationAligned destinationAbove destinationBound]
   exact hashed
 
@@ -176,7 +176,7 @@ theorem commit_position_preserves_digest (oracle : Oracle) (state : MachineState
     (separate : address+32 ≤ destination ∨ destination+32 ≤ address) :
     readBuffer (checkEvaluation oracle (commitPositionRun state)).1 address 32 =
       readBuffer state address 32 := by
-  let ready := ((commitPositionState state).setReg .x28 8).setPC 4436
+  let ready := commitLeafReadyState (commitPositionState state)
   let leaf := (checkEvaluation oracle (commitLeafLoop ready 8)).1
   have readyScratch : ready.getReg .x21 = 256 := by
     change (commitPositionState state).getReg .x21 = _

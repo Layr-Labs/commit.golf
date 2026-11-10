@@ -285,13 +285,13 @@ theorem commit_position_register (state : MachineState) (reg : Reg)
 
 /-- The exact state distribution after one salt/leaf/digest iteration. -/
 def commitPositionRun (state : MachineState) : OracleComp World MachineState := do
-  let leaf ← commitLeafLoop (((commitPositionState state).setReg .x28 8).setPC 4436) 8
+  let leaf ← commitLeafLoop (commitLeafReadyState (commitPositionState state)) 8
   return commitPositionNextState (commitCopyState (leaf.setPC 4292) 49)
 
 set_option maxHeartbeats 400000 in
 /-- One complete commitment leaf iteration: load its salt, hash 2048 bits, store
 the resulting digest in the heap, then advance. All oracle replies are covered.
-This takes 159 instructions, 215 cycles, and exactly eight public queries. -/
+This takes 124 instructions, 180 cycles, and exactly eight public queries. -/
 theorem commit_position (state : MachineState) (pc : state.pc = 4256)
     (scratch : state.getReg .x21 = 256)
     (saltValid : ∀ word : Fin 4,
@@ -301,12 +301,12 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4256)
     (messageValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (159 + fuel) state true =
+    execute (submission.image .commit) (124 + fuel) state true =
       (do let finished ← commitPositionRun state
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge 215 8) := by
+          return result.charge 180 8) := by
   let ready := commitPositionState state
-  let initialized := (ready.setReg .x28 8).setPC 4436
+  let initialized := commitLeafReadyState ready
   have scratchValid : ∀ word : Fin 4,
       accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
     rw [scratch]
@@ -325,17 +325,16 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4256)
     exact messageValid
   have leafRun := commit_leaf_subroutine ready readyPC readyLink readyScratch readyMessage (8 + (4 + fuel)) true
   dsimp only [ready, commitPositionState] at leafRun
-  rw [show 159 + fuel = 8 + (1 + (138 + (8 + (4 + fuel)))) by omega,
+  rw [show 124 + fuel = 8 + (1 + (103 + (8 + (4 + fuel)))) by omega,
     commit_copy state 40 (Or.inl rfl) pc (by simpa [commitCopySource, commitCopyOffset] using saltValid) scratchValid,
     commit_leaf_call _ copyPC, leafRun]
   simp only [commitPositionRun, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro leaf reached
   have registers := (commit_leaf_loop_registers initialized 8 leaf reached).2
-  have initRegister (reg : Reg) (notCounter : reg ≠ .x28) :
+  have initRegister (reg : Reg) (preserved : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28]) :
       initialized.getReg reg = ready.getReg reg := by
-    simp only [initialized, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm notCounter)]
+    exact commit_leaf_ready_register ready reg preserved
   have leafScratch : (leaf.setPC 4292).getReg .x21 = 256 := by
     rw [MachineState.getReg_setPC, registers .x21 (by decide), initRegister .x21 (by decide)]
     exact readyScratch

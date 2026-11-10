@@ -52,13 +52,16 @@ def CommittedState (oracle : Oracle) (message : Message) (state : MachineState) 
     leafDigest oracle.compression (readBuffer state (5368713248+32*index.val) 32) (message index)
 
 private theorem parents_start_heap (state : MachineState) :
-    (commitParentsStartState state).getReg .x9 = state.getReg .x9 := rfl
+    (commitParentsStartState state).getReg .x9 = state.getReg .x9 :=
+  commit_parents_start_register state .x9 (by simp)
 
 private theorem parents_start_output (state : MachineState) :
-    (commitParentsStartState state).getReg .x26 = state.getReg .x26 := rfl
+    (commitParentsStartState state).getReg .x26 = state.getReg .x26 :=
+  commit_parents_start_register state .x26 (by simp)
 
 private theorem parents_start_counter (state : MachineState) :
-    (commitParentsStartState state).getReg .x20 = state.getReg .x19-1 := rfl
+    (commitParentsStartState state).getReg .x20 = state.getReg .x19-1 :=
+  commit_parents_start_counter state
 
 private theorem parents_start_memory (state : MachineState) :
     (commitParentsStartState state).mem = state.mem := rfl
