@@ -31,7 +31,7 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
     ready.getReg .x19 = 16777216 ∧
     ready.getReg .x23 = initial.getReg .x12 + 536870912 ∧
     ready.getReg .x26 = initial.getReg .x11 ∧
-    ready.getReg .x21 = initial.getReg .x10 - 32 ∧ ready.getReg .x20 = initial.getReg .x20 := by
+    ready.getReg .x21 = initial.getReg .x10 - 32 ∧ ready.getReg .x20 = 0 := by
   dsimp only
   have regs := commit_setup_registers initial
   have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20)
@@ -48,7 +48,7 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
     (readyReg .x19 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
     (readyReg .x23 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.1,
     (readyReg .x26 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.2,
-    (by rw [counters.1, writeBits_register, regs.2.1]), (by rw [counters.2, writeBits_register]; rfl)⟩
+    (by rw [counters.1, writeBits_register, regs.2.1]), counters.2⟩
 
 /-- Fixed ABI pointers and loop registers, independent of sampled salt bytes. -/
 theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec bits) :
@@ -76,13 +76,13 @@ leaf digest, for all actual messages and every private random answer. -/
 theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bits) :
     CommitLeavesInvariant (commitInputReady message answer) (2 ^ 24) := by
   have regs := commit_input_registers message answer
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have setupPC := commit_setup_pc (submission.initialState .commit message) rfl
     change (commitReadyState _).pc = 4280
     apply commit_ready_pc
     simp only [writeBits, MachineState.setPC]
     rw [setupPC]; rfl
-  · exact regs.2.2.2.2.2.2.2
+  · rw [regs.2.2.2.2.2.2.2, regs.2.2.2.1]; rfl
   · rw [regs.2.2.2.1]; decide
   · rw [regs.2.2.2.2.2.2.1, regs.1]; rfl
   · rw [regs.1]; decide
@@ -94,11 +94,7 @@ theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bi
     exact fun word inside => commit_buffer_access 4831842336 (4 * 2 ^ 24) word (by decide) (by decide) inside
 
   · exact commit_ready_oracle _
-  · unfold commitInputReady
-    rw [commit_ready_block_counter, writeBits_register]
-    rfl
-  · rw [regs.1, regs.2.2.2.2.2.1]
-    rfl
+  · exact commit_ready_block_counter _
 
 /-- The complete fixed heap allocation meets the oracle syscall's size and
 alignment requirements for every internal node. -/

@@ -28,45 +28,44 @@ private theorem shifted_address (base node shift : Nat) :
 /-- Setup and loop-control instructions leave memory alone; only the reply is stored. -/
 theorem commit_parent_step_memory (state : MachineState) (answer : Digest) (base node : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 node) :
+    (pointers : ParentPointerInvariant state node) :
     (commitParentNextState (commitParentState state answer)).mem =
       (writeBits state (BitVec.ofNat 64 (base + 32*node)) answer).mem := by
   change (commitParentState state answer).mem = _
-  rw [commit_parent_written_memory, heapPointer, counter, shifted_address]
-  rfl
+  rw [commit_parent_written_memory, pointers.2, heapPointer, ← BitVec.ofNat_add]
 
 /-- The written parent is exactly the compression reply, byte for byte. -/
 theorem commit_parent_stored_digest (state : MachineState) (answer : Digest) (base node : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 node) :
+    (pointers : ParentPointerInvariant state node) :
     heapDigest (commitParentNextState (commitParentState state answer)) base node = answer := by
   unfold heapDigest
-  rw [memory_read_congr _ _ (commit_parent_step_memory state answer base node heapPointer counter)]
+  rw [memory_read_congr _ _ (commit_parent_step_memory state answer base node heapPointer pointers)]
   have written := write_bits_digest state (base+32*node) 0 answer (by decide) (by decide)
   simpa using written
 
 /-- Writing one heap node preserves every other complete digest slot. -/
 theorem commit_parent_preserves_digest (state : MachineState) (answer : Digest) (base node other : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 node)
+    (pointers : ParentPointerInvariant state node)
     (writeBound : base+32*node+32 ≤ 2^64) (readBound : base+32*other+32 ≤ 2^64)
     (different : other ≠ node) :
     heapDigest (commitParentNextState (commitParentState state answer)) base other =
       heapDigest state base other := by
   unfold heapDigest
-  rw [memory_read_congr _ _ (commit_parent_step_memory state answer base node heapPointer counter)]
+  rw [memory_read_congr _ _ (commit_parent_step_memory state answer base node heapPointer pointers)]
   exact write_bits_read_outside state answer (base+32*node) (base+32*other) 32
     writeBound readBound (by omega)
 
 /-- The parent's syscall reads the adjacent child slots in the reference byte order. -/
 theorem commit_parent_query_digest (oracle : Oracle) (state : MachineState) (base node : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 node)
+    (pointers : ParentPointerInvariant state node)
     (aligned : base % 8 = 0) (bounded : base+64*node < 2^64) :
     oracle.answer (m := Id) (commitParentQuery state) =
       combine oracle.compression (heapDigest state base (2*node)) (heapDigest state base (2*node+1)) := by
-  change oracle.compression (readBuffer state (state.getReg .x9 + (state.getReg .x20 <<< 6)).toNat 64) = _
-  rw [heapPointer, counter, shifted_address]
+  change oracle.compression (readBuffer state (state.getReg .x10).toNat 64) = _
+  rw [pointers.1, heapPointer, ← BitVec.ofNat_add]
   change oracle.compression (readBuffer state ((base+64*node) % 2^64) 64) = _
   rw [Nat.mod_eq_of_lt bounded, read_compression_halves state _ (by omega)]
   change oracle.compression (_ ++ _) = oracle.compression (_ ++ _)
@@ -85,7 +84,7 @@ def HeapParents (compress : Compression) (state : MachineState)
 theorem commit_parent_extends_heap (oracle : Oracle) (state : MachineState)
     (base leaves remaining : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 (remaining+1))
+    (pointers : ParentPointerInvariant state (remaining+1))
     (aligned : base % 8 = 0) (bounded : base+64*leaves ≤ 2^64)
     (inside : remaining+1 < leaves)
     (parents : HeapParents oracle.compression state base leaves (remaining+1)) :
@@ -96,7 +95,7 @@ theorem commit_parent_extends_heap (oracle : Oracle) (state : MachineState)
   let next := commitParentNextState (commitParentState state answer)
   have preserved (node : Nat) (inHeap : node < 2*leaves) (different : node ≠ remaining+1) :
       heapDigest next base node = heapDigest state base node :=
-    commit_parent_preserves_digest state answer base (remaining+1) node heapPointer counter
+    commit_parent_preserves_digest state answer base (remaining+1) node heapPointer pointers
       (by omega) (by omega) different
   intro node after below
   change heapDigest next base node = combine _ (heapDigest next base (2*node)) _
@@ -104,8 +103,8 @@ theorem commit_parent_extends_heap (oracle : Oracle) (state : MachineState)
       preserved (2*node+1) (by omega) (by omega)]
   by_cases current : node = remaining+1
   · subst node
-    rw [commit_parent_stored_digest state answer base (remaining+1) heapPointer counter]
-    exact commit_parent_query_digest oracle state base (remaining+1) heapPointer counter aligned (by omega)
+    rw [commit_parent_stored_digest state answer base (remaining+1) heapPointer pointers]
+    exact commit_parent_query_digest oracle state base (remaining+1) heapPointer pointers aligned (by omega)
   · rw [preserved node (by omega) current]
     exact parents node (by omega) below
 
@@ -122,7 +121,7 @@ theorem commit_parents_evaluation (oracle : Oracle) (state : MachineState) (rema
 theorem commit_parents_consistent (oracle : Oracle) (state : MachineState)
     (base leaves remaining : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 remaining)
+    (pointers : ParentPointerInvariant state remaining)
     (aligned : base % 8 = 0) (bounded : base+64*leaves ≤ 2^64)
     (inside : remaining < leaves)
     (parents : HeapParents oracle.compression state base leaves remaining) :
@@ -134,22 +133,19 @@ theorem commit_parents_consistent (oracle : Oracle) (state : MachineState)
     rw [commit_parents_evaluation]
     let answer : Digest := oracle.answer (m := Id) (commitParentQuery state)
     let next := commitParentNextState (commitParentState state answer)
-    have nextCounter : next.getReg .x20 = BitVec.ofNat 64 remaining := by
-      rw [commit_parent_step_counter, counter]
-      change BitVec.ofNat 64 (remaining+1) - BitVec.ofNat 64 1 = _
-      rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining+1) 1 (by decide) (by omega)]
-      congr 1
+    have nextPointers : ParentPointerInvariant next remaining :=
+      commit_parent_step_pointers state answer remaining pointers
     exact ih next
       ((commit_parent_step_register state answer .x9 (by simp)).trans heapPointer)
-      nextCounter (by omega)
-      (commit_parent_extends_heap oracle state base leaves remaining heapPointer counter aligned
+      nextPointers (by omega)
+      (commit_parent_extends_heap oracle state base leaves remaining heapPointer pointers aligned
         bounded inside parents)
 
 /-- Descending parent construction never changes any leaf or other higher heap slot. -/
 theorem commit_parents_preserves_digest (oracle : Oracle) (state : MachineState)
     (base remaining node : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 remaining)
+    (pointers : ParentPointerInvariant state remaining)
     (after : remaining < node) (bounded : base+32*node+32 ≤ 2^64) :
     heapDigest (checkEvaluation oracle (commitParents state remaining)).1 base node =
       heapDigest state base node := by
@@ -159,15 +155,12 @@ theorem commit_parents_preserves_digest (oracle : Oracle) (state : MachineState)
     rw [commit_parents_evaluation]
     let answer : Digest := oracle.answer (m := Id) (commitParentQuery state)
     let next := commitParentNextState (commitParentState state answer)
-    have nextCounter : next.getReg .x20 = BitVec.ofNat 64 remaining := by
-      rw [commit_parent_step_counter, counter]
-      change BitVec.ofNat 64 (remaining+1) - BitVec.ofNat 64 1 = _
-      rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining+1) 1 (by decide) (by omega)]
-      congr 1
+    have nextPointers : ParentPointerInvariant next remaining :=
+      commit_parent_step_pointers state answer remaining pointers
     change heapDigest (checkEvaluation oracle (commitParents next remaining)).1 base node = _
     rw [ih next ((commit_parent_step_register state answer .x9 (by simp)).trans heapPointer)
-      nextCounter (by omega)]
-    exact commit_parent_preserves_digest state answer base (remaining+1) node heapPointer counter
+      nextPointers (by omega)]
+    exact commit_parent_preserves_digest state answer base (remaining+1) node heapPointer pointers
       (by omega) bounded (by omega)
 
 /-- Starting at the last internal node needs no assumptions about pre-existing
@@ -175,11 +168,11 @@ parent contents. The actual loop establishes all parent equations itself. -/
 theorem commit_parents_heap (oracle : Oracle) (state : MachineState) (base leaves : Nat)
     (positive : 0 < leaves)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 (leaves-1))
+    (pointers : ParentPointerInvariant state (leaves-1))
     (aligned : base % 8 = 0) (bounded : base+64*leaves ≤ 2^64) :
     HeapParents oracle.compression
       (checkEvaluation oracle (commitParents state (leaves-1))).1 base leaves 0 :=
-  commit_parents_consistent oracle state base leaves (leaves-1) heapPointer counter
+  commit_parents_consistent oracle state base leaves (leaves-1) heapPointer pointers
     aligned bounded (by omega) (by intro node after below; omega)
 
 /-- Every original leaf authenticates to the root constructed by the actual parent
@@ -187,7 +180,7 @@ loop, using siblings from its resulting heap. -/
 theorem commit_parents_reconstruct (oracle : Oracle) (state : MachineState)
     (base depth index : Nat) (inside : index < 2^depth)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 (2^depth-1))
+    (pointers : ParentPointerInvariant state (2^depth-1))
     (aligned : base % 8 = 0) (bounded : base+64*2^depth ≤ 2^64) :
     let finished := (checkEvaluation oracle (commitParents state (2^depth-1))).1
     climb oracle.compression (heapDigest state base (2^depth+index))
@@ -195,9 +188,9 @@ theorem commit_parents_reconstruct (oracle : Oracle) (state : MachineState)
       heapDigest finished base 1 := by
   have positive : 0 < 2^depth := by positivity
   have parents := commit_parents_heap oracle state base (2^depth) positive
-    heapPointer counter aligned bounded
+    heapPointer pointers aligned bounded
   have leaf := commit_parents_preserves_digest oracle state base (2^depth-1)
-    (2^depth+index) heapPointer counter (by omega) (by omega)
+    (2^depth+index) heapPointer pointers (by omega) (by omega)
   dsimp only
   rw [← leaf]
   exact reconstruct_heap_root oracle.compression _ depth index inside parents
