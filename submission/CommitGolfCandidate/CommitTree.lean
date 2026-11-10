@@ -261,11 +261,11 @@ theorem commit_body (state : MachineState) (count : Nat)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (115 * count + 9 + fuel) state true =
+    execute (submission.image .commit) (108 * count + 9 + fuel) state true =
       (do let finished ← commitBody state count
-          return ⟨.success, finished, 178 * count + 2, 9 * count - 1⟩) := by
-  rw [show 115 * count + 9 + fuel =
-    108 * count + (5 + (7 * (count - 1) + (11 + fuel))) by omega,
+          return ⟨.success, finished, 171 * count + 2, 9 * count - 1⟩) := by
+  rw [show 108 * count + 9 + fuel =
+    101 * count + (5 + (7 * (count - 1) + (11 + fuel))) by omega,
     commit_leaves state count leaves]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
