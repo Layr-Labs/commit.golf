@@ -27,7 +27,7 @@ theorem writer_support (impl : QueryImpl World (AddWriterT Nat ProbComp))
 /-- The actual counted oracle runner preserves the commitment's success and cycles,
 for every fixed oracle and message. -/
 theorem commit_oracle_resources (oracle : Oracle) (message : Message) :
-    (prEvent ((fun result => result.1.exit = Exit.success ∧ result.1.cycles = 3321888810) <$> (oracle.run (submission.run .commit message)))) = 1 := by
+    (prEvent ((fun result => result.1.exit = Exit.success ∧ result.1.cycles = 3187671082) <$> (oracle.run (submission.run .commit message)))) = 1 := by
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
   have resources := commit_input_resources message result.1
@@ -60,7 +60,7 @@ private theorem honest_machine (candidate : Submission) (message : Message) (pos
 including the actual private trapdoor returned by commitment. -/
 theorem honest_machine_resources (message : Message) (positions : Positions)
     (result : MachineResult) (reachable : result ∈ support (submission.honestMachine message positions)) :
-    result.success = true ∧ result.commitCycles = 3321888810 ∧
+    result.success = true ∧ result.commitCycles = 3187671082 ∧
       result.openingCycles = 24 + 380 * positions.card := by
   rw [honest_machine] at reachable
   simp only [mem_support_bind_iff] at reachable
@@ -84,7 +84,7 @@ theorem submission_machine_success : submission.MachineSuccess := by
 
 /-- Certified upper bounds from the actual images for a complete commitment and a
 128-leaf opening. These are the declared claim values, not a sampled measurement. -/
-theorem submission_prover_cycles : submission.ProverCycles 3321888810 48664 := by
+theorem submission_prover_cycles : submission.ProverCycles 3187671082 48664 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached

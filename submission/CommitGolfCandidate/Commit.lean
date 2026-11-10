@@ -291,7 +291,7 @@ def commitPositionRun (state : MachineState) : OracleComp World MachineState := 
 set_option maxHeartbeats 400000 in
 /-- One complete commitment leaf iteration: load its salt, hash 2048 bits, store
 the resulting digest in the heap, then advance. All oracle replies are covered.
-This takes 124 instructions, 180 cycles, and exactly eight public queries. -/
+This takes 116 instructions, 172 cycles, and exactly eight public queries. -/
 theorem commit_position (state : MachineState) (pc : state.pc = 4256)
     (scratch : state.getReg .x21 = 256)
     (saltValid : ∀ word : Fin 4,
@@ -301,10 +301,10 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4256)
     (messageValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (124 + fuel) state true =
+    execute (submission.image .commit) (116 + fuel) state true =
       (do let finished ← commitPositionRun state
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge 180 8) := by
+          return result.charge 172 8) := by
   let ready := commitPositionState state
   let initialized := commitLeafReadyState ready
   have scratchValid : ∀ word : Fin 4,
@@ -325,7 +325,7 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4256)
     exact messageValid
   have leafRun := commit_leaf_subroutine ready readyPC readyLink readyScratch readyMessage (8 + (4 + fuel)) true
   dsimp only [ready, commitPositionState] at leafRun
-  rw [show 124 + fuel = 8 + (1 + (103 + (8 + (4 + fuel)))) by omega,
+  rw [show 116 + fuel = 8 + (1 + (95 + (8 + (4 + fuel)))) by omega,
     commit_copy state 40 (Or.inl rfl) pc (by simpa [commitCopySource, commitCopyOffset] using saltValid) scratchValid,
     commit_leaf_call _ copyPC, leafRun]
   simp only [commitPositionRun, bind_assoc, pure_bind]

@@ -139,18 +139,18 @@ def commitLeaves : MachineState → Nat → OracleComp World MachineState
 attribute [local irreducible] execute commitPositionRun
 
 /-- Every leaf is processed. This is an exact execution equality, not a sampled
-benchmark: 124 instructions, 180 cycles and eight queries per leaf. -/
+benchmark: 116 instructions, 172 cycles and eight queries per leaf. -/
 theorem commit_leaves (state : MachineState) (remaining : Nat)
     (invariant : CommitLeavesInvariant state remaining) (fuel : Nat) :
-    execute (submission.image .commit) (124 * remaining + fuel) state true =
+    execute (submission.image .commit) (116 * remaining + fuel) state true =
       (do let finished ← commitLeaves state remaining
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (180 * remaining) (8 * remaining)) := by
+          return result.charge (172 * remaining) (8 * remaining)) := by
   induction remaining generalizing state with
   | zero => simp [commitLeaves, Execution.charge]
   | succ remaining ih =>
     have pc : state.pc = 4256 := by simpa using invariant.pc
-    rw [show 124 * (remaining + 1) + fuel = 124 + (124 * remaining + fuel) by omega,
+    rw [show 116 * (remaining + 1) + fuel = 116 + (116 * remaining + fuel) by omega,
       commit_position state pc invariant.scratch
         (fun word => invariant.salts word.val (by omega))
         (fun word => invariant.heap word.val (by omega))

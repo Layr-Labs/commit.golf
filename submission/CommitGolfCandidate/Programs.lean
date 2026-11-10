@@ -95,8 +95,8 @@ def leafSubroutine : List Asm :=
 /-- Commitment keeps fixed oracle arguments live across all eight leaf blocks. -/
 def commitLeafSubroutine : List Asm :=
   [.label "leaf", addi 28 0 8] ++ compressScratch.take 5 ++
-  [.label "leaf-block"] ++ copyDigest 8 21 0 32 ++ [insn 0x73] ++
-  [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
+  ((List.range 8).flatMap fun _ => copyDigest 8 21 0 32 ++
+    [insn 0x73, addi 8 8 32, addi 28 28 (-1)]) ++ [insn 0x00008067]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
