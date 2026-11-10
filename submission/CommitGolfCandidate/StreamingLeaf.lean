@@ -9,7 +9,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 2000000
 
 theorem commit_fetch (state : MachineState) (index : Nat) (instruction : Instr)
-    (indexBound : index < 262144) (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * index))
+    (indexBound : index < 200) (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * index))
     (decoded : ((submission.image .commit).code[index]?).bind decodeInstruction =
       some (.base instruction)) :
     fetch (submission.image .commit) state = some (.base instruction) := by

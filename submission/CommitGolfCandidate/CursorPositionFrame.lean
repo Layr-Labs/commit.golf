@@ -19,7 +19,7 @@ private def cursorSaltOps : List Instr :=
   [.LD .x6 .x18 0, .SD .x10 .x6 0,
    .LD .x6 .x18 8, .SD .x10 .x6 8,
    .LD .x6 .x18 16, .SD .x10 .x6 16,
-   .ADDI .x6 .x6 0, .SD .x10 .x0 24]
+   .LD .x6 .x18 24, .SD .x10 .x6 24]
 
 def cursorSaltCopyState (state : MachineState) : MachineState :=
   cursorSaltOps.foldl execInstrBr state

@@ -1,5 +1,4 @@
 import CommitGolf.Programs
-import CommitGolfCandidate.Group341Words
 
 /-! A salted binary Merkle baseline, implemented as RV64IM images.
 
@@ -99,10 +98,12 @@ branches directly to the contiguous salt copy at the leaf entry.
 The carried x10 input advances after each captured query. Fixed selectors remain
 live. The final fall-through jump enters parent setup. -/
 def commitLeafSubroutine : List Asm :=
-  [.label "leaf"] ++ (copyDigest 18 10).take 6 ++ [sd 0 10 24] ++
+  [.label "leaf"] ++ copyDigest 18 10 ++
   ((List.range 8).flatMap fun block =>
-    [if block=7 then addi 12 23 0 else addi 12 10 32,insn 0x73,addi 10 10 32]) ++
-  [addi 18 18 24,addi 23 23 32,.branch 6 23 22 "leaf",.jump 0 "commit-parent-start"]
+    [if block = 7 then addi 12 23 0 else addi 12 10 32,
+     insn 0x73, addi 10 10 32]) ++
+  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "leaf",
+   .jump 0 "commit-parent-start"]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
@@ -115,12 +116,12 @@ def commitLi (rd value : Nat) : List Asm :=
       List.replicate 5 (addi 0 0 0)
   else li rd value
 
-def quadCommitCode (depth : Nat) : List Asm :=
+def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
   [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
   [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
-  -- Sample all salts once; each is an independent uniform 192-bit nonce.
-  [addi 5 0 2, mv 10 18] ++ commitLi 11 (24*n) ++ [insn 0x73] ++
+  -- Sample all salts once; each is an independent uniform 256-bit block.
+  [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
   -- Keep three physical setup slots so the main-loop addresses remain stable.
   [addi 21 8 (-32), mv 22 18, addi 0 0 0, addi 20 0 0] ++ compressScratch.take 5 ++
   [addi 28 0 0, .label "commit-leaf"] ++
@@ -129,14 +130,14 @@ def quadCommitCode (depth : Nat) : List Asm :=
     addi 10 10 (-64), addi 12 12 (-32), insn 0x73,
     addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-quad",
     .jump 0 "commit-root"] ++
-  [addi 18 18 24, addi 23 23 32, .branch 6 23 22 "commit-leaf", addi 0 0 0,
+  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "commit-leaf", addi 0 0 0,
    -- Fixed syscall selectors survive the leaf loop. Initialize descending
    -- parent addresses once, then advance them by subtraction after each query.
     .label "commit-parent-start", addi 20 19 (-1), shift 6 20 6, regop 10 9 6, shift 7 20 5,
    .branch 0 20 0 "commit-root", regop 12 9 7, .label "commit-parent", insn 0x73,
    addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-pair",
    .jump 0 "commit-root", addi 0 0 0, .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine ++ [addi 0 0 0] ++
+  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine ++
   -- Peel three parents before entering this body. Four queries share one
   -- end-pointer branch; the retained pair handles the N=4 fall-through.
   [.label "commit-parent-quad"] ++
@@ -144,72 +145,11 @@ def quadCommitCode (depth : Nat) : List Asm :=
     [insn 0x73, addi 10 10 (-64), addi 12 12 (-32)]) ++
   [.branch 1 12 9 "commit-parent-quad", .jump 0 "commit-root"]
 
-
-/-- Execute the first four-parent body once, then enter the eight-parent loop.
-The branch remains conditional so N=8 uses the retained fall-through root jump. -/
-def patchOctEntry : List Asm → Bool → List Asm
-  | [], _ => []
-  | .label name :: rest, _ => .label name :: patchOctEntry rest (name == "commit-parent-quad")
-  | .branch condition left right _ :: rest, true =>
-      .branch condition left right "commit-parent-oct" :: patchOctEntry rest false
-  | instruction :: rest, active => instruction :: patchOctEntry rest active
-
-def octParentCode : List Asm :=
-  [.label "commit-parent-oct"] ++
-  ((List.range 8).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
-  [.branch 1 12 9 "commit-parent-oct",.jump 0 "commit-root"]
-
-/-- Seven peeled parents leave N-8, a multiple of eight at the challenge depth. -/
-def octCommitCode (depth : Nat) : List Asm :=
-  patchOctEntry (quadCommitCode depth) false ++ octParentCode
-
-/-- Execute the eight-parent prefix once, then enter the long-jump parent group. -/
-def patchGroup341Entry : List Asm → Bool → List Asm
-  | [], _ => []
-  | .label name :: rest, _ => .label name :: patchGroup341Entry rest (name == "commit-parent-oct")
-  | .branch condition left right _ :: rest, true =>
-      .branch condition left right "commit-parent-group341" :: patchGroup341Entry rest false
-  | instruction :: rest, active => instruction :: patchGroup341Entry rest active
-
-def group341ParentCode : List Asm :=
-  [.label "commit-parent-group341"] ++
-  ((List.range 83886).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
-  [.branch 1 12 9 "commit-parent-group-continue",.jump 0 "commit-root",
-    .label "commit-parent-group-continue",.jump 0 "commit-parent-group341"]
-
-/-- Compact ABI setup for the fixed challenge depth. -/
-def compactSetupCode : List Asm :=
-  [mv 8 10,mv 26 11,mv 9 12,insn (16777216+19*2^7+0x37),
-   insn (1073741824+6*2^7+0x37),regop 18 9 6,
-   insn (536870912+6*2^7+0x37),regop 23 9 6,addi 5 0 2,mv 10 18,
-   insn (402653184+11*2^7+0x37),insn 0x0600006f] ++
-   List.replicate 23 (addi 0 0 0)
-
-/-- Remove the executed readiness no-op without relocating later blocks. -/
-def compactCommitReady : List Asm → Nat → List Asm
-  | [], _ => []
-  | .label name :: rest, index => .label name :: compactCommitReady rest index
-  | instruction :: rest, index =>
-      (if index=38 then addi 20 0 0
-       else if index=39 then addi 5 0 0
-       else if index=40 then mv 10 21
-       else if index=41 then addi 11 0 64
-       else if index=42 then mv 12 21
-       else if index=43 then addi 13 0 0
-       else if index=44 then addi 28 0 0
-       else if index=45 then insn 0x0240006f
-       else instruction) :: compactCommitReady rest (index+1)
-
-def commitCode (depth : Nat) : List Asm :=
-  if depth=24 then compactCommitReady (compactSetupCode ++
-    (patchGroup341Entry (octCommitCode depth) false ++ group341ParentCode).drop 35) 0
-  else octCommitCode depth
-
-def rawOpeningCode (depth : Nat) : List Asm :=
+def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
   [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (64*n) ++
   [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
-   shift 6 20 1,regop 6 6 20,shift 6 6 3,regop 23 18 6] ++ (copyDigest 23 25).take 6 ++ [sd 0 25 24] ++
+   shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
   [addi 25 25 32, regop 20 20 19] ++ li 28 depth ++
   [.branch 0 28 0 "open-next", .label "open-path",
    -- XORI x7,x20,1 selects the sibling heap slot.
@@ -220,28 +160,6 @@ def rawOpeningCode (depth : Nat) : List Asm :=
    .label "open-done",
    -- The output cursor advanced by exactly the serialized proof length.
    regop 11 25 15 0 32] ++ halt true
-
-
-/-- Keep all opening PCs while avoiding redundant constant-load instructions. -/
-def compactOpeningSetup : List Asm :=
-  [mv 9 12,mv 24 13,mv 25 15,mv 27 16,
-   insn (16777216+19*2^7+0x37),insn (1073741824+6*2^7+0x37),regop 18 9 6,
-   insn 0x0300006f] ++ List.replicate 11 (addi 0 0 0)
-
-def compactOpeningCounter : List Asm :=
-  [addi 25 25 32,regop 20 20 19,addi 28 0 24,insn 0x00c0006f,
-   addi 0 0 0,addi 0 0 0]
-
-def patchOpeningConstants : List Asm → Nat → List Asm
-  | [], _ => []
-  | .label name :: rest, index => .label name :: patchOpeningConstants rest index
-  | instruction :: rest, index =>
-      (if index<19 then (compactOpeningSetup[index]?).getD (addi 0 0 0)
-       else if 32 ≤ index ∧ index<38 then (compactOpeningCounter[index-32]?).getD (addi 0 0 0)
-       else instruction) :: patchOpeningConstants rest (index+1)
-
-def openingCode (depth : Nat) : List Asm :=
-  if depth=24 then patchOpeningConstants (rawOpeningCode depth) 0 else rawOpeningCode depth
 
 /-- Reject malformed lengths and every mismatching root. Values/indices are supplied
 by the trusted ABI; their validity and sorting do not depend on proof bytes. -/
@@ -281,7 +199,7 @@ def candidate (depth : Nat) : Submission where
   sizes := sizes depth
   layout := layout depth
   image
-    | .commit => ⟨if depth=24 then group341ImageWords else assemble (commitCode depth), []⟩
+    | .commit => ⟨assemble (commitCode depth), []⟩
     | .opening => ⟨assemble (openingCode depth), []⟩
     | .check => ⟨assemble (checkCode depth), []⟩
   steps

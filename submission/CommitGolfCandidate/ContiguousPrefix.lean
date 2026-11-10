@@ -10,16 +10,16 @@ set_option maxHeartbeats 2000000
 /-- Exact three-instruction layout of each ordinary prefix block. -/
 def ContiguousPrefixFetched (image : Image) : Prop :=
   ∀ (state : MachineState) (block : Nat), block < 7 →
-    (state.pc = BitVec.ofNat 64 (4484 + 12 * block) →
-      fetch image state = some (.base (.ADDI .x12 .x10 32))) ∧
     (state.pc = BitVec.ofNat 64 (4488 + 12 * block) →
-      fetch image state = some (.base .ECALL)) ∧
+      fetch image state = some (.base (.ADDI .x12 .x10 32))) ∧
     (state.pc = BitVec.ofNat 64 (4492 + 12 * block) →
+      fetch image state = some (.base .ECALL)) ∧
+    (state.pc = BitVec.ofNat 64 (4496 + 12 * block) →
       fetch image state = some (.base (.ADDI .x10 .x10 32)))
 
 theorem contiguous_prefix_block (image : Image) (fetched : ContiguousPrefixFetched image)
     (state : MachineState) (block cursor : Nat) (blockBound : block < 7)
-    (pc : state.pc = BitVec.ofNat 64 (4484 + 12 * block))
+    (pc : state.pc = BitVec.ofNat 64 (4488 + 12 * block))
     (pointer : state.getReg .x10 = BitVec.ofNat 64 cursor)
     (ready : StreamingOracleReady state) (aligned : cursor % 8 = 0)
     (bounded : cursor + 64 ≤ MEMORY_BYTES)
@@ -37,7 +37,7 @@ theorem contiguous_prefix_block (image : Image) (fetched : ContiguousPrefixFetch
   · apply (fetched (cursorOutputState state false) block blockBound).2.1
     change state.pc + 4 = _
     rw [pc]
-    change BitVec.ofNat 64 (4484 + 12 * block) + BitVec.ofNat 64 4 = _
+    change BitVec.ofNat 64 (4488 + 12 * block) + BitVec.ofNat 64 4 = _
     rw [← BitVec.ofNat_add]
     congr 1
     omega
@@ -45,7 +45,7 @@ theorem contiguous_prefix_block (image : Image) (fetched : ContiguousPrefixFetch
     apply (fetched (cursorReplyState state false answer) block blockBound).2.2
     change state.pc + 4 + 4 = _
     rw [pc, BitVec.add_assoc]
-    change BitVec.ofNat 64 (4484 + 12 * block) + BitVec.ofNat 64 8 = _
+    change BitVec.ofNat 64 (4488 + 12 * block) + BitVec.ofNat 64 8 = _
     rw [← BitVec.ofNat_add]
     congr 1
     omega
@@ -65,7 +65,7 @@ theorem contiguous_prefix_block (image : Image) (fetched : ContiguousPrefixFetch
 theorem contiguous_prefix_execute (image : Image) (fetched : ContiguousPrefixFetched image)
     (state : MachineState) (first cursor count : Nat)
     (blocks : first + count ≤ 7)
-    (pc : state.pc = BitVec.ofNat 64 (4484 + 12 * first))
+    (pc : state.pc = BitVec.ofNat 64 (4488 + 12 * first))
     (pointer : state.getReg .x10 = BitVec.ofNat 64 cursor)
     (ready : StreamingOracleReady state) (aligned : cursor % 8 = 0)
     (bounded : cursor + 32 * count + 64 ≤ MEMORY_BYTES)
@@ -89,9 +89,9 @@ theorem contiguous_prefix_execute (image : Image) (fetched : ContiguousPrefixFet
     funext answer
     change BitVec 256 at answer
     have nextPC : (cursorNextState state false answer).pc =
-        BitVec.ofNat 64 (4484 + 12 * (first + 1)) := by
+        BitVec.ofNat 64 (4488 + 12 * (first + 1)) := by
       rw [cursor_next_pc, pc]
-      change BitVec.ofNat 64 (4484 + 12 * first) + BitVec.ofNat 64 12 = _
+      change BitVec.ofNat 64 (4488 + 12 * first) + BitVec.ofNat 64 12 = _
       rw [← BitVec.ofNat_add]
       congr 1 <;> omega
     have nextPointer : (cursorNextState state false answer).getReg .x10 =

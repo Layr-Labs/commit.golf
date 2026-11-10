@@ -1,7 +1,6 @@
 import CommitGolfCandidate.QuadTree
 
-/-! Retained carried-input fetch premises; the replaced quartet branch is linked by OctImage.
-Link every carried-input execution premise to the submitted instruction
+/-! Link every carried-input execution premise to the submitted instruction
 image. The generic bridges cannot certify a different instruction stream. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -30,19 +29,19 @@ theorem contiguous_image_prefix : ContiguousPrefixFetched (submission.image .com
   intro state block bounded
   constructor
   · intro pc
-    apply commit_fetch state (97 + 3 * block) _ (by omega)
-    · rw [show 4096 + 4 * (97 + 3 * block) = 4484 + 12 * block by omega]
-      exact pc
-    · interval_cases block <;> rfl
-  constructor
-  · intro pc
     apply commit_fetch state (98 + 3 * block) _ (by omega)
     · rw [show 4096 + 4 * (98 + 3 * block) = 4488 + 12 * block by omega]
       exact pc
     · interval_cases block <;> rfl
+  constructor
   · intro pc
     apply commit_fetch state (99 + 3 * block) _ (by omega)
     · rw [show 4096 + 4 * (99 + 3 * block) = 4492 + 12 * block by omega]
+      exact pc
+    · interval_cases block <;> rfl
+  · intro pc
+    apply commit_fetch state (100 + 3 * block) _ (by omega)
+    · rw [show 4096 + 4 * (100 + 3 * block) = 4496 + 12 * block by omega]
       exact pc
     · interval_cases block <;> rfl
 
@@ -51,25 +50,25 @@ theorem contiguous_image_tail : ContiguousTailFetched (submission.image .commit)
   intro state
   refine ⟨?_, ?_, ?_⟩
   · intro pc
-    apply commit_fetch state 118 _ (by decide) pc
-    rfl
-  · intro pc
     apply commit_fetch state 119 _ (by decide) pc
     rfl
   · intro pc
     apply commit_fetch state 120 _ (by decide) pc
     rfl
+  · intro pc
+    apply commit_fetch state 121 _ (by decide) pc
+    rfl
 
 theorem contiguous_image_latch : ContiguousLatchFetched (submission.image .commit) := by
   intro state i hi pc
-  apply commit_fetch _ (121 + i) _ (by omega)
+  apply commit_fetch _ (122 + i) _ (by omega)
   · interval_cases i <;>
       simp [contiguousLatchPrefix, contiguousLatchInstructions, execInstrBr, pc, MachineState.setPC]
   · interval_cases i <;> rfl
 
 theorem contiguous_image_exit : ContiguousExitFetched (submission.image .commit) := by
   intro state pc
-  apply commit_fetch state 124 _ (by decide) pc
+  apply commit_fetch state 125 _ (by decide) pc
   rfl
 
 theorem fused_image_peeled : ParentTripleFetched (submission.image .commit) 4388 := by
@@ -143,6 +142,11 @@ theorem quad_image_sequence : ParentSequenceFetched (submission.image .commit) 4
   exact ⟨quad_image_triple 0 (by decide), quad_image_triple 1 (by decide),
     quad_image_triple 2 (by decide), quad_image_triple 3 (by decide), trivial⟩
 
+theorem quad_image_branch : QuadBranchFetched (submission.image .commit) false := by
+  intro state pc
+  apply commit_fetch state 138 _ (by decide) pc
+  rfl
+
 theorem quad_image_exit : QuadExitFetched (submission.image .commit) := by
   intro state
   constructor
@@ -152,5 +156,9 @@ theorem quad_image_exit : QuadExitFetched (submission.image .commit) := by
   · intro pc
     apply commit_fetch state 139 _ (by decide) pc
     rfl
+
+theorem quad_image_parents : QuadParentFetched (submission.image .commit) :=
+  ⟨fused_image_peeled, fused_image_peel_branch, quad_image_pair,
+    quad_image_entry_branch, quad_image_sequence, quad_image_branch, quad_image_exit⟩
 
 end CommitGolfCandidate

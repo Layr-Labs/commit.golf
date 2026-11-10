@@ -12,7 +12,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
 set_option maxHeartbeats 2000000
 
-/-- The complete physical position uses 34 instructions, 90 cycles and eight
+/-- The complete physical position uses 35 instructions, 91 cycles and eight
 queries. Delivered-image fetch premises remain explicit until image assembly. -/
 theorem contiguous_position (saltFetched : ContiguousSaltFetched (submission.image .commit))
     (prefixFetched : ContiguousPrefixFetched (submission.image .commit))
@@ -32,11 +32,11 @@ theorem contiguous_position (saltFetched : ContiguousSaltFetched (submission.ima
     (remaining : Nat)
     (window : (state.getReg .x23).toNat + 32 * (remaining + 1) =
       (state.getReg .x22).toNat) (fuel : Nat) :
-    execute (submission.image .commit) (34 + fuel) (cursorNormalize state messageBase 4456) true =
+    execute (submission.image .commit) (35 + fuel) (cursorNormalize state messageBase 4456) true =
       (do let finished ← commitPositionRun state
           let result ← execute (submission.image .commit) fuel
-            (cursorNormalize finished messageBase (if remaining = 0 then 4592 else 4456)) true
-          return result.charge 90 8) := by
+            (cursorNormalize finished messageBase (if remaining = 0 then 4596 else 4456)) true
+          return result.charge 91 8) := by
   let cursor := (state.getReg .x8).toNat - 32
   let ready := commitPositionState state
   obtain ⟨aligned, bounded⟩ := commit_leaf_source_range state messageValid
@@ -91,15 +91,15 @@ theorem contiguous_position (saltFetched : ContiguousSaltFetched (submission.ima
       commit_position_register state .x23 (by decide) (by decide)]
     exact commit_leaf_heap_range state heapValid
   have leafRun := contiguous_leaf_blocks (submission.image .commit) prefixFetched tailFetched
-    ((cursorLeafFrame ready messageBase).setPC 4484) cursor rfl
+    ((cursorLeafFrame ready messageBase).setPC 4488) cursor rfl
     (by rw [MachineState.getReg_setPC, cursor_frame_pointer]; exact readyChain)
     (by simpa only [StreamingOracleReady, MachineState.getReg_setPC] using readyOracle)
     (by dsimp [cursor]; omega) (by dsimp [cursor]; omega)
     (by simpa only [MachineState.getReg_setPC] using readyHeap) (3 + fuel) true
-  rw [show 34 + fuel = 7 + (24 + (3 + fuel)) by omega,
+  rw [show 35 + fuel = 8 + (24 + (3 + fuel)) by omega,
     contiguous_salt_execute _ saltFetched _ rfl physicalSalt destinationValid,
     contiguous_salt_ready state messageBase link, leafRun]
-  rw [contiguous_heap_pc_bind (cursorLeafFrame ready messageBase) cursor 4484 4580
+  rw [contiguous_heap_pc_bind (cursorLeafFrame ready messageBase) cursor 4488 4584
     (fun finished => do
       let result ← execute (submission.image .commit) (3 + fuel) finished true
       return result.charge 80 8)]
@@ -107,7 +107,7 @@ theorem contiguous_position (saltFetched : ContiguousSaltFetched (submission.ima
     cursor (readySource.trans source) readyChain
     (by
       change (ready.getReg .x8).toNat - 32 = cursor
-      rw [readySource]) messageBase 4580
+      rw [readySource]) messageBase 4584
     (fun finished => do
       let result ← execute (submission.image .commit) (3 + fuel) finished true
       return result.charge 80 8)]
@@ -124,7 +124,7 @@ theorem contiguous_position (saltFetched : ContiguousSaltFetched (submission.ima
       decide (0 < remaining) := by
     rw [leafHeap, leafEnd]
     exact outer_heap_latch _ _ remaining window
-  rw [contiguous_latch_execute _ latchFetched (cursorNormalize leaf messageBase 4580) rfl,
+  rw [contiguous_latch_execute _ latchFetched (cursorNormalize leaf messageBase 4584) rfl,
     contiguous_latch_frame, branch]
   rw [cursor_next_frame_pc]
   by_cases empty : remaining = 0 <;>

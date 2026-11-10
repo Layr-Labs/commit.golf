@@ -132,7 +132,7 @@ private def outerCopyOps (source destination : Reg) (offset : Nat) : List Instr 
   [.LD .x6 source (BitVec.ofNat 12 offset), .SD destination .x6 0,
    .LD .x6 source (BitVec.ofNat 12 (offset+8)), .SD destination .x6 8,
    .LD .x6 source (BitVec.ofNat 12 (offset+16)), .SD destination .x6 16,
-   .ADDI .x6 .x6 0, .SD destination .x0 24]
+   .LD .x6 source (BitVec.ofNat 12 (offset+24)), .SD destination .x6 24]
 
 set_option maxHeartbeats 2000000 in
 theorem outer_salt_copy (state : MachineState) (value : Word) :
@@ -307,13 +307,13 @@ theorem outer_normalize_idempotent (state : MachineState) (first second : Word) 
   cases reg <;> rfl
 
 def outerLatchInstructions : List Instr :=
-  [.ADDI .x18 .x18 24, .ADDI .x23 .x23 32, .BLTU .x23 .x22 8116]
+  [.ADDI .x18 .x18 32, .ADDI .x23 .x23 32, .BLTU .x23 .x22 8116]
 
 def outerLatchPrefix (state : MachineState) (count : Nat) : MachineState :=
   (outerLatchInstructions.take count).foldl execInstrBr state
 
 def outerPhysicalNextState (state : MachineState) : MachineState :=
-  ((state.setReg .x18 (state.getReg .x18+24)).setReg .x23 (state.getReg .x23+32)).setPC
+  ((state.setReg .x18 (state.getReg .x18+32)).setReg .x23 (state.getReg .x23+32)).setPC
     (if BitVec.ult (state.getReg .x23+32) (state.getReg .x22) then 4280 else 4360)
 
 theorem outer_latch_state (state : MachineState) (pc : state.pc=4348) :

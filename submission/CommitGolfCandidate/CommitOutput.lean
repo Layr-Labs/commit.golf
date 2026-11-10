@@ -49,7 +49,7 @@ def CommittedState (oracle : Oracle) (message : Message) (state : MachineState) 
   readBuffer state 4294971392 32 = heapDigest state 4294971424 1 ∧
   HeapParents oracle.compression state 4294971424 LENGTH 0 ∧
   ∀ index : Index, heapDigest state 4294971424 (LENGTH+index.val) =
-    leafDigest oracle.compression (readNonce state (5368713248+24*index.val)) (message index)
+    leafDigest oracle.compression (readBuffer state (5368713248+32*index.val) 32) (message index)
 
 private theorem parents_start_heap (state : MachineState) :
     (commitParentsStartState state).getReg .x9 = state.getReg .x9 :=
@@ -69,11 +69,11 @@ private theorem parents_start_memory (state : MachineState) :
 attribute [local irreducible] commitBody commitLeaves commitParents commitInputReady checkEvaluation
 
 /-- Both loops and the final return preserve the sampled salt buffer. -/
-theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : BitVec (192*LENGTH))
+theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : BitVec (256*LENGTH))
     (index : Index) :
     let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
     let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH-1))).1
-    readNonce finished (5368713248+24*index.val) = expandNonce192 (answer.extractLsb' (192*index.val) 192) := by
+    readBuffer finished (5368713248+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 := by
   let ready := commitInputReady message answer
   let leaves := (checkEvaluation oracle (commitLeaves ready LENGTH)).1
   let parents := commitParentsStartState leaves
@@ -88,19 +88,24 @@ theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : B
     · decide
     · decide
   have indexBound : index.val < 2^24 := index.isLt
+  have address : 5368713248+32*index.val = 4294971424+32*(2*LENGTH+index.val) := by
+    change _ = 4294971424+32*(2*16777216+index.val)
+    omega
   dsimp only
-  change readNonce (checkEvaluation oracle (commitParents parents (LENGTH-1))).1
-    (5368713248+24*index.val)=_
-  unfold readNonce
-  rw [commit_parents_preserves_buffer oracle parents 4294971424 (LENGTH-1)
-    (5368713248+24*index.val) 32 heap counter
-    (by change 4294971424+32*(16777216-1+1)≤5368713248+24*index.val;omega) (by omega)]
-  rw [read_buffer_memory_congr _ _ (parents_start_memory leaves)]
-  rw [commit_leaves_preserves_digest oracle ready 4096 4831842336 LENGTH (5368713248+24*index.val)
+  rw [address]
+  change heapDigest (checkEvaluation oracle (commitParents parents (LENGTH-1))).1
+    4294971424 (2*LENGTH+index.val) = _
+  rw [commit_parents_preserves_digest oracle parents 4294971424 (LENGTH-1)
+    (2*LENGTH+index.val) heap counter
+    (by change 16777216-1 < 2*16777216+index.val; omega)
+    (by change 4294971424+32*(2*16777216+index.val)+32 ≤ 2^64; omega)]
+  unfold heapDigest
+  rw [read_buffer_memory_congr _ _ (parents_start_memory leaves), ← address]
+  rw [commit_leaves_preserves_digest oracle ready 4096 4831842336 LENGTH (5368713248+32*index.val)
     (commit_input_leaves message answer).scratch input.1 input.2.2.2.2.1
-    (by decide) (by decide) (by omega) (by change 4831842336+32*16777216≤2^64;omega) (by omega)
-    (Or.inr (by change 4096+256*16777216≤_;omega))
-    (Or.inr (by change 4831842336+32*16777216≤_;omega))]
+    (by decide) (by decide) (by omega) (by decide) (by omega)
+    (Or.inr (by change 4096+256*16777216 ≤ _; omega))
+    (Or.inr (by change 4831842336+32*16777216 ≤ _; omega))]
   exact commit_ready_salt message answer index
 
 /-- Returning the root preserves the complete authentication invariant. -/
@@ -109,7 +114,7 @@ theorem commit_output_matches (oracle : Oracle) (message : Message) (state : Mac
     (outputPointer : state.getReg .x26 = BitVec.ofNat 64 4294971392)
     (parents : HeapParents oracle.compression state 4294971424 LENGTH 0)
     (leaves : ∀ index : Index, heapDigest state 4294971424 (LENGTH+index.val) =
-      leafDigest oracle.compression (readNonce state (5368713248+24*index.val)) (message index)) :
+      leafDigest oracle.compression (readBuffer state (5368713248+32*index.val) 32) (message index)) :
     CommittedState oracle message (commitExitState (commitCopyState state 79)) := by
   let finished := commitExitState (commitCopyState state 79)
   have preserved (node : Nat) (below : node < 3*LENGTH) :
@@ -127,15 +132,14 @@ theorem commit_output_matches (oracle : Oracle) (message : Message) (state : Mac
   · intro index
     have indexBound : index.val < LENGTH := index.isLt
     rw [preserved (LENGTH+index.val) (by omega)]
-    have salts := commit_output_preserves_digest state 4294971392 (5368713248+24*index.val)
+    have salts := commit_output_preserves_digest state 4294971392 (5368713248+32*index.val)
       outputPointer (by omega) (by change index.val < 16777216 at indexBound; omega) (by omega)
-    unfold readNonce
     rw [salts]
     exact leaves index
 
 /-- The complete post-randomness body produces a returned root and private heap
 that authenticate the original message, for every possible salt reply. -/
-theorem commit_body_matches (oracle : Oracle) (message : Message) (answer : BitVec (192*LENGTH)) :
+theorem commit_body_matches (oracle : Oracle) (message : Message) (answer : BitVec (256*LENGTH)) :
     CommittedState oracle message
       (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 := by
   let ready := commitInputReady message answer
@@ -168,10 +172,10 @@ theorem commit_body_matches (oracle : Oracle) (message : Message) (answer : BitV
 after the final root-copy instructions. This identifies the randomness visible in
 an opening without making any distributional assumption about the oracle. -/
 theorem commit_body_salt (oracle : Oracle) (message : Message)
-    (answer : BitVec (192*LENGTH)) (index : Index) :
-    readNonce (checkEvaluation oracle
+    (answer : BitVec (256*LENGTH)) (index : Index) :
+    readBuffer (checkEvaluation oracle
       (commitBody (commitInputReady message answer) LENGTH)).1
-      (5368713248+24*index.val) = expandNonce192 (answer.extractLsb' (192*index.val) 192) := by
+      (5368713248+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 := by
   let ready := commitInputReady message answer
   let leaves := (checkEvaluation oracle (commitLeaves ready LENGTH)).1
   let parents := commitParentsStartState leaves
@@ -191,8 +195,7 @@ theorem commit_body_salt (oracle : Oracle) (message : Message)
   have indexBound : index.val < 16777216 := index.isLt
   rw [commit_body_evaluation]
   dsimp only
-  unfold readNonce
-  rw [commit_output_preserves_digest finished 4294971392 (5368713248+24*index.val)
+  rw [commit_output_preserves_digest finished 4294971392 (5368713248+32*index.val)
     ((parentRegs .x26 (by simp)).trans output) (by omega) (by omega) (by omega)]
   exact commit_input_tree_salt oracle message answer index
 

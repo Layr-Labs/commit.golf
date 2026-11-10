@@ -1,5 +1,4 @@
-import CommitGolfCandidate.Group341Image
-import CommitGolfCandidate.Group341Tree
+import CommitGolfCandidate.QuadImage
 
 /-! The trusted commitment ABI establishes every tree-building address invariant. -/
 namespace CommitGolfCandidate

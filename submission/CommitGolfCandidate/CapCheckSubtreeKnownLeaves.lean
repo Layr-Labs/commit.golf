@@ -1,0 +1,37 @@
+import CommitGolfCandidate.CapCheckKnownLeaves
+
+/-! A successful actual subtree preserves known payloads anywhere in the
+finalized cap view. This is distinct from preserving a reconstructed internal
+root, which uses the separate write-footprint theorem. -/
+namespace CommitGolfCandidate
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
+set_option maxRecDepth 4096
+set_option maxHeartbeats 200000
+set_option autoImplicit false
+attribute [local irreducible] capCheckDfsValue capCheckSubtreeValue
+
+theorem cap_check_subtree_known_leaves (oracle : Oracle) (limit : Nat)
+    (marked : Nat → Bool) (height node : Nat) (state : MachineState)
+    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (ready : CapCheckDfsReady limit marked (.visit node) state)
+    (above : 22528≤(state.getReg .x25).toNat)
+    {viewHeight : Nat} (view : CapView viewHeight) (viewNode : Nat)
+    (viewLower : 128≤viewNode*2^viewHeight)
+    (viewUpper : (viewNode+1)*2^viewHeight≤256)
+    (marks : CapViewMarks marked viewNode view)
+    (known : CapCheckKnownLeaves state viewNode view)
+    (passed : (capCheckSubtreeValue oracle marked height node state).2=true) :
+    CapCheckKnownLeaves (capCheckSubtreeValue oracle marked height node state).1
+      viewNode view := by
+  have actualPassed :
+      (capCheckDfsValue oracle marked (capSubtreeSteps marked height node)
+        (.visit node) state).2=true := by
+    rw [cap_check_subtree_value oracle marked height node state lower upper]
+    exact passed
+  have result := cap_check_value_known_leaves oracle limit marked
+    (capSubtreeSteps marked height node) (.visit node) state ready above
+    view viewNode viewLower viewUpper marks known actualPassed
+  rw [cap_check_subtree_value oracle marked height node state lower upper] at result
+  exact result
+
+end CommitGolfCandidate

@@ -10,23 +10,23 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 2000000
 
 def contiguousLatchInstructions : List Instr :=
-  [.ADDI .x18 .x18 24, .ADDI .x23 .x23 32, .BLTU .x23 .x22 8060]
+  [.ADDI .x18 .x18 32, .ADDI .x23 .x23 32, .BLTU .x23 .x22 8056]
 
 def contiguousLatchPrefix (state : MachineState) (count : Nat) : MachineState :=
   (contiguousLatchInstructions.take count).foldl execInstrBr state
 
 def ContiguousLatchFetched (image : Image) : Prop :=
-  ∀ state : MachineState, ∀ i < 3, state.pc = 4580 →
+  ∀ state : MachineState, ∀ i < 3, state.pc = 4584 →
     fetch image (contiguousLatchPrefix state i) =
       some (.base ((contiguousLatchInstructions[i]?).getD .EBREAK))
 
 def contiguousLatchState (state : MachineState) : MachineState :=
-  ((state.setReg .x18 (state.getReg .x18 + 24)).setReg .x23
+  ((state.setReg .x18 (state.getReg .x18 + 32)).setReg .x23
     (state.getReg .x23 + 32)).setPC
       (if BitVec.ult (state.getReg .x23 + 32) (state.getReg .x22)
-        then 4456 else 4592)
+        then 4456 else 4596)
 
-theorem contiguous_latch_state (state : MachineState) (pc : state.pc = 4580) :
+theorem contiguous_latch_state (state : MachineState) (pc : state.pc = 4584) :
     contiguousLatchPrefix state 3 = contiguousLatchState state := by
   simp [contiguousLatchPrefix, contiguousLatchInstructions, List.foldl, execInstrBr,
     signExtend12, signExtend13, MachineState.getReg, MachineState.setReg,
@@ -35,7 +35,7 @@ theorem contiguous_latch_state (state : MachineState) (pc : state.pc = 4580) :
 
 /-- Three real ordinary instructions cost three cycles, with no leaf return. -/
 theorem contiguous_latch_execute (image : Image) (fetched : ContiguousLatchFetched image)
-    (state : MachineState) (pc : state.pc = 4580) (fuel : Nat) :
+    (state : MachineState) (pc : state.pc = 4584) (fuel : Nat) :
     execute image (3 + fuel) state true =
       (do let result ← execute image fuel (contiguousLatchState state) true
           return result.charge 3 0) := by
@@ -52,10 +52,10 @@ theorem contiguous_latch_execute (image : Image) (fetched : ContiguousLatchFetch
   exact trace
 
 theorem contiguous_latch_frame (state : MachineState) (messageBase : Word) :
-    contiguousLatchState (cursorNormalize state messageBase 4580) =
+    contiguousLatchState (cursorNormalize state messageBase 4584) =
       cursorNormalize (commitPositionNextState state) messageBase
         (if BitVec.ult (state.getReg .x23 + 32) (state.getReg .x22)
-          then 4456 else 4592) := by
+          then 4456 else 4596) := by
   cases state
   dsimp [contiguousLatchState, cursorNormalize, cursorLeafFrame, cursorBaseFrame,
     commitPositionNextState, MachineState.getReg, MachineState.setReg,

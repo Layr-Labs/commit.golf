@@ -10,12 +10,12 @@ set_option maxHeartbeats 2000000
 
 def ContiguousTailFetched (image : Image) : Prop :=
   ∀ state : MachineState,
-    (state.pc = 4568 → fetch image state = some (.base (.ADDI .x12 .x23 0))) ∧
-    (state.pc = 4572 → fetch image state = some (.base .ECALL)) ∧
-    (state.pc = 4576 → fetch image state = some (.base (.ADDI .x10 .x10 32)))
+    (state.pc = 4572 → fetch image state = some (.base (.ADDI .x12 .x23 0))) ∧
+    (state.pc = 4576 → fetch image state = some (.base .ECALL)) ∧
+    (state.pc = 4580 → fetch image state = some (.base (.ADDI .x10 .x10 32)))
 
 theorem contiguous_heap_block (image : Image) (fetched : ContiguousTailFetched image)
-    (state : MachineState) (cursor : Nat) (pc : state.pc = 4568)
+    (state : MachineState) (cursor : Nat) (pc : state.pc = 4572)
     (pointer : state.getReg .x10 = BitVec.ofNat 64 cursor)
     (ready : StreamingOracleReady state) (aligned : cursor % 8 = 0)
     (bounded : cursor + 64 ≤ MEMORY_BYTES)
@@ -55,7 +55,7 @@ theorem contiguous_heap_block (image : Image) (fetched : ContiguousTailFetched i
 eight queries. Fetch premises will be discharged against the delivered image. -/
 theorem contiguous_leaf_blocks (image : Image)
     (prefixFetched : ContiguousPrefixFetched image) (tailFetched : ContiguousTailFetched image)
-    (state : MachineState) (cursor : Nat) (pc : state.pc = 4484)
+    (state : MachineState) (cursor : Nat) (pc : state.pc = 4488)
     (pointer : state.getReg .x10 = BitVec.ofNat 64 cursor)
     (ready : StreamingOracleReady state) (aligned : cursor % 8 = 0)
     (bounded : cursor + 288 ≤ MEMORY_BYTES)
@@ -64,7 +64,7 @@ theorem contiguous_leaf_blocks (image : Image)
     (fuel : Nat) (allowCoins : Bool) :
     execute image (24 + fuel) state allowCoins =
       (do let finished ← cursorHeapBlocks state cursor 8
-          let result ← execute image fuel (finished.setPC 4580) allowCoins
+          let result ← execute image fuel (finished.setPC 4584) allowCoins
           return result.charge 80 8) := by
   rw [show 24 + fuel = 3 * 7 + (3 + fuel) by omega,
     contiguous_prefix_execute image prefixFetched state 0 cursor 7 (by decide)
@@ -72,7 +72,7 @@ theorem contiguous_leaf_blocks (image : Image)
   simp only [cursorHeapBlocks, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro body reached
-  have lastPC : body.pc = 4568 := by
+  have lastPC : body.pc = 4572 := by
     rw [cursor_prefix_pc state cursor 7 body reached, pc]
     rfl
   have lastPointer := cursor_prefix_pointer state cursor 7 pointer body reached
@@ -86,7 +86,7 @@ theorem contiguous_leaf_blocks (image : Image)
   apply bind_congr_of_forall_mem_support
   intro answer _
   change BitVec 256 at answer
-  have returnPC : (cursorNextState body true answer).pc = 4580 := by
+  have returnPC : (cursorNextState body true answer).pc = 4584 := by
     rw [cursor_next_pc, lastPC]
     rfl
   rw [← returnPC, hoist_pc_self]
