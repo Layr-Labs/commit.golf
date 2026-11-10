@@ -10,6 +10,7 @@ The cycle bounds and opening-proof byte bound are worst-case honest-run bounds, 
 sample averages. Commitment bytes, private trapdoor storage, opened values, indices,
 and verification cycles are not included in this score.
 There is no amortization of commitment cost across multiple openings.
+See [LIMITATIONS.md](LIMITATIONS.md) for the model and operational boundaries.
 
 ## Parameters and oracles
 
