@@ -269,4 +269,18 @@ theorem commit_leaves_finished (state : MachineState) (remaining : Nat)
     exact ⟨done.1, fun reg member => (done.2 reg member).trans
       ((commit_position_registers state next reached).2.2.2.2.2 reg member)⟩
 
+/-- Leaves never change the physical counter that the parent frame fixes at zero. -/
+theorem commit_leaves_counter (state : MachineState) (remaining : Nat)
+    (invariant : CommitLeavesInvariant state remaining) (finished : MachineState)
+    (reachable : finished ∈ support (commitLeaves state remaining)) : finished.getReg .x20=0 := by
+  induction remaining generalizing state with
+  | zero =>
+    simp only [commitLeaves,support_pure,Set.mem_singleton_iff] at reachable
+    subst finished
+    exact invariant.counter
+  | succ remaining ih =>
+    simp only [commitLeaves,mem_support_bind_iff] at reachable
+    obtain ⟨next,reached,rest⟩ := reachable
+    exact ih next (commit_leaves_next_invariant state next remaining invariant reached) rest
+
 end CommitGolfCandidate

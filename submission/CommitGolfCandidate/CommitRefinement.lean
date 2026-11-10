@@ -9,7 +9,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 /-- Commitment's three digest copies use the same load/store sequence as opening.
 Only the source and destination registers differ. -/
 theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 92) :
+    (location : start = 46 ∨ start = 55 ∨ start = 91) :
     (commitCopyState state start).mem =
       (openingCopyState
         ((state.setReg .x23 (if start = 46 then state.getReg .x18
@@ -23,7 +23,7 @@ theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
 
 /-- Copy a complete digest from one of the three commitment copy sites. -/
 theorem commit_copy_digest (state : MachineState) (start source destination : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 92)
+    (location : start = 46 ∨ start = 55 ∨ start = 91)
     (sourcePointer : (if start = 46 then state.getReg .x18
       else if start = 55 then state.getReg .x10 else state.getReg .x9+32) = BitVec.ofNat 64 source)
     (destinationPointer : (if start = 46 then state.getReg .x10
@@ -39,7 +39,7 @@ theorem commit_copy_digest (state : MachineState) (start source destination : Na
 
 /-- The commitment copy preserves every disjoint complete digest. -/
 theorem commit_copy_preserves_digest (state : MachineState) (start destination address : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 92)
+    (location : start = 46 ∨ start = 55 ∨ start = 91)
     (destinationPointer : (if start = 46 then state.getReg .x10
       else if start = 55 then state.getReg .x23 else state.getReg .x26) = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0)

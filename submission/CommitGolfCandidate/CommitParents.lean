@@ -27,6 +27,11 @@ def ParentArgsReady (state : MachineState) : Prop :=
 
 def commitParentInitState (state : MachineState) : MachineState := parentPrefix state 4
 
+/-- The canonical initialization remains a pure reference operation. -/
+theorem commit_parent_init_expansion (state : MachineState) :
+    commitParentInitState state=
+      ([.SLLI .x6 .x20 6,.ADD .x10 .x9 .x6,.SLLI .x7 .x20 5,.ADD .x12 .x9 .x7] : List Instr).foldl execInstrBr state := rfl
+
 theorem commit_parent_init_register (state : MachineState) (reg : Reg)
     (preserved : reg ∈ [Reg.x9,.x19,.x20,.x21,.x26,.x5,.x11,.x13]) :
     (commitParentInitState state).getReg reg=state.getReg reg := by
@@ -38,19 +43,6 @@ theorem commit_parent_init_register (state : MachineState) (reg : Reg)
 theorem commit_parent_init_ready (state : MachineState) : ParentArgsReady (commitParentInitState state) := by
   simp [ParentArgsReady,commitParentInitState,parentPrefix,parentInstructions,execInstrBr,
     MachineState.getReg,MachineState.setReg,MachineState.setPC]
-
-theorem commit_parent_init (state : MachineState) (pc : state.pc=4428) (fuel : Nat) :
-    execute (submission.image .commit) (4+fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (commitParentInitState state) true
-          return result.charge 4 0) := by
-  apply execute_unit_steps (states := parentPrefix state)
-  intro i hi
-  refine ⟨.base ((parentInstructions[i]?).getD .EBREAK),?_,?_,?_⟩
-  · apply commit_fetch _ (83+i) _ (by omega)
-    · interval_cases i <;> simp [parentPrefix,parentInstructions,execInstrBr,pc,MachineState.setPC]
-    · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
 
 def commitParentState (state : MachineState) (answer : BitVec 256) : MachineState :=
   writeBits state (state.getReg .x9+(state.getReg .x20 <<< 5)) answer
@@ -99,65 +91,7 @@ theorem commit_parent_register (state : MachineState) (answer : BitVec 256) (reg
 
 def commitParentNextState (state : MachineState) : MachineState :=
   (((state.setReg .x10 (state.getReg .x10-64)).setReg .x12 (state.getReg .x12-32)).setReg .x20
-    (state.getReg .x20-1)).setPC (if state.getReg .x20-1=0 then 4464 else 4444)
+    (state.getReg .x20-1)).setPC (if state.getReg .x20-1=0 then 4460 else 4444)
 
-private def parentNextInstructions : List Instr :=
-  [.ADDI .x10 .x10 4032,.ADDI .x12 .x12 4064,.ADDI .x20 .x20 4095]
-private def parentNextPrefix (state : MachineState) (count : Nat) : MachineState :=
-  (parentNextInstructions.take count).foldl execInstrBr state
-
-theorem commit_parent_next (state : MachineState) (pc : state.pc=4448) (fuel : Nat) :
-    execute (submission.image .commit) (4+fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (commitParentNextState state) true
-          return result.charge 4 0) := by
-  have setup (remaining : Nat) :
-      execute (submission.image .commit) (3+remaining) state true =
-        (do let result ← execute (submission.image .commit) remaining (parentNextPrefix state 3) true
-            return result.charge 3 0) := by
-    apply execute_unit_steps (states := parentNextPrefix state)
-    intro i hi
-    refine ⟨.base ((parentNextInstructions[i]?).getD .EBREAK),?_,?_,?_⟩
-    · apply commit_fetch _ (88+i) _ (by omega)
-      · interval_cases i <;> simp [parentNextPrefix,parentNextInstructions,execInstrBr,pc,MachineState.setPC]
-      · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  have fetched : fetch (submission.image .commit) (parentNextPrefix state 3)=some (.base (.BNE .x20 .x0 8176)) := by
-    apply commit_fetch _ 91 _ (by decide)
-    · simp [parentNextPrefix,parentNextInstructions,execInstrBr,pc,MachineState.setPC]
-    · rfl
-  have stepped : ordinaryStep (parentNextPrefix state 3) (.base (.BNE .x20 .x0 8176))=
-      some (commitParentNextState state) := by
-    simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend13,signExtend12,
-      parentNextPrefix,parentNextInstructions,commitParentNextState,MachineState.getReg,
-      MachineState.setReg,MachineState.setPC,pc,BitVec.sub_eq_add_neg]
-    split <;> simp_all
-  rw [show 4+fuel=3+(fuel+1) by omega,setup,execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  simp [instructionCycles,Execution.charge,← Nat.add_assoc]
-
-/-- One parent costs twelve cycles and one public query. -/
-theorem commit_parent (state : MachineState) (pc : state.pc = 4444)
-    (args : ParentArgsReady state)
-    (constants : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
-    (sourceValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 6)) 64 = true)
-    (destinationValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 5)) 32 = true)
-    (sourceAligned : (state.getReg .x9 + (state.getReg .x20 <<< 6)).toNat % 8 = 0)
-    (destinationAligned : (state.getReg .x9 + (state.getReg .x20 <<< 5)).toNat % 8 = 0)
-    (fuel : Nat) :
-    execute (submission.image .commit) (5 + fuel) state true =
-      (do let answer ← World.query (.inr (commitParentQuery state))
-          let result ← execute (submission.image .commit) fuel
-            (commitParentNextState (commitParentState state answer)) true
-          return result.charge 12 1) := by
-  rw [show 5 + fuel = 1 + (4 + fuel) by omega,
-    commit_parent_compression state pc args constants sourceValid destinationValid sourceAligned destinationAligned]
-  apply congrArg (fun continuation =>
-    (liftM (World.query (.inr (commitParentQuery state))) :
-      OracleComp World (BitVec 256)) >>= continuation)
-  funext answer
-  change BitVec 256 at answer
-  have nextPC : (commitParentState state answer).pc = 4448 := by rw [commit_parent_pc, pc]; rfl
-  rw [commit_parent_next _ nextPC]
-  simp [Execution.charge, ← Nat.add_assoc]
 
 end CommitGolfCandidate
