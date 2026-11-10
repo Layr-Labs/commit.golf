@@ -39,7 +39,7 @@ theorem commit_root (state : MachineState) (pc : state.pc = 4412)
       pure ⟨.success, commitExitState (commitCopyState state 79), 11, 0⟩ := by
   have nextPC : (commitCopyState state 79).pc = 4444 := by rw [commit_copy_pc, pc]; rfl
   rw [show 11 + fuel = 8 + (3 + fuel) by omega,
-    commit_copy state 79 (Or.inr rfl) pc rootValid outputValid,
+    commit_copy state 79 rfl pc rootValid outputValid,
     commit_exit _ nextPC]
   rfl
 

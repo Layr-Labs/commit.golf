@@ -1,4 +1,4 @@
-import CommitGolfCandidate.CursorImage
+import CommitGolfCandidate.FusedImage
 
 /-! The trusted commitment ABI establishes every tree-building address invariant. -/
 namespace CommitGolfCandidate

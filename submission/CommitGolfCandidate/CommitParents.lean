@@ -46,27 +46,4 @@ theorem commit_parent_step_pc (state : MachineState) (answer : BitVec 256) :
       if state.getReg .x12 - 32 = state.getReg .x9 then 4404 else 4388 := by
   simp [pointerParentNextState, pointer_parent_register, MachineState.setPC]
 
-/-- One parent costs four instructions, eleven cycles and one query. The final
-terminal jump is charged once by the whole-tree execution theorem. -/
-theorem commit_parent (state : MachineState) (pc : state.pc = 4388)
-    (constants : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
-    (sourceValid : rangeValid (state.getReg .x10) 64 = true)
-    (destinationValid : rangeValid (state.getReg .x12) 32 = true)
-    (sourceAligned : (state.getReg .x10).toNat % 8 = 0)
-    (destinationAligned : (state.getReg .x12).toNat % 8 = 0) (fuel : Nat) :
-    execute (submission.image .commit) (4 + fuel) state true =
-      (do let answer ← World.query (.inr (commitParentQuery state))
-          let result ← execute (submission.image .commit) fuel
-            (commitParentNextState (commitParentState state answer)) true
-          return result.charge 11 1) := by
-  rw [show 4 + fuel = 1 + (3 + fuel) by omega,
-    pointer_parent_compression state pc constants sourceValid destinationValid sourceAligned destinationAligned]
-  apply congrArg (fun continuation =>
-    (liftM (World.query (.inr (commitParentQuery state))) : OracleComp World (BitVec 256)) >>= continuation)
-  funext answer
-  change BitVec 256 at answer
-  have nextPC : (commitParentState state answer).pc = 4392 := by rw [commit_parent_pc, pc]; rfl
-  rw [pointer_parent_next _ nextPC]
-  simp [Execution.charge, ← Nat.add_assoc]
-
 end CommitGolfCandidate

@@ -61,45 +61,7 @@ def pointerParentNextState (state : MachineState) : MachineState :=
   (pointerParentAdvance state).setPC
     (if state.getReg .x12 - 32 = state.getReg .x9 then 4404 else 4388)
 
-private def pointerParentPrefix (state : MachineState) (count : Nat) : MachineState :=
-  ([Instr.ADDI .x10 .x10 4032, .ADDI .x12 .x12 4064].take count).foldl execInstrBr state
-
-/-- Two decrements and one branch cost three ordinary cycles. The last false
-branch reaches the separately counted terminal jump, not the root directly. -/
-theorem pointer_parent_next (state : MachineState) (pc : state.pc = 4392) (fuel : Nat) :
-    execute (submission.image .commit) (3 + fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (pointerParentNextState state) true
-          return result.charge 3 0) := by
-  have setup (remaining : Nat) :
-      execute (submission.image .commit) (2 + remaining) state true =
-        (do let result ← execute (submission.image .commit) remaining (pointerParentPrefix state 2) true
-            return result.charge 2 0) := by
-    apply execute_unit_steps (states := pointerParentPrefix state)
-    intro i hi
-    refine ⟨.base (([Instr.ADDI .x10 .x10 4032, .ADDI .x12 .x12 4064][i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (74+i) _ (by omega)
-      · interval_cases i <;> simp [pointerParentPrefix, execInstrBr, pc, MachineState.setPC]
-      · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  let next := pointerParentPrefix state 2
-  have fetched : fetch (submission.image .commit) next = some (.base (.BNE .x12 .x9 8180)) := by
-    apply commit_fetch _ 76 _ (by decide)
-    · simp [next, pointerParentPrefix, execInstrBr, pc, MachineState.setPC]
-    · rfl
-  have stepped : ordinaryStep next (.base (.BNE .x12 .x9 8180)) =
-      some (pointerParentNextState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13,
-      next, pointerParentPrefix, pointerParentNextState, pointerParentAdvance,
-      signExtend12, pc, MachineState.getReg, MachineState.setReg, MachineState.setPC,
-      BitVec.sub_eq_add_neg]
-    split <;> simp_all
-  rw [show 3+fuel = 2+(fuel+1) by omega, setup,
-    execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
-
-/-- Positive parent-loop completion pays one terminal jump to the unchanged
-root-copy location. The zero-parent setup branch bypasses this instruction. -/
+/-- Retained terminal jump for the peeled-only parent path. -/
 theorem pointer_parent_exit (state : MachineState) (pc : state.pc = 4404) (fuel : Nat) :
     execute (submission.image .commit) (1 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (state.setPC 4412) true

@@ -45,53 +45,6 @@ theorem commit_parent_step_pc_index (state : MachineState) (answer : BitVec 256)
 
 attribute [local irreducible] execute pointerParentState pointerParentNextState
 
-/-- Each residual node executes four instructions and eleven cycles. The
-positive-loop terminal jump remains separate from this repeated cost. -/
-theorem commit_parents (state : MachineState) (remaining : Nat) (bounded : remaining < 2 ^ 24)
-    (pc : 0 < remaining → state.pc = 4388)
-    (pointers : ParentPointerInvariant state remaining)
-    (constants : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
-    (buffers : ParentBuffers (state.getReg .x9) remaining) (fuel : Nat) :
-    execute (submission.image .commit) (4 * remaining + fuel) state true =
-      (do let finished ← commitParents state remaining
-          let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (11 * remaining) remaining) := by
-  induction remaining generalizing state with
-  | zero => simp [commitParents, Execution.charge]
-  | succ remaining ih =>
-    have current := buffers (remaining + 1) (by omega) (by omega)
-    simp only [parent_pointer_shift] at current
-    change rangeValid (state.getReg .x9 + BitVec.ofNat 64 (64*(remaining+1))) 64 = true ∧
-      rangeValid (state.getReg .x9 + BitVec.ofNat 64 (32*(remaining+1))) 32 = true ∧
-      (state.getReg .x9 + BitVec.ofNat 64 (64*(remaining+1))).toNat % 8 = 0 ∧
-      (state.getReg .x9 + BitVec.ofNat 64 (32*(remaining+1))).toNat % 8 = 0 at current
-    rw [← pointers.1, ← pointers.2] at current
-    have nextPC (answer : BitVec 256) (positive : 0 < remaining) :
-        (commitParentNextState (commitParentState state answer)).pc = 4388 := by
-      rw [commit_parent_step_pc_index state answer remaining (by omega) pointers, if_neg (by omega)]
-    have nextBuffers (answer : BitVec 256) :
-        ParentBuffers ((commitParentNextState (commitParentState state answer)).getReg .x9) remaining := by
-      rw [commit_parent_step_register state answer .x9 (by simp)]
-      exact fun node positive bound => buffers node positive (by omega)
-    rw [show 4 * (remaining + 1) + fuel = 4 + (4 * remaining + fuel) by omega,
-      commit_parent state (pc (by omega)) constants current.1 current.2.1 current.2.2.1 current.2.2.2]
-    simp only [commitParents, bind_assoc]
-    apply congrArg (fun continuation =>
-      (liftM (World.query (.inr (commitParentQuery state))) : OracleComp World (BitVec 256)) >>= continuation)
-    funext answer
-    change BitVec 256 at answer
-    have nextConstants :
-        (commitParentNextState (commitParentState state answer)).getReg .x5 = 0 ∧
-        (commitParentNextState (commitParentState state answer)).getReg .x11 = 64 ∧
-        (commitParentNextState (commitParentState state answer)).getReg .x13 = 0 := by
-      rw [commit_parent_step_register state answer .x5 (by simp),
-        commit_parent_step_register state answer .x11 (by simp),
-        commit_parent_step_register state answer .x13 (by simp)]
-      exact constants
-    rw [ih _ (by omega) (nextPC answer) (commit_parent_step_pointers state answer remaining pointers)
-      nextConstants (nextBuffers answer)]
-    simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
-
 /-- The final false pointer branch reaches the terminal jump. Required tree
 and output registers remain unchanged under arbitrary compression replies. -/
 theorem commit_parents_finished (state : MachineState) (remaining : Nat)

@@ -204,10 +204,10 @@ theorem commit_copy_pc (state : MachineState) (start : Nat) :
     MachineState.setPC, BitVec.add_assoc]
 
 set_option maxHeartbeats 1000000 in
-/-- The retained leaf-digest store and final root copy each take eight
+/-- The retained final root copy takes eight
 ordinary instructions. The hypotheses cover every source and destination access. -/
 theorem commit_copy (state : MachineState) (start : Nat)
-    (location : start = 55 ∨ start = 79)
+    (location : start = 79)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg (commitCopySource start) +
@@ -222,14 +222,14 @@ theorem commit_copy (state : MachineState) (start : Nat)
   apply execute_unit_steps (states := commitCopyPrefix state start)
   intro i hi
   refine ⟨.base (((commitCopyInstructions start)[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ (start + i) _ (by rcases location with rfl | rfl <;> omega)
-    · rcases location with rfl | rfl <;> interval_cases i <;>
+  · apply commit_fetch _ (start + i) _ (by rcases location with rfl <;> omega)
+    · rcases location with rfl <;> interval_cases i <;>
         simp [commitCopyPrefix, commitCopyInstructions, execInstrBr, pc, MachineState.setPC]
-    · rcases location with rfl | rfl <;> interval_cases i <;> rfl
+    · rcases location with rfl <;> interval_cases i <;> rfl
   · have sourceReg := commit_copy_prefix_register state start i (by omega) (commitCopySource start)
-      (by rcases location with rfl | rfl <;> decide)
+      (by rcases location with rfl <;> decide)
     have destinationReg := commit_copy_prefix_register state start i (by omega) (commitCopyDestination start)
-      (by rcases location with rfl | rfl <;> decide)
+      (by rcases location with rfl <;> decide)
     have s0 := sourceValid ⟨0, by decide⟩
     have s1 := sourceValid ⟨1, by decide⟩
     have s2 := sourceValid ⟨2, by decide⟩
@@ -240,7 +240,7 @@ theorem commit_copy (state : MachineState) (start : Nat)
     have d3 := destinationValid ⟨3, by decide⟩
     have valid : memoryArgumentsValid (commitCopyPrefix state start i)
         (((commitCopyInstructions start)[i]?).getD .EBREAK) = true := by
-      rcases location with rfl | rfl <;> interval_cases i <;>
+      rcases location with rfl <;> interval_cases i <;>
         simp only [commitCopyInstructions, List.getElem?_cons_zero, List.getElem?_cons_succ,
           Option.getD_some, memoryArgumentsValid, memAccess, sourceReg, destinationReg, signExtend12] <;>
         first | exact s0 | exact s1 | exact s2 | exact s3 |
