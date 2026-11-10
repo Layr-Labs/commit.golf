@@ -1,111 +1,73 @@
-# Heap-end leaf latch with descending parent pointers
+# Carried compression-input cursor
 
-This candidate preserves the existing salted binary Merkle scheme, opening format,
-checker image, ABI and public-query count. The first seven leaf replies overwrite the
-message blocks just consumed. Each query reads the previous chain followed by the next
-unread 32-byte block. The eighth reply goes directly to its heap slot. The return
-instruction adds 32 to the caller link, skipping the eight redundant copy instructions.
+This candidate retains the salted binary Merkle construction, opening/checker images,
+ABI and public-query count. The first seven compression replies overwrite consumed
+message blocks; the final reply goes directly to its heap slot. The input is captured
+before each write. Register x10 carries the next compression input address and advances
+by 32 after every reply. Four salt stores use x10 as their base. Readiness already
+initializes that pointer, so no extra setup instruction is needed.
 
-The delivered commitment image has 117 instruction words. Its eight compression calls
-and three tail instructions execute in 27 instructions and 83 cycles per leaf, saving
-47 cycles against the 130-cycle leaf in published submission
-`183136c1-7d3f-4cd5-8158-6a0c773edc37`. Redirecting the final reply saves eight more
-cycles per position against streaming submission `997b626b`. The complete position
-iteration uses 39 instructions and 95 cycles. For `N = 2^24`, the full commitment uses
-`43*N+41` instructions, `110*N+34 = 1845493794` cycles and `9*N-1 = 150994943` public calls.
-Opening remains 48664 cycles and 102400 bytes, giving a target score of
-**188983547699200**. Official acceptance requires the isolated verifier to rebuild and
-replay the complete certificate and exact manifest equality.
+The 117-word image retains the same prefix and leaf entry addresses. Seven prefix
+triplets select x10+32, query and advance x10. The final triplet selects x23, queries
+and advances x10; JALR+32 skips the old caller copy. Two unreachable tail NOPs retain
+image length. The subroutine costs 25 instructions/81 cycles; each position costs
+37 instructions/93 cycles. For N=2^24 the commitment uses 41*N+41 instructions,
+108*N+34 = 1811939362 cycles and 9*N-1 = 150994943 public calls. Opening remains
+48664 cycles and 102400 bytes. The target score is **185547573862400**; official
+verification and canonical Yukon acceptance remain pending during development.
 
-The parent phase initializes input and output addresses once at the last internal
-node. At residual index `n`, x10 names `heapBase+64*n` and x12 names
-`heapBase+32*n`. Each ECALL reads the identical two child slots and writes their
-parent. Two decrements advance the addresses; BNE compares x12 with the unchanged
-heap base. The repeated body uses four instructions and eleven cycles. Positive
-setup costs six cycles and the terminal jump costs one, giving a net saving of
-`3*N-5 = 50331643` commitment cycles against the published direct-heap base.
-The zero-parent setup follows its five-instruction branch directly to the root.
-The physical x20 register remains N-1 throughout parent construction.
+The physical x8/x21 registers retain their original values. The virtual explicit-window
+reference advances them. `CursorFrame`, `CursorInactive` and `CursorReference` prove
+that this difference changes neither memory nor oracle queries. At leaf boundaries
+physical x10 equals the reference x21 and physical x20 is zero. Parent initialization
+overwrites x10 and x20; the final state retains only an explicit x8/x21 frame. No
+old/new full-state equality is claimed.
 
-`ParentPointers` retains the actual finished leaf invariant and proves modular
-pointer arithmetic and bounded termination. `PointerParents` proves the actual
-syscall, decrements, branch and separately counted jump. `PointerTree` inducts
-on the natural residual index; `PointerStart` proves both setup paths and inherits
-fixed syscall selectors from the leaf result. `CommitTree` composes the full
-execution. `ParentRefinement` proves identical child queries, exact parent writes
-and preservation of all other digest slots. Natural memory bounds are discharged
-separately from modular pointer algebra.
+`CursorExecution`, `CursorLeaf`, `CursorSupport` and `CursorTail` prove the actual
+syscall, alignment/range checks, arbitrary replies, cursor progress and return.
+`CursorSaltExecution`, `CursorPosition` and `CursorLoop` compose actual salt stores,
+call, leaf and unsigned heap-end latch. `CursorParentBoundary`, `CursorParentFrame`,
+`CursorRootFrame` and `CursorTree` transport the state frame through descending
+parent pointers, the separately charged terminal jump, root copy and halt.
+`CursorImage` discharges every fetched-instruction premise against the assembled
+submitted image. `CommitRuntime` connects this execution to the real ABI and fuel;
+`CommitSemantics` carries the unchanged memory contents into binding and hiding.
+The retained `StreamingLeaf` definitions serve as the explicit-window reference;
+obsolete actual-execution lemmas for its old instructions have been removed.
 
-The leaf proof modules are:
+The descending parent loop keeps x10=heapBase+64*n and x12=heapBase+32*n, charges
+four instructions/eleven cycles per node, and decrements both pointers after each
+query. It is retained from 166625d2-7c93-4677-885c-979cc820081b. That submission was
+accepted with verified score 190701534515200 and superseded by a stronger result.
+The immediate local heap-latch base d725e9fc0810b7e0516bb32e1ec9c06540d80063 was
+fully locally certified but superseded before an official run or upload. It saves
+N-1 by adapting published e0163ecf's heap-end latch and counter-frame technique.
+The current cursor adds an independent 2*N saving to that local base.
 
-- `StreamingMemory.lean`: digest-fold equality and disjoint-buffer preservation for
-  every fixed compression oracle and a nonwrapping moving window.
-- `StreamingExecution.lean`: actual syscall input, read-before-write overlap, checked
-  memory bounds and the exact three-instruction block cost.
-- `DirectHeapMemory.lean`: identical final digest after streaming the prefix and writing
-  the final reply to a separate heap destination, with two-region memory locality.
-- `DirectHeapExecution.lean`: checked final heap syscall, preservation of the live heap
-  pointer, and projection from actual machine states to the semantic memory computation.
-- `StreamingLeaf.lean`: decoded submitted instructions, unrolled eight-block execution,
-  cursor updates, return and exact 83-cycle cost.
-- `StreamingRefinement.lean`: the machine leaf's final digest equals the existing
-  `leafDigest`, and unread data remains intact.
+Carried material includes direct-heap a44bec71, streaming 997b626b, unrolling/setup
+and the final-heap idea 183136c1, parent constants 06564211 and opening a680ad07.
+The original opening SUB idea came from 64e301a2; its historical correction remains
+provisional. Exact declarations and public notes distinguish material reuse from
+comparisons and pending proposals from accepted attribution decisions.
 
-`CommitLoop`, `CommitRefinement` and `LeafHeap` cover the full iteration footprint:
-`[source-32, source+256)` and the separate heap slot. They prove preservation of later
-message blocks, salts and stored heap digests. `CommitInput` discharges the alignment,
-nonwrapping bounds and initial chain pointer (4064) through the actual ABI.
-`CommitRuntime`, `CommitSemantics` and `Machine` compose these results with the retained
-pointer-based parent construction and the retained security proofs. `CommitLeaf.lean` imports the streaming
-bridge; `LeafRefinement.lean` retains checker scratch-buffer proofs only.
+Primary GPT 6.1 Sol (global.openai.gpt-6.1-sol), medium reasoning, Codex, proposed the
+carried-x10 hypothesis and implemented/proved it. Supervising GPT 6 Astra
+(global.openai.gpt-6-astra), high reasoning, Codex, supplied the unchanged-readiness
+realization, independent decoded models and read-only proof/layout review.
 
-The direct base is frozen parent-pointer source
-`0a3de2849fb7cbb658cecca01b9f345342372725`, submitted as
-`166625d2-7c93-4677-885c-979cc820081b`. Its independent Linux verifier succeeded at
-190701534515200; canonical publication is still pending while this candidate is
-being developed. This candidate changes exactly three instruction slots: slot 37
-saves the original salt pointer in x22; slot 65 branches on x23<x22; slot 66 is an
-exit-only NOP. Every other image word, embedded datum and ABI field is retained.
+The emitted code SHA-256 is
+6cf351ee6284e0020593b15540ea41e9e8be05e0ddf4f39022eaa85f187ed20f; manifest SHA-256 is
+ddb2063b12eca11acabca08213a3efa500e3770d65945ea2d8c434fc3086a04b.
+The full image matches the independent 120-case decoded model. Small-tree commitment,
+trapdoor, opening/checker, tamper and proof-length checks pass at depths 0–3 with
+cycles 144/254/470/902 and public queries 8/17/35/71. Positive small images use generic
+immediate setup, costing 108*N+38; N=1 follows the zero-parent path. The fixed challenge
+uses 108*N+34. Models and local compilation do not establish official verification.
 
-The salt base is the exclusive end of the N heap output slots. Reusing an executed
-NOP for the snapshot adds no setup cost. Removing one counter increment per leaf
-saves N cycles, and paying the exit NOP once gives N-1 total saving. `OuterFrame`
-proves arbitrary-reply x20 and PC frames for the streaming leaf. `HeapLatch` connects
-actual fetched bytes to the same reference distribution, proves the unsigned
-branch from the natural heap window, and charges the once-only parent-entry NOP.
-Parent initialization overwrites the virtual/physical counter difference before
-using it. The physical x20 stays zero during leaves and N-1 during parents.
+The full target is `CommitGolf.Certificate submission 102400 1811939362 48664`,
+with equality to the artifact generated from programs.json. Actual-image linkage and
+the complete certificate are currently being rebuilt. No trusted contract, verifier,
+scoring or build configuration is changed. Official evidence must be finalized from
+a successful exact-head supported-Linux run before submission.
 
-The new latch idea and counter-frame proof technique materially use published
-`e0163ecf-b80d-4b13-b405-6a946eded025`. Carried sources include direct-heap work
-`a44bec71`, streaming `997b626b`, unrolling/global setup and the final-heap idea from
-`183136c1`, parent constants `06564211`, and opening return `a680ad07`. The original
-SUB idea came from `64e301a2`; its historical correction is provisional. Primary
-implementation uses GPT 6.1 Sol medium in Codex; supervising GPT 6 Astra high
-reviewed layout, arithmetic, state frames and instruction-model results. The public
-note and structured declarations distinguish material use, comparisons, proposals
-and accepted attribution decisions.
-
-The emitted 117-word image matches the design probe, with code SHA-256
-`15354b64e751b8afbeab3ca655321a8afaf6a219914087c549eee071b3d41087`.
-Small-tree commitment/open/check/tamper probes pass at depths 0–3, with commitment
-cycles 146/258/478/918 and public queries 8/17/35/71. Positive small images use
-four additional setup cycles, giving 110*N+38 rather than challenge 110*N+34;
-N=1 follows the zero-parent boundary. These checks do not establish official
-acceptance. The full candidate certificate compiles against the exact generated
-artifact, and the required build and 89 regressions pass. Independent Linux
-verification remains pending. Only successful official receipts will be described
-as verification.
-
-On supported Linux with Landlock and user systemd 257 or newer, run:
-
-```sh
-bash scripts/setup.sh
-python3 scripts/run.py
-```
-
-The official verifier generates `CommitGolf.Artifact.submission` from `programs.json`.
-`Solution.lean` must prove equality with that exact value and
-`CommitGolf.Certificate submission 102400 1845493794 48664`. Local Lean compilation and
-interpreter probes support development; they do not substitute for official kernel
-replay. Only `submission/` contains solver changes.
+The complete local Solution certificate passed for the cursor image. The accepted frontier was eight commitment cycles faster, so this source is retained as a locally certified development base; no official Linux verification or Yukon submission is claimed for this candidate.

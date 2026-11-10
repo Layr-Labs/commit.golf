@@ -3,6 +3,7 @@ import CommitGolfCandidate.CommitInput
 /-! Exact execution and resources of the actual commitment image. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
+set_option maxRecDepth 4096
 
 attribute [local irreducible] execute commitBody
 
@@ -18,12 +19,18 @@ private theorem ready_body (state : MachineState) (count : Nat)
       BitVec.ofNat 64 (32 + 8 * word.val)) 8 = true)
     (output : ∀ word : Fin 4, accessValid ((commitReadyState state).getReg .x26 +
       BitVec.ofNat 64 (8 * word.val)) 8 = true) (fuel : Nat) :
-    execute (submission.image .commit) (10 + (43 * count + 15 + fuel)) state true =
+    execute (submission.image .commit) (10 + (41 * count + 15 + fuel)) state true =
       (do let finished ← commitBody (commitReadyState state) count
-          return ⟨.success, finished, 106 * count + 18, 9 * count - 1⟩) := by
-  rw [commit_ready state pc,
-    commit_body (commitReadyState state) count positive bounded leaves
-      (commit_ready_counters state).2 heapWindow total parents root output]
+          return ⟨.success, cursorBaseFrame finished (state.getReg .x8), 104 * count + 18, 9 * count - 1⟩) := by
+  have initialFrame := cursor_initial_frame (commitReadyState state) (state.getReg .x8)
+    (commit_ready_register state .x8 (by decide) (by decide) (by decide))
+    (commit_ready_counters state).1 (commit_ready_input state)
+    (commit_ready_counters state).2
+  have bodyRun := cursor_body cursor_image_salt cursor_image_prefix cursor_image_tail
+    (commitReadyState state) count (state.getReg .x8) positive bounded leaves
+    heapWindow total parents root output fuel
+  rw [initialFrame] at bodyRun
+  rw [commit_ready state pc, bodyRun]
   simp only [bind_assoc, pure_bind]
   apply congrArg (fun continuation => commitBody (commitReadyState state) count >>= continuation)
   funext finished
@@ -35,19 +42,24 @@ private theorem ready_body (state : MachineState) (count : Nat)
 succeed for every possible salt buffer. -/
 theorem commit_after_random (message : Message) {bits : Nat} (answer : BitVec bits) (fuel : Nat) :
     let setup := commitSetupState (submission.initialState .commit message)
-    execute (submission.image .commit) (10 + (43 * 2 ^ 24 + 15 + fuel))
+    execute (submission.image .commit) (10 + (41 * 2 ^ 24 + 15 + fuel))
       (writeBits setup (setup.getReg .x10) answer) true =
         (do let finished ← commitBody (commitReadyState (writeBits
               (commitSetupState (submission.initialState .commit message))
               ((commitSetupState (submission.initialState .commit message)).getReg .x10) answer)) (2 ^ 24)
-            return ⟨.success, finished, 106 * 2 ^ 24 + 18, 9 * 2 ^ 24 - 1⟩) := by
+            return ⟨.success, cursorBaseFrame finished 4096, 104 * 2 ^ 24 + 18, 9 * 2 ^ 24 - 1⟩) := by
   dsimp only
   have pc : (writeBits (commitSetupState (submission.initialState .commit message))
       ((commitSetupState (submission.initialState .commit message)).getReg .x10) answer).pc = 4240 := by
     simp only [writeBits, MachineState.setPC]
     rw [commit_setup_pc _ rfl]; rfl
   have root := commit_input_root message answer
-  exact ready_body _ (2 ^ 24) pc (by decide) (by decide)
+  have source : (writeBits (commitSetupState (submission.initialState .commit message))
+      ((commitSetupState (submission.initialState .commit message)).getReg .x10) answer).getReg .x8 =
+      (4096 : Word) := by
+    rw [writeBits_register, (commit_setup_registers _).2.1]
+    rfl
+  simpa only [source] using ready_body _ (2 ^ 24) pc (by decide) (by decide)
     (commit_input_leaves message answer) (commit_input_heap_window message answer)
     (commit_input_registers message answer).2.2.2.1
     (commit_input_parents message answer) root.1 root.2 fuel
@@ -58,13 +70,13 @@ def commitExecution (message : Message) : OracleComp World Execution := do
   let answer ← liftM ($ᵗ BitVec (8 * (setup.getReg .x11).toNat) :
     ProbComp (BitVec (8 * (setup.getReg .x11).toNat)))
   let finished ← commitBody (commitInputReady message answer) (2 ^ 24)
-  return ⟨.success, finished, 110 * 2 ^ 24 + 34, 9 * 2 ^ 24 - 1⟩
+  return ⟨.success, cursorBaseFrame finished 4096, 108 * 2 ^ 24 + 34, 9 * 2 ^ 24 - 1⟩
 
 set_option maxRecDepth 4096 in
 /-- Exact execution from the real ABI, including salt generation and all setup.
 Additional instruction fuel does not change the successful result. -/
 theorem commit_execute (message : Message) (fuel : Nat) :
-    execute (submission.image .commit) (43 * 2 ^ 24 + 41 + fuel)
+    execute (submission.image .commit) (41 * 2 ^ 24 + 41 + fuel)
       (submission.initialState .commit message) true = commitExecution message := by
   let initial := submission.initialState .commit message
   let setup := commitSetupState initial
@@ -78,7 +90,7 @@ theorem commit_execute (message : Message) (fuel : Nat) :
     have sum : (4294971424 : Word) + 1073741824 = 5368713248#64 := rfl
     rw [sum]
     rfl
-  rw [show 43 * 2 ^ 24 + 41 + fuel = 15 + (1 + (10 + (43 * 2 ^ 24 + 15 + fuel))) by omega,
+  rw [show 41 * 2 ^ 24 + 41 + fuel = 15 + (1 + (10 + (41 * 2 ^ 24 + 15 + fuel))) by omega,
     commit_setup _ rfl, commit_random setup setupPC regs.1 valid]
   simp only [commitExecution, bind_assoc]
   apply bind_congr_of_forall_mem_support
@@ -100,14 +112,14 @@ private theorem run_commit (candidate : Submission) (message : Message) :
 successful execution above; no truncation is used to obtain the cost bound. -/
 theorem commit_execution (message : Message) : submission.run .commit message = commitExecution message := by
   rw [run_commit]
-  have allowance : submission.steps .commit = 43 * 2 ^ 24 + 41 + 7868515287 := by decide
+  have allowance : submission.steps .commit = 41 * 2 ^ 24 + 41 + 7902069719 := by decide
   rw [allowance, commit_execute]
 
 /-- Exact machine resources for every commitment, before interpreting oracle calls.
 These counts include the private-randomness syscall's work. -/
 theorem commit_input_resources (message : Message) (result : Execution)
     (reachable : result ∈ support (submission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 1845493794 ∧ result.oracleCalls = 150994943 := by
+    result.exit = .success ∧ result.cycles = 1811939362 ∧ result.oracleCalls = 150994943 := by
   rw [commit_execution] at reachable
   simp only [commitExecution, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨answer, _, finished, _, rfl⟩ := reachable

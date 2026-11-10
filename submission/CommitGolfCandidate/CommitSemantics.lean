@@ -87,10 +87,23 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, body.1, 110*LENGTH+34, 9*LENGTH-1⟩, body.2)
+  (⟨.success, cursorBaseFrame body.1 4096, 108*LENGTH+34, 9*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
-    (packCommitResult body).1.state = body.1 := rfl
+    (packCommitResult body).1.state = cursorBaseFrame body.1 4096 := rfl
+
+/-- The final inactive-register frame changes no byte in a serialized buffer. -/
+private theorem cursor_final_buffer (state : MachineState) (address bytes : Nat) :
+    readBuffer (cursorBaseFrame state 4096) address bytes =
+      readBuffer state address bytes :=
+  read_buffer_memory_congr _ _ rfl address bytes
+
+/-- Root, salts and heap relations depend only on the unchanged memory. -/
+private theorem cursor_final_committed (oracle : Oracle) (message : Message)
+    (state : MachineState) :
+    CommittedState oracle message (cursorBaseFrame state 4096) ↔
+      CommittedState oracle message state := by
+  simp only [CommittedState, HeapParents, heapDigest, cursor_final_buffer]
 
 /-- The deterministic result after one salt reply, including both counters. -/
 def commitFinalResult (oracle : Oracle) (message : Message) {bits : Nat}
@@ -111,7 +124,8 @@ theorem commit_run_distribution (oracle : Oracle) (message : Message) :
 private theorem commit_final_state (oracle : Oracle) (message : Message)
     {bits : Nat} (answer : BitVec bits) :
     (commitFinalResult oracle message answer).1.state =
-      (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 :=
+      cursorBaseFrame
+        (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 4096 :=
   pack_commit_state _
 
 private theorem commit_body_matches_sized (oracle : Oracle) (message : Message)
@@ -125,7 +139,8 @@ private theorem commit_final_matches (oracle : Oracle) (message : Message)
     {bits : Nat} (answer : BitVec bits) (width : bits = 256*LENGTH) :
     CommittedState oracle message (commitFinalResult oracle message answer).1.state := by
   rw [commit_final_state]
-  exact commit_body_matches_sized oracle message answer width
+  exact (cursor_final_committed oracle message _).mpr
+    (commit_body_matches_sized oracle message answer width)
 
 private theorem salt_width (setup : MachineState) (bytes : setup.getReg .x11 = 536870912) :
     8*(setup.getReg .x11).toNat = 256*LENGTH := by
@@ -176,6 +191,7 @@ theorem commit_final_salt (oracle : Oracle) (message : Message) {bits : Nat}
     readBuffer (commitFinalResult oracle message answer).1.state
       (5368713248+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 := by
   rw [commit_final_state]
+  rw [cursor_final_buffer]
   subst bits
   exact commit_body_salt oracle message answer index
 
