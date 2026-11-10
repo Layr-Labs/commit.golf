@@ -1,37 +1,19 @@
-import CommitGolfCandidate.Properties
-import CommitGolfCandidate.Binding
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.OpeningInput
-import CommitGolfCandidate.CheckInput
-import CommitGolfCandidate.Budgets
-import CommitGolfCandidate.CheckAcceptance
-import CommitGolfCandidate.Completeness
-import CommitGolfCandidate.BindingSecurity
-import CommitGolfCandidate.HidingSecurity
+import CommitGolfCandidate.CapCertificate
 import CommitGolf.Artifact
-import CommitGolfCandidate.LeafResourceBridge
-import CommitGolfCandidate.ResourceTests
 
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
+/-! Cap multiproof certificate for the delivered RISC-V images. The retained
+full-path scheme remains an explicit reference for the hiding reduction; the
+challenge submission below is the new cap program and matches the exact artifact. -/
 namespace CommitGolf.Challenge
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+def submission : CommitGolf.Submission := CommitGolfCandidate.capProgram
 
 set_option maxRecDepth 100000 in
+set_option maxHeartbeats 8000000 in
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
   rfl
 
-theorem certificate : CommitGolf.Certificate submission 102400 1765802022 48664 where
-  admission := CommitGolfCandidate.submission_admission
-  machineSuccess := CommitGolfCandidate.submission_machine_success
-  termination := CommitGolfCandidate.submission_termination
-  completeness := CommitGolfCandidate.submission_completeness
-  honestBudgets := CommitGolfCandidate.submission_honest_budgets
-  proofSize := CommitGolfCandidate.submission_proof_size
-  proverCycles := CommitGolfCandidate.submission_prover_cycles
-  binding := CommitGolfCandidate.submission_binding
-  hidingProperty := CommitGolfCandidate.submission_hiding
+theorem certificate : CommitGolf.Certificate submission 75776 1765802022 45000 :=
+  CommitGolfCandidate.cap_certificate
 
 end CommitGolf.Challenge

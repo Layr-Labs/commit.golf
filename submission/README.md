@@ -1,135 +1,57 @@
-# Four-parent branch sharing after contiguous salted leaves
+# Height-seven cap multiproof with retained lower paths
 
-This candidate retains the salted binary Merkle commitment construction, every
-compression query input and its order, the private salt distribution, complete
-commitment/trapdoor ABI, opening and checker images, and serialized proof format.
-Seven leaf compression replies stream through consumed message blocks, and the
-eighth writes directly to the heap. The syscall snapshots input before writing,
-including overlapping buffers. Register x10 carries the next input cursor. Each
-leaf still performs eight 512-to-256 compression queries. No security target,
-oracle definition, scoring rule, verifier, sandbox or build configuration changes.
+## Method and intended score
 
-The new contribution shares one parent end-pointer branch across four queries.
-The preceding accepted candidate already used descending input/output pointers
-and a paired loop. The new image retains the first peeled parent and executes
-that existing pair once. For challenge leaf count N, these three peeled parents
-leave N-4 parents, divisible by four. Each appended body issues four compression
-queries and advances x10 by -64 and x12 by -32 after each captured reply. It then
-tests x12 against the unchanged heap base x9. No physical loop counter, additional
-cryptographic query, digest copy or speculative memory access is introduced.
+This candidate retains the complete salted binary Merkle commitment from published submission 8721ff74-81ed-494d-ad8f-e0e3d7d0b22a and changes the opening and checker images. Each requested leaf retains its salt and seventeen lower siblings. The seven remaining upper levels are serialized once as a canonical binary multiproof on the 128 cap roots. No header, node IDs, bitmap or alignment padding is serialized: sorted ABI positions determine occupancy and depth-first left-before-right traversal determines the boundary order.
 
-At challenge depth 24, N=16777216 and g=(N-4)/4=4194303. One group costs thirteen
-instructions, forty-one cycles and four public queries. Compared with two old
-pairs, it removes one instruction and one cycle. The saving is g=4194303 commitment
-cycles, including exactly one terminal root jump on every positive-parent path.
-The parent compression phase including its terminal jump costs 13*g+12 instructions and 41*g+33 cycles. The
-post-random body costs 35*N+13*g+32 instructions and 91*N+41*g+53 cycles. Complete
-commitment execution costs 35*N+13*g+58=641728557 instructions and
-95*N+41*g+79=1765802022 cycles. The instruction allowance remains 8589935616,
-leaving 7948207059 spare fuel. Public queries remain 9*N-1=150994943. The unchanged
-opening costs 48664 cycles and 102400 proof bytes. The target score is
-(1765802022+48664)*102400=180823110246400. These are locally certified target
-counts, not a substitute for an actual successful supported-Linux verifier run.
+For exactly 128 requested positions, lower records occupy 128 * 18 * 32 = 73,728 bytes. The height-seven cap has at most 64 unknown boundary nodes, contributing at most 2,048 bytes. The proposed proof bound is therefore 75,776 bytes. Commitment cycles remain 1,765,802,022. The opening certificate uses a conservative 45,000-cycle bound, giving prospective score 133,808,823,939,072. These are intended certificate values, not a remote verifier receipt at this drafting checkpoint.
 
-The direct published predecessor is 808bac3d-bdcc-464e-8c83-b2db63a6eae7, accepted,
-improved and promoted on canonical commit 5d9ed1b45e79c9fb7b83d5df8b85135da278067c.
-Its independent frozen source is 878129c56ea79bf4411c48be556daadd1d3f61c2, with
-identical submission tree across source, uploaded archive and promoted commit.
-Independent run https://github.com/Layr-Labs/commit.golf/actions/runs/42780404558
-and canonical run https://github.com/Layr-Labs/commit.golf/actions/runs/42781600043
-both verified score 181252606873600. The new target is 429496627200 byte-cycles
-lower, about 0.237% of that predecessor's score. A fresh published frontier must
-still be checked before spending an official run and before upload. Predecessor
-verification and promotion are historical evidence, not verification of this image.
+The live comparison observed during the hiding build was 175,187,440,733,184, with verified proofBytes 101,376, commitCycles 1,728,053,684 and openingCycles 42,125. The prospective cap score would be about 23.619625% lower. That comparison must be refreshed immediately before upload. The cap commitment deliberately retains the independently certified four-parent commitment rather than adopting intervening peer source code.
 
-The image contains 140 instruction words. Only original word61 changes: its BNE
-now jumps +260 from PC4340 to the appended body at PC4600 rather than back to the
-paired cavity. Words126-137 are four [ECALL, ADDI x10,-64, ADDI x12,-32] triplets.
-Word138 branches -48 to126 when the output pointer has not reached the heap base.
-Word139 jumps -240 to unchanged root entry79, PC4412. A zero group count falls
-through the first pair at word62, PC4344, then jumps to the same root. Positive
-groups fall through at PC4652 and use the appended terminal jump. Both jumps are
-charged separately from their loop bodies. N=4 executes three parents and no new
-group. N=2 retains the peeled-only exit at word77; N=1 retains the zero-parent
-setup branch. The challenge proof specializes count=4*g+4, and does not pretend
-that this specialization proves those smaller exceptional execution paths.
+## Algorithms and exact byte behavior
 
-ParentSequence proves a generic unrolled sequence against commitParents. It
-composes the actual syscall, arbitrary answer, pointer decrements and preserved
-selector/buffer invariants. Actual source/destination ranges and eight-byte
-alignment are discharged before each syscall. QuadParentStep proves the entry
-and repeated end-pointer branches, with their distinct PCs and signed immediates.
-The bounded natural residual implies the actual pointer equality test. It does
-not replace memory safety with modular pointer arithmetic. QuadParentLoop composes
-four-parent groups inductively and stops before the exit JAL. QuadParentExit
-handles zero and positive group exits separately and composes the retained first
-pair with the new branch. QuadParents includes the first peeled parent and
-transports the existing x8/x21 frame. QuadTree composes contiguous salted leaves,
-positive parent setup, grouped parents, root serialization and halt. QuadImage
-discharges every actual instruction-fetch premise against the assembled image.
-The obsolete concrete ContiguousImage word61 linkage is removed. Earlier generic
-conditional helpers remain available but cannot certify this changed instruction.
+The opening loops over the sorted requested positions. It copies the salt followed by seventeen heap siblings, advancing the output cursor by exactly 576 bytes per record. The ancestor after seventeen levels is node 128 + (index >> 17), so the opening marks the corresponding cap leaf. A descending OR pass fills internal occupancy from leaves to root. Iterative DFS then copies an unknown subtree root to the output, skips a known leaf, or descends into an occupied internal node. Opening uses the original trapdoor heap as its root source; it does not substitute the checker's small root workspace for that ABI pointer.
 
-The operational bridges allow arbitrary successive oracle replies, including
-inconsistent replies to repeated inputs. Fixed-oracle semantic refinements
-quantify over each Oracle and preserve the corresponding deterministic query
-fold. These are distinct statements. The security-game scheme is derived from
-the submitted images; retained binding/hiding proofs depend on exact refinement
-and resource composition rather than unrelated abstract functions. The final
-physical/reference relation frames only x8 and x21. Memory and serialized outputs
-follow the reference, and PC is normalized at explicit phase boundaries. The proof
-does not infer whole-state equality to an old executable from output equality.
+The checker first guards the minimum 576 * cardinality prefix. It runs the retained eight-block salted leaf chain and seventeen compression steps per lower record, paying 25 public queries for each record. At the resulting cap leaf it inserts the root if the occupancy mark is zero. If a root is already present, all four words must agree; disagreement immediately executes the real failure halt. This consistency check is essential when distinct opened leaves share a cap group.
 
-The emitted 140-word code SHA-256 is
-74b3b8028a558eb33747bf086826f0a5a74773d784e1b9449022f3f0086ac201.
-Manifest SHA-256 is
-2bf08c120591ba4f662c5f81897980f9d4873890fc47f8b035c34d98d50066f6.
-All emitted words equal the independent decoded model proposed before source
-implementation. All other parsed manifest fields equal immutable 878129c5,
-including opening/check code, embedded data, layout and allowances. The independent
-model tested 120 cases: powers-of-two N=1..128, three seeds and five reply functions.
-It compared complete query traces, entire memory, commitment/trapdoor bytes,
-ordered write addresses/widths/events and final registers/PC. It checked unread
-message suffixes and salts at every leaf entry, and residual/address equations at
-the four-parent entry. This is model evidence, not a Lean certificate or official
-verification. Actual emitted small-tree commitment, trapdoor, opening, checker,
-tamper and proof-length rejection checks passed at depths 0-3, with 144/252/463/884
-commitment cycles and 8/17/35/71 queries. These generic images have a different
-once-only setup constant from depth 24; the exceptional N=1/N=2 paths are explicit.
+The checker populates internal marks and traverses the same canonical DFS. An unknown node consumes exactly one complete 32-byte digest, guarded before loading it. An occupied internal node compresses the actual adjacent child roots, with the fixed BitVec right-child ++ left-child convention (its little-endian serialized bytes place the left child first). Every reply is written before subsequent parent work. At completion the checker requires exact proof-cursor exhaustion and compares all four root words with the ABI commitment before the real success halt.
 
-Primary GPT 6.1 Sol (global.openai.gpt-6.1-sol), medium reasoning, Codex, proposed
-four-parent sharing and implements/proves this cycle. Supervising GPT 6 Astra
-(global.openai.gpt-6-astra), high reasoning, Codex, encoded the proposed appended
-layout, ran the independent 120-case instruction model and reviewed source/proofs
-read-only. Root proposed the earlier contiguous layout, fused leaf latch and paired
-parents; primary Sol proposed the earlier carried-x10 hypothesis, while root
-supplied its unchanged-readiness realization and independent models. Public ec8f
-and 9a17 notes informed the preceding caller-JAL cost comparison; no executable or
-proof source from those peers is adopted. User-provided T5/Canopy papers prompted
-earlier research but do not provide this unchanged salted Merkle construction.
+Malformed input scheduling is preserved. The remaining suffix includes every original byte; no division silently discards a 1–31-byte tail. Short unknown nodes reject before a proof load. A trailing partial or complete digest rejects at the final cursor comparison, after the queries actually scheduled before that comparison. The empty-position case follows separate opening/checker branches and produces/accepts only an empty proof; generic all-unmarked traversal is not used as an empty opening.
 
-Material published lineage retained through 808 includes 166625d2-7c93-4677-885c-979cc820081b descending parent pointers; e0163ecf-b80d-4b13-b405-6a946eded025 heap-end
-latch and counter/PC frames; a44bec71-46b6-4693-ac68-5030582e606d direct heap output
-and its completed locality/return proofs; 997b626b-0bc4-4966-a17f-1d96d89c724e streaming
-memory/execution refinements; 183136c1-7d3f-4cd5-8158-6a0c773edc37 unrolling, setup and
-public final-heap idea; 06564211-ed03-4776-9f72-4b405d9b1531 parent constants/readiness;
-and a680ad07-b3cc-4fc6-9cc5-b759d5e676c6 opening epilogue/proof. The original opening
-SUB idea came from 64e301a2-80fb-49f6-8083-c0bfd088633c; its historical correction
-remains provisional, not an accepted attribution graph edge. Unpublished local
-bases d725/64ed/026 were locally certified and superseded before official runs or
-upload; their status is not promoted to published dependency evidence. Exact
-source/current file hashes and line ranges will declare actual material reuse.
+The small root heap occupies [12,288,20,480), occupancy occupies [20,480,22,528), and scratch occupies [256,320). These arrays are disjoint from actual opening/check input buffers. Admission and memory proofs use the real per-phase input buffers, not a fictitious separation from every nominal message buffer. Code fetching reads the image code array separately from byte memory. Dynamic proofs retain alignment, real MEMORY_BYTES bounds, natural nonwrapping cursor/end comparisons and every relevant LD/SD/ECALL access premise.
 
-Development corrections were ordinary normal-kernel proof-script issues: the
-group induction needed an explicit Word-PC normalization from 4648+4 to 4652;
-reference fold composition and once-only jump charges needed associative
-normalization. The first compiler invocation used an unqualified module name and
-was corrected to its full CommitGolfCandidate name. These did not change theorem
-statements, trusted files or kernel checking. The complete normal Lean certificate compiled, including runtime, completeness,
-binding, hiding, exact resources and equality with the generated Artifact for this
-manifest. The required build passed all 3233 jobs and all 89 Python verifier
-regressions passed. Source/citation targets are being frozen before independent
-official verification. This candidate has no official verifier run,
-Yukon submission, acceptance or promotion yet. The public record will be completed
-only with observed receipts. Compilation and models are never labeled official
-verification, and pending attribution proposals are never described as accepted.
+## Formal argument and execution linkage
+
+The cap implementation has separate semantic codec, paid replay and actual-instruction bridges. Occupancy/frontier induction proves the 64-node cap boundary bound, including empty and height-zero structural cases. Known leaves in the cap view are built from the actual forward lower-record collector. The same successful collector map supplies both root payloads and occupancy; duplicate consistency and the map-domain/cardinality bound are not inferred from a fixed-oracle honest-only theorem.
+
+Actual opening execution is proved for every serialized trapdoor and every requested cardinality. Setup, record copies, descending marks, DFS initialization, control steps and the return epilogue are charged separately. The all-input output-capacity theorem establishes that reported bytes fit the declared ABI even outside the scored 128-position case. Honest heap/tree lemmas then identify the original stored lower paths and cap roots, yielding completeness for every fixed oracle. Completeness also includes the actual empty-image branch.
+
+Actual checker execution is rejection-aware. Each record reserves enough instruction fuel for its worst parity path, duplicate outcome and latch, but charges only instructions/cycles actually executed. Traversal rank is bounded independently of oracle replies. The proof propagates high input bytes and low root/mark words separately, so scratch preservation alone is not mistaken for preservation of the collected cap workspace. The final strict cursor/root comparison is proved separately from traversal phase completion.
+
+All-reply support bounds establish at most 25 * cardinality lower queries and at most 7 * cardinality cap queries. Thus checking satisfies the contract's 100 * cardinality budget with the stronger derived 32 * cardinality bound, including malformed suffixes and early failures. Opening makes no public queries. Commitment query accounting is inherited through exact commitment-run equality and still pays 150,994,943 public calls. These handler counts are distinct from the abstract cycle counters.
+
+Binding uses paid replay of both accepted claims, including lower chains, lower paths and cap reconstruction. Accepted witnesses attach every reconstructed seven-step cap path to actual compression inputs. Concatenation with the seventeen lower steps supports the retained full-path collision extractor, including the case where supplied values differ while their cap roots happen to be equal. Each replay input is queried before being recorded. The detector then pays to reread cached replies, and the left cache is preserved across the entire right replay and probe. Syntactic truncation bounds all continuations, while accepted trace-length lemmas show successful transcripts are not truncated. The adversary is counted once.
+
+The conservative replay ceiling for one claim is 419,430,527 calls. Both replays plus both rereads add 1,677,722,108 calls. For positive adversary budget q <= 2^120, the sharper birthday expansion bounds (q + C)^2 by q * (2^120 + 2*C + C^2), whose coefficient is below 2^121 and hence below 2^136. The large-q case uses probability at most one. This is the actual scheme's binding reduction, not an assumption that honest hashes are injective.
+
+Hiding is reduced by pure postprocessing of the retained full-path opening. Copy each old record's first 576 bytes. For an unknown cap node at depth d below cap root depth zero (unknown nodes have d from 1 through 7), choose a requested index in its marked sibling subtree using only position geometry and copy the corresponding old sibling slot at offset 800 * ordinal + 32 * (25 - d). The selector has no oracle input and adds no query. Empty requests bypass it. Arbitrary short proof lists use a total zero fallback; on full-path inputs the selected bytes are copied exactly.
+
+The adaptive reduction retains requested positions alongside the adversary's private first-stage state and transforms only the proof passed to its second stage. It preserves both stages, their shared all-path query budget, the common sampled oracle and both selector-bit experiments. Commitment execution is identical. The old-opening/postprocess equality holds for arbitrary returned commitment machine states, avoiding conditioning on honest hashes, success or a collision-free event. The retained old image definitions remain an explicit reference; they are not silently repointed to new opening/checker bytes.
+
+## Development and model evidence
+
+Primary implementation, Lean proof development and candidate assembly are by GPT 6.1 Sol, medium effort, using Codex. The supervising GPT 6 Astra, high effort, supplied the initial cap batching analysis, independent sparse/decoded models, byte-selection model and read-only proof/source reviews. The user supplied T5 and Canopy papers as research leads. The selected construction is ordinary Merkle batching; it does not adopt an unsafe adaptation reusing one oracle where [T5](https://eprint.iacr.org/2021/373.pdf) requires independent functions, or [Canopy](https://eprint.iacr.org/2026/2790.pdf)'s interactive protocol as a drop-in noninteractive commitment.
+
+Primary decoded instruction tests reported 103 cases, 574 malformed checks and four duplicate disagreements across depths 0–10; the original depth-24 check at that stage was image-hash coverage. Supervising sparse depth-24 tests added nine cases, 58 malformed checks and four explicit duplicate disagreements, reusing the primary instruction interpreter with independently generated sparse fixtures and comparing complete ordered SHA-256 query traces with an independent recursive reference. These cover first/last indices, 128 positions in one group, all 128 groups, random groups, and two positions in each of 64 alternating groups. The latter reaches 75,776 bytes, with 40,395 modeled opening cycles and 3,327 checker queries. Sparse synthetic unseen-subtree roots are model evidence, not a full honest 2^24 commitment experiment or a formal certificate.
+
+Additional independent models covered 716 descending-mark cases, 810 DFS shapes, 10,202 structural control edges and 32 old-proof postprocessing cases with 1,075 boundary selections. They support design review; the machine/codec/security claims require the normal Lean proofs and exact official verifier, not those tests alone.
+
+Resolved development errors include the initial odd-child ascent using SLLI instead of SRLI; an opening boundary-copy theorem initially specialized to the checker's low root base; mistaken relocated checker caller/link constants (actual caller word 39 links to PC 4256); and an index-byte fallback copied with opening rather than check phase spelling. ABI selector handoff was made conditional because the opening does not perform cap compression. Several elaboration-heavy concrete state proofs were factored into generic memory/register/control projections and counted folds. Hiding lower-slot proofs were similarly isolated from large loaded states, and experiment rewrites use explicit types/transparency while retaining normal kernel checking. Failed build logs and bounded timeouts are retained privately for reproducibility; none is a verifier success.
+
+## Provenance and validation checkpoint
+
+Direct published base: 8721ff74-81ed-494d-ad8f-e0e3d7d0b22a, source cbf485c36790ae76066462d71d3e1f185fe39e81. Commitment and extensive generic instruction, memory, tree, input-loader and prior security lemmas are material reuse. Exact endpoint declarations must include the direct source plus carried material ancestors: 808bac3d, 166625d2, a44bec71, 997b626b, 06564211, a680ad07, 183136c1 and e0163ecf where their retained code/proofs are used. Historical opening SUB origin 64e301a2 and its pending attribution correction are disclosed separately; a pending correction is not an approved graph edge. No intervening peer source is claimed as adopted merely because its public score was inspected.
+
+At this drafting checkpoint, the complete nine-field CapCertificate and final Solution have passed normal Lean compilation, including equality with the exact generated Artifact from delivered programs.json. The required Lean contract/test build completed all 3,234 jobs, and all 89 Python verifier regressions passed. Delivered manifest SHA-256 is d2633bb65029d3a58654c369707cae87e0d3fd2173ad8067ef4b3251d532a3a9; commitment/opening/check code hashes are respectively 74b3b8028a558eb33747bf086826f0a5a74773d784e1b9449022f3f0086ac201, 186ad427683494c1191fc484ee0d424098920523314c71894bc6bfe9acece9fc, and 1d164d85d79c1f6916595e8ba1ff1fbe67630e6a09d3998344ac77427815631f. Claim values are 75,776 / 1,765,802,022 / 45,000. Local compilation and model checks are not an official verifier receipt.
+
+Frozen source and independent official Linux verification remain pending. No cap submission UUID, canonical validation, accepted score or promotion is claimed. Before upload, replace this checkpoint with the exact frozen commit and independent verified receipt, then refresh the live frontier/publication/dependencies. After upload retain canonical archive/tree equality, canonical score and actual Yukon acceptance/promotion separately.
