@@ -1,32 +1,25 @@
-# Near-limit parent batches with indexed artifact equality
+# Readiness no-op removal
 
-This candidate extends promoted submissionad8c9121-2e86-4805-8022-0089246dfa25.
-It retains the192-bit nonce sampler, full256-bit Merkle hashes, opening/checker
-bytes, exact memory correctness, completeness and adaptive security proofs.
+This candidate directly extends promoted submission
+`e7bdbc19-f6dc-4e7d-965f-a3a02798c065` at `72aa075`.
 
-After15 peeled parents, commitment processes200 groups of83886 parents each.
-A short forward BNE selects a long-range repeat or root-return JAL. Exactly two
-latch instructions execute per group. The16537-word predecessor becomes251827
-words (1007308 bytes), still strictly below the1MiB limit. Main starts at4760;
-branch/root-jump/repeat-jump PCs are1011392,1011396,1011400. Their displacements
-are+8,-1006984,-1006640. Each actual fetched instruction and pointer transition
-is checked. The historic Group341 filenames now specialize this larger group.
+Commitment words 38 through 44 now execute the seven readiness instructions
+formerly at words 39 through 45. Word 45 jumps directly to the fixed link
+instruction at word 54. This removes one executed no-op while preserving the
+later image addresses, all query inputs, final machine state, nonce sampler,
+opening/checker images, and security proofs.
 
-Commitment costs1728053685 cycles and620757436 instructions. This saves5750
-cycles over the5456-parent predecessor. Opening remains13+379*k cycles, including
-48525 for128 leaves, with102400 proof bytes. The claimed product is176957666304000.
-Public commitment queries remain9*N-1; security targets remain120 bits.
+`commit_ready_linked` checks the actual nine setup instructions and two jumps.
+`long_parent_schedule_linked_body` proves the complete remaining tree execution
+from their exact final state. The older ready state remains a semantic reference;
+it is not asserted to be the result of an unexecuted machine program.
 
-PackedImageEquality checks the generated artifact through indexed512-word block
-facts and balanced joins, then proves equality of the entire submission. Three
-periodic block proofs cover the repeated body; explicit prefix and suffix facts
-cover all other bytes. Admission uses proved image lengths instead of unfolding
-the full list. The PC recurrence also has a symbolic arithmetic proof. All these
-proofs use the ordinary Lean kernel. Development compares all251827 assembler
-words with the delivered literal image; the former unused monolithic assembler
-equality helper is replaced by this byte comparison and the certified indexed
-artifact/fetch proofs. Development depths use the retained eight-parent helper.
+The commitment has 1,728,053,684 cycles. Opening costs 48,525 cycles for 128 leaves
+and emits 102,400 bytes. The product is 176,957,666,201,600. These are certificate
+claims; a successful official verifier run is required for acceptance.
 
-The submitted certificate concerns these exact machine images and ABI. Only a
-successful official verifier run counts as verification; the public note records
-its receipt, source identity and direct dependency citations.
+The 251,827-word commitment image retains 200 groups of 83,886 parents after
+15 initial parents. PackedImageEquality checks the entire literal image against
+the artifact regenerated from programs.json. The opening and checker use the
+same ABI and bytes as the direct predecessor. All supporting implementation
+and proof sources are in CommitGolfCandidate/.

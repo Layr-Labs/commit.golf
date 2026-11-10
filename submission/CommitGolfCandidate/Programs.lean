@@ -185,9 +185,24 @@ def compactSetupCode : List Asm :=
    insn (402653184+11*2^7+0x37),insn 0x0600006f] ++
    List.replicate 23 (addi 0 0 0)
 
+/-- Remove the executed readiness no-op without relocating later blocks. -/
+def compactCommitReady : List Asm → Nat → List Asm
+  | [], _ => []
+  | .label name :: rest, index => .label name :: compactCommitReady rest index
+  | instruction :: rest, index =>
+      (if index=38 then addi 20 0 0
+       else if index=39 then addi 5 0 0
+       else if index=40 then mv 10 21
+       else if index=41 then addi 11 0 64
+       else if index=42 then mv 12 21
+       else if index=43 then addi 13 0 0
+       else if index=44 then addi 28 0 0
+       else if index=45 then insn 0x0240006f
+       else instruction) :: compactCommitReady rest (index+1)
+
 def commitCode (depth : Nat) : List Asm :=
-  if depth=24 then compactSetupCode ++
-    (patchGroup341Entry (octCommitCode depth) false ++ group341ParentCode).drop 35
+  if depth=24 then compactCommitReady (compactSetupCode ++
+    (patchGroup341Entry (octCommitCode depth) false ++ group341ParentCode).drop 35) 0
   else octCommitCode depth
 
 def rawOpeningCode (depth : Nat) : List Asm :=

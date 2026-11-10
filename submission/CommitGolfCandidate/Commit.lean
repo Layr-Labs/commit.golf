@@ -102,18 +102,36 @@ private def commitReadyPrefix (state : MachineState) (count : Nat) : MachineStat
 
 def commitReadyState (state : MachineState) : MachineState := commitReadyPrefix state 10
 
-/-- Initialize the moving chain pointer, saved heap end, virtual-reference counter, fixed syscall
-arguments and zero block counter once after sampling salts. -/
-theorem commit_ready (state : MachineState) (pc : state.pc = 4240) (fuel : Nat) :
-    execute (submission.image .commit) (10 + fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (commitReadyState state) true
-          return result.charge 10 0) := by
-  apply execute_unit_steps (states := commitReadyPrefix state)
+/-- Nine readiness instructions followed by two entry jumps. The old ready state
+remains a semantic reference; every actual fetched instruction is checked here. -/
+private def compactReadyInstructions : List Instr :=
+  [.ADDI .x21 .x8 (-32), .ADDI .x22 .x18 0, .ADDI .x20 .x0 0,
+   .ADDI .x5 .x0 0, .ADDI .x10 .x21 0, .ADDI .x11 .x0 64,
+   .ADDI .x12 .x21 0, .ADDI .x13 .x0 0, .ADDI .x28 .x0 0,
+   .JAL .x0 36, .JAL .x1 144]
+
+private def compactReadyPrefix (state : MachineState) (count : Nat) : MachineState :=
+  (compactReadyInstructions.take count).foldl execInstrBr state
+
+private theorem compact_ready_same (state : MachineState) (pc : state.pc=4240) :
+    compactReadyPrefix state 11 = ((commitReadyState state).setReg .x1 4316).setPC 4456 := by
+  simp [compactReadyPrefix,compactReadyInstructions,commitReadyState,commitReadyPrefix,
+    commitReadyInstructions,execInstrBr,signExtend21,signExtend12,pc,
+    MachineState.setPC,MachineState.setReg,MachineState.getReg,BitVec.add_assoc]
+
+theorem commit_ready_linked (state : MachineState) (pc : state.pc = 4240) (fuel : Nat) :
+    execute (submission.image .commit) (11 + fuel) state true =
+      (do let result ← execute (submission.image .commit) fuel
+            (((commitReadyState state).setReg .x1 4316).setPC 4456) true
+          return result.charge 11 0) := by
+  rw [← compact_ready_same state pc]
+  apply execute_unit_steps (states := compactReadyPrefix state)
   intro i hi
-  refine ⟨.base ((commitReadyInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ (36 + i) _ (by omega)
+  refine ⟨.base ((compactReadyInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
+  · apply commit_fetch _ (if i<10 then 36+i else 54) _ (by split <;> omega)
     · interval_cases i <;>
-        simp [commitReadyPrefix, commitReadyInstructions, execInstrBr, pc, MachineState.setPC]
+        simp [compactReadyPrefix,compactReadyInstructions,execInstrBr,pc,
+          signExtend21,MachineState.setPC]
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
