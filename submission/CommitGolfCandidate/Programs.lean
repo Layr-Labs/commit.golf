@@ -116,7 +116,7 @@ def commitLi (rd value : Nat) : List Asm :=
       List.replicate 5 (addi 0 0 0)
   else li rd value
 
-def commitCode (depth : Nat) : List Asm :=
+def quadCommitCode (depth : Nat) : List Asm :=
   let n := 2^depth
   [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
   [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
@@ -144,6 +144,24 @@ def commitCode (depth : Nat) : List Asm :=
   ((List.range 4).flatMap fun _ =>
     [insn 0x73, addi 10 10 (-64), addi 12 12 (-32)]) ++
   [.branch 1 12 9 "commit-parent-quad", .jump 0 "commit-root"]
+
+/-- Execute the first four-parent body once, then enter the eight-parent loop.
+The branch remains conditional so N=8 uses the retained fall-through root jump. -/
+def patchOctEntry : List Asm → Bool → List Asm
+  | [], _ => []
+  | .label name :: rest, _ => .label name :: patchOctEntry rest (name == "commit-parent-quad")
+  | .branch condition left right _ :: rest, true =>
+      .branch condition left right "commit-parent-oct" :: patchOctEntry rest false
+  | instruction :: rest, active => instruction :: patchOctEntry rest active
+
+def octParentCode : List Asm :=
+  [.label "commit-parent-oct"] ++
+  ((List.range 8).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
+  [.branch 1 12 9 "commit-parent-oct",.jump 0 "commit-root"]
+
+/-- Seven peeled parents leave N-8, a multiple of eight at the challenge depth. -/
+def commitCode (depth : Nat) : List Asm :=
+  patchOctEntry (quadCommitCode depth) false ++ octParentCode
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth

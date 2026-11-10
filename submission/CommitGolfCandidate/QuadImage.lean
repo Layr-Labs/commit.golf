@@ -1,6 +1,7 @@
 import CommitGolfCandidate.QuadTree
 
-/-! Link every carried-input execution premise to the submitted instruction
+/-! Retained carried-input fetch premises; the replaced quartet branch is linked by OctImage.
+Link every carried-input execution premise to the submitted instruction
 image. The generic bridges cannot certify a different instruction stream. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -142,11 +143,6 @@ theorem quad_image_sequence : ParentSequenceFetched (submission.image .commit) 4
   exact ⟨quad_image_triple 0 (by decide), quad_image_triple 1 (by decide),
     quad_image_triple 2 (by decide), quad_image_triple 3 (by decide), trivial⟩
 
-theorem quad_image_branch : QuadBranchFetched (submission.image .commit) false := by
-  intro state pc
-  apply commit_fetch state 138 _ (by decide) pc
-  rfl
-
 theorem quad_image_exit : QuadExitFetched (submission.image .commit) := by
   intro state
   constructor
@@ -156,9 +152,5 @@ theorem quad_image_exit : QuadExitFetched (submission.image .commit) := by
   · intro pc
     apply commit_fetch state 139 _ (by decide) pc
     rfl
-
-theorem quad_image_parents : QuadParentFetched (submission.image .commit) :=
-  ⟨fused_image_peeled, fused_image_peel_branch, quad_image_pair,
-    quad_image_entry_branch, quad_image_sequence, quad_image_branch, quad_image_exit⟩
 
 end CommitGolfCandidate
