@@ -1,6 +1,6 @@
 import CommitGolfCandidate.CommitLoop
 import CommitGolfCandidate.CopyRefinement
-import CommitGolfCandidate.LeafRefinement
+import CommitGolfCandidate.StreamingRefinement
 
 /-! Salt loading and heap writes of the actual commitment leaf iteration. -/
 namespace CommitGolfCandidate
@@ -61,39 +61,50 @@ theorem commit_position_evaluation (oracle : Oracle) (state : MachineState) :
   rw [commitPositionRun, check_evaluation_bind]
   simp only [check_evaluation_pure, Nat.add_zero]
 
-/-- The salt copy initializes the leaf hasher with the original salt digest. -/
-theorem commit_position_salt (state : MachineState) (saltAddress : Nat)
-    (scratch : state.getReg .x21 = 256)
-    (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
-    (aligned : saltAddress % 8 = 0) (above : 288 ≤ saltAddress)
-    (bounded : saltAddress+32 ≤ 2^64) :
-    readBuffer (commitLeafReadyState (commitPositionState state)) 256 32 =
-      readBuffer state saltAddress 32 := by
-  change readBuffer (commitCopyState state 46) 256 32 = _
-  exact commit_copy_digest state 46 saltAddress 256 (by simp) saltPointer scratch
-    aligned (by decide) bounded (by decide) (Or.inr above)
+/-- Convert the moving chain register to its nonwrapping natural address. -/
+theorem commit_chain_pointer (state : MachineState) (source : Nat)
+    (chain : state.getReg .x21 = state.getReg .x8 - 32)
+    (pointer : state.getReg .x8 = BitVec.ofNat 64 source) (above : 32 ≤ source) :
+    state.getReg .x21 = BitVec.ofNat 64 (source - 32) := by
+  rw [chain, pointer]
+  exact BitVec.ofNat_sub_ofNat_of_le (w := 64) source 32 (by decide) above
 
-/-- Setting up the salted leaf hash preserves every digest outside scratch. -/
-theorem commit_position_input_digest (state : MachineState) (address : Nat)
-    (scratch : state.getReg .x21 = 256) (aligned : address % 8 = 0)
-    (above : 288 ≤ address) (bounded : address+32 ≤ 2^64) :
+/-- The salt initializes the chain prefix immediately before the leaf. -/
+theorem commit_position_salt (state : MachineState) (source saltAddress : Nat)
+    (chain : state.getReg .x21 = BitVec.ofNat 64 (source-32))
+    (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
+    (sourceAligned : source % 8 = 0) (aligned : saltAddress % 8 = 0)
+    (above : 32 ≤ source) (separate : source ≤ saltAddress)
+    (bounded : saltAddress+32 ≤ 2^64) :
+    readBuffer (commitLeafReadyState (commitPositionState state)) (source-32) 32 =
+      readBuffer state saltAddress 32 := by
+  change readBuffer (commitCopyState state 46) (source-32) 32 = _
+  exact commit_copy_digest state 46 saltAddress (source-32) (by simp) saltPointer chain
+    aligned (by omega) bounded (by omega) (Or.inr (by omega))
+
+/-- Salt initialization preserves any digest disjoint from the moving prefix. -/
+theorem commit_position_input_digest (state : MachineState) (source address : Nat)
+    (chain : state.getReg .x21 = BitVec.ofNat 64 (source-32))
+    (above : 32 ≤ source) (aligned : address % 8 = 0)
+    (sourceBound : source ≤ 2^64) (bounded : address+32 ≤ 2^64)
+    (separate : address+32 ≤ source-32 ∨ source ≤ address) :
     readBuffer (commitLeafReadyState (commitPositionState state)) address 32 =
       readBuffer state address 32 := by
   change readBuffer (commitCopyState state 46) address 32 = _
-  exact commit_copy_preserves_digest state 46 256 address (by simp) scratch aligned
-    (by decide) bounded (Or.inr above)
+  exact commit_copy_preserves_digest state 46 (source-32) address (by simp) chain aligned
+    (by omega) bounded (by rcases separate with h | h <;> omega)
 
-/-- The final copy stores the computed digest before advancing the leaf pointers. -/
-theorem commit_leaf_heap_write (leaf : MachineState) (destination : Nat)
-    (scratch : leaf.getReg .x21 = 256)
+/-- Copy the final consumed block into the heap before the next salt overwrites it. -/
+theorem commit_leaf_heap_write (leaf : MachineState) (source destination : Nat)
+    (chain : leaf.getReg .x21 = BitVec.ofNat 64 (source+224))
     (heapPointer : leaf.getReg .x23 = BitVec.ofNat 64 destination)
-    (aligned : destination % 8 = 0) (above : 288 ≤ destination)
-    (bounded : destination+32 ≤ 2^64) :
+    (sourceAligned : source % 8 = 0) (aligned : destination % 8 = 0)
+    (separate : source+256 ≤ destination) (bounded : destination+32 ≤ 2^64) :
     readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)) destination 32 =
-      readBuffer leaf 256 32 := by
+      readBuffer leaf (source+224) 32 := by
   change readBuffer (commitCopyState (leaf.setPC 4316) 55) destination 32 = _
-  exact commit_copy_digest (leaf.setPC 4316) 55 256 destination (by simp) scratch heapPointer
-    (by decide) aligned (by decide) bounded (Or.inl above)
+  exact commit_copy_digest (leaf.setPC 4316) 55 (source+224) destination (by simp) chain heapPointer
+    (by omega) aligned (by omega) bounded (Or.inl separate)
 
 private theorem commit_heap_write_preserves (leaf : MachineState) (destination address : Nat)
     (heapPointer : leaf.getReg .x23 = BitVec.ofNat 64 destination)
@@ -106,34 +117,19 @@ private theorem commit_heap_write_preserves (leaf : MachineState) (destination a
   exact commit_copy_preserves_digest (leaf.setPC 4316) 55 destination address (by simp)
     heapPointer aligned destinationBound readBound separate
 
-private theorem commit_leaf_preserves_buffer (oracle : Oracle) (ready : MachineState)
-    (count address : Nat) (scratch : ready.getReg .x21 = 256)
-    (aligned : address % 8 = 0) (above : 320 ≤ address) (readBound : address+32 ≤ 2^64) :
-    readBuffer (checkEvaluation oracle (commitLeafLoop ready count)).1 address 32 =
-      readBuffer ready address 32 := by
-  apply read_digest_congr _ _ _ aligned
-  intro i hi
-  apply commit_leaf_loop_outside oracle ready count _ scratch
-  intro j hj equal
-  have numeric := congrArg BitVec.toNat equal
-  simp only [BitVec.toNat_ofNat] at numeric
-  rw [Nat.mod_eq_of_lt (by omega : address+8*i < 2^64),
-    Nat.mod_eq_of_lt (by omega : 256+8*j < 2^64)] at numeric
-  omega
-
 attribute [local irreducible] commitPositionState commitLeafLoop checkEvaluation
 
-/-- One full iteration of the submitted commitment program stores the salted
-leaf digest, using the original message blocks and salt in input memory. -/
+/-- The actual streamed iteration computes the existing salted leaf hash. -/
 theorem commit_position_digest (oracle : Oracle) (state : MachineState)
     (source saltAddress destination : Nat) (value : Entry)
-    (scratch : state.getReg .x21 = 256)
+    (scratch : state.getReg .x21 = state.getReg .x8 - 32)
     (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
     (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (sourceAligned : source % 8 = 0) (saltAligned : saltAddress % 8 = 0)
     (destinationAligned : destination % 8 = 0)
-    (sourceAbove : 320 ≤ source) (saltAbove : 288 ≤ saltAddress) (destinationAbove : 288 ≤ destination)
+    (sourceAbove : 32 ≤ source) (saltAfter : source+256 ≤ saltAddress)
+    (destinationAfter : source+256 ≤ destination)
     (sourceBound : source+256 < 2^64) (saltBound : saltAddress+32 ≤ 2^64)
     (destinationBound : destination+32 ≤ 2^64)
     (data : ∀ block < 8, readBuffer state (source+32*block) 32 = value.extractLsb' (256*block) 256) :
@@ -141,56 +137,67 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
       leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
   let ready := commitLeafReadyState (commitPositionState state)
   let leaf := (checkEvaluation oracle (commitLeafLoop ready 8)).1
-  have readyReg (reg : Reg) (notCounter : reg ≠ .x28) (notLink : reg ≠ .x1)
-      (notTemporary : reg ≠ .x6) (notOracle : reg ∉ [.x5,.x10,.x11,.x12,.x13]) :
+  have chain := commit_chain_pointer state source scratch messagePointer sourceAbove
+  have readyReg (reg : Reg) (notLink : reg ≠ .x1) (notTemporary : reg ≠ .x6) :
       ready.getReg reg = state.getReg reg := by
-    rw [commit_leaf_ready_register _ reg (by simp_all)]
+    rw [commit_leaf_ready_register]
     exact commit_position_register state reg notLink notTemporary
-  have hashed : readBuffer leaf 256 32 =
+  have readyPointer := (readyReg .x8 (by decide) (by decide)).trans messagePointer
+  have hashed : readBuffer leaf (source+224) 32 =
       leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
-    apply commit_leaf_digest oracle ready source _ value
-      ((readyReg .x21 (by decide) (by decide) (by decide) (by decide)).trans scratch)
-      ((readyReg .x8 (by decide) (by decide) (by decide) (by decide)).trans messagePointer)
+    apply streaming_commit_leaf_hash oracle ready source _ value readyPointer
       sourceAligned sourceAbove sourceBound
-    · exact commit_position_salt state saltAddress scratch saltPointer saltAligned saltAbove saltBound
+    · exact commit_position_salt state source saltAddress chain saltPointer
+        sourceAligned saltAligned sourceAbove (by omega) saltBound
     · intro block inside
-      rw [commit_position_input_digest state (source+32*block) scratch (by omega) (by omega) (by omega)]
+      rw [commit_position_input_digest state source (source+32*block) chain sourceAbove
+        (by omega) (by omega) (by omega) (Or.inr (by omega))]
       exact data block inside
-  have leafRegs := commit_leaf_loop_registers ready 8 leaf (check_evaluation_support oracle _)
+  have reached := check_evaluation_support oracle (commitLeafLoop ready 8)
+  have leafRegs := commit_leaf_loop_registers ready 8 leaf reached
+  have finalChain : leaf.getReg .x21 = BitVec.ofNat 64 (source+224) := by
+    rw [commit_leaf_loop_chain ready 8 leaf reached, readyPointer]
+    change BitVec.ofNat 64 source + BitVec.ofNat 64 256 - BitVec.ofNat 64 32 = _
+    rw [← BitVec.ofNat_add, BitVec.ofNat_sub_ofNat_of_le (w := 64) (source+256) 32 (by decide) (by omega)]
+    congr 1
   rw [commit_position_evaluation]
   change readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)) destination 32 = _
-  rw [commit_leaf_heap_write leaf destination
-    ((leafRegs.2 .x21 (by decide)).trans ((readyReg .x21 (by decide) (by decide) (by decide) (by decide)).trans scratch))
-    ((leafRegs.2 .x23 (by decide)).trans ((readyReg .x23 (by decide) (by decide) (by decide) (by decide)).trans heapPointer))
-    destinationAligned destinationAbove destinationBound]
+  rw [commit_leaf_heap_write leaf source destination finalChain
+    ((leafRegs.2 .x23 (by decide)).trans ((readyReg .x23 (by decide) (by decide)).trans heapPointer))
+    sourceAligned destinationAligned destinationAfter destinationBound]
   exact hashed
 
-/-- Leaf hashing and its final heap write preserve any digest outside scratch
-and the single destination slot. This includes all other leaves, salts, and inputs. -/
+/-- A full iteration writes only its consumed prefix/leaf and one heap slot. -/
 theorem commit_position_preserves_digest (oracle : Oracle) (state : MachineState)
-    (destination address : Nat)
-    (scratch : state.getReg .x21 = 256)
+    (source destination address : Nat)
+    (scratch : state.getReg .x21 = state.getReg .x8 - 32)
+    (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
-    (aligned : address % 8 = 0) (above : 320 ≤ address)
+    (sourceAbove : 32 ≤ source) (sourceBound : source+256 < 2^64)
+    (aligned : address % 8 = 0)
     (destinationBound : destination+32 ≤ 2^64) (readBound : address+32 ≤ 2^64)
+    (sourceSeparate : address+32 ≤ source-32 ∨ source+256 ≤ address)
     (separate : address+32 ≤ destination ∨ destination+32 ≤ address) :
     readBuffer (checkEvaluation oracle (commitPositionRun state)).1 address 32 =
       readBuffer state address 32 := by
   let ready := commitLeafReadyState (commitPositionState state)
   let leaf := (checkEvaluation oracle (commitLeafLoop ready 8)).1
-  have readyScratch : ready.getReg .x21 = 256 := by
-    change (commitPositionState state).getReg .x21 = _
-    rw [commit_position_register state .x21 (by decide) (by decide), scratch]
+  have chain := commit_chain_pointer state source scratch messagePointer sourceAbove
+  have readySource : ready.getReg .x8 = BitVec.ofNat 64 source := by
+    rw [commit_leaf_ready_register]
+    exact (commit_position_register state .x8 (by decide) (by decide)).trans messagePointer
   have readyPointer : ready.getReg .x23 = BitVec.ofNat 64 destination := by
-    change (commitPositionState state).getReg .x23 = _
-    rw [commit_position_register state .x23 (by decide) (by decide), heapPointer]
+    rw [commit_leaf_ready_register]
+    exact (commit_position_register state .x23 (by decide) (by decide)).trans heapPointer
   have leafPointer : leaf.getReg .x23 = BitVec.ofNat 64 destination :=
     ((commit_leaf_loop_registers ready 8 leaf (check_evaluation_support oracle _)).2 .x23
       (by decide)).trans readyPointer
   rw [commit_position_evaluation]
   change readBuffer (commitPositionNextState (commitCopyState (leaf.setPC 4316) 55)) address 32 = _
   rw [commit_heap_write_preserves leaf destination address leafPointer aligned destinationBound readBound separate]
-  rw [commit_leaf_preserves_buffer oracle ready 8 address readyScratch aligned above readBound]
-  exact commit_position_input_digest state address scratch aligned (by omega) readBound
+  rw [streaming_commit_leaf_read_outside oracle ready source 8 address 32 readySource sourceAbove
+    (by simpa using sourceBound) readBound (by rcases sourceSeparate with h | h <;> omega)]
+  exact commit_position_input_digest state source address chain sourceAbove aligned (by omega) readBound
+    (by rcases sourceSeparate with h | h <;> omega)
 
 end CommitGolfCandidate

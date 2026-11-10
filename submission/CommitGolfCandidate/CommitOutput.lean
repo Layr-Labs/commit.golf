@@ -99,9 +99,11 @@ theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : B
     (by change 4294971424+32*(2*16777216+index.val)+32 ≤ 2^64; omega)]
   unfold heapDigest
   rw [read_buffer_memory_congr _ _ (parents_start_memory leaves), ← address]
-  rw [commit_leaves_preserves_digest oracle ready 4831842336 LENGTH (5368713248+32*index.val)
-    input.2.2.2.2.2.2.1 input.2.2.2.2.1 (by omega) (by omega)
-    (by decide) (by omega) (Or.inr (by change 4831842336+32*16777216 ≤ _; omega))]
+  rw [commit_leaves_preserves_digest oracle ready 4096 4831842336 LENGTH (5368713248+32*index.val)
+    (commit_input_leaves message answer).scratch input.1 input.2.2.2.2.1
+    (by decide) (by decide) (by omega) (by decide) (by omega)
+    (Or.inr (by change 4096+256*16777216 ≤ _; omega))
+    (Or.inr (by change 4831842336+32*16777216 ≤ _; omega))]
   exact commit_ready_salt message answer index
 
 /-- Returning the root preserves the complete authentication invariant. -/
