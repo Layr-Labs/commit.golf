@@ -92,14 +92,15 @@ def leafSubroutine : List Asm :=
   copyDigest 8 21 0 32 ++ compressScratch ++
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
-/-- Commitment reads chain || block in consumed message memory. The reply
-overwrites only the just-read block. The caller stores the final digest before
-the following salt reuses its location. Fixed selectors remain live throughout. -/
+/-- Commitment streams seven replies through consumed message blocks. The final
+reply goes directly to the heap, and the return skips the caller's digest copy.
+The input is captured before the heap write. Fixed selectors remain live. -/
 def commitLeafSubroutine : List Asm :=
   [.label "leaf"] ++
   ((List.range 8).flatMap fun block =>
-    [addi 10 8 ((32*block : Int)-32), addi 12 8 (32*block), insn 0x73]) ++
-  [addi 8 8 256, addi 21 8 (-32), insn 0x00008067]
+    [addi 10 8 ((32*block : Int)-32),
+     if block = 7 then addi 12 23 0 else addi 12 8 (32*block), insn 0x73]) ++
+  [addi 8 8 256, addi 21 8 (-32), insn 0x02008067]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
