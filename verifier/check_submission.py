@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import stat
 from pathlib import Path
 
 from artifact import load_artifact
@@ -68,23 +70,55 @@ def imports(source: str) -> list[str]:
     return found
 
 
+def regular_bytes(path: Path, limit: int, *, dir_fd: int | None = None) -> bytes:
+    """Bound pre-sandbox reads and never follow a final symlink or wait on a FIFO."""
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+    with os.fdopen(os.open(path, flags, dir_fd=dir_fd), "rb") as source:
+        if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+            raise ValueError("must be a regular file")
+        raw = source.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError(f"file exceeds {limit} bytes")
+    return raw
+
+
 def claim(path: Path) -> dict[str, int]:
-    raw = path.read_bytes()
-    if len(raw) > 512:
-        raise ValueError("claim.json exceeds 512 bytes")
+    raw = regular_bytes(path, 512)
     value = json.loads(raw)
     score_claim(value)
     return value
+
+
+def inventory(root: Path) -> list[Path]:
+    """Visit at most MAX_FILES + 1 entries, without descending into directory symlinks."""
+    pending = [root]
+    files = []
+    while pending:
+        with os.scandir(pending.pop()) as entries:
+            for entry in entries:
+                path = Path(entry.path)
+                files.append(path)
+                if len(files) > MAX_FILES:
+                    return sorted(files)
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+    return sorted(files)
 
 
 def check(root: Path) -> dict:
     errors = []
     if root.is_symlink() or not root.is_dir():
         return {"ok": False, "errors": ["submission root is not a directory"]}
-    files = sorted(root.rglob("*"))
+    try:
+        files = inventory(root)
+    except OSError as exc:
+        return {"ok": False, "claim": None, "artifactDigest": None, "score": None,
+                "files": 0, "bytes": 0, "errors": [f"cannot inspect submission: {exc}"]}
     if len(files) > MAX_FILES:
-        errors.append(f"more than {MAX_FILES} entries")
+        return {"ok": False, "claim": None, "artifactDigest": None, "score": None,
+                "files": len(files), "bytes": 0, "errors": [f"more than {MAX_FILES} entries"]}
     total = 0
+    eligible = []
     for path in files:
         rel = path.relative_to(root)
         if path.is_symlink() or not (path.is_file() or path.is_dir()):
@@ -103,27 +137,37 @@ def check(root: Path) -> dict:
         total += size
         if size > MAX_FILE_BYTES:
             errors.append(f"{rel}: file exceeds 8 MiB")
+            continue
+        eligible.append(path)
     if total > MAX_TOTAL_BYTES:
         errors.append("submission exceeds 32 MiB")
-    if not (root / "Solution.lean").is_file():
+        return {"ok": False, "claim": None, "artifactDigest": None, "score": None,
+                "files": len(files), "bytes": total, "errors": errors}
+    if (root / "Solution.lean") not in eligible:
         errors.append("Solution.lean is required")
     try:
+        if (root / "claim.json") not in eligible:
+            raise ValueError("an admitted regular file is required")
         values = claim(root / "claim.json")
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         values = None
         errors.append(f"invalid claim.json: {exc}")
     try:
+        if (root / 'programs.json') not in eligible:
+            raise ValueError('an admitted regular file is required')
         artifact_digest = load_artifact(root / 'programs.json').digest
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         artifact_digest = None
         errors.append(f"invalid programs.json: {exc}")
     modules = {".".join(path.relative_to(root).with_suffix("").parts)
-               for path in files if path.is_file() and path.suffix == ".lean"}
-    for path in files:
-        if not path.is_file() or path.suffix != ".lean":
+               for path in eligible if path.suffix == ".lean"}
+    for path in eligible:
+        if path.suffix != ".lean":
             continue
         try:
-            source = path.read_text(encoding="utf-8")
+            source = regular_bytes(path, MAX_FILE_BYTES).decode("utf-8")
+            # Match Path.read_text's universal-newline behavior before scanning comments/imports.
+            source = source.replace("\r\n", "\n").replace("\r", "\n")
             for module in imports(source):
                 if module in ALLOWED_CONTRACT or module in modules or any(
                     module == library or module.startswith(library + ".") for library in ALLOWED_LIBRARIES):
