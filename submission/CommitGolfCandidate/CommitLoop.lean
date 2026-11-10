@@ -199,6 +199,21 @@ theorem commit_leaves (state : MachineState) (remaining : Nat)
     rw [ih next (commit_leaves_next_invariant state next remaining invariant reached)]
     simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm]
 
+/-- The outer loop preserves the globally initialized syscall arguments. -/
+theorem commit_leaves_oracle_ready (state : MachineState) (remaining : Nat)
+    (invariant : CommitLeavesInvariant state remaining) (finished : MachineState)
+    (reachable : finished ∈ support (commitLeaves state remaining)) :
+    CommitLeafOracleReady finished := by
+  induction remaining generalizing state with
+  | zero =>
+    simp only [commitLeaves,support_pure,Set.mem_singleton_iff] at reachable
+    subst finished
+    exact invariant.oracleReady
+  | succ remaining ih =>
+    simp only [commitLeaves,mem_support_bind_iff] at reachable
+    obtain ⟨next,reached,rest⟩ := reachable
+    exact ih next (commit_leaves_next_invariant state next remaining invariant reached) rest
+
 /-- The leaf loop reaches the parent-building phase and preserves its pointers. -/
 theorem commit_leaves_finished (state : MachineState) (remaining : Nat)
     (invariant : CommitLeavesInvariant state remaining) (finished : MachineState)

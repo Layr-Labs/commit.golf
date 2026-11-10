@@ -121,7 +121,7 @@ def commitCode (depth : Nat) : List Asm :=
   [addi 28 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
-   addi 5 0 0, addi 11 0 64, addi 13 0 0,
+   insn 0x00c0006f, addi 11 0 64, addi 13 0 0,
    addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++

@@ -4,6 +4,7 @@ import CommitGolfCandidate.CommitLoop
 /-! The complete parent loop, followed by root output and successful HALT. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
+set_option maxRecDepth 4096
 
 def commitParents : MachineState → Nat → OracleComp World MachineState
   | state, 0 => pure state
@@ -133,7 +134,8 @@ theorem commit_parents_finished (state : MachineState) (remaining : Nat)
       rfl
     · exact done.1 (Nat.pos_of_ne_zero empty)
 
-/-- Initialize fixed syscall constants and the descending internal-node counter once. -/
+/-- Reference parent initialization. The image bypasses the fixed constants
+under the live-argument invariant, then initializes the descending node counter. -/
 private def parentStartInstructions : List Instr :=
   [.ADDI .x5 .x0 0, .ADDI .x11 .x0 64, .ADDI .x13 .x0 0,
    .ADDI .x20 .x19 4095]
@@ -170,22 +172,45 @@ theorem commit_parents_start_constants (state : MachineState) :
     execInstrBr, MachineState.getReg, MachineState.setPC, MachineState.setReg,
     signExtend12]
 
-theorem commit_parents_start (state : MachineState) (pc : state.pc = 4364) (fuel : Nat) :
-    execute (submission.image .commit) (5 + fuel) state true =
+/-- The three fixed reference assignments are identities under the leaf invariant. -/
+private theorem parent_start_ready (state : MachineState) (ready : CommitLeafOracleReady state) :
+    parentStartPrefix state 4 =
+      (state.setReg .x20 (state.getReg .x19-1)).setPC (state.pc+16) := by
+  cases state
+  dsimp [CommitLeafOracleReady,MachineState.getReg] at ready
+  dsimp [parentStartPrefix,parentStartInstructions,List.take,List.foldl,execInstrBr,
+    signExtend12,MachineState.getReg,MachineState.setReg,MachineState.setPC]
+  simp only [BitVec.sub_eq_add_neg]
+  congr 1
+  · funext reg
+    cases reg <;> simp_all [BitVec.sub_eq_add_neg]
+  · simp [BitVec.add_assoc]
+
+theorem commit_parents_start (state : MachineState) (pc : state.pc = 4364)
+    (ready : CommitLeafOracleReady state) (fuel : Nat) :
+    execute (submission.image .commit) (3 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitParentsStartState state) true
-          return result.charge 5 0) := by
+          return result.charge 3 0) := by
   have setup (remaining : Nat) :
-      execute (submission.image .commit) (4 + remaining) state true =
+      execute (submission.image .commit) (2+remaining) state true =
         (do let result ← execute (submission.image .commit) remaining (parentStartPrefix state 4) true
-            return result.charge 4 0) := by
-    apply execute_unit_steps (states := parentStartPrefix state)
-    intro i hi
-    refine ⟨.base ((parentStartInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (67 + i) _ (by omega)
-      · interval_cases i <;> simp [parentStartPrefix, parentStartInstructions, execInstrBr, pc, MachineState.setPC]
-      · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
+            return result.charge 2 0) := by
+    let jumped := state.setPC 4376
+    have f0 : fetch (submission.image .commit) state = some (.base (.JAL .x0 12)) := by
+      apply commit_fetch _ 67 _ (by decide) pc; rfl
+    have s0 : ordinaryStep state (.base (.JAL .x0 12)) = some jumped := by
+      simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend21,
+        MachineState.setReg,jumped,pc]
+    have f1 : fetch (submission.image .commit) jumped = some (.base (.ADDI .x20 .x19 4095)) := by
+      apply commit_fetch _ 70 _ (by decide) rfl; rfl
+    have s1 : ordinaryStep jumped (.base (.ADDI .x20 .x19 4095)) =
+        some (parentStartPrefix state 4) := by
+      rw [parent_start_ready state ready]
+      simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,
+        jumped,pc,MachineState.getReg,MachineState.setReg,MachineState.setPC,BitVec.sub_eq_add_neg]
+    rw [show 2+remaining=(remaining+1)+1 by omega,
+      execute_ordinary_step _ _ _ _ _ _ f0 s0,execute_ordinary_step _ _ _ _ _ _ f1 s1]
+    simp [instructionCycles,Execution.charge,← Nat.add_assoc]
   let next := parentStartPrefix state 4
   have fetched : fetch (submission.image .commit) next = some (.base (.BEQ .x20 .x0 32)) := by
     apply commit_fetch _ 71 _ (by decide)
@@ -197,7 +222,7 @@ theorem commit_parents_start (state : MachineState) (pc : state.pc = 4364) (fuel
       signExtend12, pc, MachineState.getReg, MachineState.setReg, MachineState.setPC,
       BitVec.sub_eq_add_neg]
     split <;> simp_all
-  rw [show 5 + fuel = 4 + (fuel + 1) by omega, setup,
+  rw [show 3 + fuel = 2 + (fuel + 1) by omega, setup,
     execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
@@ -261,11 +286,11 @@ theorem commit_body (state : MachineState) (count : Nat)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (102 * count + 9 + fuel) state true =
+    execute (submission.image .commit) (102 * count + 7 + fuel) state true =
       (do let finished ← commitBody state count
-          return ⟨.success, finished, 165 * count + 2, 9 * count - 1⟩) := by
-  rw [show 102 * count + 9 + fuel =
-    95 * count + (5 + (7 * (count - 1) + (11 + fuel))) by omega,
+          return ⟨.success, finished, 165 * count, 9 * count - 1⟩) := by
+  rw [show 102 * count + 7 + fuel =
+    95 * count + (3 + (7 * (count - 1) + (11 + fuel))) by omega,
     commit_leaves state count leaves]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
@@ -297,7 +322,8 @@ theorem commit_body (state : MachineState) (count : Nat)
     (readyRegister .x26 (by simp)).trans (leafDone.2 .x26 (by simp))
   have readyBuffers : ParentBuffers (ready.getReg .x9) (count - 1) := by
     rw [readyHeap]; exact parents
-  rw [commit_parents_start hashed leafDone.1,
+  have leafReady := commit_leaves_oracle_ready state count leaves hashed reached
+  rw [commit_parents_start hashed leafDone.1 leafReady,
     commit_parents ready (count - 1) (by omega) readyPC readyCount (commit_parents_start_constants hashed) readyBuffers]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
