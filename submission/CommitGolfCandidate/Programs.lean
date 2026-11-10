@@ -92,24 +92,22 @@ def leafSubroutine : List Asm :=
   copyDigest 8 21 0 32 ++ compressScratch ++
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
+/-- Commitment keeps fixed oracle arguments live across all eight leaf blocks. -/
+def commitLeafSubroutine : List Asm :=
+  [.label "leaf", addi 28 0 8] ++ compressScratch.take 5 ++
+  [.label "leaf-block"] ++ copyDigest 8 21 0 32 ++ [insn 0x73] ++
+  [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
+
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
 
-/-- Load a large constant in three executed instructions while retaining seven image
-slots. The jump preserves every later program address. -/
-def commitLi (rd value : Nat) : List Asm :=
-  if value % (2^22) = 0 ∧ value / (2^22) < 2048 then
-    [addi rd 0 (value / (2^22)), shift rd rd 22, insn 0x0140006f] ++
-      List.replicate 4 (addi 0 0 0)
-  else li rd value
-
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
-  [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
+  [mv 8 10, mv 26 11, mv 9 12] ++ li 19 n ++ li 6 (64*n) ++
+  [regop 18 9 6] ++ li 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
-  [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
+  [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
   li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
@@ -117,7 +115,7 @@ def commitCode (depth : Nat) : List Asm :=
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
    addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ leafSubroutine
+  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
