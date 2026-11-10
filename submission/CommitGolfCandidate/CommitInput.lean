@@ -71,18 +71,6 @@ theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec
     regs.2.2.2.1, regs.2.2.2.2.1.trans leafPtr, regs.2.2.2.2.2.1.trans outputPtr,
     regs.2.2.2.2.2.2⟩
 
-set_option maxRecDepth 4096 in
-/-- The immutable end pointer is installed before salt generation. -/
-theorem commit_input_heap_end (message : Message) {bits : Nat} (answer : BitVec bits) :
-    (commitInputReady message answer).getReg .x22=5368713248 := by
-  have same : (commitInputReady message answer).getReg .x22=
-      (commitInputReady message answer).getReg .x18 := by
-    unfold commitInputReady
-    rw [commit_ready_register _ .x22 (by decide) (by decide) (by decide),
-      commit_ready_register _ .x18 (by decide) (by decide) (by decide),
-      writeBits_register,writeBits_register,commit_setup_heap_end]
-  exact same.trans (commit_input_registers message answer).2.2.1
-
 /-- The first iteration has space for every remaining message block, salt, and
 leaf digest, for all actual messages and every private random answer. -/
 theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bits) :
@@ -105,7 +93,7 @@ theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bi
 
   · exact commit_ready_oracle _
   · exact commit_ready_block_counter _
-  · rw [regs.2.2.2.2.1,commit_input_heap_end]; rfl
+  · rw [regs.1,regs.2.2.2.2.2.1]; rfl
 
 /-- The complete fixed heap allocation meets the oracle syscall's size and
 alignment requirements for every internal node. -/

@@ -114,23 +114,23 @@ structure CommitLeavesInvariant (state : MachineState) (remaining : Nat) : Prop 
     accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true
   oracleReady : CommitLeafOracleReady state
   blockCounter : state.getReg .x28=0
-  heapProgress : (state.getReg .x23).toNat+32*remaining=(state.getReg .x22).toNat
+  messageProgress : (state.getReg .x8).toNat+256*remaining=(state.getReg .x26).toNat
 
-theorem heap_step_nooverflow (pointer limit : Word) (remaining : Nat)
-    (progress : pointer.toNat+32*(remaining+1)=limit.toNat) :
-    (pointer+32).toNat=pointer.toNat+32 := by
+theorem message_step_nooverflow (pointer limit : Word) (remaining : Nat)
+    (progress : pointer.toNat+256*(remaining+1)=limit.toNat) :
+    (pointer+256).toNat=pointer.toNat+256 := by
   rw [BitVec.toNat_add]
-  change (pointer.toNat+32)%18446744073709551616=pointer.toNat+32
+  change (pointer.toNat+256)%18446744073709551616=pointer.toNat+256
   apply Nat.mod_eq_of_lt
   have small := BitVec.isLt limit
   change limit.toNat<18446744073709551616 at small
   omega
 
-theorem heap_step_branch (pointer limit : Word) (remaining : Nat)
-    (progress : pointer.toNat+32*(remaining+1)=limit.toNat) :
-    BitVec.ult (pointer+32) limit=decide (0<remaining) := by
-  simp only [BitVec.ult,heap_step_nooverflow pointer limit remaining progress]
-  have equivalent : pointer.toNat+32<limit.toNat ↔ 0<remaining := by omega
+theorem message_step_branch (pointer limit : Word) (remaining : Nat)
+    (progress : pointer.toNat+256*(remaining+1)=limit.toNat) :
+    BitVec.ult (pointer+256) limit=decide (0<remaining) := by
+  simp only [BitVec.ult,message_step_nooverflow pointer limit remaining progress]
+  have equivalent : pointer.toNat+256<limit.toNat ↔ 0<remaining := by omega
   simp only [equivalent]
 
 theorem commit_leaves_next_invariant (state finished : MachineState) (remaining : Nat)
@@ -185,9 +185,9 @@ theorem commit_leaves_next_invariant (state finished : MachineState) (remaining 
 
   · exact (commit_position_oracle_ready state finished invariant.scratch reachable).1
   · exact (commit_position_oracle_ready state finished invariant.scratch reachable).2
-  · rw [regs.2.2.1,regs.2.2.2.2.2 .x22 (by simp),
-      heap_step_nooverflow _ _ remaining invariant.heapProgress]
-    have := invariant.heapProgress
+  · rw [regs.1,regs.2.2.2.2.2 .x26 (by simp),
+      message_step_nooverflow _ _ remaining invariant.messageProgress]
+    have := invariant.messageProgress
     omega
 
 /-- Loop state distribution, using precisely the same queries as the machine. -/
@@ -221,11 +221,11 @@ theorem outer_position_execute (state : MachineState) (remaining : Nat)
     (fun word => by rw [regs .x18 (by decide)]; exact invariant.salts word.val (by omega))
     (fun word => by rw [regs .x23 (by decide)]; exact invariant.heap word.val (by omega))
     (fun word bounded => by rw [regs .x8 (by decide)]; exact invariant.message word (by omega))]
-  have branch : (if BitVec.ult (state.getReg .x23+32) (state.getReg .x22) then
+  have branch : (if BitVec.ult (state.getReg .x8+256) (state.getReg .x26) then
       (4280 : Word) else 4360)=(if remaining=0 then 4360 else 4280) := by
-    rw [heap_step_branch _ _ remaining invariant.heapProgress]
+    rw [message_step_branch _ _ remaining invariant.messageProgress]
     by_cases empty : remaining=0 <;> simp [empty,Nat.pos_of_ne_zero]
-  simp only [regs .x23 (by decide),regs .x22 (by decide),
+  simp only [regs .x8 (by decide),regs .x26 (by decide),
     show (outerFinish state 4280).getReg .x20=0 by rfl,branch]
   change (do let next ← commitPositionRun ((state.setReg .x20 0).setPC 4280)
              let result ← execute (submission.image .commit) fuel
