@@ -124,9 +124,9 @@ def commitCode (depth : Nat) : List Asm :=
   List.replicate 5 (addi 0 0 0) ++ [.label "commit-leaf"] ++
   copyDigest 18 21 ++ commitLeafSubroutine ++
   [addi 18 18 32, addi 23 23 32, .branch 6 8 26 "commit-leaf",
-   addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
-   shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, insn 0x73,
-   addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
+   addi 20 19 (-1), .branch 0 20 0 "commit-root",
+   shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, .label "commit-parent", insn 0x73,
+   addi 10 10 (-64), addi 12 12 (-32), addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
   copyDigest 9 26 32 ++ halt true
 
 def openingCode (depth : Nat) : List Asm :=

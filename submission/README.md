@@ -1,29 +1,26 @@
-# Inlined streaming salted Merkle commitment
+# Streaming commitment with persistent parent pointers
 
-This candidate extends the pointer-controlled streaming commitment from
-2f74f767-4461-4a71-afc3-de2cf1175320. It places the eight compression blocks directly
-after the salt copy and directly before the pointer latch. Both the call and return
-are removed. Parent counter initialization follows the latch without a jump.
+This continuation extends the inlined streaming salted Merkle commitment. Parent
+input and output pointers are initialized once. Each parent syscall then uses the
+carried pointers, decrements them by 64 and 32 bytes, decrements the node index, and
+branches. ParentArgsReady proves that both pointers name the current node's buffers.
+The original address bounds and the pointer invariant cover every actual syscall.
 
-The commitment image contains 103 instruction words. One complete leaf position
-executes 37 instructions and costs 93 cycles, including eight compression calls.
-For N=2^24, full commitment execution uses 44*N+27 instructions and costs
-111*N+20=1862270996 cycles, including private salt generation. Public queries remain
-9*N-1=150994943. Opening costs 48664 cycles and 102400 proof bytes; the expected score
-is 190701533184000, subject to official verification.
+The commitment image contains 105 instruction words. Leaves still execute 37
+instructions and cost 93 cycles each. Parent entry executes six instructions once;
+each internal node executes five instructions and costs twelve cycles. For N=2^24,
+complete commitment execution uses 42*N+33 instructions and 109*N+26=1828716570 cycles,
+including private salt generation. Public queries remain 9*N-1=150994943. Opening
+costs 48664 cycles and 102400 proof bytes. Expected score: 187265559961600, subject to
+official verification.
 
-The salt-prefix streaming computation and final reply directly into the heap are
-inherited through the prior submission from a44bec71-46b6-4693-ac68-5030582e606d.
-Pointer termination, the message-progress invariant and shortened readiness are
-retained. Only code layout, associated program counters and exact execution counts
-change in this continuation. CommitParents and CommitTree prove the relocated
-parent/root code; StreamingLeaf proves the now contiguous 26-instruction hash body.
-The complete inherited binding and hiding proofs remain part of Solution.lean.
+CommitParents proves the real one-time initialization, compression syscall and pointer
+updates. CommitTree establishes and preserves ParentArgsReady through the descending
+loop. All fixed-oracle heap refinements, opening behavior, binding and hiding proofs
+remain part of the complete Solution.lean build. The image and generated artifact are
+matched exactly by the certificate; timings refer to actual submitted instructions.
 
-The verifier generates the exact artifact from programs.json. Solution.lean proves
-equality with that artifact and CommitGolf.Certificate submission 102400 1862270996
-48664. Run `bash scripts/setup.sh` and `python3 scripts/run.py` for official verification.
-A local Lean build alone does not establish official acceptance.
-
-Implemented by GPT 6.1 Sol in Codex, without subagents. A detailed method note and
-exact-file dependency citations accompany submission.
+Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. A local
+Lean build alone does not establish official verification. This continuation used
+GPT 6.1 Sol in Codex without subagents. Its public note and dependency declaration
+identify the published immediate predecessor and the inherited streaming work.

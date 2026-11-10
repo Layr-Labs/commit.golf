@@ -141,7 +141,7 @@ private def commitCopySource (start : Nat) : Reg :=
   if start = 46 then .x18 else if start = 55 then .x21 else .x9
 private def commitCopyDestination (start : Nat) : Reg :=
   if start = 46 then .x21 else if start = 55 then .x23 else .x26
-private def commitCopyOffset (start : Nat) : Nat := if start = 92 then 32 else 0
+private def commitCopyOffset (start : Nat) : Nat := if start = 94 then 32 else 0
 
 private def commitCopyInstructions (start : Nat) : List Instr :=
   [.LD .x6 (commitCopySource start) (BitVec.ofNat 12 (commitCopyOffset start)),
@@ -163,7 +163,7 @@ theorem commit_copy_expansion (state : MachineState) (start : Nat) :
     commitCopyState state start =
       let source := if start = 46 then Reg.x18 else if start = 55 then Reg.x21 else Reg.x9
       let destination := if start = 46 then Reg.x21 else if start = 55 then Reg.x23 else Reg.x26
-      let offset := if start = 92 then 32 else 0
+      let offset := if start = 94 then 32 else 0
       ([.LD .x6 source (BitVec.ofNat 12 offset), .SD destination .x6 0,
         .LD .x6 source (BitVec.ofNat 12 (offset+8)), .SD destination .x6 8,
         .LD .x6 source (BitVec.ofNat 12 (offset+16)), .SD destination .x6 16,
@@ -193,7 +193,7 @@ set_option maxHeartbeats 1000000 in
 /-- The actual salt load, leaf-digest store, and final root copy each take eight
 ordinary instructions. The hypotheses cover every source and destination access. -/
 theorem commit_copy (state : MachineState) (start : Nat)
-    (location : start = 46 ∨ start = 92)
+    (location : start = 46 ∨ start = 94)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg (commitCopySource start) +
