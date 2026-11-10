@@ -128,7 +128,7 @@ def commitCode (depth : Nat) : List Asm :=
   [.jump 0 "commit-initial-call"] ++ (copyDigest 18 10).drop 1 ++
   [.label "commit-initial-call", .jump 1 "leaf", .label "commit-parent-pair", insn 0x73,
     addi 10 10 (-64), addi 12 12 (-32), insn 0x73,
-    addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-pair",
+    addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-quad",
     .jump 0 "commit-root"] ++
   [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "commit-leaf", addi 0 0 0,
    -- Fixed syscall selectors survive the leaf loop. Initialize descending
@@ -137,7 +137,13 @@ def commitCode (depth : Nat) : List Asm :=
    .branch 0 20 0 "commit-root", regop 12 9 7, .label "commit-parent", insn 0x73,
    addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-pair",
    .jump 0 "commit-root", addi 0 0 0, .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
+  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine ++
+  -- Peel three parents before entering this body. Four queries share one
+  -- end-pointer branch; the retained pair handles the N=4 fall-through.
+  [.label "commit-parent-quad"] ++
+  ((List.range 4).flatMap fun _ =>
+    [insn 0x73, addi 10 10 (-64), addi 12 12 (-32)]) ++
+  [.branch 1 12 9 "commit-parent-quad", .jump 0 "commit-root"]
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
