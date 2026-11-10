@@ -10,7 +10,7 @@ preserves the tree base, total leaf count, and commitment pointer. -/
 theorem commit_position_registers (state finished : MachineState)
     (reachable : finished ∈ support (commitPositionRun state)) :
     finished.getReg .x8 = state.getReg .x8 + 256 ∧
-    finished.getReg .x18 = state.getReg .x18 + 32 ∧
+    finished.getReg .x18 = state.getReg .x18 + 24 ∧
     finished.getReg .x23 = state.getReg .x23 + 32 ∧
     finished.getReg .x20 = state.getReg .x20 + 1 ∧
     finished.pc = (if BitVec.ult (state.getReg .x20 + 1) (state.getReg .x19) then 4280 else 4364) ∧
@@ -36,7 +36,7 @@ theorem commit_position_registers (state finished : MachineState)
     rfl
   have advance (current : MachineState) (reg : Reg) :
       (commitPositionNextState current).getReg reg =
-        if reg = .x18 then current.getReg .x18 + 32 else
+        if reg = .x18 then current.getReg .x18 + 24 else
         if reg = .x23 then current.getReg .x23 + 32 else
         if reg = .x20 then current.getReg .x20 + 1 else current.getReg reg := by
     cases reg <;> rfl
@@ -45,7 +45,7 @@ theorem commit_position_registers (state finished : MachineState)
     change (leaf.setPC 4348).getReg .x8 = _
     exact (copied .x8 (by decide)).trans value
   · rw [advance]
-    change (leaf.setPC 4348).getReg .x18 + 32 = _
+    change (leaf.setPC 4348).getReg .x18 + 24 = _
     rw [copied .x18 (by decide), leafReg .x18 (by simp)]
   · rw [advance]
     change (leaf.setPC 4348).getReg .x23 + 32 = _
@@ -181,11 +181,11 @@ theorem commit_leaves_next_invariant (state finished : MachineState) (remaining 
     exact invariant.message (word + 32) (by omega)
   · intro word bounded
     rw [regs.2.1]
-    have address : state.getReg .x18 + 32 + BitVec.ofNat 64 (8 * word) =
-        state.getReg .x18 + BitVec.ofNat 64 (8 * (word + 4)) := by
-      rw [show 8 * (word + 4) = 32 + 8 * word by omega, BitVec.ofNat_add, BitVec.add_assoc]; rfl
+    have address : state.getReg .x18 + 24 + BitVec.ofNat 64 (8 * word) =
+        state.getReg .x18 + BitVec.ofNat 64 (8 * (word + 3)) := by
+      rw [show 8 * (word + 3) = 24 + 8 * word by omega, BitVec.ofNat_add, BitVec.add_assoc]; rfl
     rw [address]
-    exact invariant.salts (word + 4) (by omega)
+    exact invariant.salts (word + 3) (by omega)
   · intro word bounded
     rw [regs.2.2.1]
     have address : state.getReg .x23 + 32 + BitVec.ofNat 64 (8 * word) =

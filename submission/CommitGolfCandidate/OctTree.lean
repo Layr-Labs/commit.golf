@@ -11,7 +11,7 @@ set_option maxHeartbeats 2000000
 attribute [local irreducible] execute commitBody
 
 /-- For count=8*groups+8, the exact post-random cost is
-35*count+25*groups+45 instructions and 91*count+81*groups+94 cycles.
+34*count+25*groups+45 instructions and 90*count+81*groups+94 cycles.
 The zero-parent and N=2 cases are outside this challenge specialization. -/
 theorem oct_body (saltFetched : ContiguousSaltFetched (submission.image .commit))
     (prefixFetched : ContiguousPrefixFetched (submission.image .commit))
@@ -31,11 +31,11 @@ theorem oct_body (saltFetched : ContiguousSaltFetched (submission.image .commit)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (35 * count + 25 * groups + 45 + fuel)
+    execute (submission.image .commit) (34 * count + 25 * groups + 45 + fuel)
       (cursorLeafFrame state messageBase) true =
       (do let finished ← commitBody state count
           return ⟨.success, cursorBaseFrame finished messageBase,
-            91 * count + 81 * groups + 94, 9 * count - 1⟩) := by
+            90 * count + 81 * groups + 94, 9 * count - 1⟩) := by
   have nonzero : count ≠ 0 := by omega
   have residualCount : count - 1 = 8 * groups + 7 := by omega
   have initialPC : state.pc = 4280 := by simpa [nonzero] using leaves.pc
@@ -53,8 +53,8 @@ theorem oct_body (saltFetched : ContiguousSaltFetched (submission.image .commit)
     rw [hoist_pc_self] at positive
     simpa only [show count - 1 + 1 = count by omega] using positive
   rw [erased] at leavesRun
-  rw [show 35 * count + 25 * groups + 45 + fuel =
-      2 + (35 * count + (7 + (25 * groups + 25 + (11 + fuel)))) by omega,
+  rw [show 34 * count + 25 * groups + 45 + fuel =
+      2 + (34 * count + (7 + (25 * groups + 25 + (11 + fuel)))) by omega,
     contiguous_entry _ entryFetched (cursorLeafFrame state messageBase) initialPC, contiguous_entry_frame, leavesRun]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support

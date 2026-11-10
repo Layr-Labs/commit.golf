@@ -11,14 +11,14 @@ attribute [local irreducible] execute commitBody
 
 def ContiguousExitFetched (image : Image) : Prop :=
   ∀ state : MachineState,
-    state.pc = 4596 → fetch image state = some (.base (.JAL .x0 2096920))
+    state.pc = 4592 → fetch image state = some (.base (.JAL .x0 2096924))
 
 theorem contiguous_leaf_exit (image : Image) (fetched : ContiguousExitFetched image)
-    (state : MachineState) (pc : state.pc = 4596) (fuel : Nat) :
+    (state : MachineState) (pc : state.pc = 4592) (fuel : Nat) :
     execute image (1 + fuel) state true =
       (do let result ← execute image fuel (state.setPC 4364) true
           return result.charge 1 0) := by
-  have stepped : ordinaryStep state (.base (.JAL .x0 2096920)) =
+  have stepped : ordinaryStep state (.base (.JAL .x0 2096924)) =
       some (state.setPC 4364) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21,
       pc, MachineState.setReg]
@@ -30,21 +30,21 @@ theorem contiguous_parent_setup (fetched : ContiguousExitFetched (submission.ima
     (state : MachineState) (messageBase : Word)
     (pc : state.pc = 4364) (nonempty : state.getReg .x19 - 1 ≠ 0) (fuel : Nat) :
     execute (submission.image .commit) (7 + fuel)
-      (cursorNormalize state messageBase 4596) true =
+      (cursorNormalize state messageBase 4592) true =
       (do let result ← execute (submission.image .commit) fuel
             (cursorBaseFrame (commitParentsStartState state) messageBase) true
           return result.charge 7 0) := by
   rw [show 7 + fuel = 1 + (6 + fuel) by omega,
     contiguous_leaf_exit _ fetched _ rfl]
-  have padding : (cursorNormalize state messageBase 4596).setPC 4364 =
+  have padding : (cursorNormalize state messageBase 4592).setPC 4364 =
       cursorNormalize state messageBase 4364 := rfl
   rw [padding, commit_parents_start (cursorNormalize state messageBase 4364) rfl nonempty,
     cursor_parent_boundary]
   rw [← pc, hoist_pc_self]
   simp [Execution.charge, ← Nat.add_assoc]
 
-/-- For even count=2*pairs+2, exact post-random cost is 35*count+7*pairs+25
-instructions and 91*count+21*pairs+32 cycles. The zero-parent case is separate. -/
+/-- For even count=2*pairs+2, exact post-random cost is 34*count+7*pairs+25
+instructions and 90*count+21*pairs+32 cycles. The zero-parent case is separate. -/
 theorem contiguous_body (saltFetched : ContiguousSaltFetched (submission.image .commit))
     (prefixFetched : ContiguousPrefixFetched (submission.image .commit))
     (tailFetched : ContiguousTailFetched (submission.image .commit))
@@ -63,11 +63,11 @@ theorem contiguous_body (saltFetched : ContiguousSaltFetched (submission.image .
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (35 * count + 7 * pairs + 25 + fuel)
+    execute (submission.image .commit) (34 * count + 7 * pairs + 25 + fuel)
       (cursorLeafFrame state messageBase) true =
       (do let finished ← commitBody state count
           return ⟨.success, cursorBaseFrame finished messageBase,
-            91 * count + 21 * pairs + 32, 9 * count - 1⟩) := by
+            90 * count + 21 * pairs + 32, 9 * count - 1⟩) := by
   have nonzero : count ≠ 0 := by omega
   have residualCount : count - 1 = 2 * pairs + 1 := by omega
   have initialPC : state.pc = 4280 := by simpa [nonzero] using leaves.pc
@@ -85,8 +85,8 @@ theorem contiguous_body (saltFetched : ContiguousSaltFetched (submission.image .
     rw [hoist_pc_self] at positive
     simpa only [show count - 1 + 1 = count by omega] using positive
   rw [erased] at leavesRun
-  rw [show 35 * count + 7 * pairs + 25 + fuel =
-      2 + (35 * count + (7 + (7 * pairs + 5 + (11 + fuel)))) by omega,
+  rw [show 34 * count + 7 * pairs + 25 + fuel =
+      2 + (34 * count + (7 + (7 * pairs + 5 + (11 + fuel)))) by omega,
     contiguous_entry _ entryFetched (cursorLeafFrame state messageBase) initialPC, contiguous_entry_frame, leavesRun]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support

@@ -26,11 +26,11 @@ theorem group341_body (saltFetched : ContiguousSaltFetched (submission.image .co
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26+BitVec.ofNat 64 (8*word.val)) 8=true)
     (fuel : Nat) :
-    execute (submission.image .commit) (35*count+1024*groups+70+fuel)
+    execute (submission.image .commit) (34*count+1024*groups+70+fuel)
       (cursorLeafFrame state messageBase) true=
       (do let finished ← commitBody state count
           return ⟨.success,cursorBaseFrame finished messageBase,
-            91*count+3411*groups+175,9*count-1⟩) := by
+            90*count+3411*groups+175,9*count-1⟩) := by
   have scheduleCount : count=group341Schedule.parents groups+1 := by
     rw [group341_schedule_parents]
     omega

@@ -1,39 +1,31 @@
-# Compact opening constants and shared public transcript
+# Packed 192-bit nonces with full-width Merkle hashes
 
-This candidate extends the compact commitment setup candidate
-39c7d1a4-7ed6-46f6-9442-291ca30af5d9, retaining its341-parent commitment loop,
-12-step commitment prelude, complete salted Merkle construction and full256-bit
-salt/digest formats. Commitment remains1761656918 cycles and637583453 steps.
+This candidate extends promoted submission
+76c28705-3408-4ca8-a3cb-f0abdbc89cb9. It retains the binary Merkle tree,
+341-parent loop, compact setup, shared hiding continuation and 256-bit checker.
 
-The opening prelude now uses eight instructions to reach the exact previous
-nineteen-instruction state. Four ABI pointer/count moves, two LUIs and a heap
-address ADD occupy words0..6. Word7 jumps48 bytes to the unchanged empty-opening
-branch at word19; words8..18 are unreachable padding. Including that branch,
-setup costs9 cycles. The per-position salt-copy continuation uses ADDI x25,32,
-ADD x20,x19, ADDI x28,24 and JAL+12, then enters the unchanged path loop at word37.
-These four instructions reach exactly the former six-instruction state. All
-other opening PCs and the59-word image length are preserved.
+Commitment samples one packed vector of 192-bit nonces, using 24 bytes per leaf.
+Each nonce is zero-extended to 256 bits before the eight compression calls for
+its 2048-bit leaf. Intermediate digests, parent digests, the root, and serialized
+opening salts remain 256 bits. The private ABI capacity is unchanged; unused
+bytes are never treated as additional entropy.
 
-Opening.lean proves complete MachineState equivalence of both replacements and
-checks every actual fetched instruction/step separately. Resource composition
-then gives378 cycles per opened position plus13 fixed cycles. The scored128-leaf
-opening costs48397 cycles and102400 proof bytes. Empty opening costs13 cycles.
-The claimed score is(1761656918+48397)*102400=180398624256000, a267-cycle opening
-saving relative to the direct compact-commitment predecessor. The checking image,
-ABI layouts, buffer sizes and permitted step allowances remain unchanged.
+The actual commitment copies three nonce words and stores a zero fourth word.
+Its nonce cursor advances by 24 bytes, while the heap cursor advances by 32.
+Exact instruction, syscall and memory proofs give 1728102486 commitment cycles.
+Opening computes each nonce address with four arithmetic instructions and emits
+the padded salt plus 24 sibling hashes. Its exact cost is 13+379*k cycles for
+k opened positions, including the empty case. The 128-position opening costs
+48525 cycles and 102400 bytes. The claimed product is 176962663526400.
 
-The hiding proof also uses a tighter public continuation. SharedHeapQueries
-computes all leaf digests once into a functional heap, builds internal parents
-once in descending index order, and extracts root/proof purely from the result.
-Its fixed-oracle interpretation equals the full reference heap at every index,
-including zero and unused indices. Its public query budget is at most9*N-1,
-independent of opening size. HidingLeafReplacement, HidingCoordinate and
-HidingHybrid use that shared continuation for a hidden-leaf hybrid; HidingSecurity
-composes the resulting bound into the contract's120-bit error requirement.
-This changes proof accounting without changing actual machine queries or salts.
+NonceEncoding proves padding injective and the packed address formula.
+NonceBuffer connects the sampled bits to actual memory. NoncePrivacy proves
+192-bit nonce guessing and cached adaptive leaf-reprogramming bounds, retaining
+full-width oracle replies. The shared continuation uses at most 9*N-1 public
+queries; the coordinate hybrid and adaptive first-stage cache reduction prove
+the contract's 120-bit statistical hiding requirement. Binding uses the retained
+256-bit checker and its existing collision argument.
 
-Ordinary Lean builds check the complete artifact-equality and machine-derived
-security certificate. The official verifier independently regenerates Artifact
-from programs.json; successful receipts and exact dependency citations appear in
-the public submission note. Development model checks supplement those proofs.
-No reduced-entropy salt format or truncated digest is included.
+Solution.lean proves the complete certificate and equality to the artifact
+regenerated from programs.json. Only a successful official verifier run counts
+as verification; the public submission note records that result and provenance.

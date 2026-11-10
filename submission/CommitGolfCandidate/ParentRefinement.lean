@@ -163,6 +163,30 @@ theorem commit_parents_preserves_digest (oracle : Oracle) (state : MachineState)
     exact commit_parent_preserves_digest state answer base (remaining+1) node heapPointer pointers
       (by omega) bounded (by omega)
 
+/-- Parent construction also preserves arbitrary later byte buffers, which need
+not start on the heap's32-byte grid. -/
+theorem commit_parents_preserves_buffer (oracle : Oracle) (state : MachineState)
+    (base remaining address count : Nat)
+    (heapPointer : state.getReg .x9=BitVec.ofNat 64 base)
+    (pointers : ParentPointerInvariant state remaining)
+    (after : base+32*(remaining+1)≤address) (bounded : address+count≤2^64) :
+    readBuffer (checkEvaluation oracle (commitParents state remaining)).1 address count=
+      readBuffer state address count := by
+  induction remaining generalizing state with
+  | zero => rw [commitParents,check_evaluation_pure]
+  | succ remaining ih =>
+    rw [commit_parents_evaluation]
+    let answer : Digest := oracle.answer (m := Id) (commitParentQuery state)
+    let next := commitParentNextState (commitParentState state answer)
+    have nextPointers : ParentPointerInvariant next remaining :=
+      commit_parent_step_pointers state answer remaining pointers
+    change readBuffer (checkEvaluation oracle (commitParents next remaining)).1 address count=_
+    rw [ih next ((commit_parent_step_register state answer .x9 (by simp)).trans heapPointer)
+      nextPointers (by omega)]
+    rw [memory_read_congr _ _ (commit_parent_step_memory state answer base (remaining+1) heapPointer pointers)]
+    exact write_bits_read_outside state answer (base+32*(remaining+1)) address count
+      (by omega) bounded (Or.inr (by omega))
+
 /-- Starting at the last internal node needs no assumptions about pre-existing
 parent contents. The actual loop establishes all parent equations itself. -/
 theorem commit_parents_heap (oracle : Oracle) (state : MachineState) (base leaves : Nat)

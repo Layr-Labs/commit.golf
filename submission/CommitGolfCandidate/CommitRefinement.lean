@@ -1,5 +1,6 @@
 import CommitGolfCandidate.CommitLoop
 import CommitGolfCandidate.CopyRefinement
+import CommitGolfCandidate.NonceSaltMemory
 import CommitGolfCandidate.StreamingRefinement
 
 /-! Salt loading and heap writes of the actual commitment leaf iteration. -/
@@ -9,21 +10,21 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 /-- Commitment's three digest copies use the same load/store sequence as opening.
 Only the source and destination registers differ. -/
 theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 79) :
+    (location : start = 55 ∨ start = 79) :
     (commitCopyState state start).mem =
       (openingCopyState
         ((state.setReg .x23 (if start = 46 then state.getReg .x18
           else if start = 55 then state.getReg .x21 else state.getReg .x9+32)).setReg .x25
           (if start = 46 then state.getReg .x21
           else if start = 55 then state.getReg .x23 else state.getReg .x26))).mem := by
-  rcases location with rfl | rfl | rfl <;>
+  rcases location with rfl | rfl <;>
     rw [commit_copy_expansion, opening_copy_expansion] <;>
     simp [List.foldl, execInstrBr, signExtend12, MachineState.getReg,
       MachineState.setReg, MachineState.setPC, MachineState.setMem, MachineState.getMem, BitVec.add_assoc]
 
 /-- Copy a complete digest from one of the three commitment copy sites. -/
 theorem commit_copy_digest (state : MachineState) (start source destination : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 79)
+    (location : start = 55 ∨ start = 79)
     (sourcePointer : (if start = 46 then state.getReg .x18
       else if start = 55 then state.getReg .x21 else state.getReg .x9+32) = BitVec.ofNat 64 source)
     (destinationPointer : (if start = 46 then state.getReg .x21
@@ -37,7 +38,30 @@ theorem commit_copy_digest (state : MachineState) (start source destination : Na
     (by simpa [MachineState.getReg, MachineState.setReg] using destinationPointer) sourceAligned destinationAligned sourceBound destinationBound separate]
   rfl
 
-/-- The commitment copy preserves every disjoint complete digest. -/
+/-- The nonce copy has the same memory effect as its actual seven-step copier. -/
+theorem commit_nonce_copy_memory (state : MachineState) :
+    (commitCopyState state 46).mem=
+      (nonceSaltState (state.setReg .x10 (state.getReg .x21))).mem := by
+  rw [commit_copy_expansion]
+  simp [nonceSaltState,nonceSaltPrefix,nonceSaltInstructions,List.foldl,execInstrBr,
+    signExtend12,MachineState.getReg,MachineState.setReg,MachineState.setPC,
+    MachineState.setMem,MachineState.getMem]
+
+/-- Loading the packed nonce initializes the padded256-bit chain. -/
+theorem commit_nonce_copy_digest (state : MachineState) (source destination : Nat)
+    (sourcePointer : state.getReg .x18=BitVec.ofNat 64 source)
+    (destinationPointer : state.getReg .x21=BitVec.ofNat 64 destination)
+    (sourceAligned : source%8=0) (destinationAligned : destination%8=0)
+    (sourceBound : source+32≤2^64) (destinationBound : destination+32≤2^64)
+    (separate : source+32≤destination ∨ destination+32≤source) :
+    readBuffer (commitCopyState state 46) destination 32=readNonce state source := by
+  rw [read_buffer_memory_congr _ _ (commit_nonce_copy_memory state)]
+  exact nonce_salt_digest (state.setReg .x10 (state.getReg .x21)) source destination
+    (by simpa [MachineState.getReg,MachineState.setReg] using sourcePointer)
+    (by simpa [MachineState.getReg,MachineState.setReg] using destinationPointer)
+    sourceAligned destinationAligned sourceBound destinationBound separate
+
+/-- Every copy, including zero padding, preserves disjoint digests. -/
 theorem commit_copy_preserves_digest (state : MachineState) (start destination address : Nat)
     (location : start = 46 ∨ start = 55 ∨ start = 79)
     (destinationPointer : (if start = 46 then state.getReg .x21
@@ -46,10 +70,16 @@ theorem commit_copy_preserves_digest (state : MachineState) (start destination a
     (destinationBound : destination+32 ≤ 2^64) (readBound : address+32 ≤ 2^64)
     (separate : address+32 ≤ destination ∨ destination+32 ≤ address) :
     readBuffer (commitCopyState state start) address 32 = readBuffer state address 32 := by
-  rw [read_buffer_memory_congr _ _ (commit_copy_memory_as_opening state start location)]
-  rw [opening_copy_preserves_digest _ destination address (by simpa [MachineState.getReg, MachineState.setReg] using destinationPointer)
-    aligned destinationBound readBound separate]
-  rfl
+  rcases location with rfl | location
+  · rw [read_buffer_memory_congr _ _ (commit_nonce_copy_memory state)]
+    exact nonce_salt_preserves_digest (state.setReg .x10 (state.getReg .x21)) destination address
+      (by simpa [MachineState.getReg,MachineState.setReg] using destinationPointer)
+      aligned destinationBound readBound separate
+  · rw [read_buffer_memory_congr _ _ (commit_copy_memory_as_opening state start location)]
+    rw [opening_copy_preserves_digest _ destination address
+      (by simpa [MachineState.getReg,MachineState.setReg] using destinationPointer)
+      aligned destinationBound readBound separate]
+    rfl
 
 /-- A complete leaf iteration writes its result directly to the heap, then
 advances pointers. This equality retains the actual interpreter memory state. -/
@@ -77,9 +107,9 @@ theorem commit_position_salt (state : MachineState) (source saltAddress : Nat)
     (above : 32 ≤ source) (separate : source ≤ saltAddress)
     (bounded : saltAddress+32 ≤ 2^64) :
     readBuffer (commitLeafReadyState (commitPositionState state)) (source-32) 32 =
-      readBuffer state saltAddress 32 := by
+      readNonce state saltAddress := by
   change readBuffer (commitCopyState state 46) (source-32) 32 = _
-  exact commit_copy_digest state 46 saltAddress (source-32) (by simp) saltPointer chain
+  exact commit_nonce_copy_digest state saltAddress (source-32) saltPointer chain
     aligned (by omega) bounded (by omega) (Or.inr (by omega))
 
 /-- Salt initialization preserves any digest disjoint from the moving prefix. -/
@@ -111,7 +141,7 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
     (destinationBound : destination+32 ≤ 2^64)
     (data : ∀ block < 8, readBuffer state (source+32*block) 32 = value.extractLsb' (256*block) 256) :
     readBuffer (checkEvaluation oracle (commitPositionRun state)).1 destination 32 =
-      leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
+      leafDigest oracle.compression (readNonce state saltAddress) value := by
   let ready := commitLeafReadyState (commitPositionState state)
   let leaf := (checkEvaluation oracle (commitLeafLoop ready 8)).1
   have chain := commit_chain_pointer state source scratch messagePointer sourceAbove
@@ -121,7 +151,7 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
     exact commit_position_register state reg notLink notTemporary
   have readyPointer := (readyReg .x8 (by decide) (by decide)).trans messagePointer
   have hashed : readBuffer leaf destination 32 =
-      leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
+      leafDigest oracle.compression (readNonce state saltAddress) value := by
     apply streaming_commit_leaf_hash oracle ready source destination _ value readyPointer
       ((readyReg .x23 (by decide) (by decide)).trans heapPointer)
       sourceAligned sourceAbove sourceBound destinationBound

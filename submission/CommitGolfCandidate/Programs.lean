@@ -99,12 +99,10 @@ branches directly to the contiguous salt copy at the leaf entry.
 The carried x10 input advances after each captured query. Fixed selectors remain
 live. The final fall-through jump enters parent setup. -/
 def commitLeafSubroutine : List Asm :=
-  [.label "leaf"] ++ copyDigest 18 10 ++
+  [.label "leaf"] ++ (copyDigest 18 10).take 6 ++ [sd 0 10 24] ++
   ((List.range 8).flatMap fun block =>
-    [if block = 7 then addi 12 23 0 else addi 12 10 32,
-     insn 0x73, addi 10 10 32]) ++
-  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "leaf",
-   .jump 0 "commit-parent-start"]
+    [if block=7 then addi 12 23 0 else addi 12 10 32,insn 0x73,addi 10 10 32]) ++
+  [addi 18 18 24,addi 23 23 32,.branch 6 23 22 "leaf",.jump 0 "commit-parent-start"]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
@@ -122,7 +120,7 @@ def quadCommitCode (depth : Nat) : List Asm :=
   [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
   [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
-  [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
+  [addi 5 0 2, mv 10 18] ++ commitLi 11 (24*n) ++ [insn 0x73] ++
   -- Keep three physical setup slots so the main-loop addresses remain stable.
   [addi 21 8 (-32), mv 22 18, addi 0 0 0, addi 20 0 0] ++ compressScratch.take 5 ++
   [addi 28 0 0, .label "commit-leaf"] ++
@@ -131,20 +129,21 @@ def quadCommitCode (depth : Nat) : List Asm :=
     addi 10 10 (-64), addi 12 12 (-32), insn 0x73,
     addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-quad",
     .jump 0 "commit-root"] ++
-  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "commit-leaf", addi 0 0 0,
+  [addi 18 18 24, addi 23 23 32, .branch 6 23 22 "commit-leaf", addi 0 0 0,
    -- Fixed syscall selectors survive the leaf loop. Initialize descending
    -- parent addresses once, then advance them by subtraction after each query.
     .label "commit-parent-start", addi 20 19 (-1), shift 6 20 6, regop 10 9 6, shift 7 20 5,
    .branch 0 20 0 "commit-root", regop 12 9 7, .label "commit-parent", insn 0x73,
    addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent-pair",
    .jump 0 "commit-root", addi 0 0 0, .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine ++
+  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine ++ [addi 0 0 0] ++
   -- Peel three parents before entering this body. Four queries share one
   -- end-pointer branch; the retained pair handles the N=4 fall-through.
   [.label "commit-parent-quad"] ++
   ((List.range 4).flatMap fun _ =>
     [insn 0x73, addi 10 10 (-64), addi 12 12 (-32)]) ++
   [.branch 1 12 9 "commit-parent-quad", .jump 0 "commit-root"]
+
 
 /-- Execute the first four-parent body once, then enter the eight-parent loop.
 The branch remains conditional so N=8 uses the retained fall-through root jump. -/
@@ -183,7 +182,7 @@ def compactSetupCode : List Asm :=
   [mv 8 10,mv 26 11,mv 9 12,insn (16777216+19*2^7+0x37),
    insn (1073741824+6*2^7+0x37),regop 18 9 6,
    insn (536870912+6*2^7+0x37),regop 23 9 6,addi 5 0 2,mv 10 18,
-   insn (536870912+11*2^7+0x37),insn 0x0600006f] ++
+   insn (402653184+11*2^7+0x37),insn 0x0600006f] ++
    List.replicate 23 (addi 0 0 0)
 
 def commitCode (depth : Nat) : List Asm :=
@@ -197,7 +196,7 @@ def rawOpeningCode (depth : Nat) : List Asm :=
   let n := 2^depth
   [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (64*n) ++
   [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
-   shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
+   shift 6 20 1,regop 6 6 20,shift 6 6 3,regop 23 18 6] ++ (copyDigest 23 25).take 6 ++ [sd 0 25 24] ++
   [addi 25 25 32, regop 20 20 19] ++ li 28 depth ++
   [.branch 0 28 0 "open-next", .label "open-path",
    -- XORI x7,x20,1 selects the sibling heap slot.
@@ -208,6 +207,7 @@ def rawOpeningCode (depth : Nat) : List Asm :=
    .label "open-done",
    -- The output cursor advanced by exactly the serialized proof length.
    regop 11 25 15 0 32] ++ halt true
+
 
 /-- Keep all opening PCs while avoiding redundant constant-load instructions. -/
 def compactOpeningSetup : List Asm :=
@@ -224,7 +224,7 @@ def patchOpeningConstants : List Asm → Nat → List Asm
   | .label name :: rest, index => .label name :: patchOpeningConstants rest index
   | instruction :: rest, index =>
       (if index<19 then (compactOpeningSetup[index]?).getD (addi 0 0 0)
-       else if 31 ≤ index ∧ index<37 then (compactOpeningCounter[index-31]?).getD (addi 0 0 0)
+       else if 32 ≤ index ∧ index<38 then (compactOpeningCounter[index-32]?).getD (addi 0 0 0)
        else instruction) :: patchOpeningConstants rest (index+1)
 
 def openingCode (depth : Nat) : List Asm :=

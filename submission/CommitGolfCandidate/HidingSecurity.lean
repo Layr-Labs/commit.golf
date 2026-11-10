@@ -12,16 +12,16 @@ open CommitGolf OracleComp OracleComp.DeferredSampling
 attribute [local irreducible] heapQueryBudget
 
 /-- The shared heap charges each honest query once, independently of opening size.
-This theorem uses the actual full-entropy salt construction. -/
+This theorem uses the actual independent 192-bit nonce construction. -/
 theorem hiding_loss_le_target (positions : Positions) (known budget : Nat) (knownBound : known ≤ budget) :
     (LENGTH : ℝ) *
-      (16 * ((known + ((9*LENGTH-1) + budget) + 8 : Nat) : ℝ) / 2^256) ≤
+      (16 * ((known + ((9*LENGTH-1) + budget) + 8 : Nat) : ℝ) / 2^192) ≤
       ((budget : ℝ)+1) / 2^HIDING_SECURITY_BITS := by
   have total : known + ((9*LENGTH-1) + budget) + 8 ≤
       budget + ((9*LENGTH-1) + budget) + 8 := by omega
   calc
     _ ≤ (LENGTH : ℝ) *
-        (16 * ((budget + ((9*LENGTH-1) + budget) + 8 : Nat) : ℝ) / 2^256) := by gcongr
+        (16 * ((budget + ((9*LENGTH-1) + budget) + 8 : Nat) : ℝ) / 2^192) := by gcongr
     _ ≤ _ := by
       norm_num [LENGTH,LOG_LENGTH,HIDING_SECURITY_BITS,Nat.cast_add,Nat.cast_mul]
       nlinarith [Nat.cast_nonneg (α := ℝ) budget]
