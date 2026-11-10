@@ -71,13 +71,13 @@ def commitExecution (message : Message) : OracleComp World Execution := do
   let answer ← liftM ($ᵗ BitVec (8 * (setup.getReg .x11).toNat) :
     ProbComp (BitVec (8 * (setup.getReg .x11).toNat)))
   let finished ← commitBody (commitInputReady message answer) (2 ^ 24)
-  return ⟨.success, cursorBaseFrame finished 4096, 95 * 2 ^ 24 + 3411 * 49200 + 201, 9 * 2 ^ 24 - 1⟩
+  return ⟨.success, cursorBaseFrame finished 4096, 95 * 2 ^ 24 + 3411 * 49200 + 198, 9 * 2 ^ 24 - 1⟩
 
 set_option maxRecDepth 4096 in
 /-- Exact execution from the real ABI, including salt generation and all setup.
 Additional instruction fuel does not change the successful result. -/
 theorem commit_execute (message : Message) (fuel : Nat) :
-    execute (submission.image .commit) (35 * 2 ^ 24 + 1024 * 49200 + 96 + fuel)
+    execute (submission.image .commit) (35 * 2 ^ 24 + 1024 * 49200 + 93 + fuel)
       (submission.initialState .commit message) true = commitExecution message := by
   let initial := submission.initialState .commit message
   let setup := commitSetupState initial
@@ -91,7 +91,7 @@ theorem commit_execute (message : Message) (fuel : Nat) :
     have sum : (4294971424 : Word) + 1073741824 = 5368713248#64 := rfl
     rw [sum]
     rfl
-  rw [show 35 * 2 ^ 24 + 1024 * 49200 + 96 + fuel = 15 + (1 + (10 + (35 * 2 ^ 24 + 1024 * 49200 + 70 + fuel))) by omega,
+  rw [show 35 * 2 ^ 24 + 1024 * 49200 + 93 + fuel = 12 + (1 + (10 + (35 * 2 ^ 24 + 1024 * 49200 + 70 + fuel))) by omega,
     commit_setup _ rfl, commit_random setup setupPC regs.1 valid]
   simp only [commitExecution, bind_assoc]
   apply bind_congr_of_forall_mem_support
@@ -113,14 +113,14 @@ private theorem run_commit (candidate : Submission) (message : Message) :
 successful execution above; no truncation is used to obtain the cost bound. -/
 theorem commit_execution (message : Message) : submission.run .commit message = commitExecution message := by
   rw [run_commit]
-  have allowance : submission.steps .commit = 35 * 2 ^ 24 + 1024 * 49200 + 96 + 7952352160 := by decide
+  have allowance : submission.steps .commit = 35 * 2 ^ 24 + 1024 * 49200 + 93 + 7952352163 := by decide
   rw [allowance, commit_execute]
 
 /-- Exact machine resources for every commitment, before interpreting oracle calls.
 These counts include the private-randomness syscall's work. -/
 theorem commit_input_resources (message : Message) (result : Execution)
     (reachable : result ∈ support (submission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 1761656921 ∧ result.oracleCalls = 150994943 := by
+    result.exit = .success ∧ result.cycles = 1761656918 ∧ result.oracleCalls = 150994943 := by
   rw [commit_execution] at reachable
   simp only [commitExecution, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨answer, _, finished, _, rfl⟩ := reachable

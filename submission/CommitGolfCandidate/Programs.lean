@@ -179,7 +179,17 @@ def group341ParentCode : List Asm :=
 
 /-- 2^depth is 16 modulo 341 exactly when depth is 4 modulo 10.
 Other development depths retain the promoted eight-parent program. -/
+def compactSetupCode : List Asm :=
+  [mv 8 10,mv 26 11,mv 9 12,insn (16777216+19*2^7+0x37),
+   insn (1073741824+6*2^7+0x37),regop 18 9 6,
+   insn (536870912+6*2^7+0x37),regop 23 9 6,addi 5 0 2,mv 10 18,
+   insn (536870912+11*2^7+0x37),insn 0x0600006f] ++
+   List.replicate 23 (addi 0 0 0)
+
 def commitCode (depth : Nat) : List Asm :=
+  if depth=24 then compactSetupCode ++
+    (patchGroup341Entry (octCommitCode depth) false ++ group341ParentCode).drop 35
+  else
   if depth%10=4 then patchGroup341Entry (octCommitCode depth) false ++ group341ParentCode
   else octCommitCode depth
 

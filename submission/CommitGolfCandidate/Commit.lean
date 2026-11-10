@@ -20,20 +20,35 @@ private def commitSetupPrefix (state : MachineState) (count : Nat) : MachineStat
 
 def commitSetupState (state : MachineState) : MachineState := commitSetupPrefix state 15
 
+private def compactSetupInstructions : List Instr :=
+  [.ADDI .x8 .x10 0,.ADDI .x26 .x11 0,.ADDI .x9 .x12 0,
+   .LUI .x19 4096,.LUI .x6 262144,.ADD .x18 .x9 .x6,
+   .LUI .x6 131072,.ADD .x23 .x9 .x6,.ADDI .x5 .x0 2,
+   .ADDI .x10 .x18 0,.LUI .x11 131072,.JAL .x0 96]
+
+private def compactSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
+  (compactSetupInstructions.take count).foldl execInstrBr state
+
+private theorem compact_setup_same (state : MachineState) :
+    compactSetupPrefix state 12=commitSetupState state := by
+  simp [compactSetupPrefix,compactSetupInstructions,commitSetupState,commitSetupPrefix,
+    commitSetupInstructions,commitLoad,execInstrBr,signExtend21,signExtend12,
+    MachineState.setPC,MachineState.setReg,MachineState.getReg,BitVec.add_assoc]
+
 set_option maxHeartbeats 1000000 in
-/-- The 15-instruction setup computes pointers into the admitted private trapdoor
-and the total salt length; it performs no memory access or oracle call. -/
+/-- Twelve actual setup instructions produce exactly the former setup state. -/
 theorem commit_setup (state : MachineState) (pc : state.pc = 4096)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (15 + fuel) state allowCoins =
+    execute (submission.image .commit) (12 + fuel) state allowCoins =
       (do let result ← execute (submission.image .commit) fuel (commitSetupState state) allowCoins
-          return result.charge 15 0) := by
-  apply execute_unit_steps (states := commitSetupPrefix state)
+          return result.charge 12 0) := by
+  rw [← compact_setup_same]
+  apply execute_unit_steps (states := compactSetupPrefix state)
   intro i hi
-  refine ⟨.base ((commitSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ (([0,1,2,3,4,10,11,17,18,19,25,26,27,28,29] : List Nat)[i]!) _ (by interval_cases i <;> decide)
+  refine ⟨.base ((compactSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
+  · apply commit_fetch _ i _ (by omega)
     · interval_cases i <;>
-        simp [commitSetupPrefix, commitSetupInstructions, commitLoad, execInstrBr, signExtend21, pc,
+        simp [compactSetupPrefix,compactSetupInstructions,execInstrBr,signExtend21,pc,
           MachineState.setPC]
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl

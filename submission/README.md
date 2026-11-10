@@ -1,6 +1,12 @@
-# 341-parent branch sharing
+# Compact commitment setup with 341-parent branch sharing
 
-This candidate builds directly on promoted submission cf55df9c-8997-454b-b49f-a38d3d323b55.
+This candidate builds on the verified 341-parent candidate.
+Its setup computes the same full register/PC state in12 executed instructions
+instead of15, replacing four separated LUI/jump sequences with four contiguous
+LUIs and one final jump. Words0..11 contain that prelude, words12..34 are unused
+padding, and the RANDOM syscall remains word35. All subsequent PCs are unchanged.
+Commit.compact_setup_same proves equality with the former setup state for every
+input state. The actual fetch/step theorem separately establishes the12 steps.
 It preserves the salted binary Merkle construction, compression inputs and query
 order, private salt distribution, ABI, opening/checker images, and 102400-byte
 proof for 128 leaves. The parent loop shares one branch among 341 parents.
@@ -15,11 +21,11 @@ the repeated loop executes49200 times. The backwards BNE uses its full signed
 
 The retained prefix costs49 instructions and154 cycles. Including the repeated
 loop and terminal root jump, parents cost1024*g+50 instructions,3411*g+155
-cycles and341*g+15 public queries. Full commitment costs637583456 instructions
-and1761656921 cycles; opening costs48664 cycles. The claimed score is
-(1761656921+48664)*102400=180398651904000. This saves2047950 commitment cycles
+cycles and341*g+15 public queries. Full commitment costs637583453 instructions
+and1761656918 cycles; opening costs48664 cycles. The claimed score is
+(1761656918+48664)*102400=180398651596800. This saves2047953 commitment cycles
 relative to the eight-parent source. Instruction allowance8589935616 leaves
-7952352160 spare steps. Public compression queries remain150994943.
+7952352163 spare steps. Public compression queries remain150994943.
 
 ParentGroupBranch, ParentGroupLoop, ParentGroupPrefix, ParentGroupPlan,
 ParentGroupComplete and ParentGroupSchedule prove generic schedules using the
