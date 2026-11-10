@@ -9,6 +9,7 @@ import CommitGolfCandidate.Completeness
 import CommitGolfCandidate.BindingSecurity
 import CommitGolfCandidate.HidingSecurity
 import CommitGolf.Artifact
+import CommitGolfCandidate.PackedImageEquality
 import CommitGolfCandidate.LeafResourceBridge
 import CommitGolfCandidate.ResourceTests
 
@@ -22,9 +23,9 @@ def submission : CommitGolf.Submission := CommitGolfCandidate.submission
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 20000000 in
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+  exact CommitGolfCandidate.packed_submission_matches
 
-theorem certificate : CommitGolf.Certificate submission 102400 1728059435 48525 where
+theorem certificate : CommitGolf.Certificate submission 102400 1728053685 48525 where
   admission := CommitGolfCandidate.submission_admission
   machineSuccess := CommitGolfCandidate.submission_machine_success
   termination := CommitGolfCandidate.submission_termination

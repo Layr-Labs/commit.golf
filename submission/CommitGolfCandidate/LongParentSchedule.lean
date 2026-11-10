@@ -162,6 +162,18 @@ theorem long_parent_complete (image : Image) (plan : ParentPlan)
   apply bind_congr_of_forall_mem_support
   intro finished _
   simp [Execution.charge,Nat.add_assoc,Nat.add_comm,Nat.add_left_comm]
+theorem long_parent_sequence_end (start : Word) (count : Nat) :
+    parentSequenceEnd start count=start+BitVec.ofNat 64 (12*count) := by
+  induction count generalizing start with
+  | zero => simp [parentSequenceEnd]
+  | succ count ih =>
+    rw [parentSequenceEnd,ih,BitVec.add_assoc]
+    congr 1
+    change BitVec.ofNat 64 12+BitVec.ofNat 64 (12*count)=BitVec.ofNat 64 (12*(count+1))
+    rw [←BitVec.ofNat_add]
+    congr 1
+    omega
+
 structure LongParentSchedule where
   initialPlan : ParentPlan
   start : Word

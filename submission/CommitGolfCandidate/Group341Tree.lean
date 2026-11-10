@@ -1,7 +1,7 @@
 import CommitGolfCandidate.Group341Schedule
 import CommitGolfCandidate.ParentGroupTree
 
-/-! Specialize the generic schedule to 15 initial parents and 5456-parent groups. -/
+/-! Specialize the generic schedule to 15 initial parents and 83886-parent groups. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
@@ -16,7 +16,7 @@ theorem group341_body (saltFetched : ContiguousSaltFetched (submission.image .co
     (exitFetched : ContiguousExitFetched (submission.image .commit))
     (parentFetched : group341Schedule.Fetched (submission.image .commit))
     (state : MachineState) (count groups : Nat) (messageBase : Word)
-    (countEq : count=5456*groups+16) (positive : 0<groups) (bounded : count≤2^24)
+    (countEq : count=83886*groups+16) (positive : 0<groups) (bounded : count≤2^24)
     (leaves : CommitLeavesInvariant state count)
     (heapWindow : (state.getReg .x23).toNat+32*count=(state.getReg .x22).toNat)
     (total : state.getReg .x19=BitVec.ofNat 64 count)
@@ -26,11 +26,11 @@ theorem group341_body (saltFetched : ContiguousSaltFetched (submission.image .co
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26+BitVec.ofNat 64 (8*word.val)) 8=true)
     (fuel : Nat) :
-    execute (submission.image .commit) (34*count+16370*groups+69+fuel)
+    execute (submission.image .commit) (34*count+251660*groups+69+fuel)
       (cursorLeafFrame state messageBase) true=
       (do let finished ← commitBody state count
           return ⟨.success,cursorBaseFrame finished messageBase,
-            90*count+54562*groups+174,9*count-1⟩) := by
+            90*count+838862*groups+174,9*count-1⟩) := by
   have scheduleCount : count=group341Schedule.parents groups+1 := by
     rw [group341_schedule_parents]
     omega
