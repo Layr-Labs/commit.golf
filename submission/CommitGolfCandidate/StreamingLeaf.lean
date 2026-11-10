@@ -34,17 +34,15 @@ private theorem streaming_commit_code : (submission.image .commit).code =
    0xfe040a93#32, 0x00000293#32, 0x04000593#32, 0x00000693#32, 0x0180006f#32, 0x00000013#32,
    0x00000013#32, 0x00000013#32, 0x00000013#32, 0x00000013#32, 0x00093303#32, 0x006ab023#32,
    0x00893303#32, 0x006ab423#32, 0x01093303#32, 0x006ab823#32, 0x01893303#32, 0x006abc23#32,
-   0x090000ef#32, 0x000ab303#32, 0x006bb023#32, 0x008ab303#32, 0x006bb423#32, 0x010ab303#32,
-   0x006bb823#32, 0x018ab303#32, 0x006bbc23#32, 0x02090913#32, 0x020b8b93#32, 0xfba46ae3#32,
-   0x0100006f#32, 0x00000293#32, 0x04000593#32, 0x00000693#32, 0xfff98a13#32, 0x020a0063#32,
-   0x006a1313#32, 0x00648533#32, 0x005a1393#32, 0x00748633#32, 0x00000073#32, 0xfffa0a13#32,
-   0xfe0a14e3#32, 0x0204b303#32, 0x006d3023#32, 0x0284b303#32, 0x006d3423#32, 0x0304b303#32,
-   0x006d3823#32, 0x0384b303#32, 0x006d3c23#32, 0x00100293#32, 0x00000513#32, 0x00000073#32,
    0xfe040513#32, 0x00040613#32, 0x00000073#32, 0x00040513#32, 0x02040613#32, 0x00000073#32,
    0x02040513#32, 0x04040613#32, 0x00000073#32, 0x04040513#32, 0x06040613#32, 0x00000073#32,
    0x06040513#32, 0x08040613#32, 0x00000073#32, 0x08040513#32, 0x0a040613#32, 0x00000073#32,
    0x0a040513#32, 0x0c040613#32, 0x00000073#32, 0x0c040513#32, 0x000b8613#32, 0x00000073#32,
-   0x10040413#32, 0xfe040a93#32, 0x02008067#32] := by rfl
+   0x10040413#32, 0xfe040a93#32, 0x02090913#32, 0x020b8b93#32, 0xf7a468e3#32, 0xfff98a13#32,
+   0x020a0063#32, 0x006a1313#32, 0x00648533#32, 0x005a1393#32, 0x00748633#32, 0x00000073#32,
+   0xfffa0a13#32, 0xfe0a14e3#32, 0x0204b303#32, 0x006d3023#32, 0x0284b303#32, 0x006d3423#32,
+   0x0304b303#32, 0x006d3823#32, 0x0384b303#32, 0x006d3c23#32, 0x00100293#32, 0x00000513#32,
+   0x00000073#32] := by rfl
 
 
 
@@ -52,13 +50,13 @@ private theorem streaming_commit_code : (submission.image .commit).code =
 computed independently before each compression. -/
 abbrev CommitLeafOracleReady := StreamingOracleReady
 
-def commitLeafReadyState (state : MachineState) : MachineState := state.setPC 4456
+def commitLeafReadyState (state : MachineState) : MachineState := state.setPC 4312
 
 @[simp] theorem commit_leaf_ready_register (state : MachineState) (reg : Reg) :
     (commitLeafReadyState state).getReg reg = state.getReg reg := rfl
 
 @[simp] theorem commit_leaf_ready_pc (state : MachineState) :
-    (commitLeafReadyState state).pc = 4456 := rfl
+    (commitLeafReadyState state).pc = 4312 := rfl
 
 @[simp] theorem commit_leaf_ready_oracle (state : MachineState)
     (ready : CommitLeafOracleReady state) :
@@ -151,7 +149,7 @@ theorem commit_leaf_heap_range (state : MachineState)
 /-- The emitted three-word block reads the original message block beside the
 previous reply, then overwrites only that consumed block. -/
 theorem commit_streaming_block (state : MachineState) (base block : Nat)
-    (blockBound : block < 7) (pc : state.pc = BitVec.ofNat 64 (4456 + 12 * block))
+    (blockBound : block < 7) (pc : state.pc = BitVec.ofNat 64 (4312 + 12 * block))
     (pointer : state.getReg .x8 = BitVec.ofNat 64 base)
     (ready : CommitLeafOracleReady state) (aligned : base % 8 = 0)
     (above : 32 ≤ base) (bounded : base + 256 ≤ MEMORY_BYTES)
@@ -184,16 +182,16 @@ theorem commit_streaming_block (state : MachineState) (base block : Nat)
   apply streaming_machine_block _ state cursor
     (BitVec.ofInt 12 ((32 * block : Int) - 32)) (BitVec.ofNat 12 (32 * block))
     ready (by dsimp [cursor]; omega) (by dsimp [cursor]; omega)
-  · apply commit_fetch _ (90 + 3 * block) _ (by omega)
+  · apply commit_fetch _ (54 + 3 * block) _ (by omega)
     · rw [pc]; congr 1 <;> omega
     · rw [streaming_commit_code]
       interval_cases block <;> rfl
   · simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, source,
       streamingFirstState]
-  · apply commit_fetch _ (91 + 3 * block) _ (by omega)
+  · apply commit_fetch _ (55 + 3 * block) _ (by omega)
     · change state.pc + 4 = _
       rw [pc]
-      change BitVec.ofNat 64 (4456 + 12 * block) + BitVec.ofNat 64 4 = _
+      change BitVec.ofNat 64 (4312 + 12 * block) + BitVec.ofNat 64 4 = _
       rw [← BitVec.ofNat_add]; congr 1 <;> omega
     · rw [streaming_commit_code]
       interval_cases block <;> rfl
@@ -205,10 +203,10 @@ theorem commit_streaming_block (state : MachineState) (base block : Nat)
       some (streamingArgsState state cursor)
     rw [BitVec.add_assoc]
     rfl
-  · apply commit_fetch _ (92 + 3 * block) _ (by omega)
+  · apply commit_fetch _ (56 + 3 * block) _ (by omega)
     · change state.pc + 8 = _
       rw [pc]
-      change BitVec.ofNat 64 (4456 + 12 * block) + BitVec.ofNat 64 8 = _
+      change BitVec.ofNat 64 (4312 + 12 * block) + BitVec.ofNat 64 8 = _
       rw [← BitVec.ofNat_add]; congr 1 <;> omega
     · rw [streaming_commit_code]
       interval_cases block <;> rfl
@@ -216,7 +214,7 @@ theorem commit_streaming_block (state : MachineState) (base block : Nat)
 /-- The eighth compression reads the last original block, then writes directly
 to the caller's checked heap slot. It still costs three instructions/ten cycles. -/
 theorem commit_heap_streaming_block (state : MachineState) (base : Nat)
-    (pc : state.pc = 4540) (pointer : state.getReg .x8 = BitVec.ofNat 64 base)
+    (pc : state.pc = 4396) (pointer : state.getReg .x8 = BitVec.ofNat 64 base)
     (ready : CommitLeafOracleReady state) (aligned : base % 8 = 0)
     (above : 32 ≤ base) (bounded : base + 256 ≤ MEMORY_BYTES)
     (heapValid : rangeValid (state.getReg .x23) 32 = true ∧
@@ -234,11 +232,11 @@ theorem commit_heap_streaming_block (state : MachineState) (base : Nat)
     rw [BitVec.ofNat_add]
   apply heap_streaming_machine_block _ state (base + 192) 192 ready
     (by omega) (by omega) heapValid
-  · apply commit_fetch _ 111 _ (by decide) pc
+  · apply commit_fetch _ 75 _ (by decide) pc
     rw [streaming_commit_code]; rfl
   · simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, source,
       heapStreamingFirstState]
-  · apply commit_fetch _ 112 _ (by decide)
+  · apply commit_fetch _ 76 _ (by decide)
     · change state.pc + 4 = _; rw [pc]; rfl
     · rw [streaming_commit_code]; rfl
   · simp only [ordinaryStep, memoryArgumentsValid, memAccess, reduceIte, execInstrBr,
@@ -248,7 +246,7 @@ theorem commit_heap_streaming_block (state : MachineState) (base : Nat)
       (state.getReg .x23 + signExtend12 0)).setPC (state.pc + 4 + 4)) =
       some (heapStreamingArgsState state (base + 192))
     simp [signExtend12, heapStreamingArgsState, BitVec.add_assoc]
-  · apply commit_fetch _ 113 _ (by decide)
+  · apply commit_fetch _ 77 _ (by decide)
     · change state.pc + 8 = _; rw [pc]; rfl
     · rw [streaming_commit_code]; rfl
 
@@ -256,7 +254,7 @@ theorem commit_heap_streaming_block (state : MachineState) (base : Nat)
 explicitly, and the query continuation includes every possible compression reply. -/
 theorem commit_streaming_loop (state : MachineState) (base first count : Nat)
     (blocks : first + count ≤ 7)
-    (pc : state.pc = BitVec.ofNat 64 (4456 + 12 * first))
+    (pc : state.pc = BitVec.ofNat 64 (4312 + 12 * first))
     (pointer : state.getReg .x8 = BitVec.ofNat 64 base)
     (ready : CommitLeafOracleReady state) (aligned : base % 8 = 0)
     (above : 32 ≤ base) (bounded : base + 256 ≤ MEMORY_BYTES)
@@ -275,9 +273,9 @@ theorem commit_streaming_loop (state : MachineState) (base first count : Nat)
     intro answer _
     change BitVec 256 at answer
     let next := streamingReplyState state (base - 32 + 32 * first) answer
-    have nextPC : next.pc = BitVec.ofNat 64 (4456 + 12 * (first + 1)) := by
+    have nextPC : next.pc = BitVec.ofNat 64 (4312 + 12 * (first + 1)) := by
       rw [streaming_reply_pc, pc]
-      change BitVec.ofNat 64 (4456 + 12 * first) + BitVec.ofNat 64 12 = _
+      change BitVec.ofNat 64 (4312 + 12 * first) + BitVec.ofNat 64 12 = _
       rw [← BitVec.ofNat_add]
       congr 1 <;> omega
     have nextPointer : next.getReg .x8 = BitVec.ofNat 64 base :=
@@ -335,7 +333,7 @@ private def commitLeafFinishPrefix (state : MachineState) (count : Nat) : Machin
 
 /-- The actual tail advances the message base and records its last consumed
 32-byte block as the chain pointer. Both additions cost one cycle. -/
-theorem commit_leaf_finish (state : MachineState) (pc : state.pc = 4552)
+theorem commit_leaf_finish (state : MachineState) (pc : state.pc = 4408)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .commit) (2 + fuel) state allowCoins =
       (do let result ← execute (submission.image .commit) fuel
@@ -355,45 +353,37 @@ theorem commit_leaf_finish (state : MachineState) (pc : state.pc = 4552)
   apply execute_unit_steps (states := commitLeafFinishPrefix state)
   intro i hi
   refine ⟨.base (([.ADDI .x8 .x8 256, .ADDI .x21 .x8 4064][i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ (114 + i) _ (by omega)
+  · apply commit_fetch _ (78 + i) _ (by omega)
     · interval_cases i <;> simp [commitLeafFinishPrefix, execInstrBr, pc, MachineState.setPC]
     · rw [streaming_commit_code]
       interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-theorem commit_leaf_return (state : MachineState) (pc : state.pc = 4560)
-    (link : state.getReg .x1 = 4316) (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (1 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .commit) fuel (state.setPC 4348) allowCoins
-          return result.charge 1 0) := by
-  have fetched : fetch (submission.image .commit) state = some (.base (.JALR .x0 .x1 32)) := by
-    apply commit_fetch _ 116 _ (by decide) pc
-    rw [streaming_commit_code]
-    rfl
-  have stepped : ordinaryStep state (.base (.JALR .x0 .x1 32)) = some (state.setPC 4348) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
-      MachineState.setReg, link]
-  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  rfl
+theorem commit_leaf_return (state : MachineState) (pc : state.pc = 4416)
+    (fuel : Nat) (allowCoins : Bool) :
+    execute (submission.image .commit) (0 + fuel) state allowCoins =
+      (do let result ← execute (submission.image .commit) fuel (state.setPC 4416) allowCoins
+          return result.charge 0 0) := by
+  rw [← pc, hoist_pc_self]
+  simp [Execution.charge]
 
-/-- Twenty-four block instructions and three tail instructions hash one leaf
-with exactly eight queries and 83 cycles, for every possible oracle reply. -/
-theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4456)
-    (link : state.getReg .x1 = 4316)
+/-- Twenty-four block instructions and two tail instructions hash one leaf
+with exactly eight queries and 82 cycles, for every possible oracle reply. -/
+theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4312)
     (ready : CommitLeafOracleReady state) (aligned : (state.getReg .x8).toNat % 8 = 0)
     (above : 32 ≤ (state.getReg .x8).toNat)
     (bounded : (state.getReg .x8).toNat + 256 ≤ MEMORY_BYTES)
     (heapValid : rangeValid (state.getReg .x23) 32 = true ∧
       (state.getReg .x23).toNat % 8 = 0)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (27 + fuel) state allowCoins =
+    execute (submission.image .commit) (26 + fuel) state allowCoins =
       (do let finished ← commitLeafLoop (commitLeafReadyState state) 8
-          let result ← execute (submission.image .commit) fuel (finished.setPC 4348) allowCoins
-          return result.charge 83 8) := by
+          let result ← execute (submission.image .commit) fuel (finished.setPC 4416) allowCoins
+          return result.charge 82 8) := by
   have entry : commitLeafReadyState state = state := by
     rw [commitLeafReadyState, ← pc, hoist_pc_self]
-  rw [entry, show 27 + fuel = 3 * 7 + (3 + (2 + (1 + fuel))) by omega,
+  rw [entry, show 26 + fuel = 3 * 7 + (3 + (2 + (0 + fuel))) by omega,
     commit_streaming_loop state (state.getReg .x8).toNat 0 7 (by decide)
       (by simpa using pc) (by simp) ready aligned above bounded]
   simp only [Nat.mul_zero, Nat.add_zero, commitLeafLoop, heapStreamingMachineBlocks,
@@ -401,7 +391,7 @@ theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4456)
   apply bind_congr_of_forall_mem_support
   intro body reached
   have regs := streaming_machine_registers state _ 7 body reached
-  have lastPC : body.pc = 4540 := by rw [regs.1, pc]; rfl
+  have lastPC : body.pc = 4396 := by rw [regs.1, pc]; rfl
   have lastPointer : body.getReg .x8 = BitVec.ofNat 64 (state.getReg .x8).toNat := by
     rw [regs.2 .x8 (by decide)]
     simp
@@ -421,15 +411,11 @@ theorem commit_leaf_subroutine (state : MachineState) (pc : state.pc = 4456)
   intro answer _
   change BitVec 256 at answer
   let final := heapStreamingReplyState body ((state.getReg .x8).toNat + 192) answer
-  have endPC : final.pc = 4552 := by rw [heap_streaming_reply_pc, lastPC]; rfl
-  have endLink : (commitLeafFinishState final 8).getReg .x1 = 4316 := by
-    change final.getReg .x1 = _
-    exact (heap_streaming_reply_register _ _ _ .x1 (by decide)).trans
-      ((regs.2 .x1 (by decide)).trans link)
-  have returnPC : (commitLeafFinishState final 8).pc = 4560 := by
+  have endPC : final.pc = 4408 := by rw [heap_streaming_reply_pc, lastPC]; rfl
+  have returnPC : (commitLeafFinishState final 8).pc = 4416 := by
     change final.pc + 8 = _
     rw [endPC]; rfl
-  rw [commit_leaf_finish final endPC, commit_leaf_return _ returnPC endLink]
+  rw [commit_leaf_finish final endPC, commit_leaf_return _ returnPC]
   simp [Execution.charge, ← Nat.add_assoc, final]
 
 end CommitGolfCandidate

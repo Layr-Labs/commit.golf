@@ -100,7 +100,7 @@ def commitLeafSubroutine : List Asm :=
   ((List.range 8).flatMap fun block =>
     [addi 10 8 ((32*block : Int)-32),
      if block = 7 then addi 12 23 0 else addi 12 8 (32*block), insn 0x73]) ++
-  [addi 8 8 256, addi 21 8 (-32), insn 0x02008067]
+  [addi 8 8 256, addi 21 8 (-32)]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
@@ -122,13 +122,12 @@ def commitCode (depth : Nat) : List Asm :=
   -- Five useful setup instructions skip five padding words.
   [addi 21 8 (-32), addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x0180006f] ++
   List.replicate 5 (addi 0 0 0) ++ [.label "commit-leaf"] ++
-  copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
-  [addi 18 18 32, addi 23 23 32, .branch 6 8 26 "commit-leaf", insn 0x0100006f,
-   addi 5 0 0, addi 11 0 64, addi 13 0 0,
+  copyDigest 18 21 ++ commitLeafSubroutine ++
+  [addi 18 18 32, addi 23 23 32, .branch 6 8 26 "commit-leaf",
    addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
+  copyDigest 9 26 32 ++ halt true
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth

@@ -12,7 +12,7 @@ theorem commit_position_registers (state finished : MachineState)
     finished.getReg .x18 = state.getReg .x18 + 32 ∧
     finished.getReg .x23 = state.getReg .x23 + 32 ∧
     finished.getReg .x20 = state.getReg .x20 ∧
-    finished.pc = (if BitVec.ult (state.getReg .x8 + 256) (state.getReg .x26) then 4280 else 4360) ∧
+    finished.pc = (if BitVec.ult (state.getReg .x8 + 256) (state.getReg .x26) then 4280 else 4428) ∧
     ∀ reg ∈ [Reg.x9, .x19, .x26], finished.getReg reg = state.getReg reg := by
   simp only [commitPositionRun, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨leaf, reached, rfl⟩ := reachable
@@ -31,7 +31,7 @@ theorem commit_position_registers (state finished : MachineState)
   have value : leaf.getReg .x8 = state.getReg .x8 + 256 := by
     rw [regs.1, preserved .x8 (by decide) (by decide) (by decide) (by decide)]; rfl
   have copied (reg : Reg) (notTemporary : reg ≠ .x6) :
-      (leaf.setPC 4348).getReg reg = leaf.getReg reg := by
+      (leaf.setPC 4416).getReg reg = leaf.getReg reg := by
     rfl
   have advance (current : MachineState) (reg : Reg) :
       (commitPositionNextState current).getReg reg =
@@ -41,19 +41,19 @@ theorem commit_position_registers (state finished : MachineState)
     cases reg <;> rfl
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [advance]
-    change (leaf.setPC 4348).getReg .x8 = _
+    change (leaf.setPC 4416).getReg .x8 = _
     exact (copied .x8 (by decide)).trans value
   · rw [advance]
-    change (leaf.setPC 4348).getReg .x18 + 32 = _
+    change (leaf.setPC 4416).getReg .x18 + 32 = _
     rw [copied .x18 (by decide), leafReg .x18 (by simp)]
   · rw [advance]
-    change (leaf.setPC 4348).getReg .x23 + 32 = _
+    change (leaf.setPC 4416).getReg .x23 + 32 = _
     rw [copied .x23 (by decide), leafReg .x23 (by simp)]
   · rw [advance]
-    change (leaf.setPC 4348).getReg .x20 = _
+    change (leaf.setPC 4416).getReg .x20 = _
     rw [copied .x20 (by decide), leafReg .x20 (by simp)]
-  · change (if BitVec.ult ((leaf.setPC 4348).getReg .x8)
-        ((leaf.setPC 4348).getReg .x26) then 4280 else 4360) = _
+  · change (if BitVec.ult ((leaf.setPC 4416).getReg .x8)
+        ((leaf.setPC 4416).getReg .x26) then 4280 else 4428) = _
     rw [copied .x8 (by decide), copied .x26 (by decide), value,
       leafReg .x26 (by simp)]
   · intro reg member
@@ -75,7 +75,7 @@ theorem commit_position_chain (state finished : MachineState)
   obtain ⟨leaf, reached, rfl⟩ := reachable
   have chain := commit_leaf_loop_chain (commitLeafReadyState (commitPositionState state)) 8 leaf reached
   rw [commit_leaf_ready_register, commit_position_register _ .x8 (by decide) (by decide)] at chain
-  have finalChain : (commitPositionNextState (leaf.setPC 4348)).getReg .x21 =
+  have finalChain : (commitPositionNextState (leaf.setPC 4416)).getReg .x21 =
       leaf.getReg .x21 := by
     simp only [commitPositionNextState, MachineState.getReg_setPC,
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x20 ≠ .x21),
@@ -105,7 +105,7 @@ theorem commit_position_oracle_ready (state finished : MachineState)
     ((inputReg .x28 (by decide) (by decide)).trans counter)
   have preserved (reg : Reg) (not6 : Reg.x6 ≠ reg) (not18 : Reg.x18 ≠ reg)
       (not23 : Reg.x23 ≠ reg) (not20 : Reg.x20 ≠ reg) :
-      (commitPositionNextState (leaf.setPC 4348)).getReg reg = leaf.getReg reg := by
+      (commitPositionNextState (leaf.setPC 4416)).getReg reg = leaf.getReg reg := by
     unfold commitPositionNextState
     rw [MachineState.getReg_setPC,
       MachineState.getReg_setReg_ne _ _ _ _ not23,
@@ -119,7 +119,7 @@ theorem commit_position_oracle_ready (state finished : MachineState)
 
 /-- Safety and loop-control conditions, independent of the input bytes. -/
 structure CommitLeavesInvariant (state : MachineState) (remaining : Nat) : Prop where
-  pc : state.pc = if remaining = 0 then 4360 else 4280
+  pc : state.pc = if remaining = 0 then 4428 else 4280
   counter : state.getReg .x20 = 0
   bounded : (state.getReg .x19).toNat ≤ 2 ^ 24
   scratch : state.getReg .x21 = state.getReg .x8 - 32
@@ -214,18 +214,18 @@ def commitLeaves : MachineState → Nat → OracleComp World MachineState
 attribute [local irreducible] execute commitPositionRun
 
 /-- Every leaf is processed. This is an exact execution equality, not a sampled
-benchmark: 39 instructions, 95 cycles and eight queries per leaf. -/
+benchmark: 37 instructions, 93 cycles and eight queries per leaf. -/
 theorem commit_leaves (state : MachineState) (remaining : Nat)
     (invariant : CommitLeavesInvariant state remaining) (fuel : Nat) :
-    execute (submission.image .commit) (39 * remaining + fuel) state true =
+    execute (submission.image .commit) (37 * remaining + fuel) state true =
       (do let finished ← commitLeaves state remaining
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (95 * remaining) (8 * remaining)) := by
+          return result.charge (93 * remaining) (8 * remaining)) := by
   induction remaining generalizing state with
   | zero => simp [commitLeaves, Execution.charge]
   | succ remaining ih =>
     have pc : state.pc = 4280 := by simpa using invariant.pc
-    rw [show 39 * (remaining + 1) + fuel = 39 + (39 * remaining + fuel) by omega,
+    rw [show 37 * (remaining + 1) + fuel = 37 + (37 * remaining + fuel) by omega,
       commit_position state pc invariant.scratch invariant.sourceAbove invariant.oracleReady invariant.blockCounter
         (fun word => invariant.salts word.val (by omega))
         (fun word => invariant.heap word.val (by omega))
@@ -255,7 +255,7 @@ theorem commit_leaves_oracle_ready (state : MachineState) (remaining : Nat)
 theorem commit_leaves_finished (state : MachineState) (remaining : Nat)
     (invariant : CommitLeavesInvariant state remaining) (finished : MachineState)
     (reachable : finished ∈ support (commitLeaves state remaining)) :
-    finished.pc = 4360 ∧
+    finished.pc = 4428 ∧
     ∀ reg ∈ [Reg.x9, .x19, .x26], finished.getReg reg = state.getReg reg := by
   induction remaining generalizing state with
   | zero =>

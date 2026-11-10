@@ -9,7 +9,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 /-- Commitment's three digest copies use the same load/store sequence as opening.
 Only the source and destination registers differ. -/
 theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 79) :
+    (location : start = 46 ∨ start = 55 ∨ start = 92) :
     (commitCopyState state start).mem =
       (openingCopyState
         ((state.setReg .x23 (if start = 46 then state.getReg .x18
@@ -23,7 +23,7 @@ theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
 
 /-- Copy a complete digest from one of the three commitment copy sites. -/
 theorem commit_copy_digest (state : MachineState) (start source destination : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 79)
+    (location : start = 46 ∨ start = 55 ∨ start = 92)
     (sourcePointer : (if start = 46 then state.getReg .x18
       else if start = 55 then state.getReg .x21 else state.getReg .x9+32) = BitVec.ofNat 64 source)
     (destinationPointer : (if start = 46 then state.getReg .x21
@@ -39,7 +39,7 @@ theorem commit_copy_digest (state : MachineState) (start source destination : Na
 
 /-- The commitment copy preserves every disjoint complete digest. -/
 theorem commit_copy_preserves_digest (state : MachineState) (start destination address : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 79)
+    (location : start = 46 ∨ start = 55 ∨ start = 92)
     (destinationPointer : (if start = 46 then state.getReg .x21
       else if start = 55 then state.getReg .x23 else state.getReg .x26) = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0)
@@ -57,7 +57,7 @@ theorem commit_position_evaluation (oracle : Oracle) (state : MachineState) :
     checkEvaluation oracle (commitPositionRun state) =
       let leaf := checkEvaluation oracle
         (commitLeafLoop (commitLeafReadyState (commitPositionState state)) 8)
-      (commitPositionNextState (leaf.1.setPC 4348), leaf.2) := by
+      (commitPositionNextState (leaf.1.setPC 4416), leaf.2) := by
   rw [commitPositionRun, check_evaluation_bind]
   simp only [check_evaluation_pure, Nat.add_zero]
 
@@ -78,7 +78,7 @@ theorem commit_position_salt (state : MachineState) (source saltAddress : Nat)
     (bounded : saltAddress+32 ≤ 2^64) :
     readBuffer (commitLeafReadyState (commitPositionState state)) (source-32) 32 =
       readBuffer state saltAddress 32 := by
-  change readBuffer (commitCopyState state 46) (source-32) 32 = _
+  rw [read_buffer_memory_congr _ (commitCopyState state 46) (by rfl)]
   exact commit_copy_digest state 46 saltAddress (source-32) (by simp) saltPointer chain
     aligned (by omega) bounded (by omega) (Or.inr (by omega))
 
@@ -90,7 +90,7 @@ theorem commit_position_input_digest (state : MachineState) (source address : Na
     (separate : address+32 ≤ source-32 ∨ source ≤ address) :
     readBuffer (commitLeafReadyState (commitPositionState state)) address 32 =
       readBuffer state address 32 := by
-  change readBuffer (commitCopyState state 46) address 32 = _
+  rw [read_buffer_memory_congr _ (commitCopyState state 46) (by rfl)]
   exact commit_copy_preserves_digest state 46 (source-32) address (by simp) chain aligned
     (by omega) bounded (by rcases separate with h | h <;> omega)
 
