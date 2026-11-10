@@ -92,23 +92,35 @@ def leafSubroutine : List Asm :=
   copyDigest 8 21 0 32 ++ compressScratch ++
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
-/-- Commitment keeps fixed oracle arguments live across all eight leaf blocks. -/
+/-- Commitment reads chain || block in consumed message memory. The reply
+overwrites only the just-read block. The caller stores the final digest before
+the following salt reuses its location. Fixed selectors remain live throughout. -/
 def commitLeafSubroutine : List Asm :=
-  [.label "leaf", addi 28 0 8] ++ compressScratch.take 5 ++
-  [.label "leaf-block"] ++ copyDigest 8 21 0 32 ++ [insn 0x73] ++
-  [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
+  [.label "leaf"] ++
+  ((List.range 8).flatMap fun block =>
+    [addi 10 8 ((32*block : Int)-32), addi 12 8 (32*block), insn 0x73]) ++
+  [addi 8 8 256, addi 21 8 (-32), insn 0x00008067]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
 
+/-- A direct upper-immediate load and jump keep seven slots while executing two. -/
+def commitLi (rd value : Nat) : List Asm :=
+  if value % 4096 = 0 ∧ value < 2^31 then
+    [insn (value + rd * 2^7 + 0x37), insn 0x0180006f] ++
+      List.replicate 5 (addi 0 0 0)
+  else li rd value
+
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 8 10, mv 26 11, mv 9 12] ++ li 19 n ++ li 6 (64*n) ++
-  [regop 18 9 6] ++ li 6 (32*n) ++ [regop 23 9 6] ++
+  [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
+  [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
-  [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
-  li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
+  [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
+  -- Keep three physical setup slots so the main-loop addresses remain stable.
+  [addi 21 8 (-32), addi 0 0 0, addi 0 0 0, addi 20 0 0] ++ compressScratch.take 5 ++
+  [addi 28 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
    addi 5 0 0, addi 11 0 64, addi 13 0 0,

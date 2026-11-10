@@ -21,11 +21,17 @@ private theorem deterministic_pure (oracle : Oracle) {α : Type} (value : α) :
 /-- The leaf hash uses only public queries once its salt is supplied. -/
 theorem commit_leaf_loop_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
     oracle.run (commitLeafLoop state count) = pure (checkEvaluation oracle (commitLeafLoop state count)) := by
-  induction count generalizing state with
-  | zero => exact deterministic_pure oracle state
-  | succ count ih =>
-    rw [commitLeafLoop, oracle_run_public_bind, check_evaluation_public_bind, ih]
-    simp only [pure_bind]
+  have blocks (state : MachineState) (cursor count : Nat) :
+      oracle.run (streamingMachineBlocks state cursor count) =
+        pure (checkEvaluation oracle (streamingMachineBlocks state cursor count)) := by
+    induction count generalizing state cursor with
+    | zero => exact deterministic_pure oracle state
+    | succ count ih =>
+      rw [streamingMachineBlocks, oracle_run_public_bind, check_evaluation_public_bind, ih]
+      simp only [pure_bind]
+  unfold commitLeafLoop
+  exact deterministic_bind oracle _ _ (blocks _ _ count)
+    (fun body => deterministic_pure oracle _)
 
 /-- Salt copying, leaf hashing, and heap storage add no private randomness. -/
 theorem commit_position_deterministic (oracle : Oracle) (state : MachineState) :
@@ -69,7 +75,7 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, body.1, 198*LENGTH+42, 9*LENGTH-1⟩, body.2)
+  (⟨.success, body.1, 122*LENGTH+28, 9*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
     (packCommitResult body).1.state = body.1 := rfl

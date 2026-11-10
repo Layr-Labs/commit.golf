@@ -70,7 +70,7 @@ theorem commit_input_leaf_heap (oracle : Oracle) (message : Message)
   have result := commit_leaves_digests oracle (commitInputReady message answer)
     4096 4831842336 5368713248 LENGTH (fun i => message (wrap i))
     (fun i => answer.extractLsb' (256*i) 256)
-    regs.2.2.2.2.2.2.1 regs.1 regs.2.2.2.2.1 regs.2.2.1
+    (by rw [regs.2.2.2.2.2.2.1, regs.1]; rfl) regs.1 regs.2.2.2.2.1 regs.2.2.1
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
     (by
       intro i hi block hb
