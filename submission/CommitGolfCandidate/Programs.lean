@@ -96,11 +96,10 @@ def leafSubroutine : List Asm :=
 reply goes directly to the heap, and the return skips the caller's digest copy.
 The input is captured before the heap write. Fixed selectors remain live. -/
 def commitLeafSubroutine : List Asm :=
-  [.label "leaf"] ++
-  ((List.range 8).flatMap fun block =>
-    (if block=0 then [] else [addi 10 8 ((32*block : Int)-32)]) ++
-    [if block = 7 then addi 12 23 0 else addi 12 8 (32*block), insn 0x73]) ++
-  [addi 8 8 256, addi 10 8 (-32)]
+  [.label "leaf",insn 0x73] ++
+  ((List.range 7).flatMap fun step =>
+    [addi 10 10 32,if step=6 then addi 12 23 0 else addi 12 12 32,insn 0x73]) ++
+  [addi 10 10 32,addi 12 10 32]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
@@ -115,15 +114,15 @@ def commitLi (rd value : Nat) : List Asm :=
 
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
+  [mv 9 12, mv 12 10, mv 26 11] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
   [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
   -- Five useful setup instructions skip five padding words.
-  [addi 10 8 (-32), addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x0180006f] ++
+  [addi 10 12 (-32), addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x0180006f] ++
   List.replicate 5 (addi 0 0 0) ++ [.label "commit-leaf"] ++
   copyDigest 18 10 ++ commitLeafSubroutine ++
-  [addi 18 18 32, addi 23 23 32, .branch 6 8 26 "commit-leaf",
+  [addi 18 18 32, addi 23 23 32, .branch 6 12 26 "commit-leaf",
    addi 20 19 (-1), .branch 0 20 0 "commit-root",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, .label "commit-parent", insn 0x73,
    addi 10 10 (-64), addi 12 12 (-32), addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++

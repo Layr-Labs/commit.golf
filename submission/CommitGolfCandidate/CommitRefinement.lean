@@ -9,7 +9,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 /-- Commitment's three digest copies use the same load/store sequence as opening.
 Only the source and destination registers differ. -/
 theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 93) :
+    (location : start = 46 ∨ start = 55 ∨ start = 92) :
     (commitCopyState state start).mem =
       (openingCopyState
         ((state.setReg .x23 (if start = 46 then state.getReg .x18
@@ -23,7 +23,7 @@ theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
 
 /-- Copy a complete digest from one of the three commitment copy sites. -/
 theorem commit_copy_digest (state : MachineState) (start source destination : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 93)
+    (location : start = 46 ∨ start = 55 ∨ start = 92)
     (sourcePointer : (if start = 46 then state.getReg .x18
       else if start = 55 then state.getReg .x10 else state.getReg .x9+32) = BitVec.ofNat 64 source)
     (destinationPointer : (if start = 46 then state.getReg .x10
@@ -39,7 +39,7 @@ theorem commit_copy_digest (state : MachineState) (start source destination : Na
 
 /-- The commitment copy preserves every disjoint complete digest. -/
 theorem commit_copy_preserves_digest (state : MachineState) (start destination address : Nat)
-    (location : start = 46 ∨ start = 55 ∨ start = 93)
+    (location : start = 46 ∨ start = 55 ∨ start = 92)
     (destinationPointer : (if start = 46 then state.getReg .x10
       else if start = 55 then state.getReg .x23 else state.getReg .x26) = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0)
@@ -57,14 +57,14 @@ theorem commit_position_evaluation (oracle : Oracle) (state : MachineState) :
     checkEvaluation oracle (commitPositionRun state) =
       let leaf := checkEvaluation oracle
         (commitLeafLoop (commitLeafReadyState (commitPositionState state)) 8)
-      (commitPositionNextState (leaf.1.setPC 4412), leaf.2) := by
+      (commitPositionNextState (leaf.1.setPC 4408), leaf.2) := by
   rw [commitPositionRun, check_evaluation_bind]
   simp only [check_evaluation_pure, Nat.add_zero]
 
 /-- Convert the moving chain register to its nonwrapping natural address. -/
 theorem commit_chain_pointer (state : MachineState) (source : Nat)
-    (chain : state.getReg .x10 = state.getReg .x8 - 32)
-    (pointer : state.getReg .x8 = BitVec.ofNat 64 source) (above : 32 ≤ source) :
+    (chain : state.getReg .x10 = state.getReg .x12 - 32)
+    (pointer : state.getReg .x12 = BitVec.ofNat 64 source) (above : 32 ≤ source) :
     state.getReg .x10 = BitVec.ofNat 64 (source - 32) := by
   rw [chain, pointer]
   exact BitVec.ofNat_sub_ofNat_of_le (w := 64) source 32 (by decide) above
@@ -99,8 +99,8 @@ attribute [local irreducible] commitPositionState commitLeafLoop checkEvaluation
 /-- The actual streamed iteration computes the existing salted leaf hash. -/
 theorem commit_position_digest (oracle : Oracle) (state : MachineState)
     (source saltAddress destination : Nat) (value : Entry)
-    (scratch : state.getReg .x10 = state.getReg .x8 - 32)
-    (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
+    (scratch : state.getReg .x10 = state.getReg .x12 - 32)
+    (messagePointer : state.getReg .x12 = BitVec.ofNat 64 source)
     (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (sourceAligned : source % 8 = 0) (saltAligned : saltAddress % 8 = 0)
@@ -119,7 +119,7 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
       ready.getReg reg = state.getReg reg := by
     rw [commit_leaf_ready_register]
     exact commit_position_register state reg notLink notTemporary
-  have readyPointer := (readyReg .x8 (by decide) (by decide)).trans messagePointer
+  have readyPointer := (readyReg .x12 (by decide) (by decide)).trans messagePointer
   have hashed : readBuffer leaf destination 32 =
       leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
     apply streaming_commit_leaf_hash oracle ready source destination _ value readyPointer
@@ -138,8 +138,8 @@ theorem commit_position_digest (oracle : Oracle) (state : MachineState)
 /-- A full iteration writes only its consumed prefix/leaf and one heap slot. -/
 theorem commit_position_preserves_digest (oracle : Oracle) (state : MachineState)
     (source destination address : Nat)
-    (scratch : state.getReg .x10 = state.getReg .x8 - 32)
-    (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
+    (scratch : state.getReg .x10 = state.getReg .x12 - 32)
+    (messagePointer : state.getReg .x12 = BitVec.ofNat 64 source)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (sourceAbove : 32 ≤ source) (sourceBound : source+256 < 2^64)
     (aligned : address % 8 = 0)
@@ -151,9 +151,9 @@ theorem commit_position_preserves_digest (oracle : Oracle) (state : MachineState
   let ready := commitLeafReadyState (commitPositionState state)
   let leaf := (checkEvaluation oracle (commitLeafLoop ready 8)).1
   have chain := commit_chain_pointer state source scratch messagePointer sourceAbove
-  have readySource : ready.getReg .x8 = BitVec.ofNat 64 source := by
+  have readySource : ready.getReg .x12 = BitVec.ofNat 64 source := by
     rw [commit_leaf_ready_register]
-    exact (commit_position_register state .x8 (by decide) (by decide)).trans messagePointer
+    exact (commit_position_register state .x12 (by decide) (by decide)).trans messagePointer
   have readyPointer : ready.getReg .x23 = BitVec.ofNat 64 destination := by
     rw [commit_leaf_ready_register]
     exact (commit_position_register state .x23 (by decide) (by decide)).trans heapPointer

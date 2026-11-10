@@ -25,7 +25,7 @@ def commitInputReady (message : Message) {bits : Nat} (answer : BitVec bits) : M
 private theorem initialized_registers (initial : MachineState) {bits : Nat} (answer : BitVec bits) :
     let setup := commitSetupState initial
     let ready := commitReadyState (writeBits setup (setup.getReg .x10) answer)
-    ready.getReg .x8 = initial.getReg .x10 ∧
+    ready.getReg .x12 = initial.getReg .x10 ∧
     ready.getReg .x9 = initial.getReg .x12 ∧
     ready.getReg .x18 = initial.getReg .x12 + 1073741824 ∧
     ready.getReg .x19 = 16777216 ∧
@@ -35,14 +35,14 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
   dsimp only
   have regs := commit_setup_registers initial
   have readyReg (reg : Reg) (notScratch : reg ≠ .x10) (notCounter : reg ≠ .x20)
-      (notArguments : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28]) :
+      (notArguments : reg ∉ [.x5,.x10,.x11,.x13,.x28]) :
       (commitReadyState (writeBits (commitSetupState initial)
         ((commitSetupState initial).getReg .x10) answer)).getReg reg =
           (commitSetupState initial).getReg reg := by
     rw [commit_ready_register _ reg notScratch notCounter notArguments, writeBits_register]
   have counters := commit_ready_counters (writeBits (commitSetupState initial)
     ((commitSetupState initial).getReg .x10) answer)
-  exact ⟨(readyReg .x8 (by decide) (by decide) (by decide)).trans regs.2.1,
+  exact ⟨(readyReg .x12 (by decide) (by decide) (by decide)).trans regs.2.1,
     (readyReg .x9 (by decide) (by decide) (by decide)).trans regs.2.2.1,
     (readyReg .x18 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.1,
     (readyReg .x19 (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
@@ -52,7 +52,7 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
 
 /-- Fixed ABI pointers and loop registers, independent of sampled salt bytes. -/
 theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec bits) :
-    (commitInputReady message answer).getReg .x8 = 4096 ∧
+    (commitInputReady message answer).getReg .x12 = 4096 ∧
     (commitInputReady message answer).getReg .x9 = 4294971424 ∧
     (commitInputReady message answer).getReg .x18 = 5368713248 ∧
     (commitInputReady message answer).getReg .x19 = 16777216 ∧

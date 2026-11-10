@@ -31,9 +31,9 @@ theorem commit_leaf_loop_deterministic (oracle : Oracle) (state : MachineState) 
       simp only [pure_bind]
   unfold commitLeafLoop
   have heapBlocks :
-      oracle.run (heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count) =
+      oracle.run (heapStreamingMachineBlocks state ((state.getReg .x12).toNat - 32) count) =
         pure (checkEvaluation oracle
-          (heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)) := by
+          (heapStreamingMachineBlocks state ((state.getReg .x12).toNat - 32) count)) := by
     cases count with
     | zero => exact deterministic_pure oracle state
     | succ count =>
@@ -87,7 +87,7 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, body.1, 108*LENGTH+26, 9*LENGTH-1⟩, body.2)
+  (⟨.success, body.1, 107*LENGTH+26, 9*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
     (packCommitResult body).1.state = body.1 := rfl

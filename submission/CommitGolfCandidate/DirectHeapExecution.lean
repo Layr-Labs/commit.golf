@@ -68,13 +68,13 @@ theorem heap_streaming_oracle_input (state : MachineState) (cursor : Nat)
 /-- Two single-cycle address instructions and one eight-cycle ECALL: exactly
 three instructions, ten cycles, one query, and an arbitrary 256-bit reply. -/
 theorem heap_streaming_machine_block (image : Image) (state : MachineState) (cursor : Nat)
-    (inputOffset : BitVec 12)
+    (inputBase : Reg) (inputOffset : BitVec 12)
     (ready : StreamingOracleReady state) (aligned : cursor % 8 = 0)
     (bounded : cursor + 64 ≤ MEMORY_BYTES)
     (heapValid : rangeValid (state.getReg .x23) 32 = true ∧
       (state.getReg .x23).toNat % 8 = 0)
-    (fetchInput : fetch image state = some (.base (.ADDI .x10 .x8 inputOffset)))
-    (stepInput : ordinaryStep state (.base (.ADDI .x10 .x8 inputOffset)) =
+    (fetchInput : fetch image state = some (.base (.ADDI .x10 inputBase inputOffset)))
+    (stepInput : ordinaryStep state (.base (.ADDI .x10 inputBase inputOffset)) =
       some (heapStreamingFirstState state cursor))
     (fetchOutput : fetch image (heapStreamingFirstState state cursor) =
       some (.base (.ADDI .x12 .x23 0)))
