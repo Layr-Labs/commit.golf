@@ -31,10 +31,10 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
     ready.getReg .x19 = 16777216 ∧
     ready.getReg .x23 = initial.getReg .x12 + 536870912 ∧
     ready.getReg .x26 = initial.getReg .x11 ∧
-    ready.getReg .x21 = initial.getReg .x10 - 32 ∧ ready.getReg .x20 = initial.getReg .x20 := by
+    ready.getReg .x10 = initial.getReg .x10 - 32 ∧ ready.getReg .x20 = initial.getReg .x20 := by
   dsimp only
   have regs := commit_setup_registers initial
-  have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20)
+  have readyReg (reg : Reg) (notScratch : reg ≠ .x10) (notCounter : reg ≠ .x20)
       (notArguments : reg ∉ [.x5,.x10,.x11,.x12,.x13,.x28]) :
       (commitReadyState (writeBits (commitSetupState initial)
         ((commitSetupState initial).getReg .x10) answer)).getReg reg =
@@ -58,7 +58,7 @@ theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec
     (commitInputReady message answer).getReg .x19 = 16777216 ∧
     (commitInputReady message answer).getReg .x23 = 4831842336 ∧
     (commitInputReady message answer).getReg .x26 = 4294971392 ∧
-    (commitInputReady message answer).getReg .x21 = 4064 ∧
+    (commitInputReady message answer).getReg .x10 = 4064 ∧
     (commitInputReady message answer).getReg .x20 = 0 := by
   let initial := submission.initialState .commit message
   have regs := initialized_registers initial answer

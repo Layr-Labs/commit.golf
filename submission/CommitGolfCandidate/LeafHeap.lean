@@ -18,7 +18,7 @@ set_option maxRecDepth 4096 in
 /-- The leaf loop preserves every digest outside consumed inputs and heap outputs. -/
 theorem commit_leaves_preserves_digest (oracle : Oracle) (state : MachineState)
     (source destination count address : Nat)
-    (scratch : state.getReg .x21 = state.getReg .x8 - 32)
+    (scratch : state.getReg .x10 = state.getReg .x8 - 32)
     (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (sourceAbove : 32 ≤ source) (sourceBound : source+256*count < 2^64)
@@ -53,7 +53,7 @@ set_option maxRecDepth 4096 in
 The source vector, leaf-output range, and salt range occur in that order in memory. -/
 theorem commit_leaves_digests (oracle : Oracle) (state : MachineState)
     (source destination saltAddress count : Nat) (message : Nat → Entry) (salts : Nat → Digest)
-    (scratch : state.getReg .x21 = state.getReg .x8 - 32)
+    (scratch : state.getReg .x10 = state.getReg .x8 - 32)
     (messagePointer : state.getReg .x8 = BitVec.ofNat 64 source)
     (heapPointer : state.getReg .x23 = BitVec.ofNat 64 destination)
     (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)

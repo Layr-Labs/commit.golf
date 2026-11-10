@@ -98,9 +98,9 @@ The input is captured before the heap write. Fixed selectors remain live. -/
 def commitLeafSubroutine : List Asm :=
   [.label "leaf"] ++
   ((List.range 8).flatMap fun block =>
-    [addi 10 8 ((32*block : Int)-32),
-     if block = 7 then addi 12 23 0 else addi 12 8 (32*block), insn 0x73]) ++
-  [addi 8 8 256, addi 21 8 (-32)]
+    (if block=0 then [] else [addi 10 8 ((32*block : Int)-32)]) ++
+    [if block = 7 then addi 12 23 0 else addi 12 8 (32*block), insn 0x73]) ++
+  [addi 8 8 256, addi 10 8 (-32)]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
@@ -120,9 +120,9 @@ def commitCode (depth : Nat) : List Asm :=
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ commitLi 11 (32*n) ++ [insn 0x73] ++
   -- Five useful setup instructions skip five padding words.
-  [addi 21 8 (-32), addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x0180006f] ++
+  [addi 10 8 (-32), addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x0180006f] ++
   List.replicate 5 (addi 0 0 0) ++ [.label "commit-leaf"] ++
-  copyDigest 18 21 ++ commitLeafSubroutine ++
+  copyDigest 18 10 ++ commitLeafSubroutine ++
   [addi 18 18 32, addi 23 23 32, .branch 6 8 26 "commit-leaf",
    addi 20 19 (-1), .branch 0 20 0 "commit-root",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, .label "commit-parent", insn 0x73,
