@@ -111,9 +111,9 @@ def commitCode (depth : Nat) : List Asm :=
   li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
+   addi 5 0 0, addi 11 0 64, addi 13 0 0,
    addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
-   shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
-   addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x73,
+   shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
   copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
 
@@ -129,8 +129,9 @@ def openingCode (depth : Nat) : List Asm :=
    shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
   [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
    .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
-   .label "open-done"] ++ li 6 (openingBytes depth) ++
-  [regop 11 16 6 0 1] ++ halt true
+   .label "open-done",
+   -- The output cursor advanced by exactly the serialized proof length.
+   regop 11 25 15 0 32] ++ halt true
 
 /-- Reject malformed lengths and every mismatching root. Values/indices are supplied
 by the trusted ABI; their validity and sorting do not depend on proof bytes. -/

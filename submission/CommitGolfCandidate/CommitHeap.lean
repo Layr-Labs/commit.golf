@@ -87,10 +87,12 @@ theorem commit_input_leaf_heap (oracle : Oracle) (message : Message)
   simpa only [same] using result
 
 private theorem parent_start_heap (state : MachineState) :
-    (commitParentsStartState state).getReg .x9 = state.getReg .x9 := rfl
+    (commitParentsStartState state).getReg .x9 = state.getReg .x9 :=
+  commit_parents_start_register state .x9 (by simp)
 
 private theorem parent_start_counter (state : MachineState) :
-    (commitParentsStartState state).getReg .x20 = state.getReg .x19-1 := rfl
+    (commitParentsStartState state).getReg .x20 = state.getReg .x19-1 :=
+  commit_parents_start_counter state
 
 private theorem parent_start_memory (state : MachineState) :
     (commitParentsStartState state).mem = state.mem := rfl
