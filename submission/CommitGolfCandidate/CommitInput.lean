@@ -1,4 +1,4 @@
-import CommitGolfCandidate.FusedImage
+import CommitGolfCandidate.ContiguousImage
 
 /-! The trusted commitment ABI establishes every tree-building address invariant. -/
 namespace CommitGolfCandidate

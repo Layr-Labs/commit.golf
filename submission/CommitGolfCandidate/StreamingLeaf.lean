@@ -1,8 +1,8 @@
 import CommitGolfCandidate.DirectHeapExecution
 
 /-! Retained explicit-window commitment reference and shared address bounds.
-The fused carried-input image is linked by FusedImage; the reference advances x8/x21
-virtually so existing memory and security refinements remain reusable. -/
+Actual instruction fetches are linked separately by ContiguousImage. The reference
+advances x8/x21 virtually so memory and security refinements remain reusable. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
