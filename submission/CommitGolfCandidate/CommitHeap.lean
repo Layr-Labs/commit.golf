@@ -95,7 +95,7 @@ private theorem parent_start_counter (state : MachineState) :
   commit_parents_start_counter state
 
 private theorem parent_start_memory (state : MachineState) :
-    (commitParentsStartState state).mem = state.mem := rfl
+    (commitParentsStartState state).mem = state.mem := commit_parents_start_memory state
 
 /-- The actual leaf and parent loops together construct a consistent heap whose
 leaves are the salted input digests. No hypothesis about heap contents is required. -/
@@ -113,9 +113,11 @@ theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec
     (check_evaluation_support oracle _)).2
   have parentHeap : parents.getReg .x9 = BitVec.ofNat 64 4294971424 := by
     exact (parent_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
-  have parentCounter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parent_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have parentCounter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · decide
+    · decide
   constructor
   · exact commit_parents_heap oracle parents 4294971424 LENGTH (by decide)
       parentHeap parentCounter (by decide) (by decide)

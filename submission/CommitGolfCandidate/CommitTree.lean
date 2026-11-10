@@ -1,205 +1,8 @@
-import CommitGolfCandidate.CommitParents
-import CommitGolfCandidate.CommitLoop
+import CommitGolfCandidate.PointerStart
 
-/-! The complete parent loop, followed by root output and successful HALT. -/
+/-! The full pointer-based parent phase and successful commitment return. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
-
-def commitParents : MachineState → Nat → OracleComp World MachineState
-  | state, 0 => pure state
-  | state, remaining + 1 => do
-      let answer ← World.query (.inr (commitParentQuery state))
-      commitParents (commitParentNextState (commitParentState state answer)) remaining
-
-/-- The parent heap is readable/writable for every node still to be computed. -/
-def ParentBuffers (base : Word) (remaining : Nat) : Prop :=
-  ∀ node, 0 < node → node ≤ remaining →
-    rangeValid (base + (BitVec.ofNat 64 node <<< 6)) 64 = true ∧
-    rangeValid (base + (BitVec.ofNat 64 node <<< 5)) 32 = true ∧
-    (base + (BitVec.ofNat 64 node <<< 6)).toNat % 8 = 0 ∧
-    (base + (BitVec.ofNat 64 node <<< 5)).toNat % 8 = 0
-
-theorem commit_parent_step_counter (state : MachineState) (answer : BitVec 256) :
-    (commitParentNextState (commitParentState state answer)).getReg .x20 = state.getReg .x20 - 1 := by
-  change (commitParentState state answer).getReg .x20 - 1 = _
-  rw [commit_parent_register state answer .x20 (by simp)]
-
-theorem commit_parent_step_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
-    (member : reg ∈ [Reg.x9, .x19, .x21, .x26]) :
-    (commitParentNextState (commitParentState state answer)).getReg reg = state.getReg reg := by
-  have not20 : Reg.x20 ≠ reg := by intro h; subst reg; simp at member
-  rw [commitParentNextState, MachineState.getReg_setPC,
-    MachineState.getReg_setReg_ne _ _ _ _ not20]
-  apply commit_parent_register
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at member ⊢
-  tauto
-
-theorem commit_parent_step_pc (state : MachineState) (answer : BitVec 256) :
-    (commitParentNextState (commitParentState state answer)).pc =
-      if state.getReg .x20 - 1 = 0 then 4412 else 4384 := by
-  change (if (commitParentState state answer).getReg .x20 - 1 = 0 then 4412 else 4384) = _
-  rw [commit_parent_register state answer .x20 (by simp)]
-
-attribute [local irreducible] execute commitParentState commitParentNextState
-
-/-- All internal nodes are processed in descending heap order. Each costs seven
-instructions, fourteen cycles, and one query, independently of oracle answers. -/
-theorem commit_parents (state : MachineState) (remaining : Nat) (bounded : remaining < 2 ^ 24)
-    (pc : 0 < remaining → state.pc = 4384)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 remaining)
-    (constants : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
-    (buffers : ParentBuffers (state.getReg .x9) remaining) (fuel : Nat) :
-    execute (submission.image .commit) (7 * remaining + fuel) state true =
-      (do let finished ← commitParents state remaining
-          let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (14 * remaining) remaining) := by
-  induction remaining generalizing state with
-  | zero => simp [commitParents, Execution.charge]
-  | succ remaining ih =>
-    have current := buffers (remaining + 1) (by omega) (by omega)
-    rw [← counter] at current
-    have nextCounter (answer : BitVec 256) :
-        (commitParentNextState (commitParentState state answer)).getReg .x20 = BitVec.ofNat 64 remaining := by
-      rw [commit_parent_step_counter, counter]
-      change BitVec.ofNat 64 (remaining + 1) - BitVec.ofNat 64 1 = _
-      rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
-      congr 1
-    have nextPC (answer : BitVec 256) (positive : 0 < remaining) :
-        (commitParentNextState (commitParentState state answer)).pc = 4384 := by
-      rw [commit_parent_step_pc]
-      apply if_neg
-      rw [← commit_parent_step_counter state answer, nextCounter]
-      intro zero
-      have equal := congrArg BitVec.toNat zero
-      change remaining % 18446744073709551616 = 0 at equal
-      omega
-    have nextBuffers (answer : BitVec 256) :
-        ParentBuffers ((commitParentNextState (commitParentState state answer)).getReg .x9) remaining := by
-      rw [commit_parent_step_register state answer .x9 (by simp)]
-      exact fun node positive bound => buffers node positive (by omega)
-    rw [show 7 * (remaining + 1) + fuel = 7 + (7 * remaining + fuel) by omega,
-      commit_parent state (pc (by omega)) constants current.1 current.2.1 current.2.2.1 current.2.2.2]
-    simp only [commitParents, bind_assoc]
-    apply congrArg (fun continuation =>
-      (liftM (World.query (.inr (commitParentQuery state))) : OracleComp World (BitVec 256)) >>= continuation)
-    funext answer
-    change BitVec 256 at answer
-    have nextConstants :
-        (commitParentNextState (commitParentState state answer)).getReg .x5 = 0 ∧
-        (commitParentNextState (commitParentState state answer)).getReg .x11 = 64 ∧
-        (commitParentNextState (commitParentState state answer)).getReg .x13 = 0 := by
-      have preserved (reg : Reg) (member : reg ∈ [Reg.x5, .x11, .x13]) :
-          (commitParentNextState (commitParentState state answer)).getReg reg = state.getReg reg := by
-        have ne : Reg.x20 ≠ reg := by intro h; subst reg; simp at member
-        rw [commitParentNextState, MachineState.getReg_setPC,
-          MachineState.getReg_setReg_ne _ _ _ _ ne]
-        apply commit_parent_register
-        simp only [List.mem_cons, List.not_mem_nil, or_false] at member ⊢
-        tauto
-      rw [preserved .x5 (by simp), preserved .x11 (by simp), preserved .x13 (by simp)]
-      exact constants
-    rw [ih _ (by omega) (nextPC answer) (nextCounter answer) nextConstants (nextBuffers answer)]
-    simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
-
-theorem commit_parents_finished (state : MachineState) (remaining : Nat)
-    (bounded : remaining < 2 ^ 24)
-    (counter : state.getReg .x20 = BitVec.ofNat 64 remaining)
-    (finished : MachineState) (reachable : finished ∈ support (commitParents state remaining)) :
-    (0 < remaining → finished.pc = 4412) ∧
-    ∀ reg ∈ [Reg.x9, .x19, .x21, .x26], finished.getReg reg = state.getReg reg := by
-  induction remaining generalizing state with
-  | zero =>
-    simp only [commitParents, support_pure, Set.mem_singleton_iff] at reachable
-    subst finished
-    exact ⟨by omega, fun _ _ => rfl⟩
-  | succ remaining ih =>
-    simp only [commitParents, mem_support_bind_iff] at reachable
-    obtain ⟨answer, _, reached⟩ := reachable
-    change BitVec 256 at answer
-    have nextCounter : (commitParentNextState (commitParentState state answer)).getReg .x20 =
-        BitVec.ofNat 64 remaining := by
-      rw [commit_parent_step_counter, counter]
-      change BitVec.ofNat 64 (remaining + 1) - BitVec.ofNat 64 1 = _
-      rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
-      congr 1
-    have done := ih _ (by omega) nextCounter reached
-    refine ⟨?_, fun reg member => (done.2 reg member).trans (commit_parent_step_register state answer reg member)⟩
-    intro _
-    by_cases empty : remaining = 0
-    · subst remaining
-      simp only [commitParents, support_pure, Set.mem_singleton_iff] at reached
-      subst finished
-      rw [commit_parent_step_pc, counter]
-      rfl
-    · exact done.1 (Nat.pos_of_ne_zero empty)
-
-/-- Initialize fixed syscall constants and the descending internal-node counter once. -/
-private def parentStartInstructions : List Instr :=
-  [.ADDI .x5 .x0 0, .ADDI .x11 .x0 64, .ADDI .x13 .x0 0,
-   .ADDI .x20 .x19 4095]
-
-private def parentStartPrefix (state : MachineState) (count : Nat) : MachineState :=
-  (parentStartInstructions.take count).foldl execInstrBr state
-
-def commitParentsStartState (state : MachineState) : MachineState :=
-  (parentStartPrefix state 4).setPC
-    (if state.getReg .x19 - 1 = 0 then 4412 else 4384)
-
-theorem commit_parents_start_register (state : MachineState) (reg : Reg)
-    (member : reg ∈ [Reg.x9, .x19, .x21, .x26]) :
-    (commitParentsStartState state).getReg reg = state.getReg reg := by
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-  rcases member with rfl | rfl | rfl | rfl <;>
-    simp [commitParentsStartState, parentStartPrefix, parentStartInstructions,
-      execInstrBr, MachineState.getReg, MachineState.setPC, MachineState.setReg]
-
-theorem commit_parents_start_counter (state : MachineState) :
-    (commitParentsStartState state).getReg .x20 = state.getReg .x19 - 1 := by
-  simp [commitParentsStartState, parentStartPrefix, parentStartInstructions,
-    execInstrBr, MachineState.getReg, MachineState.setPC, MachineState.setReg,
-    signExtend12, BitVec.sub_eq_add_neg]
-
-theorem commit_parents_start_memory (state : MachineState) :
-    (commitParentsStartState state).mem = state.mem := rfl
-
-theorem commit_parents_start_constants (state : MachineState) :
-    (commitParentsStartState state).getReg .x5 = 0 ∧
-    (commitParentsStartState state).getReg .x11 = 64 ∧
-    (commitParentsStartState state).getReg .x13 = 0 := by
-  simp [commitParentsStartState, parentStartPrefix, parentStartInstructions,
-    execInstrBr, MachineState.getReg, MachineState.setPC, MachineState.setReg,
-    signExtend12]
-
-theorem commit_parents_start (state : MachineState) (pc : state.pc = 4364) (fuel : Nat) :
-    execute (submission.image .commit) (5 + fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (commitParentsStartState state) true
-          return result.charge 5 0) := by
-  have setup (remaining : Nat) :
-      execute (submission.image .commit) (4 + remaining) state true =
-        (do let result ← execute (submission.image .commit) remaining (parentStartPrefix state 4) true
-            return result.charge 4 0) := by
-    apply execute_unit_steps (states := parentStartPrefix state)
-    intro i hi
-    refine ⟨.base ((parentStartInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (67 + i) _ (by omega)
-      · interval_cases i <;> simp [parentStartPrefix, parentStartInstructions, execInstrBr, pc, MachineState.setPC]
-      · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  let next := parentStartPrefix state 4
-  have fetched : fetch (submission.image .commit) next = some (.base (.BEQ .x20 .x0 32)) := by
-    apply commit_fetch _ 71 _ (by decide)
-    · simp [next, parentStartPrefix, parentStartInstructions, execInstrBr, pc, MachineState.setPC]
-    · rfl
-  have stepped : ordinaryStep next (.base (.BEQ .x20 .x0 32)) = some (commitParentsStartState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13,
-      next, commitParentsStartState, parentStartPrefix, parentStartInstructions,
-      signExtend12, pc, MachineState.getReg, MachineState.setReg, MachineState.setPC,
-      BitVec.sub_eq_add_neg]
-    split <;> simp_all
-  rw [show 5 + fuel = 4 + (fuel + 1) by omega, setup,
-    execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
 def commitExitState (state : MachineState) : MachineState :=
   ((state.setReg .x5 1).setReg .x10 0).setPC 4452
@@ -248,9 +51,45 @@ def commitBody (state : MachineState) (count : Nat) : OracleComp World MachineSt
 
 attribute [local irreducible] commitLeaves commitParents commitCopyState
 
+private theorem load_pc_frame (state : MachineState) (pc : Word)
+    (destination source : Reg) (offset : BitVec 12) :
+    execInstrBr (state.setPC pc) (.LD destination source offset) =
+      (execInstrBr state (.LD destination source offset)).setPC (pc+4) := by
+  cases destination <;> rfl
+
+private theorem store_pc_frame (state : MachineState) (pc : Word)
+    (destination source : Reg) (offset : BitVec 12) :
+    execInstrBr (state.setPC pc) (.SD destination source offset) =
+      (execInstrBr state (.SD destination source offset)).setPC (pc+4) := rfl
+
+private theorem root_copy_pc_frame (state : MachineState) (pc : Word) :
+    commitCopyState (state.setPC pc) 79 = (commitCopyState state 79).setPC (pc+32) := by
+  rw [commit_copy_expansion, commit_copy_expansion]
+  simp only [show (79 : Nat) ≠ 46 by decide, show (79 : Nat) ≠ 55 by decide,
+    ite_false, ite_true, List.foldl, load_pc_frame, store_pc_frame]
+  simp only [BitVec.add_assoc]
+  rfl
+
+/-- The positive loop's terminal jump and unchanged root-copy/halt cost twelve
+cycles. The final state is independent of the pre-jump program counter. -/
+private theorem commit_positive_root (state : MachineState) (pc : state.pc = 4404)
+    (rootValid : ∀ word : Fin 4,
+      accessValid (state.getReg .x9 + BitVec.ofNat 64 (32 + 8 * word.val)) 8 = true)
+    (outputValid : ∀ word : Fin 4,
+      accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
+    (fuel : Nat) :
+    execute (submission.image .commit) (12 + fuel) state true =
+      pure ⟨.success, commitExitState (commitCopyState state 79), 12, 0⟩ := by
+  rw [show 12+fuel = 1+(11+fuel) by omega, pointer_parent_exit state pc,
+    commit_root (state.setPC 4412) rfl rootValid outputValid]
+  simp only [pure_bind, Execution.charge]
+  rw [root_copy_pc_frame]
+  unfold commitExitState
+  rfl
+
 set_option maxRecDepth 4096 in
-/-- Exact execution of all leaves, all internal nodes, and root output. Safety
-conditions constrain addresses only; the theorem covers every message and salt. -/
+/-- Exact execution, including inherited syscall readiness and the once-only
+setup and terminal jump. Address conditions cover every message and salt. -/
 theorem commit_body (state : MachineState) (count : Nat)
     (positive : 2 ≤ count) (bounded : count ≤ 2 ^ 24)
     (leaves : CommitLeavesInvariant state count)
@@ -261,58 +100,57 @@ theorem commit_body (state : MachineState) (count : Nat)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (47 * count + 9 + fuel) state true =
+    execute (submission.image .commit) (44 * count + 14 + fuel) state true =
       (do let finished ← commitBody state count
-          return ⟨.success, finished, 110 * count + 2, 9 * count - 1⟩) := by
-  rw [show 47 * count + 9 + fuel =
-    40 * count + (5 + (7 * (count - 1) + (11 + fuel))) by omega,
+          return ⟨.success, finished, 107 * count + 7, 9 * count - 1⟩) := by
+  rw [show 44 * count + 14 + fuel =
+    40 * count + (6 + (4 * (count - 1) + (12 + fuel))) by omega,
     commit_leaves state count leaves]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro hashed reached
   have leafDone := commit_leaves_finished state count leaves hashed reached
+  have leafInvariant := commit_leaves_final_invariant state count leaves hashed reached
   let ready := commitParentsStartState hashed
   have readyRegister (reg : Reg) (member : reg ∈ [Reg.x9, .x19, .x26]) :
       ready.getReg reg = hashed.getReg reg := by
     apply commit_parents_start_register hashed reg
     simp only [List.mem_cons, List.not_mem_nil, or_false] at member ⊢
     tauto
-  have readyCount : ready.getReg .x20 = BitVec.ofNat 64 (count - 1) := by
-    rw [commit_parents_start_counter]
-    change hashed.getReg .x19 - 1 = _
+  have residual : hashed.getReg .x19 - 1 = BitVec.ofNat 64 (count - 1) := by
     rw [leafDone.2 .x19 (by simp), total]
     change BitVec.ofNat 64 count - BitVec.ofNat 64 1 = _
     rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) count 1 (by decide) (by omega)]
-  have readyPC : 0 < count - 1 → ready.pc = 4384 := by
-    intro _
-    change (if hashed.getReg .x19 - 1 = 0 then 4412 else 4384) = _
-    rw [leafDone.2 .x19 (by simp), total]
-    apply if_neg
-    change BitVec.ofNat 64 count - BitVec.ofNat 64 1 ≠ 0
-    rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) count 1 (by decide) (by omega)]
+  have nonempty : hashed.getReg .x19 - 1 ≠ 0 := by
+    rw [residual]
     intro zero
     have equal := congrArg BitVec.toNat zero
     change (count - 1) % 18446744073709551616 = 0 at equal
     omega
+  have readyPointers : ParentPointerInvariant ready (count-1) :=
+    commit_parents_start_pointers hashed (count-1) nonempty residual
+  have readyPC : 0 < count-1 → ready.pc = 4388 :=
+    fun _ => commit_parents_start_pc hashed nonempty
   have readyHeap : ready.getReg .x9 = state.getReg .x9 :=
     (readyRegister .x9 (by simp)).trans (leafDone.2 .x9 (by simp))
   have readyOutput : ready.getReg .x26 = state.getReg .x26 :=
     (readyRegister .x26 (by simp)).trans (leafDone.2 .x26 (by simp))
   have readyBuffers : ParentBuffers (ready.getReg .x9) (count - 1) := by
     rw [readyHeap]; exact parents
-  rw [commit_parents_start hashed leafDone.1,
-    commit_parents ready (count - 1) (by omega) readyPC readyCount (commit_parents_start_constants hashed) readyBuffers]
+  rw [commit_parents_start hashed leafDone.1 nonempty,
+    commit_parents ready (count - 1) (by omega) readyPC readyPointers
+      (commit_parents_start_constants hashed leafInvariant.oracleReady) readyBuffers]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro finished reachedParents
-  have parentDone := commit_parents_finished ready (count - 1) (by omega) readyCount finished reachedParents
+  have parentDone := commit_parents_finished ready (count - 1) (by omega) readyPointers finished reachedParents
   have root : ∀ word : Fin 4,
       accessValid (finished.getReg .x9 + BitVec.ofNat 64 (32 + 8 * word.val)) 8 = true := by
     rw [parentDone.2 .x9 (by simp), readyHeap]; exact rootValid
   have output : ∀ word : Fin 4,
       accessValid (finished.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
     rw [parentDone.2 .x26 (by simp), readyOutput]; exact outputValid
-  rw [commit_root finished (parentDone.1 (by omega)) root output]
+  rw [commit_positive_root finished (parentDone.1 (by omega)) root output]
   simp only [pure_bind, Execution.charge, Nat.add_zero]
   congr 1
   congr 1 <;> omega

@@ -64,7 +64,7 @@ private theorem parents_start_counter (state : MachineState) :
   commit_parents_start_counter state
 
 private theorem parents_start_memory (state : MachineState) :
-    (commitParentsStartState state).mem = state.mem := rfl
+    (commitParentsStartState state).mem = state.mem := commit_parents_start_memory state
 
 attribute [local irreducible] commitBody commitLeaves commitParents commitInputReady checkEvaluation
 
@@ -82,9 +82,11 @@ theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : B
     (check_evaluation_support oracle _)).2
   have heap : parents.getReg .x9 = BitVec.ofNat 64 4294971424 :=
     (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
-  have counter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parents_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have counter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · decide
+    · decide
   have indexBound : index.val < 2^24 := index.isLt
   have address : 5368713248+32*index.val = 4294971424+32*(2*LENGTH+index.val) := by
     change _ = 4294971424+32*(2*16777216+index.val)
@@ -151,9 +153,11 @@ theorem commit_body_matches (oracle : Oracle) (message : Message) (answer : BitV
     (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
   have output : parents.getReg .x26 = BitVec.ofNat 64 4294971392 :=
     (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans input.2.2.2.2.2.1)
-  have counter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parents_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have counter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · decide
+    · decide
   have parentRegs := (commit_parents_finished parents (LENGTH-1) (by decide) counter finished
     (check_evaluation_support oracle _)).2
   have tree := commit_input_tree oracle message answer
@@ -181,9 +185,11 @@ theorem commit_body_salt (oracle : Oracle) (message : Message)
     (check_evaluation_support oracle _)).2
   have output : parents.getReg .x26 = BitVec.ofNat 64 4294971392 :=
     (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans input.2.2.2.2.2.1)
-  have counter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parents_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have counter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · decide
+    · decide
   have parentRegs := (commit_parents_finished parents (LENGTH-1) (by decide) counter finished
     (check_evaluation_support oracle _)).2
   have indexBound : index.val < 16777216 := index.isLt

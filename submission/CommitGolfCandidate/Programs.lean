@@ -124,10 +124,12 @@ def commitCode (depth : Nat) : List Asm :=
   [addi 28 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
-   addi 5 0 0, addi 11 0 64, addi 13 0 0,
-   addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
-   shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, insn 0x73,
-   addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
+   -- Fixed syscall selectors survive the leaf loop. Initialize descending
+   -- parent addresses once, then advance them by subtraction after each query.
+   addi 20 19 (-1), shift 6 20 6, regop 10 9 6, shift 7 20 5,
+   .branch 0 20 0 "commit-root", regop 12 9 7, .label "commit-parent", insn 0x73,
+   addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 9 "commit-parent",
+   .jump 0 "commit-root", addi 0 0 0, .label "commit-root"] ++
   copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
 
 def openingCode (depth : Nat) : List Asm :=
