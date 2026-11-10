@@ -2,7 +2,7 @@ import CommitGolfCandidate.HidingGameIntegration
 
 /-! Statistical hiding of the submitted machine-derived scheme. The proof covers
 the complete two-stage oracle-adaptive game and every opening size, including zero.
-The deliberately loose recomputation bound is below the fixed 120-bit requirement. -/
+The shared-heap query bound is below the fixed120-bit requirement. -/
 namespace CommitGolfCandidate
 
 -- Observations retain the discrete measurable structure used by the contract.
@@ -11,27 +11,19 @@ open CommitGolf OracleComp OracleComp.DeferredSampling
 
 attribute [local irreducible] heapQueryBudget
 
-/-- Even charging all leaves for all serialized proof bytes leaves ample room
-under the challenge's 120-bit target. This is proof-only query accounting. -/
+/-- The shared heap charges each honest query once, independently of opening size.
+This theorem uses the actual full-entropy salt construction. -/
 theorem hiding_loss_le_target (positions : Positions) (known budget : Nat) (knownBound : known ≤ budget) :
     (LENGTH : ℝ) *
-      (16 * ((known + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) ≤
+      (16 * ((known + ((9*LENGTH-1) + budget) + 8 : Nat) : ℝ) / 2^256) ≤
       ((budget : ℝ)+1) / 2^HIDING_SECURITY_BITS := by
-  have cardinal : positions.card ≤ LENGTH := by
-    simpa only [Index, Fintype.card_fin] using Finset.card_le_univ positions
-  have treeFormula := heap_query_budget_formula 8 LOG_LENGTH
-  have treeBound : heapQueryBudget 8 LOG_LENGTH ≤ 9*LENGTH := by
-    change heapQueryBudget 8 LOG_LENGTH+1 = 9*LENGTH at treeFormula
-    omega
-  have total : known + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 ≤
-      budget + ((1+800*LENGTH)*(9*LENGTH) + budget) + 8 := by
-    gcongr
+  have total : known + ((9*LENGTH-1) + budget) + 8 ≤
+      budget + ((9*LENGTH-1) + budget) + 8 := by omega
   calc
     _ ≤ (LENGTH : ℝ) *
-        (16 * ((budget + ((1+800*LENGTH)*(9*LENGTH) + budget) + 8 : Nat) : ℝ) / 2^256) := by
-      gcongr
+        (16 * ((budget + ((9*LENGTH-1) + budget) + 8 : Nat) : ℝ) / 2^256) := by gcongr
     _ ≤ _ := by
-      norm_num [LENGTH, LOG_LENGTH, HIDING_SECURITY_BITS, Nat.cast_add, Nat.cast_mul]
+      norm_num [LENGTH,LOG_LENGTH,HIDING_SECURITY_BITS,Nat.cast_add,Nat.cast_mul]
       nlinarith [Nat.cast_nonneg (α := ℝ) budget]
 
 /-- Conditional on each reachable first-stage transcript, the fixed-message

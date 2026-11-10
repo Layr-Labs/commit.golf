@@ -61,7 +61,7 @@ including the actual private trapdoor returned by commitment. -/
 theorem honest_machine_resources (message : Message) (positions : Positions)
     (result : MachineResult) (reachable : result ∈ support (submission.honestMachine message positions)) :
     result.success = true ∧ result.commitCycles = 1761656918 ∧
-      result.openingCycles = 24 + 380 * positions.card := by
+      result.openingCycles = 13 + 378 * positions.card := by
   rw [honest_machine] at reachable
   simp only [mem_support_bind_iff] at reachable
   obtain ⟨committed, committedReached, opened, openedReached, returned⟩ := reachable
@@ -84,7 +84,7 @@ theorem submission_machine_success : submission.MachineSuccess := by
 
 /-- Certified upper bounds from the actual images for a complete commitment and a
 128-leaf opening. These are the declared claim values, not a sampled measurement. -/
-theorem submission_prover_cycles : submission.ProverCycles 1761656918 48664 := by
+theorem submission_prover_cycles : submission.ProverCycles 1761656918 48397 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached

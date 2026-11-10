@@ -83,14 +83,14 @@ def openingResult (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) : Execution :=
   ⟨.success, openingExitState (openingPositionState^[positions.card]
     (openingInitializedState (submission.initialState .opening (trapdoor, positions)))),
-    24 + 380 * positions.card, 0⟩
+    13 + 378 * positions.card, 0⟩
 
 set_option maxRecDepth 4096 in
 private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (fuel : Nat) :
-    execute (submission.image .opening) (380 * positions.card + (4 + fuel))
+    execute (submission.image .opening) (378 * positions.card + (4 + fuel))
       (openingInitializedState (submission.initialState .opening (trapdoor, positions))) true =
-        pure ⟨.success, (openingResult trapdoor positions).state, 380 * positions.card + 4, 0⟩ := by
+        pure ⟨.success, (openingResult trapdoor positions).state, 378 * positions.card + 4, 0⟩ := by
   let initial := submission.initialState .opening (trapdoor, positions)
   let ready := openingInitializedState initial
   have cardinal : positions.card ≤ LENGTH := by
@@ -152,7 +152,7 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
     by_cases empty : positions.card = 0
     · simp [empty, ready, openingInitializedState, MachineState.setPC, initialCount]
     · exact (opening_positions_finished positions.card (by omega) ready counter).1
-  change execute (submission.image .opening) (380 * positions.card + (4 + fuel)) ready true = _
+  change execute (submission.image .opening) (378 * positions.card + (4 + fuel)) ready true = _
   rw [opening_positions_loop positions.card cardinal ready counter readyPC indices indexSpace indexAligned
       leaves saltBound saltAligned heapBound heapAligned outputBound outputAligned,
     opening_exit _ finishedPC]
@@ -161,7 +161,7 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
 
 private theorem opening_execution_extra (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (fuel : Nat) :
-    execute (submission.image .opening) (20 + (380 * positions.card + (4 + fuel)))
+    execute (submission.image .opening) (9 + (378 * positions.card + (4 + fuel)))
       (submission.initialState .opening (trapdoor, positions)) true =
         pure (openingResult trapdoor positions) := by
   rw [opening_setup _ rfl, opening_ready_execution]
@@ -183,7 +183,7 @@ theorem opening_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor))
   have cardinal : positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ positions
   have steps : submission.steps .opening =
-      20 + (380 * positions.card + (4 + (submission.steps .opening - (24 + 380 * positions.card)))) := by
+      9 + (378 * positions.card + (4 + (submission.steps .opening - (13 + 378 * positions.card)))) := by
     norm_num [submission, candidate, LENGTH, LOG_LENGTH] at cardinal ⊢
     omega
   exact (run_opening_eq_execute submission (trapdoor, positions)).trans
@@ -215,7 +215,7 @@ theorem opening_result_succeeded (trapdoor : BitVec (8 * submission.sizes.trapdo
 /-- The scored batch's actual opening cost, proved for arbitrary trapdoors and sets. -/
 theorem opening_batch_cycles (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (batch : positions.card = BATCH) :
-    (openingResult trapdoor positions).cycles = 48664 := by
+    (openingResult trapdoor positions).cycles = 48397 := by
   simp [openingResult, batch, BATCH]
 
 
@@ -268,7 +268,7 @@ used by the certificate: 48,664 cycles, zero queries, and 102,400 proof bytes. -
 theorem opening_batch_resources (oracle : Oracle)
     (trapdoor : BitVec (8 * submission.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
-    (prEvent ((fun result => result.1.cycles = 48664 ∧ result.2 = 0 ∧
+    (prEvent ((fun result => result.1.cycles = 48397 ∧ result.2 = 0 ∧
       (submission.readProof result.1).length = 102400) <$> (oracle.run (submission.run .opening (trapdoor, positions))))) = 1 := by
   rw [opening_execution, oracle_run_pure]
   simp [opening_batch_cycles trapdoor positions batch, opening_proof_length trapdoor positions,

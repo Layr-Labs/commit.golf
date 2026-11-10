@@ -193,7 +193,7 @@ def commitCode (depth : Nat) : List Asm :=
   if depth%10=4 then patchGroup341Entry (octCommitCode depth) false ++ group341ParentCode
   else octCommitCode depth
 
-def openingCode (depth : Nat) : List Asm :=
+def rawOpeningCode (depth : Nat) : List Asm :=
   let n := 2^depth
   [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (64*n) ++
   [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
@@ -208,6 +208,27 @@ def openingCode (depth : Nat) : List Asm :=
    .label "open-done",
    -- The output cursor advanced by exactly the serialized proof length.
    regop 11 25 15 0 32] ++ halt true
+
+/-- Keep all opening PCs while avoiding redundant constant-load instructions. -/
+def compactOpeningSetup : List Asm :=
+  [mv 9 12,mv 24 13,mv 25 15,mv 27 16,
+   insn (16777216+19*2^7+0x37),insn (1073741824+6*2^7+0x37),regop 18 9 6,
+   insn 0x0300006f] ++ List.replicate 11 (addi 0 0 0)
+
+def compactOpeningCounter : List Asm :=
+  [addi 25 25 32,regop 20 20 19,addi 28 0 24,insn 0x00c0006f,
+   addi 0 0 0,addi 0 0 0]
+
+def patchOpeningConstants : List Asm → Nat → List Asm
+  | [], _ => []
+  | .label name :: rest, index => .label name :: patchOpeningConstants rest index
+  | instruction :: rest, index =>
+      (if index<19 then (compactOpeningSetup[index]?).getD (addi 0 0 0)
+       else if 31 ≤ index ∧ index<37 then (compactOpeningCounter[index-31]?).getD (addi 0 0 0)
+       else instruction) :: patchOpeningConstants rest (index+1)
+
+def openingCode (depth : Nat) : List Asm :=
+  if depth=24 then patchOpeningConstants (rawOpeningCode depth) 0 else rawOpeningCode depth
 
 /-- Reject malformed lengths and every mismatching root. Values/indices are supplied
 by the trusted ABI; their validity and sorting do not depend on proof bytes. -/
