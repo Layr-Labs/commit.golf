@@ -14,9 +14,9 @@ def group341BodyWord (index : Nat) : BitVec 32 :=
   | _ => 4261807635
 
 def group341BodyWords : List (BitVec 32) :=
-  List.ofFn (fun i : Fin 1023 => group341BodyWord i.val)
+  List.ofFn (fun i : Fin 16368 => group341BodyWord i.val)
 
 def group341ImageWords : List (BitVec 32) :=
-  group341HeadWords ++ (group341BodyWords ++ [2157318755, 3932151919])
+  group341HeadWords ++ (group341BodyWords ++ [9835619, 3995005039, 2207187055])
 
 end CommitGolfCandidate

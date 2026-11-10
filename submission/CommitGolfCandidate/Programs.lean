@@ -119,7 +119,7 @@ def quadCommitCode (depth : Nat) : List Asm :=
   let n := 2^depth
   [mv 8 10, mv 26 11, mv 9 12] ++ commitLi 19 n ++ commitLi 6 (64*n) ++
   [regop 18 9 6] ++ commitLi 6 (32*n) ++ [regop 23 9 6] ++
-  -- Sample all salts once; each is an independent uniform 256-bit block.
+  -- Sample all salts once; each is an independent uniform 192-bit nonce.
   [addi 5 0 2, mv 10 18] ++ commitLi 11 (24*n) ++ [insn 0x73] ++
   -- Keep three physical setup slots so the main-loop addresses remain stable.
   [addi 21 8 (-32), mv 22 18, addi 0 0 0, addi 20 0 0] ++ compressScratch.take 5 ++
@@ -163,7 +163,7 @@ def octParentCode : List Asm :=
 def octCommitCode (depth : Nat) : List Asm :=
   patchOctEntry (quadCommitCode depth) false ++ octParentCode
 
-/-- Execute the eight-parent prefix once, then enter the maximal short-branch group. -/
+/-- Execute the eight-parent prefix once, then enter the long-jump parent group. -/
 def patchGroup341Entry : List Asm → Bool → List Asm
   | [], _ => []
   | .label name :: rest, _ => .label name :: patchGroup341Entry rest (name == "commit-parent-oct")
@@ -173,8 +173,9 @@ def patchGroup341Entry : List Asm → Bool → List Asm
 
 def group341ParentCode : List Asm :=
   [.label "commit-parent-group341"] ++
-  ((List.range 341).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
-  [.branch 1 12 9 "commit-parent-group341",.jump 0 "commit-root"]
+  ((List.range 5456).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
+  [.branch 1 12 9 "commit-parent-group-continue",.jump 0 "commit-root",
+    .label "commit-parent-group-continue",.jump 0 "commit-parent-group341"]
 
 /-- 2^depth is 16 modulo 341 exactly when depth is 4 modulo 10.
 Other development depths retain the promoted eight-parent program. -/

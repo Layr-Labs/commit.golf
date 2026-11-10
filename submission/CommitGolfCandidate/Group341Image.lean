@@ -15,7 +15,7 @@ theorem group341_image_entry : ParentGroupBranchFetched (submission.image .commi
   apply commit_fetch state 164 _ (by decide) pc
   rfl
 
-private theorem group341_image_triple (block : Nat) (bounded : block<341) :
+private theorem group341_image_triple (block : Nat) (bounded : block<5456) :
     ParentTripleFetched (submission.image .commit) (4760+BitVec.ofNat 64 (12*block)) := by
   intro state
   refine ⟨?_,?_,?_⟩
@@ -50,21 +50,28 @@ private theorem group341_image_triple (block : Nat) (bounded : block<341) :
       rw [show 168+3*block=166+3*block+2 by omega,group341_main_word block 2 bounded (by decide)]
       rfl
 
-theorem group341_image_sequence : ParentSequenceFetched (submission.image .commit) 4760 341 :=
+theorem group341_image_sequence : ParentSequenceFetched (submission.image .commit) 4760 5456 :=
   parent_sequence_slots _ _ _ group341_image_triple
 
-theorem group341_image_branch : ParentGroupBranchFetched (submission.image .commit) 8852 4100 := by
+theorem group341_image_branch : ParentGroupBranchFetched (submission.image .commit) 70232 8 := by
   intro state pc
-  apply commit_fetch state 1189 _ (by decide) pc
-  change (group341ImageWords[1189]?).bind decodeInstruction=some (.base (.BNE .x12 .x9 4100))
+  apply commit_fetch state 16534 _ (by decide) pc
+  change (group341ImageWords[16534]?).bind decodeInstruction=some (.base (.BNE .x12 .x9 8))
   rw [group341_end_word 0]
   rfl
 
-theorem group341_image_exit : ParentGroupExitFetched (submission.image .commit) 8856 2092708 := by
+theorem group341_image_exit : ParentGroupExitFetched (submission.image .commit) 70236 2031328 := by
   intro state pc
-  apply commit_fetch state 1190 _ (by decide) pc
-  change (group341ImageWords[1190]?).bind decodeInstruction=some (.base (.JAL .x0 2092708))
-  rw [show 1190=1189+1 by decide,group341_end_word 1]
+  apply commit_fetch state 16535 _ (by decide) pc
+  change (group341ImageWords[16535]?).bind decodeInstruction=some (.base (.JAL .x0 2031328))
+  rw [show 16535=16534+1 by decide,group341_end_word 1]
+  rfl
+
+theorem group341_image_loop : ParentGroupExitFetched (submission.image .commit) 70240 2031672 := by
+  intro state pc
+  apply commit_fetch state 16536 _ (by decide) pc
+  change (group341ImageWords[16536]?).bind decodeInstruction=some (.base (.JAL .x0 2031672))
+  rw [show 16536=16534+2 by decide,group341_end_word 2]
   rfl
 
 theorem group341_image_plan : ParentPlan.Fetched (submission.image .commit) group341Schedule.initialPlan := by
@@ -74,6 +81,6 @@ theorem group341_image_plan : ParentPlan.Fetched (submission.image .commit) grou
     oct_image_sequence,group341_image_entry,rfl,by decide,trivial⟩
 
 theorem group341_image_fetched : group341Schedule.Fetched (submission.image .commit) :=
-  ⟨group341_image_plan,group341_image_sequence,group341_image_branch,group341_image_exit⟩
+  ⟨group341_image_plan,group341_image_sequence,group341_image_branch,group341_image_loop,group341_image_exit⟩
 
 end CommitGolfCandidate

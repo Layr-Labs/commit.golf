@@ -20,10 +20,11 @@ namespace CommitGolf.Challenge
 def submission : CommitGolf.Submission := CommitGolfCandidate.submission
 
 set_option maxRecDepth 100000 in
+set_option maxHeartbeats 20000000 in
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
   rfl
 
-theorem certificate : CommitGolf.Certificate submission 102400 1728102486 48525 where
+theorem certificate : CommitGolf.Certificate submission 102400 1728059435 48525 where
   admission := CommitGolfCandidate.submission_admission
   machineSuccess := CommitGolfCandidate.submission_machine_success
   termination := CommitGolfCandidate.submission_termination
