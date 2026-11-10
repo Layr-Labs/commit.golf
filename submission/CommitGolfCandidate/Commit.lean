@@ -13,25 +13,25 @@ private def commitSetupInstructions : List Instr :=
   [.ADDI .x8 .x10 0, .ADDI .x26 .x11 0, .ADDI .x9 .x12 0] ++
   commitLoad .x19 4 ++ commitLoad .x6 256 ++ [.ADD .x18 .x9 .x6] ++
   commitLoad .x6 128 ++ [.ADD .x23 .x9 .x6, .ADDI .x5 .x0 2, .ADDI .x10 .x18 0] ++
-  commitLoad .x11 128
+  [.LUI .x11 (BitVec.ofNat 20 (128*1024)),.ADDI .x22 .x18 0,.JAL .x0 20]
 
 private def commitSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
   (commitSetupInstructions.take count).foldl execInstrBr state
 
-def commitSetupState (state : MachineState) : MachineState := commitSetupPrefix state 15
+def commitSetupState (state : MachineState) : MachineState := commitSetupPrefix state 16
 
 set_option maxHeartbeats 1000000 in
-/-- The 15-instruction setup computes pointers into the admitted private trapdoor
+/-- The 16-instruction setup computes pointers into the admitted private trapdoor
 and the total salt length; it performs no memory access or oracle call. -/
 theorem commit_setup (state : MachineState) (pc : state.pc = 4096)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .commit) (15 + fuel) state allowCoins =
+    execute (submission.image .commit) (16 + fuel) state allowCoins =
       (do let result ← execute (submission.image .commit) fuel (commitSetupState state) allowCoins
-          return result.charge 15 0) := by
+          return result.charge 16 0) := by
   apply execute_unit_steps (states := commitSetupPrefix state)
   intro i hi
   refine ⟨.base ((commitSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ (([0,1,2,3,4,10,11,17,18,19,25,26,27,28,29] : List Nat)[i]!) _ (by interval_cases i <;> decide)
+  · apply commit_fetch _ (([0,1,2,3,4,10,11,17,18,19,25,26,27,28,29,30] : List Nat)[i]!) _ (by interval_cases i <;> decide)
     · interval_cases i <;>
         simp [commitSetupPrefix, commitSetupInstructions, commitLoad, execInstrBr, signExtend21, pc,
           MachineState.setPC]
@@ -59,6 +59,12 @@ theorem commit_setup_pc (state : MachineState) (pc : state.pc = 4096) :
     (commitSetupState state).pc = 4236 := by
   simp [commitSetupState, commitSetupPrefix, commitSetupInstructions, commitLoad,
     execInstrBr, signExtend21, MachineState.setPC, pc]
+
+/-- Save the original salt base as the fixed heap-leaf output limit. -/
+theorem commit_setup_heap_end (state : MachineState) :
+    (commitSetupState state).getReg .x22=(commitSetupState state).getReg .x18 := by
+  simp [commitSetupState,commitSetupPrefix,commitSetupInstructions,commitLoad,
+    execInstrBr,signExtend12,MachineState.getReg,MachineState.setReg,MachineState.setPC]
 
 /-- The real RANDOM syscall samples the salt buffer with private coins. Its cost is
 one cycle plus one cycle per eight bytes; it makes no public oracle queries. -/
@@ -263,36 +269,52 @@ def commitPositionNextState (state : MachineState) : MachineState :=
 private def commitNextPrefix (state : MachineState) (count : Nat) : MachineState :=
   ([.ADDI .x18 .x18 32, .ADDI .x23 .x23 32, .ADDI .x20 .x20 1].take count).foldl execInstrBr state
 
-theorem commit_leaf_next_position (state : MachineState) (pc : state.pc = 4348) (fuel : Nat) :
-    execute (submission.image .commit) (4 + fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (commitPositionNextState state) true
-          return result.charge 4 0) := by
+/-- The actual latch advances two pointers and branches on the fixed heap limit. -/
+def outerPositionNextState (state : MachineState) : MachineState :=
+  ((state.setReg .x18 (state.getReg .x18+32)).setReg .x23 (state.getReg .x23+32)).setPC
+    (if BitVec.ult (state.getReg .x23+32) (state.getReg .x22) then 4280 else 4360)
+
+theorem outer_next_reference (state : MachineState) :
+    outerPositionNextState state =
+      ((commitPositionNextState state).setReg .x20 (state.getReg .x20)).setPC
+        (if BitVec.ult (state.getReg .x23+32) (state.getReg .x22) then 4280 else 4360) := by
+  cases state
+  dsimp [outerPositionNextState,commitPositionNextState,MachineState.getReg,
+    MachineState.setReg,MachineState.setPC]
+  congr 1
+  funext reg
+  cases reg <;> rfl
+
+theorem commit_leaf_next_position (state : MachineState) (pc : state.pc=4348) (fuel : Nat) :
+    execute (submission.image .commit) (3+fuel) state true =
+      (do let result ← execute (submission.image .commit) fuel (outerPositionNextState state) true
+          return result.charge 3 0) := by
   have setup (remaining : Nat) :
-      execute (submission.image .commit) (3 + remaining) state true =
-        (do let result ← execute (submission.image .commit) remaining (commitNextPrefix state 3) true
-            return result.charge 3 0) := by
+      execute (submission.image .commit) (2+remaining) state true =
+        (do let result ← execute (submission.image .commit) remaining (commitNextPrefix state 2) true
+            return result.charge 2 0) := by
     apply execute_unit_steps (states := commitNextPrefix state)
     intro i hi
-    refine ⟨.base (([.ADDI .x18 .x18 32, .ADDI .x23 .x23 32, .ADDI .x20 .x20 1][i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (63 + i) _ (by omega)
-      · interval_cases i <;> simp [commitNextPrefix, execInstrBr, pc, MachineState.setPC]
+    refine ⟨.base (([.ADDI .x18 .x18 32,.ADDI .x23 .x23 32][i]?).getD .EBREAK),?_,?_,?_⟩
+    · apply commit_fetch _ (63+i) _ (by omega)
+      · interval_cases i <;> simp [commitNextPrefix,execInstrBr,pc,MachineState.setPC]
       · interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
-  have fetched : fetch (submission.image .commit) (commitNextPrefix state 3) =
-      some (.base (.BLTU .x20 .x19 8112)) := by
-    apply commit_fetch _ 66 _ (by decide)
-    · simp [commitNextPrefix, execInstrBr, pc, MachineState.setPC]
+  have fetched : fetch (submission.image .commit) (commitNextPrefix state 2) =
+      some (.base (.BLTU .x23 .x22 8116)) := by
+    apply commit_fetch _ 65 _ (by decide)
+    · simp [commitNextPrefix,execInstrBr,pc,MachineState.setPC]
     · rfl
-  have stepped : ordinaryStep (commitNextPrefix state 3) (.base (.BLTU .x20 .x19 8112)) =
-      some (commitPositionNextState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, signExtend12,
-      commitNextPrefix, commitPositionNextState, MachineState.getReg, MachineState.setReg,
-      MachineState.setPC, pc]
+  have stepped : ordinaryStep (commitNextPrefix state 2) (.base (.BLTU .x23 .x22 8116)) =
+      some (outerPositionNextState state) := by
+    simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend13,signExtend12,
+      commitNextPrefix,outerPositionNextState,MachineState.getReg,MachineState.setReg,
+      MachineState.setPC,pc]
     split <;> simp_all
-  rw [show 4 + fuel = 3 + (fuel + 1) by omega, setup,
+  rw [show 3+fuel=2+(fuel+1) by omega,setup,
     execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
+  simp [instructionCycles,Execution.charge,← Nat.add_assoc]
 
 def commitPositionState (state : MachineState) : MachineState :=
   commitLeafCallState (commitCopyState state 46)
@@ -312,7 +334,8 @@ def commitPositionRun (state : MachineState) : OracleComp World MachineState := 
 set_option maxHeartbeats 400000 in
 /-- One complete commitment leaf iteration: load its salt, hash 2048 bits, store
 the resulting digest in the heap, then advance. All oracle replies are covered.
-This takes 95 instructions, 151 cycles, and exactly eight public queries. -/
+This takes 94 instructions, 150 cycles, and exactly eight public queries.
+The continuation restores the physical counter and pointer-selected PC. -/
 theorem commit_position (state : MachineState) (pc : state.pc = 4280)
     (scratch : state.getReg .x21 = 256)
     (oracleReady : CommitLeafOracleReady state) (blockCounter : state.getReg .x28=0)
@@ -323,10 +346,12 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4280)
     (messageValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (95 + fuel) state true =
+    execute (submission.image .commit) (94 + fuel) state true =
       (do let finished ← commitPositionRun state
-          let result ← execute (submission.image .commit) fuel finished true
-          return result.charge 151 8) := by
+          let result ← execute (submission.image .commit) fuel
+            ((finished.setReg .x20 (state.getReg .x20)).setPC
+              (if BitVec.ult (state.getReg .x23+32) (state.getReg .x22) then 4280 else 4360)) true
+          return result.charge 150 8) := by
   let ready := commitPositionState state
   let initialized := commitLeafReadyState ready
   have scratchValid : ∀ word : Fin 4,
@@ -354,9 +379,9 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4280)
       (commit_position_register state .x11 (by decide) (by decide)).trans r11,
       (commit_position_register state .x12 (by decide) (by decide)).trans r12,
       (commit_position_register state .x13 (by decide) (by decide)).trans r13⟩
-  have leafRun := commit_leaf_subroutine ready readyPC readyLink readyScratch readyOracle readyCounter readyMessage (8 + (4 + fuel)) true
+  have leafRun := commit_leaf_subroutine ready readyPC readyLink readyScratch readyOracle readyCounter readyMessage (8 + (3 + fuel)) true
   dsimp only [ready, commitPositionState] at leafRun
-  rw [show 95 + fuel = 8 + (1 + (74 + (8 + (4 + fuel)))) by omega,
+  rw [show 94 + fuel = 8 + (1 + (74 + (8 + (3 + fuel)))) by omega,
     commit_copy state 46 (Or.inl rfl) pc (by simpa [commitCopySource, commitCopyOffset] using saltValid) scratchValid,
     commit_leaf_call _ copyPC, leafRun]
   simp only [commitPositionRun, bind_assoc, pure_bind]
@@ -383,6 +408,19 @@ theorem commit_position (state : MachineState) (pc : state.pc = 4280)
     rw [commit_copy_pc]; rfl
   rw [commit_copy _ 55 (Or.inr (Or.inl rfl)) rfl (by simpa [commitCopySource, commitCopyOffset] using sourceValid) destinationValid,
     commit_leaf_next_position _ storePC]
+  have copied20 : (commitCopyState (leaf.setPC 4316) 55).getReg .x20=state.getReg .x20 := by
+    rw [commit_copy_register _ _ .x20 (by decide),MachineState.getReg_setPC,
+      registers .x20 (by decide),initRegister .x20 (by decide),
+      commit_position_register state .x20 (by decide) (by decide)]
+  have copied23 : (commitCopyState (leaf.setPC 4316) 55).getReg .x23=state.getReg .x23 := by
+    rw [commit_copy_register _ _ .x23 (by decide),MachineState.getReg_setPC,
+      registers .x23 (by decide),initRegister .x23 (by decide),
+      commit_position_register state .x23 (by decide) (by decide)]
+  have copied22 : (commitCopyState (leaf.setPC 4316) 55).getReg .x22=state.getReg .x22 := by
+    rw [commit_copy_register _ _ .x22 (by decide),MachineState.getReg_setPC,
+      registers .x22 (by decide),initRegister .x22 (by decide),
+      commit_position_register state .x22 (by decide) (by decide)]
+  rw [outer_next_reference,copied20,copied23,copied22]
   simp [Execution.charge, ← Nat.add_assoc]
 
 end CommitGolfCandidate

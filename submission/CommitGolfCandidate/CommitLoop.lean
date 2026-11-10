@@ -1,11 +1,12 @@
-import CommitGolfCandidate.Commit
+import CommitGolfCandidate.OuterHelpers
 
 /-! Execution of every leaf iteration of the submitted commitment image. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-/-- The salt, digest, message, and index pointers advance independently. The loop
-preserves the tree base, total leaf count, scratch pointer, and commitment pointer. -/
+/-- The salt, digest, message, and index pointers advance independently. The reference loop
+preserves the tree base, total leaf count, scratch pointer, fixed output limit,
+and commitment pointer. -/
 theorem commit_position_registers (state finished : MachineState)
     (reachable : finished ∈ support (commitPositionRun state)) :
     finished.getReg .x8 = state.getReg .x8 + 256 ∧
@@ -13,7 +14,7 @@ theorem commit_position_registers (state finished : MachineState)
     finished.getReg .x23 = state.getReg .x23 + 32 ∧
     finished.getReg .x20 = state.getReg .x20 + 1 ∧
     finished.pc = (if BitVec.ult (state.getReg .x20 + 1) (state.getReg .x19) then 4280 else 4364) ∧
-    ∀ reg ∈ [Reg.x9, .x19, .x21, .x26], finished.getReg reg = state.getReg reg := by
+    ∀ reg ∈ [Reg.x9, .x19, .x21, .x22, .x26], finished.getReg reg = state.getReg reg := by
   simp only [commitPositionRun, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨leaf, reached, rfl⟩ := reachable
   let ready := commitLeafReadyState (commitPositionState state)
@@ -23,10 +24,10 @@ theorem commit_position_registers (state finished : MachineState)
       ready.getReg reg = state.getReg reg := by
     rw [commit_leaf_ready_register _ reg (by simp_all)]
     exact commit_position_register state reg notLink notTemporary
-  have leafReg (reg : Reg) (member : reg ∈ [Reg.x9, .x18, .x19, .x20, .x21, .x23, .x26]) :
+  have leafReg (reg : Reg) (member : reg ∈ [Reg.x9, .x18, .x19, .x20, .x21, .x22, .x23, .x26]) :
       leaf.getReg reg = state.getReg reg := by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-    rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+    rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
       exact (regs.2 _ (by decide)).trans (preserved _ (by decide) (by decide) (by decide) (by decide))
   have value : leaf.getReg .x8 = state.getReg .x8 + 256 := by
     rw [regs.1, preserved .x8 (by decide) (by decide) (by decide) (by decide)]; rfl
@@ -113,6 +114,24 @@ structure CommitLeavesInvariant (state : MachineState) (remaining : Nat) : Prop 
     accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true
   oracleReady : CommitLeafOracleReady state
   blockCounter : state.getReg .x28=0
+  heapProgress : (state.getReg .x23).toNat+32*remaining=(state.getReg .x22).toNat
+
+theorem heap_step_nooverflow (pointer limit : Word) (remaining : Nat)
+    (progress : pointer.toNat+32*(remaining+1)=limit.toNat) :
+    (pointer+32).toNat=pointer.toNat+32 := by
+  rw [BitVec.toNat_add]
+  change (pointer.toNat+32)%18446744073709551616=pointer.toNat+32
+  apply Nat.mod_eq_of_lt
+  have small := BitVec.isLt limit
+  change limit.toNat<18446744073709551616 at small
+  omega
+
+theorem heap_step_branch (pointer limit : Word) (remaining : Nat)
+    (progress : pointer.toNat+32*(remaining+1)=limit.toNat) :
+    BitVec.ult (pointer+32) limit=decide (0<remaining) := by
+  simp only [BitVec.ult,heap_step_nooverflow pointer limit remaining progress]
+  have equivalent : pointer.toNat+32<limit.toNat ↔ 0<remaining := by omega
+  simp only [equivalent]
 
 theorem commit_leaves_next_invariant (state finished : MachineState) (remaining : Nat)
     (invariant : CommitLeavesInvariant state (remaining + 1))
@@ -133,7 +152,7 @@ theorem commit_leaves_next_invariant (state finished : MachineState) (remaining 
       have := invariant.counter
       omega
     simp only [equivalent]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [regs.2.2.2.2.1, branch]
     by_cases empty : remaining = 0 <;> simp [empty, Nat.pos_of_ne_zero]
   · rw [regs.2.2.2.1, regs.2.2.2.2.2 .x19 (by simp), counter]
@@ -166,6 +185,10 @@ theorem commit_leaves_next_invariant (state finished : MachineState) (remaining 
 
   · exact (commit_position_oracle_ready state finished invariant.scratch reachable).1
   · exact (commit_position_oracle_ready state finished invariant.scratch reachable).2
+  · rw [regs.2.2.1,regs.2.2.2.2.2 .x22 (by simp),
+      heap_step_nooverflow _ _ remaining invariant.heapProgress]
+    have := invariant.heapProgress
+    omega
 
 /-- Loop state distribution, using precisely the same queries as the machine. -/
 def commitLeaves : MachineState → Nat → OracleComp World MachineState
@@ -176,28 +199,63 @@ def commitLeaves : MachineState → Nat → OracleComp World MachineState
 
 attribute [local irreducible] execute commitPositionRun
 
-/-- Every leaf is processed. This is an exact execution equality, not a sampled
-benchmark: 95 instructions, 151 cycles and eight queries per leaf. -/
+/-- The physical loop carries no incrementing position counter. Its heap pointer
+selects the same iteration count as the reference counter. -/
+theorem outer_position_execute (state : MachineState) (remaining : Nat)
+    (invariant : CommitLeavesInvariant state (remaining+1)) (fuel : Nat) :
+    execute (submission.image .commit) (94+fuel) (outerFinish state 4280) true =
+      (do let next ← commitPositionRun state
+          let result ← execute (submission.image .commit) fuel
+            (outerFinish next (if remaining=0 then 4360 else 4280)) true
+          return result.charge 150 8) := by
+  have regs (reg : Reg) (ne : reg ≠ .x20) :
+      (outerFinish state 4280).getReg reg=state.getReg reg := by
+    simp [outerFinish,MachineState.getReg_setPC,MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm ne)]
+  have ready : CommitLeafOracleReady (outerFinish state 4280) := by
+    rcases invariant.oracleReady with ⟨a,b,c,d,e⟩
+    exact ⟨(regs .x5 (by decide)).trans a,(regs .x10 (by decide)).trans b,
+      (regs .x11 (by decide)).trans c,(regs .x12 (by decide)).trans d,
+      (regs .x13 (by decide)).trans e⟩
+  rw [commit_position _ rfl ((regs .x21 (by decide)).trans invariant.scratch) ready
+    ((regs .x28 (by decide)).trans invariant.blockCounter)
+    (fun word => by rw [regs .x18 (by decide)]; exact invariant.salts word.val (by omega))
+    (fun word => by rw [regs .x23 (by decide)]; exact invariant.heap word.val (by omega))
+    (fun word bounded => by rw [regs .x8 (by decide)]; exact invariant.message word (by omega))]
+  have branch : (if BitVec.ult (state.getReg .x23+32) (state.getReg .x22) then
+      (4280 : Word) else 4360)=(if remaining=0 then 4360 else 4280) := by
+    rw [heap_step_branch _ _ remaining invariant.heapProgress]
+    by_cases empty : remaining=0 <;> simp [empty,Nat.pos_of_ne_zero]
+  simp only [regs .x23 (by decide),regs .x22 (by decide),
+    show (outerFinish state 4280).getReg .x20=0 by rfl,branch]
+  change (do let next ← commitPositionRun ((state.setReg .x20 0).setPC 4280)
+             let result ← execute (submission.image .commit) fuel
+               (outerFinish next (if remaining=0 then 4360 else 4280)) true
+             return result.charge 150 8) = _
+  rw [outer_position_run_pc]
+  exact outer_position_bind state 0 (if remaining=0 then 4360 else 4280)
+    (fun finished => do
+      let result ← execute (submission.image .commit) fuel finished true
+      return result.charge 150 8)
+
+/-- Every leaf is processed: 94 instructions, 150 cycles and eight queries. -/
 theorem commit_leaves (state : MachineState) (remaining : Nat)
     (invariant : CommitLeavesInvariant state remaining) (fuel : Nat) :
-    execute (submission.image .commit) (95 * remaining + fuel) state true =
+    execute (submission.image .commit) (94*remaining+fuel)
+      (outerFinish state (if remaining=0 then 4360 else 4280)) true =
       (do let finished ← commitLeaves state remaining
-          let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (151 * remaining) (8 * remaining)) := by
+          let result ← execute (submission.image .commit) fuel (outerFinish finished 4360) true
+          return result.charge (150*remaining) (8*remaining)) := by
   induction remaining generalizing state with
-  | zero => simp [commitLeaves, Execution.charge]
+  | zero => simp [commitLeaves,Execution.charge]
   | succ remaining ih =>
-    have pc : state.pc = 4280 := by simpa using invariant.pc
-    rw [show 95 * (remaining + 1) + fuel = 95 + (95 * remaining + fuel) by omega,
-      commit_position state pc invariant.scratch invariant.oracleReady invariant.blockCounter
-        (fun word => invariant.salts word.val (by omega))
-        (fun word => invariant.heap word.val (by omega))
-        (fun word bounded => invariant.message word (by omega))]
-    simp only [commitLeaves, bind_assoc]
+    rw [show 94*(remaining+1)+fuel=94+(94*remaining+fuel) by omega]
+    simp only [Nat.add_eq_zero_iff, Nat.one_ne_zero, and_false, ↓reduceIte]
+    rw [outer_position_execute state remaining invariant]
+    simp only [commitLeaves,bind_assoc]
     apply bind_congr_of_forall_mem_support
     intro next reached
     rw [ih next (commit_leaves_next_invariant state next remaining invariant reached)]
-    simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm]
+    simp [Execution.charge,Nat.mul_add,Nat.add_comm,Nat.add_left_comm]
 
 /-- The outer loop preserves the globally initialized syscall arguments. -/
 theorem commit_leaves_oracle_ready (state : MachineState) (remaining : Nat)
@@ -230,6 +288,6 @@ theorem commit_leaves_finished (state : MachineState) (remaining : Nat)
     obtain ⟨next, reached, rest⟩ := reachable
     have done := ih next (commit_leaves_next_invariant state next remaining invariant reached) rest
     exact ⟨done.1, fun reg member => (done.2 reg member).trans
-      ((commit_position_registers state next reached).2.2.2.2.2 reg member)⟩
+      ((commit_position_registers state next reached).2.2.2.2.2 reg (by simp only [List.mem_cons,List.not_mem_nil,or_false] at member ⊢; tauto))⟩
 
 end CommitGolfCandidate

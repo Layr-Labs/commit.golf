@@ -107,8 +107,12 @@ def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
 /-- A direct upper-immediate load and jump keep seven slots while executing two. -/
 def commitLi (rd value : Nat) : List Asm :=
   if value % 4096 = 0 ∧ value < 2^31 then
-    [insn (value + rd * 2^7 + 0x37), insn 0x0180006f] ++
-      List.replicate 5 (addi 0 0 0)
+    if rd = 11 then
+      [insn (value + rd * 2^7 + 0x37), addi 22 18 0, insn 0x0140006f] ++
+        List.replicate 4 (addi 0 0 0)
+    else
+      [insn (value + rd * 2^7 + 0x37), insn 0x0180006f] ++
+        List.replicate 5 (addi 0 0 0)
   else li rd value
 
 def commitCode (depth : Nat) : List Asm :=
@@ -120,7 +124,7 @@ def commitCode (depth : Nat) : List Asm :=
   li 21 256 ++ [addi 20 0 0] ++ compressScratch.take 5 ++
   [addi 28 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
-  [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
+  [addi 18 18 32, addi 23 23 32, .branch 6 23 22 "commit-leaf", insn 0x0100006f,
    insn 0x00c0006f, addi 11 0 64, addi 13 0 0,
    addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7, insn 0x73,

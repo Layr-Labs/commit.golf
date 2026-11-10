@@ -134,8 +134,7 @@ theorem commit_parents_finished (state : MachineState) (remaining : Nat)
       rfl
     · exact done.1 (Nat.pos_of_ne_zero empty)
 
-/-- Reference parent initialization. The image bypasses the fixed constants
-under the live-argument invariant, then initializes the descending node counter. -/
+/-- Initialize fixed syscall constants and the descending internal-node counter once. -/
 private def parentStartInstructions : List Instr :=
   [.ADDI .x5 .x0 0, .ADDI .x11 .x0 64, .ADDI .x13 .x0 0,
    .ADDI .x20 .x19 4095]
@@ -226,6 +225,48 @@ theorem commit_parents_start (state : MachineState) (pc : state.pc = 4364)
     execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
+theorem commit_parents_outer_start (state : MachineState) (pc : state.pc = 4364)
+    (ready : CommitLeafOracleReady state) (fuel : Nat) :
+    execute (submission.image .commit) (3 + fuel) (outerFinish state 4360) true =
+      (do let result ← execute (submission.image .commit) fuel (commitParentsStartState state) true
+          return result.charge 3 0) := by
+  have setup (remaining : Nat) :
+      execute (submission.image .commit) (2+remaining) (outerFinish state 4360) true =
+        (do let result ← execute (submission.image .commit) remaining (parentStartPrefix state 4) true
+            return result.charge 2 0) := by
+    let jumped := outerFinish state 4376
+    have f0 : fetch (submission.image .commit) (outerFinish state 4360) = some (.base (.JAL .x0 16)) := by
+      apply commit_fetch _ 66 _ (by decide) rfl; rfl
+    have s0 : ordinaryStep (outerFinish state 4360) (.base (.JAL .x0 16)) = some jumped := by
+      simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend21,
+        MachineState.setReg,MachineState.setPC,outerFinish,jumped,pc]
+    have f1 : fetch (submission.image .commit) jumped = some (.base (.ADDI .x20 .x19 4095)) := by
+      apply commit_fetch _ 70 _ (by decide) rfl; rfl
+    have s1 : ordinaryStep jumped (.base (.ADDI .x20 .x19 4095)) =
+        some (parentStartPrefix state 4) := by
+      rw [parent_start_ready state ready]
+      simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,
+        jumped,outerFinish,pc,MachineState.getReg,MachineState.setReg,MachineState.setPC,BitVec.sub_eq_add_neg]
+      funext reg
+      by_cases equal : reg=.x20 <;> simp [equal]
+    rw [show 2+remaining=(remaining+1)+1 by omega,
+      execute_ordinary_step _ _ _ _ _ _ f0 s0,execute_ordinary_step _ _ _ _ _ _ f1 s1]
+    simp [instructionCycles,Execution.charge,← Nat.add_assoc]
+  let next := parentStartPrefix state 4
+  have fetched : fetch (submission.image .commit) next = some (.base (.BEQ .x20 .x0 32)) := by
+    apply commit_fetch _ 71 _ (by decide)
+    · simp [next, parentStartPrefix, parentStartInstructions, execInstrBr, pc, MachineState.setPC]
+    · rfl
+  have stepped : ordinaryStep next (.base (.BEQ .x20 .x0 32)) = some (commitParentsStartState state) := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13,
+      next, commitParentsStartState, parentStartPrefix, parentStartInstructions,
+      signExtend12, pc, MachineState.getReg, MachineState.setReg, MachineState.setPC,
+      BitVec.sub_eq_add_neg]
+    split <;> simp_all
+  rw [show 3 + fuel = 2 + (fuel + 1) by omega, setup,
+    execute_ordinary_step _ _ _ _ _ _ fetched stepped]
+  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
+
 def commitExitState (state : MachineState) : MachineState :=
   ((state.setReg .x5 1).setReg .x10 0).setPC 4452
 
@@ -286,12 +327,13 @@ theorem commit_body (state : MachineState) (count : Nat)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (102 * count + 7 + fuel) state true =
+    execute (submission.image .commit) (101 * count + 7 + fuel) (outerFinish state 4280) true =
       (do let finished ← commitBody state count
-          return ⟨.success, finished, 165 * count, 9 * count - 1⟩) := by
-  rw [show 102 * count + 7 + fuel =
-    95 * count + (3 + (7 * (count - 1) + (11 + fuel))) by omega,
-    commit_leaves state count leaves]
+          return ⟨.success, finished, 164 * count, 9 * count - 1⟩) := by
+  rw [show 101 * count + 7 + fuel =
+    94 * count + (3 + (7 * (count - 1) + (11 + fuel))) by omega,
+    show (outerFinish state 4280)=outerFinish state (if count=0 then 4360 else 4280) by
+      rw [if_neg (by omega)], commit_leaves state count leaves]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro hashed reached
@@ -323,7 +365,7 @@ theorem commit_body (state : MachineState) (count : Nat)
   have readyBuffers : ParentBuffers (ready.getReg .x9) (count - 1) := by
     rw [readyHeap]; exact parents
   have leafReady := commit_leaves_oracle_ready state count leaves hashed reached
-  rw [commit_parents_start hashed leafDone.1 leafReady,
+  rw [commit_parents_outer_start hashed leafDone.1 leafReady,
     commit_parents ready (count - 1) (by omega) readyPC readyCount (commit_parents_start_constants hashed) readyBuffers]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
