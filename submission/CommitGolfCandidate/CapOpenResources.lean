@@ -22,7 +22,7 @@ theorem cap_open_loaded_batch_bytes
 theorem cap_open_result_batch_cycles
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
-    (capOpenNonemptyResult trapdoor positions).cycles ≤ 45000 :=
+    (capOpenNonemptyResult trapdoor positions).cycles ≤ 40971 :=
   cap_open_loaded_batch_cycles positions (by simpa only [BATCH] using batch)
 
 private theorem oracle_pure (oracle : Oracle) {α : Type} (value : α) :
@@ -45,7 +45,7 @@ theorem cap_open_batch_resources (oracle : Oracle)
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
     (prEvent ((fun result => result.1.exit = Exit.success ∧
-      result.1.cycles ≤ 45000 ∧ result.2 = 0 ∧
+      result.1.cycles ≤ 40971 ∧ result.2 = 0 ∧
       (capProgram.readProof result.1).length ≤ 75776) <$>
       oracle.run (capProgram.run .opening (trapdoor, positions)))) = 1 := by
   have positive : 0 < positions.card := by rw [batch]; decide
