@@ -1,7 +1,8 @@
 import CommitGolf.Programs
 
 /-! Literal challenge-image words. The full certificate proves execution of these
-bytes, and Group341Encoding separately checks equality with the assembler output. -/
+bytes. Group341Encoding proves indexed lookup facts; CapPackedImageEquality
+checks equality with the exact delivered artifact. -/
 namespace CommitGolfCandidate
 
 def group341HeadWords : List (BitVec 32) :=
@@ -14,9 +15,9 @@ def group341BodyWord (index : Nat) : BitVec 32 :=
   | _ => 4261807635
 
 def group341BodyWords : List (BitVec 32) :=
-  List.ofFn (fun i : Fin 1023 => group341BodyWord i.val)
+  List.ofFn (fun i : Fin 251658 => group341BodyWord i.val)
 
 def group341ImageWords : List (BitVec 32) :=
-  group341HeadWords ++ (group341BodyWords ++ [2157318755, 3932151919])
+  group341HeadWords ++ (group341BodyWords ++ [9835619, 2810224751, 3170934895])
 
 end CommitGolfCandidate

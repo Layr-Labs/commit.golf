@@ -2,7 +2,7 @@ import CommitGolfCandidate.Programs
 
 /-! Prospective cap opening/check assembly. These images are deliberately separate
 from candidate/submission until decoded execution, formal refinement and security
-have all been established. Commitment code remains the published four-parent code. -/
+have all been established. Commitment code is supplied by candidate; this file replaces opening/checker only. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
@@ -86,7 +86,7 @@ def capCheckCode (depth : Nat) : List Asm :=
   [.jump 0 "accept", .label "cap-empty", .branch 1 17 0 "reject",
    .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++ leafSubroutine
 
-/-- Experimental images only: not the certified or submitted candidate. -/
+/-- Cap images; the complete certificate is assembled separately. -/
 def capExperimental (depth : Nat) : Submission :=
   { candidate depth with image := fun program =>
       match program with

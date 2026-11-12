@@ -1,5 +1,6 @@
 import CommitGolfCandidate.CapCertificate
 import CommitGolf.Artifact
+import CommitGolfCandidate.CapPackedImageEquality
 
 /-! Cap multiproof certificate for the delivered RISC-V images. The retained
 full-path scheme remains an explicit reference for the hiding reduction; the
@@ -11,9 +12,9 @@ def submission : CommitGolf.Submission := CommitGolfCandidate.capProgram
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 8000000 in
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+  exact CommitGolfCandidate.cap_packed_submission_matches
 
-theorem certificate : CommitGolf.Certificate submission 75776 1761656918 40395 :=
+theorem certificate : CommitGolf.Certificate submission 75776 1761608117 40395 :=
   CommitGolfCandidate.cap_certificate
 
 end CommitGolf.Challenge

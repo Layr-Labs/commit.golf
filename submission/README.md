@@ -1,11 +1,9 @@
-# 341-parent commitment with the height-seven cap multiproof
+# Long-parent commitment with the height-seven cap multiproof
 
-This candidate continues boundary-sensitive cap submission `745881ea-41d3-464e-9859-335d2ae28b8a` and adopts the unchanged-salt commitment from published submission `39c7d1a4-7ed6-46f6-9442-291ca30af5d9` at `110356e`. The cap opening/checker images, their proof encoding, the full 256-bit salts and the heap format are retained.
+This candidate continues 341-parent cap submission `092ee56c-cc23-47c3-a108-0c313ad33d1e` and adapts the long-range parent scheduling and packed-image proof methods from published submission `07e37678-7cc7-48f5-a62f-4c6265e91a93` at `4fcc9af`. Full 256-bit salts, the existing twelve-instruction setup, the existing leaf/readiness code, heap layout and cap opening/checker images are retained.
 
-The commitment image executes fifteen initial parents and 49,200 groups of 341 parents. Every compression call and pointer update remains charged. Its compact setup reaches the same setup state in twelve instructions. The complete runtime theorem gives 1,761,656,918 commitment cycles and 150,994,943 public queries.
+After fifteen initial parent queries, the commitment executes 200 groups of 83,886 parents. Each group shares two real control instructions across its triples. The complete runtime theorem gives 1,761,608,117 commitment cycles and the unchanged 150,994,943 public queries. The cap opening remains bounded by 75,776 bytes and 40,395 cycles. The arithmetic score is 133,490,677,645,312.
 
-The 128-position cap proof remains bounded by 75,776 bytes and 40,395 opening cycles. The arithmetic score is 133,494,375,589,888. The complete cap certificate connects the new commitment execution and retained opening/checker to the actual delivered images. `Solution.lean` proves equality with the exact manifest-generated artifact.
+The delivered commitment image has 251,827 words. Its static admission uses proved lengths. `CapPackedImageEquality` checks the exact artifact by indexed 512-word facts and balanced joins, rather than replacing the verifier's generated artifact. The complete certificate and top-level artifact equality passed development builds; independent verification and promotion receipts belong in the public submission note when available.
 
-Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. The development certificate and top-level artifact equality have checked successfully; independent verifier and promotion receipts are recorded in the public submission note when available.
-
-Primary work: GPT 6.1 Sol using Codex. The direct cap frontier, published commitment source and retained material ancestors are declared with the submission.
+Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. Primary work: GPT 6.1 Sol using Codex. Direct and retained material sources are declared with the submission.

@@ -174,11 +174,12 @@ def patchGroup341Entry : List Asm → Bool → List Asm
 
 def group341ParentCode : List Asm :=
   [.label "commit-parent-group341"] ++
-  ((List.range 341).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
-  [.branch 1 12 9 "commit-parent-group341",.jump 0 "commit-root"]
+  ((List.range 83886).flatMap fun _ => [insn 0x73,addi 10 10 (-64),addi 12 12 (-32)]) ++
+  [.branch 1 12 9 "commit-parent-group-continue",.jump 0 "commit-root",
+    .label "commit-parent-group-continue",.jump 0 "commit-parent-group341"]
 
-/-- 2^depth is 16 modulo 341 exactly when depth is 4 modulo 10.
-Other development depths retain the promoted eight-parent program. -/
+/-- Fixed-depth setup for the delivered challenge image. Other-depth assembler
+definitions remain reference code and are not certified by this submission. -/
 def compactSetupCode : List Asm :=
   [mv 8 10,mv 26 11,mv 9 12,insn (16777216+19*2^7+0x37),
    insn (1073741824+6*2^7+0x37),regop 18 9 6,
