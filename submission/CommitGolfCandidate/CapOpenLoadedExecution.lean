@@ -1,6 +1,7 @@
 import CommitGolfCandidate.CapOpenLoadedDfs
 import CommitGolfCandidate.CapOpenExit
-import CommitGolfCandidate.CapOpenPotential
+import CommitGolfCandidate.BoundaryPotential
+import CommitGolfCandidate.CapBoundarySize
 
 /-! Complete finite-fuel execution of every nonempty experimental opening,
 including the real success HALT. It charges the actual record count and DFS
@@ -55,8 +56,10 @@ theorem cap_open_loaded_execution
 
 theorem cap_open_loaded_batch_cycles (positions : Positions) (batch : positions.card = 128) :
     29+278*positions.card+1272+2+
-      capDfsCycleTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+4 ≤ 40971 := by
-  have traversal := cap_open_cycle_4080 (capOpenRequestedMarks positions)
+      capDfsCycleTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+4 ≤ 40395 := by
+  have traversal := cap_boundary_cycle_bound (capOpenRequestedMarks positions)
+  have positive : 0 < positions.card := by omega
+  have boundary := cap_open_requested_boundary_bound positions positive
   rw [batch]
   omega
 

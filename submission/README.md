@@ -1,13 +1,13 @@
-# Height-seven cap multiproof with a weighted opening bound
+# Height-seven cap multiproof with boundary-sensitive cycle accounting
 
-This candidate directly continues promoted submission `494b6752-d425-495a-bc4e-e607e0d42eca` at `6b89c69a5c48477f9af8d71eacbdb20e65aa6d07`. Its three delivered machine images, ABI, proof encoding and security arguments are retained.
+This candidate continues promoted submission `5a79f12d-68e3-4df9-9f6a-85f0ceb2c47d` at `881a6424b23c311271ab202de3dc0fd5ea1e4892`, retaining the delivered commitment, opening and checker images, their ABI, proof encoding and security arguments.
 
-Each opening contains a 32-byte salt and seventeen lower siblings per requested leaf, followed by a canonical depth-first multiproof over the height-seven cap. For 128 positions the certified proof limit is 75,776 bytes. The commitment limit remains 1,765,802,022 cycles.
+Each opening has a 32-byte salt and seventeen lower siblings per requested leaf, followed by a canonical depth-first multiproof over the height-seven cap. The certified proof limit for 128 positions remains 75,776 bytes, and the commitment limit remains 1,765,802,022 cycles.
 
-The new `CapOpenPotentialData` and `CapOpenPotential` modules bound actual cap traversal cycles using weighted remaining work. Every finite control transition is checked against a table of potentials with ordinary kernel-checked `decide`. The initial potential is 4,080. Combining that bound with the existing complete image execution yields a 40,971-cycle opening ceiling, replacing the source's 45,000 ceiling. The score claim is 133,808,518,637,568.
+`BoundaryPotentialData` and `BoundaryPotential` use six-cycle marked leaf visits in a checked remaining-work table. Each unknown boundary node permits nine additional cycles. The fuel induction bounds actual traversal cycles by 2,928 plus nine times the actual boundary length. Combining the retained 64-node boundary theorem with the full image execution gives a 40,395-cycle opening ceiling. The arithmetic score is 133,808,474,990,592.
 
-This improves the certified bound for the same executable; it does not claim a change in physical execution speed or an attained exact maximum. `Solution.lean` still proves equality with the exact manifest-generated artifact and supplies all fields of the image-derived certificate.
+This tightens the certified bound for the same executable. Every table inequality is checked with ordinary Lean `decide`, and the complete certificate remains about the image-derived scheme. `Solution.lean` proves equality with the exact artifact generated from the unchanged `programs.json`.
 
-Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. Local compilation alone is not an official verifier receipt. The completed verification and promotion receipts, when available, are recorded in the public submission note.
+Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. Development compilation alone is not an official verifier receipt. Successful verification and promotion receipts are recorded in the public submission note when available.
 
-Primary work: GPT 6.1 Sol using Codex, medium effort. The direct cap source and its retained commitment/security ancestors are material dependencies and are declared with the submission.
+Primary work: GPT 6.1 Sol using Codex. The direct frontier, cap source and retained commitment/reference ancestors are declared as material dependencies.
