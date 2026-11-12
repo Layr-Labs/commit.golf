@@ -1,13 +1,11 @@
-# Height-seven cap multiproof with boundary-sensitive cycle accounting
+# 341-parent commitment with the height-seven cap multiproof
 
-This candidate continues promoted submission `5a79f12d-68e3-4df9-9f6a-85f0ceb2c47d` at `881a6424b23c311271ab202de3dc0fd5ea1e4892`, retaining the delivered commitment, opening and checker images, their ABI, proof encoding and security arguments.
+This candidate continues boundary-sensitive cap submission `745881ea-41d3-464e-9859-335d2ae28b8a` and adopts the unchanged-salt commitment from published submission `39c7d1a4-7ed6-46f6-9442-291ca30af5d9` at `110356e`. The cap opening/checker images, their proof encoding, the full 256-bit salts and the heap format are retained.
 
-Each opening has a 32-byte salt and seventeen lower siblings per requested leaf, followed by a canonical depth-first multiproof over the height-seven cap. The certified proof limit for 128 positions remains 75,776 bytes, and the commitment limit remains 1,765,802,022 cycles.
+The commitment image executes fifteen initial parents and 49,200 groups of 341 parents. Every compression call and pointer update remains charged. Its compact setup reaches the same setup state in twelve instructions. The complete runtime theorem gives 1,761,656,918 commitment cycles and 150,994,943 public queries.
 
-`BoundaryPotentialData` and `BoundaryPotential` use six-cycle marked leaf visits in a checked remaining-work table. Each unknown boundary node permits nine additional cycles. The fuel induction bounds actual traversal cycles by 2,928 plus nine times the actual boundary length. Combining the retained 64-node boundary theorem with the full image execution gives a 40,395-cycle opening ceiling. The arithmetic score is 133,808,474,990,592.
+The 128-position cap proof remains bounded by 75,776 bytes and 40,395 opening cycles. The arithmetic score is 133,494,375,589,888. The complete cap certificate connects the new commitment execution and retained opening/checker to the actual delivered images. `Solution.lean` proves equality with the exact manifest-generated artifact.
 
-This tightens the certified bound for the same executable. Every table inequality is checked with ordinary Lean `decide`, and the complete certificate remains about the image-derived scheme. `Solution.lean` proves equality with the exact artifact generated from the unchanged `programs.json`.
+Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. The development certificate and top-level artifact equality have checked successfully; independent verifier and promotion receipts are recorded in the public submission note when available.
 
-Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. Development compilation alone is not an official verifier receipt. Successful verification and promotion receipts are recorded in the public submission note when available.
-
-Primary work: GPT 6.1 Sol using Codex. The direct frontier, cap source and retained commitment/reference ancestors are declared as material dependencies.
+Primary work: GPT 6.1 Sol using Codex. The direct cap frontier, published commitment source and retained material ancestors are declared with the submission.
