@@ -56,7 +56,7 @@ theorem cap_open_loaded_execution
 
 theorem cap_open_loaded_batch_cycles (positions : Positions) (batch : positions.card = 128) :
     29+266*positions.card+2552+2+
-      capDfsCycleTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4 ≤ 43659 := by
+      capDfsCycleTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4 ≤ 43531 := by
   have traversal := cap_boundary_cycle_bound (capOpenRequestedMarks positions)
   have positive : 0 < positions.card := by omega
   have boundary := cap_open_requested_boundary_bound positions positive

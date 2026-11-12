@@ -84,11 +84,11 @@ theorem cap_marked_visit_execute (checking : Bool) (state : MachineState) (node 
     (positive : 0 < node) (bounded : node < 512)
     (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (present : marked node = true) (fuel : Nat) (allowCoins : Bool) :
-    execute (capWalkImage checking) ((4 + (if node < 256 then 3 else 2)) + fuel)
+    execute (capWalkImage checking) ((4 + (if node < 256 then 3 else 1)) + fuel)
         state allowCoins =
       (do let result ← execute (capWalkImage checking) fuel
             (capMarkedVisitState checking state node) allowCoins
-          return result.charge (4 + (if node < 256 then 3 else 2)) 0) := by
+          return result.charge (4 + (if node < 256 then 3 else 1)) 0) := by
   have nextPC := cap_marked_prepare_pc checking state node pc base index positive bounded
     marked ready present
   have nextIndex : (capMarkedPrepare checking state).getReg .x20 = BitVec.ofNat 64 node :=

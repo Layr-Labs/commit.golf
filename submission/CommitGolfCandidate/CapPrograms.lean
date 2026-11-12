@@ -25,9 +25,8 @@ Opening emits one trapdoor heap root for each unknown subtree. -/
 def capWalk (checking : Bool) (marks leafCount roots proofEnd : Nat) : List Asm :=
   [addi 20 0 1, addi 31 0 1, .label "cap-visit",
    shift 7 20 3, regop 23 marks 7, ld 6 23 0,
-   .branch 0 6 0 "cap-unknown", .branch 6 20 leafCount "cap-descend",
-   .jump 0 "cap-advance", .label "cap-descend", shift 20 20 1,
-   .jump 0 "cap-visit", .label "cap-unknown"] ++
+   .branch 0 6 0 "cap-unknown", .branch 7 20 leafCount "cap-advance",
+   shift 20 20 1, .jump 0 "cap-visit", addi 0 0 0, .label "cap-unknown"] ++
   (if checking then
     [addi 6 25 32, .branch 6 proofEnd 6 "reject",
      shift 7 20 5, regop 23 roots 7] ++ copyDigest 25 23

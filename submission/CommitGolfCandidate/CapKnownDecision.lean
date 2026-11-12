@@ -1,9 +1,9 @@
 import CommitGolfCandidate.CapFlow
 
-/-! After reading a nonzero occupancy mark, the actual BLTU distinguishes
+/-! After reading a nonzero occupancy mark, the actual BGEU distinguishes
 internal nodes from known leaves. Internal nodes descend and jump to visit;
-known leaves jump to advance. This decision contains no memory accesses or
-queries, and its two/three instruction charges exclude the preceding visit. -/
+known leaves branch directly to advance. This decision contains no memory accesses or
+queries, and its one/three instruction charges exclude the preceding visit. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
@@ -14,14 +14,13 @@ def capKnownEntry (checking : Bool) : Word := if checking then 4620 else 4436
 def capKnownAdvance (checking : Bool) : Word := if checking then 4688 else 4496
 def capKnownVisit (checking : Bool) : Word := if checking then 4604 else 4420
 def capKnownTest (checking : Bool) : CapFlow :=
-  .below .x20 (capKnownLeafRegister checking) 8
-def capKnownSkip (checking : Bool) : CapFlow := .jump (if checking then 64 else 56)
+  .aboveEqual .x20 (capKnownLeafRegister checking) (if checking then 68 else 60)
 
 def capKnownState (checking : Bool) (state : MachineState) (node : Nat) : MachineState :=
   let tested := capFlowState (capKnownTest checking) state
   if node < 256 then
-    capFlowState (.jump 2097124) (capNavigationState .descend tested)
-  else capFlowState (capKnownSkip checking) tested
+    capFlowState (.jump 2097128) (capNavigationState .descend tested)
+  else tested
 
 private theorem below_known (checking : Bool) (state : MachineState) (node : Nat)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
@@ -39,11 +38,12 @@ theorem cap_known_test_pc (checking : Bool) (state : MachineState) (node : Nat)
     (bounded : node < 512) :
     (capFlowState (capKnownTest checking) state).pc =
       if node < 256 then capNavigationPC checking .descend
-      else capKnownEntry checking + 4 := by
+      else capKnownAdvance checking := by
   unfold capKnownTest
-  rw [cap_flow_below_pc]
+  rw [cap_flow_above_equal_pc]
   simp only [below_known checking state node index leaves bounded, pc]
-  cases checking <;> split <;> rfl
+  by_cases internal : node < 256 <;> simp only [internal, not_true_eq_false, not_false_eq_true, if_true, if_false]
+  all_goals cases checking <;> rfl
 
 theorem cap_known_state_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownEntry checking)
@@ -59,10 +59,7 @@ theorem cap_known_state_pc (checking : Bool) (state : MachineState) (node : Nat)
       cap_known_test_pc checking state node pc index leaves bounded, if_pos internal]
     cases checking <;> rfl
   · simp only [if_neg internal]
-    unfold capKnownSkip
-    rw [cap_flow_jump_pc, cap_known_test_pc checking state node pc index leaves bounded,
-      if_neg internal]
-    cases checking <;> rfl
+    rw [cap_known_test_pc checking state node pc index leaves bounded, if_neg internal]
 
 theorem cap_known_state_node (checking : Bool) (state : MachineState) (node : Nat)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
@@ -74,7 +71,7 @@ theorem cap_known_state_node (checking : Bool) (state : MachineState) (node : Na
     rw [cap_flow_register, cap_navigation_descend]
     exact (cap_flow_register _ _ _).trans index
   · simp only [if_neg internal]
-    rw [cap_flow_register, cap_flow_register, index]
+    rw [cap_flow_register, index]
 
 theorem cap_known_state_memory (checking : Bool) (state : MachineState) (node : Nat) :
     (capKnownState checking state node).mem = state.mem := by
@@ -96,11 +93,11 @@ theorem cap_known_decision_execute (checking : Bool) (state : MachineState) (nod
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
     (leaves : state.getReg (capKnownLeafRegister checking) = 256)
     (bounded : node < 512) (fuel : Nat) (allowCoins : Bool) :
-    execute (capWalkImage checking) ((if node < 256 then 3 else 2) + fuel)
+    execute (capWalkImage checking) ((if node < 256 then 3 else 1) + fuel)
         state allowCoins =
       (do let result ← execute (capWalkImage checking) fuel
             (capKnownState checking state node) allowCoins
-          return result.charge (if node < 256 then 3 else 2) 0) := by
+          return result.charge (if node < 256 then 3 else 1) 0) := by
   let tested := capFlowState (capKnownTest checking) state
   have fetched : fetch (capWalkImage checking) state =
       some (.base (capFlowInstruction (capKnownTest checking))) := by
@@ -113,13 +110,13 @@ theorem cap_known_decision_execute (checking : Bool) (state : MachineState) (nod
   by_cases internal : node < 256
   · simp only [if_pos internal] at testedPC ⊢
     have back : fetch (capWalkImage checking) (capNavigationState .descend tested) =
-        some (.base (capFlowInstruction (.jump 2097124))) := by
+        some (.base (capFlowInstruction (.jump 2097128))) := by
       cases checking
-      · apply cap_image_fetch _ (capNavigationState .descend tested) 88 _ (by decide)
+      · apply cap_image_fetch _ (capNavigationState .descend tested) 87 _ (by decide)
         · rw [cap_navigation_pc, testedPC]
           rfl
         · rfl
-      · apply cap_image_fetch _ (capNavigationState .descend tested) 134 _ (by decide)
+      · apply cap_image_fetch _ (capNavigationState .descend tested) 133 _ (by decide)
         · rw [cap_navigation_pc, testedPC]
           rfl
         · rfl
@@ -130,20 +127,7 @@ theorem cap_known_decision_execute (checking : Bool) (state : MachineState) (nod
     simp only [bind_assoc, pure_bind, charge_pair, capKnownState, if_pos internal]
     rfl
   · simp only [if_neg internal] at testedPC ⊢
-    have skip : fetch (capWalkImage checking) tested =
-        some (.base (capFlowInstruction (capKnownSkip checking))) := by
-      cases checking
-      · apply cap_image_fetch _ tested 86 _ (by decide)
-        · rw [testedPC]
-          rfl
-        · rfl
-      · apply cap_image_fetch _ tested 132 _ (by decide)
-        · rw [testedPC]
-          rfl
-        · rfl
-    rw [show 2 + fuel = 1 + (1 + fuel) by omega,
-      cap_flow_execute _ _ state fetched, cap_flow_execute _ _ tested skip]
-    simp only [bind_assoc, pure_bind, charge_pair, capKnownState, if_neg internal]
-    rfl
+    rw [cap_flow_execute _ _ state fetched]
+    simp only [capKnownState, if_neg internal]
 
 end CommitGolfCandidate

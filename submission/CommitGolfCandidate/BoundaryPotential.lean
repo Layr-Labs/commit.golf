@@ -15,8 +15,8 @@ def capBoundaryPotential : CapDfsControl → Nat
 
 private theorem potential_table :
     ∀ node : Fin 512, 0<node.val →
-      (15+capBoundaryPotential (.advance node.val) ≤ capBoundaryPotential (.visit node.val)+9) ∧
-      (6+capBoundaryPotential (.advance node.val) ≤ capBoundaryPotential (.visit node.val)) ∧
+      (15+capBoundaryPotential (.advance node.val) ≤ capBoundaryPotential (.visit node.val)+10) ∧
+      (5+capBoundaryPotential (.advance node.val) ≤ capBoundaryPotential (.visit node.val)) ∧
       (node.val<256 → 7+capBoundaryPotential (.visit (2*node.val)) ≤ capBoundaryPotential (.visit node.val)) ∧
       (1<node.val ∧ node.val%2=0 → 5+capBoundaryPotential (.visit (node.val+1)) ≤ capBoundaryPotential (.advance node.val)) ∧
       (1<node.val ∧ node.val%2=1 → 5+capBoundaryPotential (.advance (node.val/2)) ≤ capBoundaryPotential (.advance node.val)) := by
@@ -25,7 +25,7 @@ private theorem potential_table :
 theorem cap_boundary_potential_step (marked : Nat → Bool) (control : CapDfsControl)
     (valid : CapDfsControlValid control) :
     capDfsStepCycles false marked control+capBoundaryPotential (capControlStep marked control) ≤
-      capBoundaryPotential control + 9*(capControlBoundaryHead marked control).length := by
+      capBoundaryPotential control + 10*(capControlBoundaryHead marked control).length := by
   cases control with
   | visit node =>
     obtain ⟨positive,bounded⟩ := valid
@@ -58,7 +58,7 @@ theorem cap_boundary_potential_step (marked : Nat → Bool) (control : CapDfsCon
 theorem cap_boundary_cycle_potential_bound (marked : Nat → Bool) (fuel : Nat)
     (control : CapDfsControl) (valid : CapDfsControlValid control) :
     capDfsCycleTotal false marked fuel control ≤ capBoundaryPotential control +
-      9*(capControlBoundaries marked fuel control).length := by
+      10*(capControlBoundaries marked fuel control).length := by
   induction fuel generalizing control with
   | zero => exact Nat.zero_le _
   | succ fuel ih =>
@@ -69,8 +69,8 @@ theorem cap_boundary_cycle_potential_bound (marked : Nat → Bool) (fuel : Nat)
 
 theorem cap_boundary_cycle_bound (marked : Nat → Bool) :
     capDfsCycleTotal false marked 1022 (.visit 1) ≤
-      5872 + 9*(capControlBoundaries marked 1022 (.visit 1)).length := by
+      5616 + 10*(capControlBoundaries marked 1022 (.visit 1)).length := by
   have bound := cap_boundary_cycle_potential_bound marked 1022 (.visit 1) (by constructor <;> decide)
-  have initial : capBoundaryPotential (.visit 1)=5872 := by decide
+  have initial : capBoundaryPotential (.visit 1)=5616 := by decide
   simpa only [initial] using bound
 end CommitGolfCandidate

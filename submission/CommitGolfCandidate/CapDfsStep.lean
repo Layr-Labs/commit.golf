@@ -41,7 +41,7 @@ def capDfsStep (checking : Bool) (marked : Nat → Bool)
 
 def capDfsStepInstructions (checking : Bool) (marked : Nat → Bool) : CapDfsControl → Nat
   | .visit node =>
-      if marked node then 4 + (if node < 256 then 3 else 2)
+      if marked node then 4 + (if node < 256 then 3 else 1)
       else if checking then 17 else 15
   | .advance node =>
       if node = 1 then 1 else if node % 2 = 0 then 5 else if checking then 10 else 5

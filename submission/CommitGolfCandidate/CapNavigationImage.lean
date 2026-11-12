@@ -9,11 +9,11 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 def capNavigationIndex : Bool → CapNavigation → Nat
-  | false, .descend => 87
+  | false, .descend => 86
   | false, .ascend => 103
   | false, .sibling => 105
   | false, .parity => 101
-  | true, .descend => 133
+  | true, .descend => 132
   | true, .ascend => 151
   | true, .sibling => 158
   | true, .parity => 149
