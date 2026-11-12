@@ -46,13 +46,13 @@ theorem cap_encoding_read (state : MachineState) (digests : List Digest) (suffix
         (bytes offset inside).trans (cap_encoding_byte digests suffix ordinal offset present inside))
   simpa only [Nat.mul_zero, Nat.zero_add, Nat.reduceMul, BitVec.extractLsb'_eq_self] using decoded
 
-/-- An eighteen-digest lower record begins with its salt. -/
+/-- A seventeen-digest lower record begins with its salt. -/
 theorem cap_lower_encoding_salt (record : CapLowerRecord) :
     (capLowerEncoding record)[0]'(by rw [cap_lower_encoding_length]; decide) =
       record.salt := rfl
 
-/-- Its next seventeen slots are the original supplied siblings in order. -/
-theorem cap_lower_encoding_sibling (record : CapLowerRecord) (level : Fin 17) :
+/-- Its next sixteen slots are the original supplied siblings in order. -/
+theorem cap_lower_encoding_sibling (record : CapLowerRecord) (level : Fin 16) :
     (capLowerEncoding record)[level.val + 1]'(by
       rw [cap_lower_encoding_length]; omega) = record.sibling level := by
   simp only [capLowerEncoding, List.getElem_cons_succ, List.getElem_ofFn]

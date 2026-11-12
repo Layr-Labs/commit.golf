@@ -1,6 +1,6 @@
 import CommitGolfCandidate.CapCheckPathPreparation
 
-/-! The depth-24 checker loads seventeen lower siblings with the actual
+/-! The depth-24 checker loads sixteen lower siblings with the actual
 three-instruction generic immediate, then executes the nonzero gate.
 These four once-per-record instructions are charged separately. -/
 namespace CommitGolfCandidate
@@ -9,7 +9,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 def capCheckPathInitInstructions : List Instr :=
-  [.ADDI .x29 .x0 0, .SLLI .x29 .x29 11, .ADDI .x29 .x29 17]
+  [.ADDI .x29 .x0 0, .SLLI .x29 .x29 11, .ADDI .x29 .x29 16]
 
 def capCheckPathInitPrefix (state : MachineState) (count : Nat) : MachineState :=
   (capCheckPathInitInstructions.take count).foldl execInstrBr state
@@ -34,7 +34,7 @@ theorem cap_check_path_init_register (state : MachineState) (count : Nat)
       MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm outside)]
 
 theorem cap_check_path_init_counter (state : MachineState) :
-    (capCheckPathInitPrefix state 3).getReg .x29 = 17 := by
+    (capCheckPathInitPrefix state 3).getReg .x29 = 16 := by
   simp [capCheckPathInitPrefix, capCheckPathInitInstructions, execInstrBr,
     MachineState.getReg_setPC, MachineState.getReg_setReg_eq, signExtend12,
     MachineState.getReg]
@@ -81,7 +81,7 @@ theorem cap_check_path_init_execute (state : MachineState) (pc : state.pc = 4256
       some (capCheckPathInitState state) := by
     simp only [ordinaryStep, memoryArgumentsValid, memAccess, ↓reduceIte, execInstrBr,
       cap_check_path_init_counter, show (capCheckPathInitPrefix state 3).getReg .x0 = 0 from rfl,
-      show ((17 : Word) == (0 : Word)) = false by decide,
+      show ((16 : Word) == (0 : Word)) = false by decide,
       Bool.false_eq_true, ite_false, gatePC, capCheckPathInitState]
     rfl
   rw [show 4+fuel = 3+(1+fuel) by omega, setup, Nat.add_comm 1 fuel,

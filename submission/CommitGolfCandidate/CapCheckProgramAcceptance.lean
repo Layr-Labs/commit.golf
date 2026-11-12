@@ -15,7 +15,7 @@ attribute [local irreducible] checkEvaluation execute
 def CapCheckProgramAccepts (oracle : Oracle) (input : CheckInput) : Prop :=
   input.proof.length ≤ capProgram.sizes.proof ∧
   if input.positions.card=0 then input.proof=[] else
-    576*input.positions.card ≤ input.proof.length ∧
+    544*input.positions.card ≤ input.proof.length ∧
     ∃ roots, capLowerBatchRoots oracle.compression (capCheckLoadedRecords input)
       (fun _ => none)=some roots ∧ CapCheckLoadedAcceptance oracle input roots
 
@@ -30,7 +30,7 @@ theorem cap_check_program_acceptance (oracle : Oracle) (input : CheckInput) :
           (capProgram.initialState .check input) false
       else pure ⟨.failure,initialMachine,0,0⟩)).1.exit=.success ↔ _
     simp only [admitted,decide_true,ite_true,CapCheckProgramAccepts,true_and]
-    by_cases enough : 576*input.positions.card ≤ input.proof.length
+    by_cases enough : 544*input.positions.card ≤ input.proof.length
     · by_cases empty : input.positions.card=0
       · have execution := cap_check_input_empty input admitted empty
           (capProgram.steps .check-16) false

@@ -25,18 +25,18 @@ def CapCheckCodecCorrect (oracle : Oracle) (limit : Nat) (marked : Nat → Bool)
 private theorem above_cursor (state : MachineState) (cursor : Nat)
     (words : List Digest) (tailBytes : Nat)
     (suffix : CapCheckWordSuffix state cursor words tailBytes) :
-    22528≤(state.getReg .x25).toNat := by
+    32768≤(state.getReg .x25).toNat := by
   have small := cap_check_word_suffix_small state cursor words tailBytes suffix
   rw [suffix.pointer,BitVec.toNat_ofNat,Nat.mod_eq_of_lt small.1]
   exact suffix.high
 
 theorem cap_check_codec_internal (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) {height : Nat} (left right : CapView height)
-    (node : Nat) (positive : 0<node) (internal : node<128)
-    (leftLower : 128≤(2*node)*2^height)
-    (leftUpper : (2*node+1)*2^height≤256)
-    (rightLower : 128≤(2*node+1)*2^height)
-    (rightUpper : (2*node+2)*2^height≤256)
+    (node : Nat) (positive : 0<node) (internal : node<256)
+    (leftLower : 256≤(2*node)*2^height)
+    (leftUpper : (2*node+1)*2^height≤512)
+    (rightLower : 256≤(2*node+1)*2^height)
+    (rightUpper : (2*node+2)*2^height≤512)
     (marks : CapViewMarks marked node (.node left right))
     (occupied : capOccupied (.node left right)=true)
     (leftCorrect : CapCheckCodecCorrect oracle limit marked left (2*node))

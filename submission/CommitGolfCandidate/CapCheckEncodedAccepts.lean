@@ -14,7 +14,7 @@ theorem cap_check_encoded_accepts (oracle : Oracle) (input : CheckInput)
     (parsed : CapCheckParsedRecords input records (capDigestEncoding suffix))
     (nonempty : 0 < input.positions.card) (roots : CapRootMap)
     (lower : capLowerBatchRoots oracle.compression records (fun _ => none)=some roots)
-    (cap : capDecode oracle.compression (capKnownView roots 7 0) suffix=
+    (cap : capDecode oracle.compression (capKnownView roots 8 0) suffix=
       some (input.commitment,[])) :
     (oracle.eval (capProgram.scheme.check input.commitment input.positions
       input.values input.proof)).1=true := by
@@ -23,10 +23,10 @@ theorem cap_check_encoded_accepts (oracle : Oracle) (input : CheckInput)
     rw [parsed.encoded]
     simp only [capDigestEncoding,List.flatMap_append]
   have prefixLength : 32*(capLowerTranscript records).length=
-      576*input.positions.card := by
+      544*input.positions.card := by
     rw [cap_lower_transcript_length,parsed.length]
     omega
-  have enough : 576*input.positions.card ≤ input.proof.length := by
+  have enough : 544*input.positions.card ≤ input.proof.length := by
     rw [combined,cap_digest_encoding_length,List.length_append]
     rw [←prefixLength]
     omega

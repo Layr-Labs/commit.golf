@@ -1,7 +1,7 @@
 import CommitGolfCandidate.CapCheckCompression
 
 /-! The four actual lower-path latch instructions advance the proof cursor,
-shift the node, and decrement the seventeen-sibling counter. Fetch and cycle
+shift the node, and decrement the sixteen-sibling counter. Fetch and cycle
 accounting refer to the experimental checker, with natural bounds separate. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp

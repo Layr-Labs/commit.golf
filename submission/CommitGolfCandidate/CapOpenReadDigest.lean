@@ -38,7 +38,7 @@ theorem cap_unknown_open_reference_digest (state reference : MachineState)
 its end is below the tracked output floor. -/
 theorem cap_open_future_digest (marked : Nat → Bool)
     (rootBase limit floor : Nat) (reference : MachineState)
-    (limitBound : limit ≤ MEMORY_BYTES) (rootBound : rootBase + 8192 ≤ MEMORY_BYTES)
+    (limitBound : limit ≤ MEMORY_BYTES) (rootBound : rootBase + 16384 ≤ MEMORY_BYTES)
     (rootAligned : rootBase % 8 = 0)
     (count : Nat) (control : CapDfsControl) (state final : MachineState)
     (ready : CapOpenReadReady marked rootBase limit floor reference control state)
@@ -50,8 +50,8 @@ theorem cap_open_future_digest (marked : Nat → Bool)
   exact cap_open_frame_read floor reference final address 32 inside finished.inputFrame
 
 theorem cap_open_abi_heap_before_prefix (positions : Positions) :
-    capProgram.layout.trapdoor + 8192 ≤
-      capProgram.layout.proof + 576 * positions.card := by
+    capProgram.layout.trapdoor + 16384 ≤
+      capProgram.layout.proof + 544 * positions.card := by
   norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
     LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES]
   omega

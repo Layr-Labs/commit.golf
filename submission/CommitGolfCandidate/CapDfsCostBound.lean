@@ -1,7 +1,7 @@
 import CommitGolfCandidate.CapDfsStep
 
 /-! Conservative DFS resource ceilings derived from the exact macro costs.
-The control bound permits at most 510 macros. Opening has no cap queries and
+The control bound permits at most 1022 macros. Opening has no cap queries and
 each of its macros costs at most fifteen cycles. Connecting this sum to the
 whole actual traversal and lower-record phase remains a separate theorem. -/
 namespace CommitGolfCandidate
@@ -108,6 +108,6 @@ theorem cap_dfs_query_total_bound (checking : Bool) (marked : Nat → Bool)
 record, mark and exit allowances. This arithmetic is not yet a full runtime
 certificate for those phases. -/
 theorem cap_coarse_opening_arithmetic :
-    510 * 15 + 128 * 278 + 1272 + 33 + 2 ≤ 45000 := by decide
+    1022 * 15 + 128 * 263 + 2552 + 33 + 2 ≤ 60000 := by decide
 
 end CommitGolfCandidate

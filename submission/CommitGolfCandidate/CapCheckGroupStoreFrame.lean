@@ -86,9 +86,9 @@ theorem cap_check_group_store_root_word (state : MachineState)
 theorem cap_check_group_store_digest (state : MachineState)
     (scratch : state.getReg .x21 = 256) (root : Nat)
     (rootPointer : state.getReg .x23 = BitVec.ofNat 64 root)
-    (aligned : root % 8 = 0) (bounded : root+32 ≤ 20480)
+    (aligned : root % 8 = 0) (bounded : root+32 ≤ 28672)
     (aboveScratch : 320 ≤ root)
-    (mark : 20480 ≤ (state.getReg .x30).toNat) :
+    (mark : 28672 ≤ (state.getReg .x30).toNat) :
     readBuffer (capCheckGroupStoreState state) root 32 = readBuffer state 256 32 := by
   apply (read_digest_eq_iff _ _ _ _ aligned (by decide)).mpr
   intro word inside

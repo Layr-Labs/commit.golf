@@ -10,11 +10,11 @@ set_option maxHeartbeats 200000
 
 def capCheckConstantsInstructions : List Instr :=
   [.ADDI .x21 .x0 0, .SLLI .x21 .x21 11, .ADDI .x21 .x21 256,
-   .ADDI .x9 .x0 0, .SLLI .x9 .x9 11, .ADDI .x9 .x9 10,
+   .ADDI .x9 .x0 0, .SLLI .x9 .x9 11, .ADDI .x9 .x9 14,
    .SLLI .x9 .x9 11, .ADDI .x9 .x9 0,
    .ADDI .x18 .x0 0, .SLLI .x18 .x18 11, .ADDI .x18 .x18 6,
    .SLLI .x18 .x18 11, .ADDI .x18 .x18 0,
-   .ADDI .x19 .x0 0, .SLLI .x19 .x19 11, .ADDI .x19 .x19 128,
+   .ADDI .x19 .x0 0, .SLLI .x19 .x19 11, .ADDI .x19 .x19 256,
    .ADDI .x31 .x0 1]
 
 def capCheckConstantsPrefix (state : MachineState) (count : Nat) : MachineState :=
@@ -48,9 +48,9 @@ theorem cap_check_constants_execute (state : MachineState)
 
 theorem cap_check_constants_registers (state : MachineState) :
     (capCheckConstantsPrefix state 17).getReg .x21 = 256 ∧
-    (capCheckConstantsPrefix state 17).getReg .x9 = 20480 ∧
+    (capCheckConstantsPrefix state 17).getReg .x9 = 28672 ∧
     (capCheckConstantsPrefix state 17).getReg .x18 = 12288 ∧
-    (capCheckConstantsPrefix state 17).getReg .x19 = 128 ∧
+    (capCheckConstantsPrefix state 17).getReg .x19 = 256 ∧
     (capCheckConstantsPrefix state 17).getReg .x31 = 1 := by
   simp [capCheckConstantsPrefix, capCheckConstantsInstructions, execInstrBr,
     signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]

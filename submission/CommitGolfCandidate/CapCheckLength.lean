@@ -11,7 +11,7 @@ set_option maxHeartbeats 200000
 
 theorem cap_check_multiplied_length (state : MachineState) :
     (capCheckMultiplied state).getReg .x17 = state.getReg .x17 ∧
-    (capCheckMultiplied state).getReg .x7 = state.getReg .x16 * 576 := by
+    (capCheckMultiplied state).getReg .x7 = state.getReg .x16 * 544 := by
   constructor
   · simp only [capCheckMultiplied, MachineState.getReg_setPC,
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x7 ≠ .x17)]
@@ -22,10 +22,10 @@ theorem cap_check_multiplied_length (state : MachineState) :
 theorem cap_check_length_decision (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof) :
     (capCheckLengthState (capProgram.initialState .check input)).pc =
-      if input.proof.length < 576 * input.positions.card then 4808 else 4140 := by
+      if input.proof.length < 544 * input.positions.card then 4808 else 4140 := by
   have control := cap_check_length_control (capProgram.initialState .check input)
-  have required : ((capProgram.initialState .check input).getReg .x16 * 576).toNat =
-      576 * input.positions.card := cap_check_required_length input
+  have required : ((capProgram.initialState .check input).getReg .x16 * 544).toNat =
+      544 * input.positions.card := cap_check_required_length input
   have proofLength : ((capProgram.initialState .check input).getReg .x17).toNat =
       input.proof.length := by
     change (BitVec.ofNat 64 input.proof.length).toNat = _
@@ -37,7 +37,7 @@ theorem cap_check_length_decision (input : CheckInput)
 /-- Rejection uses fourteen actual instructions and seventeen cycles. -/
 theorem cap_check_short_reject (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (short : input.proof.length < 576 * input.positions.card)
+    (short : input.proof.length < 544 * input.positions.card)
     (fuel : Nat) (allowCoins : Bool) :
     execute (capProgram.image .check) (14 + fuel)
       (capProgram.initialState .check input) allowCoins =

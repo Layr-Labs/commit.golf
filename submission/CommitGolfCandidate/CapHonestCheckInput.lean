@@ -4,7 +4,7 @@ import CommitGolfCandidate.CapOpenResult
 import CommitGolfCandidate.InputOrder
 
 /-! Honest openings at every cardinality feed the actual checker ABI. Admission
-uses the full output-capacity theorem, independently of the batch-128 score
+uses the full output-capacity theorem, independently of the batch-256 score
 bound. The nonempty acceptance theorem retains actual committed-heap facts;
 the empty opening is handled separately by the scheme wrapper. -/
 namespace CommitGolfCandidate

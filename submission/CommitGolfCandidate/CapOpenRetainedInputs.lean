@@ -11,7 +11,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 def CapOpenRetainedInputs (floor : Nat) (reference state : MachineState) : Prop :=
-  ∀ address, 22528 ≤ address → address < floor →
+  ∀ address, 32768 ≤ address → address < floor →
     state.getByte (BitVec.ofNat 64 address) = reference.getByte (BitVec.ofNat 64 address)
 
 theorem cap_open_retained_refl (floor : Nat) (state : MachineState) :
@@ -29,7 +29,7 @@ theorem cap_open_retained_memory (floor : Nat) (state next reference : MachineSt
 
 theorem cap_open_retained_store (floor : Nat) (state reference : MachineState)
     (destination : Nat) (value : Word) (floorBound : floor ≤ 2^64)
-    (low : destination < 22528) (frame : CapOpenRetainedInputs floor reference state) :
+    (low : destination < 32768) (frame : CapOpenRetainedInputs floor reference state) :
     CapOpenRetainedInputs floor reference
       (state.setMem (BitVec.ofNat 64 destination) value) := by
   have stored := cap_high_bytes_store state state destination value low
@@ -48,7 +48,7 @@ theorem cap_open_retained_copy (floor cursor : Nat) (state reference : MachineSt
   exact frame address high below
 
 theorem cap_open_retained_read (floor : Nat) (reference state : MachineState)
-    (address count : Nat) (high : 22528 ≤ address) (inside : address+count ≤ floor)
+    (address count : Nat) (high : 32768 ≤ address) (inside : address+count ≤ floor)
     (frame : CapOpenRetainedInputs floor reference state) :
     readBuffer state address count = readBuffer reference address count := by
   unfold readBuffer

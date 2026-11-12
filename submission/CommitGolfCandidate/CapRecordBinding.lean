@@ -25,11 +25,11 @@ theorem cap_opening_inputs_subset (compress : Compression) (salt : Digest) (valu
 selected lower-record inputs or the paid cap replay inputs. Directions are fixed
 by the original index, including the seven cap bits. -/
 theorem cap_record_collision (oracle : Oracle) (index : Index)
-    (leftView rightView : CapView 7) (leftProof rightProof leftRest rightRest : List Digest)
+    (leftView rightView : CapView 8) (leftProof rightProof leftRest rightRest : List Digest)
     (root leftSalt rightSalt : Digest) (leftValue rightValue : Entry)
     (leftLower rightLower : List (Bool × Digest))
-    (leftDirections : leftLower.map Prod.fst = (List.range 17).map index.val.testBit)
-    (rightDirections : rightLower.map Prod.fst = (List.range 17).map index.val.testBit)
+    (leftDirections : leftLower.map Prod.fst = (List.range 16).map index.val.testBit)
+    (rightDirections : rightLower.map Prod.fst = (List.range 16).map index.val.testBit)
     (leftAccepted : capDecode oracle.compression leftView leftProof = some (root, leftRest))
     (rightAccepted : capDecode oracle.compression rightView rightProof = some (root, rightRest))
     (leftKnown : capLeafValue leftView (capRequestedPath index) =

@@ -59,10 +59,10 @@ theorem cap_subtree_serialization (compress : Compression) (marked : Nat → Boo
             rw [atRoot]
 
 theorem cap_root_serialization (compress : Compression) (marked : Nat → Bool)
-    (roots : Nat → Digest) (tree : Tree 7) (view : CapView 7)
+    (roots : Nat → Digest) (tree : Tree 8) (view : CapView 8)
     (marks : CapViewMarks marked 1 view)
     (heap : CapHeapRoots compress roots 1 tree) :
-    (capControlBoundaries marked 510 (.visit 1)).map roots = capProof compress tree view := by
+    (capControlBoundaries marked 1022 (.visit 1)).map roots = capProof compress tree view := by
   rw [cap_root_boundary_order]
   exact cap_subtree_serialization compress marked roots tree view 1 marks heap
 

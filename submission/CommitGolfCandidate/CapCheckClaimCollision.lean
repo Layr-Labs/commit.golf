@@ -26,8 +26,8 @@ theorem cap_check_claim_probe_collision (oracle : Oracle) (claim : Scheme.Claim)
     ∃ replies calls,
       oracle.run (capProbePair
         (capCheckLoadedRecords (claimLeft claim)) (capCheckLoadedRecords (claimRight claim))
-        (capCheckSuffixWords (claimLeft claim) (576*claim.positions₀.card))
-        (capCheckSuffixWords (claimRight claim) (576*claim.positions₁.card))
+        (capCheckSuffixWords (claimLeft claim) (544*claim.positions₀.card))
+        (capCheckSuffixWords (claimRight claim) (544*claim.positions₁.card))
         claim.root)=pure (replies,calls) ∧ ReplyCollision replies := by
   obtain ⟨index,leftMember,rightMember,different⟩ := breaks.1
   have leftNonempty : 0<claim.positions₀.card :=
@@ -48,8 +48,8 @@ theorem cap_check_claim_probe_collision (oracle : Oracle) (claim : Scheme.Claim)
   obtain ⟨leftCapInputs,rightCapInputs,leftRun,rightRun,collision⟩ :=
     cap_batch_collision oracle
       (capCheckLoadedRecords (claimLeft claim)) (capCheckLoadedRecords (claimRight claim))
-      (capCheckSuffixWords (claimLeft claim) (576*claim.positions₀.card))
-      (capCheckSuffixWords (claimRight claim) (576*claim.positions₁.card))
+      (capCheckSuffixWords (claimLeft claim) (544*claim.positions₀.card))
+      (capCheckSuffixWords (claimRight claim) (544*claim.positions₁.card))
       claim.root leftRoots rightRoots leftLower rightLower leftCap rightCap
       leftRecord rightRecord leftPresent rightPresent
       (leftIndex.trans rightIndex.symm) differentRecords

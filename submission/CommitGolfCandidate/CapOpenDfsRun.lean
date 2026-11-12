@@ -34,16 +34,16 @@ theorem cap_open_dfs_run_execute (positions : Positions) (marked : Nat → Bool)
     (state : MachineState)
     (physical : CapDfsStateControl false state (.visit 1))
     (stable : CapDfsStable false state capProgram.layout.trapdoor)
-    (marks : CapMarksReady state 128 0 marked)
+    (marks : CapMarksReady state 256 0 marked)
     (pointer : state.getReg .x25 =
-      BitVec.ofNat 64 (capProgram.layout.proof + 576 * positions.card))
+      BitVec.ofNat 64 (capProgram.layout.proof + 544 * positions.card))
     (fuel : Nat) (allowCoins : Bool) :
     execute (capWalkImage false)
-        (capDfsInstructionTotal false marked 510 (.visit 1) + fuel) state allowCoins =
-      (do let final ← capDfsRun false marked 510 (.visit 1) state
+        (capDfsInstructionTotal false marked 1022 (.visit 1) + fuel) state allowCoins =
+      (do let final ← capDfsRun false marked 1022 (.visit 1) state
           let result ← execute (capWalkImage false) fuel final allowCoins
-          return result.charge (capDfsCycleTotal false marked 510 (.visit 1))
-            (capDfsQueryTotal false marked 510 (.visit 1))) := by
+          return result.charge (capDfsCycleTotal false marked 1022 (.visit 1))
+            (capDfsQueryTotal false marked 1022 (.visit 1))) := by
   apply cap_dfs_machine_run_execute false marked capProgram.layout.trapdoor
     (CapOpenCursorWindow capOpenOutputLimit)
   · intro impossible
@@ -57,13 +57,13 @@ theorem cap_open_dfs_run_done (positions : Positions) (marked : Nat → Bool)
     (state final : MachineState)
     (physical : CapDfsStateControl false state (.visit 1))
     (stable : CapDfsStable false state capProgram.layout.trapdoor)
-    (marks : CapMarksReady state 128 0 marked)
+    (marks : CapMarksReady state 256 0 marked)
     (pointer : state.getReg .x25 =
-      BitVec.ofNat 64 (capProgram.layout.proof + 576 * positions.card))
-    (reached : final ∈ support (capDfsRun false marked 510 (.visit 1) state)) :
+      BitVec.ofNat 64 (capProgram.layout.proof + 544 * positions.card))
+    (reached : final ∈ support (capDfsRun false marked 1022 (.visit 1) state)) :
     final.pc = capAdvanceDone false ∧
       CapDfsStable false final capProgram.layout.trapdoor ∧
-      CapMarksReady final 128 0 marked ∧
+      CapMarksReady final 256 0 marked ∧
       CapOpenCursorWindow capOpenOutputLimit .done final := by
   apply cap_dfs_machine_run_done false marked capProgram.layout.trapdoor
     (CapOpenCursorWindow capOpenOutputLimit)

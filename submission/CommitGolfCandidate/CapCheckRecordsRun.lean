@@ -1,7 +1,7 @@
 import CommitGolfCandidate.CapCheckRecordsReady
 
 /-! A pure phase result for the record loop, before the real mark/DFS tail.
-Every record performs its 25 paid queries before consistency handling.
+Every record performs its 24 paid queries before consistency handling.
 Failure short-circuits; successful zero residual is an identity phase result,
 not a claim that the machine has halted. -/
 namespace CommitGolfCandidate
@@ -17,14 +17,14 @@ def capCheckRecordsRun : Nat → MachineState → OracleComp World (MachineState
       if result.2 then capCheckRecordsRun count result.1 else pure result
 
 theorem cap_check_records_run_queries (count : Nat) (state : MachineState) :
-    (capCheckRecordsRun count state).IsTotalQueryBound (25*count) := by
+    (capCheckRecordsRun count state).IsTotalQueryBound (24*count) := by
   induction count generalizing state with
   | zero => trivial
   | succ count ih =>
     rw [capCheckRecordsRun]
     have tail : ∀ result : MachineState × Bool,
         (if result.2 then capCheckRecordsRun count result.1 else pure result).IsTotalQueryBound
-          (25*count) := by
+          (24*count) := by
       intro result
       cases passed : result.2
       · simp only [Bool.false_eq_true,↓reduceIte]

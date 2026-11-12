@@ -1,7 +1,7 @@
 import Mathlib
 
 /-! Research primitive only. This is not an image certificate or a submission.
-An occupied binary cap of height seven has at most sixty-four frontier hashes. -/
+An occupied binary cap of height eight has at most 128 frontier hashes. -/
 namespace CommitGolfCandidate
 inductive MarkTree : Nat → Type
   | leaf (marked : Bool) : MarkTree 0
@@ -40,8 +40,8 @@ theorem frontier_bound (height : Nat) (tree : MarkTree height) :
         unfold frontier
         split <;> split <;> rw [Nat.pow_succ] <;> omega
 
-theorem height_seven_frontier (tree : MarkTree 7) : frontier tree ≤ 64 := by
-  simpa using frontier_bound 7 tree
+theorem height_eight_frontier (tree : MarkTree 8) : frontier tree ≤ 128 := by
+  simpa using frontier_bound 8 tree
 
 end CommitGolfCandidate
 

@@ -32,7 +32,7 @@ theorem cap_check_codec_parent (oracle : Oracle) (limit : Nat)
     (cursor : Nat) (words : List Digest) (tailBytes : Nat)
     (ready : CapCheckDfsReady limit marked (.advance (2*node+1)) state)
     (suffix : CapCheckWordSuffix state cursor words tailBytes)
-    (positive : 0<node) (bounded : node<128) :
+    (positive : 0<node) (bounded : node<256) :
     capReadRoot (capCheckDfsNext oracle marked (.advance (2*node+1)) state) node=
       combine oracle.compression (capReadRoot state (2*node))
         (capReadRoot state (2*node+1)) := by

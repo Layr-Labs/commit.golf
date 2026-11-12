@@ -9,7 +9,7 @@ set_option autoImplicit false
 set_option maxHeartbeats 200000
 
 theorem cap_mark_descendant (leaves : Nat → Bool) (height node : Nat)
-    (lower : 128 ≤ node*2^height) (upper : (node+1)*2^height ≤ 256) :
+    (lower : 256 ≤ node*2^height) (upper : (node+1)*2^height ≤ 512) :
     capTreeMarks leaves node=true ↔
       ∃ leaf, node*2^height ≤ leaf ∧ leaf < (node+1)*2^height ∧
         leaves leaf=true := by
@@ -29,11 +29,11 @@ theorem cap_mark_descendant (leaves : Nat → Bool) (height node : Nat)
     have upper' := upper
     rw [pow_succ] at lower' upper'
     have positive : 0 < node := by nlinarith
-    have internal : node < 128 := by nlinarith
-    have leftLower : 128 ≤ (2*node)*2^height := by nlinarith
-    have leftUpper : (2*node+1)*2^height ≤ 256 := by nlinarith
-    have rightLower : 128 ≤ (2*node+1)*2^height := by nlinarith
-    have rightUpper : (2*node+1+1)*2^height ≤ 256 := by nlinarith
+    have internal : node < 256 := by nlinarith
+    have leftLower : 256 ≤ (2*node)*2^height := by nlinarith
+    have leftUpper : (2*node+1)*2^height ≤ 512 := by nlinarith
+    have rightLower : 256 ≤ (2*node+1)*2^height := by nlinarith
+    have rightUpper : (2*node+1+1)*2^height ≤ 512 := by nlinarith
     rw [cap_tree_marks_parent leaves node positive internal,
       Bool.or_eq_true,ih (2*node) leftLower leftUpper,
       ih (2*node+1) rightLower rightUpper]

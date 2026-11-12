@@ -25,12 +25,12 @@ theorem cap_open_record_register (state : MachineState) (reg : Reg)
 
 theorem cap_open_record_cursor (state : MachineState) :
     (capOpenRecordState state).getReg .x25 =
-      state.getReg .x25 + BitVec.ofNat 64 576 := by
+      state.getReg .x25 + BitVec.ofNat 64 544 := by
   rw [capOpenRecordState, cap_open_group_register _ .x25 (by decide),
     capOpenRecordGroupState, cap_open_path_loop_cursor,
     cap_open_record_path_cursor]
-  change state.getReg .x25 + BitVec.ofNat 64 32 + BitVec.ofNat 64 (32*17) =
-    state.getReg .x25 + BitVec.ofNat 64 576
+  change state.getReg .x25 + BitVec.ofNat 64 32 + BitVec.ofNat 64 (32*16) =
+    state.getReg .x25 + BitVec.ofNat 64 544
   rw [BitVec.add_assoc, ← BitVec.ofNat_add]
 
 theorem cap_open_record_index_pointer (state : MachineState) :
@@ -51,7 +51,7 @@ theorem cap_open_record_exit (state : MachineState)
     (pc : state.pc = 4212)
     (roots : state.getReg .x9 = BitVec.ofNat 64 rootBase)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (aligned : cursor % 8 = 0) (space : cursor+576 ≤ limit)
+    (aligned : cursor % 8 = 0) (space : cursor+544 ≤ limit)
     (limitBound : limit ≤ MEMORY_BYTES)
     (positionBound : position < 16777216)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 position)
@@ -64,7 +64,7 @@ theorem cap_open_record_exit (state : MachineState)
   rw [capOpenRecordState]
   apply cap_open_group_exit _ remaining
   · rw [capOpenRecordGroupState]
-    exact (cap_open_path_loop_finished rootBase limit limitBound 17 _ ready).1
+    exact (cap_open_path_loop_finished rootBase limit limitBound 16 _ ready).1
   · exact positive
   · exact remainingBound
   · exact (cap_open_record_group_register state .x27 (by decide)).trans counter

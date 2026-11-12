@@ -49,10 +49,10 @@ theorem cap_open_query_total_zero (marked : Nat → Bool) (count : Nat)
 theorem cap_open_root_cursor_count (marked : Nat → Bool)
     (state final : MachineState) (cursor : Nat)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (reached : final ∈ support (capDfsRun false marked 510 (.visit 1) state)) :
+    (reached : final ∈ support (capDfsRun false marked 1022 (.visit 1) state)) :
     final.getReg .x25 =
-      BitVec.ofNat 64 (cursor + 32 * (capSubtreeBoundaries marked 7 1).length) := by
+      BitVec.ofNat 64 (cursor + 32 * (capSubtreeBoundaries marked 8 1).length) := by
   simpa only [cap_root_boundary_order] using
-    cap_open_run_cursor_count marked 510 (.visit 1) state final cursor pointer reached
+    cap_open_run_cursor_count marked 1022 (.visit 1) state final cursor pointer reached
 
 end CommitGolfCandidate

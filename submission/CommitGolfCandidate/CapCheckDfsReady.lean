@@ -24,7 +24,7 @@ structure CapCheckDfsReady (limit : Nat) (marked : Nat → Bool)
   physical : CapDfsStateControl true state control
   valid : CapDfsControlValid control
   stable : CapDfsStable true state 12288
-  marks : CapMarksReady state 128 0 marked
+  marks : CapMarksReady state 256 0 marked
   window : CapCheckCursorWindow limit state
 
 theorem cap_check_dfs_not_short_enough (marked : Nat → Bool)
@@ -46,7 +46,7 @@ theorem cap_check_dfs_ready_transport (limit : Nat) (marked : Nat → Bool)
   have enough := cap_check_dfs_not_short_enough marked control state notShort
   have access (node : Nat) (atNode : control = .visit node) (absent : marked node = false) :
       CapDfsBoundaryReady true state 12288 node := by
-    have bounded : node < 256 := by
+    have bounded : node < 512 := by
       have valid := ready.valid
       rw [atNode] at valid
       exact valid.2
@@ -73,7 +73,7 @@ theorem cap_check_dfs_ready_execute (limit : Nat) (marked : Nat → Bool)
   apply cap_dfs_step_execute true marked control state 12288
     ready.physical ready.valid ready.stable ready.marks (fun _ => rfl)
   intro node atNode absent
-  have bounded : node < 256 := by
+  have bounded : node < 512 := by
     have valid := ready.valid
     rw [atNode] at valid
     exact valid.2

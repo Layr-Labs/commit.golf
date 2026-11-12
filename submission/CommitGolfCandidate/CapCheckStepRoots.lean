@@ -35,8 +35,8 @@ theorem cap_check_ascent_query_roots (state : MachineState) (node : Nat) :
 theorem cap_check_dfs_next_roots (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (control : CapDfsControl) (state : MachineState)
     (ready : CapCheckDfsReady limit marked control state)
-    (above : 22528 ≤ (state.getReg .x25).toNat)
-    (other : Nat) (otherBound : other<256) :
+    (above : 32768 ≤ (state.getReg .x25).toNat)
+    (other : Nat) (otherBound : other<512) :
     capReadRoot (capCheckDfsNext oracle marked control state) other =
       capCheckRootStep oracle.compression marked control (capReadRoot state)
         (readBuffer state (state.getReg .x25).toNat 32) other := by

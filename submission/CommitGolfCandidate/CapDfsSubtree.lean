@@ -34,11 +34,11 @@ theorem cap_control_run_add (marked : Nat → Bool) (first second : Nat)
       simpa only [Nat.succ_add, capControlRun] using ih (capControlStep marked control)
 
 private theorem subtree_children (height node : Nat)
-    (lower : 128 ≤ node * 2^(height+1))
-    (upper : (node + 1) * 2^(height+1) ≤ 256) :
-    0 < node ∧ node < 128 ∧
-      128 ≤ (2*node) * 2^height ∧ ((2*node)+1) * 2^height ≤ 256 ∧
-      128 ≤ (2*node+1) * 2^height ∧ ((2*node+1)+1) * 2^height ≤ 256 := by
+    (lower : 256 ≤ node * 2^(height+1))
+    (upper : (node + 1) * 2^(height+1) ≤ 512) :
+    0 < node ∧ node < 256 ∧
+      256 ≤ (2*node) * 2^height ∧ ((2*node)+1) * 2^height ≤ 512 ∧
+      256 ≤ (2*node+1) * 2^height ∧ ((2*node+1)+1) * 2^height ≤ 512 := by
   have power : 0 < 2^height := Nat.two_pow_pos height
   rw [pow_succ] at lower upper
   constructor
@@ -52,13 +52,13 @@ private theorem subtree_children (height node : Nat)
   constructor <;> nlinarith
 
 theorem cap_subtree_run_end (marked : Nat → Bool) (height node : Nat)
-    (lower : 128 ≤ node * 2^height)
-    (upper : (node + 1) * 2^height ≤ 256) :
+    (lower : 256 ≤ node * 2^height)
+    (upper : (node + 1) * 2^height ≤ 512) :
     capControlRun marked (capSubtreeSteps marked height node) (.visit node) =
       .advance node := by
   induction height generalizing node with
   | zero =>
-      have terminal : ¬ node < 128 := by simpa using (Nat.not_lt.mpr lower)
+      have terminal : ¬ node < 256 := by simpa using (Nat.not_lt.mpr lower)
       simp only [capSubtreeSteps, capControlRun, capControlStep]
       simp [terminal]
   | succ height ih =>

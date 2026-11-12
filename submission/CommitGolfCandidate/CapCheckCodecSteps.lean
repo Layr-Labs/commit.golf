@@ -17,12 +17,12 @@ theorem cap_check_codec_known_frame (oracle : Oracle) (limit : Nat)
     (suffix : CapCheckWordSuffix state cursor words tailBytes)
     (notShort : capCheckDfsShort marked control state=false)
     {height : Nat} (view : CapView height) (node : Nat)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (marks : CapViewMarks marked node view)
     (known : CapCheckKnownLeaves state node view) :
     CapCheckKnownLeaves (capCheckDfsNext oracle marked control state) node view := by
   have small := cap_check_word_suffix_small state cursor words tailBytes suffix
-  have above : 22528≤(state.getReg .x25).toNat := by
+  have above : 32768≤(state.getReg .x25).toNat := by
     rw [suffix.pointer,BitVec.toNat_ofNat,Nat.mod_eq_of_lt small.1]
     exact suffix.high
   have one := cap_check_one_value oracle marked control state notShort
@@ -36,7 +36,7 @@ theorem cap_check_codec_enter (oracle : Oracle) (limit : Nat)
     (cursor : Nat) (words : List Digest) (tailBytes : Nat)
     (ready : CapCheckDfsReady limit marked (.visit node) state)
     (suffix : CapCheckWordSuffix state cursor words tailBytes)
-    (internal : node<128) (present : marked node=true) :
+    (internal : node<256) (present : marked node=true) :
     CapCheckWordSuffix (capCheckDfsNext oracle marked (.visit node) state)
         cursor words tailBytes ∧
       CapCheckDfsReady limit marked (.visit (2*node))
@@ -52,7 +52,7 @@ theorem cap_check_codec_sibling (oracle : Oracle) (limit : Nat)
     (cursor : Nat) (words : List Digest) (tailBytes : Nat)
     (ready : CapCheckDfsReady limit marked (.advance (2*node)) state)
     (suffix : CapCheckWordSuffix state cursor words tailBytes)
-    (positive : 0<node) (bounded : node<128) :
+    (positive : 0<node) (bounded : node<256) :
     CapCheckWordSuffix (capCheckDfsNext oracle marked (.advance (2*node)) state)
         cursor words tailBytes ∧
       CapCheckDfsReady limit marked (.visit (2*node+1))

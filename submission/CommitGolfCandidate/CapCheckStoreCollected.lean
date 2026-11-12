@@ -22,20 +22,20 @@ private theorem natural_distinct (left right : Nat) (leftSmall : left < 2^64)
   exact different value
 
 theorem cap_check_store_collected (state : MachineState) (roots : CapRootMap)
-    (ready : CapCheckCollected state roots) (group : Nat) (bounded : group < 128)
+    (ready : CapCheckCollected state roots) (group : Nat) (bounded : group < 256)
     (scratch : state.getReg .x21 = 256)
     (rootPointer : state.getReg .x23 = BitVec.ofNat 64 (capCheckRootAddress group))
-    (markPointer : state.getReg .x30 = capMarkAddress (128+group))
+    (markPointer : state.getReg .x30 = capMarkAddress (256+group))
     (one : state.getReg .x31 = 1) :
     CapCheckCollected (capCheckGroupStoreState state)
       (fun index => if index=group then some (readBuffer state 256 32) else roots index) := by
   let copied := capWordCopyPrefix .x21 .x23 0 0 state 8
   have markMemory : (capCheckGroupStoreState state).mem =
-      (copied.setMem (capMarkAddress (128+group)) 1).mem := by
+      (copied.setMem (capMarkAddress (256+group)) 1).mem := by
     rw [cap_check_group_store_memory,markPointer,one]
-  have markBefore (other : Nat) (otherBound : other < 128) :
-      copied.getMem (capMarkAddress (128+other)) =
-        state.getMem (capMarkAddress (128+other)) := by
+  have markBefore (other : Nat) (otherBound : other < 256) :
+      copied.getMem (capMarkAddress (256+other)) =
+        state.getMem (capMarkAddress (256+other)) := by
     apply cap_word_copy_memory_outside .x21 .x23 state (by decide) (by decide)
     intro word
     rw [rootPointer,← BitVec.ofNat_add]
@@ -47,11 +47,11 @@ theorem cap_check_store_collected (state : MachineState) (roots : CapRootMap)
   constructor
   · intro other otherBound
     have result := cap_mark_point_update state copied (capCheckGroupStoreState state)
-      (128+group) (128+other) (by omega) (by omega) markMemory (markBefore other otherBound)
+      (256+group) (256+other) (by omega) (by omega) markMemory (markBefore other otherBound)
     by_cases same : other=group
     · subst other
       simpa only [if_pos rfl,Option.isSome_some,↓reduceIte] using result
-    · have different : 128+other ≠ 128+group := by omega
+    · have different : 256+other ≠ 256+group := by omega
       rw [if_neg different,ready.marks other otherBound] at result
       simpa only [if_neg same] using result
   · intro other otherBound value known
@@ -64,7 +64,7 @@ theorem cap_check_store_collected (state : MachineState) (roots : CapRootMap)
         (by unfold capCheckRootAddress; omega)
         (by unfold capCheckRootAddress; omega)
       rw [markPointer]
-      change 20480 ≤ (BitVec.ofNat 64 (20480+8*(128+group))).toNat
+      change 28672 ≤ (BitVec.ofNat 64 (28672+8*(256+group))).toNat
       rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
       omega
     · simp only [if_neg same] at known

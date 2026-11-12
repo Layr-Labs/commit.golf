@@ -24,7 +24,7 @@ private theorem charge_pair (result : Execution) (first second : Nat) :
     (result.charge first 0).charge second 0 = result.charge (second + first) 0 := by
   simp only [Execution.charge, Nat.zero_add, Nat.add_assoc]
 
-private theorem node_word_one (node : Nat) (bounded : node < 256) :
+private theorem node_word_one (node : Nat) (bounded : node < 512) :
     BitVec.ofNat 64 node = (1 : Word) ↔ node = 1 := by
   constructor
   · intro equal
@@ -39,7 +39,7 @@ private theorem node_word_one (node : Nat) (bounded : node < 256) :
 theorem cap_advance_root_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) :
+    (root : state.getReg .x31 = 1) (bounded : node < 512) :
     (capAdvanceRootState checking state).pc =
       if node = 1 then capAdvanceDone checking else capNavigationPC checking .parity := by
   unfold capAdvanceRootState capAdvanceRootFlow
@@ -80,7 +80,7 @@ private theorem parity_word_zero (node : Nat) :
 theorem cap_advance_guard_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1) :
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1) :
     (capAdvanceGuardState checking state).pc =
       if node % 2 = 0 then capNavigationPC checking .sibling
       else capNavigationPC checking .ascend := by
@@ -113,7 +113,7 @@ theorem cap_advance_guard_register (checking : Bool) (state : MachineState)
 theorem cap_advance_guard_execute (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1)
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1)
     (fuel : Nat) (allowCoins : Bool) :
     execute (capWalkImage checking) (3 + fuel) state allowCoins =
       (do let result ← execute (capWalkImage checking) fuel

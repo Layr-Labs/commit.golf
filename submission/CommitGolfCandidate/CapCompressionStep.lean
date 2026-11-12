@@ -66,7 +66,7 @@ theorem cap_compression_answer_digest (state : MachineState) (destination : Nat)
 theorem cap_compression_high_bytes (state reference : MachineState)
     (destination : Nat) (answer : BitVec 256)
     (pointer : state.getReg .x12 = BitVec.ofNat 64 destination)
-    (low : destination + 32 ≤ 22528) (frame : CapHighBytes state reference) :
+    (low : destination + 32 ≤ 32768) (frame : CapHighBytes state reference) :
     CapHighBytes (capCompressionAnswer state answer) reference := by
   unfold capCompressionAnswer
   rw [pointer]
@@ -76,16 +76,16 @@ theorem cap_compression_high_bytes (state reference : MachineState)
 theorem cap_compression_marks (state : MachineState) (destination : Nat)
     (answer : BitVec 256) (node : Nat)
     (pointer : state.getReg .x12 = BitVec.ofNat 64 destination)
-    (low : destination + 32 ≤ 20480) (bounded : node < 256) :
+    (low : destination + 32 ≤ 28672) (bounded : node < 512) :
     (capCompressionAnswer state answer).getMem (capMarkAddress node) =
       state.getMem (capMarkAddress node) := by
   unfold capCompressionAnswer
   rw [pointer]
   apply writeBits_memory_outside
   intro offset inside equal
-  have addressSmall : destination + offset < 20480 := by omega
+  have addressSmall : destination + offset < 28672 := by omega
   have alignedLow :
-      (alignToDword (BitVec.ofNat 64 destination + BitVec.ofNat 64 offset)).toNat < 20480 := by
+      (alignToDword (BitVec.ofNat 64 destination + BitVec.ofNat 64 offset)).toNat < 28672 := by
     rw [← BitVec.ofNat_add]
     have masked : (alignToDword (BitVec.ofNat 64 (destination + offset))).toNat ≤
         (BitVec.ofNat 64 (destination + offset)).toNat := by
@@ -94,17 +94,17 @@ theorem cap_compression_marks (state : MachineState) (destination : Nat)
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : destination + offset < 2^64)] at masked
     omega
   have numeric := congrArg BitVec.toNat equal
-  have markNat : (capMarkAddress node).toNat = 20480 + 8 * node := by
+  have markNat : (capMarkAddress node).toNat = 28672 + 8 * node := by
     simp only [capMarkAddress, BitVec.toNat_ofNat,
-      Nat.mod_eq_of_lt (by omega : 20480 + 8 * node < 2^64)]
+      Nat.mod_eq_of_lt (by omega : 28672 + 8 * node < 2^64)]
   rw [markNat] at numeric
   omega
 
 theorem cap_compression_ready (state : MachineState) (destination : Nat)
     (answer : BitVec 256) (marked : Nat → Bool)
     (pointer : state.getReg .x12 = BitVec.ofNat 64 destination)
-    (low : destination + 32 ≤ 20480) (ready : CapMarksReady state 128 0 marked) :
-    CapMarksReady (capCompressionAnswer state answer) 128 0 marked := by
+    (low : destination + 32 ≤ 28672) (ready : CapMarksReady state 256 0 marked) :
+    CapMarksReady (capCompressionAnswer state answer) 256 0 marked := by
   intro node positive bounded
   rw [cap_compression_marks state destination answer node pointer low bounded]
   exact ready node positive bounded

@@ -67,11 +67,11 @@ theorem cap_lower_batch_support_domain (records : List CapLowerRecord)
 theorem cap_lower_batch_support_count (records : List CapLowerRecord) (roots : CapRootMap)
     (inputs : List (BitVec 512))
     (reached : some (roots, inputs) ∈ support (capReplayLowerBatch records (fun _ => none))) :
-    capMarkedCount (capKnownView roots 7 0) ≤ records.length := by
+    capMarkedCount (capKnownView roots 8 0) ≤ records.length := by
   classical
   rw [cap_known_view_card]
   have subset :
-      (Finset.range 128).filter (fun group => (roots group).isSome = true) ⊆
+      (Finset.range 256).filter (fun group => (roots group).isSome = true) ⊆
         (records.map (fun record => (capGroup record.index).val)).toFinset := by
     intro group member
     obtain ⟨_, occupied⟩ := Finset.mem_filter.mp member
@@ -93,7 +93,7 @@ theorem cap_replay_batch_position_bound (records : List CapLowerRecord)
     (proof : List Digest) (root : Digest) :
     IsTotalQueryBound (capReplayBatch records proof root) (32 * records.length) := by
   unfold capReplayBatch
-  have total : 32 * records.length = 25 * records.length + 7 * records.length := by omega
+  have total : 32 * records.length = 24 * records.length + 8 * records.length := by omega
   rw [total]
   apply isTotalQueryBound_bind_of_mem_support
     (cap_replay_lower_batch_query_bound records (fun _ => none))
@@ -103,8 +103,8 @@ theorem cap_replay_batch_position_bound (records : List CapLowerRecord)
   | some pair =>
       rcases pair with ⟨roots, inputs⟩
       have count := cap_lower_batch_support_count records roots inputs reached
-      have capBound : capCalls (capKnownView roots 7 0) ≤ 7 * records.length := by
-        exact (cap_calls_bound _).trans (Nat.mul_le_mul_left 7 count)
+      have capBound : capCalls (capKnownView roots 8 0) ≤ 8 * records.length := by
+        exact (cap_calls_bound _).trans (Nat.mul_le_mul_left 8 count)
       simpa only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff] using
-        (cap_replay_query_bound (capKnownView roots 7 0) proof).mono capBound
+        (cap_replay_query_bound (capKnownView roots 8 0) proof).mono capBound
 end CommitGolfCandidate

@@ -12,7 +12,7 @@ set_option autoImplicit false
 attribute [local irreducible] execute
 
 theorem cap_check_program_fuel (input : CheckInput) :
-    29+671*input.positions.card+9961 ≤ capProgram.steps .check := by
+    29+671*input.positions.card+19945 ≤ capProgram.steps .check := by
   have cardinal : input.positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ input.positions
   norm_num [capProgram, capExperimental, candidate, LENGTH, LOG_LENGTH] at cardinal ⊢
@@ -27,7 +27,7 @@ theorem cap_check_program_queries (input : CheckInput) :
       else pure ⟨.failure, initialMachine, 0, 0⟩).IsTotalQueryBound _
     simp only [admitted, decide_true, ite_true]
     have sufficient := cap_check_program_fuel input
-    by_cases enough : 576*input.positions.card ≤ input.proof.length
+    by_cases enough : 544*input.positions.card ≤ input.proof.length
     · by_cases empty : input.positions.card = 0
       · have execution := cap_check_input_empty input admitted empty
           (capProgram.steps .check-16) false

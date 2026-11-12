@@ -131,7 +131,7 @@ theorem cap_mark_prefix_memory (marks : Reg) (state : MachineState) (count : Nat
 
 /-- A checked low parent store preserves all later ABI input bytes. -/
 theorem cap_mark_frame (marks : Reg) (state reference : MachineState)
-    (low : ((capMarkPrefix marks state 7).getReg .x23).toNat < 22528)
+    (low : ((capMarkPrefix marks state 7).getReg .x23).toNat < 32768)
     (frame : CapHighBytes state reference) :
     CapHighBytes (capMarkPrefix marks state 10) reference := by
   have before : CapHighBytes (capMarkPrefix marks state 7) reference :=

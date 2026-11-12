@@ -12,8 +12,8 @@ set_option autoImplicit false
 def capClaimProbe (claim : Scheme.Claim) : OracleComp World CompressionReplies :=
   capProbePair (capCheckLoadedRecords (claimLeft claim))
     (capCheckLoadedRecords (claimRight claim))
-    (capCheckSuffixWords (claimLeft claim) (576*claim.positions₀.card))
-    (capCheckSuffixWords (claimRight claim) (576*claim.positions₁.card)) claim.root
+    (capCheckSuffixWords (claimLeft claim) (544*claim.positions₀.card))
+    (capCheckSuffixWords (claimRight claim) (544*claim.positions₁.card)) claim.root
 
 theorem cap_claim_probe_bound (claim : Scheme.Claim) :
     (capClaimProbe claim).IsTotalQueryBound (2*capReplayCeiling) := by

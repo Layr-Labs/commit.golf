@@ -20,15 +20,15 @@ def capCheckRecordsContinue : Nat → MachineState → Nat → Bool → OracleCo
         let result ← capCheckRecordsContinue count (capCheckRecordResult lower).1
           (fuel-capCheckLowerRecordSteps state-capCheckGroupSteps lower-3) allowCoins
         return result.charge
-          (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 17+
-            328+capCheckGroupSteps lower+3) 25
+          (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+
+            321+capCheckGroupSteps lower+3) 24
       else pure ⟨.failure,(capCheckGroupResult lower).1,
-        capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 17+
-          328+capCheckGroupSteps lower,25⟩
+        capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+
+          321+capCheckGroupSteps lower,24⟩
 
 theorem cap_check_records_execute (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length)
+    (enough : 544*input.positions.card ≤ input.proof.length)
     (ordinal count : Nat) (state : MachineState)
     (ready : CapCheckRecordsReady input ordinal count state)
     (fuel : Nat) (sufficient : 671*count ≤ fuel) (allowCoins : Bool) :

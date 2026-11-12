@@ -73,7 +73,7 @@ theorem cap_check_record_run_cursors (state : MachineState) (result : MachineSta
     (reachable : result ∈ support (capCheckRecordRun state))
     (passed : result.2 = true) :
     result.1.getReg .x8 = state.getReg .x8+256 ∧
-    result.1.getReg .x25 = state.getReg .x25+576 ∧
+    result.1.getReg .x25 = state.getReg .x25+544 ∧
     result.1.getReg .x24 = state.getReg .x24+8 := by
   obtain ⟨lower, lowerReachable, equal⟩ :=
     (cap_check_record_run_support state result).mp reachable

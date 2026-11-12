@@ -13,9 +13,9 @@ def capOpenPotential : CapDfsControl → Nat
   | .done => 0
 
 private theorem potential_table :
-    ∀ node : Fin 256, 0<node.val →
+    ∀ node : Fin 512, 0<node.val →
       (15+capOpenPotential (.advance node.val) ≤ capOpenPotential (.visit node.val)) ∧
-      (node.val<128 → 7+capOpenPotential (.visit (2*node.val)) ≤ capOpenPotential (.visit node.val)) ∧
+      (node.val<256 → 7+capOpenPotential (.visit (2*node.val)) ≤ capOpenPotential (.visit node.val)) ∧
       (1<node.val ∧ node.val%2=0 → 5+capOpenPotential (.visit (node.val+1)) ≤ capOpenPotential (.advance node.val)) ∧
       (1<node.val ∧ node.val%2=1 → 5+capOpenPotential (.advance (node.val/2)) ≤ capOpenPotential (.advance node.val)) := by
   decide
@@ -32,7 +32,7 @@ theorem cap_open_potential_step (marked : Nat → Bool) (control : CapDfsControl
     simp only [capDfsStepCycles,capDfsStepInstructions,capControlStep,Bool.false_eq_true,ite_false]
     by_cases selected : marked node=true
     · simp only [selected,Bool.true_and]
-      by_cases internal : node<128
+      by_cases internal : node<256
       · simpa [internal] using bounds.2.1 internal
       · simp [internal]
         omega
@@ -65,9 +65,9 @@ theorem cap_open_cycle_potential_bound (marked : Nat → Bool) (fuel : Nat)
     have rest := ih (capControlStep marked control) (cap_control_step_valid marked control valid)
     omega
 
-theorem cap_open_cycle_4080 (marked : Nat → Bool) :
-    capDfsCycleTotal false marked 510 (.visit 1) ≤ 4080 := by
-  have bound := cap_open_cycle_potential_bound marked 510 (.visit 1) (by constructor <;> decide)
-  have initial : capOpenPotential (.visit 1)=4080 := by decide
+theorem cap_open_cycle_8176 (marked : Nat → Bool) :
+    capDfsCycleTotal false marked 1022 (.visit 1) ≤ 8176 := by
+  have bound := cap_open_cycle_potential_bound marked 1022 (.visit 1) (by constructor <;> decide)
+  have initial : capOpenPotential (.visit 1)=8176 := by decide
   simpa only [initial] using bound
 end CommitGolfCandidate

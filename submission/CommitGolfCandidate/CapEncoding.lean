@@ -20,11 +20,11 @@ theorem cap_digest_encoding_length (digests : List Digest) :
       omega
 
 theorem cap_lower_encoding_length (record : CapLowerRecord) :
-    (capLowerEncoding record).length = 18 := by
+    (capLowerEncoding record).length = 17 := by
   simp [capLowerEncoding]
 
 theorem cap_lower_transcript_length (records : List CapLowerRecord) :
-    (capLowerTranscript records).length = 18 * records.length := by
+    (capLowerTranscript records).length = 17 * records.length := by
   induction records with
   | nil => rfl
   | cons record rest ih =>
@@ -36,24 +36,24 @@ theorem cap_lower_transcript_length (records : List CapLowerRecord) :
 /-- Empty positions produce no cap frontier, even though the standalone unknown
 cap decoder would otherwise consume one root digest. -/
 def capHonestBytes (compress : Compression) (records : List CapLowerRecord)
-    (tree : Tree 7) (view : CapView 7) : Proof :=
+    (tree : Tree 8) (view : CapView 8) : Proof :=
   if records.length = 0 then []
   else capDigestEncoding (capLowerTranscript records ++ capProof compress tree view)
 
 theorem cap_honest_bytes_length (compress : Compression) (records : List CapLowerRecord)
-    (tree : Tree 7) (view : CapView 7) (nonempty : records ≠ []) :
+    (tree : Tree 8) (view : CapView 8) (nonempty : records ≠ []) :
     (capHonestBytes compress records tree view).length =
-      576 * records.length + 32 * (capProof compress tree view).length := by
+      544 * records.length + 32 * (capProof compress tree view).length := by
   rw [capHonestBytes, if_neg (by simpa using nonempty), cap_digest_encoding_length, List.length_append,
     cap_lower_transcript_length]
   omega
 
-/-- A batch of 128 lower records uses 73,728 bytes; the occupied height-seven
-frontier contributes at most another 2,048 bytes, with no headers. -/
+/-- A batch of 128 lower records uses 69,632 bytes; the occupied height-eight
+frontier contributes at most another 4,096 bytes, with no headers. -/
 theorem cap_honest_bytes_batch_bound (compress : Compression)
-    (records : List CapLowerRecord) (tree : Tree 7) (view : CapView 7)
+    (records : List CapLowerRecord) (tree : Tree 8) (view : CapView 8)
     (batch : records.length = BATCH) (occupied : capOccupied view = true) :
-    (capHonestBytes compress records tree view).length ≤ 75776 := by
+    (capHonestBytes compress records tree view).length ≤ 73728 := by
   have nonempty : records ≠ [] := by
     intro empty
     rw [empty] at batch
@@ -61,10 +61,10 @@ theorem cap_honest_bytes_batch_bound (compress : Compression)
     contradiction
   rw [cap_honest_bytes_length _ _ _ _ nonempty, batch]
   have boundary := cap_occupied_proof_bound compress tree view occupied
-  change 576 * 128 + 32 * (capProof compress tree view).length ≤ 75776
+  change 544 * 128 + 32 * (capProof compress tree view).length ≤ 73728
   omega
 
-theorem cap_honest_bytes_empty (compress : Compression) (tree : Tree 7) (view : CapView 7) :
+theorem cap_honest_bytes_empty (compress : Compression) (tree : Tree 8) (view : CapView 8) :
     capHonestBytes compress [] tree view = [] := by
   simp [capHonestBytes]
 end CommitGolfCandidate

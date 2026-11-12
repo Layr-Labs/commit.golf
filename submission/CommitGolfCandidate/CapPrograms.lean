@@ -1,12 +1,11 @@
 import CommitGolfCandidate.Programs
 
-/-! Prospective cap opening/check assembly. These images are deliberately separate
-from candidate/submission until decoded execution, formal refinement and security
-have all been established. Commitment code is supplied by candidate; this file replaces opening/checker only. -/
+/-! Cap opening/check assembly. The complete certificate is assembled in
+CapCertificate. Commitment code is supplied by the candidate and certified separately. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
-def capHeight (depth : Nat) : Nat := min depth 7
+def capHeight (depth : Nat) : Nat := min depth 8
 def capLowerHeight (depth : Nat) : Nat := depth - capHeight depth
 
 def capAndOne (destination source : Nat) : Asm :=
@@ -46,7 +45,7 @@ def capOpeningCode (depth : Nat) : List Asm :=
   let capLeaves := 2^(capHeight depth)
   [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++
   li 19 leaves ++ li 6 (64*leaves) ++ [regop 18 9 6] ++
-  li 22 20480 ++ li 29 capLeaves ++ [addi 31 0 1, .branch 0 27 0 "open-done",
+  li 22 28672 ++ li 29 capLeaves ++ [addi 31 0 1, .branch 0 27 0 "open-done",
    .label "open-position", ld 20 24 0, shift 6 20 5, regop 23 18 6] ++
   copyDigest 23 25 ++ [addi 25 25 32, regop 20 20 19] ++ li 28 lower ++
   [.branch 0 28 0 "open-group", .label "open-path",
@@ -64,7 +63,7 @@ def capCheckCode (depth : Nat) : List Asm :=
   [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16, regop 22 15 17] ++
   li 6 (32*(lower+1)) ++
   [regop 7 16 6 0 1, .branch 6 17 7 "reject", .branch 0 27 0 "cap-empty"] ++
-  li 21 256 ++ li 9 20480 ++ li 18 12288 ++ li 19 capLeaves ++
+  li 21 256 ++ li 9 28672 ++ li 18 12288 ++ li 19 capLeaves ++
   [addi 31 0 1, .label "check-position", ld 20 24 0] ++
   copyDigest 25 21 ++ [addi 25 25 32, .jump 1 "leaf"] ++ li 29 lower ++
   [.branch 0 29 0 "check-group", .label "check-path", capAndOne 7 20,
@@ -86,7 +85,7 @@ def capCheckCode (depth : Nat) : List Asm :=
   [.jump 0 "accept", .label "cap-empty", .branch 1 17 0 "reject",
    .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++ leafSubroutine
 
-/-- Cap images; the complete certificate is assembled separately. -/
+/-- Cap images; the complete machine and security certificate is assembled separately. -/
 def capExperimental (depth : Nat) : Submission :=
   { candidate depth with image := fun program =>
       match program with

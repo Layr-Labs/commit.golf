@@ -20,12 +20,12 @@ theorem cap_open_record_before_group_frame (rootBase limit cursor position : Nat
     (state : MachineState) (pc : state.pc = 4212)
     (roots : state.getReg .x9 = BitVec.ofNat 64 rootBase)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (aligned : cursor % 8 = 0) (space : cursor+576 ≤ limit)
+    (aligned : cursor % 8 = 0) (space : cursor+544 ≤ limit)
     (limitBound : limit ≤ MEMORY_BYTES) (positionBound : position < 16777216)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 position)
     (leaves : state.getReg .x19 = 16777216) :
     CapOpenInputFrame cursor state (capOpenRecordGroupState state) := by
-  have small : cursor+576 < 2^64 := by
+  have small : cursor+544 < 2^64 := by
     simp only [MEMORY_BYTES] at limitBound
     omega
   have preparedPointer : (capOpenRecordPrefix state 3).getReg .x25 =
@@ -52,14 +52,14 @@ theorem cap_open_record_before_group_frame (rootBase limit cursor position : Nat
     rw [pathCursor, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : cursor+32 < 2^64)]
     omega
   rw [capOpenRecordGroupState]
-  exact cap_open_path_loop_input_frame rootBase limit cursor 17 _ state
+  exact cap_open_path_loop_input_frame rootBase limit cursor 16 _ state
     limitBound ready floor pathFrame
 
 theorem cap_open_record_before_group_word (rootBase limit cursor position : Nat)
     (state : MachineState) (pc : state.pc = 4212)
     (roots : state.getReg .x9 = BitVec.ofNat 64 rootBase)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (aligned : cursor % 8 = 0) (space : cursor+576 ≤ limit)
+    (aligned : cursor % 8 = 0) (space : cursor+544 ≤ limit)
     (limitBound : limit ≤ MEMORY_BYTES) (positionBound : position < 16777216)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 position)
     (leaves : state.getReg .x19 = 16777216)

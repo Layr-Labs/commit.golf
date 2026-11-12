@@ -13,18 +13,18 @@ set_option autoImplicit false
 theorem cap_check_traversal_initial_window (input : CheckInput) (ordinal : Nat)
     (state : MachineState) (ready : CapCheckRecordsReady input ordinal 0 state)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length) :
+    (enough : 544*input.positions.card ≤ input.proof.length) :
     CapCheckCursorWindow (capProgram.layout.proof+input.proof.length)
       (capCheckTraversalInitial state) := by
   have ordinalEq : ordinal=input.positions.card := by
     have partition := ready.partition
     omega
   have bounded := (cap_check_loader_bounds input admitted).1
-  have small : capProgram.layout.proof+576*ordinal < 2^64 := by
+  have small : capProgram.layout.proof+544*ordinal < 2^64 := by
     simp only [MEMORY_BYTES] at bounded
     omega
   have numeric : ((capCheckTraversalInitial state).getReg .x25).toNat =
-      capProgram.layout.proof+576*ordinal := by
+      capProgram.layout.proof+544*ordinal := by
     rw [cap_check_traversal_initial_cursor input ordinal state ready]
     simp only [BitVec.toNat_ofNat,Nat.mod_eq_of_lt small]
   refine ⟨?_,?_,
@@ -41,7 +41,7 @@ theorem cap_check_traversal_initial_ready (input : CheckInput) (ordinal : Nat)
     (roots : CapRootMap) (collected : CapCheckCollected state roots)
     (selectors : CapCheckSelectors state)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length) :
+    (enough : 544*input.positions.card ≤ input.proof.length) :
     CapCheckDfsReady (capProgram.layout.proof+input.proof.length)
       (capCheckCollectedMarks roots) (.visit 1) (capCheckTraversalInitial state) :=
   ⟨cap_check_traversal_initial_control input ordinal state ready roots collected,

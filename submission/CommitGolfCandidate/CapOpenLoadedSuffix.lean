@@ -10,7 +10,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 private theorem high_read (state reference : MachineState) (address count : Nat)
-    (high : 22528 ≤ address) (bound : address+count ≤ 2^64)
+    (high : 32768 ≤ address) (bound : address+count ≤ 2^64)
     (frame : CapHighBytes state reference) :
     readBuffer state address count = readBuffer reference address count := by
   unfold readBuffer
@@ -22,18 +22,18 @@ private theorem high_read (state reference : MachineState) (address count : Nat)
 
 def capOpenBoundaryDigests
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) : List Digest :=
-  (capControlBoundaries (capOpenRequestedMarks positions) 510 (.visit 1)).map
+  (capControlBoundaries (capOpenRequestedMarks positions) 1022 (.visit 1)).map
     (fun node => readBuffer (capProgram.initialState .opening (trapdoor, positions))
       (capProgram.layout.trapdoor+32*node) 32)
 
 theorem cap_open_traversal_initial_root_read
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
-    (positive : 0 < positions.card) (node : Nat) (bounded : node < 256) :
+    (positive : 0 < positions.card) (node : Nat) (bounded : node < 512) :
     readBuffer (capOpenTraversalInitial trapdoor positions)
       (capProgram.layout.trapdoor+32*node) 32 =
       readBuffer (capProgram.initialState .opening (trapdoor, positions))
         (capProgram.layout.trapdoor+32*node) 32 := by
-  have high : 22528 ≤ capProgram.layout.trapdoor+32*node := by
+  have high : 32768 ≤ capProgram.layout.trapdoor+32*node := by
     norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
       LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES]
     omega
@@ -55,13 +55,13 @@ theorem cap_open_loaded_suffix_bytes
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) (final : MachineState)
     (reached : final ∈ support (capDfsRun false (capOpenRequestedMarks positions)
-      510 (.visit 1) (capOpenTraversalInitial trapdoor positions)))
+      1022 (.visit 1) (capOpenTraversalInitial trapdoor positions)))
     (offset : Nat)
     (inside : offset < 32*(capOpenBoundaryDigests trapdoor positions).length) :
     (capOpenExitState final).getByte
-        (BitVec.ofNat 64 (capProgram.layout.proof+576*positions.card+offset)) =
+        (BitVec.ofNat 64 (capProgram.layout.proof+544*positions.card+offset)) =
       (capDigestEncoding (capOpenBoundaryDigests trapdoor positions))[offset]?.getD 0 := by
-  let nodes := capControlBoundaries (capOpenRequestedMarks positions) 510 (.visit 1)
+  let nodes := capControlBoundaries (capOpenRequestedMarks positions) 1022 (.visit 1)
   have selected : nodes.map (fun node =>
       readBuffer (capOpenTraversalInitial trapdoor positions)
         (capProgram.layout.trapdoor+32*node) 32) =
@@ -69,20 +69,20 @@ theorem cap_open_loaded_suffix_bytes
     apply List.map_congr_left
     intro node member
     have bounded := cap_control_boundaries_nodes
-      (capOpenRequestedMarks positions) 510 (.visit 1)
+      (capOpenRequestedMarks positions) 1022 (.visit 1)
       (by constructor <;> decide) node member
     exact cap_open_traversal_initial_root_read trapdoor positions positive node bounded.2
   have emitted := cap_open_run_bytes (capOpenRequestedMarks positions)
     capProgram.layout.trapdoor capOpenOutputLimit
-    (capProgram.layout.proof+576*positions.card)
+    (capProgram.layout.proof+544*positions.card)
     (capOpenTraversalInitial trapdoor positions)
     (cap_open_abi_output_space positions).2 cap_open_abi_root_space.1
     cap_open_abi_root_space.2 (cap_open_abi_heap_before_prefix positions)
-    510 (.visit 1) _ final
+    1022 (.visit 1) _ final
     (cap_open_loaded_read_ready trapdoor positions positive) reached offset
     (by simpa only [capOpenBoundaryDigests, List.length_map] using inside)
   have pointer := cap_open_traversal_initial_cursor trapdoor positions positive
-  have bound : capProgram.layout.proof+576*positions.card < 2^64 := by
+  have bound : capProgram.layout.proof+544*positions.card < 2^64 := by
     have space := (cap_open_abi_output_space positions).1
     have limitBound := (cap_open_abi_output_space positions).2
     simp only [MEMORY_BYTES] at limitBound

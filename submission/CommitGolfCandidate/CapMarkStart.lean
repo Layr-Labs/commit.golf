@@ -81,7 +81,7 @@ theorem cap_mark_header_counter (leavesReg : Reg) (state : MachineState) (leaves
 theorem cap_mark_header_pc (leavesReg : Reg) (state : MachineState) (entry : Word)
     (leaves : Nat) (pc : state.pc = entry)
     (count : state.getReg leavesReg = BitVec.ofNat 64 leaves)
-    (positive : 0 < leaves) (bounded : leaves ≤ 128) :
+    (positive : 0 < leaves) (bounded : leaves ≤ 256) :
     (capMarkHeaderState leavesReg state).pc =
       if leaves = 1 then (entry + 8) + 40 else entry + 8 := by
   have setCounter : (capMarkHeaderSet leavesReg state).getReg .x20 =
@@ -119,9 +119,9 @@ theorem cap_mark_header_pc (leavesReg : Reg) (state : MachineState) (entry : Wor
 natural counter, address base and conditional entry PC. -/
 theorem cap_mark_header_ready (marks leavesReg : Reg) (state : MachineState)
     (entry : Word) (leaves : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (count : state.getReg leavesReg = BitVec.ofNat 64 leaves) (pc : state.pc = entry)
-    (positive : 0 < leaves) (bounded : leaves ≤ 128)
+    (positive : 0 < leaves) (bounded : leaves ≤ 256)
     (ready : CapMarksReady state leaves (leaves - 1) marked) :
     CapMarkLoopReady marks (entry + 8) (capMarkHeaderState leavesReg state)
       leaves (leaves - 1) marked := by

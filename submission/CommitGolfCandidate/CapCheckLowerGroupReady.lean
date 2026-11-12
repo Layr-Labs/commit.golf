@@ -11,23 +11,23 @@ set_option maxHeartbeats 200000
 set_option autoImplicit false
 
 structure CapCheckGroupReady (state : MachineState) (group : Nat) : Prop where
-  bounded : group < 128
+  bounded : group < 256
   pc : state.pc = 4420
   scratch : state.getReg .x21 = 256
   index : state.getReg .x20 = BitVec.ofNat 64 group
-  leaves : state.getReg .x19 = 128
-  marks : state.getReg .x9 = 20480
+  leaves : state.getReg .x19 = 256
+  marks : state.getReg .x9 = 28672
   roots : state.getReg .x18 = 12288
   one : state.getReg .x31 = 1
 
 theorem cap_check_lower_group_ready (state finished : MachineState) (index : Nat)
     (bounded : index < 2^24)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 index)
-    (scratch : state.getReg .x21 = 256) (leaves : state.getReg .x19 = 128)
-    (marks : state.getReg .x9 = 20480) (roots : state.getReg .x18 = 12288)
+    (scratch : state.getReg .x21 = 256) (leaves : state.getReg .x19 = 256)
+    (marks : state.getReg .x9 = 28672) (roots : state.getReg .x18 = 12288)
     (one : state.getReg .x31 = 1)
     (reachable : finished ∈ support (capCheckLowerRecord state)) :
-    CapCheckGroupReady finished (index/2^17) := by
+    CapCheckGroupReady finished (index/2^16) := by
   constructor
   · omega
   · exact (cap_check_lower_record_finished state finished reachable).1
@@ -59,6 +59,6 @@ theorem cap_check_group_ready_admission (state : MachineState) (group : Nat)
     rw [addresses.2.2]
     exact cap_check_group_root_access group ready.bounded ⟨i,inside⟩
   · rw [addresses.2.1]
-    exact (cap_mark_address_valid 128 (128+group) (by decide) (by omega)).1
+    exact (cap_mark_address_valid 256 (256+group) (by decide) (by omega)).1
 
 end CommitGolfCandidate

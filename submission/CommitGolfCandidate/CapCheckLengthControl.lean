@@ -10,7 +10,7 @@ attribute [local irreducible] capCheckSetupPrefix
 
 theorem cap_check_multiplied_registers (state : MachineState) :
     (capCheckMultiplied state).getReg .x17 = state.getReg .x17 ∧
-    (capCheckMultiplied state).getReg .x7 = state.getReg .x16 * 576 := by
+    (capCheckMultiplied state).getReg .x7 = state.getReg .x16 * 544 := by
   constructor
   · simp only [capCheckMultiplied, MachineState.getReg_setPC,
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x7 ≠ .x17)]
@@ -23,7 +23,7 @@ theorem cap_check_multiplied_pc (state : MachineState) :
 
 theorem cap_check_length_control (state : MachineState) :
     (capCheckLengthState state).pc =
-      if state.getReg .x17 < state.getReg .x16 * 576 then 4808 else 4140 := by
+      if state.getReg .x17 < state.getReg .x16 * 544 then 4808 else 4140 := by
   rw [capCheckLengthState, cap_flow_below_pc]
   have regs := cap_check_multiplied_registers state
   simp only [regs.1, regs.2, cap_check_multiplied_pc]

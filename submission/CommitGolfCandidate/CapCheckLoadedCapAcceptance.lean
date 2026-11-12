@@ -20,32 +20,32 @@ theorem cap_check_loaded_cap_acceptance (oracle : Oracle) (input : CheckInput)
     (roots : CapRootMap) (collected : CapCheckCollected state roots)
     (selectors : CapCheckSelectors state)
     (admitted : input.proof.length≤capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length) :
+    (enough : 544*input.positions.card ≤ input.proof.length) :
     (checkEvaluation oracle (capCheckDfsFinish (capCheckCollectedMarks roots)
-      510 (.visit 1) (capCheckTraversalInitial state))).1.exit=.success ↔
-      capDecode oracle.compression (capKnownView roots 7 0)
-        (capCheckSuffixWords input (576*input.positions.card))=
+      1022 (.visit 1) (capCheckTraversalInitial state))).1.exit=.success ↔
+      capDecode oracle.compression (capKnownView roots 8 0)
+        (capCheckSuffixWords input (544*input.positions.card))=
           some (input.commitment,[]) ∧
-        (input.proof.length-576*input.positions.card)%32=0 := by
+        (input.proof.length-544*input.positions.card)%32=0 := by
   have ordinalEq : ordinal=input.positions.card := by
     have partition := ready.partition
     omega
   have frame := cap_check_traversal_initial_high input ordinal state ready roots collected
   have suffix := cap_check_loaded_word_suffix input (capCheckTraversalInitial state)
-    (576*input.positions.card) admitted enough
+    (544*input.positions.card) admitted enough
     (by rw [←ordinalEq]; exact cap_check_traversal_initial_cursor input ordinal state ready)
     (cap_check_traversal_initial_end input ordinal state ready) frame
   have reached := cap_check_traversal_initial_ready input ordinal state ready
     roots collected selectors admitted enough
   have claimed := cap_check_traversal_initial_commitment input ordinal state ready
-  have high : 22528≤capProgram.layout.commitment := by decide
+  have high : 32768≤capProgram.layout.commitment := by decide
   have bound : capProgram.layout.commitment+32≤2^64 := by decide
   have acceptance := cap_check_cap_acceptance oracle
     (capProgram.layout.proof+input.proof.length) (capCheckCollectedMarks roots)
-    (capKnownView roots 7 0) (capCheckTraversalInitial state)
-    (capProgram.layout.proof+576*input.positions.card)
-    (capCheckSuffixWords input (576*input.positions.card))
-    ((input.proof.length-576*input.positions.card)%32) capProgram.layout.commitment
+    (capKnownView roots 8 0) (capCheckTraversalInitial state)
+    (capProgram.layout.proof+544*input.positions.card)
+    (capCheckSuffixWords input (544*input.positions.card))
+    ((input.proof.length-544*input.positions.card)%32) capProgram.layout.commitment
     reached suffix (cap_check_known_root_marks roots)
     (cap_check_traversal_known_leaves input ordinal state ready roots collected)
     claimed (by decide) high bound

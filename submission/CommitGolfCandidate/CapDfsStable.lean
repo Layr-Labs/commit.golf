@@ -10,9 +10,9 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 structure CapDfsStable (checking : Bool) (state : MachineState) (rootBase : Nat) : Prop where
-  marks : state.getReg (capVisitMarks checking) = 20480
+  marks : state.getReg (capVisitMarks checking) = 28672
   roots : state.getReg (capBoundaryRootRegister checking) = BitVec.ofNat 64 rootBase
-  leaves : state.getReg (capKnownLeafRegister checking) = 128
+  leaves : state.getReg (capKnownLeafRegister checking) = 256
   root : state.getReg .x31 = 1
   selectors : checking = true →
     state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0

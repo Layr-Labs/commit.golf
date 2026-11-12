@@ -30,15 +30,15 @@ theorem cap_check_record_supported_collected (input : CheckInput)
   have groupPassed : (capCheckGroupResult lower).2=true := by
     rw [← cap_check_record_result_passed]
     exact passed
-  have inserted := (cap_check_group_insert lower roots lowerCollected (index/2^17)
+  have inserted := (cap_check_group_insert lower roots lowerCollected (index/2^16)
     groupReady.bounded groupReady.index groupReady.leaves groupReady.marks
     groupReady.roots groupReady.scratch groupReady.one).mp groupPassed
-  cases insertion : capInsert roots (index/2^17) (readBuffer lower 256 32) with
+  cases insertion : capInsert roots (index/2^16) (readBuffer lower 256 32) with
   | none =>
     rw [insertion] at inserted
     contradiction
   | some next =>
-    exact ⟨next,cap_check_record_result_collected lower roots next (index/2^17)
+    exact ⟨next,cap_check_record_result_collected lower roots next (index/2^16)
       groupReady lowerCollected insertion⟩
 
 theorem cap_check_records_supported_collected (input : CheckInput) (ordinal count : Nat)

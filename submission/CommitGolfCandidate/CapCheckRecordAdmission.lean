@@ -2,7 +2,7 @@ import CommitGolfCandidate.CapCheckInitialFacts
 import CommitGolfCandidate.CapCheckRetainedIndex
 
 /-! ABI admission of the current checker record. The initial minimum-length
-gate reserves all 576-byte lower records, including their salts. Source values
+gate reserves all 544-byte lower records, including their salts. Source values
 and indices use their distinct fixed ABI ranges. Bounds are natural numbers
 before their addresses are converted to words. -/
 namespace CommitGolfCandidate
@@ -13,10 +13,10 @@ set_option maxHeartbeats 200000
 theorem cap_check_record_bounds (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576 * input.positions.card ≤ input.proof.length) :
+    (enough : 544 * input.positions.card ≤ input.proof.length) :
     capProgram.layout.indices + 8*ordinal + 8 ≤ MEMORY_BYTES ∧
     capProgram.layout.values + 256*ordinal + 256 ≤ MEMORY_BYTES ∧
-    capProgram.layout.proof + 576*ordinal + 576 ≤
+    capProgram.layout.proof + 544*ordinal + 544 ≤
       capProgram.layout.proof + input.proof.length ∧
     capProgram.layout.proof + input.proof.length ≤ MEMORY_BYTES := by
   have cardinal : input.positions.card ≤ LENGTH := by
@@ -40,14 +40,14 @@ private theorem word_access (address : Nat) (aligned : address % 8 = 0)
 theorem cap_check_record_access (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576 * input.positions.card ≤ input.proof.length)
+    (enough : 544 * input.positions.card ≤ input.proof.length)
     (state : MachineState)
     (indices : state.getReg .x24 =
       BitVec.ofNat 64 (capProgram.layout.indices + 8*ordinal))
     (values : state.getReg .x8 =
       BitVec.ofNat 64 (capProgram.layout.values + 256*ordinal))
     (proof : state.getReg .x25 =
-      BitVec.ofNat 64 (capProgram.layout.proof + 576*ordinal)) :
+      BitVec.ofNat 64 (capProgram.layout.proof + 544*ordinal)) :
     accessValid (state.getReg .x24) 8 = true ∧
     (∀ word : Fin 4,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8*word.val)) 8 = true) ∧
@@ -61,7 +61,7 @@ theorem cap_check_record_access (input : CheckInput) (ordinal : Nat)
     norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
       LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES]
     omega
-  have proofAlign : (capProgram.layout.proof + 576*ordinal) % 8 = 0 := by
+  have proofAlign : (capProgram.layout.proof + 544*ordinal) % 8 = 0 := by
     norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
       LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES]
     omega

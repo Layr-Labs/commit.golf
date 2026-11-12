@@ -34,10 +34,10 @@ private theorem suffix_memory (state : MachineState) (offset : BitVec 13) :
     show signExtend12 (0 : BitVec 12) = (0 : Word) by decide, add_zero_word]
 
 theorem cap_open_group_memory (state : MachineState) (node : Nat)
-    (marks : state.getReg .x22 = 20480)
+    (marks : state.getReg .x22 = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capOpenGroupPrefix state 6).mem =
-      (state.setMem (BitVec.ofNat 64 (20480+8*node)) (state.getReg .x31)).mem := by
+      (state.setMem (BitVec.ofNat 64 (28672+8*node)) (state.getReg .x31)).mem := by
   have source : (capOpenGroupPrefix state 2).getReg .x31 = state.getReg .x31 := by
     simp (disch := decide) only [capOpenGroupPrefix, capOpenGroupInstructions,
       List.take, List.foldl, execInstrBr, MachineState.getReg_setPC,
@@ -64,12 +64,12 @@ theorem cap_open_group_register (state : MachineState) (reg : Reg)
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm outside.2.2.2)]
 
 theorem cap_open_group_retained_inputs (floor : Nat) (state reference : MachineState)
-    (node : Nat) (floorBound : floor ≤ 2^64) (bounded : node < 256)
-    (marks : state.getReg .x22 = 20480)
+    (node : Nat) (floorBound : floor ≤ 2^64) (bounded : node < 512)
+    (marks : state.getReg .x22 = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
     (frame : CapOpenRetainedInputs floor reference state) :
     CapOpenRetainedInputs floor reference (capOpenGroupPrefix state 6) := by
-  have written := cap_open_retained_store floor state reference (20480+8*node)
+  have written := cap_open_retained_store floor state reference (28672+8*node)
     (state.getReg .x31) floorBound (by omega) frame
   exact cap_open_retained_memory floor _ _ reference
     (cap_open_group_memory state node marks index) written

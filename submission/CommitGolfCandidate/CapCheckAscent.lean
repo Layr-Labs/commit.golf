@@ -35,7 +35,7 @@ theorem cap_check_ascent_prepared_register (state : MachineState) (reg : Reg)
     cap_advance_guard_register true state reg outside.2]
 
 theorem cap_check_ascent_prepared_index (state : MachineState) (node : Nat)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512) :
     (capCheckAscentPrepared state).getReg .x20 = BitVec.ofNat 64 (node / 2) := by
   apply cap_navigation_ascend _ node _ bounded
   exact (cap_advance_guard_register true state .x20 (by decide)).trans index
@@ -43,7 +43,7 @@ theorem cap_check_ascent_prepared_index (state : MachineState) (node : Nat)
 theorem cap_check_ascent_prepared_pc (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry true)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1)
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1)
     (odd : node % 2 ≠ 0) :
     (capCheckAscentPrepared state).pc = 4704 := by
   have guardPC := cap_advance_guard_pc true state node pc index root bounded nonroot
@@ -74,7 +74,7 @@ attribute [local irreducible] capCheckAscentPrepared
 theorem cap_check_ascent_execute (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry true)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1)
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1)
     (odd : node % 2 ≠ 0) (roots : state.getReg .x18 = 12288)
     (selectors : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
     (fuel : Nat) (allowCoins : Bool) :
@@ -140,7 +140,7 @@ theorem cap_check_ascent_execute (state : MachineState) (node : Nat)
   simp only [bind_assoc, pure_bind, charge_pair, capCheckAscentAnswer]
 
 theorem cap_check_ascent_answer_index (state : MachineState) (answer : BitVec 256)
-    (node : Nat) (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
+    (node : Nat) (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512) :
     (capCheckAscentAnswer state answer).getReg .x20 = BitVec.ofNat 64 (node / 2) := by
   rw [capCheckAscentAnswer, cap_flow_register, cap_parent_answer_register _ _ .x20 (by decide)]
   exact cap_check_ascent_prepared_index state node index bounded
@@ -155,22 +155,22 @@ theorem cap_check_ascent_answer_register (state : MachineState) (answer : BitVec
 theorem cap_check_ascent_answer_marks (state : MachineState) (node : Nat)
     (answer : BitVec 256) (marked : Nat → Bool)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (roots : state.getReg .x18 = 12288) (bounded : node < 256)
-    (ready : CapMarksReady state 128 0 marked) :
-    CapMarksReady (capCheckAscentAnswer state answer) 128 0 marked := by
+    (roots : state.getReg .x18 = 12288) (bounded : node < 512)
+    (ready : CapMarksReady state 256 0 marked) :
+    CapMarksReady (capCheckAscentAnswer state answer) 256 0 marked := by
   apply cap_marks_ready_memory
     (capParentAnswerState (capCheckAscentPrepared state) answer)
-    (capCheckAscentAnswer state answer) 128 0 marked
+    (capCheckAscentAnswer state answer) 256 0 marked
     (cap_flow_memory (.jump 2097116) _)
   apply cap_parent_answer_marks _ (node / 2) answer marked
     ((cap_check_ascent_prepared_register state .x18 (by decide)).trans roots)
     (cap_check_ascent_prepared_index state node index bounded) (by omega)
-  exact cap_marks_ready_memory state (capCheckAscentPrepared state) 128 0 marked
+  exact cap_marks_ready_memory state (capCheckAscentPrepared state) 256 0 marked
     (cap_check_ascent_prepared_memory state) ready
 
 theorem cap_check_ascent_answer_root_map (state : MachineState) (answer : BitVec 256)
     (node other : Nat) (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (roots : state.getReg .x18 = 12288) (bounded : node < 256) (otherBound : other < 256) :
+    (roots : state.getReg .x18 = 12288) (bounded : node < 512) (otherBound : other < 512) :
     capReadRoot (capCheckAscentAnswer state answer) other =
       if other = node / 2 then answer else capReadRoot state other := by
   have frame := cap_flow_memory (.jump 2097116)

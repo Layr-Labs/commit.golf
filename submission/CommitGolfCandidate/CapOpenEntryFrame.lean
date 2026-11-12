@@ -16,13 +16,13 @@ theorem cap_open_marked_final_high
     CapHighBytes (capOpenMarkedFinal trapdoor positions)
       (capOpenRecordsFinal trapdoor positions) := by
   have ready := cap_open_records_final_ready trapdoor positions positive
-  have memory := cap_mark_pass_memory .x22 .x29 _ 4364 128 _
+  have memory := cap_mark_pass_memory .x22 .x29 _ 4364 256 _
     (Or.inr rfl) (by decide) (by decide) (cap_tree_marks_parent _)
     (by simpa using ready.pc) ready.marks
     (cap_open_records_final_leaves trapdoor positions)
     (cap_open_records_marks_ready trapdoor positions positive)
   exact cap_high_bytes_memory _ _ _ memory
-    (cap_mark_pass_frame _ _ 128 127 (by decide) (by decide) (cap_high_bytes_refl _))
+    (cap_mark_pass_frame _ _ 256 255 (by decide) (by decide) (cap_high_bytes_refl _))
 
 theorem cap_open_traversal_initial_high
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)

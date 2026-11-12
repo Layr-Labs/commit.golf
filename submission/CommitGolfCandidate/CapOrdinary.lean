@@ -44,7 +44,7 @@ theorem cap_mark_store_step (image : Image) (state : MachineState) (fuel : Nat)
   rfl
 
 theorem cap_mark_store_frame (state reference : MachineState)
-    (low : (state.getReg .x23).toNat < 22528) (frame : CapHighBytes state reference) :
+    (low : (state.getReg .x23).toNat < 32768) (frame : CapHighBytes state reference) :
     CapHighBytes (capMarkStoreState state) reference := by
   apply cap_high_bytes_memory
     (state.setMem (state.getReg .x23) (state.getReg .x6)) _ reference rfl

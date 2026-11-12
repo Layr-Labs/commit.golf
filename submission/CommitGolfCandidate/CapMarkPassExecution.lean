@@ -23,11 +23,11 @@ theorem cap_mark_pass_execute (image : Image) (marks leavesReg : Reg)
     (headerFetched : CapMarkHeaderFetched image leavesReg entry)
     (bodyFetched : CapMarkFetched image marks (entry + 8))
     (selected : CapMarksRegister marks) (leaves : Nat) (marked : Nat → Bool)
-    (positive : 0 < leaves) (bounded : leaves ≤ 128)
+    (positive : 0 < leaves) (bounded : leaves ≤ 256)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
     (state : MachineState) (pc : state.pc = entry)
-    (base : state.getReg marks = 20480)
+    (base : state.getReg marks = 28672)
     (count : state.getReg leavesReg = BitVec.ofNat 64 leaves)
     (ready : CapMarksReady state leaves (leaves - 1) marked)
     (fuel : Nat) (allowCoins : Bool) :
@@ -47,10 +47,10 @@ theorem cap_mark_pass_execute (image : Image) (marks leavesReg : Reg)
 
 theorem cap_mark_pass_finished (marks leavesReg : Reg) (state : MachineState)
     (entry : Word) (leaves : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (positive : 0 < leaves) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (positive : 0 < leaves) (bounded : leaves ≤ 256)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
-    (pc : state.pc = entry) (base : state.getReg marks = 20480)
+    (pc : state.pc = entry) (base : state.getReg marks = 28672)
     (count : state.getReg leavesReg = BitVec.ofNat 64 leaves)
     (ready : CapMarksReady state leaves (leaves - 1) marked) :
     CapMarkLoopReady marks (entry + 8)
@@ -69,10 +69,10 @@ theorem cap_mark_pass_register (marks leavesReg : Reg) (state : MachineState)
 
 theorem cap_mark_pass_memory (marks leavesReg : Reg) (state : MachineState)
     (entry : Word) (leaves : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (positive : 0 < leaves) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (positive : 0 < leaves) (bounded : leaves ≤ 256)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
-    (pc : state.pc = entry) (base : state.getReg marks = 20480)
+    (pc : state.pc = entry) (base : state.getReg marks = 28672)
     (count : state.getReg leavesReg = BitVec.ofNat 64 leaves)
     (ready : CapMarksReady state leaves (leaves - 1) marked) :
     (capMarkMachinePass marks leavesReg state leaves).mem =

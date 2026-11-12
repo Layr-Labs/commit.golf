@@ -44,7 +44,7 @@ theorem cap_open_initial_salt_base
 
 theorem cap_open_initial_workspace_zero
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
-    (address : Nat) (bounded : address+8 ≤ 22528) :
+    (address : Nat) (bounded : address+8 ≤ 32768) :
     (capOpenInitializedState (capProgram.initialState .opening (trapdoor, positions))).getMem
       (BitVec.ofNat 64 address) = 0 := by
   have zero := cap_experimental_opening_workspace_zero trapdoor positions address bounded

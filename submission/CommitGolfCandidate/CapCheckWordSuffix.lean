@@ -15,7 +15,7 @@ structure CapCheckWordSuffix (state : MachineState) (cursor : Nat)
     (words : List Digest) (tailBytes : Nat) : Prop where
   pointer : state.getReg .x25=BitVec.ofNat 64 cursor
   endPointer : state.getReg .x22=BitVec.ofNat 64 (cursor+32*words.length+tailBytes)
-  high : 22528≤cursor
+  high : 32768≤cursor
   bound : cursor+32*words.length+tailBytes≤MEMORY_BYTES
   partialBound : tailBytes<32
   slots : ∀ ordinal, (present : ordinal<words.length) →

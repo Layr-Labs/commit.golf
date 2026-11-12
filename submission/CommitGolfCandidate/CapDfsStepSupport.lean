@@ -2,7 +2,7 @@ import CommitGolfCandidate.CapDfsStep
 
 /-! Every supported macro result follows the same structural DFS edge and
 retains occupancy and fixed machine selectors. In particular the parent reply
-may be any 256-bit value. Admission of later proof reads is a separate cursor
+may be any 512-bit value. Admission of later proof reads is a separate cursor
 invariant; it is not inferred from successful earlier queries. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -13,13 +13,13 @@ theorem cap_dfs_step_support (checking : Bool) (marked : Nat → Bool)
     (control : CapDfsControl) (state next : MachineState) (rootBase : Nat)
     (physical : CapDfsStateControl checking state control)
     (valid : CapDfsControlValid control) (stable : CapDfsStable checking state rootBase)
-    (ready : CapMarksReady state 128 0 marked)
+    (ready : CapMarksReady state 256 0 marked)
     (checkBase : checking = true → rootBase = 12288)
     (boundary : ∀ node, control = .visit node → marked node = false →
       CapDfsBoundaryReady checking state rootBase node)
     (reached : next ∈ support (capDfsStep checking marked control state)) :
     CapDfsStateControl checking next (capControlStep marked control) ∧
-      CapDfsStable checking next rootBase ∧ CapMarksReady next 128 0 marked := by
+      CapDfsStable checking next rootBase ∧ CapMarksReady next 256 0 marked := by
   cases control with
   | visit node =>
       by_cases present : marked node = true
@@ -29,7 +29,7 @@ theorem cap_dfs_step_support (checking : Bool) (marked : Nat → Bool)
         exact ⟨cap_dfs_marked_control checking state node marked physical valid stable.marks
             stable.leaves ready present,
           cap_dfs_marked_stable checking state node rootBase stable,
-          cap_marks_ready_memory state _ 128 0 marked
+          cap_marks_ready_memory state _ 256 0 marked
             (cap_marked_visit_memory checking state node) ready⟩
       · have absent : marked node = false := Bool.eq_false_iff.mpr present
         have admitted := boundary node rfl absent
@@ -73,7 +73,7 @@ theorem cap_dfs_step_support (checking : Bool) (marked : Nat → Bool)
         · apply cap_dfs_stable_transport checking state _ rootBase stable
           intro reg _
           exact cap_flow_register _ _ reg
-        · exact cap_marks_ready_memory state _ 128 0 marked
+        · exact cap_marks_ready_memory state _ 256 0 marked
             (cap_flow_memory _ _) ready
       · by_cases even : node % 2 = 0
         · simp only [capDfsStep, if_neg root, if_pos even] at reached
@@ -81,7 +81,7 @@ theorem cap_dfs_step_support (checking : Bool) (marked : Nat → Bool)
           subst next
           exact ⟨cap_dfs_sibling_control checking state node marked physical valid stable.root
               root even, cap_dfs_sibling_stable checking state rootBase stable,
-            cap_marks_ready_memory state _ 128 0 marked
+            cap_marks_ready_memory state _ 256 0 marked
               (cap_advance_sibling_memory checking state) ready⟩
         · cases checking
           · simp only [capDfsStep, if_neg root, if_neg even, Bool.false_eq_true,
@@ -90,7 +90,7 @@ theorem cap_dfs_step_support (checking : Bool) (marked : Nat → Bool)
             subst next
             exact ⟨cap_dfs_open_ascent_control state node marked physical valid stable.root
                 root even, cap_dfs_open_ascent_stable state rootBase stable,
-              cap_marks_ready_memory state _ 128 0 marked
+              cap_marks_ready_memory state _ 256 0 marked
                 (cap_advance_open_ascent_memory state) ready⟩
           · simp only [capDfsStep, if_neg root, if_neg even, ↓reduceIte] at reached
             obtain ⟨answer, _, returned⟩ := mem_support_bind_peel _ _ reached

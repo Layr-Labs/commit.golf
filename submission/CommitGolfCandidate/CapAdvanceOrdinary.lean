@@ -25,7 +25,7 @@ private theorem charge_pair (result : Execution) (first second : Nat) :
 theorem cap_advance_sibling_execute (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1)
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1)
     (even : node % 2 = 0) (fuel : Nat) (allowCoins : Bool) :
     execute (capWalkImage checking) (5 + fuel) state allowCoins =
       (do let result ← execute (capWalkImage checking) fuel
@@ -54,7 +54,7 @@ theorem cap_advance_sibling_execute (checking : Bool) (state : MachineState) (no
 theorem cap_advance_sibling_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1)
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1)
     (even : node % 2 = 0) :
     (capAdvanceSiblingState checking state).pc = capKnownVisit checking := by
   have guardPC := cap_advance_guard_pc checking state node pc index root bounded nonroot
@@ -78,7 +78,7 @@ theorem cap_advance_sibling_memory (checking : Bool) (state : MachineState) :
 theorem cap_advance_open_ascent_execute (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry false)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1)
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1)
     (odd : node % 2 ≠ 0) (fuel : Nat) (allowCoins : Bool) :
     execute (capWalkImage false) (5 + fuel) state allowCoins =
       (do let result ← execute (capWalkImage false) fuel
@@ -102,7 +102,7 @@ theorem cap_advance_open_ascent_execute (state : MachineState) (node : Nat)
 theorem cap_advance_open_ascent_pc (state : MachineState) (node : Nat)
     (pc : state.pc = capAdvanceEntry false)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (root : state.getReg .x31 = 1) (bounded : node < 256) (nonroot : node ≠ 1)
+    (root : state.getReg .x31 = 1) (bounded : node < 512) (nonroot : node ≠ 1)
     (odd : node % 2 ≠ 0) :
     (capAdvanceOpenAscentState state).pc = capAdvanceEntry false := by
   have guardPC := cap_advance_guard_pc false state node pc index root bounded nonroot
@@ -111,7 +111,7 @@ theorem cap_advance_open_ascent_pc (state : MachineState) (node : Nat)
   rfl
 
 theorem cap_advance_open_ascent_node (state : MachineState) (node : Nat)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512) :
     (capAdvanceOpenAscentState state).getReg .x20 = BitVec.ofNat 64 (node / 2) := by
   rw [capAdvanceOpenAscentState, cap_flow_register]
   apply cap_navigation_ascend _ node _ bounded

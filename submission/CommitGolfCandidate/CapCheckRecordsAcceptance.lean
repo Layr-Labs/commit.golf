@@ -15,10 +15,10 @@ attribute [local irreducible] checkEvaluation capCheckRecordsContinue
 
 def CapCheckLoadedAcceptance (oracle : Oracle) (input : CheckInput)
     (roots : CapRootMap) : Prop :=
-  capDecode oracle.compression (capKnownView roots 7 0)
-    (capCheckSuffixWords input (576*input.positions.card)) =
+  capDecode oracle.compression (capKnownView roots 8 0)
+    (capCheckSuffixWords input (544*input.positions.card)) =
       some (input.commitment,[]) ∧
-    (input.proof.length-576*input.positions.card)%32=0
+    (input.proof.length-544*input.positions.card)%32=0
 
 private theorem some_roots_bind (roots : CapRootMap)
     (next : CapRootMap → Option CapRootMap) :
@@ -26,12 +26,12 @@ private theorem some_roots_bind (roots : CapRootMap)
 
 theorem cap_check_records_continue_acceptance (oracle : Oracle) (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length)
+    (enough : 544*input.positions.card ≤ input.proof.length)
     (ordinal count : Nat) (state : MachineState)
     (ready : CapCheckRecordsReady input ordinal count state)
     (roots : CapRootMap) (collected : CapCheckCollected state roots)
     (zeroSelectors : count=0 → CapCheckSelectors state)
-    (fuel : Nat) (sufficient : 671*count+9961 ≤ fuel) (allowCoins : Bool) :
+    (fuel : Nat) (sufficient : 671*count+19945 ≤ fuel) (allowCoins : Bool) :
     (checkEvaluation oracle
       (capCheckRecordsContinue count state fuel allowCoins)).1.exit=.success ↔
       ∃ next, capLowerBatchRoots oracle.compression
@@ -45,12 +45,12 @@ theorem cap_check_records_continue_acceptance (oracle : Oracle) (input : CheckIn
       rw [cap_check_loaded_records_length]
       omega
     have execution := cap_check_post_records_execute input ordinal state ready roots
-      collected (zeroSelectors rfl) admitted enough (fuel-1274) (by omega) allowCoins
-    rw [show 1274+(fuel-1274)=fuel by omega] at execution
+      collected (zeroSelectors rfl) admitted enough (fuel-2554) (by omega) allowCoins
+    rw [show 2554+(fuel-2554)=fuel by omega] at execution
     rw [capCheckRecordsContinue,execution,cap_check_evaluation_bind_value,
       check_evaluation_pure]
     change (checkEvaluation oracle (capCheckDfsFinish (capCheckCollectedMarks roots)
-      510 (.visit 1) (capCheckTraversalInitial state))).1.exit=.success ↔ _
+      1022 (.visit 1) (capCheckTraversalInitial state))).1.exit=.success ↔ _
     rw [cap_check_loaded_cap_acceptance oracle input ordinal state ready roots collected
       (zeroSelectors rfl) admitted enough,finished,List.drop_length]
     simp only [capLowerBatchRoots,Option.some.injEq,CapCheckLoadedAcceptance]
@@ -65,7 +65,7 @@ theorem cap_check_records_continue_acceptance (oracle : Oracle) (input : CheckIn
     have recordPresent : ordinal < (capCheckLoadedRecords input).length := by
       rw [cap_check_loaded_records_length]; exact present
     have digest := cap_check_record_logical oracle input (capCheckLoadedRecords input)
-      (input.proof.drop (576*input.positions.card)) parsed.encoded admitted ordinal
+      (input.proof.drop (544*input.positions.card)) parsed.encoded admitted ordinal
       (count+1) state ready present recordPresent
       (parsed.index ordinal recordPresent present) (parsed.value ordinal recordPresent present)
     have loaded : state.getMem (state.getReg .x24)=

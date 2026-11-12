@@ -54,7 +54,7 @@ theorem cap_path_trace_length (node : Digest) (path : List (Bool × Digest))
 
 theorem cap_lower_trace_length (record : CapLowerRecord) (root : Digest)
     (inputs : List (BitVec 512))
-    (reached : (root, inputs) ∈ support (capReplayLower record)) : inputs.length = 25 := by
+    (reached : (root, inputs) ∈ support (capReplayLower record)) : inputs.length = 24 := by
   rw [capReplayLower] at reached
   obtain ⟨⟨leaf, leafInputs⟩, leafReached, afterLeaf⟩ := mem_support_bind_peel _ _ reached
   obtain ⟨⟨lowerRoot, lowerInputs⟩, lowerReached, afterLower⟩ := mem_support_bind_peel _ _ afterLeaf
@@ -68,7 +68,7 @@ theorem cap_lower_trace_length (record : CapLowerRecord) (root : Digest)
 theorem cap_lower_batch_trace_length (records : List CapLowerRecord)
     (roots finalRoots : CapRootMap) (inputs : List (BitVec 512))
     (reached : some (finalRoots, inputs) ∈ support (capReplayLowerBatch records roots)) :
-    inputs.length = 25 * records.length := by
+    inputs.length = 24 * records.length := by
   induction records generalizing roots finalRoots inputs with
   | nil =>
       have same := eq_of_mem_support_pure (some (roots, [])) reached
@@ -164,7 +164,7 @@ Strict root/suffix rejection cannot enlarge the returned trace. -/
 theorem cap_batch_trace_bound (records : List CapLowerRecord) (proof : List Digest)
     (root : Digest) (inputs : List (BitVec 512))
     (reached : some inputs ∈ support (capReplayBatch records proof root)) :
-    inputs.length ≤ 25 * records.length + 127 := by
+    inputs.length ≤ 24 * records.length + 255 := by
   rw [capReplayBatch] at reached
   obtain ⟨lowerResult, lowerReached, afterLower⟩ := mem_support_bind_peel _ _ reached
   cases lowerResult with
@@ -186,7 +186,7 @@ theorem cap_batch_trace_bound (records : List CapLowerRecord) (proof : List Dige
             have trace := Option.some.inj same
             rw [trace, List.length_append, cap_lower_batch_trace_length _ _ _ _ lowerReached,
               cap_cap_trace_length _ _ _ _ _ capReached]
-            have capBound := cap_calls_full_bound (capKnownView roots 7 0)
+            have capBound := cap_calls_full_bound (capKnownView roots 8 0)
             norm_num at capBound
             omega
           · simp only [Option.bind_some, if_neg accepted] at afterCap

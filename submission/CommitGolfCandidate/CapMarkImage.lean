@@ -73,32 +73,32 @@ theorem cap_check_mark_body :
 /-- The actual challenge opening pass costs 1,272 cycles, including its header.
 The caller supplies initialized leaf marks; no oracle or coin behavior is assumed. -/
 theorem cap_open_mark_execute (state : MachineState) (marked : Nat → Bool)
-    (equations : ∀ node, 0 < node → node < 128 →
+    (equations : ∀ node, 0 < node → node < 256 →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
-    (pc : state.pc = 4364) (base : state.getReg .x22 = 20480)
-    (count : state.getReg .x29 = 128)
-    (ready : CapMarksReady state 128 127 marked) (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (1272 + fuel) state allowCoins =
+    (pc : state.pc = 4364) (base : state.getReg .x22 = 28672)
+    (count : state.getReg .x29 = 256)
+    (ready : CapMarksReady state 256 255 marked) (fuel : Nat) (allowCoins : Bool) :
+    execute ((capExperimental 24).image .opening) (2552 + fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
-            (capMarkMachinePass .x22 .x29 state 128) allowCoins
-          return result.charge 1272 0) := by
+            (capMarkMachinePass .x22 .x29 state 256) allowCoins
+          return result.charge 2552 0) := by
   exact cap_mark_pass_execute _ .x22 .x29 4364 cap_open_mark_header
-    cap_open_mark_body (Or.inr rfl) 128 marked (by decide) (by decide)
+    cap_open_mark_body (Or.inr rfl) 256 marked (by decide) (by decide)
     equations state pc base count ready fuel allowCoins
 
 /-- The actual challenge checker uses the same cost and separate image fetches. -/
 theorem cap_check_mark_execute (state : MachineState) (marked : Nat → Bool)
-    (equations : ∀ node, 0 < node → node < 128 →
+    (equations : ∀ node, 0 < node → node < 256 →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
-    (pc : state.pc = 4548) (base : state.getReg .x9 = 20480)
-    (count : state.getReg .x19 = 128)
-    (ready : CapMarksReady state 128 127 marked) (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .check) (1272 + fuel) state allowCoins =
+    (pc : state.pc = 4548) (base : state.getReg .x9 = 28672)
+    (count : state.getReg .x19 = 256)
+    (ready : CapMarksReady state 256 255 marked) (fuel : Nat) (allowCoins : Bool) :
+    execute ((capExperimental 24).image .check) (2552 + fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .check) fuel
-            (capMarkMachinePass .x9 .x19 state 128) allowCoins
-          return result.charge 1272 0) := by
+            (capMarkMachinePass .x9 .x19 state 256) allowCoins
+          return result.charge 2552 0) := by
   exact cap_mark_pass_execute _ .x9 .x19 4548 cap_check_mark_header
-    cap_check_mark_body (Or.inl rfl) 128 marked (by decide) (by decide)
+    cap_check_mark_body (Or.inl rfl) 256 marked (by decide) (by decide)
     equations state pc base count ready fuel allowCoins
 
 end CommitGolfCandidate

@@ -23,16 +23,16 @@ theorem cap_open_records_loop_execute (context : CapOpenRecordContext)
     (records : List Index) (reference : MachineState)
     (countBound : records.length < 2^64)
     (indexSpace : context.indices+8*records.length+32 ≤ context.output)
-    (outputSpace : context.output+576*records.length ≤ context.limit)
+    (outputSpace : context.output+544*records.length ≤ context.limit)
     (inputs : CapOpenRecordInputs context records reference)
     (remaining : Nat) (state : MachineState)
     (ready : CapOpenRecordsReady context records reference remaining state)
     (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (278*remaining+fuel) state allowCoins =
+    execute ((capExperimental 24).image .opening) (263*remaining+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capCountedRun capOpenRecordState remaining state) allowCoins
-          return result.charge (278*remaining) 0) := by
-  apply cap_counted_run_execute _ 278 capOpenRecordState
+          return result.charge (263*remaining) 0) := by
+  apply cap_counted_run_execute _ 263 capOpenRecordState
     (CapOpenRecordsReady context records reference)
     (fun residual current currentReady =>
       cap_open_records_ready_next context records reference current residual
@@ -42,7 +42,7 @@ theorem cap_open_records_loop_execute (context : CapOpenRecordContext)
   have bounded := currentReady.bounded
   have ordinalBound : records.length-(residual+1) < records.length := by omega
   let position := (records[records.length-(residual+1)]'ordinalBound).val
-  let cursor := context.output+576*(records.length-(residual+1))
+  let cursor := context.output+544*(records.length-(residual+1))
   let indexAddress := context.indices+8*(records.length-(residual+1))
   have positionBound : position < 16777216 := by
     simpa only [position, LENGTH, LOG_LENGTH, Nat.reducePow] using
@@ -74,7 +74,7 @@ theorem cap_open_records_loop_finished (context : CapOpenRecordContext)
     (records : List Index) (reference : MachineState)
     (countBound : records.length < 2^64)
     (indexSpace : context.indices+8*records.length+32 ≤ context.output)
-    (outputSpace : context.output+576*records.length ≤ context.limit)
+    (outputSpace : context.output+544*records.length ≤ context.limit)
     (inputs : CapOpenRecordInputs context records reference)
     (remaining : Nat) (state : MachineState)
     (ready : CapOpenRecordsReady context records reference remaining state) :

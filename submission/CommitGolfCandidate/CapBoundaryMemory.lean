@@ -90,15 +90,15 @@ theorem cap_boundary_marks_ready (checking : Bool) (state : MachineState)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
     (proof : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (destinationBound : capBoundaryDestination checking node rootBase cursor + 32 ≤ 2^64)
-    (separate : capBoundaryDestination checking node rootBase cursor + 32 ≤ 20480 ∨
-      22528 ≤ capBoundaryDestination checking node rootBase cursor)
-    (ready : CapMarksReady state 128 0 marked) :
-    CapMarksReady (capBoundaryState checking state) 128 0 marked := by
+    (separate : capBoundaryDestination checking node rootBase cursor + 32 ≤ 28672 ∨
+      32768 ≤ capBoundaryDestination checking node rootBase cursor)
+    (ready : CapMarksReady state 256 0 marked) :
+    CapMarksReady (capBoundaryState checking state) 256 0 marked := by
   have pointers := cap_boundary_pointers checking state node rootBase cursor base index proof
-  apply cap_marks_ready_memory _ _ 128 0 marked
+  apply cap_marks_ready_memory _ _ 256 0 marked
     (cap_boundary_state_memory checking state)
   apply cap_copy_marks_ready checking _ _ marked pointers.2 destinationBound separate
-  exact cap_marks_ready_memory state (capBoundaryPrefix checking state 2) 128 0 marked
+  exact cap_marks_ready_memory state (capBoundaryPrefix checking state 2) 256 0 marked
     (cap_boundary_prefix_memory checking state 2 (by decide)) ready
 
 /-- A checker boundary write preserves all high input bytes. Opening output
@@ -109,7 +109,7 @@ theorem cap_boundary_high_bytes (checking : Bool) (state reference : MachineStat
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
     (proof : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (aligned : capBoundaryDestination checking node rootBase cursor % 8 = 0)
-    (low : capBoundaryDestination checking node rootBase cursor + 32 ≤ 22528)
+    (low : capBoundaryDestination checking node rootBase cursor + 32 ≤ 32768)
     (frame : CapHighBytes state reference) :
     CapHighBytes (capBoundaryState checking state) reference := by
   have pointers := cap_boundary_pointers checking state node rootBase cursor base index proof

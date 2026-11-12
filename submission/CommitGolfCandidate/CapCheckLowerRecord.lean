@@ -3,7 +3,7 @@ import CommitGolfCandidate.CapCheckPathInit
 import CommitGolfCandidate.CapCheckPathLoop
 import CommitGolfCandidate.CapCheckPathOutcome
 
-/-! A lower record pays for its salt, eight leaf queries and seventeen sibling
+/-! A lower record pays for its salt, eight leaf queries and sixteen sibling
 queries. Its parity-dependent instruction count uses the loaded index, which
 is preserved through the arbitrary leaf replies and path-counter setup. -/
 namespace CommitGolfCandidate
@@ -14,10 +14,10 @@ attribute [local irreducible] capCheckPathInitPrefix capCheckPathLoopSteps execu
 
 def capCheckLowerRecord (state : MachineState) : OracleComp World MachineState := do
   let leaf ← capCheckRecordLeaf state
-  capCheckPathLoop (capCheckPathInitState leaf) 17
+  capCheckPathLoop (capCheckPathInitState leaf) 16
 
 def capCheckLowerRecordSteps (state : MachineState) : Nat :=
-  153+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 17
+  153+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16
 
 theorem cap_check_record_leaf_pc (state finished : MachineState)
     (reachable : finished ∈ support (capCheckRecordLeaf state)) :
@@ -33,10 +33,10 @@ private theorem lower_charge (computation : OracleComp World Execution) (pathSte
       let result ← (do
         let result ← (do
           let result ← computation
-          return result.charge (pathSteps+119) 17)
+          return result.charge (pathSteps+112) 16)
         return result.charge 4 0)
       return result.charge 205 8) =
-      (do let result ← computation; return result.charge (pathSteps+328) 25) := by
+      (do let result ← computation; return result.charge (pathSteps+321) 24) := by
   simp [bind_assoc, Execution.charge, ← Nat.add_assoc]
   congr 1
   funext result
@@ -50,7 +50,7 @@ theorem cap_check_lower_record_execute (state : MachineState)
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8*word.val)) 8 = true)
     (sourceValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8*word)) 8 = true)
-    (siblingsValid : ∀ word < 68,
+    (siblingsValid : ∀ word < 64,
       accessValid (state.getReg .x25 + 32 + BitVec.ofNat 64 (8*word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
     execute ((capExperimental 24).image .check)
@@ -58,10 +58,10 @@ theorem cap_check_lower_record_execute (state : MachineState)
       (do let finished ← capCheckLowerRecord state
           let result ← execute ((capExperimental 24).image .check) fuel finished allowCoins
           return result.charge
-            (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 17+328) 25) := by
+            (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+321) 24) := by
   unfold capCheckLowerRecordSteps
-  rw [show 153+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 17+fuel =
-      149+(4+(capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 17+fuel)) by omega,
+  rw [show 153+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+fuel =
+      149+(4+(capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+fuel)) by omega,
     cap_check_record_leaf_execute state pc scratch indexValid saltValid sourceValid]
   unfold capCheckLowerRecord
   simp only [bind_assoc]
@@ -74,7 +74,7 @@ theorem cap_check_lower_record_execute (state : MachineState)
       cap_check_path_init_register leaf 3 (by decide) .x21 (by decide),
       cap_check_record_leaf_register state leaf reachable .x21 (by decide)]
     exact scratch
-  have initCounter : (capCheckPathInitState leaf).getReg .x29 = BitVec.ofNat 64 17 := by
+  have initCounter : (capCheckPathInitState leaf).getReg .x29 = BitVec.ofNat 64 16 := by
     unfold capCheckPathInitState
     rw [MachineState.getReg_setPC, cap_check_path_init_counter]
     rfl
@@ -89,26 +89,26 @@ theorem cap_check_lower_record_execute (state : MachineState)
     rw [MachineState.getReg_setPC,
       cap_check_path_init_register leaf 3 (by decide) .x25 (by decide)]
     exact cap_check_record_leaf_cursor state leaf reachable
-  have initValid : ∀ word < 4*17, accessValid
+  have initValid : ∀ word < 4*16, accessValid
       ((capCheckPathInitState leaf).getReg .x25+BitVec.ofNat 64 (8*word)) 8 = true := by
     simpa only [initCursor] using siblingsValid
   rw [cap_check_path_init_execute leaf leafPC,
     ← initIndex,
-    cap_check_path_loop_execute (capCheckPathInitState leaf) 17 (by decide)
+    cap_check_path_loop_execute (capCheckPathInitState leaf) 16 (by decide)
       (fun _ => rfl) initCounter initScratch initValid]
   rw [initIndex]
   simp only [bind_assoc]
   apply congrArg (fun continuation =>
-    capCheckPathLoop (capCheckPathInitState leaf) 17 >>= continuation)
+    capCheckPathLoop (capCheckPathInitState leaf) 16 >>= continuation)
   funext finished
   simpa only [bind_assoc] using lower_charge
     (execute ((capExperimental 24).image .check) fuel finished allowCoins)
-    (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 17)
+    (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16)
 
 theorem cap_check_lower_record_query_bound (state : MachineState) :
-    IsTotalQueryBound (capCheckLowerRecord state) 25 := by
+    IsTotalQueryBound (capCheckLowerRecord state) 24 := by
   unfold capCheckLowerRecord
   exact isTotalQueryBound_bind (cap_check_record_leaf_query_bound state)
-    (fun leaf => cap_check_path_loop_query_bound (capCheckPathInitState leaf) 17)
+    (fun leaf => cap_check_path_loop_query_bound (capCheckPathInitState leaf) 16)
 
 end CommitGolfCandidate

@@ -19,24 +19,24 @@ private theorem cap_probe_inputs_run (oracle : Oracle) (inputs : List (BitVec 51
 def capProbeBatch (records : List CapLowerRecord) (proof : List Digest) (root : Digest) :
     OracleComp World CompressionReplies := do
   let result ← capReplayBatch records proof root
-  probeInputs ((result.getD []).take (25 * records.length + 127))
+  probeInputs ((result.getD []).take (24 * records.length + 255))
 
 theorem cap_probe_batch_query_bound (records : List CapLowerRecord)
     (proof : List Digest) (root : Digest) :
     IsTotalQueryBound (capProbeBatch records proof root)
-      (2 * (25 * records.length + 127)) := by
+      (2 * (24 * records.length + 255)) := by
   unfold capProbeBatch
   rw [two_mul]
   apply isTotalQueryBound_bind (cap_replay_batch_query_bound records proof root)
   intro result
-  exact (probe_inputs_bound ((result.getD []).take (25 * records.length + 127))).mono
+  exact (probe_inputs_bound ((result.getD []).take (24 * records.length + 255))).mono
     (List.length_take_le _ _)
 
 /-- On an accepted fixed-oracle trace the guard discards no recorded input. -/
 theorem cap_probe_batch_run (oracle : Oracle) (records : List CapLowerRecord)
     (proof : List Digest) (root : Digest) (inputs : List (BitVec 512)) (calls : Nat)
     (run : oracle.run (capReplayBatch records proof root) = pure (some inputs, calls))
-    (bounded : inputs.length ≤ 25 * records.length + 127) :
+    (bounded : inputs.length ≤ 24 * records.length + 255) :
     oracle.run (capProbeBatch records proof root) =
       pure (inputs.map (fun input => (input, capCompression oracle input)),
         calls + inputs.length) := by
@@ -56,8 +56,8 @@ def capProbePair (leftRecords rightRecords : List CapLowerRecord)
 theorem cap_probe_pair_query_bound (leftRecords rightRecords : List CapLowerRecord)
     (leftProof rightProof : List Digest) (root : Digest) :
     IsTotalQueryBound (capProbePair leftRecords rightRecords leftProof rightProof root)
-      (2 * (25 * leftRecords.length + 127) +
-        2 * (25 * rightRecords.length + 127)) := by
+      (2 * (24 * leftRecords.length + 255) +
+        2 * (24 * rightRecords.length + 255)) := by
   unfold capProbePair
   apply isTotalQueryBound_bind
     (cap_probe_batch_query_bound leftRecords leftProof root)
@@ -84,8 +84,8 @@ theorem cap_probe_pair_run (oracle : Oracle)
       pure (some leftInputs, leftCalls))
     (rightRun : oracle.run (capReplayBatch rightRecords rightProof root) =
       pure (some rightInputs, rightCalls))
-    (leftBound : leftInputs.length ≤ 25 * leftRecords.length + 127)
-    (rightBound : rightInputs.length ≤ 25 * rightRecords.length + 127) :
+    (leftBound : leftInputs.length ≤ 24 * leftRecords.length + 255)
+    (rightBound : rightInputs.length ≤ 24 * rightRecords.length + 255) :
     oracle.run (capProbePair leftRecords rightRecords leftProof rightProof root) =
       pure ((leftInputs ++ rightInputs).map (fun input => (input, capCompression oracle input)),
         (leftCalls + leftInputs.length) + (rightCalls + rightInputs.length)) := by
@@ -105,8 +105,8 @@ theorem cap_probe_pair_collision (oracle : Oracle)
       pure (some leftInputs, leftCalls))
     (rightRun : oracle.run (capReplayBatch rightRecords rightProof root) =
       pure (some rightInputs, rightCalls))
-    (leftBound : leftInputs.length ≤ 25 * leftRecords.length + 127)
-    (rightBound : rightInputs.length ≤ 25 * rightRecords.length + 127)
+    (leftBound : leftInputs.length ≤ 24 * leftRecords.length + 255)
+    (rightBound : rightInputs.length ≤ 24 * rightRecords.length + 255)
     (collision : ∃ input ∈ leftInputs, ∃ input' ∈ rightInputs,
       input ≠ input' ∧ oracle.compression input = oracle.compression input') :
     ∃ replies calls,

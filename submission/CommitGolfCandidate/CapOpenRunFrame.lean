@@ -18,7 +18,7 @@ structure CapOpenReadReady (marked : Nat → Bool) (rootBase limit floor : Nat)
 theorem cap_open_read_ready_transport (marked : Nat → Bool)
     (rootBase limit floor : Nat) (reference : MachineState)
     (limitBound : limit ≤ MEMORY_BYTES)
-    (rootBound : rootBase + 8192 ≤ MEMORY_BYTES)
+    (rootBound : rootBase + 16384 ≤ MEMORY_BYTES)
     (rootAligned : rootBase % 8 = 0)
     (control : CapDfsControl) (state : MachineState)
     (ready : CapOpenReadReady marked rootBase limit floor reference control state)
@@ -46,7 +46,7 @@ theorem cap_open_read_ready_transport (marked : Nat → Bool)
 theorem cap_open_run_input_frame (marked : Nat → Bool)
     (rootBase limit floor : Nat) (reference : MachineState)
     (limitBound : limit ≤ MEMORY_BYTES)
-    (rootBound : rootBase + 8192 ≤ MEMORY_BYTES)
+    (rootBound : rootBase + 16384 ≤ MEMORY_BYTES)
     (rootAligned : rootBase % 8 = 0)
     (count : Nat) (control : CapDfsControl) (state final : MachineState)
     (ready : CapOpenReadReady marked rootBase limit floor reference control state)
@@ -61,15 +61,15 @@ theorem cap_open_run_input_frame (marked : Nat → Bool)
 theorem cap_open_completed_input_frame (marked : Nat → Bool)
     (rootBase limit floor : Nat) (reference : MachineState)
     (limitBound : limit ≤ MEMORY_BYTES)
-    (rootBound : rootBase + 8192 ≤ MEMORY_BYTES)
+    (rootBound : rootBase + 16384 ≤ MEMORY_BYTES)
     (rootAligned : rootBase % 8 = 0)
     (state final : MachineState)
     (ready : CapOpenReadReady marked rootBase limit floor reference (.visit 1) state)
-    (reached : final ∈ support (capDfsRun false marked 510 (.visit 1) state)) :
+    (reached : final ∈ support (capDfsRun false marked 1022 (.visit 1) state)) :
     final.pc = capAdvanceDone false ∧ CapOpenInputFrame floor reference final ∧
       floor ≤ (final.getReg .x25).toNat := by
   have finished := cap_open_run_input_frame marked rootBase limit floor reference
-    limitBound rootBound rootAligned 510 (.visit 1) state final ready reached
+    limitBound rootBound rootAligned 1022 (.visit 1) state final ready reached
   rw [cap_control_complete] at finished
   exact ⟨finished.machine.physical, finished.inputFrame, finished.cursorFloor⟩
 

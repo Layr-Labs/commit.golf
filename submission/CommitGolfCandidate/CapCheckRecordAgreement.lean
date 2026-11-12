@@ -22,8 +22,8 @@ theorem cap_check_record_insert_agreement (oracle : Oracle) (state : MachineStat
     (record : CapLowerRecord) (roots : CapRootMap)
     (collected : CapCheckCollected state roots)
     (loaded : state.getMem (state.getReg .x24)=BitVec.ofNat 64 record.index.val)
-    (scratch : state.getReg .x21=256) (leaves : state.getReg .x19=128)
-    (marks : state.getReg .x9=20480) (rootBase : state.getReg .x18=12288)
+    (scratch : state.getReg .x21=256) (leaves : state.getReg .x19=256)
+    (marks : state.getReg .x9=28672) (rootBase : state.getReg .x18=12288)
     (one : state.getReg .x31=1)
     (digest : readBuffer (checkEvaluation oracle (capCheckLowerRecord state)).1 256 32=
       record.root oracle.compression) :
@@ -37,7 +37,7 @@ theorem cap_check_record_insert_agreement (oracle : Oracle) (state : MachineStat
   have lowerCollected := cap_check_lower_record_collected state lower
     scratch reachable roots collected
   rw [cap_check_record_evaluation,cap_check_record_result_passed,
-    cap_check_group_insert lower roots lowerCollected (record.index.val/2^17)
+    cap_check_group_insert lower roots lowerCollected (record.index.val/2^16)
       ready.bounded ready.index ready.leaves ready.marks ready.roots ready.scratch ready.one,
     digest]
   rfl
@@ -46,8 +46,8 @@ theorem cap_check_record_insert_result (oracle : Oracle) (state : MachineState)
     (record : CapLowerRecord) (roots next : CapRootMap)
     (collected : CapCheckCollected state roots)
     (loaded : state.getMem (state.getReg .x24)=BitVec.ofNat 64 record.index.val)
-    (scratch : state.getReg .x21=256) (leaves : state.getReg .x19=128)
-    (marks : state.getReg .x9=20480) (rootBase : state.getReg .x18=12288)
+    (scratch : state.getReg .x21=256) (leaves : state.getReg .x19=256)
+    (marks : state.getReg .x9=28672) (rootBase : state.getReg .x18=12288)
     (one : state.getReg .x31=1)
     (digest : readBuffer (checkEvaluation oracle (capCheckLowerRecord state)).1 256 32=
       record.root oracle.compression)
@@ -62,7 +62,7 @@ theorem cap_check_record_insert_result (oracle : Oracle) (state : MachineState)
   have lowerCollected := cap_check_lower_record_collected state lower
     scratch reachable roots collected
   rw [cap_check_record_evaluation]
-  apply cap_check_record_result_collected lower roots next (record.index.val/2^17)
+  apply cap_check_record_result_collected lower roots next (record.index.val/2^16)
     ready lowerCollected
   rw [digest]
   exact accepted

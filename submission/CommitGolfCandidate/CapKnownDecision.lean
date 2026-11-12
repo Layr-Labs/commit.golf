@@ -19,15 +19,15 @@ def capKnownSkip (checking : Bool) : CapFlow := .jump (if checking then 64 else 
 
 def capKnownState (checking : Bool) (state : MachineState) (node : Nat) : MachineState :=
   let tested := capFlowState (capKnownTest checking) state
-  if node < 128 then
+  if node < 256 then
     capFlowState (.jump 2097124) (capNavigationState .descend tested)
   else capFlowState (capKnownSkip checking) tested
 
 private theorem below_known (checking : Bool) (state : MachineState) (node : Nat)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (leaves : state.getReg (capKnownLeafRegister checking) = 128)
-    (bounded : node < 256) :
-    state.getReg .x20 < state.getReg (capKnownLeafRegister checking) ↔ node < 128 := by
+    (leaves : state.getReg (capKnownLeafRegister checking) = 256)
+    (bounded : node < 512) :
+    state.getReg .x20 < state.getReg (capKnownLeafRegister checking) ↔ node < 256 := by
   rw [index, leaves, BitVec.lt_def]
   simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : node < 2^64)]
   rfl
@@ -35,10 +35,10 @@ private theorem below_known (checking : Bool) (state : MachineState) (node : Nat
 theorem cap_known_test_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (leaves : state.getReg (capKnownLeafRegister checking) = 128)
-    (bounded : node < 256) :
+    (leaves : state.getReg (capKnownLeafRegister checking) = 256)
+    (bounded : node < 512) :
     (capFlowState (capKnownTest checking) state).pc =
-      if node < 128 then capNavigationPC checking .descend
+      if node < 256 then capNavigationPC checking .descend
       else capKnownEntry checking + 4 := by
   unfold capKnownTest
   rw [cap_flow_below_pc]
@@ -48,12 +48,12 @@ theorem cap_known_test_pc (checking : Bool) (state : MachineState) (node : Nat)
 theorem cap_known_state_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (leaves : state.getReg (capKnownLeafRegister checking) = 128)
-    (bounded : node < 256) :
+    (leaves : state.getReg (capKnownLeafRegister checking) = 256)
+    (bounded : node < 512) :
     (capKnownState checking state node).pc =
-      if node < 128 then capKnownVisit checking else capKnownAdvance checking := by
+      if node < 256 then capKnownVisit checking else capKnownAdvance checking := by
   unfold capKnownState
-  by_cases internal : node < 128
+  by_cases internal : node < 256
   · simp only [if_pos internal]
     rw [cap_flow_jump_pc, cap_navigation_pc,
       cap_known_test_pc checking state node pc index leaves bounded, if_pos internal]
@@ -67,9 +67,9 @@ theorem cap_known_state_pc (checking : Bool) (state : MachineState) (node : Nat)
 theorem cap_known_state_node (checking : Bool) (state : MachineState) (node : Nat)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capKnownState checking state node).getReg .x20 =
-      BitVec.ofNat 64 (if node < 128 then 2 * node else node) := by
+      BitVec.ofNat 64 (if node < 256 then 2 * node else node) := by
   unfold capKnownState
-  by_cases internal : node < 128
+  by_cases internal : node < 256
   · simp only [if_pos internal]
     rw [cap_flow_register, cap_navigation_descend]
     exact (cap_flow_register _ _ _).trans index
@@ -94,13 +94,13 @@ private theorem charge_pair (result : Execution) (first second : Nat) :
 theorem cap_known_decision_execute (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownEntry checking)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (leaves : state.getReg (capKnownLeafRegister checking) = 128)
-    (bounded : node < 256) (fuel : Nat) (allowCoins : Bool) :
-    execute (capWalkImage checking) ((if node < 128 then 3 else 2) + fuel)
+    (leaves : state.getReg (capKnownLeafRegister checking) = 256)
+    (bounded : node < 512) (fuel : Nat) (allowCoins : Bool) :
+    execute (capWalkImage checking) ((if node < 256 then 3 else 2) + fuel)
         state allowCoins =
       (do let result ← execute (capWalkImage checking) fuel
             (capKnownState checking state node) allowCoins
-          return result.charge (if node < 128 then 3 else 2) 0) := by
+          return result.charge (if node < 256 then 3 else 2) 0) := by
   let tested := capFlowState (capKnownTest checking) state
   have fetched : fetch (capWalkImage checking) state =
       some (.base (capFlowInstruction (capKnownTest checking))) := by
@@ -110,7 +110,7 @@ theorem cap_known_decision_execute (checking : Bool) (state : MachineState) (nod
     · apply cap_image_fetch _ state 131 _ (by decide) pc
       rfl
   have testedPC := cap_known_test_pc checking state node pc index leaves bounded
-  by_cases internal : node < 128
+  by_cases internal : node < 256
   · simp only [if_pos internal] at testedPC ⊢
     have back : fetch (capWalkImage checking) (capNavigationState .descend tested) =
         some (.base (capFlowInstruction (.jump 2097124))) := by

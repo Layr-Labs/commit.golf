@@ -10,7 +10,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 theorem cap_high_bytes_read (state reference : MachineState) (address count : Nat)
-    (high : 22528 ≤ address) (bounded : address + count ≤ 2^64)
+    (high : 32768 ≤ address) (bounded : address + count ≤ 2^64)
     (frame : CapHighBytes state reference) :
     readBuffer state address count = readBuffer reference address count := by
   unfold readBuffer
@@ -28,7 +28,7 @@ theorem cap_check_retained_index (input : CheckInput) (state : MachineState)
         ((input.positions.sort (· ≤ ·))[ordinal]'(by simpa using bounded)).val := by
   have cardinal : input.positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ input.positions
-  have high : 22528 ≤ capProgram.layout.indices + 8*ordinal := by
+  have high : 32768 ≤ capProgram.layout.indices + 8*ordinal := by
     norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
       LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES]
     omega

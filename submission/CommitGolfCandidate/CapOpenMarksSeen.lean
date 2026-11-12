@@ -44,7 +44,7 @@ theorem cap_open_marks_seen_residual (records : List Index) (remaining node : Na
 
 theorem cap_open_marks_seen_full (records : List Index) (node : Nat) :
     capOpenMarksSeen records records.length node = true ↔
-      ∃ index ∈ records, node = 128+(capGroup index).val := by
+      ∃ index ∈ records, node = 256+(capGroup index).val := by
   rw [cap_open_marks_seen_residual]
   constructor
   · rintro ⟨residual, bound, same⟩

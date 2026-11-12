@@ -13,7 +13,7 @@ set_option autoImplicit false
 theorem cap_check_root_step_known (compress : Compression) (marked : Nat → Bool)
     (control : CapDfsControl) (roots : Nat → Digest) (boundary : Digest)
     (valid : CapDfsControlValid control) (leaf : Nat)
-    (lower : 128≤leaf) (known : marked leaf=true) :
+    (lower : 256≤leaf) (known : marked leaf=true) :
     capCheckRootStep compress marked control roots boundary leaf=roots leaf := by
   cases control with
   | visit node =>
@@ -57,8 +57,8 @@ theorem cap_check_step_cursor_monotone (limit : Nat) (marked : Nat → Bool)
 theorem cap_check_next_known_root (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (control : CapDfsControl) (state : MachineState)
     (ready : CapCheckDfsReady limit marked control state)
-    (above : 22528≤(state.getReg .x25).toNat)
-    (leaf : Nat) (lower : 128≤leaf) (upper : leaf<256)
+    (above : 32768≤(state.getReg .x25).toNat)
+    (leaf : Nat) (lower : 256≤leaf) (upper : leaf<512)
     (known : marked leaf=true) :
     capReadRoot (capCheckDfsNext oracle marked control state) leaf=
       capReadRoot state leaf := by
@@ -99,8 +99,8 @@ theorem cap_check_value_cursor_monotone (oracle : Oracle) (limit : Nat)
 theorem cap_check_value_known_root (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (count : Nat) (control : CapDfsControl)
     (state : MachineState) (ready : CapCheckDfsReady limit marked control state)
-    (above : 22528≤(state.getReg .x25).toNat)
-    (leaf : Nat) (lower : 128≤leaf) (upper : leaf<256)
+    (above : 32768≤(state.getReg .x25).toNat)
+    (leaf : Nat) (lower : 256≤leaf) (upper : leaf<512)
     (known : marked leaf=true)
     (passed : (capCheckDfsValue oracle marked count control state).2=true) :
     capReadRoot (capCheckDfsValue oracle marked count control state).1 leaf=

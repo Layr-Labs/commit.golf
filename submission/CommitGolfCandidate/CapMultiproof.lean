@@ -86,11 +86,11 @@ theorem cap_proof_length (compress : Compression) {height : Nat} (tree : Tree he
             simp [capProof, capOccupied, capMarks, frontier, cap_marks_occupied, hl, hr,
               ihLeft, ihRight, Nat.add_comm]
 
-theorem cap_occupied_proof_bound (compress : Compression) (tree : Tree 7)
-    (view : CapView 7) (nonempty : capOccupied view = true) :
-    (capProof compress tree view).length ≤ 64 := by
+theorem cap_occupied_proof_bound (compress : Compression) (tree : Tree 8)
+    (view : CapView 8) (nonempty : capOccupied view = true) :
+    (capProof compress tree view).length ≤ 128 := by
   rw [cap_proof_length, nonempty]
-  exact height_seven_frontier (capMarks view)
+  exact height_eight_frontier (capMarks view)
 end CommitGolfCandidate
 
 namespace CommitGolfCandidate

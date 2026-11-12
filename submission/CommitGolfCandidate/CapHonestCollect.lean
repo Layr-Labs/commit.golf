@@ -56,7 +56,7 @@ theorem cap_honest_lower_collection (oracle : Oracle) (message : Message)
     (positions : Positions) :
     ∃ roots, capLowerBatchRoots oracle.compression
         (capHonestLowerRecords message committed positions) (fun _ => none) = some roots ∧
-      CapRootsAgree (fun group => heapDigest committed 4294971424 (128+group)) roots := by
+      CapRootsAgree (fun group => heapDigest committed 4294971424 (256+group)) roots := by
   apply cap_lower_batch_agrees
   · intro record member
     obtain ⟨index, requested, rfl⟩ := List.mem_map.mp member

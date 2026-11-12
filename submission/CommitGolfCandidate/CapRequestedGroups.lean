@@ -29,7 +29,7 @@ theorem cap_requested_domain (positions : Positions) (lowerRoot : Index → Dige
 
 theorem cap_requested_set (positions : Positions) (lowerRoot : Index → Digest)
     (roots : CapRootMap) (accepted : capCollectForward (capGroupRecords positions lowerRoot) = some roots) :
-    (Finset.range 128).filter (fun group => (roots group).isSome = true) =
+    (Finset.range 256).filter (fun group => (roots group).isSome = true) =
       (capGroups positions).image (fun group => group.val) := by
   ext group
   simp only [Finset.mem_filter, Finset.mem_range, Finset.mem_image, cap_requested_domain _ _ _ accepted]
@@ -43,19 +43,19 @@ theorem cap_requested_set (positions : Positions) (lowerRoot : Index → Digest)
 /-- Known leaves count distinct requested groups, not the number of records. -/
 theorem cap_requested_count (positions : Positions) (lowerRoot : Index → Digest)
     (roots : CapRootMap) (accepted : capCollectForward (capGroupRecords positions lowerRoot) = some roots) :
-    capMarkedCount (capKnownView roots 7 0) = (capGroups positions).card := by
+    capMarkedCount (capKnownView roots 8 0) = (capGroups positions).card := by
   rw [cap_known_view_card, cap_requested_set _ _ _ accepted]
   exact Finset.card_image_of_injective _ Fin.val_injective
 
 theorem cap_requested_calls (positions : Positions) (lowerRoot : Index → Digest)
     (roots : CapRootMap) (accepted : capCollectForward (capGroupRecords positions lowerRoot) = some roots) :
-    capCalls (capKnownView roots 7 0) ≤ 7 * (capGroups positions).card := by
-  simpa [cap_requested_count _ _ _ accepted] using cap_calls_bound (capKnownView roots 7 0)
+    capCalls (capKnownView roots 8 0) ≤ 8 * (capGroups positions).card := by
+  simpa [cap_requested_count _ _ _ accepted] using cap_calls_bound (capKnownView roots 8 0)
 
 theorem cap_requested_nonempty (positions : Positions) (lowerRoot : Index → Digest)
     (roots : CapRootMap) (accepted : capCollectForward (capGroupRecords positions lowerRoot) = some roots)
     (nonempty : positions.Nonempty) :
-    capOccupied (capKnownView roots 7 0) = true := by
+    capOccupied (capKnownView roots 8 0) = true := by
   rw [cap_occupied_count, cap_requested_count _ _ _ accepted]
   obtain ⟨index, member⟩ := nonempty
   exact Finset.card_pos.mpr ⟨capGroup index, (cap_groups_member _ _).mpr ⟨index, member, rfl⟩⟩

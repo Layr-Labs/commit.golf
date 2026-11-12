@@ -4,7 +4,7 @@ import CommitGolfCandidate.CapCheckDfsFinish
 /-! Finer all-reply query accounting for the actual terminating cap traversal.
 Early short-input failure can only reduce its structural query total. When
 finalized marks describe a view with at most n known leaves, the cap costs
-at most 7*n queries; the lower-record loop pays its separate 25*n calls. -/
+at most 8*n queries; the lower-record loop pays its separate 24*n calls. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
 set_option maxRecDepth 4096
@@ -54,16 +54,16 @@ theorem cap_check_dfs_finish_structural_queries (marked : Nat → Bool)
         ih (capControlStep marked control) next
 
 theorem cap_check_dfs_finish_view_queries (marked : Nat → Bool)
-    (view : CapView 7) (marks : CapViewMarks marked 1 view) (state : MachineState) :
-    (capCheckDfsFinish marked 510 (.visit 1) state).IsTotalQueryBound (capCalls view) := by
+    (view : CapView 8) (marks : CapViewMarks marked 1 view) (state : MachineState) :
+    (capCheckDfsFinish marked 1022 (.visit 1) state).IsTotalQueryBound (capCalls view) := by
   simpa only [cap_root_query_count marked view marks] using
-    cap_check_dfs_finish_structural_queries marked 510 (.visit 1) state
+    cap_check_dfs_finish_structural_queries marked 1022 (.visit 1) state
 
 theorem cap_check_dfs_finish_card_queries (marked : Nat → Bool)
-    (view : CapView 7) (marks : CapViewMarks marked 1 view)
+    (view : CapView 8) (marks : CapViewMarks marked 1 view)
     (count : Nat) (known : capMarkedCount view≤count) (state : MachineState) :
-    (capCheckDfsFinish marked 510 (.visit 1) state).IsTotalQueryBound (7*count) :=
+    (capCheckDfsFinish marked 1022 (.visit 1) state).IsTotalQueryBound (8*count) :=
   (cap_check_dfs_finish_view_queries marked view marks state).mono
-    ((cap_calls_bound view).trans (Nat.mul_le_mul_left 7 known))
+    ((cap_calls_bound view).trans (Nat.mul_le_mul_left 8 known))
 
 end CommitGolfCandidate

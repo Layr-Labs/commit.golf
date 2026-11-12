@@ -3,7 +3,7 @@ import CommitGolfCandidate.CapCheckRecordLeafDigest
 import CommitGolfCandidate.CapCheckPathSemantics
 
 /-! Fixed-oracle lower-record refinement: the exact loaded salt and value
-produce a leaf digest, followed by the seventeen serialized siblings in index
+produce a leaf digest, followed by the sixteen serialized siblings in index
 bit order. Earlier scratch writes cannot alter those later proof slots. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -15,7 +15,7 @@ attribute [local irreducible] readBuffer checkEvaluation capCheckPathLoop
 theorem cap_check_lower_record_evaluation (oracle : Oracle) (state : MachineState) :
     (checkEvaluation oracle (capCheckLowerRecord state)).1 =
       (checkEvaluation oracle (capCheckPathLoop
-        (capCheckPathInitState (checkEvaluation oracle (capCheckRecordLeaf state)).1) 17)).1 := by
+        (capCheckPathInitState (checkEvaluation oracle (capCheckRecordLeaf state)).1) 16)).1 := by
   unfold capCheckLowerRecord
   rw [check_evaluation_bind]
 
@@ -38,12 +38,12 @@ theorem cap_check_lower_leaf_read (state leaf : MachineState)
 
 theorem cap_check_lower_record_digest (oracle : Oracle) (state : MachineState)
     (saltAddress valueAddress : Nat) (value : Entry) (path : List (Bool × Digest))
-    (length : path.length = 17)
+    (length : path.length = 16)
     (scratch : state.getReg .x21 = 256)
     (saltPointer : state.getReg .x25 = BitVec.ofNat 64 saltAddress)
     (valuePointer : state.getReg .x8 = BitVec.ofNat 64 valueAddress)
     (saltAligned : saltAddress % 8 = 0) (saltAbove : 320 ≤ saltAddress)
-    (saltBound : saltAddress+576 < 2^64)
+    (saltBound : saltAddress+544 < 2^64)
     (valueAligned : valueAddress % 8 = 0) (valueAbove : 320 ≤ valueAddress)
     (valueBound : valueAddress+256 < 2^64)
     (data : ∀ i < 8, readBuffer state (valueAddress+32*i) 32 =

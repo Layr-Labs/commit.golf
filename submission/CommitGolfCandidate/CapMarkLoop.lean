@@ -26,7 +26,7 @@ theorem cap_mark_loop_run_succ (marks : Reg) (remaining : Nat) (state : MachineS
 
 theorem cap_mark_loop_next (marks : Reg) (start : Word) (state : MachineState)
     (leaves node : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (bounded : leaves ≤ 256)
     (positive : 0 < node) (internal : node < leaves)
     (equation : marked node = (marked (2 * node) || marked (2 * node + 1)))
     (invariant : CapMarkLoopReady marks start state leaves node marked) :
@@ -46,7 +46,7 @@ theorem cap_mark_loop_next (marks : Reg) (start : Word) (state : MachineState)
 /-- The natural residual bound and the machine projections travel together. -/
 private theorem cap_mark_loop_transport (marks : Reg) (start : Word)
     (leaves : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (bounded : leaves ≤ 256)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
     (remaining : Nat) (state : MachineState)
@@ -61,7 +61,7 @@ private theorem cap_mark_loop_transport (marks : Reg) (start : Word)
 
 private theorem cap_mark_loop_checked (image : Image) (marks : Reg) (start : Word)
     (fetched : CapMarkFetched image marks start) (selected : CapMarksRegister marks)
-    (leaves : Nat) (marked : Nat → Bool) (bounded : leaves ≤ 128)
+    (leaves : Nat) (marked : Nat → Bool) (bounded : leaves ≤ 256)
     (count : Nat) (current : MachineState)
     (valid : count + 1 < leaves ∧
       CapMarkLoopReady marks start current leaves (count + 1) marked)
@@ -80,7 +80,7 @@ actual prefix state, and the fuel count is exactly ten times the residual. -/
 theorem cap_mark_loop_execute (image : Image) (marks : Reg) (start : Word)
     (fetched : CapMarkFetched image marks start) (selected : CapMarksRegister marks)
     (leaves remaining : Nat) (marked : Nat → Bool)
-    (bounded : leaves ≤ 128) (internal : remaining < leaves)
+    (bounded : leaves ≤ 256) (internal : remaining < leaves)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
     (state : MachineState)
@@ -97,7 +97,7 @@ theorem cap_mark_loop_execute (image : Image) (marks : Reg) (start : Word)
 
 theorem cap_mark_loop_finished (marks : Reg) (start : Word)
     (leaves remaining : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (bounded : leaves ≤ 256)
     (internal : remaining < leaves)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))

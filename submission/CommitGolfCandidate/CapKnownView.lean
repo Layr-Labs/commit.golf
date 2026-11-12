@@ -49,17 +49,17 @@ theorem cap_known_view_count (roots : CapRootMap) (height offset : Nat) :
 
 /-- The number of known cap leaves is exactly the distinct occupied group count. -/
 theorem cap_known_view_card (roots : CapRootMap) :
-    capMarkedCount (capKnownView roots 7 0) =
-      ((Finset.range 128).filter (fun group => (roots group).isSome = true)).card := by
+    capMarkedCount (capKnownView roots 8 0) =
+      ((Finset.range 256).filter (fun group => (roots group).isSome = true)).card := by
   rw [cap_known_view_count]
   norm_num
 
 /-- Every supplied lower root occupies its requested cap leaf after a successful
 duplicate-consistency check. -/
 theorem cap_collected_view_leaf (records : List (Nat × Digest)) (roots : CapRootMap)
-    (accepted : capCollect records = some roots) (path : Path 7) (value : Digest)
+    (accepted : capCollect records = some roots) (path : Path 8) (value : Digest)
     (member : (capPathIndex path, value) ∈ records) :
-    capLeafValue (capKnownView roots 7 0) path = some value := by
+    capLeafValue (capKnownView roots 8 0) path = some value := by
   rw [cap_known_view_leaf]
   simpa using cap_collect_member records roots accepted (capPathIndex path) value member
 end CommitGolfCandidate

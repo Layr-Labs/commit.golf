@@ -88,11 +88,11 @@ theorem cap_check_dfs_run_ready (limit : Nat) (marked : Nat → Bool)
 theorem cap_check_dfs_run_done (limit : Nat) (marked : Nat → Bool)
     (state : MachineState) (ready : CapCheckDfsReady limit marked (.visit 1) state)
     (result : MachineState × Bool)
-    (reached : result ∈ support (capCheckDfsRun marked 510 (.visit 1) state))
+    (reached : result ∈ support (capCheckDfsRun marked 1022 (.visit 1) state))
     (passed : result.2=true) :
     result.1.pc=4736 ∧ CapDfsStable true result.1 12288 ∧
-      CapMarksReady result.1 128 0 marked ∧ CapCheckCursorWindow limit result.1 := by
-  have finished := cap_check_dfs_run_ready limit marked 510 (.visit 1)
+      CapMarksReady result.1 256 0 marked ∧ CapCheckCursorWindow limit result.1 := by
+  have finished := cap_check_dfs_run_ready limit marked 1022 (.visit 1)
     state ready result reached passed
   rw [cap_control_complete] at finished
   exact ⟨finished.physical,finished.stable,finished.marks,finished.window⟩

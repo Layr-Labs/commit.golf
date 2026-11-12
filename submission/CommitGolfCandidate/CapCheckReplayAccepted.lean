@@ -15,8 +15,8 @@ theorem cap_check_accepted_batch (oracle : Oracle) (input : CheckInput)
     (nonempty : 0 < input.positions.card) :
     ∃ roots, capLowerBatchRoots oracle.compression (capCheckLoadedRecords input)
       (fun _ => none)=some roots ∧
-      capDecode oracle.compression (capKnownView roots 7 0)
-        (capCheckSuffixWords input (576*input.positions.card))=
+      capDecode oracle.compression (capKnownView roots 8 0)
+        (capCheckSuffixWords input (544*input.positions.card))=
           some (input.commitment,[]) := by
   have logical := (cap_check_scheme_acceptance oracle input).mp accepted
   simp only [CapCheckProgramAccepts,show input.positions.card≠0 by omega,ite_false,
@@ -45,16 +45,16 @@ theorem cap_check_accepted_replay (oracle : Oracle) (input : CheckInput)
     (nonempty : 0 < input.positions.card) :
     ∃ inputs calls,
       oracle.run (capReplayBatch (capCheckLoadedRecords input)
-        (capCheckSuffixWords input (576*input.positions.card)) input.commitment)=
+        (capCheckSuffixWords input (544*input.positions.card)) input.commitment)=
           pure (some inputs,calls) ∧
-      inputs.length≤25*input.positions.card+127 := by
+      inputs.length≤24*input.positions.card+255 := by
   obtain ⟨roots,lower,cap⟩ := cap_check_accepted_batch oracle input accepted nonempty
   obtain ⟨capInputs,witness⟩ := cap_decode_witness oracle.compression
-    (capKnownView roots 7 0) (capCheckSuffixWords input (576*input.positions.card))
+    (capKnownView roots 8 0) (capCheckSuffixWords input (544*input.positions.card))
     [] input.commitment cap
   have capRun := cap_replay_witness_run oracle witness
   refine ⟨capLowerBatchInputs oracle.compression (capCheckLoadedRecords input)++capInputs,
-    25*(capCheckLoadedRecords input).length+capInputs.length,?_,?_⟩
+    24*(capCheckLoadedRecords input).length+capInputs.length,?_,?_⟩
   · simp only [capReplayBatch]
     erw [oracle_run_bind,cap_replay_lower_batch_run oracle
       (capCheckLoadedRecords input) _ roots lower]
@@ -64,7 +64,7 @@ theorem cap_check_accepted_replay (oracle : Oracle) (input : CheckInput)
     rfl
   · rw [List.length_append,cap_lower_batch_inputs_length,
       cap_check_loaded_records_length,cap_check_witness_trace_length _ witness]
-    have bound := cap_calls_full_bound (capKnownView roots 7 0)
+    have bound := cap_calls_full_bound (capKnownView roots 8 0)
     norm_num at bound
     omega
 

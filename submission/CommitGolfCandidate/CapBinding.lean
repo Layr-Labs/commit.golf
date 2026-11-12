@@ -6,8 +6,8 @@ binding game or its detector probability theorem. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp
 
-theorem cap_replay_height_seven_bound (view : CapView 7) (proof : List Digest) :
-    IsTotalQueryBound (capReplayQ view proof) 127 := by
+theorem cap_replay_height_seven_bound (view : CapView 8) (proof : List Digest) :
+    IsTotalQueryBound (capReplayQ view proof) 255 := by
   apply (cap_replay_query_bound view proof).mono
   simpa using cap_calls_full_bound view
 

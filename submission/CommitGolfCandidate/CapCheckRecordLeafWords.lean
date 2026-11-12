@@ -35,7 +35,7 @@ theorem cap_check_record_leaf_word_frame (state finished : MachineState)
 theorem cap_check_record_leaf_low_frame (state finished : MachineState)
     (scratch : state.getReg .x21 = 256)
     (reachable : finished ∈ support (capCheckRecordLeaf state))
-    (address : Nat) (above : 320 ≤ address) (below : address < 22528) :
+    (address : Nat) (above : 320 ≤ address) (below : address < 32768) :
     finished.getMem (BitVec.ofNat 64 address) =
       state.getMem (BitVec.ofNat 64 address) := by
   apply cap_check_record_leaf_word_frame state finished scratch reachable

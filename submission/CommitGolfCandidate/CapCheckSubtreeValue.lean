@@ -27,11 +27,11 @@ def capCheckSubtreeValue (oracle : Oracle) (marked : Nat → Bool) :
       else capCheckDfsValue oracle marked 1 (.visit node) state
 
 private theorem children (height node : Nat)
-    (lower : 128 ≤ node*2^(height+1))
-    (upper : (node+1)*2^(height+1) ≤ 256) :
-    0<node ∧ node<128 ∧
-      128≤(2*node)*2^height ∧ (2*node+1)*2^height≤256 ∧
-      128≤(2*node+1)*2^height ∧ (2*node+2)*2^height≤256 := by
+    (lower : 256 ≤ node*2^(height+1))
+    (upper : (node+1)*2^(height+1) ≤ 512) :
+    0<node ∧ node<256 ∧
+      256≤(2*node)*2^height ∧ (2*node+1)*2^height≤ 512 ∧
+      256≤(2*node+1)*2^height ∧ (2*node+2)*2^height≤ 512 := by
   have power := Nat.two_pow_pos height
   rw [pow_succ] at lower upper
   constructor
@@ -46,7 +46,7 @@ private theorem children (height node : Nat)
 
 theorem cap_check_subtree_value (oracle : Oracle) (marked : Nat → Bool)
     (height node : Nat) (state : MachineState)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256) :
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤ 512) :
     capCheckDfsValue oracle marked (capSubtreeSteps marked height node) (.visit node) state =
       capCheckSubtreeValue oracle marked height node state := by
   induction height generalizing node state with

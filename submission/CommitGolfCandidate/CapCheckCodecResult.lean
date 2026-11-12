@@ -63,7 +63,7 @@ theorem cap_check_codec_result_leaf (oracle : Oracle) (limit : Nat)
     (state : MachineState) (cursor : Nat) (words : List Digest) (tailBytes : Nat)
     (ready : CapCheckDfsReady limit marked (.visit node) state)
     (suffix : CapCheckWordSuffix state cursor words tailBytes)
-    (lower : 128≤node)
+    (lower : 256≤node)
     (marks : CapViewMarks marked node (.leaf known))
     (payload : CapCheckKnownLeaves state node (.leaf known)) :
     CapCheckCodecResult limit marked node tailBytes

@@ -11,10 +11,10 @@ attribute [local irreducible] capOpenRecordState
 
 private theorem source_window (context : CapOpenRecordContext) (position slot : Nat)
     (positionBound : position < 16777216)
-    (rootHigh : 22528 ≤ context.roots) (saltHigh : 22528 ≤ context.salts)
+    (rootHigh : 32768 ≤ context.roots) (saltHigh : 32768 ≤ context.salts)
     (heapBelow : context.roots+1073741824 ≤ context.output)
     (saltsBelow : context.salts+536870912 ≤ context.output) :
-    22528 ≤ capLowerSlotAddress context position slot ∧
+    32768 ≤ capLowerSlotAddress context position slot ∧
       capLowerSlotAddress context position slot+32 ≤ context.output := by
   unfold capLowerSlotAddress
   split
@@ -28,18 +28,18 @@ theorem cap_open_records_all_slots (context : CapOpenRecordContext)
     (records : List Index) (inputReference : MachineState)
     (countBound : records.length < 2^64)
     (indexSpace : context.indices+8*records.length+32 ≤ context.output)
-    (outputSpace : context.output+576*records.length ≤ context.limit)
+    (outputSpace : context.output+544*records.length ≤ context.limit)
     (inputs : CapOpenRecordInputs context records inputReference)
-    (rootHigh : 22528 ≤ context.roots) (saltHigh : 22528 ≤ context.salts)
+    (rootHigh : 32768 ≤ context.roots) (saltHigh : 32768 ≤ context.salts)
     (heapBelow : context.roots+1073741824 ≤ context.output)
     (saltsBelow : context.salts+536870912 ≤ context.output)
     (remaining : Nat) (state : MachineState)
     (ready : CapOpenRecordsReady context records inputReference remaining state)
     (ordinal : Nat) (inside : ordinal < records.length)
     (notConsumed : records.length-remaining ≤ ordinal)
-    (slot : Nat) (slotBound : slot < 18) :
+    (slot : Nat) (slotBound : slot < 17) :
     readBuffer (capCountedRun capOpenRecordState remaining state)
-      (context.output+576*ordinal+32*slot) 32 =
+      (context.output+544*ordinal+32*slot) 32 =
       readBuffer inputReference
         (capLowerSlotAddress context (records[ordinal]'inside).val slot) 32 := by
   induction remaining generalizing state with

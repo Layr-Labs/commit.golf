@@ -18,7 +18,7 @@ private theorem parent_charge (result : Execution) :
 
 theorem cap_parent_query (state : MachineState) (node : Nat)
     (roots : state.getReg .x18 = 12288)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 128) :
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
     capCompressionInput (capParentPrefix state 4) =
       .inl (readBuffer state (12288 + 64 * node + 32) 32 ++
         readBuffer state (12288 + 64 * node) 32) := by
@@ -31,7 +31,7 @@ theorem cap_parent_query (state : MachineState) (node : Nat)
 
 theorem cap_parent_execute (state : MachineState) (node : Nat)
     (pc : state.pc = 4704) (roots : state.getReg .x18 = 12288)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 128)
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256)
     (selectors : state.getReg .x5 = 0 ∧ state.getReg .x11 = 64 ∧ state.getReg .x13 = 0)
     (fuel : Nat) (allowCoins : Bool) :
     execute ((capExperimental 24).image .check) (5 + fuel) state allowCoins =
@@ -79,18 +79,18 @@ theorem cap_parent_answer_register (state : MachineState) (answer : BitVec 256)
 theorem cap_parent_answer_marks (state : MachineState) (node : Nat)
     (answer : BitVec 256) (marked : Nat → Bool)
     (roots : state.getReg .x18 = 12288)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 128)
-    (ready : CapMarksReady state 128 0 marked) :
-    CapMarksReady (capParentAnswerState state answer) 128 0 marked := by
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256)
+    (ready : CapMarksReady state 256 0 marked) :
+    CapMarksReady (capParentAnswerState state answer) 256 0 marked := by
   apply cap_compression_ready (capParentPrefix state 4) (12288 + 32 * node) answer marked
   · exact cap_parent_destination state node roots index
   · omega
-  · exact cap_marks_ready_memory state (capParentPrefix state 4) 128 0 marked
+  · exact cap_marks_ready_memory state (capParentPrefix state 4) 256 0 marked
       (cap_parent_prefix_memory state 4 (by decide)) ready
 
 theorem cap_parent_answer_high (state reference : MachineState) (node : Nat)
     (answer : BitVec 256) (roots : state.getReg .x18 = 12288)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 128)
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256)
     (frame : CapHighBytes state reference) :
     CapHighBytes (capParentAnswerState state answer) reference := by
   apply cap_compression_high_bytes (capParentPrefix state 4) reference

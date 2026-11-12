@@ -30,10 +30,10 @@ theorem cap_marked_prepare_register (checking : Bool) (state : MachineState)
 
 theorem cap_marked_prepare_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownVisit checking)
-    (base : state.getReg (capVisitMarks checking) = 20480)
+    (base : state.getReg (capVisitMarks checking) = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 256)
-    (marked : Nat → Bool) (ready : CapMarksReady state 128 0 marked)
+    (positive : 0 < node) (bounded : node < 512)
+    (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (present : marked node = true) :
     (capMarkedPrepare checking state).pc = capKnownEntry checking := by
   have selected : CapMarksRegister (capVisitMarks checking) := by
@@ -47,9 +47,9 @@ theorem cap_marked_prepare_pc (checking : Bool) (state : MachineState) (node : N
 /-- The occupancy load and its known-node branch pay exactly four cycles. -/
 theorem cap_marked_prepare_execute (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownVisit checking)
-    (base : state.getReg (capVisitMarks checking) = 20480)
+    (base : state.getReg (capVisitMarks checking) = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (bounded : node < 256) (fuel : Nat) (allowCoins : Bool) :
+    (bounded : node < 512) (fuel : Nat) (allowCoins : Bool) :
     execute (capWalkImage checking) (4 + fuel) state allowCoins =
       (do let result ← execute (capWalkImage checking) fuel
             (capMarkedPrepare checking state) allowCoins
@@ -78,23 +78,23 @@ theorem cap_marked_prepare_execute (checking : Bool) (state : MachineState) (nod
 
 theorem cap_marked_visit_execute (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownVisit checking)
-    (base : state.getReg (capVisitMarks checking) = 20480)
+    (base : state.getReg (capVisitMarks checking) = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (leaves : state.getReg (capKnownLeafRegister checking) = 128)
-    (positive : 0 < node) (bounded : node < 256)
-    (marked : Nat → Bool) (ready : CapMarksReady state 128 0 marked)
+    (leaves : state.getReg (capKnownLeafRegister checking) = 256)
+    (positive : 0 < node) (bounded : node < 512)
+    (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (present : marked node = true) (fuel : Nat) (allowCoins : Bool) :
-    execute (capWalkImage checking) ((4 + (if node < 128 then 3 else 2)) + fuel)
+    execute (capWalkImage checking) ((4 + (if node < 256 then 3 else 2)) + fuel)
         state allowCoins =
       (do let result ← execute (capWalkImage checking) fuel
             (capMarkedVisitState checking state node) allowCoins
-          return result.charge (4 + (if node < 128 then 3 else 2)) 0) := by
+          return result.charge (4 + (if node < 256 then 3 else 2)) 0) := by
   have nextPC := cap_marked_prepare_pc checking state node pc base index positive bounded
     marked ready present
   have nextIndex : (capMarkedPrepare checking state).getReg .x20 = BitVec.ofNat 64 node :=
     (cap_marked_prepare_register checking state .x20 (by decide)).trans index
   have nextLeaves : (capMarkedPrepare checking state).getReg
-      (capKnownLeafRegister checking) = 128 := by
+      (capKnownLeafRegister checking) = 256 := by
     rw [cap_marked_prepare_register]
     · exact leaves
     · cases checking <;> decide
@@ -109,7 +109,7 @@ theorem cap_marked_visit_memory (checking : Bool) (state : MachineState) (node :
 theorem cap_marked_visit_node (checking : Bool) (state : MachineState) (node : Nat)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capMarkedVisitState checking state node).getReg .x20 =
-      BitVec.ofNat 64 (if node < 128 then 2 * node else node) := by
+      BitVec.ofNat 64 (if node < 256 then 2 * node else node) := by
   apply cap_known_state_node
   exact (cap_marked_prepare_register checking state .x20 (by decide)).trans index
 

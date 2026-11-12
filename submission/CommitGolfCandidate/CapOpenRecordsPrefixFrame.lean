@@ -13,12 +13,12 @@ theorem cap_open_records_prefix_frame (context : CapOpenRecordContext)
     (records : List Index) (inputReference outputReference : MachineState)
     (countBound : records.length < 2^64)
     (indexSpace : context.indices+8*records.length+32 ≤ context.output)
-    (outputSpace : context.output+576*records.length ≤ context.limit)
+    (outputSpace : context.output+544*records.length ≤ context.limit)
     (inputs : CapOpenRecordInputs context records inputReference)
     (remaining : Nat) (state : MachineState)
     (ready : CapOpenRecordsReady context records inputReference remaining state)
     (floor : Nat)
-    (before : floor ≤ context.output+576*(records.length-remaining))
+    (before : floor ≤ context.output+544*(records.length-remaining))
     (frame : CapOpenRetainedInputs floor outputReference state) :
     CapOpenRetainedInputs floor outputReference
       (capCountedRun capOpenRecordState remaining state) := by
@@ -28,7 +28,7 @@ theorem cap_open_records_prefix_frame (context : CapOpenRecordContext)
     have bounded := ready.bounded
     have ordinalBound : records.length-(remaining+1) < records.length := by omega
     let position := (records[records.length-(remaining+1)]'ordinalBound).val
-    let cursor := context.output+576*(records.length-(remaining+1))
+    let cursor := context.output+544*(records.length-(remaining+1))
     have positionBound : position < 16777216 := by
       simpa only [position, LENGTH, LOG_LENGTH, Nat.reducePow] using
         (records[records.length-(remaining+1)]'ordinalBound).isLt
@@ -38,7 +38,7 @@ theorem cap_open_records_prefix_frame (context : CapOpenRecordContext)
       have base := context.outputAligned
       dsimp only [cursor]
       omega
-    have space : cursor+576 ≤ context.limit := by
+    have space : cursor+544 ≤ context.limit := by
       dsimp only [cursor]
       omega
     have step := cap_open_record_retained_inputs floor context.roots context.limit

@@ -18,8 +18,8 @@ theorem cap_honest_opening_bytes (oracle : Oracle) (message : Message)
       (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor) positions =
       capDigestEncoding
         (capLowerTranscript (capHonestLowerRecords message committed positions) ++
-          capProof oracle.compression (capHeapTree (heapDigest committed 4294971424) 7 1)
-            (capHeapView (heapDigest committed 4294971424) (capOpenRequestedMarks positions) 7 1)) := by
+          capProof oracle.compression (capHeapTree (heapDigest committed 4294971424) 8 1)
+            (capHeapView (heapDigest committed 4294971424) (capOpenRequestedMarks positions) 8 1)) := by
   rw [capOpenLoadedBytes, cap_honest_lower_loaded_transcript message committed positions,
     cap_open_honest_boundary_digests oracle message committed correct positions]
   simp only [capDigestEncoding, List.flatMap_append]
@@ -29,18 +29,18 @@ theorem cap_honest_cap_accepts (oracle : Oracle) (message : Message)
     (positions : Positions) (roots : CapRootMap)
     (accepted : capLowerBatchRoots oracle.compression
       (capHonestLowerRecords message committed positions) (fun _ => none) = some roots)
-    (agree : CapRootsAgree (fun group => heapDigest committed 4294971424 (128+group)) roots) :
-    capDecode oracle.compression (capKnownView roots 7 0)
+    (agree : CapRootsAgree (fun group => heapDigest committed 4294971424 (256+group)) roots) :
+    capDecode oracle.compression (capKnownView roots 8 0)
       (capOpenBoundaryDigests
         (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor) positions) =
       some (readBuffer committed 4294971392 32, []) := by
   rw [cap_honest_known_view oracle message committed positions roots accepted agree,
     cap_open_honest_boundary_digests oracle message committed correct positions]
   have codec := cap_heap_codec oracle.compression (heapDigest committed 4294971424)
-    (capOpenRequestedMarks positions) 7 1 []
+    (capOpenRequestedMarks positions) 8 1 []
   simp only [List.append_nil] at codec
   rw [codec, cap_heap_tree_root oracle.compression _ 
-    (cap_open_committed_cap_parents oracle message committed correct) 7 1
+    (cap_open_committed_cap_parents oracle message committed correct) 8 1
     (by decide) (by decide)]
   rw [correct.1]
 

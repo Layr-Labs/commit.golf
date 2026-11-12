@@ -62,7 +62,7 @@ theorem cap_probe_batch_cache (permutation : Perm)
   rw [capProbeBatch,compression_run_bind] at reached
   obtain ⟨⟨outcome,afterReplay⟩,_,tail⟩ := (mem_support_bind_iff _ _ _).mp reached
   exact (probe_inputs_cache permutation
-    ((outcome.getD []).take (25*records.length+127)) afterReplay result tail).2
+    ((outcome.getD []).take (24*records.length+255)) afterReplay result tail).2
 
 theorem cap_probe_pair_cache (permutation : Perm)
     (leftRecords rightRecords : List CapLowerRecord)

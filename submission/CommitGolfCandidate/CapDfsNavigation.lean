@@ -57,14 +57,14 @@ private theorem descend_word (node : Nat) :
   change BitVec.ofNat 64 node * BitVec.ofNat 64 2 = _
   rw [← BitVec.ofNat_mul, Nat.mul_comm]
 
-private theorem ascend_word (node : Nat) (bounded : node < 256) :
+private theorem ascend_word (node : Nat) (bounded : node < 512) :
     BitVec.ofNat 64 node >>> 1 = BitVec.ofNat 64 (node / 2) := by
   apply BitVec.eq_of_toNat_eq
   change node % 2^64 / 2 = node / 2 % 2^64
   rw [Nat.mod_eq_of_lt (by omega : node < 2^64),
     Nat.mod_eq_of_lt (by omega : node / 2 < 2^64)]
 
-private theorem parity_word (node : Nat) (bounded : node < 256) :
+private theorem parity_word (node : Nat) (bounded : node < 512) :
     BitVec.ofNat 64 node &&& (1 : Word) = BitVec.ofNat 64 (node % 2) := by
   apply BitVec.eq_of_toNat_eq
   simp only [BitVec.toNat_and, BitVec.toNat_ofNat,
@@ -81,7 +81,7 @@ theorem cap_navigation_descend (state : MachineState) (node : Nat)
   exact descend_word node
 
 theorem cap_navigation_ascend (state : MachineState) (node : Nat)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512) :
     (capNavigationState .ascend state).getReg .x20 = BitVec.ofNat 64 (node / 2) := by
   simp (disch := decide) only [capNavigationState, capNavigationInstruction, execInstrBr,
     MachineState.getReg_setPC, MachineState.getReg_setReg_eq, index,
@@ -97,7 +97,7 @@ theorem cap_navigation_sibling (state : MachineState) (node : Nat)
   exact (BitVec.ofNat_add node 1).symm
 
 theorem cap_navigation_parity (state : MachineState) (node : Nat)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512) :
     (capNavigationState .parity state).getReg .x7 = BitVec.ofNat 64 (node % 2) := by
   simp (disch := decide) only [capNavigationState, capNavigationInstruction, execInstrBr,
     MachineState.getReg_setPC, MachineState.getReg_setReg_eq, index,

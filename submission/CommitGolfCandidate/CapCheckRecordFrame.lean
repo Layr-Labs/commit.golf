@@ -24,7 +24,7 @@ theorem cap_check_group_high_frame (state reference : MachineState) (group : Nat
     have bounded := ready.bounded
     rw [BitVec.toNat_ofNat,BitVec.toNat_ofNat,
       Nat.mod_eq_of_lt (by omega : 8*(address/8)<2^64),
-      Nat.mod_eq_of_lt (by omega : 20480+8*(128+group)<2^64)] at numeric
+      Nat.mod_eq_of_lt (by omega : 28672+8*(256+group)<2^64)] at numeric
     omega
   have rootOutside : ∀ word : Fin 4, BitVec.ofNat 64 (8*(address/8)) ≠
       (capCheckGroupStartPrefix state 6).getReg .x23+
@@ -36,7 +36,7 @@ theorem cap_check_group_high_frame (state reference : MachineState) (group : Nat
     have inside := word.isLt
     rw [BitVec.toNat_ofNat,BitVec.toNat_ofNat,
       Nat.mod_eq_of_lt (by omega : 8*(address/8)<2^64),
-      Nat.mod_eq_of_lt (by omega : 12288+32*(128+group)+8*word.val<2^64)] at numeric
+      Nat.mod_eq_of_lt (by omega : 12288+32*(256+group)+8*word.val<2^64)] at numeric
     omega
   have word := cap_check_group_result_word_frame state
     (BitVec.ofNat 64 (8*(address/8))) markOutside rootOutside
@@ -62,8 +62,8 @@ theorem cap_check_record_result_high_frame (lower reference : MachineState) (gro
 theorem cap_check_record_run_high_frame (state reference : MachineState) (index : Nat)
     (bounded : index < 2^24)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 index)
-    (scratch : state.getReg .x21 = 256) (leaves : state.getReg .x19 = 128)
-    (marks : state.getReg .x9 = 20480) (roots : state.getReg .x18 = 12288)
+    (scratch : state.getReg .x21 = 256) (leaves : state.getReg .x19 = 256)
+    (marks : state.getReg .x9 = 28672) (roots : state.getReg .x18 = 12288)
     (one : state.getReg .x31 = 1) (frame : CapHighBytes state reference)
     (result : MachineState × Bool)
     (reachable : result ∈ support (capCheckRecordRun state)) :
@@ -73,7 +73,7 @@ theorem cap_check_record_run_high_frame (state reference : MachineState) (index 
   subst result
   have ready := cap_check_lower_group_ready state lower index bounded loaded scratch
     leaves marks roots one lowerReachable
-  exact cap_check_record_result_high_frame lower reference (index/2^17) ready
+  exact cap_check_record_result_high_frame lower reference (index/2^16) ready
     (cap_check_lower_record_high_frame state reference lower scratch frame lowerReachable)
 
 end CommitGolfCandidate

@@ -17,16 +17,16 @@ private theorem charge_pair (result : Execution) (first second : Nat) :
 theorem cap_open_traversal_entry_execute
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) (fuel : Nat) (allowCoins : Bool) :
-    execute (capProgram.image .opening) (29+278*positions.card+1272+2+fuel)
+    execute (capProgram.image .opening) (29+263*positions.card+2552+2+fuel)
       (capProgram.initialState .opening (trapdoor, positions)) allowCoins =
       (do let result ← execute (capProgram.image .opening) fuel
             (capOpenTraversalInitial trapdoor positions) allowCoins
-          return result.charge (29+278*positions.card+1272+2) 0) := by
-  have mark : execute (capProgram.image .opening) (1272+(2+fuel))
+          return result.charge (29+263*positions.card+2552+2) 0) := by
+  have mark : execute (capProgram.image .opening) (2552+(2+fuel))
       (capOpenRecordsFinal trapdoor positions) allowCoins =
       (do let result ← execute (capProgram.image .opening) (2+fuel)
             (capOpenMarkedFinal trapdoor positions) allowCoins
-          return result.charge 1272 0) := by
+          return result.charge 2552 0) := by
     simpa only [capProgram, LOG_LENGTH, capOpenMarkedFinal] using
       cap_open_filled_mark_execute trapdoor positions positive (2+fuel) allowCoins
   have entry : execute (capProgram.image .opening) (2+fuel)
@@ -37,8 +37,8 @@ theorem cap_open_traversal_entry_execute
     simpa only [capOpenTraversalInitial] using
       cap_open_walk_initial_execute _ (cap_open_marked_final_pc trapdoor positions positive)
         fuel allowCoins
-  rw [show 29+278*positions.card+1272+2+fuel =
-      29+278*positions.card+(1272+(2+fuel)) by omega,
+  rw [show 29+263*positions.card+2552+2+fuel =
+      29+263*positions.card+(2552+(2+fuel)) by omega,
     cap_open_record_pass_execute trapdoor positions positive, mark, entry]
   simp only [bind_assoc, pure_bind, charge_pair, Nat.add_assoc]
 

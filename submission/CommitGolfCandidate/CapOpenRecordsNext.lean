@@ -13,7 +13,7 @@ theorem cap_open_records_ready_next (context : CapOpenRecordContext)
     (records : List Index) (reference state : MachineState) (remaining : Nat)
     (countBound : records.length < 2^64)
     (indexSpace : context.indices+8*records.length+32 ≤ context.output)
-    (outputSpace : context.output+576*records.length ≤ context.limit)
+    (outputSpace : context.output+544*records.length ≤ context.limit)
     (inputs : CapOpenRecordInputs context records reference)
     (ready : CapOpenRecordsReady context records reference (remaining+1) state) :
     CapOpenRecordsReady context records reference remaining (capOpenRecordState state) := by
@@ -21,7 +21,7 @@ theorem cap_open_records_ready_next (context : CapOpenRecordContext)
   have currentPC : state.pc = 4212 := by simpa using ready.pc
   have ordinalBound : records.length-(remaining+1) < records.length := by omega
   let position := (records[records.length-(remaining+1)]'ordinalBound).val
-  let cursor := context.output+576*(records.length-(remaining+1))
+  let cursor := context.output+544*(records.length-(remaining+1))
   have positionBound : position < 16777216 := by
     simpa only [position, LENGTH, LOG_LENGTH, Nat.reducePow] using
       (records[records.length-(remaining+1)]'ordinalBound).isLt
@@ -32,7 +32,7 @@ theorem cap_open_records_ready_next (context : CapOpenRecordContext)
     have base := context.outputAligned
     dsimp only [cursor]
     omega
-  have space : cursor+576 ≤ context.limit := by
+  have space : cursor+544 ≤ context.limit := by
     dsimp only [cursor]
     omega
   refine ⟨by omega, cap_open_record_counter state (remaining+1) (by omega) ready.counter,

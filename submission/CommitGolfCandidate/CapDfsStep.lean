@@ -21,7 +21,7 @@ structure CapDfsBoundaryReady (checking : Bool) (state : MachineState)
   proofEnd : checking = true → state.getReg .x22 = BitVec.ofNat 64 limit
   limitBound : checking = true → limit ≤ MEMORY_BYTES
   enough : checking = true → cursor + 32 ≤ limit
-  highOutput : checking = false → 22528 ≤ cursor
+  highOutput : checking = false → 32768 ≤ cursor
 
 def capDfsStep (checking : Bool) (marked : Nat → Bool)
     (control : CapDfsControl) (state : MachineState) : OracleComp World MachineState :=
@@ -41,7 +41,7 @@ def capDfsStep (checking : Bool) (marked : Nat → Bool)
 
 def capDfsStepInstructions (checking : Bool) (marked : Nat → Bool) : CapDfsControl → Nat
   | .visit node =>
-      if marked node then 4 + (if node < 128 then 3 else 2)
+      if marked node then 4 + (if node < 256 then 3 else 2)
       else if checking then 17 else 15
   | .advance node =>
       if node = 1 then 1 else if node % 2 = 0 then 5 else if checking then 10 else 5
@@ -64,7 +64,7 @@ theorem cap_dfs_step_execute (checking : Bool) (marked : Nat → Bool)
     (control : CapDfsControl) (state : MachineState) (rootBase : Nat)
     (physical : CapDfsStateControl checking state control)
     (valid : CapDfsControlValid control) (stable : CapDfsStable checking state rootBase)
-    (ready : CapMarksReady state 128 0 marked)
+    (ready : CapMarksReady state 256 0 marked)
     (checkBase : checking = true → rootBase = 12288)
     (boundary : ∀ node, control = .visit node → marked node = false →
       CapDfsBoundaryReady checking state rootBase node)

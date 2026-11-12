@@ -24,10 +24,10 @@ private theorem charge_pair (result : Execution) (first second : Nat) :
 
 theorem cap_unknown_prepare_pc (checking : Bool) (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownVisit checking)
-    (base : state.getReg (capVisitMarks checking) = 20480)
+    (base : state.getReg (capVisitMarks checking) = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 256)
-    (marked : Nat → Bool) (ready : CapMarksReady state 128 0 marked)
+    (positive : 0 < node) (bounded : node < 512)
+    (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (absent : marked node = false) :
     (capMarkedPrepare checking state).pc = if checking then 4636 else 4452 := by
   have selected : CapMarksRegister (capVisitMarks checking) := by
@@ -40,10 +40,10 @@ theorem cap_unknown_prepare_pc (checking : Bool) (state : MachineState) (node : 
 
 theorem cap_unknown_open_execute (state : MachineState) (node rootBase cursor : Nat)
     (pc : state.pc = capKnownVisit false)
-    (marks : state.getReg .x22 = 20480)
+    (marks : state.getReg .x22 = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 256)
-    (marked : Nat → Bool) (ready : CapMarksReady state 128 0 marked)
+    (positive : 0 < node) (bounded : node < 512)
+    (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (absent : marked node = false)
     (roots : state.getReg .x9 = BitVec.ofNat 64 rootBase)
     (rootBound : rootBase + 32 * node + 32 ≤ MEMORY_BYTES)
@@ -68,10 +68,10 @@ theorem cap_unknown_open_execute (state : MachineState) (node rootBase cursor : 
 
 theorem cap_unknown_check_guard_pc (state : MachineState) (node cursor limit : Nat)
     (pc : state.pc = capKnownVisit true)
-    (marks : state.getReg .x9 = 20480)
+    (marks : state.getReg .x9 = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 256)
-    (marked : Nat → Bool) (ready : CapMarksReady state 128 0 marked)
+    (positive : 0 < node) (bounded : node < 512)
+    (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (absent : marked node = false)
     (proof : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (proofEnd : state.getReg .x22 = BitVec.ofNat 64 limit)
@@ -87,10 +87,10 @@ theorem cap_unknown_check_guard_pc (state : MachineState) (node cursor limit : N
 
 theorem cap_unknown_check_guard_execute (state : MachineState) (node : Nat)
     (pc : state.pc = capKnownVisit true)
-    (marks : state.getReg .x9 = 20480)
+    (marks : state.getReg .x9 = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 256)
-    (marked : Nat → Bool) (ready : CapMarksReady state 128 0 marked)
+    (positive : 0 < node) (bounded : node < 512)
+    (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (absent : marked node = false) (fuel : Nat) (allowCoins : Bool) :
     execute (capWalkImage true) (6 + fuel) state allowCoins =
       (do let result ← execute (capWalkImage true) fuel
@@ -106,10 +106,10 @@ theorem cap_unknown_check_guard_execute (state : MachineState) (node : Nat)
 /-- An admitted full boundary digest costs seventeen ordinary instructions. -/
 theorem cap_unknown_check_execute (state : MachineState) (node cursor limit : Nat)
     (pc : state.pc = capKnownVisit true)
-    (marks : state.getReg .x9 = 20480)
+    (marks : state.getReg .x9 = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 256)
-    (marked : Nat → Bool) (ready : CapMarksReady state 128 0 marked)
+    (positive : 0 < node) (bounded : node < 512)
+    (marked : Nat → Bool) (ready : CapMarksReady state 256 0 marked)
     (absent : marked node = false) (roots : state.getReg .x18 = 12288)
     (proof : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (proofEnd : state.getReg .x22 = BitVec.ofNat 64 limit)

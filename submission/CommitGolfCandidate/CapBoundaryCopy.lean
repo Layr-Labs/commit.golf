@@ -113,7 +113,7 @@ admitted trapdoor base to the generic theorem above. -/
 theorem cap_check_boundary_copy_execute (state : MachineState)
     (node cursor : Nat) (pc : state.pc = capBoundaryEntry true)
     (base : state.getReg .x18 = 12288)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256)
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512)
     (proof : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (cursorBound : cursor + 32 ≤ MEMORY_BYTES) (aligned : cursor % 8 = 0)
     (fuel : Nat) (allowCoins : Bool) :

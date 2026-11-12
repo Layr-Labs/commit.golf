@@ -80,7 +80,7 @@ def cap_check_boundary_ready (marked : Nat → Bool) (control : CapDfsControl)
     (state : MachineState) (limit : Nat) (window : CapCheckCursorWindow limit state)
     (enough : capCheckBoundaryEnough marked control state)
     (node : Nat) (atNode : control = .visit node) (absent : marked node = false)
-    (bounded : node < 256) : CapDfsBoundaryReady true state 12288 node := by
+    (bounded : node < 512) : CapDfsBoundaryReady true state 12288 node := by
   have small := cap_check_cursor_no_wrap limit state window
   have space := cap_check_cursor_space marked control state limit window enough
   simp only [atNode,capBoundaryIncrement,absent,Bool.false_eq_true,↓reduceIte] at space

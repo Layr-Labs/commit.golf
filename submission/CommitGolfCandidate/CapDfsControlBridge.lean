@@ -24,9 +24,9 @@ theorem cap_dfs_marked_control (checking : Bool) (state : MachineState)
     (node : Nat) (marked : Nat → Bool)
     (control : CapDfsStateControl checking state (.visit node))
     (valid : CapDfsControlValid (.visit node))
-    (marks : state.getReg (capVisitMarks checking) = 20480)
-    (leaves : state.getReg (capKnownLeafRegister checking) = 128)
-    (ready : CapMarksReady state 128 0 marked) (present : marked node = true) :
+    (marks : state.getReg (capVisitMarks checking) = 28672)
+    (leaves : state.getReg (capKnownLeafRegister checking) = 256)
+    (ready : CapMarksReady state 256 0 marked) (present : marked node = true) :
     CapDfsStateControl checking (capMarkedVisitState checking state node)
       (capControlStep marked (.visit node)) := by
   have preparedPC := cap_marked_prepare_pc checking state node control.1 marks control.2
@@ -40,7 +40,7 @@ theorem cap_dfs_marked_control (checking : Bool) (state : MachineState)
       · cases checking <;> decide) valid.2
   have nextIndex := cap_marked_visit_node checking state node control.2
   simp only [capControlStep, present, Bool.true_and, decide_eq_true_eq]
-  by_cases internal : node < 128
+  by_cases internal : node < 256
   · simp only [if_pos internal] at nextPC nextIndex ⊢
     exact ⟨nextPC, nextIndex⟩
   · simp only [if_neg internal] at nextPC nextIndex ⊢
@@ -50,8 +50,8 @@ theorem cap_dfs_unknown_open_control (state : MachineState) (node : Nat)
     (marked : Nat → Bool)
     (control : CapDfsStateControl false state (.visit node))
     (valid : CapDfsControlValid (.visit node))
-    (marks : state.getReg .x22 = 20480)
-    (ready : CapMarksReady state 128 0 marked) (absent : marked node = false) :
+    (marks : state.getReg .x22 = 28672)
+    (ready : CapMarksReady state 256 0 marked) (absent : marked node = false) :
     CapDfsStateControl false (capUnknownOpenState state)
       (capControlStep marked (.visit node)) := by
   simp only [capControlStep, absent, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
@@ -63,8 +63,8 @@ theorem cap_dfs_unknown_check_control (state : MachineState) (node cursor limit 
     (marked : Nat → Bool)
     (control : CapDfsStateControl true state (.visit node))
     (valid : CapDfsControlValid (.visit node))
-    (marks : state.getReg .x9 = 20480)
-    (ready : CapMarksReady state 128 0 marked) (absent : marked node = false)
+    (marks : state.getReg .x9 = 28672)
+    (ready : CapMarksReady state 256 0 marked) (absent : marked node = false)
     (proof : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (proofEnd : state.getReg .x22 = BitVec.ofNat 64 limit)
     (noWrap : cursor + 32 < 2^64) (limitBound : limit < 2^64)

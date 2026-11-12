@@ -3,7 +3,7 @@ import CommitGolfCandidate.CapCheckGroupInsert
 import CommitGolfCandidate.CapCheckRecordNext
 import CommitGolfCandidate.CapCheckLowerGroupReady
 
-/-! One checker record has 25 paid lower queries, pure consistency handling,
+/-! One checker record has 24 paid lower queries, pure consistency handling,
 and the common three-instruction latch only after success. A failed
 comparison already represents the actual rejection halt and never advances
 to the next record. The execution bridge is supplied separately. -/
@@ -42,7 +42,7 @@ theorem cap_check_record_run_support (state : MachineState) (result : MachineSta
   simp only [capCheckRecordRun,mem_support_bind_iff,support_pure,Set.mem_singleton_iff]
 
 theorem cap_check_record_run_queries (state : MachineState) :
-    (capCheckRecordRun state).IsTotalQueryBound 25 := by
+    (capCheckRecordRun state).IsTotalQueryBound 24 := by
   unfold capCheckRecordRun
   have tailBound : ∀ lower : MachineState,
       IsTotalQueryBound (pure (capCheckRecordResult lower) :

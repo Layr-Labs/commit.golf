@@ -23,7 +23,7 @@ theorem cap_dfs_query_total_add (marked : Nat → Bool) (first second : Nat)
 
 theorem cap_subtree_query_count (marked : Nat → Bool) {height : Nat}
     (view : CapView height) (node : Nat)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (marks : CapViewMarks marked node view) :
     capDfsQueryTotal true marked (capSubtreeSteps marked height node) (.visit node)=
       capCalls view := by
@@ -36,11 +36,11 @@ theorem cap_subtree_query_count (marked : Nat → Bool) {height : Nat}
     have upper' := upper
     rw [pow_succ] at lower' upper'
     have positive : 0<node := by nlinarith
-    have internal : node<128 := by nlinarith
-    have leftLower : 128≤(2*node)*2^height := by nlinarith
-    have leftUpper : (2*node+1)*2^height≤256 := by nlinarith
-    have rightLower : 128≤(2*node+1)*2^height := by nlinarith
-    have rightUpper : (2*node+1+1)*2^height≤256 := by nlinarith
+    have internal : node<256 := by nlinarith
+    have leftLower : 256≤(2*node)*2^height := by nlinarith
+    have leftUpper : (2*node+1)*2^height≤512 := by nlinarith
+    have rightLower : 256≤(2*node+1)*2^height := by nlinarith
+    have rightUpper : (2*node+1+1)*2^height≤512 := by nlinarith
     obtain ⟨mark,leftMarks,rightMarks⟩ := marks
     by_cases present : marked node=true
     · have occupied : capOccupied (.node leftView rightView)=true := mark.symm.trans present
@@ -76,15 +76,15 @@ theorem cap_dfs_done_queries (marked : Nat → Bool) (count : Nat) :
   | succ count ih =>
     simp only [capDfsQueryTotal,capDfsStepQueries,capControlStep,ih,Nat.zero_add]
 
-theorem cap_root_query_count (marked : Nat → Bool) (view : CapView 7)
+theorem cap_root_query_count (marked : Nat → Bool) (view : CapView 8)
     (marks : CapViewMarks marked 1 view) :
-    capDfsQueryTotal true marked 510 (.visit 1)=capCalls view := by
-  have ended := cap_subtree_run_end marked 7 1 (by decide) (by decide)
+    capDfsQueryTotal true marked 1022 (.visit 1)=capCalls view := by
+  have ended := cap_subtree_run_end marked 8 1 (by decide) (by decide)
   have counted := cap_subtree_query_count marked view 1 (by decide) (by decide) marks
-  have bounded := cap_subtree_steps_bound marked 7 1
-  have count : capSubtreeSteps marked 7 1+1≤510 := by norm_num at bounded; omega
-  rw [show 510=(capSubtreeSteps marked 7 1+1)+
-    (510-(capSubtreeSteps marked 7 1+1)) by omega,
+  have bounded := cap_subtree_steps_bound marked 8 1
+  have count : capSubtreeSteps marked 8 1+1≤1022 := by norm_num at bounded; omega
+  rw [show 1022=(capSubtreeSteps marked 8 1+1)+
+    (1022-(capSubtreeSteps marked 8 1+1)) by omega,
     cap_dfs_query_total_add,cap_dfs_query_total_add,ended,counted]
   have oneDone : capControlRun marked 1 (.advance 1)=.done := by
     simp [capControlRun,capControlStep]

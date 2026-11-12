@@ -2,12 +2,12 @@ import CommitGolfCandidate.CapMarkInvariant
 
 /-! Abstract occupancy point update. This theorem consumes memory projections
 only, so applying it to a completed record does not expose that record's
-seventeen-copy machine-state expression to the rewrite tactics. -/
+sibling-copy machine-state expression to the rewrite tactics. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 theorem cap_mark_point_update (reference before after : MachineState)
-    (group node : Nat) (groupBound : group < 256) (nodeBound : node < 256)
+    (group node : Nat) (groupBound : group < 512) (nodeBound : node < 512)
     (memory : after.mem = (before.setMem (capMarkAddress group) 1).mem)
     (unchanged : before.getMem (capMarkAddress node) =
       reference.getMem (capMarkAddress node)) :
@@ -22,14 +22,14 @@ theorem cap_mark_point_update (reference before after : MachineState)
     rw [MachineState.getMem_setMem_eq, if_pos rfl]
   · have distinct : capMarkAddress node ≠ capMarkAddress group := by
       intro equal
-      exact same (cap_mark_address_injective 128 (by decide) node group
+      exact same (cap_mark_address_injective 256 (by decide) node group
         nodeBound groupBound equal)
     rw [MachineState.getMem_setMem_ne distinct, if_neg same]
     exact unchanged
 
 theorem cap_mark_lookup_address (reference before : MachineState) (node : Nat)
-    (same : before.getMem (BitVec.ofNat 64 (20480+8*node)) =
-      reference.getMem (BitVec.ofNat 64 (20480+8*node))) :
+    (same : before.getMem (BitVec.ofNat 64 (28672+8*node)) =
+      reference.getMem (BitVec.ofNat 64 (28672+8*node))) :
     before.getMem (capMarkAddress node) = reference.getMem (capMarkAddress node) :=
   same
 

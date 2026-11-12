@@ -25,7 +25,7 @@ theorem cap_unknown_check_digest (state : MachineState) (node cursor : Nat)
     (roots : state.getReg .x18=12288)
     (index : state.getReg .x20=BitVec.ofNat 64 node)
     (pointer : state.getReg .x25=BitVec.ofNat 64 cursor)
-    (bounded : node<256) (above : 22528≤cursor)
+    (bounded : node<512) (above : 32768≤cursor)
     (aligned : cursor%8=0) (cursorBound : cursor+32≤2^64) :
     capReadRoot (capUnknownCheckState state) node = readBuffer state cursor 32 := by
   have base : (capUnknownCheckGuard state).getReg .x18=BitVec.ofNat 64 12288 := by
@@ -46,7 +46,7 @@ theorem cap_unknown_check_other_root (state : MachineState) (node other cursor :
     (roots : state.getReg .x18=12288)
     (index : state.getReg .x20=BitVec.ofNat 64 node)
     (pointer : state.getReg .x25=BitVec.ofNat 64 cursor)
-    (bounded : node<256) (otherBound : other<256) (distinct : other≠node) :
+    (bounded : node<512) (otherBound : other<512) (distinct : other≠node) :
     capReadRoot (capUnknownCheckState state) other = capReadRoot state other := by
   have base : (capUnknownCheckGuard state).getReg .x18=BitVec.ofNat 64 12288 :=
     (cap_unknown_check_guard_register state .x18 (by decide)).trans roots
@@ -67,8 +67,8 @@ theorem cap_unknown_check_root_map (state : MachineState) (node other cursor : N
     (roots : state.getReg .x18=12288)
     (index : state.getReg .x20=BitVec.ofNat 64 node)
     (pointer : state.getReg .x25=BitVec.ofNat 64 cursor)
-    (bounded : node<256) (otherBound : other<256)
-    (above : 22528≤cursor) (aligned : cursor%8=0) (cursorBound : cursor+32≤2^64) :
+    (bounded : node<512) (otherBound : other<512)
+    (above : 32768≤cursor) (aligned : cursor%8=0) (cursorBound : cursor+32≤2^64) :
     capReadRoot (capUnknownCheckState state) other =
       if other=node then readBuffer state cursor 32 else capReadRoot state other := by
   by_cases same : other=node

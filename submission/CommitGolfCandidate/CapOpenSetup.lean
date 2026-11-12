@@ -16,9 +16,9 @@ def capOpenSetupInstructions : List Instr :=
    .ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 256,
    .SLLI .x6 .x6 11, .ADDI .x6 .x6 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 0,
    .ADD .x18 .x9 .x6,
-   .ADDI .x22 .x0 0, .SLLI .x22 .x22 11, .ADDI .x22 .x22 10,
+   .ADDI .x22 .x0 0, .SLLI .x22 .x22 11, .ADDI .x22 .x22 14,
    .SLLI .x22 .x22 11, .ADDI .x22 .x22 0,
-   .ADDI .x29 .x0 0, .SLLI .x29 .x29 11, .ADDI .x29 .x29 128,
+   .ADDI .x29 .x0 0, .SLLI .x29 .x29 11, .ADDI .x29 .x29 256,
    .ADDI .x31 .x0 1]
 
 def capOpenSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
@@ -60,8 +60,8 @@ theorem cap_open_setup_registers (state : MachineState) :
     (capOpenInitializedState state).getReg .x27 = state.getReg .x16 ∧
     (capOpenInitializedState state).getReg .x19 = 16777216 ∧
     (capOpenInitializedState state).getReg .x18 = state.getReg .x12 + 1073741824 ∧
-    (capOpenInitializedState state).getReg .x22 = 20480 ∧
-    (capOpenInitializedState state).getReg .x29 = 128 ∧
+    (capOpenInitializedState state).getReg .x22 = 28672 ∧
+    (capOpenInitializedState state).getReg .x29 = 256 ∧
     (capOpenInitializedState state).getReg .x31 = 1 ∧
     (capOpenInitializedState state).getReg .x15 = state.getReg .x15 ∧
     (capOpenInitializedState state).getReg .x16 = state.getReg .x16 := by

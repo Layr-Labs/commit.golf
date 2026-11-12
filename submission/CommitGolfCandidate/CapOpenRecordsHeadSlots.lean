@@ -18,23 +18,23 @@ theorem cap_open_records_head_slot (context : CapOpenRecordContext)
     (records : List Index) (inputReference : MachineState)
     (countBound : records.length < 2^64)
     (indexSpace : context.indices+8*records.length+32 ≤ context.output)
-    (outputSpace : context.output+576*records.length ≤ context.limit)
+    (outputSpace : context.output+544*records.length ≤ context.limit)
     (inputs : CapOpenRecordInputs context records inputReference)
-    (high : 22528 ≤ context.output)
+    (high : 32768 ≤ context.output)
     (heapBelow : context.roots+1073741824 ≤ context.output)
     (saltsBelow : context.salts+536870912 ≤ context.output)
     (remaining : Nat) (state : MachineState)
     (ready : CapOpenRecordsReady context records inputReference (remaining+1) state)
-    (slot : Nat) (slotBound : slot < 18) :
+    (slot : Nat) (slotBound : slot < 17) :
     readBuffer (capCountedRun capOpenRecordState (remaining+1) state)
-      (context.output+576*(records.length-(remaining+1))+32*slot) 32 =
+      (context.output+544*(records.length-(remaining+1))+32*slot) 32 =
       readBuffer state (capLowerSlotAddress context
         (records[records.length-(remaining+1)]'(by have bound := ready.bounded; omega)).val
         slot) 32 := by
   have bounded := ready.bounded
   have ordinalBound : records.length-(remaining+1) < records.length := by omega
   let position := (records[records.length-(remaining+1)]'ordinalBound).val
-  let cursor := context.output+576*(records.length-(remaining+1))
+  let cursor := context.output+544*(records.length-(remaining+1))
   have positionBound : position < 16777216 := by
     simpa only [position, LENGTH, LOG_LENGTH, Nat.reducePow] using
       (records[records.length-(remaining+1)]'ordinalBound).isLt
@@ -44,7 +44,7 @@ theorem cap_open_records_head_slot (context : CapOpenRecordContext)
     have base := context.outputAligned
     dsimp only [cursor]
     omega
-  have space : cursor+576 ≤ context.limit := by
+  have space : cursor+544 ≤ context.limit := by
     dsimp only [cursor]
     omega
   have next := cap_open_records_ready_next context records inputReference state remaining
@@ -64,7 +64,7 @@ theorem cap_open_records_head_slot (context : CapOpenRecordContext)
       state (by simpa using ready.pc) ready.roots ready.salts ready.cursor aligned space
       context.limitBound (by dsimp only [cursor]; omega) context.saltAligned
       (by dsimp only [cursor]; omega) positionBound loaded ready.leaves ready.marks
-  · have sibling : slot-1 < 17 := by omega
+  · have sibling : slot-1 < 16 := by omega
     have address : cursor+32*slot = cursor+32+32*(slot-1) := by omega
     rw [capLowerSlotAddress, if_neg salt, address]
     exact cap_open_record_sibling_slot context.roots context.limit cursor position

@@ -34,7 +34,7 @@ theorem cap_mark_pass_memory_congr (state reference : MachineState) (remaining :
 
 theorem cap_mark_loop_memory (marks : Reg) (start : Word)
     (leaves remaining : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (bounded : leaves ≤ 256)
     (internal : remaining < leaves)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
@@ -57,7 +57,7 @@ theorem cap_mark_loop_memory (marks : Reg) (start : Word)
 
 theorem cap_mark_loop_frame (marks : Reg) (start : Word)
     (leaves remaining : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (bounded : leaves ≤ 256)
     (internal : remaining < leaves)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
@@ -72,13 +72,13 @@ theorem cap_mark_loop_frame (marks : Reg) (start : Word)
 
 theorem cap_mark_loop_roots (marks : Reg) (start : Word)
     (leaves remaining : Nat) (marked : Nat → Bool)
-    (selected : CapMarksRegister marks) (bounded : leaves ≤ 128)
+    (selected : CapMarksRegister marks) (bounded : leaves ≤ 256)
     (internal : remaining < leaves)
     (equations : ∀ node, 0 < node → node < leaves →
       marked node = (marked (2 * node) || marked (2 * node + 1)))
     (state : MachineState)
     (invariant : CapMarkLoopReady marks start state leaves remaining marked)
-    (address : Nat) (belowMarks : address < 20480) :
+    (address : Nat) (belowMarks : address < 28672) :
     (capMarkLoopRun marks remaining state).getMem (BitVec.ofNat 64 address) =
       state.getMem (BitVec.ofNat 64 address) := by
   exact (congrFun

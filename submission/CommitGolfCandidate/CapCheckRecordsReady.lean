@@ -17,15 +17,15 @@ structure CapCheckRecordsReady (input : CheckInput) (ordinal remaining : Nat)
   pc : state.pc=if remaining=0 then 4548 else 4212
   indices : state.getReg .x24=BitVec.ofNat 64 (capProgram.layout.indices+8*ordinal)
   values : state.getReg .x8=BitVec.ofNat 64 (capProgram.layout.values+256*ordinal)
-  proof : state.getReg .x25=BitVec.ofNat 64 (capProgram.layout.proof+576*ordinal)
+  proof : state.getReg .x25=BitVec.ofNat 64 (capProgram.layout.proof+544*ordinal)
   counter : state.getReg .x27=BitVec.ofNat 64 remaining
   endPointer : state.getReg .x22=
     BitVec.ofNat 64 (capProgram.layout.proof+input.proof.length)
   commitment : state.getReg .x26=BitVec.ofNat 64 capProgram.layout.commitment
   scratch : state.getReg .x21=256
-  marks : state.getReg .x9=20480
+  marks : state.getReg .x9=28672
   roots : state.getReg .x18=12288
-  leaves : state.getReg .x19=128
+  leaves : state.getReg .x19=256
   one : state.getReg .x31=1
   inputs : CapHighBytes state (capProgram.initialState .check input)
 
@@ -72,7 +72,7 @@ theorem cap_check_records_ready_next (input : CheckInput) (ordinal remaining : N
       show (256 : Word)=BitVec.ofNat 64 256 by rfl,← BitVec.ofNat_add]
     congr 1
   · rw [cursors.2.1,ready.proof,
-      show (576 : Word)=BitVec.ofNat 64 576 by rfl,← BitVec.ofNat_add]
+      show (544 : Word)=BitVec.ofNat 64 544 by rfl,← BitVec.ofNat_add]
     congr 1
   · simpa only [Nat.add_sub_cancel] using control.1
   · exact (registers .x22 (by decide)).trans ready.endPointer

@@ -59,7 +59,7 @@ theorem cap_open_record_tail_index (state : MachineState) :
     MachineState.getReg_setReg_eq, MachineState.getReg_setReg_ne]
 
 theorem cap_open_record_tail_count (state : MachineState) :
-    (capOpenRecordTailPrefix state 6).getReg .x28 = 17 := by
+    (capOpenRecordTailPrefix state 6).getReg .x28 = 16 := by
   rw [final_register]
   exact cap_open_record_tail_counter state
 

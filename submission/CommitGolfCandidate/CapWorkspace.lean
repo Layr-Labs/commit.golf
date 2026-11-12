@@ -7,17 +7,17 @@ namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 def capRootsBase : Nat := 12288
-def capMarksBase : Nat := 20480
+def capMarksBase : Nat := 28672
 def capStackBase : Nat := 1024
 
 theorem cap_workspace_ranges :
     capStackBase + 1024 ≤ capRootsBase ∧
-    capRootsBase + 256*32 = capMarksBase ∧
-    capMarksBase + 256*8 = 22528 ∧
+    capRootsBase + 512*32 = capMarksBase ∧
+    capMarksBase + 512*8 = 32768 ∧
     capRootsBase % 8 = 0 ∧ capMarksBase % 8 = 0 ∧ capStackBase % 8 = 0 := by
   decide
 
-theorem cap_child_parent_separate (node : Nat) (positive : 1 ≤ node) (bounded : node < 128) :
+theorem cap_child_parent_separate (node : Nat) (positive : 1 ≤ node) (bounded : node < 256) :
     capRootsBase + 32*node + 32 ≤ capRootsBase + 32*(2*node) ∧
     capRootsBase + 32*(2*node) + 64 ≤ capMarksBase := by
   norm_num [capRootsBase, capMarksBase]
@@ -56,7 +56,7 @@ theorem cap_initial_zero_word (candidate : Submission) (program : Program)
 /-- The current opening loader initializes the entire proposed workspace to zero.
 The eventual cap image must retain empty data and the same input layout. -/
 theorem cap_opening_workspace_zero (trapdoor : BitVec (8*submission.sizes.trapdoor))
-    (positions : Positions) (address : Nat) (bounded : address + 8 ≤ 22528) :
+    (positions : Positions) (address : Nat) (bounded : address + 8 ≤ 32768) :
     (submission.initialState .opening (trapdoor, positions)).getMem (BitVec.ofNat 64 address) = 0 := by
   apply cap_initial_zero_word submission .opening _ address (by omega) rfl
   intro buffer member
@@ -69,7 +69,7 @@ theorem cap_opening_workspace_zero (trapdoor : BitVec (8*submission.sizes.trapdo
     omega
 
 theorem cap_check_workspace_zero (input : CheckInput) (address : Nat)
-    (bounded : address + 8 ≤ 22528) :
+    (bounded : address + 8 ≤ 32768) :
     (submission.initialState .check input).getMem (BitVec.ofNat 64 address) = 0 := by
   apply cap_initial_zero_word submission .check input address (by omega) rfl
   intro buffer member

@@ -18,7 +18,7 @@ private theorem before_read (marks : Reg) (state : MachineState) (count : Nat)
   congrFun (cap_mark_prefix_memory marks state count bounded) address
 
 theorem cap_mark_data_register (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capMarkPrefix marks state 7).getReg .x6 =
       state.getMem (capMarkAddress (2 * node)) |||
@@ -74,7 +74,7 @@ private theorem suffix_memory (state : MachineState) (offset : BitVec 13) :
   simp only [execInstrBr, MachineState.setPC, MachineState.setReg, zero_offset]
 
 theorem cap_mark_memory_effect (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capMarkPrefix marks state 10).mem = (capMarkWrite state node).mem := by
   have suffix : (capMarkPrefix marks state 10).mem =

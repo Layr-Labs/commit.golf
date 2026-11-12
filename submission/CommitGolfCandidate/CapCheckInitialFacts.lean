@@ -58,7 +58,7 @@ theorem cap_check_initial_pointers (input : CheckInput) :
     exact (BitVec.ofNat_add _ _).symm
 
 theorem cap_check_initial_workspace_zero (input : CheckInput)
-    (address : Nat) (bounded : address + 8 ≤ 22528) :
+    (address : Nat) (bounded : address + 8 ≤ 32768) :
     (capCheckRecordEntry (capCheckLengthState (capProgram.initialState .check input))).getMem
       (BitVec.ofNat 64 address) = 0 := by
   have zero := cap_experimental_check_workspace_zero input address bounded

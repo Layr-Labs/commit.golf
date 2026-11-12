@@ -31,7 +31,7 @@ theorem cap_control_root_writes_add (marked : Nat → Bool) (first second : Nat)
     simp only [Nat.succ_add,capControlRootWrites,capControlRun,ih,List.append_assoc]
 
 theorem cap_subtree_root_writes_bound (marked : Nat → Bool) (height node : Nat)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (written : Nat)
     (member : written ∈ capControlRootWrites marked
       (capSubtreeSteps marked height node) (.visit node)) :
@@ -50,11 +50,11 @@ theorem cap_subtree_root_writes_bound (marked : Nat → Bool) (height node : Nat
     have upper' := upper
     rw [pow_succ] at lower' upper'
     have positive : 0<node := by nlinarith
-    have internal : node<128 := by nlinarith
-    have ll : 128≤(2*node)*2^height := by nlinarith
-    have lu : (2*node+1)*2^height≤256 := by nlinarith
-    have rl : 128≤(2*node+1)*2^height := by nlinarith
-    have ru : (2*node+2)*2^height≤256 := by nlinarith
+    have internal : node<256 := by nlinarith
+    have ll : 256≤(2*node)*2^height := by nlinarith
+    have lu : (2*node+1)*2^height≤512 := by nlinarith
+    have rl : 256≤(2*node+1)*2^height := by nlinarith
+    have ru : (2*node+2)*2^height≤512 := by nlinarith
     by_cases present : marked node=true
     · have enter : capControlRun marked 1 (.visit node)=.visit (2*node) := by
         simp [capControlRun,capControlStep,present,internal]

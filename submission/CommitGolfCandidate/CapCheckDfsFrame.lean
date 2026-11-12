@@ -12,7 +12,7 @@ set_option autoImplicit false
 
 theorem cap_check_ascent_high (state reference : MachineState) (node : Nat)
     (answer : BitVec 256) (roots : state.getReg .x18=12288)
-    (index : state.getReg .x20=BitVec.ofNat 64 node) (bounded : node<256)
+    (index : state.getReg .x20=BitVec.ofNat 64 node) (bounded : node<512)
     (frame : CapHighBytes state reference) :
     CapHighBytes (capCheckAscentAnswer state answer) reference := by
   apply cap_high_bytes_memory (capParentAnswerState (capCheckAscentPrepared state) answer)

@@ -8,7 +8,7 @@ namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 def CapHighBytes (state reference : MachineState) : Prop :=
-  ∀ address, 22528 ≤ address → address < 2^64 →
+  ∀ address, 32768 ≤ address → address < 2^64 →
     state.getByte (BitVec.ofNat 64 address) = reference.getByte (BitVec.ofNat 64 address)
 
 theorem cap_high_bytes_refl (state : MachineState) : CapHighBytes state state :=
@@ -25,7 +25,7 @@ theorem cap_high_bytes_memory (state next reference : MachineState)
 
 /-- A word store to the low workspace preserves all high input bytes. -/
 theorem cap_high_bytes_store (state reference : MachineState) (destination : Nat) (value : Word)
-    (low : destination < 22528) (frame : CapHighBytes state reference) :
+    (low : destination < 32768) (frame : CapHighBytes state reference) :
     CapHighBytes (state.setMem (BitVec.ofNat 64 destination) value) reference := by
   intro address lower upper
   have decomposition : 8 * (address / 8) + address % 8 = address := by omega
@@ -50,7 +50,7 @@ theorem cap_high_bytes_store (state reference : MachineState) (destination : Nat
 about the reply value or consistency of consecutive replies is required. -/
 theorem cap_high_bytes_reply {bits : Nat} (state reference : MachineState)
     (destination : Nat) (answer : BitVec bits)
-    (low : destination + (bits+7)/8 ≤ 22528) (frame : CapHighBytes state reference) :
+    (low : destination + (bits+7)/8 ≤ 32768) (frame : CapHighBytes state reference) :
     CapHighBytes (writeBits state (BitVec.ofNat 64 destination) answer) reference := by
   intro address lower upper
   rw [write_bits_byte_outside]

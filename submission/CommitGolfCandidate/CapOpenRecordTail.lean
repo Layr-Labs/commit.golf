@@ -2,7 +2,7 @@ import CommitGolfCandidate.CapOpenRecordPrepare
 
 /-! Actual instructions between the salt copy and lower-path entry. The output
 cursor advances by one salt digest, the index becomes the full heap leaf index,
-and the fixed seventeen-step path counter makes the zero-path branch fall
+and the fixed sixteen-step path counter makes the zero-path branch fall
 through. This does not identify the salt contents with a commitment yet. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -11,7 +11,7 @@ set_option maxHeartbeats 200000
 
 def capOpenRecordTailInstructions : List Instr :=
   [.ADDI .x25 .x25 32, .ADD .x20 .x20 .x19,
-   .ADDI .x28 .x0 0, .SLLI .x28 .x28 11, .ADDI .x28 .x28 17,
+   .ADDI .x28 .x0 0, .SLLI .x28 .x28 11, .ADDI .x28 .x28 16,
    .BEQ .x28 .x0 64]
 
 def capOpenRecordTailPrefix (state : MachineState) (count : Nat) : MachineState :=
@@ -34,7 +34,7 @@ theorem cap_open_record_tail_succ (state : MachineState) (count : Nat)
       using bounded)
 
 theorem cap_open_record_tail_counter (state : MachineState) :
-    (capOpenRecordTailPrefix state 5).getReg .x28 = 17 := by
+    (capOpenRecordTailPrefix state 5).getReg .x28 = 16 := by
   simp (disch := decide) only [capOpenRecordTailPrefix, capOpenRecordTailInstructions,
     List.take, List.foldl, execInstrBr, signExtend12, MachineState.getReg_setPC,
     MachineState.getReg_setReg_eq, MachineState.getReg_setReg_ne]
@@ -49,7 +49,7 @@ theorem cap_open_record_tail_pc (state : MachineState) (count : Nat)
     change (execInstrBr (capOpenRecordTailPrefix state 5) (.BEQ .x28 .x0 64)).pc = _
     simp only [execInstrBr, cap_open_record_tail_counter,
       show (capOpenRecordTailPrefix state 5).getReg .x0 = 0 from rfl,
-      show ((17 : Word) == (0 : Word)) = false by decide, Bool.false_eq_true, ite_false,
+      show ((16 : Word) == (0 : Word)) = false by decide, Bool.false_eq_true, ite_false,
       MachineState.setPC]
     simp only [capOpenRecordTailPrefix, capOpenRecordTailInstructions,
       List.take, List.foldl, execInstrBr, MachineState.setPC, BitVec.add_assoc]

@@ -58,39 +58,39 @@ theorem cap_check_group_start_projection (state : MachineState) :
   rw [BitVec.add_zero]
 
 theorem cap_check_group_start_addresses (state : MachineState) (group : Nat)
-    (bounded : group < 128) (index : state.getReg .x20 = BitVec.ofNat 64 group)
-    (leaves : state.getReg .x19 = 128) (marks : state.getReg .x9 = 20480)
+    (bounded : group < 256) (index : state.getReg .x20 = BitVec.ofNat 64 group)
+    (leaves : state.getReg .x19 = 256) (marks : state.getReg .x9 = 28672)
     (roots : state.getReg .x18 = 12288) :
-    (capCheckGroupStartPrefix state 6).getReg .x20 = BitVec.ofNat 64 (128+group) ∧
+    (capCheckGroupStartPrefix state 6).getReg .x20 = BitVec.ofNat 64 (256+group) ∧
     (capCheckGroupStartPrefix state 6).getReg .x30 =
-      BitVec.ofNat 64 (20480+8*(128+group)) ∧
+      BitVec.ofNat 64 (28672+8*(256+group)) ∧
     (capCheckGroupStartPrefix state 6).getReg .x23 =
-      BitVec.ofNat 64 (12288+32*(128+group)) := by
+      BitVec.ofNat 64 (12288+32*(256+group)) := by
   have projected := cap_check_group_start_projection state
   rw [index, leaves, marks, roots] at projected
-  have add : BitVec.ofNat 64 group + (128 : Word) =
-      BitVec.ofNat 64 (128+group) := by
-    rw [show (128 : Word) = BitVec.ofNat 64 128 by rfl, ← BitVec.ofNat_add]
+  have add : BitVec.ofNat 64 group + (256 : Word) =
+      BitVec.ofNat 64 (256+group) := by
+    rw [show (256 : Word) = BitVec.ofNat 64 256 by rfl, ← BitVec.ofNat_add]
     congr 1
     omega
   rw [add] at projected
-  have shifted3 : BitVec.ofNat 64 (128+group) <<< 3 =
-      BitVec.ofNat 64 (8*(128+group)) := by
+  have shifted3 : BitVec.ofNat 64 (256+group) <<< 3 =
+      BitVec.ofNat 64 (8*(256+group)) := by
     rw [BitVec.shiftLeft_eq_mul_twoPow]
-    change BitVec.ofNat 64 (128+group) * BitVec.ofNat 64 8 = _
+    change BitVec.ofNat 64 (256+group) * BitVec.ofNat 64 8 = _
     rw [← BitVec.ofNat_mul]
     congr 1
     omega
-  have shifted5 : BitVec.ofNat 64 (128+group) <<< 5 =
-      BitVec.ofNat 64 (32*(128+group)) := by
+  have shifted5 : BitVec.ofNat 64 (256+group) <<< 5 =
+      BitVec.ofNat 64 (32*(256+group)) := by
     rw [BitVec.shiftLeft_eq_mul_twoPow]
-    change BitVec.ofNat 64 (128+group) * BitVec.ofNat 64 32 = _
+    change BitVec.ofNat 64 (256+group) * BitVec.ofNat 64 32 = _
     rw [← BitVec.ofNat_mul]
     congr 1
     omega
   refine ⟨projected.1, ?_, ?_⟩
   · rw [projected.2.1, shifted3]
-    exact (BitVec.ofNat_add (n := 64) 20480 _).symm
+    exact (BitVec.ofNat_add (n := 64) 28672 _).symm
   · rw [projected.2.2.1, shifted5]
     exact (BitVec.ofNat_add (n := 64) 12288 _).symm
 

@@ -12,7 +12,7 @@ set_option maxHeartbeats 200000
 theorem cap_open_loaded_batch_bytes
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
-    (capOpenLoadedBytes trapdoor positions).length ≤ 75776 := by
+    (capOpenLoadedBytes trapdoor positions).length ≤ 73728 := by
   have positive : 0 < positions.card := by rw [batch]; decide
   have boundary := cap_open_requested_boundary_bound positions positive
   rw [cap_open_loaded_bytes_length, batch]
@@ -22,7 +22,7 @@ theorem cap_open_loaded_batch_bytes
 theorem cap_open_result_batch_cycles
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
-    (capOpenNonemptyResult trapdoor positions).cycles ≤ 40395 :=
+    (capOpenNonemptyResult trapdoor positions).cycles ≤ 43275 :=
   cap_open_loaded_batch_cycles positions (by simpa only [BATCH] using batch)
 
 private theorem oracle_pure (oracle : Oracle) {α : Type} (value : α) :
@@ -45,8 +45,8 @@ theorem cap_open_batch_resources (oracle : Oracle)
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
     (prEvent ((fun result => result.1.exit = Exit.success ∧
-      result.1.cycles ≤ 40395 ∧ result.2 = 0 ∧
-      (capProgram.readProof result.1).length ≤ 75776) <$>
+      result.1.cycles ≤ 43275 ∧ result.2 = 0 ∧
+      (capProgram.readProof result.1).length ≤ 73728) <$>
       oracle.run (capProgram.run .opening (trapdoor, positions)))) = 1 := by
   have positive : 0 < positions.card := by rw [batch]; decide
   rw [cap_open_nonempty_program_run trapdoor positions positive, oracle_pure]
@@ -56,7 +56,7 @@ theorem cap_open_batch_resources (oracle : Oracle)
     cap_open_loaded_batch_bytes trapdoor positions batch]
   simp [capOpenNonemptyResult]
 
-theorem cap_program_proof_size : capProgram.scheme.ProofSize 75776 := by
+theorem cap_program_proof_size : capProgram.scheme.ProofSize 73728 := by
   intro oracle message positions batch
   unfold Scheme.honest
   apply le_antisymm (prEvent_le_one _)

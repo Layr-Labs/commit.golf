@@ -22,7 +22,7 @@ theorem cap_parent_answer_root (state : MachineState) (node : Nat)
 theorem cap_parent_answer_other_root (state : MachineState) (node other : Nat)
     (answer : BitVec 256) (roots : state.getReg .x18 = 12288)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (parentBound : node < 128) (otherBound : other < 256) (distinct : other ≠ node) :
+    (parentBound : node < 256) (otherBound : other < 512) (distinct : other ≠ node) :
     capReadRoot (capParentAnswerState state answer) other = capReadRoot state other := by
   unfold capReadRoot capParentAnswerState capCompressionAnswer
   rw [cap_parent_destination state node roots index]
@@ -37,7 +37,7 @@ theorem cap_parent_answer_other_root (state : MachineState) (node other : Nat)
 theorem cap_parent_answer_root_map (state : MachineState) (node : Nat)
     (answer : BitVec 256) (roots : state.getReg .x18 = 12288)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (parentBound : node < 128) (other : Nat) (otherBound : other < 256) :
+    (parentBound : node < 256) (other : Nat) (otherBound : other < 512) :
     capReadRoot (capParentAnswerState state answer) other =
       if other = node then answer else capReadRoot state other := by
   by_cases same : other = node
@@ -50,7 +50,7 @@ theorem cap_parent_answer_root_map (state : MachineState) (node : Nat)
 
 theorem cap_parent_query_roots (state : MachineState) (node : Nat)
     (roots : state.getReg .x18 = 12288)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 128) :
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
     capCompressionInput (capParentPrefix state 4) =
       .inl (capReadRoot state (2 * node + 1) ++ capReadRoot state (2 * node)) := by
   rw [cap_parent_query state node roots index bounded]

@@ -26,7 +26,7 @@ theorem cap_check_lower_record_collected (state finished : MachineState)
   constructor
   · intro group bounded
     have same := cap_check_lower_record_word_frame state finished scratch reachable
-      (capMarkAddress (128+group))
+      (capMarkAddress (256+group))
       (word_outside_scratch _ (by omega) (by omega))
     exact same.trans (ready.marks group bounded)
   · intro group bounded value known

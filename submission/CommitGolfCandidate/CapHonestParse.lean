@@ -7,8 +7,8 @@ namespace CommitGolfCandidate
 open CommitGolf
 set_option maxHeartbeats 200000
 
-private theorem sibling_lookup (sibling : Fin 17 → Digest) (suffix : List Digest)
-    (level : Fin 17) :
+private theorem sibling_lookup (sibling : Fin 16 → Digest) (suffix : List Digest)
+    (level : Fin 16) :
     ((List.ofFn sibling) ++ suffix)[level.val]?.getD 0 = sibling level := by
   rw [List.getElem?_eq_getElem (by simp; omega), List.getElem_append_left
     (by simp only [List.length_ofFn]; exact level.isLt), List.getElem_ofFn]
@@ -27,7 +27,7 @@ theorem cap_parse_encoded_lower (values : Index → Entry) (records : List CapLo
         intro entry member
         exact consistent entry (by simp [member])
       have tail := ih later
-      have siblings : (fun level : Fin 17 =>
+      have siblings : (fun level : Fin 16 =>
           ((List.ofFn record.sibling) ++
             (capLowerTranscript rest ++ suffix))[level.val]?.getD 0) =
               record.sibling := by
@@ -45,13 +45,13 @@ theorem cap_parse_encoded_lower (values : Index → Entry) (records : List CapLo
         (record.salt :: ((List.ofFn record.sibling) ++
           (capLowerTranscript rest ++ suffix))) = some (record :: rest, suffix)
       rw [capParseLower]
-      have enough : 17 ≤
+      have enough : 16 ≤
           ((List.ofFn record.sibling) ++ (capLowerTranscript rest ++ suffix)).length := by
         simp only [List.length_append, List.length_ofFn]
         omega
       rw [if_pos enough]
       have dropped : ((List.ofFn record.sibling) ++
-          (capLowerTranscript rest ++ suffix)).drop 17 =
+          (capLowerTranscript rest ++ suffix)).drop 16 =
           capLowerTranscript rest ++ suffix := by
         simpa only [List.length_ofFn] using
           (List.drop_left (l₁ := List.ofFn record.sibling)

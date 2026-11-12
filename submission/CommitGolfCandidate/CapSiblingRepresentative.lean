@@ -10,7 +10,7 @@ set_option autoImplicit false
 set_option maxHeartbeats 200000
 
 theorem cap_sibling_marked (leaves : Nat → Bool) (node : Nat)
-    (positive : 1 < node) (bounded : node < 256)
+    (positive : 1 < node) (bounded : node < 512)
     (parent : capTreeMarks leaves (node/2)=true)
     (absent : capTreeMarks leaves node=false) :
     capTreeMarks leaves (node ^^^ 1)=true := by
@@ -27,11 +27,11 @@ theorem cap_sibling_marked (leaves : Nat → Bool) (node : Nat)
     simpa only [left] using parent
 
 theorem cap_requested_descendant (positions : Positions) (height node : Nat)
-    (lower : 128 ≤ node*2^height) (upper : (node+1)*2^height ≤ 256)
+    (lower : 256 ≤ node*2^height) (upper : (node+1)*2^height ≤ 512)
     (marked : capOpenRequestedMarks positions node=true) :
     ∃ index ∈ positions,
-      node*2^height ≤ 128+(capGroup index).val ∧
-        128+(capGroup index).val < (node+1)*2^height := by
+      node*2^height ≤ 256+(capGroup index).val ∧
+        256+(capGroup index).val < (node+1)*2^height := by
   obtain ⟨leaf,left,right,seen⟩ :=
     (cap_mark_descendant
       (capOpenMarksSeen (capOpenRequestedIndices positions) positions.card)

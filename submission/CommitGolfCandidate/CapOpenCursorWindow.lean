@@ -12,16 +12,16 @@ set_option maxHeartbeats 200000
 def CapOpenCursorWindow (limit : Nat) (control : CapDfsControl)
     (state : MachineState) : Prop :=
   ∃ cursor : Nat, state.getReg .x25 = BitVec.ofNat 64 cursor ∧
-    cursor % 8 = 0 ∧ 22528 ≤ cursor ∧
-    cursor + 32 * (510 - capControlRank control) ≤ limit
+    cursor % 8 = 0 ∧ 32768 ≤ cursor ∧
+    cursor + 32 * (1022 - capControlRank control) ≤ limit
 
 theorem cap_open_cursor_initial (limit cursor : Nat) (control : CapDfsControl)
     (state : MachineState) (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (aligned : cursor % 8 = 0) (high : 22528 ≤ cursor)
-    (space : cursor + 32 * 510 ≤ limit) :
+    (aligned : cursor % 8 = 0) (high : 32768 ≤ cursor)
+    (space : cursor + 32 * 1022 ≤ limit) :
     CapOpenCursorWindow limit control state := by
   refine ⟨cursor, pointer, aligned, high, ?_⟩
-  have residual : 510 - capControlRank control ≤ 510 := Nat.sub_le _ _
+  have residual : 1022 - capControlRank control ≤ 1022 := Nat.sub_le _ _
   omega
 
 theorem cap_open_cursor_transport (marked : Nat → Bool) (limit : Nat)
@@ -55,7 +55,7 @@ noncomputable def cap_open_boundary_ready (marked : Nat → Bool)
     (valid : CapDfsControlValid control)
     (window : CapOpenCursorWindow limit control state)
     (limitBound : limit ≤ MEMORY_BYTES)
-    (rootBound : rootBase + 8192 ≤ MEMORY_BYTES)
+    (rootBound : rootBase + 16384 ≤ MEMORY_BYTES)
     (rootAligned : rootBase % 8 = 0)
     (node : Nat) (atNode : control = .visit node) :
     CapDfsBoundaryReady false state rootBase node := by
@@ -65,7 +65,7 @@ noncomputable def cap_open_boundary_ready (marked : Nat → Bool)
     rw [atNode]
     exact CapDfsControl.noConfusion
   have before := cap_control_rank_before_done control valid unfinished
-  have nodeBound : node < 256 := by
+  have nodeBound : node < 512 := by
     rw [atNode] at valid
     exact valid.2
   refine {

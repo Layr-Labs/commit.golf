@@ -84,7 +84,7 @@ theorem cap_check_input_empty (input : CheckInput)
 after twenty-nine instructions and thirty-two cycles. -/
 theorem cap_check_input_nonempty (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576 * input.positions.card ≤ input.proof.length)
+    (enough : 544 * input.positions.card ≤ input.proof.length)
     (nonempty : 0 < input.positions.card) (fuel : Nat) (allowCoins : Bool) :
     execute (capProgram.image .check) (29 + fuel)
       (capProgram.initialState .check input) allowCoins =

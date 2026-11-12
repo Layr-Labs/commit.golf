@@ -17,9 +17,9 @@ def capCheckLoadedRecord (input : CheckInput) (ordinal : Fin input.positions.car
     input.values ((input.positions.attach.sort (fun i j => i.val≤j.val))[ordinal.val]'(by
       simpa using ordinal.isLt)),
     readBuffer (capProgram.initialState .check input)
-      (capProgram.layout.proof+576*ordinal.val) 32,
+      (capProgram.layout.proof+544*ordinal.val) 32,
     fun level => readBuffer (capProgram.initialState .check input)
-      (capProgram.layout.proof+576*ordinal.val+32*(level.val+1)) 32⟩
+      (capProgram.layout.proof+544*ordinal.val+32*(level.val+1)) 32⟩
 
 def capCheckLoadedRecords (input : CheckInput) : List CapLowerRecord :=
   List.ofFn (capCheckLoadedRecord input)
@@ -36,9 +36,9 @@ theorem cap_check_loaded_records_element (input : CheckInput) (ordinal : Nat)
   exact List.getElem_ofFn _
 
 theorem cap_check_loaded_record_slot (input : CheckInput) (ordinal slot : Nat)
-    (present : ordinal < input.positions.card) (inside : slot<18) :
+    (present : ordinal < input.positions.card) (inside : slot<17) :
     readBuffer (capProgram.initialState .check input)
-      (capProgram.layout.proof+576*ordinal+32*slot) 32=
+      (capProgram.layout.proof+544*ordinal+32*slot) 32=
       (capLowerEncoding ((capCheckLoadedRecords input)[ordinal]'(by
         rw [cap_check_loaded_records_length]; exact present)))[slot]?.getD 0 := by
   rw [cap_check_loaded_records_element input ordinal present]
@@ -47,7 +47,7 @@ theorem cap_check_loaded_record_slot (input : CheckInput) (ordinal slot : Nat)
     simp only [capLowerEncoding,capCheckLoadedRecord,List.getElem?_cons_zero,
       Option.getD_some,Nat.mul_zero,Nat.add_zero]
   | succ slot =>
-    have level : slot<17 := by omega
+    have level : slot<16 := by omega
     simp only [capLowerEncoding,capCheckLoadedRecord,List.getElem?_cons_succ,
       List.getElem?_ofFn,level,↓reduceDIte,Option.getD_some]
 
@@ -56,16 +56,16 @@ theorem cap_check_loaded_transcript_slot (input : CheckInput) (ordinal : Nat)
     readBuffer (capProgram.initialState .check input)
       (capProgram.layout.proof+32*ordinal) 32=
       (capLowerTranscript (capCheckLoadedRecords input))[ordinal] := by
-  have row : ordinal/18 < input.positions.card := by
+  have row : ordinal/17 < input.positions.card := by
     rw [cap_lower_transcript_length,cap_check_loaded_records_length] at present
     omega
-  have column : ordinal%18<18 := Nat.mod_lt _ (by decide)
-  have recordPresent : ordinal/18<(capCheckLoadedRecords input).length := by
+  have column : ordinal%17<17 := Nat.mod_lt _ (by decide)
+  have recordPresent : ordinal/17<(capCheckLoadedRecords input).length := by
     rw [cap_check_loaded_records_length]; exact row
-  have same : 18*(ordinal/18)+ordinal%18=ordinal := by omega
-  have address : capProgram.layout.proof+576*(ordinal/18)+32*(ordinal%18)=
+  have same : 17*(ordinal/17)+ordinal%17=ordinal := by omega
+  have address : capProgram.layout.proof+544*(ordinal/17)+32*(ordinal%17)=
       capProgram.layout.proof+32*ordinal := by omega
-  have slot := cap_check_loaded_record_slot input (ordinal/18) (ordinal%18) row column
+  have slot := cap_check_loaded_record_slot input (ordinal/17) (ordinal%17) row column
   rw [address] at slot
   rw [← cap_transcript_slot _ _ _ recordPresent column,same,
     List.getElem?_eq_getElem present,Option.getD_some] at slot
@@ -73,19 +73,19 @@ theorem cap_check_loaded_transcript_slot (input : CheckInput) (ordinal : Nat)
 
 theorem cap_check_loaded_records_prefix (input : CheckInput)
     (admitted : input.proof.length≤capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length) :
-    input.proof.take (576*input.positions.card)=
+    (enough : 544*input.positions.card ≤ input.proof.length) :
+    input.proof.take (544*input.positions.card)=
       capDigestEncoding (capLowerTranscript (capCheckLoadedRecords input)) := by
   have encodingLength :
       (capDigestEncoding (capLowerTranscript (capCheckLoadedRecords input))).length=
-        576*input.positions.card := by
+        544*input.positions.card := by
     rw [cap_digest_encoding_length,cap_lower_transcript_length,
       cap_check_loaded_records_length]
     omega
   apply List.ext_getElem
   · rw [List.length_take,Nat.min_eq_left enough,encodingLength]
   · intro offset leftBound rightBound
-    have inside : offset<576*input.positions.card := by
+    have inside : offset<544*input.positions.card := by
       rw [encodingLength] at rightBound; exact rightBound
     have proofPresent : offset < input.proof.length := by omega
     have bytes := cap_slots_encoding (capProgram.initialState .check input)
@@ -100,9 +100,9 @@ theorem cap_check_loaded_records_prefix (input : CheckInput)
 
 theorem cap_check_loaded_records_parsed (input : CheckInput)
     (admitted : input.proof.length≤capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length) :
+    (enough : 544*input.positions.card ≤ input.proof.length) :
     CapCheckParsedRecords input (capCheckLoadedRecords input)
-      (input.proof.drop (576*input.positions.card)) := by
+      (input.proof.drop (544*input.positions.card)) := by
   refine ⟨?_,admitted,cap_check_loaded_records_length input,?_,?_⟩
   · rw [← cap_check_loaded_records_prefix input admitted enough,List.take_append_drop]
   · intro ordinal inside present

@@ -3,7 +3,7 @@ import CommitGolfCandidate.CapOpenPathPrepare
 /-! One actual lower-path iteration: prepare the sibling address, copy four
 words, advance the output cursor, move to the parent and decrement the bounded
 path counter. The copy access premises are checked at the actual prepared
-state. Honest path semantics and the seventeen-iteration loop are separate. -/
+state. Honest path semantics and the sixteen-iteration loop are separate. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096

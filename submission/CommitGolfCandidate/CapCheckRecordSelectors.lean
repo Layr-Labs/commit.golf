@@ -52,7 +52,7 @@ theorem cap_check_lower_record_selectors (state finished : MachineState)
     CapCheckSelectors finished := by
   simp only [capCheckLowerRecord,mem_support_bind_iff] at reachable
   obtain ⟨leaf,_,pathReachable⟩ := reachable
-  exact cap_check_path_loop_selectors _ 17 (by decide) finished pathReachable
+  exact cap_check_path_loop_selectors _ 16 (by decide) finished pathReachable
 
 theorem cap_check_record_run_selectors (state : MachineState) (result : MachineState × Bool)
     (reachable : result ∈ support (capCheckRecordRun state)) (passed : result.2=true) :

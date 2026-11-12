@@ -12,7 +12,7 @@ attribute [local irreducible] capOpenRecordsFinal capMarkMachinePass
 
 def capOpenMarkedFinal
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) : MachineState :=
-  capMarkMachinePass .x22 .x29 (capOpenRecordsFinal trapdoor positions) 128
+  capMarkMachinePass .x22 .x29 (capOpenRecordsFinal trapdoor positions) 256
 
 def capOpenTraversalInitial
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) : MachineState :=
@@ -21,10 +21,10 @@ def capOpenTraversalInitial
 theorem cap_open_marked_final_ready
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) :
-    CapMarkLoopReady .x22 4372 (capOpenMarkedFinal trapdoor positions) 128 0
+    CapMarkLoopReady .x22 4372 (capOpenMarkedFinal trapdoor positions) 256 0
       (capOpenRequestedMarks positions) := by
   have ready := cap_open_records_final_ready trapdoor positions positive
-  exact cap_mark_pass_finished .x22 .x29 _ 4364 128 _
+  exact cap_mark_pass_finished .x22 .x29 _ 4364 256 _
     (Or.inr rfl) (by decide) (by decide) (cap_tree_marks_parent _)
     (by simpa using ready.pc) ready.marks
     (cap_open_records_final_leaves trapdoor positions)
@@ -41,7 +41,7 @@ theorem cap_open_marked_final_register
     (outside : reg ≠ .x6 ∧ reg ≠ .x7 ∧ reg ≠ .x20 ∧ reg ≠ .x23 ∧ reg ≠ .x30) :
     (capOpenMarkedFinal trapdoor positions).getReg reg =
       (capOpenRecordsFinal trapdoor positions).getReg reg :=
-  cap_mark_pass_register .x22 .x29 _ 128 reg outside
+  cap_mark_pass_register .x22 .x29 _ 256 reg outside
 
 theorem cap_open_traversal_initial_control
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
@@ -69,16 +69,16 @@ theorem cap_open_traversal_initial_stable
 theorem cap_open_traversal_initial_marks
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) :
-    CapMarksReady (capOpenTraversalInitial trapdoor positions) 128 0
+    CapMarksReady (capOpenTraversalInitial trapdoor positions) 256 0
       (capOpenRequestedMarks positions) :=
-  cap_marks_ready_memory _ _ 128 0 _ (cap_open_walk_initial_memory _)
+  cap_marks_ready_memory _ _ 256 0 _ (cap_open_walk_initial_memory _)
     (cap_open_marked_final_ready trapdoor positions positive).ready
 
 theorem cap_open_traversal_initial_cursor
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) :
     (capOpenTraversalInitial trapdoor positions).getReg .x25 =
-      BitVec.ofNat 64 (capProgram.layout.proof+576*positions.card) := by
+      BitVec.ofNat 64 (capProgram.layout.proof+544*positions.card) := by
   have ready := cap_open_records_final_ready trapdoor positions positive
   have cursor := ready.cursor
   simp only [capOpenAbiRecordContext, capOpenRequestedIndices, Finset.length_sort,

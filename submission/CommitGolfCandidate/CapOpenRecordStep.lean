@@ -2,9 +2,9 @@ import CommitGolfCandidate.CapOpenRecordStart
 import CommitGolfCandidate.CapOpenPathFrame
 import CommitGolfCandidate.CapOpenGroupControl
 
-/-! One complete, checked opening record. It copies a salt and seventeen lower
+/-! One complete, checked opening record. It copies a salt and sixteen lower
 siblings, then sets the corresponding cap leaf mark. The loaded index bounds
-identify the final heap node; the macro charges exactly 278 ordinary cycles
+identify the final heap node; the macro charges exactly 263 ordinary cycles
 and makes no oracle query. Original input/serialized-byte refinements are
 proved separately from this runtime composition. -/
 namespace CommitGolfCandidate
@@ -13,7 +13,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 def capOpenRecordGroupState (state : MachineState) : MachineState :=
-  capCountedRun capOpenPathState 17 (capOpenRecordPathState state)
+  capCountedRun capOpenPathState 16 (capOpenRecordPathState state)
 
 def capOpenRecordState (state : MachineState) : MachineState :=
   capOpenGroupPrefix (capOpenRecordGroupState state) 6
@@ -25,7 +25,7 @@ theorem cap_open_record_group_register (state : MachineState) (reg : Reg)
       reg ≠ .x25 ∧ reg ≠ .x20 ∧ reg ≠ .x28) :
     (capOpenRecordGroupState state).getReg reg = state.getReg reg := by
   rw [capOpenRecordGroupState]
-  exact (cap_open_path_loop_register 17 _ reg outside).trans
+  exact (cap_open_path_loop_register 16 _ reg outside).trans
     (cap_open_record_path_register state reg
       ⟨outside.1, outside.2.2.2.2.1, outside.2.2.1,
         outside.2.2.2.1, outside.2.2.2.2.2⟩)
@@ -35,11 +35,11 @@ theorem cap_open_record_group_index (state : MachineState) (position : Nat)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 position)
     (leaves : state.getReg .x19 = 16777216) :
     (capOpenRecordGroupState state).getReg .x20 =
-      BitVec.ofNat 64 (128+position/131072) := by
-  rw [capOpenRecordGroupState, cap_open_path_loop_index 17 _
+      BitVec.ofNat 64 (256+position/65536) := by
+  rw [capOpenRecordGroupState, cap_open_path_loop_index 16 _
     (16777216+position) (by omega)
       (cap_open_record_path_index state position loaded leaves)]
-  have division : (16777216+position)/2^17 = 128+position/131072 := by
+  have division : (16777216+position)/2^16 = 256+position/65536 := by
     norm_num
     omega
   rw [division]
@@ -61,28 +61,28 @@ theorem cap_open_record_execute (state : MachineState)
     (saltAligned : saltBase % 8 = 0)
     (saltBound : saltBase+32*position+32 ≤ MEMORY_BYTES)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (cursorAligned : cursor % 8 = 0) (space : cursor+576 ≤ limit)
+    (cursorAligned : cursor % 8 = 0) (space : cursor+544 ≤ limit)
     (limitBound : limit ≤ MEMORY_BYTES)
     (leaves : state.getReg .x19 = 16777216)
-    (marks : state.getReg .x22 = 20480)
+    (marks : state.getReg .x22 = 28672)
     (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (278+fuel) state allowCoins =
+    execute ((capExperimental 24).image .opening) (263+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capOpenRecordState state) allowCoins
-          return result.charge 278 0) := by
+          return result.charge 263 0) := by
   have ready := cap_open_record_path_ready rootBase limit cursor position state
     pc roots pointer cursorAligned space positionBound loaded leaves
   have pathRun := cap_open_path_loop_execute rootBase limit rootBound rootAligned
-    limitBound 17 (capOpenRecordPathState state) ready (6+fuel) allowCoins
+    limitBound 16 (capOpenRecordPathState state) ready (6+fuel) allowCoins
   have groupPC : (capOpenRecordGroupState state).pc = 4340 := by
     rw [capOpenRecordGroupState]
-    exact (cap_open_path_loop_finished rootBase limit limitBound 17 _ ready).1
-  have groupMark : (capOpenRecordGroupState state).getReg .x22 = 20480 :=
+    exact (cap_open_path_loop_finished rootBase limit limitBound 16 _ ready).1
+  have groupMark : (capOpenRecordGroupState state).getReg .x22 = 28672 :=
     (cap_open_record_group_register state .x22 (by decide)).trans marks
   have groupIndex := cap_open_record_group_index state position positionBound loaded leaves
   have groupRun := cap_open_group_execute (capOpenRecordGroupState state)
-    (128+position/131072) groupPC groupMark groupIndex (by omega) fuel allowCoins
-  rw [show 278+fuel = 17+(15*17+(6+fuel)) by omega,
+    (256+position/65536) groupPC groupMark groupIndex (by omega) fuel allowCoins
+  rw [show 263+fuel = 17+(15*16+(6+fuel)) by omega,
     cap_open_record_start_execute state position saltBase cursor pc indexValid loaded
       salts pointer saltAligned saltBound cursorAligned (by omega),
     pathRun]

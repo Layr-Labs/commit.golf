@@ -12,13 +12,13 @@ set_option autoImplicit false
 
 theorem cap_insert_known_count (roots next : CapRootMap) (key : Nat)
     (value : Digest) (inserted : capInsert roots key value = some next) :
-    capMarkedCount (capKnownView next 7 0) ≤
-      capMarkedCount (capKnownView roots 7 0) + 1 := by
+    capMarkedCount (capKnownView next 8 0) ≤
+      capMarkedCount (capKnownView roots 8 0) + 1 := by
   classical
   rw [cap_known_view_card, cap_known_view_card]
   have subset :
-      (Finset.range 128).filter (fun group => (next group).isSome = true) ⊆
-        insert key ((Finset.range 128).filter (fun group => (roots group).isSome = true)) := by
+      (Finset.range 256).filter (fun group => (next group).isSome = true) ⊆
+        insert key ((Finset.range 256).filter (fun group => (roots group).isSome = true)) := by
     intro group member
     obtain ⟨inside, occupied⟩ := Finset.mem_filter.mp member
     rcases (cap_insert_domain roots next key group value inserted).mp occupied with same | old
@@ -33,8 +33,8 @@ theorem cap_check_record_supported_count (input : CheckInput)
     (result : MachineState × Bool) (reachable : result ∈ support (capCheckRecordRun state))
     (passed : result.2 = true) :
     ∃ next : CapRootMap, CapCheckCollected result.1 next ∧
-      capMarkedCount (capKnownView next 7 0) ≤
-        capMarkedCount (capKnownView roots 7 0) + 1 := by
+      capMarkedCount (capKnownView next 8 0) ≤
+        capMarkedCount (capKnownView roots 8 0) + 1 := by
   obtain ⟨index, bounded, loaded⟩ :=
     cap_check_records_ready_index input ordinal (remaining+1) state ready (by omega)
   obtain ⟨lower, lowerReachable, equal⟩ :=
@@ -47,17 +47,17 @@ theorem cap_check_record_supported_count (input : CheckInput)
   have groupPassed : (capCheckGroupResult lower).2 = true := by
     rw [← cap_check_record_result_passed]
     exact passed
-  have inserted := (cap_check_group_insert lower roots lowerCollected (index/2^17)
+  have inserted := (cap_check_group_insert lower roots lowerCollected (index/2^16)
     groupReady.bounded groupReady.index groupReady.leaves groupReady.marks
     groupReady.roots groupReady.scratch groupReady.one).mp groupPassed
-  cases insertion : capInsert roots (index/2^17) (readBuffer lower 256 32) with
+  cases insertion : capInsert roots (index/2^16) (readBuffer lower 256 32) with
   | none =>
     rw [insertion] at inserted
     contradiction
   | some next =>
-    exact ⟨next, cap_check_record_result_collected lower roots next (index/2^17)
+    exact ⟨next, cap_check_record_result_collected lower roots next (index/2^16)
       groupReady lowerCollected insertion, cap_insert_known_count roots next
-      (index/2^17) (readBuffer lower 256 32) insertion⟩
+      (index/2^16) (readBuffer lower 256 32) insertion⟩
 
 theorem cap_check_records_supported_count (input : CheckInput) (ordinal count : Nat)
     (state : MachineState) (ready : CapCheckRecordsReady input ordinal count state)
@@ -65,8 +65,8 @@ theorem cap_check_records_supported_count (input : CheckInput) (ordinal count : 
     (result : MachineState × Bool) (reachable : result ∈ support (capCheckRecordsRun count state))
     (passed : result.2 = true) :
     ∃ finalRoots : CapRootMap, CapCheckCollected result.1 finalRoots ∧
-      capMarkedCount (capKnownView finalRoots 7 0) ≤
-        capMarkedCount (capKnownView roots 7 0) + count := by
+      capMarkedCount (capKnownView finalRoots 8 0) ≤
+        capMarkedCount (capKnownView roots 8 0) + count := by
   induction count generalizing ordinal state roots with
   | zero =>
     simp only [capCheckRecordsRun, support_pure, Set.mem_singleton_iff] at reachable
@@ -96,10 +96,10 @@ theorem cap_check_records_empty_count (input : CheckInput) (count : Nat)
     (result : MachineState × Bool) (reachable : result ∈ support (capCheckRecordsRun count state))
     (passed : result.2 = true) :
     ∃ roots : CapRootMap, CapCheckCollected result.1 roots ∧
-      capMarkedCount (capKnownView roots 7 0) ≤ count := by
+      capMarkedCount (capKnownView roots 8 0) ≤ count := by
   obtain ⟨roots, finalCollected, bounded⟩ := cap_check_records_supported_count input 0
     count state ready (fun _ => none) collected result reachable passed
-  have empty : capMarkedCount (capKnownView (fun _ => none) 7 0) = 0 := by
+  have empty : capMarkedCount (capKnownView (fun _ => none) 8 0) = 0 := by
     rw [cap_known_view_card]
     simp
   exact ⟨roots, finalCollected, by simpa only [empty, Nat.zero_add] using bounded⟩

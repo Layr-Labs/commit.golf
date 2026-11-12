@@ -2,8 +2,8 @@ import CommitGolfCandidate.CapHonestLower
 import CommitGolfCandidate.CapOpenLowerBytes
 import Mathlib.Data.List.OfFn
 
-/-! Each loaded eighteen-digest record is precisely the honest salt and
-seventeen stored siblings. Flattening these records identifies the actual
+/-! Each loaded seventeen-digest record is precisely the honest salt and
+sixteen stored siblings. Flattening these records identifies the actual
 opening prefix with the logical lower-record transcript, including its order. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
@@ -16,17 +16,17 @@ def capHonestLowerRecords (message : Message) (committed : MachineState)
   (capOpenRequestedIndices positions).map (capHonestLowerRecord message committed)
 
 theorem cap_honest_lower_encoding_length (record : CapLowerRecord) :
-    (capLowerEncoding record).length = 18 := by
+    (capLowerEncoding record).length = 17 := by
   simp only [capLowerEncoding, List.length_cons, List.length_ofFn]
 
 private theorem encoding_sibling (record : CapLowerRecord) (level : Nat)
-    (inside : level < 17) :
+    (inside : level < 16) :
     (capLowerEncoding record)[level+1]'(by
       rw [cap_honest_lower_encoding_length]; omega) = record.sibling ⟨level, inside⟩ := by
   simp only [capLowerEncoding, List.getElem_cons_succ, List.getElem_ofFn]
 
 theorem cap_honest_lower_loaded_slot (message : Message) (committed : MachineState)
-    (positions : Positions) (index : Index) (slot : Nat) (inside : slot < 18) :
+    (positions : Positions) (index : Index) (slot : Nat) (inside : slot < 17) :
     readBuffer (capProgram.initialState .opening
       (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor, positions))
       (capLowerSlotAddress capOpenAbiRecordContext index.val slot) 32 =
@@ -62,7 +62,7 @@ theorem cap_honest_lower_loaded_slot (message : Message) (committed : MachineSta
 
 theorem cap_honest_lower_loaded_record (message : Message) (committed : MachineState)
     (positions : Positions) (index : Index) :
-    (List.ofFn fun slot : Fin 18 =>
+    (List.ofFn fun slot : Fin 17 =>
       readBuffer (capProgram.initialState .opening
         (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor, positions))
         (capLowerSlotAddress capOpenAbiRecordContext index.val slot.val) 32) =
@@ -100,8 +100,8 @@ theorem cap_honest_lower_loaded_transcript (message : Message) (committed : Mach
   rw [← cap_honest_lower_loaded_record message committed positions]
   apply congrArg List.ofFn
   funext slot
-  have divided : (18*ordinal.val+slot.val)/18 = ordinal.val := by omega
-  have remainder : (18*ordinal.val+slot.val)%18 = slot.val := by omega
+  have divided : (17*ordinal.val+slot.val)/17 = ordinal.val := by omega
+  have remainder : (17*ordinal.val+slot.val)%17 = slot.val := by omega
   simp only [divided, remainder]
 
 end CommitGolfCandidate

@@ -1,6 +1,6 @@
 import CommitGolfCandidate.CapDfsRank
 
-/-! Bounded canonical DFS control for a fixed height-seven cap. Marks may be
+/-! Bounded canonical DFS control for a fixed height-eight cap. Marks may be
 arbitrary: they determine pruning but cannot defeat termination. This pure
 control theorem still requires an instruction/memory refinement before it can
 bound the actual checker, particularly its early malformed-proof exits. -/
@@ -13,17 +13,17 @@ inductive CapDfsControl where
   deriving DecidableEq
 
 def CapDfsControlValid : CapDfsControl → Prop
-  | .visit node | .advance node => 0 < node ∧ node < 256
+  | .visit node | .advance node => 0 < node ∧ node < 512
   | .done => True
 
 def capControlRank : CapDfsControl → Nat
   | .visit node => capVisitRank node
   | .advance node => capAdvanceRank node
-  | .done => 510
+  | .done => 1022
 
 def capControlStep (marked : Nat → Bool) : CapDfsControl → CapDfsControl
   | .visit node =>
-      if marked node && decide (node < 128) then .visit (2 * node) else .advance node
+      if marked node && decide (node < 256) then .visit (2 * node) else .advance node
   | .advance node =>
       if node = 1 then .done
       else if node % 2 = 0 then .visit (node + 1) else .advance (node / 2)
@@ -39,8 +39,8 @@ theorem cap_control_step_valid (marked : Nat → Bool) (control : CapDfsControl)
       split
       · rename_i selected
         simp only [Bool.and_eq_true, decide_eq_true_eq] at selected
-        have internal : node < 128 := selected.2
-        change 0 < 2 * node ∧ 2 * node < 256
+        have internal : node < 256 := selected.2
+        change 0 < 2 * node ∧ 2 * node < 512
         omega
       · exact ⟨positive, bounded⟩
   | advance node =>
@@ -51,20 +51,20 @@ theorem cap_control_step_valid (marked : Nat → Bool) (control : CapDfsControl)
       · rename_i nonroot
         split
         · rename_i even
-          change 0 < node + 1 ∧ node + 1 < 256
+          change 0 < node + 1 ∧ node + 1 < 512
           omega
-        · change 0 < node / 2 ∧ node / 2 < 256
+        · change 0 < node / 2 ∧ node / 2 < 512
           omega
   | done => trivial
 
 theorem cap_control_rank_bounded (control : CapDfsControl)
-    (valid : CapDfsControlValid control) : capControlRank control ≤ 510 := by
+    (valid : CapDfsControlValid control) : capControlRank control ≤ 1022 := by
   cases control with
   | visit node =>
       obtain ⟨positive, bounded⟩ := valid
       have before := cap_visit_terminal_rank node positive bounded
       have last := cap_advance_rank_bounded node positive bounded
-      change capVisitRank node ≤ 510
+      change capVisitRank node ≤ 1022
       omega
   | advance node =>
       exact Nat.le_of_lt (cap_advance_rank_bounded node valid.1 valid.2)
@@ -72,7 +72,7 @@ theorem cap_control_rank_bounded (control : CapDfsControl)
 
 theorem cap_control_rank_before_done (control : CapDfsControl)
     (valid : CapDfsControlValid control) (unfinished : control ≠ .done) :
-    capControlRank control < 510 := by
+    capControlRank control < 1022 := by
   cases control with
   | visit node =>
       exact Nat.lt_trans (cap_visit_terminal_rank node valid.1 valid.2)
@@ -90,7 +90,7 @@ theorem cap_control_step_progress (marked : Nat → Bool) (control : CapDfsContr
       split
       · rename_i selected
         simp only [Bool.and_eq_true, decide_eq_true_eq] at selected
-        have internal : node < 128 := selected.2
+        have internal : node < 256 := selected.2
         change capVisitRank node < capVisitRank (2 * node)
         rw [cap_descend_rank node positive internal]
         omega
@@ -101,7 +101,7 @@ theorem cap_control_step_progress (marked : Nat → Bool) (control : CapDfsContr
       split
       · rename_i root
         subst node
-        change capAdvanceRank 1 < 510
+        change capAdvanceRank 1 < 1022
         have finished := cap_root_done_rank
         omega
       · rename_i nonroot
@@ -125,7 +125,7 @@ def capControlRun (marked : Nat → Bool) : Nat → CapDfsControl → CapDfsCont
 /-- Sufficient remaining rank budget completes every pruning shape. -/
 theorem cap_control_run_done (marked : Nat → Bool) (fuel : Nat)
     (control : CapDfsControl) (valid : CapDfsControlValid control)
-    (budget : 510 ≤ capControlRank control + fuel) :
+    (budget : 1022 ≤ capControlRank control + fuel) :
     capControlRun marked fuel control = .done := by
   induction fuel generalizing control with
   | zero =>
@@ -138,13 +138,13 @@ theorem cap_control_run_done (marked : Nat → Bool) (fuel : Nat)
       rw [capControlRun]
       by_cases finished : control = .done
       · subst control
-        exact ih .done trivial (by change 510 ≤ 510 + fuel; omega)
+        exact ih .done trivial (by change 1022 ≤ 1022 + fuel; omega)
       · have nextValid := cap_control_step_valid marked control valid
         have progress := cap_control_step_progress marked control valid finished
         exact ih _ nextValid (by omega)
 
 theorem cap_control_complete (marked : Nat → Bool) :
-    capControlRun marked 510 (.visit 1) = .done :=
-  cap_control_run_done marked 510 (.visit 1) (by constructor <;> decide) (by omega)
+    capControlRun marked 1022 (.visit 1) = .done :=
+  cap_control_run_done marked 1022 (.visit 1) (by constructor <;> decide) (by omega)
 
 end CommitGolfCandidate

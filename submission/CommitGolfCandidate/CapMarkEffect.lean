@@ -58,7 +58,7 @@ theorem cap_mark_counter (marks : Reg) (state : MachineState) (node : Nat)
 theorem cap_mark_latch_pc (marks : Reg) (state : MachineState) (start : Word)
     (node : Nat) (pc : state.pc = start)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 128) :
+    (positive : 0 < node) (bounded : node < 256) :
     (capMarkPrefix marks state 10).pc = if node = 1 then start + 40 else start := by
   have counter : (capMarkPrefix marks state 9).getReg .x20 =
       BitVec.ofNat 64 (node - 1) := by

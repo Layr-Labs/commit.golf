@@ -178,8 +178,7 @@ def group341ParentCode : List Asm :=
   [.branch 1 12 9 "commit-parent-group-continue",.jump 0 "commit-root",
     .label "commit-parent-group-continue",.jump 0 "commit-parent-group341"]
 
-/-- Fixed-depth setup for the delivered challenge image. Other-depth assembler
-definitions remain reference code and are not certified by this submission. -/
+/-- Fixed-depth commitment image; other depths retain reference assembly. -/
 def compactSetupCode : List Asm :=
   [mv 8 10,mv 26 11,mv 9 12,insn (16777216+19*2^7+0x37),
    insn (1073741824+6*2^7+0x37),regop 18 9 6,

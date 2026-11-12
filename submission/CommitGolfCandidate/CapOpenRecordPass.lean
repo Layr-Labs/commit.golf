@@ -16,11 +16,11 @@ private theorem charge_pair (result : Execution) (first second : Nat) :
 theorem cap_open_record_pass_execute
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) (fuel : Nat) (allowCoins : Bool) :
-    execute (capProgram.image .opening) (29+278*positions.card+fuel)
+    execute (capProgram.image .opening) (29+263*positions.card+fuel)
       (capProgram.initialState .opening (trapdoor, positions)) allowCoins =
       (do let result ← execute (capProgram.image .opening) fuel
             (capOpenRecordsFinal trapdoor positions) allowCoins
-          return result.charge (29+278*positions.card) 0) := by
+          return result.charge (29+263*positions.card) 0) := by
   have windows := cap_open_abi_record_windows positions
   have loop := cap_open_records_loop_execute capOpenAbiRecordContext
     (capOpenRequestedIndices positions)
@@ -28,12 +28,12 @@ theorem cap_open_record_pass_execute
     windows.1 windows.2.1 windows.2.2
     (cap_open_abi_record_inputs trapdoor positions) positions.card _
     (cap_open_abi_record_ready trapdoor positions positive) fuel allowCoins
-  have loop' : execute (capProgram.image .opening) (278*positions.card+fuel)
+  have loop' : execute (capProgram.image .opening) (263*positions.card+fuel)
       (capOpenInitializedState (capProgram.initialState .opening (trapdoor, positions)))
       allowCoins =
     (do let result ← execute (capProgram.image .opening) fuel
           (capOpenRecordsFinal trapdoor positions) allowCoins
-        return result.charge (278*positions.card) 0) := by
+        return result.charge (263*positions.card) 0) := by
     simpa only [capProgram, LOG_LENGTH, capOpenRecordsFinal] using loop
   rw [Nat.add_assoc, cap_open_setup_execute _ rfl]
   rw [loop']

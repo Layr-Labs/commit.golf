@@ -11,19 +11,19 @@ set_option maxHeartbeats 200000
 
 def capOpenFinalState
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) : MachineState :=
-  capOpenDfsFinal (capOpenRequestedMarks positions) 510 (.visit 1)
+  capOpenDfsFinal (capOpenRequestedMarks positions) 1022 (.visit 1)
     (capOpenTraversalInitial trapdoor positions)
 
 def capOpenNonemptyResult
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) : Execution :=
   ⟨.success, capOpenExitState (capOpenFinalState trapdoor positions),
-    29+278*positions.card+1272+2+
-      capDfsCycleTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+4, 0⟩
+    29+263*positions.card+2552+2+
+      capDfsCycleTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4, 0⟩
 
 theorem cap_open_final_state_support
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) :
     capOpenFinalState trapdoor positions ∈ support
-      (capDfsRun false (capOpenRequestedMarks positions) 510 (.visit 1)
+      (capDfsRun false (capOpenRequestedMarks positions) 1022 (.visit 1)
         (capOpenTraversalInitial trapdoor positions)) := by
   rw [cap_open_dfs_run_pure]
   simp only [capOpenFinalState, support_pure, Set.mem_singleton_iff]
@@ -39,7 +39,7 @@ theorem cap_open_nonempty_result_length
 theorem cap_open_loaded_bytes_capacity
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) :
     (capOpenLoadedBytes trapdoor positions).length ≤ capProgram.sizes.proof := by
-  have count := cap_control_boundaries_length (capOpenRequestedMarks positions) 510 (.visit 1)
+  have count := cap_control_boundaries_length (capOpenRequestedMarks positions) 1022 (.visit 1)
   have space := (cap_open_abi_output_space positions).1
   rw [cap_open_loaded_bytes_length]
   simp only [capOpenBoundaryDigests, List.length_map]

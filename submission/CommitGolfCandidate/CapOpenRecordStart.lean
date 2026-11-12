@@ -3,7 +3,7 @@ import CommitGolfCandidate.CapOpenPathLoop
 
 /-! Checked record entry through its salt digest and lower-path setup. The
 loaded position is related to the ABI separately. Every salt/output access is
-admitted here, and the seventeen-step loop readiness uses actual register
+admitted here, and the sixteen-step loop readiness uses actual register
 projections rather than a fresh abstract machine state. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -64,11 +64,11 @@ theorem cap_open_record_path_ready (rootBase limit cursor position : Nat)
     (state : MachineState) (pc : state.pc = 4212)
     (roots : state.getReg .x9 = BitVec.ofNat 64 rootBase)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (aligned : cursor % 8 = 0) (space : cursor+576 ≤ limit)
+    (aligned : cursor % 8 = 0) (space : cursor+544 ≤ limit)
     (bounded : position < 16777216)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 position)
     (leaves : state.getReg .x19 = 16777216) :
-    CapOpenPathReady rootBase limit 17 (capOpenRecordPathState state) := by
+    CapOpenPathReady rootBase limit 16 (capOpenRecordPathState state) := by
   refine ⟨(cap_open_record_path_register state .x9 (by decide)).trans roots, ?_,
     cap_open_record_path_pc state pc, by decide, ?_, ?_⟩
   · rw [capOpenRecordPathState]

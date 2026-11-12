@@ -12,18 +12,18 @@ set_option maxHeartbeats 200000
 
 theorem cap_open_boundary_length (compress : Compression) (roots : Nat → Digest)
     (marked : Nat → Bool)
-    (hashParents : ∀ node, 0 < node → node < 128 →
+    (hashParents : ∀ node, 0 < node → node < 256 →
       roots node = combine compress (roots (2*node)) (roots (2*node+1)))
-    (markParents : ∀ node, 0 < node → node < 128 →
+    (markParents : ∀ node, 0 < node → node < 256 →
       marked node = (marked (2*node) || marked (2*node+1)))
     (nonempty : marked 1 = true) :
-    (capControlBoundaries marked 510 (.visit 1)).length ≤ 64 := by
+    (capControlBoundaries marked 1022 (.visit 1)).length ≤ 128 := by
   have selected := congrArg List.length
     (cap_heap_serialization compress roots marked hashParents markParents)
   simp only [List.length_map] at selected
   rw [selected]
   apply cap_occupied_proof_bound
-  exact (cap_heap_view_occupied roots marked markParents 7 1
+  exact (cap_heap_view_occupied roots marked markParents 8 1
     (by decide) (by decide)).trans nonempty
 
 theorem cap_open_step_base (marked : Nat → Bool) (control : CapDfsControl)
@@ -80,27 +80,27 @@ theorem cap_open_run_base (marked : Nat → Bool) (count : Nat)
 
 theorem cap_open_batch_report_bound (compress : Compression) (roots : Nat → Digest)
     (marked : Nat → Bool)
-    (hashParents : ∀ node, 0 < node → node < 128 →
+    (hashParents : ∀ node, 0 < node → node < 256 →
       roots node = combine compress (roots (2*node)) (roots (2*node+1)))
-    (markParents : ∀ node, 0 < node → node < 128 →
+    (markParents : ∀ node, 0 < node → node < 256 →
       marked node = (marked (2*node) || marked (2*node+1)))
     (nonempty : marked 1 = true)
     (state final : MachineState)
     (base : state.getReg .x15 = BitVec.ofNat 64 capProgram.layout.proof)
     (prefixCursor : state.getReg .x25 =
-      BitVec.ofNat 64 (capProgram.layout.proof + 576*128))
-    (reached : final ∈ support (capDfsRun false marked 510 (.visit 1) state)) :
-    ((capOpenExitState final).getReg .x11).toNat ≤ 75776 := by
-  let boundaries := (capControlBoundaries marked 510 (.visit 1)).length
-  have bounded : boundaries ≤ 64 :=
+      BitVec.ofNat 64 (capProgram.layout.proof + 544*128))
+    (reached : final ∈ support (capDfsRun false marked 1022 (.visit 1) state)) :
+    ((capOpenExitState final).getReg .x11).toNat ≤ 73728 := by
+  let boundaries := (capControlBoundaries marked 1022 (.visit 1)).length
+  have bounded : boundaries ≤ 128 :=
     cap_open_boundary_length compress roots marked hashParents markParents nonempty
-  have start := (cap_open_run_base marked 510 (.visit 1) state final reached).trans base
-  have finish := cap_open_run_cursor_count marked 510 (.visit 1) state final
-    (capProgram.layout.proof + 576*128) prefixCursor reached
+  have start := (cap_open_run_base marked 1022 (.visit 1) state final reached).trans base
+  have finish := cap_open_run_cursor_count marked 1022 (.visit 1) state final
+    (capProgram.layout.proof + 544*128) prefixCursor reached
   have cursor : final.getReg .x25 =
-      BitVec.ofNat 64 (capProgram.layout.proof + (576*128 + 32*boundaries)) := by
+      BitVec.ofNat 64 (capProgram.layout.proof + (544*128 + 32*boundaries)) := by
     simpa only [Nat.add_assoc] using finish
-  have noWrap : capProgram.layout.proof + (576*128 + 32*boundaries) < 2^64 := by
+  have noWrap : capProgram.layout.proof + (544*128 + 32*boundaries) < 2^64 := by
     norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
       LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES]
     omega

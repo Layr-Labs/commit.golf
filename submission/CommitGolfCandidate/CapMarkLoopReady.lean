@@ -7,7 +7,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 structure CapMarkLoopReady (marks : Reg) (start : Word) (state : MachineState)
     (leaves remaining : Nat) (marked : Nat → Bool) : Prop where
-  base : state.getReg marks = 20480
+  base : state.getReg marks = 28672
   index : state.getReg .x20 = BitVec.ofNat 64 remaining
   pc : state.pc = if remaining = 0 then start + 40 else start
   ready : CapMarksReady state leaves remaining marked
@@ -25,10 +25,10 @@ theorem cap_mark_one_iff (leaves : Nat) (positive : 0 < leaves) :
 
 theorem cap_mark_ready_transport (marks : Reg) (start : Word)
     (state next : MachineState) (leaves node : Nat) (marked : Nat → Bool)
-    (bounded : leaves ≤ 128) (positive : 0 < node) (internal : node < leaves)
+    (bounded : leaves ≤ 256) (positive : 0 < node) (internal : node < leaves)
     (equation : marked node = (marked (2 * node) || marked (2 * node + 1)))
     (ready : CapMarksReady state leaves node marked)
-    (base : next.getReg marks = 20480)
+    (base : next.getReg marks = 28672)
     (index : next.getReg .x20 = BitVec.ofNat 64 (node - 1))
     (pc : next.pc = if node = 1 then start + 40 else start)
     (memory : next.mem = (capMarkWrite state node).mem) :

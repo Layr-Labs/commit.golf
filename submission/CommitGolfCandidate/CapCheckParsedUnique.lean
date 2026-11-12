@@ -1,7 +1,7 @@
 import CommitGolfCandidate.CapCheckLoadedRecords
 
 /-! An admitted encoded record list is exactly the list read by the checker
-loader. Indices and values come from the ABI; the eighteen proof slots fix
+loader. Indices and values come from the ABI; the seventeen proof slots fix
 salt and siblings. The arbitrary byte suffix is preserved. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
@@ -20,7 +20,7 @@ private theorem record_ext (left right : CapLowerRecord)
 private theorem encoding_salt (record : CapLowerRecord) :
     (capLowerEncoding record)[0]?.getD 0=record.salt := rfl
 
-private theorem encoding_sibling (record : CapLowerRecord) (level : Fin 17) :
+private theorem encoding_sibling (record : CapLowerRecord) (level : Fin 16) :
     (capLowerEncoding record)[level.val+1]?.getD 0=record.sibling level := by
   simp only [capLowerEncoding,List.getElem?_cons_succ,List.getElem?_ofFn,
     level.isLt,↓reduceDIte,Option.getD_some]
@@ -35,7 +35,7 @@ theorem cap_check_parsed_records_unique (input : CheckInput)
     have present : ordinal < input.positions.card := by
       rw [cap_check_loaded_records_length] at loadedBound
       exact loadedBound
-    have slots : ∀ slot < 18,
+    have slots : ∀ slot < 17,
         (capLowerEncoding (capCheckLoadedRecords input)[ordinal])[slot]?.getD 0=
           (capLowerEncoding records[ordinal])[slot]?.getD 0 := by
       intro slot inside

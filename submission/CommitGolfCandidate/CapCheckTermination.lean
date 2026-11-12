@@ -46,19 +46,19 @@ theorem cap_check_dfs_finish_terminated (marked : Nat → Bool)
 
 theorem cap_check_post_records_terminated (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length)
+    (enough : 544*input.positions.card ≤ input.proof.length)
     (ordinal : Nat) (state : MachineState)
     (ready : CapCheckRecordsReady input ordinal 0 state)
     (roots : CapRootMap) (collected : CapCheckCollected state roots)
     (selectors : CapCheckSelectors state)
-    (fuel : Nat) (sufficient : 9961 ≤ fuel) (allowCoins : Bool)
+    (fuel : Nat) (sufficient : 19945 ≤ fuel) (allowCoins : Bool)
     (result : Execution)
     (reached : result ∈ support
       (execute (capProgram.image .check) fuel state allowCoins)) :
     result.exit ≠ .unfinished := by
   have execution := cap_check_post_records_execute input ordinal state ready roots collected
-    selectors admitted enough (fuel-1274) (by omega) allowCoins
-  rw [show 1274+(fuel-1274)=fuel by omega] at execution
+    selectors admitted enough (fuel-2554) (by omega) allowCoins
+  rw [show 2554+(fuel-2554)=fuel by omega] at execution
   rw [execution] at reached
   obtain ⟨finished,finishedReached,returned⟩ :=
     (mem_support_bind_iff _ _ _).mp reached
@@ -68,12 +68,12 @@ theorem cap_check_post_records_terminated (input : CheckInput)
 
 theorem cap_check_records_continue_terminated (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length)
+    (enough : 544*input.positions.card ≤ input.proof.length)
     (ordinal count : Nat) (state : MachineState)
     (ready : CapCheckRecordsReady input ordinal count state)
     (roots : CapRootMap) (collected : CapCheckCollected state roots)
     (zeroSelectors : count=0 → CapCheckSelectors state)
-    (fuel : Nat) (sufficient : 671*count+9961 ≤ fuel) (allowCoins : Bool)
+    (fuel : Nat) (sufficient : 671*count+19945 ≤ fuel) (allowCoins : Bool)
     (result : Execution)
     (reached : result ∈ support (capCheckRecordsContinue count state fuel allowCoins)) :
     result.exit ≠ .unfinished := by
@@ -124,7 +124,7 @@ theorem cap_check_program_terminated (input : CheckInput) (result : Execution)
       else pure ⟨.failure,initialMachine,0,0⟩) at reached
     simp only [admitted,decide_true,ite_true] at reached
     have sufficient := cap_check_program_fuel input
-    by_cases enough : 576*input.positions.card ≤ input.proof.length
+    by_cases enough : 544*input.positions.card ≤ input.proof.length
     · by_cases empty : input.positions.card=0
       · have execution := cap_check_input_empty input admitted empty
           (capProgram.steps .check-16) false

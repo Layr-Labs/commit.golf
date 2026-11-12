@@ -7,9 +7,9 @@ namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 theorem cap_mark_child_pointer (node : Nat) :
-    (20480 : Word) + (BitVec.ofNat 64 node <<< 4) = capMarkAddress (2 * node) := by
+    (28672 : Word) + (BitVec.ofNat 64 node <<< 4) = capMarkAddress (2 * node) := by
   rw [BitVec.shiftLeft_eq_mul_twoPow]
-  change BitVec.ofNat 64 20480 + BitVec.ofNat 64 node * BitVec.ofNat 64 16 = _
+  change BitVec.ofNat 64 28672 + BitVec.ofNat 64 node * BitVec.ofNat 64 16 = _
   rw [← BitVec.ofNat_mul, ← BitVec.ofNat_add]
   unfold capMarkAddress
   congr 1
@@ -17,15 +17,15 @@ theorem cap_mark_child_pointer (node : Nat) :
 
 theorem cap_mark_right_pointer (node : Nat) :
     capMarkAddress (2 * node) + 8 = capMarkAddress (2 * node + 1) := by
-  change BitVec.ofNat 64 (20480 + 8 * (2 * node)) + BitVec.ofNat 64 8 = _
+  change BitVec.ofNat 64 (28672 + 8 * (2 * node)) + BitVec.ofNat 64 8 = _
   rw [← BitVec.ofNat_add]
   unfold capMarkAddress
   congr 1
 
 theorem cap_mark_parent_pointer (node : Nat) :
-    (20480 : Word) + (BitVec.ofNat 64 node <<< 3) = capMarkAddress node := by
+    (28672 : Word) + (BitVec.ofNat 64 node <<< 3) = capMarkAddress node := by
   rw [BitVec.shiftLeft_eq_mul_twoPow]
-  change BitVec.ofNat 64 20480 + BitVec.ofNat 64 node * BitVec.ofNat 64 8 = _
+  change BitVec.ofNat 64 28672 + BitVec.ofNat 64 node * BitVec.ofNat 64 8 = _
   rw [← BitVec.ofNat_mul, ← BitVec.ofNat_add]
   unfold capMarkAddress
   congr 1
@@ -40,7 +40,7 @@ theorem cap_mark_decrement (node : Nat) (positive : 0 < node) :
   rw [BitVec.ofNat_add, BitVec.add_assoc]
   simp
 
-theorem cap_mark_last_iff (node : Nat) (positive : 0 < node) (bounded : node < 128) :
+theorem cap_mark_last_iff (node : Nat) (positive : 0 < node) (bounded : node < 256) :
     BitVec.ofNat 64 (node - 1) = 0 ↔ node = 1 := by
   constructor
   · intro equal

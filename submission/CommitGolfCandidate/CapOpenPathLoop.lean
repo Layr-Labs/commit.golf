@@ -13,7 +13,7 @@ structure CapOpenPathReady (rootBase limit remaining : Nat) (state : MachineStat
   roots : state.getReg .x9 = BitVec.ofNat 64 rootBase
   counter : state.getReg .x28 = BitVec.ofNat 64 remaining
   pc : state.pc = if remaining = 0 then 4340 else 4280
-  bounded : remaining ≤ 17
+  bounded : remaining ≤ 16
   node : ∃ node, node < 33554432 ∧ state.getReg .x20 = BitVec.ofNat 64 node
   cursor : ∃ cursor, state.getReg .x25 = BitVec.ofNat 64 cursor ∧
     cursor % 8 = 0 ∧ cursor + 32*remaining ≤ limit
@@ -28,9 +28,9 @@ theorem cap_open_path_ready_next (rootBase limit remaining : Nat) (state : Machi
   have currentPC : state.pc = 4280 := by simpa using ready.pc
   refine ⟨(cap_open_path_register state .x9 (by decide)).trans ready.roots, ?_, ?_,
     by omega, ?_, ?_⟩
-  · simpa using cap_open_path_counter state (remaining+1) (by omega) ready.bounded ready.counter
+  · simpa using cap_open_path_counter state (remaining+1) (by omega) (by omega) ready.counter
   · have done := cap_open_path_exit state (remaining+1) currentPC
-      (by omega) ready.bounded ready.counter
+      (by omega) (by omega) ready.counter
     simpa using done
   · exact ⟨node/2, by omega,
       cap_open_path_index state node (by omega) index⟩

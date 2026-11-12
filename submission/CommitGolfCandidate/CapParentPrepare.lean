@@ -86,7 +86,7 @@ theorem cap_parent_destination (state : MachineState) (node : Nat)
     roots, index, show (5 : BitVec 6).toNat = 5 by decide]
   exact root_pointer node 5 32 (by decide)
 
-theorem cap_parent_access (node : Nat) (bounded : node < 128) :
+theorem cap_parent_access (node : Nat) (bounded : node < 256) :
     rangeValid (BitVec.ofNat 64 (12288 + 64 * node)) 64 = true ∧
     rangeValid (capRootAddress node) 32 = true ∧
     (BitVec.ofNat 64 (12288 + 64 * node)).toNat % 8 = 0 ∧

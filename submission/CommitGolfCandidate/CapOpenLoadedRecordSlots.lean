@@ -12,9 +12,9 @@ set_option maxHeartbeats 200000
 theorem cap_open_loaded_record_slot
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) (ordinal : Nat) (inside : ordinal < positions.card)
-    (slot : Nat) (slotBound : slot < 18) :
+    (slot : Nat) (slotBound : slot < 17) :
     readBuffer (capOpenRecordsFinal trapdoor positions)
-      (capProgram.layout.proof+576*ordinal+32*slot) 32 =
+      (capProgram.layout.proof+544*ordinal+32*slot) 32 =
       readBuffer (capProgram.initialState .opening (trapdoor, positions))
         (capLowerSlotAddress capOpenAbiRecordContext
           ((capOpenRequestedIndices positions)[ordinal]'(by

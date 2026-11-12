@@ -14,7 +14,7 @@ set_option autoImplicit false
 attribute [local irreducible] capMarkMachinePass capMarkLoopRun capCountedRun
 
 def capCheckMarkedFinal (state : MachineState) : MachineState :=
-  capMarkMachinePass .x9 .x19 state 128
+  capMarkMachinePass .x9 .x19 state 256
 
 def capCheckTraversalInitial (state : MachineState) : MachineState :=
   capCheckWalkInitial (capCheckMarkedFinal state)
@@ -22,7 +22,7 @@ def capCheckTraversalInitial (state : MachineState) : MachineState :=
 theorem cap_check_marked_final_register (state : MachineState) (reg : Reg)
     (outside : reg ≠ .x6 ∧ reg ≠ .x7 ∧ reg ≠ .x20 ∧ reg ≠ .x23 ∧ reg ≠ .x30) :
     (capCheckMarkedFinal state).getReg reg=state.getReg reg :=
-  cap_mark_pass_register .x9 .x19 state 128 reg outside
+  cap_mark_pass_register .x9 .x19 state 256 reg outside
 
 theorem cap_check_marked_final_pc (input : CheckInput) (ordinal : Nat)
     (state : MachineState) (ready : CapCheckRecordsReady input ordinal 0 state)
@@ -61,8 +61,8 @@ theorem cap_check_traversal_initial_stable (input : CheckInput) (ordinal : Nat)
 theorem cap_check_traversal_initial_marks (input : CheckInput) (ordinal : Nat)
     (state : MachineState) (ready : CapCheckRecordsReady input ordinal 0 state)
     (roots : CapRootMap) (collected : CapCheckCollected state roots) :
-    CapMarksReady (capCheckTraversalInitial state) 128 0 (capCheckCollectedMarks roots) :=
-  cap_marks_ready_memory _ _ 128 0 _ (cap_check_walk_initial_memory _)
+    CapMarksReady (capCheckTraversalInitial state) 256 0 (capCheckCollectedMarks roots) :=
+  cap_marks_ready_memory _ _ 256 0 _ (cap_check_walk_initial_memory _)
     (cap_check_filled_mark_finished input ordinal state ready roots collected).ready
 
 theorem cap_check_traversal_initial_high (input : CheckInput) (ordinal : Nat)
@@ -75,7 +75,7 @@ theorem cap_check_traversal_initial_high (input : CheckInput) (ordinal : Nat)
 theorem cap_check_traversal_initial_cursor (input : CheckInput) (ordinal : Nat)
     (state : MachineState) (ready : CapCheckRecordsReady input ordinal 0 state) :
     (capCheckTraversalInitial state).getReg .x25=
-      BitVec.ofNat 64 (capProgram.layout.proof+576*ordinal) :=
+      BitVec.ofNat 64 (capProgram.layout.proof+544*ordinal) :=
   (cap_check_walk_initial_register _ .x25 (by decide)).trans
     ((cap_check_marked_final_register state .x25 (by decide)).trans ready.proof)
 

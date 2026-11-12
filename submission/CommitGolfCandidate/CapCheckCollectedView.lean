@@ -11,19 +11,19 @@ set_option autoImplicit false
 
 theorem cap_check_collected_view_leaves (state : MachineState) (roots : CapRootMap)
     (collected : CapCheckCollected state roots) (height offset node : Nat)
-    (address : offset+128=node*2^height)
-    (bounded : offset+2^height≤128) :
+    (address : offset+256=node*2^height)
+    (bounded : offset+2^height≤256) :
     CapCheckKnownLeaves state node (capKnownView roots height offset) := by
   induction height generalizing offset node with
   | zero =>
-    have nodeEq : node=offset+128 := by simpa using address.symm
-    have offsetBound : offset<128 := by
-      have bound : offset+1≤128 := by simpa using bounded
+    have nodeEq : node=offset+256 := by simpa using address.symm
+    have offsetBound : offset<256 := by
+      have bound : offset+1≤256 := by simpa using bounded
       omega
     intro digest known
     have payload : roots offset=some digest := known
     have stored := collected.roots offset offsetBound digest payload
-    simpa only [capReadRoot,capCheckRootAddress,nodeEq,Nat.add_comm offset 128] using stored
+    simpa only [capReadRoot,capCheckRootAddress,nodeEq,Nat.add_comm offset 256] using stored
   | succ height ih =>
     have power := Nat.two_pow_pos height
     have address' := address
@@ -35,7 +35,7 @@ theorem cap_check_collected_view_leaves (state : MachineState) (roots : CapRootM
 
 theorem cap_check_collected_root_view (state : MachineState) (roots : CapRootMap)
     (collected : CapCheckCollected state roots) :
-    CapCheckKnownLeaves state 1 (capKnownView roots 7 0) :=
-  cap_check_collected_view_leaves state roots collected 7 0 1 (by decide) (by decide)
+    CapCheckKnownLeaves state 1 (capKnownView roots 8 0) :=
+  cap_check_collected_view_leaves state roots collected 8 0 1 (by decide) (by decide)
 
 end CommitGolfCandidate

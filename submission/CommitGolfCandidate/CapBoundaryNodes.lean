@@ -1,6 +1,6 @@
 import CommitGolfCandidate.CapDfsBoundaryOrder
 
-/-! Every emitted unknown node is a real node of the fixed seven-level cap.
+/-! Every emitted unknown node is a real node of the fixed eight-level cap.
 The bound depends only on control validity, not root values or replies. -/
 namespace CommitGolfCandidate
 
@@ -22,7 +22,7 @@ theorem cap_control_boundaries_length (marked : Nat → Bool) (count : Nat)
 theorem cap_control_boundaries_nodes (marked : Nat → Bool) (count : Nat)
     (control : CapDfsControl) (valid : CapDfsControlValid control)
     (node : Nat) (member : node ∈ capControlBoundaries marked count control) :
-    0 < node ∧ node < 256 := by
+    0 < node ∧ node < 512 := by
   induction count generalizing control with
   | zero => simp [capControlBoundaries] at member
   | succ count ih =>

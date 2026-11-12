@@ -28,8 +28,8 @@ theorem cap_control_boundaries_add (marked : Nat → Bool) (first second : Nat)
       simp only [Nat.succ_add, capControlBoundaries, capControlRun, ih, List.append_assoc]
 
 theorem cap_subtree_boundary_order (marked : Nat → Bool) (height node : Nat)
-    (lower : 128 ≤ node * 2^height)
-    (upper : (node + 1) * 2^height ≤ 256) :
+    (lower : 256 ≤ node * 2^height)
+    (upper : (node + 1) * 2^height ≤ 512) :
     capControlBoundaries marked (capSubtreeSteps marked height node) (.visit node) =
       capSubtreeBoundaries marked height node := by
   induction height generalizing node with
@@ -41,11 +41,11 @@ theorem cap_subtree_boundary_order (marked : Nat → Bool) (height node : Nat)
       have upper' := upper
       rw [pow_succ] at lower' upper'
       have positive : 0 < node := by nlinarith
-      have internal : node < 128 := by nlinarith
-      have leftLower : 128 ≤ (2*node) * 2^height := by nlinarith
-      have leftUpper : (2*node+1) * 2^height ≤ 256 := by nlinarith
-      have rightLower : 128 ≤ (2*node+1) * 2^height := by nlinarith
-      have rightUpper : (2*node+1+1) * 2^height ≤ 256 := by nlinarith
+      have internal : node < 256 := by nlinarith
+      have leftLower : 256 ≤ (2*node) * 2^height := by nlinarith
+      have leftUpper : (2*node+1) * 2^height ≤ 512 := by nlinarith
+      have rightLower : 256 ≤ (2*node+1) * 2^height := by nlinarith
+      have rightUpper : (2*node+1+1) * 2^height ≤ 512 := by nlinarith
       by_cases present : marked node = true
       · have left := ih (2*node) leftLower leftUpper
         have right := ih (2*node+1) rightLower rightUpper
@@ -93,17 +93,17 @@ theorem cap_control_done_boundaries (marked : Nat → Bool) (fuel : Nat) :
         List.nil_append, ih]
 
 theorem cap_root_boundary_order (marked : Nat → Bool) :
-    capControlBoundaries marked 510 (.visit 1) = capSubtreeBoundaries marked 7 1 := by
-  have ended := cap_subtree_run_end marked 7 1 (by decide) (by decide)
-  have ordered := cap_subtree_boundary_order marked 7 1 (by decide) (by decide)
-  have bounded := cap_subtree_steps_bound marked 7 1
-  have count : capSubtreeSteps marked 7 1 + 1 ≤ 510 := by
+    capControlBoundaries marked 1022 (.visit 1) = capSubtreeBoundaries marked 8 1 := by
+  have ended := cap_subtree_run_end marked 8 1 (by decide) (by decide)
+  have ordered := cap_subtree_boundary_order marked 8 1 (by decide) (by decide)
+  have bounded := cap_subtree_steps_bound marked 8 1
+  have count : capSubtreeSteps marked 8 1 + 1 ≤ 1022 := by
     norm_num at bounded
     omega
-  have splitCount : 510 = (capSubtreeSteps marked 7 1 + 1) +
-      (510 - (capSubtreeSteps marked 7 1 + 1)) := by omega
+  have splitCount : 1022 = (capSubtreeSteps marked 8 1 + 1) +
+      (1022 - (capSubtreeSteps marked 8 1 + 1)) := by omega
   rw [splitCount, cap_control_boundaries_add,
-    cap_control_boundaries_add marked (capSubtreeSteps marked 7 1), ended, ordered]
+    cap_control_boundaries_add marked (capSubtreeSteps marked 8 1), ended, ordered]
   have oneDone : capControlRun marked 1 (.advance 1) = .done := by
     simp [capControlRun, capControlStep]
   rw [cap_control_run_add, ended, oneDone, cap_control_done_boundaries]

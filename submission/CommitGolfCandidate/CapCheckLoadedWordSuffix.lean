@@ -27,7 +27,7 @@ theorem cap_check_loaded_word_suffix (input : CheckInput) (state : MachineState)
     rw [wordsLength]
     omega
   have bounds := cap_check_loader_bounds input admitted
-  have high : 22528≤capProgram.layout.proof := by
+  have high : 32768≤capProgram.layout.proof := by
     norm_num [capProgram,capExperimental,candidate,layout,trapdoorBytes,
       LENGTH,LOG_LENGTH,LEAF_SIZE,DIGEST_BYTES]
   refine ⟨pointer,?_,by omega,?_,Nat.mod_lt _ (by decide),?_⟩

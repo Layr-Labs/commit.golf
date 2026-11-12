@@ -22,7 +22,7 @@ theorem cap_check_value_then_success (head : MachineState × Bool)
 
 theorem cap_check_subtree_ready (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (height node : Nat) (state : MachineState)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (ready : CapCheckDfsReady limit marked (.visit node) state)
     (passed : (capCheckSubtreeValue oracle marked height node state).2=true) :
     CapCheckDfsReady limit marked (.advance node)
@@ -36,10 +36,10 @@ theorem cap_check_subtree_ready (oracle : Oracle) (limit : Nat)
 
 theorem cap_check_subtree_known_root (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (height node : Nat) (state : MachineState)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (ready : CapCheckDfsReady limit marked (.visit node) state)
-    (above : 22528≤(state.getReg .x25).toNat)
-    (leaf : Nat) (leafLower : 128≤leaf) (leafUpper : leaf<256)
+    (above : 32768≤(state.getReg .x25).toNat)
+    (leaf : Nat) (leafLower : 256≤leaf) (leafUpper : leaf<512)
     (known : marked leaf=true)
     (passed : (capCheckSubtreeValue oracle marked height node state).2=true) :
     capReadRoot (capCheckSubtreeValue oracle marked height node state).1 leaf=

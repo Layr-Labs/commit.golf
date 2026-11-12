@@ -12,12 +12,12 @@ attribute [local irreducible] capCheckDfsValue capCheckSubtreeValue
 
 theorem cap_check_subtree_known_leaves (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (height node : Nat) (state : MachineState)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (ready : CapCheckDfsReady limit marked (.visit node) state)
-    (above : 22528≤(state.getReg .x25).toNat)
+    (above : 32768≤(state.getReg .x25).toNat)
     {viewHeight : Nat} (view : CapView viewHeight) (viewNode : Nat)
-    (viewLower : 128≤viewNode*2^viewHeight)
-    (viewUpper : (viewNode+1)*2^viewHeight≤256)
+    (viewLower : 256≤viewNode*2^viewHeight)
+    (viewUpper : (viewNode+1)*2^viewHeight≤512)
     (marks : CapViewMarks marked viewNode view)
     (known : CapCheckKnownLeaves state viewNode view)
     (passed : (capCheckSubtreeValue oracle marked height node state).2=true) :

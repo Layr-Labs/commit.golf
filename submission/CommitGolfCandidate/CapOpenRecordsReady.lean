@@ -20,7 +20,7 @@ structure CapOpenRecordContext where
   rootBound : roots+1073741824 ≤ MEMORY_BYTES
   saltAligned : salts % 8 = 0
   saltBound : salts+536870912 ≤ MEMORY_BYTES
-  indexHigh : 22528 ≤ indices
+  indexHigh : 32768 ≤ indices
   indexAligned : indices % 8 = 0
   outputAligned : output % 8 = 0
   limitBound : limit ≤ MEMORY_BYTES
@@ -39,12 +39,12 @@ structure CapOpenRecordsReady (context : CapOpenRecordContext) (records : List I
   roots : state.getReg .x9 = BitVec.ofNat 64 context.roots
   salts : state.getReg .x18 = BitVec.ofNat 64 context.salts
   leaves : state.getReg .x19 = 16777216
-  marks : state.getReg .x22 = 20480
+  marks : state.getReg .x22 = 28672
   one : state.getReg .x31 = 1
   indices : state.getReg .x24 =
     BitVec.ofNat 64 (context.indices+8*(records.length-remaining))
   cursor : state.getReg .x25 =
-    BitVec.ofNat 64 (context.output+576*(records.length-remaining))
+    BitVec.ofNat 64 (context.output+544*(records.length-remaining))
   frame : CapOpenRetainedInputs context.output reference state
 
 theorem cap_open_records_loaded (context : CapOpenRecordContext) (records : List Index)
@@ -58,7 +58,7 @@ theorem cap_open_records_loaded (context : CapOpenRecordContext) (records : List
         omega)).val := by
   have bounded := ready.bounded
   have ordinalBound : records.length-(remaining+1) < records.length := by omega
-  have addressHigh : 22528 ≤ context.indices+8*(records.length-(remaining+1)) := by
+  have addressHigh : 32768 ≤ context.indices+8*(records.length-(remaining+1)) := by
     have high := context.indexHigh
     omega
   have addressInside : context.indices+8*(records.length-(remaining+1))+32 ≤

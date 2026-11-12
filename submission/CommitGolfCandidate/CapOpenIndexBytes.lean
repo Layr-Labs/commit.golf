@@ -85,7 +85,7 @@ theorem cap_open_input_index (trapdoor : BitVec (8 * capProgram.sizes.trapdoor))
 theorem cap_open_retained_index (floor : Nat)
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (state : MachineState) (ordinal : Nat) (bounded : ordinal < positions.card)
-    (high : 22528 ≤ capProgram.layout.indices + 8*ordinal)
+    (high : 32768 ≤ capProgram.layout.indices + 8*ordinal)
     (inside : capProgram.layout.indices + 8*ordinal + 32 ≤ floor)
     (aligned : (capProgram.layout.indices + 8*ordinal) % 8 = 0)
     (frame : CapOpenRetainedInputs floor

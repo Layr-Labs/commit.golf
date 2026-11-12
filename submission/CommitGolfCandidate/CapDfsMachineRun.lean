@@ -16,7 +16,7 @@ structure CapDfsMachineReady (checking : Bool) (marked : Nat → Bool) (rootBase
   physical : CapDfsStateControl checking state control
   valid : CapDfsControlValid control
   stable : CapDfsStable checking state rootBase
-  marks : CapMarksReady state 128 0 marked
+  marks : CapMarksReady state 256 0 marked
   cursor : CursorInvariant control state
 
 theorem cap_dfs_machine_transport (checking : Bool) (marked : Nat → Bool)
@@ -73,7 +73,7 @@ theorem cap_dfs_machine_run_execute (checking : Bool) (marked : Nat → Bool)
   · exact ready
 
 /-- With the cursor/access hooks established, every reply sequence reaches
-the actual root-completion PC within the structural 510-macro allowance. -/
+the actual root-completion PC within the structural 1022-macro allowance. -/
 theorem cap_dfs_machine_run_done (checking : Bool) (marked : Nat → Bool)
     (rootBase : Nat) (CursorInvariant : CapDfsControl → MachineState → Prop)
     (checkBase : checking = true → rootBase = 12288)
@@ -87,16 +87,16 @@ theorem cap_dfs_machine_run_done (checking : Bool) (marked : Nat → Bool)
         CursorInvariant (capControlStep marked control) next)
     (state final : MachineState)
     (ready : CapDfsMachineReady checking marked rootBase CursorInvariant (.visit 1) state)
-    (reached : final ∈ support (capDfsRun checking marked 510 (.visit 1) state)) :
+    (reached : final ∈ support (capDfsRun checking marked 1022 (.visit 1) state)) :
     final.pc = capAdvanceDone checking ∧
-      CapDfsStable checking final rootBase ∧ CapMarksReady final 128 0 marked ∧
+      CapDfsStable checking final rootBase ∧ CapMarksReady final 256 0 marked ∧
       CursorInvariant .done final := by
   have finished := cap_dfs_run_support checking marked
     (CapDfsMachineReady checking marked rootBase CursorInvariant)
     (fun control state ready next reached =>
       cap_dfs_machine_transport checking marked rootBase CursorInvariant
         checkBase access cursorTransport control state next ready reached)
-    510 (.visit 1) state final ready reached
+    1022 (.visit 1) state final ready reached
   rw [cap_control_complete] at finished
   exact ⟨finished.physical, finished.stable, finished.marks, finished.cursor⟩
 

@@ -18,7 +18,7 @@ theorem cap_open_step_cursor_nat (marked : Nat → Bool) (control : CapDfsContro
       32 * (capControlBoundaryHead marked control).length := by
   obtain ⟨cursor, pointer, aligned, high, space⟩ := window
   have incBound : capBoundaryIncrement marked control ≤
-      32 * (510 - capControlRank control) := by
+      32 * (1022 - capControlRank control) := by
     by_cases done : control = .done
     · subst control
       simp [capBoundaryIncrement]
@@ -41,7 +41,7 @@ theorem cap_open_step_head_slot (marked : Nat → Bool) (control : CapDfsControl
     (ready : CapOpenReadReady marked rootBase limit floor reference control state)
     (limitBound : limit ≤ MEMORY_BYTES)
     (rootAligned : rootBase % 8 = 0)
-    (heapBelow : rootBase + 8192 ≤ floor)
+    (heapBelow : rootBase + 16384 ≤ floor)
     (reached : next ∈ support (capDfsStep false marked control state))
     (ordinal node : Nat)
     (selected : (capControlBoundaryHead marked control)[ordinal]? = some node) :
@@ -73,7 +73,7 @@ theorem cap_open_step_head_slot (marked : Nat → Bool) (control : CapDfsControl
         have current : (state.getReg .x25).toNat = cursor := by
           rw [pointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
         have before : floor ≤ cursor := by simpa only [current] using ready.cursorFloor
-        have nodeBound : atNode < 256 := ready.machine.valid.2
+        have nodeBound : atNode < 512 := ready.machine.valid.2
         simpa only [current, Nat.mul_zero, Nat.add_zero] using
           cap_unknown_open_reference_digest state reference atNode rootBase cursor floor
             ready.machine.stable.roots ready.machine.physical.2 pointer rootAligned aligned
@@ -82,9 +82,9 @@ theorem cap_open_step_head_slot (marked : Nat → Bool) (control : CapDfsControl
 theorem cap_open_run_slots (marked : Nat → Bool)
     (rootBase limit floor : Nat) (reference : MachineState)
     (limitBound : limit ≤ MEMORY_BYTES)
-    (rootBound : rootBase + 8192 ≤ MEMORY_BYTES)
+    (rootBound : rootBase + 16384 ≤ MEMORY_BYTES)
     (rootAligned : rootBase % 8 = 0)
-    (heapBelow : rootBase + 8192 ≤ floor)
+    (heapBelow : rootBase + 16384 ≤ floor)
     (count : Nat) (control : CapDfsControl) (state final : MachineState)
     (ready : CapOpenReadReady marked rootBase limit floor reference control state)
     (reached : final ∈ support (capDfsRun false marked count control state))

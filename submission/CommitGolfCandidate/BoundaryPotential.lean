@@ -14,10 +14,10 @@ def capBoundaryPotential : CapDfsControl → Nat
   | .done => 0
 
 private theorem potential_table :
-    ∀ node : Fin 256, 0<node.val →
+    ∀ node : Fin 512, 0<node.val →
       (15+capBoundaryPotential (.advance node.val) ≤ capBoundaryPotential (.visit node.val)+9) ∧
       (6+capBoundaryPotential (.advance node.val) ≤ capBoundaryPotential (.visit node.val)) ∧
-      (node.val<128 → 7+capBoundaryPotential (.visit (2*node.val)) ≤ capBoundaryPotential (.visit node.val)) ∧
+      (node.val<256 → 7+capBoundaryPotential (.visit (2*node.val)) ≤ capBoundaryPotential (.visit node.val)) ∧
       (1<node.val ∧ node.val%2=0 → 5+capBoundaryPotential (.visit (node.val+1)) ≤ capBoundaryPotential (.advance node.val)) ∧
       (1<node.val ∧ node.val%2=1 → 5+capBoundaryPotential (.advance (node.val/2)) ≤ capBoundaryPotential (.advance node.val)) := by
   decide
@@ -34,7 +34,7 @@ theorem cap_boundary_potential_step (marked : Nat → Bool) (control : CapDfsCon
     simp only [capDfsStepCycles,capDfsStepInstructions,capControlStep,capControlBoundaryHead,Bool.false_eq_true,ite_false]
     by_cases selected : marked node=true
     · simp only [selected,Bool.true_and,ite_true,List.length_nil,Nat.mul_zero,Nat.add_zero]
-      by_cases internal : node<128
+      by_cases internal : node<256
       · simpa [internal] using bounds.2.2.1 internal
       · simpa [internal] using bounds.2.1
     · have unmarked : marked node=false := Bool.eq_false_iff.mpr selected
@@ -68,9 +68,9 @@ theorem cap_boundary_cycle_potential_bound (marked : Nat → Bool) (fuel : Nat)
     omega
 
 theorem cap_boundary_cycle_bound (marked : Nat → Bool) :
-    capDfsCycleTotal false marked 510 (.visit 1) ≤
-      2928 + 9*(capControlBoundaries marked 510 (.visit 1)).length := by
-  have bound := cap_boundary_cycle_potential_bound marked 510 (.visit 1) (by constructor <;> decide)
-  have initial : capBoundaryPotential (.visit 1)=2928 := by decide
+    capDfsCycleTotal false marked 1022 (.visit 1) ≤
+      5872 + 9*(capControlBoundaries marked 1022 (.visit 1)).length := by
+  have bound := cap_boundary_cycle_potential_bound marked 1022 (.visit 1) (by constructor <;> decide)
+  have initial : capBoundaryPotential (.visit 1)=5872 := by decide
   simpa only [initial] using bound
 end CommitGolfCandidate

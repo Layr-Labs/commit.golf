@@ -29,18 +29,18 @@ theorem cap_open_loaded_execution
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (positive : 0 < positions.card) (fuel : Nat) (allowCoins : Bool) :
     execute (capProgram.image .opening)
-        (29+278*positions.card+1272+2+
-          capDfsInstructionTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+4+fuel)
+        (29+263*positions.card+2552+2+
+          capDfsInstructionTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4+fuel)
         (capProgram.initialState .opening (trapdoor, positions)) allowCoins =
-      (do let final ← capDfsRun false (capOpenRequestedMarks positions) 510 (.visit 1)
+      (do let final ← capDfsRun false (capOpenRequestedMarks positions) 1022 (.visit 1)
             (capOpenTraversalInitial trapdoor positions)
           return ⟨.success, capOpenExitState final,
-            29+278*positions.card+1272+2+
-              capDfsCycleTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+4, 0⟩) := by
-  rw [show 29+278*positions.card+1272+2+
-        capDfsInstructionTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+4+fuel =
-      29+278*positions.card+1272+2+
-        (capDfsInstructionTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+(4+fuel))
+            29+263*positions.card+2552+2+
+              capDfsCycleTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4, 0⟩) := by
+  rw [show 29+263*positions.card+2552+2+
+        capDfsInstructionTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4+fuel =
+      29+263*positions.card+2552+2+
+        (capDfsInstructionTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+(4+fuel))
       by omega, cap_open_traversal_entry_execute trapdoor positions positive,
     cap_open_loaded_dfs_execute trapdoor positions positive]
   simp only [bind_assoc, pure_bind, open_query_total]
@@ -55,8 +55,8 @@ theorem cap_open_loaded_execution
   simp only [pure_bind, exit_charges]
 
 theorem cap_open_loaded_batch_cycles (positions : Positions) (batch : positions.card = 128) :
-    29+278*positions.card+1272+2+
-      capDfsCycleTotal false (capOpenRequestedMarks positions) 510 (.visit 1)+4 ≤ 40395 := by
+    29+263*positions.card+2552+2+
+      capDfsCycleTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4 ≤ 43275 := by
   have traversal := cap_boundary_cycle_bound (capOpenRequestedMarks positions)
   have positive : 0 < positions.card := by omega
   have boundary := cap_open_requested_boundary_bound positions positive

@@ -19,18 +19,18 @@ def CapCheckKnownLeaves (state : MachineState) :
 
 theorem cap_check_known_leaves_frame (marked : Nat → Bool)
     (state next : MachineState) {height : Nat} (view : CapView height) (node : Nat)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (marks : CapViewMarks marked node view)
     (known : CapCheckKnownLeaves state node view)
-    (frame : ∀ leaf,128≤leaf → leaf<256 → marked leaf=true →
+    (frame : ∀ leaf,256≤leaf → leaf<512 → marked leaf=true →
       capReadRoot next leaf=capReadRoot state leaf) :
     CapCheckKnownLeaves next node view := by
   induction view generalizing node with
   | leaf payload =>
     intro digest equal
-    have nodeLower : 128≤node := by simpa using lower
-    have nodeUpper : node<256 := by
-      have bound : node+1≤256 := by simpa using upper
+    have nodeLower : 256≤node := by simpa using lower
+    have nodeUpper : node<512 := by
+      have bound : node+1≤512 := by simpa using upper
       omega
     have present : marked node=true := by
       change marked node=payload.isSome at marks
@@ -50,9 +50,9 @@ theorem cap_check_known_leaves_frame (marked : Nat → Bool)
 theorem cap_check_value_known_leaves (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (count : Nat) (control : CapDfsControl)
     (state : MachineState) (ready : CapCheckDfsReady limit marked control state)
-    (above : 22528≤(state.getReg .x25).toNat)
+    (above : 32768≤(state.getReg .x25).toNat)
     {height : Nat} (view : CapView height) (node : Nat)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (marks : CapViewMarks marked node view)
     (known : CapCheckKnownLeaves state node view)
     (passed : (capCheckDfsValue oracle marked count control state).2=true) :

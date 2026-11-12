@@ -15,7 +15,7 @@ theorem cap_marks_register_outside (marks : Reg) (selected : CapMarksRegister ma
   rcases selected with rfl | rfl <;> decide
 
 theorem cap_mark_source_register (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capMarkPrefix marks state 2).getReg .x30 = capMarkAddress (2 * node) := by
   rcases selected with rfl | rfl <;>
@@ -26,7 +26,7 @@ theorem cap_mark_source_register (marks : Reg) (state : MachineState) (node : Na
     exact cap_mark_child_pointer node
 
 theorem cap_mark_right_register (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capMarkPrefix marks state 3).getReg .x30 + 8 = capMarkAddress (2 * node + 1) := by
   rw [cap_mark_prefix_succ marks state 2 (by omega)]
@@ -37,7 +37,7 @@ theorem cap_mark_right_register (marks : Reg) (state : MachineState) (node : Nat
   exact cap_mark_right_pointer node
 
 theorem cap_mark_parent_register (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capMarkPrefix marks state 7).getReg .x23 = capMarkAddress node := by
   have unchanged := cap_mark_prefix_register marks state 6 (by omega) marks
@@ -58,13 +58,13 @@ theorem cap_mark_parent_register (marks : Reg) (state : MachineState) (node : Na
 
 /-- Natural child and parent bounds discharge the three actual access premises. -/
 theorem cap_mark_access (marks : Reg) (state : MachineState) (leaves node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (bounded : leaves ≤ 128) (internal : node < leaves) :
+    (bounded : leaves ≤ 256) (internal : node < leaves) :
     accessValid ((capMarkPrefix marks state 2).getReg .x30) 8 = true ∧
     accessValid ((capMarkPrefix marks state 3).getReg .x30 + 8) 8 = true ∧
     accessValid ((capMarkPrefix marks state 7).getReg .x23) 8 = true ∧
-      ((capMarkPrefix marks state 7).getReg .x23).toNat < 22528 := by
+      ((capMarkPrefix marks state 7).getReg .x23).toNat < 32768 := by
   rw [cap_mark_source_register marks state node selected base index,
     cap_mark_right_register marks state node selected base index,
     cap_mark_parent_register marks state node selected base index]

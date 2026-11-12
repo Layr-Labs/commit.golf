@@ -2,7 +2,7 @@ import CommitGolfCandidate.CapLowerParser
 import CommitGolfCandidate.CapOpenHonestSuffix
 import CommitGolfCandidate.HeapModel
 
-/-! The honest lower record authenticates to the stored height-seventeen
+/-! The honest lower record authenticates to the stored height-eightteen
 ancestor. All siblings and salt come from the same actual commitment heap;
 no injectivity or collision-free assumption is used. The emitted-byte
 identification is a separate loader/transcript bridge. -/
@@ -22,11 +22,11 @@ def capHonestLowerRecord (message : Message) (committed : MachineState)
 theorem cap_honest_lower_path (message : Message) (committed : MachineState)
     (index : Index) :
     (capHonestLowerRecord message committed index).path =
-      heapPath (heapDigest committed 4294971424) (LENGTH+index.val) 17 := by
+      heapPath (heapDigest committed 4294971424) (LENGTH+index.val) 16 := by
   apply List.ext_getElem
   · rw [cap_lower_path_length, heap_path_length]
   · intro level leftBound rightBound
-    have inside : level < 17 := by
+    have inside : level < 16 := by
       simpa only [cap_lower_path_length] using leftBound
     rw [heap_path_get _ _ _ _ inside]
     simp only [CapLowerRecord.path, List.getElem_ofFn, capHonestLowerRecord]
@@ -38,7 +38,7 @@ theorem cap_honest_lower_root (oracle : Oracle) (message : Message)
     (committed : MachineState) (correct : CommittedState oracle message committed)
     (index : Index) :
     (capHonestLowerRecord message committed index).root oracle.compression =
-      heapDigest committed 4294971424 (128+(capGroup index).val) := by
+      heapDigest committed 4294971424 (256+(capGroup index).val) := by
   rw [CapLowerRecord.root, cap_honest_lower_path]
   have leaf := correct.2.2 index
   change heapDigest committed 4294971424 (LENGTH+index.val) =
@@ -47,15 +47,15 @@ theorem cap_honest_lower_root (oracle : Oracle) (message : Message)
   change climb oracle.compression
     (leafDigest oracle.compression
       (readBuffer committed (5368713248+32*index.val) 32) (message index))
-    (heapPath (heapDigest committed 4294971424) (LENGTH+index.val) 17) = _
+    (heapPath (heapDigest committed 4294971424) (LENGTH+index.val) 16) = _
   rw [← leaf, reconstruct_heap_ancestor oracle.compression
     (heapDigest committed 4294971424) LENGTH correct.2.1]
   · congr 1
-    change (16777216+index.val)/131072 = 128+index.val/131072
+    change (16777216+index.val)/65536 = 256+index.val/65536
     omega
   · have bounded := index.isLt
     omega
-  · change 131072 ≤ 16777216+index.val
+  · change 65536 ≤ 16777216+index.val
     omega
 
 end CommitGolfCandidate

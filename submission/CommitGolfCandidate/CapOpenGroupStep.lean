@@ -46,28 +46,28 @@ theorem cap_open_group_pc (state : MachineState) (count : Nat)
   all_goals rfl
 
 theorem cap_open_group_address (state : MachineState) (node : Nat)
-    (marks : state.getReg .x22 = 20480)
+    (marks : state.getReg .x22 = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
-    (capOpenGroupPrefix state 2).getReg .x23 = BitVec.ofNat 64 (20480+8*node) := by
+    (capOpenGroupPrefix state 2).getReg .x23 = BitVec.ofNat 64 (28672+8*node) := by
   simp (disch := decide) only [capOpenGroupPrefix, capOpenGroupInstructions,
     List.take, List.foldl, execInstrBr, MachineState.getReg_setPC,
     MachineState.getReg_setReg_eq, MachineState.getReg_setReg_ne, marks, index,
     show (3 : BitVec 6).toNat = 3 by decide]
   rw [BitVec.shiftLeft_eq_mul_twoPow,
     show BitVec.twoPow 64 3 = BitVec.ofNat 64 8 by decide, ← BitVec.ofNat_mul]
-  change BitVec.ofNat 64 20480 + BitVec.ofNat 64 (node*8) = _
+  change BitVec.ofNat 64 28672 + BitVec.ofNat 64 (node*8) = _
   rw [← BitVec.ofNat_add, Nat.mul_comm node 8]
 
 theorem cap_open_group_store_access (state : MachineState) (node : Nat)
-    (marks : state.getReg .x22 = 20480)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
+    (marks : state.getReg .x22 = 28672)
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512) :
     accessValid ((capOpenGroupPrefix state 2).getReg .x23) 8 = true := by
   rw [cap_open_group_address state node marks index]
-  exact (cap_mark_address_valid 128 node (by decide) (by omega)).1
+  exact (cap_mark_address_valid 256 node (by decide) (by omega)).1
 
 theorem cap_open_group_execute (state : MachineState) (node : Nat)
-    (pc : state.pc = 4340) (marks : state.getReg .x22 = 20480)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256)
+    (pc : state.pc = 4340) (marks : state.getReg .x22 = 28672)
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512)
     (fuel : Nat) (allowCoins : Bool) :
     execute ((capExperimental 24).image .opening) (6+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel

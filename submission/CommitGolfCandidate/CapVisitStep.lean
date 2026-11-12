@@ -58,7 +58,7 @@ theorem cap_visit_prefix_register (marks : Reg) (state : MachineState) (count : 
       MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm outside.2.2)]
 
 theorem cap_visit_address (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capVisitPrefix marks state 2).getReg .x23 = capMarkAddress node := by
   rcases selected with rfl | rfl <;>
@@ -69,7 +69,7 @@ theorem cap_visit_address (marks : Reg) (state : MachineState) (node : Nat)
     exact cap_mark_parent_pointer node
 
 theorem cap_visit_mark (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capVisitPrefix marks state 3).getReg .x6 = state.getMem (capMarkAddress node) := by
   rw [cap_visit_prefix_succ marks state 2 (by decide)]
@@ -108,20 +108,20 @@ theorem cap_visit_execute (image : Image) (marks : Reg) (entry : Word)
 /-- Finalized occupancy supplies the branch's exact 0/1 word. -/
 theorem cap_visit_mark_ready (marks : Reg) (state : MachineState) (node : Nat)
     (marked : Nat → Bool) (selected : CapMarksRegister marks)
-    (base : state.getReg marks = 20480)
+    (base : state.getReg marks = 28672)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (positive : 0 < node) (bounded : node < 256)
-    (ready : CapMarksReady state 128 0 marked) :
+    (positive : 0 < node) (bounded : node < 512)
+    (ready : CapMarksReady state 256 0 marked) :
     (capVisitPrefix marks state 3).getReg .x6 = capMarkWord (marked node) :=
   (cap_visit_mark marks state node selected base index).trans
     (ready node positive bounded)
 
 theorem cap_visit_load_valid (marks : Reg) (state : MachineState) (node : Nat)
-    (selected : CapMarksRegister marks) (base : state.getReg marks = 20480)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 256) :
+    (selected : CapMarksRegister marks) (base : state.getReg marks = 28672)
+    (index : state.getReg .x20 = BitVec.ofNat 64 node) (bounded : node < 512) :
     accessValid ((capVisitPrefix marks state 2).getReg .x23) 8 = true := by
   rw [cap_visit_address marks state node selected base index]
-  exact (cap_mark_address_valid 128 node (by decide) bounded).1
+  exact (cap_mark_address_valid 256 node (by decide) bounded).1
 
 def capVisitBranchState (offset : BitVec 13) (state : MachineState) : MachineState :=
   execInstrBr state (.BEQ .x6 .x0 offset)

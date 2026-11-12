@@ -42,7 +42,7 @@ theorem cap_copy_byte_outside (checking : Bool) (state : MachineState)
 theorem cap_copy_high_bytes (checking : Bool) (state reference : MachineState)
     (destination : Nat)
     (pointer : state.getReg (capCopyDestination checking) = BitVec.ofNat 64 destination)
-    (aligned : destination % 8 = 0) (low : destination + 32 ≤ 22528)
+    (aligned : destination % 8 = 0) (low : destination + 32 ≤ 32768)
     (frame : CapHighBytes state reference) :
     CapHighBytes (capDigestCopyPrefix checking state 8) reference := by
   intro address lower upper
@@ -54,8 +54,8 @@ theorem cap_copy_high_bytes (checking : Bool) (state reference : MachineState)
 theorem cap_copy_marks (checking : Bool) (state : MachineState) (destination node : Nat)
     (pointer : state.getReg (capCopyDestination checking) = BitVec.ofNat 64 destination)
     (destinationBound : destination + 32 ≤ 2^64)
-    (bounded : node < 256)
-    (separate : destination + 32 ≤ 20480 ∨ 22528 ≤ destination) :
+    (bounded : node < 512)
+    (separate : destination + 32 ≤ 28672 ∨ 32768 ≤ destination) :
     (capDigestCopyPrefix checking state 8).getMem (capMarkAddress node) =
       state.getMem (capMarkAddress node) := by
   apply cap_copy_memory_outside
@@ -63,7 +63,7 @@ theorem cap_copy_marks (checking : Bool) (state : MachineState) (destination nod
   rw [pointer, ← BitVec.ofNat_add] at equal
   have numeric := congrArg BitVec.toNat equal
   simp only [capMarkAddress, BitVec.toNat_ofNat,
-    Nat.mod_eq_of_lt (by omega : 20480 + 8 * node < 2^64),
+    Nat.mod_eq_of_lt (by omega : 28672 + 8 * node < 2^64),
     Nat.mod_eq_of_lt (by omega : destination + 8 * word.val < 2^64)] at numeric
   omega
 
@@ -71,9 +71,9 @@ theorem cap_copy_marks_ready (checking : Bool) (state : MachineState) (destinati
     (marked : Nat → Bool)
     (pointer : state.getReg (capCopyDestination checking) = BitVec.ofNat 64 destination)
     (destinationBound : destination + 32 ≤ 2^64)
-    (separate : destination + 32 ≤ 20480 ∨ 22528 ≤ destination)
-    (ready : CapMarksReady state 128 0 marked) :
-    CapMarksReady (capDigestCopyPrefix checking state 8) 128 0 marked := by
+    (separate : destination + 32 ≤ 28672 ∨ 32768 ≤ destination)
+    (ready : CapMarksReady state 256 0 marked) :
+    CapMarksReady (capDigestCopyPrefix checking state 8) 256 0 marked := by
   intro node positive bounded
   rw [cap_copy_marks checking state destination node pointer destinationBound bounded separate]
   exact ready node positive bounded

@@ -32,7 +32,7 @@ theorem cap_open_abi_record_windows (positions : Positions) :
     (capOpenRequestedIndices positions).length < 2^64 ∧
     capOpenAbiRecordContext.indices+8*(capOpenRequestedIndices positions).length+32 ≤
       capOpenAbiRecordContext.output ∧
-    capOpenAbiRecordContext.output+576*(capOpenRequestedIndices positions).length ≤
+    capOpenAbiRecordContext.output+544*(capOpenRequestedIndices positions).length ≤
       capOpenAbiRecordContext.limit := by
   have cardinal : positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ positions

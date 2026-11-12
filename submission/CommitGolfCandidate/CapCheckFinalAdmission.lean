@@ -39,17 +39,17 @@ theorem cap_check_loaded_dfs_finish (input : CheckInput)
     (roots : CapRootMap) (collected : CapCheckCollected state roots)
     (selectors : CapCheckSelectors state)
     (admitted : input.proof.length≤capProgram.sizes.proof)
-    (enough : 576*input.positions.card ≤ input.proof.length)
-    (fuel : Nat) (sufficient : 8687≤fuel) (allowCoins : Bool) :
+    (enough : 544*input.positions.card ≤ input.proof.length)
+    (fuel : Nat) (sufficient : 17391≤fuel) (allowCoins : Bool) :
     execute (capWalkImage true) fuel (capCheckTraversalInitial state) allowCoins=
-      capCheckDfsFinish (capCheckCollectedMarks roots) 510 (.visit 1)
+      capCheckDfsFinish (capCheckCollectedMarks roots) 1022 (.visit 1)
         (capCheckTraversalInitial state) := by
   have traversalReady := cap_check_traversal_initial_ready input ordinal state ready
     roots collected selectors admitted enough
   have admission := cap_check_final_abi_access (capCheckTraversalInitial state)
     traversalReady.stable.roots
     (cap_check_traversal_initial_commitment input ordinal state ready)
-  exact cap_check_dfs_finish_execute _ _ 510 (.visit 1) _ traversalReady
+  exact cap_check_dfs_finish_execute _ _ 1022 (.visit 1) _ traversalReady
     (cap_control_complete _) admission.1 admission.2 fuel sufficient allowCoins
 
 end CommitGolfCandidate

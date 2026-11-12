@@ -1,7 +1,7 @@
 import CommitGolfCandidate.CapCheckSubtreeCodec
 import CommitGolfCandidate.CapCheckRootValue
 
-/-! The complete conservative traversal refines the canonical height-seven
+/-! The complete conservative traversal refines the canonical height-eight
 decoder. Its done state retains exact remaining words and partial tail, which
 the real final continuation subsequently checks. -/
 namespace CommitGolfCandidate
@@ -20,39 +20,39 @@ def CapCheckRootCodecResult (limit : Nat) (marked : Nat → Bool) (tailBytes : N
           CapCheckDfsReady limit marked .done result.1
 
 theorem cap_check_root_codec (oracle : Oracle) (limit : Nat)
-    (marked : Nat → Bool) (view : CapView 7)
+    (marked : Nat → Bool) (view : CapView 8)
     (state : MachineState) (cursor : Nat) (words : List Digest) (tailBytes : Nat)
     (ready : CapCheckDfsReady limit marked (.visit 1) state)
     (suffix : CapCheckWordSuffix state cursor words tailBytes)
     (marks : CapViewMarks marked 1 view)
     (known : CapCheckKnownLeaves state 1 view) :
     CapCheckRootCodecResult limit marked tailBytes
-      (capCheckDfsValue oracle marked 510 (.visit 1) state)
+      (capCheckDfsValue oracle marked 1022 (.visit 1) state)
       (capDecode oracle.compression view words) := by
   have matchResult := cap_check_subtree_codec oracle limit marked view 1
     (by decide) (by decide) marks state cursor words tailBytes ready suffix known
   cases decoded : capDecode oracle.compression view words with
   | none =>
     rw [decoded] at matchResult
-    change (capCheckSubtreeValue oracle marked 7 1 state).2=false at matchResult
-    change (capCheckDfsValue oracle marked 510 (.visit 1) state).2=false
+    change (capCheckSubtreeValue oracle marked 8 1 state).2=false at matchResult
+    change (capCheckDfsValue oracle marked 1022 (.visit 1) state).2=false
     rw [cap_check_root_value,cap_check_then_rejected _ _ matchResult]
     exact matchResult
   | some pair =>
     rcases pair with ⟨root,rest⟩
     rw [decoded] at matchResult
-    change (capCheckSubtreeValue oracle marked 7 1 state).2=true ∧
-      capReadRoot (capCheckSubtreeValue oracle marked 7 1 state).1 1=root ∧
+    change (capCheckSubtreeValue oracle marked 8 1 state).2=true ∧
+      capReadRoot (capCheckSubtreeValue oracle marked 8 1 state).1 1=root ∧
       ∃ finalCursor, CapCheckWordSuffix
-        (capCheckSubtreeValue oracle marked 7 1 state).1 finalCursor rest tailBytes ∧
+        (capCheckSubtreeValue oracle marked 8 1 state).1 finalCursor rest tailBytes ∧
         CapCheckDfsReady limit marked (.advance 1)
-          (capCheckSubtreeValue oracle marked 7 1 state).1 at matchResult
+          (capCheckSubtreeValue oracle marked 8 1 state).1 at matchResult
     obtain ⟨passed,payload,finalCursor,finalSuffix,finalReady⟩ := matchResult
-    let last := (capCheckSubtreeValue oracle marked 7 1 state).1
+    let last := (capCheckSubtreeValue oracle marked 8 1 state).1
     have nextFacts := cap_check_codec_navigation oracle limit marked (.advance 1)
       last finalCursor rest tailBytes finalReady finalSuffix rfl rfl
     have small := cap_check_word_suffix_small last finalCursor rest tailBytes finalSuffix
-    have above : 22528≤(last.getReg .x25).toNat := by
+    have above : 32768≤(last.getReg .x25).toNat := by
       rw [finalSuffix.pointer,BitVec.toNat_ofNat,Nat.mod_eq_of_lt small.1]
       exact finalSuffix.high
     have rootFrame := cap_check_dfs_next_roots oracle limit marked (.advance 1)

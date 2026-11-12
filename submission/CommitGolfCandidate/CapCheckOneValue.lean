@@ -30,7 +30,7 @@ theorem cap_check_known_leaf_value (oracle : Oracle) (limit : Nat)
     (cursor : Nat) (words : List Digest) (tailBytes : Nat) (digest : Digest)
     (ready : CapCheckDfsReady limit marked (.visit node) state)
     (suffix : CapCheckWordSuffix state cursor words tailBytes)
-    (lower : 128≤node) (present : marked node=true)
+    (lower : 256≤node) (present : marked node=true)
     (payload : capReadRoot state node=digest) :
     let result := capCheckSubtreeValue oracle marked 0 node state
     result.2=true ∧ capReadRoot result.1 node=digest ∧
@@ -40,7 +40,7 @@ theorem cap_check_known_leaf_value (oracle : Oracle) (limit : Nat)
     simp only [capCheckDfsShort,present,↓reduceIte]
   have one := cap_check_one_value oracle marked (.visit node) state notShort
   have small := cap_check_word_suffix_small state cursor words tailBytes suffix
-  have above : 22528≤(state.getReg .x25).toNat := by
+  have above : 32768≤(state.getReg .x25).toNat := by
     rw [suffix.pointer,BitVec.toNat_ofNat,Nat.mod_eq_of_lt small.1]
     exact suffix.high
   have stored := cap_check_next_known_root oracle limit marked (.visit node) state

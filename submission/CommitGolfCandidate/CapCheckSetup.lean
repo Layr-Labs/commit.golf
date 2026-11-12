@@ -2,7 +2,7 @@ import CommitGolfCandidate.CapCheckLeafCall
 import CommitGolfCandidate.CapFlow
 
 /-! The real cap checker first retains ABI pointers, computes the proof end,
-and compares length with 576 times the requested count. This comparison is
+and compares length with 544 times the requested count. This comparison is
 only a lower bound: cap boundary bytes follow the fixed lower records.
 The gate executes before any proof-buffer load or oracle query. -/
 namespace CommitGolfCandidate
@@ -13,13 +13,13 @@ set_option maxHeartbeats 200000
 def capCheckSetupInstructions : List Instr :=
   [.ADDI .x26 .x11 0, .ADDI .x24 .x13 0, .ADDI .x8 .x14 0,
    .ADDI .x25 .x15 0, .ADDI .x27 .x16 0, .ADD .x22 .x15 .x17,
-   .ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 576]
+   .ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 544]
 
 def capCheckSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
   (capCheckSetupInstructions.take count).foldl execInstrBr state
 
 def capCheckMultiplied (state : MachineState) : MachineState :=
-  ((capCheckSetupPrefix state 9).setReg .x7 (state.getReg .x16 * 576)).setPC 4136
+  ((capCheckSetupPrefix state 9).setReg .x7 (state.getReg .x16 * 544)).setPC 4136
 
 def capCheckLengthState (state : MachineState) : MachineState :=
   capFlowState (.below .x17 .x7 672) (capCheckMultiplied state)
@@ -55,7 +55,7 @@ theorem cap_check_setup_registers (state : MachineState) :
     (capCheckSetupPrefix state 9).getReg .x25 = state.getReg .x15 ∧
     (capCheckSetupPrefix state 9).getReg .x27 = state.getReg .x16 ∧
     (capCheckSetupPrefix state 9).getReg .x22 = state.getReg .x15 + state.getReg .x17 ∧
-    (capCheckSetupPrefix state 9).getReg .x6 = 576 ∧
+    (capCheckSetupPrefix state 9).getReg .x6 = 544 ∧
     (capCheckSetupPrefix state 9).getReg .x16 = state.getReg .x16 ∧
     (capCheckSetupPrefix state 9).getReg .x17 = state.getReg .x17 := by
   simp [capCheckSetupPrefix, capCheckSetupInstructions, execInstrBr, signExtend12,

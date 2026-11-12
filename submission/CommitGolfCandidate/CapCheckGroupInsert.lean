@@ -11,9 +11,9 @@ set_option autoImplicit false
 attribute [local irreducible] capCheckGroupStartPrefix readBuffer
 
 theorem cap_check_group_insert (state : MachineState) (roots : CapRootMap)
-    (ready : CapCheckCollected state roots) (group : Nat) (bounded : group < 128)
+    (ready : CapCheckCollected state roots) (group : Nat) (bounded : group < 256)
     (index : state.getReg .x20 = BitVec.ofNat 64 group)
-    (leaves : state.getReg .x19 = 128) (marks : state.getReg .x9 = 20480)
+    (leaves : state.getReg .x19 = 256) (marks : state.getReg .x9 = 28672)
     (rootBase : state.getReg .x18 = 12288) (scratch : state.getReg .x21 = 256)
     (one : state.getReg .x31 = 1) :
     (capCheckGroupResult state).2 = true ↔
@@ -41,9 +41,9 @@ theorem cap_check_group_insert (state : MachineState) (roots : CapRootMap)
       simp only [failed,same,↓reduceIte,Option.isSome_none,Bool.false_eq_true]
 
 theorem cap_check_group_insert_collected (state : MachineState) (roots next : CapRootMap)
-    (ready : CapCheckCollected state roots) (group : Nat) (bounded : group < 128)
+    (ready : CapCheckCollected state roots) (group : Nat) (bounded : group < 256)
     (index : state.getReg .x20 = BitVec.ofNat 64 group)
-    (leaves : state.getReg .x19 = 128) (marks : state.getReg .x9 = 20480)
+    (leaves : state.getReg .x19 = 256) (marks : state.getReg .x9 = 28672)
     (rootBase : state.getReg .x18 = 12288) (scratch : state.getReg .x21 = 256)
     (one : state.getReg .x31 = 1)
     (accepted : capInsert roots group (readBuffer state 256 32) = some next) :

@@ -33,7 +33,7 @@ theorem cap_open_step_floor (marked : Nat → Bool) (control : CapDfsControl)
   have current : (state.getReg .x25).toNat = cursor := by
     rw [pointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt cursorBound]
   have incrementBound : capBoundaryIncrement marked control ≤
-      32 * (510 - capControlRank control) := by
+      32 * (1022 - capControlRank control) := by
     by_cases done : control = .done
     · subst control
       simp only [capBoundaryIncrement]

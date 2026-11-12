@@ -13,7 +13,7 @@ set_option maxRecDepth 4096
 
 def CapOldSiblingWitness (positions : Positions) (height node : Nat) : Prop :=
   ∃ ordinal < positions.card,
-    (((LENGTH+openingIndex positions ordinal)/2^(17+height)) ^^^ 1)=node
+    (((LENGTH+openingIndex positions ordinal)/2^(16+height)) ^^^ 1)=node
 
 noncomputable def capOldBoundaryOrdinal (positions : Positions) (height node : Nat) : Nat := by
   classical
@@ -23,7 +23,7 @@ theorem cap_old_boundary_ordinal (positions : Positions) (height node : Nat)
     (available : CapOldSiblingWitness positions height node) :
     capOldBoundaryOrdinal positions height node < positions.card ∧
       (((LENGTH+openingIndex positions (capOldBoundaryOrdinal positions height node)) /
-        2^(17+height)) ^^^ 1)=node := by
+        2^(16+height)) ^^^ 1)=node := by
   classical
   rw [capOldBoundaryOrdinal,dif_pos available]
   exact Nat.find_spec available
@@ -32,18 +32,18 @@ noncomputable def capOldBoundaryBytes (positions : Positions) (proof : Proof) :
     Nat → Nat → Proof
   | 0, node =>
       if capOpenRequestedMarks positions node then []
-      else capOldProofSlot proof (capOldBoundaryOrdinal positions 0 node) 18
+      else capOldProofSlot proof (capOldBoundaryOrdinal positions 0 node) 17
   | height+1, node =>
       if capOpenRequestedMarks positions node then
         capOldBoundaryBytes positions proof height (2*node) ++
           capOldBoundaryBytes positions proof height (2*node+1)
       else capOldProofSlot proof (capOldBoundaryOrdinal positions (height+1) node)
-        (18+(height+1))
+        (17+(height+1))
 
 private theorem child_bounds (height node : Nat)
-    (lower : 128 ≤ node*2^(height+1)) (upper : (node+1)*2^(height+1) ≤ 256) :
-    128 ≤ (2*node)*2^height ∧ (2*node+1)*2^height ≤ 256 ∧
-      128 ≤ (2*node+1)*2^height ∧ (2*node+2)*2^height ≤ 256 := by
+    (lower : 256 ≤ node*2^(height+1)) (upper : (node+1)*2^(height+1) ≤ 512) :
+    256 ≤ (2*node)*2^height ∧ (2*node+1)*2^height ≤ 512 ∧
+      256 ≤ (2*node+1)*2^height ∧ (2*node+2)*2^height ≤ 512 := by
   have power := Nat.two_pow_pos height
   rw [pow_succ] at lower upper
   constructor
@@ -53,28 +53,28 @@ private theorem child_bounds (height node : Nat)
   constructor <;> nlinarith
 
 private theorem unknown_slot (heap : Nat → Digest) (salt : Index → Digest)
-    (positions : Positions) (height node : Nat) (heightBound : height < 7)
-    (lower : 128 ≤ node*2^height) (upper : (node+1)*2^height ≤ 256)
+    (positions : Positions) (height node : Nat) (heightBound : height < 8)
+    (lower : 256 ≤ node*2^height) (upper : (node+1)*2^height ≤ 512)
     (parent : capOpenRequestedMarks positions (node/2)=true)
     (absent : capOpenRequestedMarks positions node=false) :
     capOldProofSlot (referenceOpening heap salt positions)
-      (capOldBoundaryOrdinal positions height node) (18+height) =
+      (capOldBoundaryOrdinal positions height node) (17+height) =
       digestBytes (heap node) := by
   have available := cap_unknown_old_sibling positions height node
     heightBound lower upper parent absent
   have selected := cap_old_boundary_ordinal positions height node available
   rw [cap_old_reference_slot heap salt positions _ _ selected.1 (by omega)]
-  have part : 18+height≠0 := by omega
-  have level : 18+height-1=17+height := by omega
+  have part : 17+height≠0 := by omega
+  have level : 17+height-1=16+height := by omega
   simp only [referenceOpeningDigest,if_neg part,level]
   exact congrArg (fun input => digestBytes (heap input)) selected.2
 
 theorem cap_old_boundary_bytes (heap : Nat → Digest) (salt : Index → Digest)
     (positions : Positions) (height node : Nat)
-    (heightBound : height ≤ 7)
-    (lower : 128 ≤ node*2^height) (upper : (node+1)*2^height ≤ 256)
+    (heightBound : height ≤ 8)
+    (lower : 256 ≤ node*2^height) (upper : (node+1)*2^height ≤ 512)
     (active : capOpenRequestedMarks positions node=true ∨
-      (height < 7 ∧ capOpenRequestedMarks positions (node/2)=true)) :
+      (height < 8 ∧ capOpenRequestedMarks positions (node/2)=true)) :
     capOldBoundaryBytes positions (referenceOpening heap salt positions) height node =
       capDigestEncoding
         ((capSubtreeBoundaries (capOpenRequestedMarks positions) height node).map heap) := by

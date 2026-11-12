@@ -31,8 +31,8 @@ theorem cap_check_root_step_frame (compress : Compression) (marked : Nat → Boo
 theorem cap_check_value_root_frame (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (count : Nat) (control : CapDfsControl)
     (state : MachineState) (ready : CapCheckDfsReady limit marked control state)
-    (above : 22528≤(state.getReg .x25).toNat)
-    (other : Nat) (bounded : other<256)
+    (above : 32768≤(state.getReg .x25).toNat)
+    (other : Nat) (bounded : other<512)
     (outside : other ∉ capControlRootWrites marked count control)
     (passed : (capCheckDfsValue oracle marked count control state).2=true) :
     capReadRoot (capCheckDfsValue oracle marked count control state).1 other=
@@ -64,10 +64,10 @@ theorem cap_check_value_root_frame (oracle : Oracle) (limit : Nat)
 
 theorem cap_check_subtree_root_below (oracle : Oracle) (limit : Nat)
     (marked : Nat → Bool) (height node : Nat) (state : MachineState)
-    (lower : 128≤node*2^height) (upper : (node+1)*2^height≤256)
+    (lower : 256≤node*2^height) (upper : (node+1)*2^height≤512)
     (ready : CapCheckDfsReady limit marked (.visit node) state)
-    (above : 22528≤(state.getReg .x25).toNat)
-    (other : Nat) (below : other<node) (bounded : other<256)
+    (above : 32768≤(state.getReg .x25).toNat)
+    (other : Nat) (below : other<node) (bounded : other<512)
     (passed : (capCheckSubtreeValue oracle marked height node state).2=true) :
     capReadRoot (capCheckSubtreeValue oracle marked height node state).1 other=
       capReadRoot state other := by

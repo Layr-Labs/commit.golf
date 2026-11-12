@@ -31,7 +31,7 @@ theorem cap_check_retained_value_block (input : CheckInput) (state : MachineStat
         simpa using present))).extractLsb' (256*block) 256 := by
   have cardinal : input.positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ input.positions
-  have high : 22528 ≤ capProgram.layout.values + 256*ordinal + 32*block := by
+  have high : 32768 ≤ capProgram.layout.values + 256*ordinal + 32*block := by
     norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
       LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES]
     omega
