@@ -46,6 +46,7 @@ structure CapOpenRecordsReady (context : CapOpenRecordContext) (records : List I
   cursor : state.getReg .x25 =
     BitVec.ofNat 64 (context.output+544*(records.length-remaining))
   frame : CapOpenRetainedInputs context.output reference state
+  nonceStride : state.getReg .x17 = 24
 
 theorem cap_open_records_loaded (context : CapOpenRecordContext) (records : List Index)
     (reference state : MachineState) (remaining : Nat)

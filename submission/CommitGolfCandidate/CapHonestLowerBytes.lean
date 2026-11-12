@@ -27,9 +27,9 @@ private theorem encoding_sibling (record : CapLowerRecord) (level : Nat)
 
 theorem cap_honest_lower_loaded_slot (message : Message) (committed : MachineState)
     (positions : Positions) (index : Index) (slot : Nat) (inside : slot < 17) :
-    readBuffer (capProgram.initialState .opening
+    capLowerSlotPayload slot (readBuffer (capProgram.initialState .opening
       (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor, positions))
-      (capLowerSlotAddress capOpenAbiRecordContext index.val slot) 32 =
+      (capLowerSlotAddress capOpenAbiRecordContext index.val slot) 32) =
       (capLowerEncoding (capHonestLowerRecord message committed index))[slot]'(by
         rw [cap_honest_lower_encoding_length]; exact inside) := by
   have bounded : index.val < 16777216 := index.isLt
@@ -39,13 +39,13 @@ theorem cap_honest_lower_loaded_slot (message : Message) (committed : MachineSta
   cases slot with
   | zero =>
     have read := cap_open_input_trapdoor_roundtrip committed positions
-      (1073741824+32*index.val) (by change _ ≤ 1610612736; omega)
-    rw [capLowerSlotAddress, if_pos rfl, contextSalt]
-    simp only [capLowerEncoding, List.getElem_cons_zero, capHonestLowerRecord]
-    have address : capProgram.layout.trapdoor+(1073741824+32*index.val) =
-        5368713248+32*index.val := by rw [rootBase]; omega
+      (1073741824+24*index.val) (by change _ ≤ 1610612736; omega)
+    rw [capLowerSlotPayload, if_pos rfl, capLowerSlotAddress, if_pos rfl, contextSalt]
+    simp only [capLowerEncoding, List.getElem_cons_zero, capHonestLowerRecord, readNonce]
+    have address : capProgram.layout.trapdoor+(1073741824+24*index.val) =
+        5368713248+24*index.val := by rw [rootBase]; omega
     rw [address] at read
-    exact read
+    exact congrArg (fun value : Digest => expandNonce192 (value.extractLsb' 0 192)) read
   | succ slot =>
     have quotient := Nat.div_le_self (16777216+index.val) (2^slot)
     have sibling : ((16777216+index.val)/2^slot) ^^^ 1 < 33554432 :=
@@ -53,7 +53,8 @@ theorem cap_honest_lower_loaded_slot (message : Message) (committed : MachineSta
     have read := cap_open_input_trapdoor_roundtrip committed positions
       (32*(((16777216+index.val)/2^slot) ^^^ 1))
       (by change _ ≤ 1610612736; omega)
-    rw [capLowerSlotAddress, if_neg (Nat.succ_ne_zero slot), contextRoot,
+    rw [capLowerSlotPayload, if_neg (Nat.succ_ne_zero slot),
+      capLowerSlotAddress, if_neg (Nat.succ_ne_zero slot), contextRoot,
       Nat.add_sub_cancel, encoding_sibling _ slot (by omega)]
     change readBuffer _ (capProgram.layout.trapdoor+
       32*(((16777216+index.val)/2^slot) ^^^ 1)) 32 =
@@ -63,9 +64,9 @@ theorem cap_honest_lower_loaded_slot (message : Message) (committed : MachineSta
 theorem cap_honest_lower_loaded_record (message : Message) (committed : MachineState)
     (positions : Positions) (index : Index) :
     (List.ofFn fun slot : Fin 17 =>
-      readBuffer (capProgram.initialState .opening
+      capLowerSlotPayload slot.val (readBuffer (capProgram.initialState .opening
         (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor, positions))
-        (capLowerSlotAddress capOpenAbiRecordContext index.val slot.val) 32) =
+        (capLowerSlotAddress capOpenAbiRecordContext index.val slot.val) 32)) =
       capLowerEncoding (capHonestLowerRecord message committed index) := by
   apply List.ext_getElem
   · rw [List.length_ofFn, cap_honest_lower_encoding_length]

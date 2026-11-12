@@ -21,7 +21,7 @@ theorem cap_open_traversal_entry_execute
       (capProgram.initialState .opening (trapdoor, positions)) allowCoins =
       (do let result ← execute (capProgram.image .opening) fuel
             (capOpenTraversalInitial trapdoor positions) allowCoins
-          return result.charge (29+263*positions.card+2552+2) 0) := by
+          return result.charge (29+266*positions.card+2552+2) 0) := by
   have mark : execute (capProgram.image .opening) (2552+(2+fuel))
       (capOpenRecordsFinal trapdoor positions) allowCoins =
       (do let result ← execute (capProgram.image .opening) (2+fuel)

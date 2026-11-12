@@ -18,7 +18,7 @@ def capOpenSetupInstructions : List Instr :=
    .ADD .x18 .x9 .x6,
    .ADDI .x22 .x0 0, .SLLI .x22 .x22 11, .ADDI .x22 .x22 14,
    .SLLI .x22 .x22 11, .ADDI .x22 .x22 0,
-   .ADDI .x29 .x0 0, .SLLI .x29 .x29 11, .ADDI .x29 .x29 256,
+   .ADDI .x29 .x0 256, .ADDI .x17 .x0 24, .ADDI .x0 .x0 0,
    .ADDI .x31 .x0 1]
 
 def capOpenSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
@@ -99,5 +99,11 @@ theorem cap_open_setup_execute (state : MachineState)
     Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   simp only [instructionCycles, bind_assoc, pure_bind, Execution.charge, Nat.zero_add,
     ← Nat.add_assoc, Nat.reduceAdd]
+
+/-- The nonce stride is an actual initialized register, retained through records. -/
+theorem cap_open_setup_nonce_stride (state : MachineState) :
+    (capOpenInitializedState state).getReg .x17 = 24 := by
+  simp [capOpenInitializedState, capOpenSetupPrefix, capOpenSetupInstructions,
+    execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
 
 end CommitGolfCandidate

@@ -2,7 +2,7 @@ import CommitGolfCandidate.CapLowerParser
 import CommitGolfCandidate.CapOpenHonestSuffix
 import CommitGolfCandidate.HeapModel
 
-/-! The honest lower record authenticates to the stored height-eightteen
+/-! The honest lower record authenticates to the stored height-sixteen
 ancestor. All siblings and salt come from the same actual commitment heap;
 no injectivity or collision-free assumption is used. The emitted-byte
 identification is a separate loader/transcript bridge. -/
@@ -15,7 +15,7 @@ def capHonestLowerRecord (message : Message) (committed : MachineState)
     (index : Index) : CapLowerRecord where
   index := index
   value := message index
-  salt := readBuffer committed (5368713248+32*index.val) 32
+  salt := readNonce committed (5368713248+24*index.val)
   sibling := fun level =>
     heapDigest committed 4294971424 (((LENGTH+index.val)/2^level.val) ^^^ 1)
 
@@ -43,10 +43,10 @@ theorem cap_honest_lower_root (oracle : Oracle) (message : Message)
   have leaf := correct.2.2 index
   change heapDigest committed 4294971424 (LENGTH+index.val) =
     leafDigest oracle.compression
-      (readBuffer committed (5368713248+32*index.val) 32) (message index) at leaf
+      (readNonce committed (5368713248+24*index.val)) (message index) at leaf
   change climb oracle.compression
     (leafDigest oracle.compression
-      (readBuffer committed (5368713248+32*index.val) 32) (message index))
+      (readNonce committed (5368713248+24*index.val)) (message index))
     (heapPath (heapDigest committed 4294971424) (LENGTH+index.val) 16) = _
   rw [← leaf, reconstruct_heap_ancestor oracle.compression
     (heapDigest committed 4294971424) LENGTH correct.2.1]

@@ -20,7 +20,7 @@ theorem cap_open_record_pass_execute
       (capProgram.initialState .opening (trapdoor, positions)) allowCoins =
       (do let result ← execute (capProgram.image .opening) fuel
             (capOpenRecordsFinal trapdoor positions) allowCoins
-          return result.charge (29+263*positions.card) 0) := by
+          return result.charge (29+266*positions.card) 0) := by
   have windows := cap_open_abi_record_windows positions
   have loop := cap_open_records_loop_execute capOpenAbiRecordContext
     (capOpenRequestedIndices positions)
@@ -33,7 +33,7 @@ theorem cap_open_record_pass_execute
       allowCoins =
     (do let result ← execute (capProgram.image .opening) fuel
           (capOpenRecordsFinal trapdoor positions) allowCoins
-        return result.charge (263*positions.card) 0) := by
+        return result.charge (266*positions.card) 0) := by
     simpa only [capProgram, LOG_LENGTH, capOpenRecordsFinal] using loop
   rw [Nat.add_assoc, cap_open_setup_execute _ rfl]
   rw [loop']

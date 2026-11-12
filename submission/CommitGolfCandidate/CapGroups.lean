@@ -7,7 +7,7 @@ open CommitGolf
 set_option maxRecDepth 8192
 set_option maxHeartbeats 4000000
 
-/-- Each cap leaf is a height-eightteen subtree of the original commitment. -/
+/-- Each cap leaf is a height-sixteen subtree of the original commitment. -/
 def capGroup (index : Index) : Fin 256 :=
   ⟨index.val / 2^16, by
     have bound := index.isLt
@@ -28,7 +28,7 @@ theorem cap_groups_card (positions : Positions) :
 theorem cap_groups_empty (positions : Positions) :
     capGroups positions = ∅ ↔ positions = ∅ := by simp [capGroups]
 
-/-- 256 salt/lower-path records and at most 64 cap boundary digests, with no header. -/
+/-- 128 salt/lower-path records and at most 128 cap boundary digests, with no header. -/
 theorem cap_batch_byte_bound (boundary : Nat) (bound : boundary ≤ 128) :
     BATCH * (32 + 16*32) + boundary*32 ≤ 73728 := by
   change 128 * (32 + 16*32) + boundary*32 ≤ 73728

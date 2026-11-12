@@ -15,11 +15,11 @@ theorem cap_open_loaded_record_slot
     (slot : Nat) (slotBound : slot < 17) :
     readBuffer (capOpenRecordsFinal trapdoor positions)
       (capProgram.layout.proof+544*ordinal+32*slot) 32 =
-      readBuffer (capProgram.initialState .opening (trapdoor, positions))
+      capLowerSlotPayload slot (readBuffer (capProgram.initialState .opening (trapdoor, positions))
         (capLowerSlotAddress capOpenAbiRecordContext
           ((capOpenRequestedIndices positions)[ordinal]'(by
             simpa only [capOpenRequestedIndices, Finset.length_sort] using inside)).val slot)
-        32 := by
+        32) := by
   have windows := cap_open_abi_record_windows positions
   have actual := cap_open_records_all_slots capOpenAbiRecordContext
     (capOpenRequestedIndices positions)

@@ -36,7 +36,7 @@ theorem cap_open_records_ready_next (context : CapOpenRecordContext)
     dsimp only [cursor]
     omega
   refine ⟨by omega, cap_open_record_counter state (remaining+1) (by omega) ready.counter,
-    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have exit := cap_open_record_exit state context.roots context.limit cursor position
       (remaining+1) currentPC ready.roots pointer aligned space context.limitBound
       positionBound loaded ready.leaves (by omega) (by omega) ready.counter
@@ -63,5 +63,6 @@ theorem cap_open_records_ready_next (context : CapOpenRecordContext)
       cursor position state reference currentPC ready.roots pointer aligned space
       context.limitBound (by dsimp only [cursor]; omega) positionBound loaded
       ready.leaves ready.marks ready.frame
+  · exact (cap_open_record_register state .x17 (by decide)).trans ready.nonceStride
 
 end CommitGolfCandidate

@@ -74,7 +74,7 @@ theorem cap_open_abi_record_ready
     cap_open_initial_root_base trapdoor positions,
     cap_open_initial_salt_base trapdoor positions,
     registers.2.2.2.2.1, registers.2.2.2.2.2.2.1,
-    registers.2.2.2.2.2.2.2.2.1, ?_, ?_, ?_⟩
+    registers.2.2.2.2.2.2.2.2.1, ?_, ?_, ?_, ?_⟩
   · simp only [capOpenRequestedIndices, Finset.length_sort]
     exact Nat.le_refl _
   · simpa only [ne_of_gt positive, ite_false] using currentPC
@@ -84,5 +84,6 @@ theorem cap_open_abi_record_ready
       Nat.mul_zero, Nat.add_zero] using cap_open_initial_proof_pointer trapdoor positions
   · intro address high below
     exact cap_open_initial_byte_frame trapdoor positions _ address below
+  · exact cap_open_setup_nonce_stride initial
 
 end CommitGolfCandidate

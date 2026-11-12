@@ -1,7 +1,8 @@
 import CommitGolfCandidate.Programs
 
-/-! Cap opening/check assembly. The complete certificate is assembled in
-CapCertificate. Commitment code is supplied by the candidate and certified separately. -/
+/-! Height-eight cap opening/check assembly with packed 192-bit nonces.
+CapCertificate assembles the complete machine and security certificate;
+commitment code is supplied by the reference candidate. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
@@ -45,9 +46,10 @@ def capOpeningCode (depth : Nat) : List Asm :=
   let capLeaves := 2^(capHeight depth)
   [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++
   li 19 leaves ++ li 6 (64*leaves) ++ [regop 18 9 6] ++
-  li 22 28672 ++ li 29 capLeaves ++ [addi 31 0 1, .branch 0 27 0 "open-done",
-   .label "open-position", ld 20 24 0, shift 6 20 5, regop 23 18 6] ++
-  copyDigest 23 25 ++ [addi 25 25 32, regop 20 20 19] ++ li 28 lower ++
+  li 22 28672 ++ [addi 29 0 capLeaves, addi 17 0 24, addi 0 0 0] ++ [addi 31 0 1, .branch 0 27 0 "open-done",
+   .label "open-position", ld 20 24 0, regop 6 20 17 0 1, regop 23 18 6] ++
+  (copyDigest 23 25).take 6 ++ [sd 0 25 24, addi 0 0 0] ++
+  [addi 25 25 32, regop 20 20 19] ++ li 28 lower ++
   [.branch 0 28 0 "open-group", .label "open-path",
    insn (1*2^20 + 20*2^15 + 4*2^12 + 7*2^7 + 0x13),
    shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
@@ -85,7 +87,7 @@ def capCheckCode (depth : Nat) : List Asm :=
   [.jump 0 "accept", .label "cap-empty", .branch 1 17 0 "reject",
    .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++ leafSubroutine
 
-/-- Cap images; the complete machine and security certificate is assembled separately. -/
+/-- Cap images; the complete certificate is assembled separately. -/
 def capExperimental (depth : Nat) : Submission :=
   { candidate depth with image := fun program =>
       match program with

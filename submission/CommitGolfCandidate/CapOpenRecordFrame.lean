@@ -1,4 +1,5 @@
 import CommitGolfCandidate.CapOpenRecordProjection
+import CommitGolfCandidate.CapNonceFrame
 
 /-! The complete record preserves the admitted high input interval below the
 initial proof-output floor. The path uses a fresh self-reference, because
@@ -34,7 +35,7 @@ theorem cap_open_record_retained_inputs (floor rootBase limit cursor position : 
     (cap_open_record_prepare_register state 3 (by decide) .x25 (by decide)).trans pointer
   have salted : CapOpenRetainedInputs floor reference (capOpenSaltedState state) := by
     rw [capOpenSaltedState]
-    exact cap_open_retained_copy floor cursor _ reference copyPointer aligned
+    exact cap_open_retained_nonce floor cursor _ reference copyPointer aligned
       (by omega) before prepared
   have pathFrame : CapOpenRetainedInputs floor reference
       (capOpenRecordPathState state) := by

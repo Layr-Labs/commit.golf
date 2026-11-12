@@ -16,7 +16,7 @@ theorem cap_old_opening_heap_digest (committed : MachineState)
     readBuffer (openingResult trapdoor positions).state
       (submission.layout.proof+800*ordinal+32*part) 32 =
       referenceOpeningDigest (heapDigest committed 4294971424)
-        (fun index => readBuffer committed (5368713248+32*index.val) 32)
+        (fun index => readNonce committed (5368713248+24*index.val))
         positions ordinal part := by
   dsimp only
   have records := opening_output_records committed positions ordinal present
@@ -34,7 +34,7 @@ theorem cap_old_opening_heap_bytes (committed : MachineState) (positions : Posit
     let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
     submission.readProof (openingResult trapdoor positions) =
       referenceOpening (heapDigest committed 4294971424)
-        (fun index => readBuffer committed (5368713248+32*index.val) 32) positions := by
+        (fun index => readNonce committed (5368713248+24*index.val)) positions := by
   dsimp only
   rw [Submission.readProof,opening_result_succeeded,if_pos rfl,opening_result_length]
   unfold referenceOpening

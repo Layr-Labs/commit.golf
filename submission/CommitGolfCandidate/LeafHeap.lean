@@ -64,7 +64,7 @@ theorem commit_leaves_digests (oracle : Oracle) (state : MachineState)
     (bounded : saltAddress+32*count < 2^64)
     (data : ∀ index < count, ∀ block < 8,
       readBuffer state (source+256*index+32*block) 32 = (message index).extractLsb' (256*block) 256)
-    (saltData : ∀ index < count, readBuffer state (saltAddress+32*index) 32 = salts index) :
+    (saltData : ∀ index < count, readNonce state (saltAddress+24*index) = salts index) :
     ∀ index < count,
       readBuffer (checkEvaluation oracle (commitLeaves state count)).1 (destination+32*index) 32 =
         leafDigest oracle.compression (salts index) (message index) := by
@@ -80,7 +80,7 @@ theorem commit_leaves_digests (oracle : Oracle) (state : MachineState)
     have nextDestination : next.getReg .x23 = BitVec.ofNat 64 (destination+32) := by
       rw [regs.2.2.1, heapPointer, BitVec.ofNat_add]
       rfl
-    have nextSalt : next.getReg .x18 = BitVec.ofNat 64 (saltAddress+32) := by
+    have nextSalt : next.getReg .x18 = BitVec.ofNat 64 (saltAddress+24) := by
       rw [regs.2.1, saltPointer, BitVec.ofNat_add]
       rfl
     have nextData (index : Nat) (inside : index < count) (block : Nat) (blockInside : block < 8) :
@@ -92,9 +92,11 @@ theorem commit_leaves_digests (oracle : Oracle) (state : MachineState)
       · congr 1
         omega
     have nextSaltData (index : Nat) (inside : index < count) :
-        readBuffer next (saltAddress+32+32*index) 32 = salts (index+1) := by
+        readNonce next (saltAddress+24+24*index) = salts (index+1) := by
+      unfold readNonce
       rw [commit_position_preserves_digest oracle state source destination _ scratch messagePointer heapPointer
         above (by omega) (by omega) (by omega) (by omega) (Or.inr (by omega)) (Or.inr (by omega))]
+      change readNonce state (saltAddress+24+24*index)=_
       convert saltData (index+1) (by omega) using 1
       · congr 1
         omega
@@ -114,7 +116,7 @@ theorem commit_leaves_digests (oracle : Oracle) (state : MachineState)
       rw [← saltData 0 (by omega)]
       simp only [Nat.mul_zero, Nat.add_zero]
     | succ index =>
-      have record := ih next (source+256) (destination+32) (saltAddress+32)
+      have record := ih next (source+256) (destination+32) (saltAddress+24)
         (fun i => message (i+1)) (fun i => salts (i+1)) nextScratch nextSource nextDestination nextSalt
         (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)
         nextData nextSaltData index (by omega)

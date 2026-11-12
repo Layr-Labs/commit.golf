@@ -27,7 +27,7 @@ theorem cap_postprocess_loaded (message : Message) (committed : MachineState)
     (positions : Positions) (positive : 0 < positions.card) :
     capPostprocess positions
       (referenceOpening (heapDigest committed 4294971424)
-        (fun index => readBuffer committed (5368713248+32*index.val) 32) positions) =
+        (fun index => readNonce committed (5368713248+24*index.val)) positions) =
       capOpenLoadedBytes
         (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor)
         positions := by

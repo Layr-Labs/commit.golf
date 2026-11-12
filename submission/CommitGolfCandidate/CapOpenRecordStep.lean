@@ -4,7 +4,7 @@ import CommitGolfCandidate.CapOpenGroupControl
 
 /-! One complete, checked opening record. It copies a salt and sixteen lower
 siblings, then sets the corresponding cap leaf mark. The loaded index bounds
-identify the final heap node; the macro charges exactly 263 ordinary cycles
+identify the final heap node; the macro charges exactly 266 cycles across 263 instructions
 and makes no oracle query. Original input/serialized-byte refinements are
 proved separately from this runtime composition. -/
 namespace CommitGolfCandidate
@@ -59,17 +59,18 @@ theorem cap_open_record_execute (state : MachineState)
     (rootBound : rootBase+1073741824 ≤ MEMORY_BYTES)
     (salts : state.getReg .x18 = BitVec.ofNat 64 saltBase)
     (saltAligned : saltBase % 8 = 0)
-    (saltBound : saltBase+32*position+32 ≤ MEMORY_BYTES)
+    (saltBound : saltBase+24*position+32 ≤ MEMORY_BYTES)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (cursorAligned : cursor % 8 = 0) (space : cursor+544 ≤ limit)
     (limitBound : limit ≤ MEMORY_BYTES)
     (leaves : state.getReg .x19 = 16777216)
     (marks : state.getReg .x22 = 28672)
+    (stride : state.getReg .x17 = 24)
     (fuel : Nat) (allowCoins : Bool) :
     execute ((capExperimental 24).image .opening) (263+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capOpenRecordState state) allowCoins
-          return result.charge 263 0) := by
+          return result.charge 266 0) := by
   have ready := cap_open_record_path_ready rootBase limit cursor position state
     pc roots pointer cursorAligned space positionBound loaded leaves
   have pathRun := cap_open_path_loop_execute rootBase limit rootBound rootAligned
@@ -84,7 +85,7 @@ theorem cap_open_record_execute (state : MachineState)
     (256+position/65536) groupPC groupMark groupIndex (by omega) fuel allowCoins
   rw [show 263+fuel = 17+(15*16+(6+fuel)) by omega,
     cap_open_record_start_execute state position saltBase cursor pc indexValid loaded
-      salts pointer saltAligned saltBound cursorAligned (by omega),
+      salts pointer saltAligned saltBound cursorAligned (by omega) stride,
     pathRun]
   rw [← capOpenRecordGroupState, groupRun, ← capOpenRecordState]
   simp only [bind_assoc, pure_bind, charge_pair, Nat.reduceAdd]

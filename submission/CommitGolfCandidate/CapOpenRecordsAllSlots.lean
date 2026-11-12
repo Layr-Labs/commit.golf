@@ -40,8 +40,8 @@ theorem cap_open_records_all_slots (context : CapOpenRecordContext)
     (slot : Nat) (slotBound : slot < 17) :
     readBuffer (capCountedRun capOpenRecordState remaining state)
       (context.output+544*ordinal+32*slot) 32 =
-      readBuffer inputReference
-        (capLowerSlotAddress context (records[ordinal]'inside).val slot) 32 := by
+      capLowerSlotPayload slot (readBuffer inputReference
+        (capLowerSlotAddress context (records[ordinal]'inside).val slot) 32) := by
   induction remaining generalizing state with
   | zero => omega
   | succ remaining ih =>
@@ -58,7 +58,7 @@ theorem cap_open_records_all_slots (context : CapOpenRecordContext)
         (capLowerSlotAddress context (records[ordinal]'inside).val slot) 32
         window.1 window.2 ready.frame
       subst ordinal
-      exact entry.trans original
+      exact entry.trans (congrArg (capLowerSlotPayload slot) original)
     · have next := cap_open_records_ready_next context records inputReference state remaining
         countBound indexSpace outputSpace inputs ready
       rw [capCountedRun.eq_2]

@@ -11,7 +11,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 
 def capOpenSaltedState (state : MachineState) : MachineState :=
-  capDigestCopyPrefix false (capOpenRecordPrefix state 3) 8
+  capNonceEightState (capOpenRecordPrefix state 3)
 
 def capOpenRecordPathState (state : MachineState) : MachineState :=
   capOpenRecordTailPrefix (capOpenSaltedState state) 6
@@ -22,7 +22,7 @@ theorem cap_open_record_salted_register (state : MachineState) (reg : Reg)
     (outside : reg ≠ .x6 ∧ reg ≠ .x20 ∧ reg ≠ .x23) :
     (capOpenSaltedState state).getReg reg = state.getReg reg := by
   rw [capOpenSaltedState]
-  exact (cap_copy_prefix_register false _ 8 (by decide) reg outside.1).trans
+  exact (cap_nonce_eight_register _ reg outside.1).trans
     (cap_open_record_prepare_register state 3 (by decide) reg
       ⟨outside.2.1, outside.1, outside.2.2⟩)
 
@@ -46,7 +46,7 @@ theorem cap_open_record_path_index (state : MachineState) (position : Nat)
     (capOpenRecordPathState state).getReg .x20 =
       BitVec.ofNat 64 (16777216+position) := by
   have salted : (capOpenSaltedState state).getReg .x20 = BitVec.ofNat 64 position := by
-    rw [capOpenSaltedState, cap_copy_prefix_register false _ 8 (by decide) .x20 (by decide),
+    rw [capOpenSaltedState, cap_nonce_eight_register _ .x20 (by decide),
       cap_open_record_index, loaded]
   rw [capOpenRecordPathState, cap_open_record_tail_index, salted,
     cap_open_record_salted_register state .x19 (by decide), leaves]
@@ -56,7 +56,7 @@ theorem cap_open_record_path_index (state : MachineState) (position : Nat)
 theorem cap_open_record_path_pc (state : MachineState) (pc : state.pc = 4212) :
     (capOpenRecordPathState state).pc = 4280 := by
   rw [capOpenRecordPathState, cap_open_record_tail_pc _ 6 (by decide),
-    capOpenSaltedState, cap_copy_prefix_pc false _ 8 (by decide),
+    capOpenSaltedState, cap_nonce_eight_pc _,
     cap_open_record_prepare_pc state 3 (by decide), pc]
   rfl
 
@@ -88,17 +88,18 @@ theorem cap_open_record_start_execute (state : MachineState)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 position)
     (salts : state.getReg .x18 = BitVec.ofNat 64 saltBase)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (saltAligned : saltBase % 8 = 0) (saltBound : saltBase+32*position+32 ≤ MEMORY_BYTES)
+    (saltAligned : saltBase % 8 = 0) (saltBound : saltBase+24*position+32 ≤ MEMORY_BYTES)
     (cursorAligned : cursor % 8 = 0) (cursorBound : cursor+32 ≤ MEMORY_BYTES)
+    (stride : state.getReg .x17 = 24)
     (fuel : Nat) (allowCoins : Bool) :
     execute ((capExperimental 24).image .opening) (17+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capOpenRecordPathState state) allowCoins
-          return result.charge 17 0) := by
-  have source := cap_open_record_salt_address state position saltBase loaded salts
+          return result.charge 20 0) := by
+  have source := cap_open_record_salt_address state position saltBase loaded salts stride
   have destination := (cap_open_record_prepare_register state 3 (by decide) .x25
     (by decide)).trans pointer
-  have saltSmall : saltBase+32*position < 2^64 := by
+  have saltSmall : saltBase+24*position < 2^64 := by
     simp only [MEMORY_BYTES] at saltBound
     omega
   have cursorSmall : cursor < 2^64 := by
@@ -123,10 +124,10 @@ theorem cap_open_record_start_execute (state : MachineState)
     rw [cap_open_record_prepare_pc state 3 (by decide), pc]
     rfl
   have tailPC : (capOpenSaltedState state).pc = 4256 := by
-    rw [capOpenSaltedState, cap_copy_prefix_pc false _ 8 (by decide), copyPC]
+    rw [capOpenSaltedState, cap_nonce_eight_pc _, copyPC]
     rfl
   have tailRun : execute ((capExperimental 24).image .opening) (6+fuel)
-      (capDigestCopyPrefix false (capOpenRecordPrefix state 3) 8) allowCoins =
+      (capNonceEightState (capOpenRecordPrefix state 3)) allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capOpenRecordPathState state) allowCoins
           return result.charge 6 0) := by
@@ -134,8 +135,9 @@ theorem cap_open_record_start_execute (state : MachineState)
     exact cap_open_record_tail_execute _ tailPC fuel allowCoins
   rw [show 17+fuel = 3+(8+(6+fuel)) by omega,
     cap_open_record_prepare_execute state pc indexValid,
-    cap_digest_copy_execute _ false 4224 cap_open_record_salt_copy_fetched
-      (capOpenRecordPrefix state 3) copyPC sourceAccess destinationAccess,
+    cap_nonce_eight_execute _ cap_open_record_salt_copy_fetched
+      cap_open_record_nonce_nop_fetched (capOpenRecordPrefix state 3) copyPC
+      (fun word => sourceAccess ⟨word.val, by have bound := word.isLt; omega⟩) destinationAccess,
     tailRun]
   simp only [bind_assoc, pure_bind, charge_pair, Nat.reduceAdd]
 

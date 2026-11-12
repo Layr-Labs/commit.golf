@@ -2,6 +2,7 @@ import CommitGolfCandidate.LeafHeap
 import CommitGolfCandidate.ParentRefinement
 import CommitGolfCandidate.BufferRefinement
 import CommitGolfCandidate.CommitInput
+import CommitGolfCandidate.NonceBuffer
 
 /-! Leaf contents established from the real commitment ABI and private salt reply. -/
 namespace CommitGolfCandidate
@@ -34,7 +35,7 @@ theorem commit_input_memory (message : Message) {bits : Nat} (answer : BitVec bi
   rfl
 
 /-- Random salt generation leaves all original message blocks intact. -/
-theorem commit_ready_message_block (message : Message) (answer : BitVec (256*LENGTH))
+theorem commit_ready_message_block (message : Message) (answer : BitVec (192*LENGTH))
     (index : Index) (block : Nat) (inside : block < 8) :
     readBuffer (commitInputReady message answer) (4096+256*index.val+32*block) 32 =
       (message index).extractLsb' (256*block) 256 := by
@@ -44,32 +45,29 @@ theorem commit_ready_message_block (message : Message) (answer : BitVec (256*LEN
     (by omega) (Or.inl (by omega))]
   exact commit_input_block message index block inside
 
-/-- Each sampled 256-bit salt occupies its designated digest slot. -/
-theorem commit_ready_salt (message : Message) (answer : BitVec (256*LENGTH))
+/-- Each packed24-byte nonce is read as a zero-padded256-bit chaining state. -/
+theorem commit_ready_salt (message : Message) (answer : BitVec (192*LENGTH))
     (index : Index) :
-    readBuffer (commitInputReady message answer) (5368713248+32*index.val) 32 =
-      answer.extractLsb' (256*index.val) 256 := by
-  have indexBound : index.val < 2^24 := index.isLt
-  rw [read_buffer_memory_congr _ _ (commit_input_memory message answer)]
-  have written := write_bits_digest (submission.initialState .commit message) 5368713248
-    (32*index.val) answer (by change 32*index.val+32 ≤ 536870912; omega) (by decide)
-  simpa only [← Nat.mul_assoc, Nat.reduceMul] using written
+    readNonce (commitInputReady message answer) (5368713248+24*index.val)=
+      expandNonce192 (answer.extractLsb' (192*index.val) 192) := by
+  rw [nonce_read_memory_congr _ _ (commit_input_memory message answer)]
+  exact write_bits_nonce_chunk LENGTH (submission.initialState .commit message) 5368713248 answer index (by decide)
 
 attribute [local irreducible] commitLeaves commitInputReady checkEvaluation
 
 /-- After all 2^24 actual leaf iterations, each heap leaf is the salted digest of
 that exact input entry, for every message, salt reply, and compression oracle. -/
 theorem commit_input_leaf_heap (oracle : Oracle) (message : Message)
-    (answer : BitVec (256*LENGTH)) (index : Index) :
+    (answer : BitVec (192*LENGTH)) (index : Index) :
     readBuffer (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
       (4831842336+32*index.val) 32 =
-        leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index) := by
+        leafDigest oracle.compression (expandNonce192 (answer.extractLsb' (192*index.val) 192)) (message index) := by
   let wrap (i : Nat) : Index := ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩
   have wrapped (i : Nat) (inside : i < LENGTH) : (wrap i).val = i := Nat.mod_eq_of_lt inside
   have regs := commit_input_registers message answer
   have result := commit_leaves_digests oracle (commitInputReady message answer)
     4096 4831842336 5368713248 LENGTH (fun i => message (wrap i))
-    (fun i => answer.extractLsb' (256*i) 256)
+    (fun i => expandNonce192 (answer.extractLsb' (192*i) 192))
     (by rw [regs.2.2.2.2.2.2.1, regs.1]; rfl) regs.1 regs.2.2.2.2.1 regs.2.2.1
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
     (by
@@ -99,12 +97,12 @@ private theorem parent_start_memory (state : MachineState) :
 
 /-- The actual leaf and parent loops together construct a consistent heap whose
 leaves are the salted input digests. No hypothesis about heap contents is required. -/
-theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec (256*LENGTH)) :
+theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec (192*LENGTH)) :
     let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
     let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH-1))).1
     HeapParents oracle.compression finished 4294971424 LENGTH 0 ∧
       ∀ index : Index, heapDigest finished 4294971424 (LENGTH+index.val) =
-        leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index) := by
+        leafDigest oracle.compression (expandNonce192 (answer.extractLsb' (192*index.val) 192)) (message index) := by
   let ready := commitInputReady message answer
   let leaves := (checkEvaluation oracle (commitLeaves ready LENGTH)).1
   let parents := commitParentsStartState leaves
@@ -139,11 +137,11 @@ theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec
 /-- Every path through that constructed heap reconstructs the root from the
 corresponding salted input leaf. -/
 theorem commit_input_tree_reconstruct (oracle : Oracle) (message : Message)
-    (answer : BitVec (256*LENGTH)) (index : Index) :
+    (answer : BitVec (192*LENGTH)) (index : Index) :
     let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
     let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH-1))).1
     climb oracle.compression
-      (leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index))
+      (leafDigest oracle.compression (expandNonce192 (answer.extractLsb' (192*index.val) 192)) (message index))
       (heapPath (heapDigest finished 4294971424) (LENGTH+index.val) LOG_LENGTH) =
         heapDigest finished 4294971424 1 := by
   have tree := commit_input_tree oracle message answer

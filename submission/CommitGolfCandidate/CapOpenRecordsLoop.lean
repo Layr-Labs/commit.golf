@@ -1,4 +1,5 @@
 import CommitGolfCandidate.CapOpenRecordsNext
+import CommitGolfCandidate.CostedCountedLoop
 
 /-! Actual counted record pass, with no compression queries. Every callback
 derives the index load from the retained reference interval and checks the
@@ -31,8 +32,8 @@ theorem cap_open_records_loop_execute (context : CapOpenRecordContext)
     execute ((capExperimental 24).image .opening) (263*remaining+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capCountedRun capOpenRecordState remaining state) allowCoins
-          return result.charge (263*remaining) 0) := by
-  apply cap_counted_run_execute _ 263 capOpenRecordState
+          return result.charge (266*remaining) 0) := by
+  apply cap_counted_run_execute_costed _ 263 266 capOpenRecordState
     (CapOpenRecordsReady context records reference)
     (fun residual current currentReady =>
       cap_open_records_ready_next context records reference current residual
@@ -68,7 +69,7 @@ theorem cap_open_records_loop_execute (context : CapOpenRecordContext)
     currentReady.roots context.rootAligned context.rootBound currentReady.salts
     context.saltAligned (by omega) currentReady.cursor
     (by dsimp only [cursor]; omega) (by dsimp only [cursor]; omega)
-    context.limitBound currentReady.leaves currentReady.marks extra coins
+    context.limitBound currentReady.leaves currentReady.marks currentReady.nonceStride extra coins
 
 theorem cap_open_records_loop_finished (context : CapOpenRecordContext)
     (records : List Index) (reference : MachineState)

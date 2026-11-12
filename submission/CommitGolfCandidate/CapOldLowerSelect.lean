@@ -33,7 +33,7 @@ theorem cap_old_lower_loaded (message : Message) (committed : MachineState)
     (positions : Positions) :
     capOldLowerBytes positions
       (referenceOpening (heapDigest committed 4294971424)
-        (fun index => readBuffer committed (5368713248+32*index.val) 32) positions) =
+        (fun index => readNonce committed (5368713248+24*index.val)) positions) =
       capDigestEncoding (capOpenLowerDigests
         (readBuffer committed capProgram.layout.trapdoor capProgram.sizes.trapdoor)
         positions) := by
@@ -52,8 +52,8 @@ theorem cap_old_lower_loaded (message : Message) (committed : MachineState)
     simp only [openingIndex,dif_pos present,index,capOpenRequestedIndices]
   have loaded := cap_honest_lower_loaded_slot message committed positions
     index (slot.val%17) inside
-  change _ = readBuffer _ (capLowerSlotAddress capOpenAbiRecordContext index.val
-    (slot.val%17)) 32
+  change _ = capLowerSlotPayload (slot.val%17) (readBuffer _
+    (capLowerSlotAddress capOpenAbiRecordContext index.val (slot.val%17)) 32)
   rw [loaded]
   rw [cap_lower_slot_value _ _ inside]
   by_cases zero : slot.val%17=0

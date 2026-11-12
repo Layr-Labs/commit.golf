@@ -31,11 +31,11 @@ theorem parent_schedule_body (schedule : ParentSchedule) (valid : schedule.Valid
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (35 * count + schedule.instructions groups + 20 + fuel)
+    execute (submission.image .commit) (34 * count + schedule.instructions groups + 20 + fuel)
       (cursorLeafFrame state messageBase) true =
       (do let finished ← commitBody state count
           return ⟨.success, cursorBaseFrame finished messageBase,
-            91 * count + schedule.cycles groups + 20, 9 * count - 1⟩) := by
+            90 * count + schedule.cycles groups + 20, 9 * count - 1⟩) := by
   have mainPositive : 0<schedule.width*groups := Nat.mul_pos valid.positive positiveGroups
   have residualPositive : 0<schedule.parents groups := by
     change 0<schedule.initialPlan.parents+schedule.width*groups
@@ -57,8 +57,8 @@ theorem parent_schedule_body (schedule : ParentSchedule) (valid : schedule.Valid
     rw [hoist_pc_self] at positive
     simpa only [show count - 1 + 1 = count by omega] using positive
   rw [erased] at leavesRun
-  rw [show 35 * count + schedule.instructions groups + 20 + fuel =
-      2 + (35 * count + (7 + (schedule.instructions groups + (11 + fuel)))) by omega,
+  rw [show 34 * count + schedule.instructions groups + 20 + fuel =
+      2 + (34 * count + (7 + (schedule.instructions groups + (11 + fuel)))) by omega,
     contiguous_entry _ entryFetched (cursorLeafFrame state messageBase) initialPC, contiguous_entry_frame, leavesRun]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support

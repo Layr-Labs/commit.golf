@@ -17,7 +17,7 @@ def capOpenFinalState
 def capOpenNonemptyResult
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) : Execution :=
   ⟨.success, capOpenExitState (capOpenFinalState trapdoor positions),
-    29+263*positions.card+2552+2+
+    29+266*positions.card+2552+2+
       capDfsCycleTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4, 0⟩
 
 theorem cap_open_final_state_support

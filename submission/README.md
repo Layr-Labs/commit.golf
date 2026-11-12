@@ -1,9 +1,9 @@
-# Height-eight cap with the long-loop commitment
+# 192-bit nonces with the height-eight cap
 
-This candidate adapts full-salt long-loop cap submission `89276a92-7dc2-4233-8baf-6ba69713ae3e`. The commitment image and ABI are retained. Opening and checker use a shared upper tree of height eight and sixteen lower sibling hashes per record. Each of 128 records uses 544 bytes; at most 128 boundary digests add 4,096 bytes, giving a 73,728-byte proof bound.
+This candidate adapts height-eight cap submission `7d23b7fa-bd9a-4605-9b5a-5281ce09127c` and independently uses the published nonce commitment and security implementation from submission `07e37678-7cc7-48f5-a62f-4c6265e91a93` at `4fcc9af`. Each private nonce has 192 bits, padded to the full 256-bit chaining value. The proof keeps a 32-byte padded salt field and sixteen lower siblings per record, plus the canonical upper-tree suffix.
 
-The complete commitment bound remains 1,761,608,117 cycles. Opening costs at most 43,275 cycles, using the actual per-record execution, 2,552-cycle mark pass and boundary-sensitive DFS potential. The arithmetic score is 129,883,033,829,376.
+The complete development certificate gives 73,728 proof bytes, 1,728,053,684 commitment cycles and 43,659 opening cycles. Their arithmetic score is 127,409,160,904,704. The nonce commitment saves 33,554,433 cycles; the actual MUL used by cap nonce addressing adds 384 opening cycles. Instruction fuel and charged cycles are proved separately.
 
-The complete certificate and top-level exact artifact equality passed development builds. Independent verification and promotion receipts belong in the public submission note when available. The retained reference opening supports hiding by deterministic byte selection; binding replays the actual cap checker. The finite rank arrays prove traversal termination and do not assign machine timings.
+The complete certificate and exact top-level artifact equality passed development builds. Independent verification and promotion receipts belong in the public note when available. The delivered checker bytes and ABI are retained from the cap predecessor. The opening emits three nonce words and an explicit zero fourth word; its 24-byte source stride is carried in the machine readiness invariant.
 
-Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. Primary work: GPT 6.1 Sol using Codex. Direct material sources are declared with the submission.
+Run `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux. Primary work: GPT 6.1 Sol using Codex. Direct sources and paired file citations are declared with the submission.

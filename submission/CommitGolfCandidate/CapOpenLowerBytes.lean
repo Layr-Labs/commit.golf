@@ -12,12 +12,12 @@ set_option maxHeartbeats 200000
 def capOpenLowerDigests
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) : List Digest :=
   List.ofFn (fun slot : Fin (17*positions.card) =>
-    readBuffer (capProgram.initialState .opening (trapdoor, positions))
+    capLowerSlotPayload (slot.val%17) (readBuffer (capProgram.initialState .opening (trapdoor, positions))
       (capLowerSlotAddress capOpenAbiRecordContext
         ((capOpenRequestedIndices positions)[slot.val/17]'(by
           have bounded := slot.isLt
           simp only [capOpenRequestedIndices, Finset.length_sort]
-          omega)).val (slot.val%17)) 32)
+          omega)).val (slot.val%17)) 32))
 
 theorem cap_open_lower_digests_length
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions) :

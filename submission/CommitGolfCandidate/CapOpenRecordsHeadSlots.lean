@@ -11,8 +11,12 @@ set_option maxHeartbeats 200000
 attribute [local irreducible] capOpenRecordState
 
 def capLowerSlotAddress (context : CapOpenRecordContext) (position slot : Nat) : Nat :=
-  if slot = 0 then context.salts+32*position
+  if slot = 0 then context.salts+24*position
   else context.roots+32*(((16777216+position)/2^(slot-1)) ^^^ 1)
+
+/-- The proof salt is the padded 192-bit nonce; other slots are full digests. -/
+def capLowerSlotPayload (slot : Nat) (raw : Digest) : Digest :=
+  if slot = 0 then expandNonce192 (raw.extractLsb' 0 192) else raw
 
 theorem cap_open_records_head_slot (context : CapOpenRecordContext)
     (records : List Index) (inputReference : MachineState)
@@ -28,9 +32,9 @@ theorem cap_open_records_head_slot (context : CapOpenRecordContext)
     (slot : Nat) (slotBound : slot < 17) :
     readBuffer (capCountedRun capOpenRecordState (remaining+1) state)
       (context.output+544*(records.length-(remaining+1))+32*slot) 32 =
-      readBuffer state (capLowerSlotAddress context
+      capLowerSlotPayload slot (readBuffer state (capLowerSlotAddress context
         (records[records.length-(remaining+1)]'(by have bound := ready.bounded; omega)).val
-        slot) 32 := by
+        slot) 32) := by
   have bounded := ready.bounded
   have ordinalBound : records.length-(remaining+1) < records.length := by omega
   let position := (records[records.length-(remaining+1)]'ordinalBound).val
@@ -55,18 +59,18 @@ theorem cap_open_records_head_slot (context : CapOpenRecordContext)
     (by dsimp only [cursor]; omega)
   rw [capCountedRun.eq_2]
   change readBuffer (capCountedRun capOpenRecordState remaining (capOpenRecordState state))
-    (cursor+32*slot) 32 = readBuffer state (capLowerSlotAddress context position slot) 32
+    (cursor+32*slot) 32 = capLowerSlotPayload slot (readBuffer state (capLowerSlotAddress context position slot) 32)
   rw [retained]
   by_cases salt : slot = 0
   · subst slot
-    simp only [Nat.mul_zero, Nat.add_zero, capLowerSlotAddress, ite_true]
+    simp only [Nat.mul_zero, Nat.add_zero, capLowerSlotAddress, capLowerSlotPayload, ite_true]
     exact cap_open_record_salt_slot context.roots context.salts context.limit cursor position
       state (by simpa using ready.pc) ready.roots ready.salts ready.cursor aligned space
       context.limitBound (by dsimp only [cursor]; omega) context.saltAligned
-      (by dsimp only [cursor]; omega) positionBound loaded ready.leaves ready.marks
+      (by dsimp only [cursor]; omega) positionBound loaded ready.leaves ready.marks ready.nonceStride
   · have sibling : slot-1 < 16 := by omega
     have address : cursor+32*slot = cursor+32+32*(slot-1) := by omega
-    rw [capLowerSlotAddress, if_neg salt, address]
+    rw [capLowerSlotPayload, if_neg salt, capLowerSlotAddress, if_neg salt, address]
     exact cap_open_record_sibling_slot context.roots context.limit cursor position
       state (by simpa using ready.pc) ready.roots ready.cursor aligned space
       context.limitBound (by dsimp only [cursor]; omega) context.rootAligned

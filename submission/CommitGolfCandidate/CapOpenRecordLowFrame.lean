@@ -34,7 +34,7 @@ theorem cap_open_record_before_group_frame (rootBase limit cursor position : Nat
   have saltedFrame : CapOpenInputFrame cursor state (capOpenSaltedState state) := by
     intro address below
     rw [capOpenSaltedState]
-    exact (cap_copy_byte_outside false (capOpenRecordPrefix state 3) cursor address
+    exact (cap_nonce_byte_outside (capOpenRecordPrefix state 3) cursor address
       preparedPointer aligned (by omega) (by omega) (Or.inl below)).trans
       (byte_memory state _ (cap_open_record_prepare_memory state 3 (by decide)) address)
   have pathFrame : CapOpenInputFrame cursor state (capOpenRecordPathState state) := by

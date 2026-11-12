@@ -9,7 +9,7 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 2000000
 
 def fusedLatchInstructions : List Instr :=
-  [.ADDI .x18 .x18 32, .ADDI .x23 .x23 32, .BLTU .x23 .x22 7912]
+  [.ADDI .x18 .x18 24, .ADDI .x23 .x23 32, .BLTU .x23 .x22 7912]
 
 def fusedLatchPrefix (state : MachineState) (count : Nat) : MachineState :=
   (fusedLatchInstructions.take count).foldl execInstrBr state
@@ -20,7 +20,7 @@ def FusedLatchFetched (image : Image) : Prop :=
       some (.base ((fusedLatchInstructions[i]?).getD .EBREAK))
 
 def fusedLatchState (state : MachineState) : MachineState :=
-  ((state.setReg .x18 (state.getReg .x18 + 32)).setReg .x23
+  ((state.setReg .x18 (state.getReg .x18 + 24)).setReg .x23
     (state.getReg .x23 + 32)).setPC
       (if BitVec.ult (state.getReg .x23 + 32) (state.getReg .x22)
         then 4280 else 4564)

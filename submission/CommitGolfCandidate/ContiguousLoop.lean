@@ -14,7 +14,7 @@ theorem contiguous_normalize_self_pc (state : MachineState) (messageBase : Word)
   rfl
 
 /-- Natural reference progress proves all memory accesses and heap-end branches.
-The real repeated cost is 35 instructions and 91 cycles per committed leaf. -/
+The real repeated cost is 34 instructions and 90 cycles per committed leaf. -/
 theorem contiguous_leaves (saltFetched : ContiguousSaltFetched (submission.image .commit))
     (prefixFetched : ContiguousPrefixFetched (submission.image .commit))
     (tailFetched : ContiguousTailFetched (submission.image .commit))
@@ -24,18 +24,18 @@ theorem contiguous_leaves (saltFetched : ContiguousSaltFetched (submission.image
     (link : state.getReg .x1 = 4316)
     (window : (state.getReg .x23).toNat + 32 * remaining = (state.getReg .x22).toNat)
     (fuel : Nat) :
-    execute (submission.image .commit) (35 * remaining + fuel)
-      (cursorNormalize state messageBase (if remaining = 0 then 4596 else 4456)) true =
+    execute (submission.image .commit) (34 * remaining + fuel)
+      (cursorNormalize state messageBase (if remaining = 0 then 4592 else 4456)) true =
       (do let finished ← commitLeaves state remaining
           let result ← execute (submission.image .commit) fuel
-            (cursorNormalize finished messageBase 4596) true
-          return result.charge (91 * remaining) (8 * remaining)) := by
+            (cursorNormalize finished messageBase 4592) true
+          return result.charge (90 * remaining) (8 * remaining)) := by
   induction remaining generalizing state with
   | zero => simp [commitLeaves, Execution.charge]
   | succ remaining ih =>
     have pc : state.pc = 4280 := by simpa using invariant.pc
     simp only [show remaining + 1 ≠ 0 by omega, ite_false]
-    rw [show 35 * (remaining + 1) + fuel = 35 + (35 * remaining + fuel) by omega,
+    rw [show 34 * (remaining + 1) + fuel = 34 + (34 * remaining + fuel) by omega,
       contiguous_position saltFetched prefixFetched tailFetched latchFetched state messageBase pc
         link invariant.scratch invariant.sourceAbove invariant.oracleReady
         (fun word => invariant.salts word.val (by omega))

@@ -86,26 +86,29 @@ theorem cap_open_record_salt_slot (rootBase saltBase limit cursor position : Nat
     (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
     (aligned : cursor % 8 = 0) (space : cursor+544 ≤ limit)
     (limitBound : limit ≤ MEMORY_BYTES) (high : 32768 ≤ cursor)
-    (saltAligned : saltBase % 8 = 0) (saltBelow : saltBase+32*position+32 ≤ cursor)
+    (saltAligned : saltBase % 8 = 0) (saltBelow : saltBase+24*position+32 ≤ cursor)
     (positionBound : position < 16777216)
     (loaded : state.getMem (state.getReg .x24) = BitVec.ofNat 64 position)
-    (leaves : state.getReg .x19 = 16777216) (marks : state.getReg .x22 = 28672) :
+    (leaves : state.getReg .x19 = 16777216) (marks : state.getReg .x22 = 28672)
+    (stride : state.getReg .x17 = 24) :
     readBuffer (capOpenRecordState state) cursor 32 =
-      readBuffer state (saltBase+32*position) 32 := by
+      readNonce state (saltBase+24*position) := by
   have small : cursor+544 < 2^64 := by
     simp only [MEMORY_BYTES] at limitBound
     omega
-  have source := cap_open_record_salt_address state position saltBase loaded salts
+  have source := cap_open_record_salt_address state position saltBase loaded salts stride
   have destination := (cap_open_record_prepare_register state 3 (by decide) .x25
     (by decide)).trans pointer
-  have copied := cap_copy_digest false (capOpenRecordPrefix state 3)
-    (saltBase+32*position) cursor source destination (by omega) aligned
+  have copied := cap_nonce_eight_digest (capOpenRecordPrefix state 3)
+    (saltBase+24*position) cursor source destination (by omega) aligned
     (by omega) (by omega) (Or.inl saltBelow)
   have salted : readBuffer (capOpenSaltedState state) cursor 32 =
-      readBuffer state (saltBase+32*position) 32 := by
+      readNonce state (saltBase+24*position) := by
     rw [capOpenSaltedState]
-    exact copied.trans (read_buffer_memory_congr _ _
-      (cap_open_record_prepare_memory state 3 (by decide)) _ 32)
+    apply copied.trans
+    unfold readNonce
+    exact congrArg (fun value : Digest => expandNonce192 (value.extractLsb' 0 192))
+      (read_buffer_memory_congr _ _ (cap_open_record_prepare_memory state 3 (by decide)) _ 32)
   have pathToSalted : readBuffer (capOpenRecordPathState state) cursor 32 =
       readBuffer (capOpenSaltedState state) cursor 32 := by
     rw [capOpenRecordPathState]
