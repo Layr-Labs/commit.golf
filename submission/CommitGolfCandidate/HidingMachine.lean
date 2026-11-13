@@ -13,7 +13,7 @@ message and retained salts, on every used slot. -/
 theorem committed_heap_reference (oracle : Oracle) (message : Message)
     (state : MachineState) (correct : CommittedState oracle message state)
     (salt : Index → Digest)
-    (salts : ∀ index, readNonce state (5368713248+24*index.val) = salt index)
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
     (node : Nat) (positive : 0 < node) (inside : node < 2*LENGTH) :
     heapDigest state 4294971424 node = saltedHeap oracle.compression message salt node := by
   apply heap_eq_reference oracle.compression LENGTH _ _ correct.2.1 _ node positive inside
@@ -25,7 +25,7 @@ theorem committed_heap_reference (oracle : Oracle) (message : Message)
 theorem committed_root_reference (oracle : Oracle) (message : Message)
     (state : MachineState) (correct : CommittedState oracle message state)
     (salt : Index → Digest)
-    (salts : ∀ index, readNonce state (5368713248+24*index.val) = salt index) :
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index) :
     readBuffer state submission.layout.commitment 32 =
       saltedHeap oracle.compression message salt 1 :=
   correct.1.trans (committed_heap_reference oracle message state correct salt salts
@@ -53,7 +53,7 @@ theorem reference_opening_length (heap : Nat → Digest) (salt : Index → Diges
 theorem opening_reference_digest (oracle : Oracle) (message : Message)
     (state : MachineState) (correct : CommittedState oracle message state)
     (salt : Index → Digest)
-    (salts : ∀ index, readNonce state (5368713248+24*index.val) = salt index)
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
     (positions : Positions) (ordinal part : Nat)
     (present : ordinal < positions.card) (inside : part < 25) :
     let trapdoor := readBuffer state submission.layout.trapdoor submission.sizes.trapdoor
@@ -80,7 +80,7 @@ The proof covers arbitrary opening sets, including the empty set. -/
 theorem opening_reference_bytes (oracle : Oracle) (message : Message)
     (state : MachineState) (correct : CommittedState oracle message state)
     (salt : Index → Digest)
-    (salts : ∀ index, readNonce state (5368713248+24*index.val) = salt index)
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
     (positions : Positions) :
     let trapdoor := readBuffer state submission.layout.trapdoor submission.sizes.trapdoor
     submission.readProof (openingResult trapdoor positions) =
