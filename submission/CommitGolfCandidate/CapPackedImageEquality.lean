@@ -1,6 +1,7 @@
 import CommitGolf.Artifact
 import CommitGolfCandidate.Group341Encoding
 import CommitGolfCandidate.CapExperimentalABI
+import CommitGolfCandidate.NonceCompressedPrograms
 /-! Checked indexed equality with the independently regenerated delivered artifact.
 Periodic512-word facts and balanced joins avoid materializing the full code list. -/
 namespace CommitGolfCandidate
@@ -2545,8 +2546,8 @@ theorem packed_code_matches_image :
     simpa only [Nat.zero_add] using (packed_complete_matches ⟨index,bounded⟩).symm
 
 
-theorem cap_packed_submission_matches : capProgram=Artifact.submission := by
-  have images : capProgram.image=Artifact.submission.image := by
+theorem nonce_packed_submission_matches : nonceCompressedProgram=Artifact.submission := by
+  have images : nonceCompressedProgram.image=Artifact.submission.image := by
     funext program
     cases program with
     | commit =>
@@ -2555,8 +2556,8 @@ theorem cap_packed_submission_matches : capProgram=Artifact.submission := by
       exact congrArg (fun code => (⟨code,[]⟩ : Riscv.Image)) packed_code_matches_image
     | opening => rfl
     | check => rfl
-  change (Submission.mk capProgram.sizes capProgram.layout capProgram.image capProgram.steps)=
-    (Submission.mk capProgram.sizes capProgram.layout Artifact.submission.image capProgram.steps)
-  exact congrArg (fun image => Submission.mk capProgram.sizes capProgram.layout image capProgram.steps) images
+  change (Submission.mk nonceCompressedProgram.sizes nonceCompressedProgram.layout nonceCompressedProgram.image nonceCompressedProgram.steps)=
+    (Submission.mk nonceCompressedProgram.sizes nonceCompressedProgram.layout Artifact.submission.image nonceCompressedProgram.steps)
+  exact congrArg (fun image => Submission.mk nonceCompressedProgram.sizes nonceCompressedProgram.layout image nonceCompressedProgram.steps) images
 
 end CommitGolfCandidate
