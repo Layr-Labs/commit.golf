@@ -42,7 +42,7 @@ jobs:
           paths = subprocess.check_output([
               'git', 'diff', '--no-ext-diff', '--no-textconv', '--no-renames',
               '--name-only', '-z', base, head, '--']).split(b'\0')
-          contract = any(path and not path.startswith(b'submission/') for path in paths)
+          contract = any(path and not path.startswith((b'submission/', b'submission-pareto/')) for path in paths)
           # A fork or differently cased lookalike is not a Yukon-owned submission branch.
           head_repo = os.environ['HEAD_REPO_ID']
           solver_branch = bool(re.fullmatch(r'[1-9][0-9]*', head_repo)) and (
@@ -62,11 +62,17 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.head.sha }}
       contract_regressions: ${{ needs.changes.outputs.contract == 'true' }}
+  benchmark-pareto:
+    needs: changes
+    if: needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true'
+    uses: ./.github/workflows/benchmark-pareto.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
   contract-regressions:
     # Preserve this completed check name when a managed submission legitimately skips Benchmark.
     name: contract-regressions
     if: always()
-    needs: [changes, benchmark]
+    needs: [changes, benchmark, benchmark-pareto]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -75,6 +81,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           CONTRACT_CHANGED: ${{ needs.changes.outputs.contract }}
           BENCHMARK_RESULT: ${{ needs.benchmark.result }}
+          PARETO_RESULT: ${{ needs.benchmark-pareto.result }}
           SOLVER_BRANCH: ${{ needs.changes.outputs.solver_branch }}
         run: |
           if [[ "$CHANGES_RESULT" != success ]]; then
@@ -85,9 +92,9 @@ jobs:
             true|false) ;;
             *) echo 'Unknown submission-branch classification.' >&2; exit 1 ;;
           esac
-          case "$CONTRACT_CHANGED:$BENCHMARK_RESULT" in
-            true:success|false:success) echo 'Required benchmark checks passed.' ;;
-            false:skipped)
+          case "$CONTRACT_CHANGED:$BENCHMARK_RESULT:$PARETO_RESULT" in
+            true:success:success|false:success:success) echo 'Required benchmark checks passed.' ;;
+            false:skipped:skipped)
               if [[ "$SOLVER_BRANCH" == true ]]; then
                 echo 'Submission-only managed branch; Yukon dispatches Benchmark.'
               else

@@ -9,6 +9,11 @@ on:
         type: boolean
   workflow_call:
     inputs:
+      track:
+        description: Track to verify
+        required: false
+        default: product
+        type: string
       ref:
         description: Exact candidate commit to check
         required: true
@@ -50,7 +55,14 @@ jobs:
           path: .cache/trusted.tar.zst
           key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Benchmark
-        run: bash scripts/blacksmith.sh run
+        env:
+          TRACK: ${{ inputs.track || 'product' }}
+        run: |
+          case "$TRACK" in
+            product) bash scripts/blacksmith.sh run ;;
+            pareto) bash scripts/blacksmith.sh run-pareto ;;
+            *) echo 'Unknown track' >&2; exit 1 ;;
+          esac
       - name: Verifier regressions and artifact linkage
         if: inputs.contract_regressions
         run: bash scripts/blacksmith.sh test-linkage
@@ -61,12 +73,19 @@ jobs:
         if: always()
         run: bash scripts/blacksmith.sh collect
       - name: Prepare score artifact
+        env:
+          TRACK: ${{ inputs.track || 'product' }}
         run: |
-          mkdir -p .work/score-artifact/scripts
-          cp scripts/score.json .work/score-artifact/scripts/score.json
+          case "$TRACK" in
+            product) score_path=scripts/score.json ;;
+            pareto) score_path=scripts/pareto/score.json ;;
+            *) exit 1 ;;
+          esac
+          mkdir -p ".work/score-artifact/$(dirname "$score_path")"
+          cp "$score_path" ".work/score-artifact/$score_path"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: benchmark-score
+          name: benchmark-score-${{ inputs.track || 'product' }}
           path: .work/score-artifact/
           include-hidden-files: true
           if-no-files-found: error
@@ -74,7 +93,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: verifier-logs
+          name: verifier-logs-${{ inputs.track || 'product' }}
           path: |
             .work/*/verify.log
             .work-vm-console.log
