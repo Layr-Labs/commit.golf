@@ -57,8 +57,8 @@ This boundary depends on the host OS and is not a universal sandbox-escape proof
 The four-hour/24-GiB verification limits constrain proof processing separately from
 machine scoring. Yukon service promotion and repository administration are additional
 operational trust boundaries. Each track's directory (`submission/` or
-`submission-pareto/`) should change only through that track's verified promotions;
-Yukon enforces this, not the repository.
+`submission-pareto/`) should change only through that track's verified promotions.
+Only Yukon can enforce this; the repository does not (#61).
 
 Changes to security games, prices, workloads or dependency assumptions require an
 explicitly versioned challenge. Necessary verifier repairs require independent review
