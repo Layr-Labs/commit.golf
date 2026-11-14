@@ -22,9 +22,11 @@ Timing, access traces and allocation are hidden by the game, so side-channel
 resistance is not certified. See [Hiding](CommitGolf/Hiding.lean) for the precise
 comparison with CY24.
 
-**Resources.** The objective covers worst-case abstract cycles for one full
-commitment and one 128-position opening, multiplied by its proof-byte bound,
-without amortization. Checker cycles, trapdoor storage, commitment/value/index
+**Resources.** The product track's objective covers worst-case abstract cycles for
+one full commitment and one 128-position opening, multiplied by its proof-byte bound,
+without amortization. The Pareto track ranks the same two measures, total cycles and
+proof bytes, separately under the same certificate and limits, including the
+`2^53 - 1` cap on their product. Checker cycles, trapdoor storage, commitment/value/index
 bytes, code size, loading the 4-GiB input and interface output decoding are unranked.
 Admission, query budgets and termination still constrain them. Declared capacities
 do not measure actual allocation, touched bytes or peak working memory.
@@ -54,7 +56,9 @@ a private writable cache, then replays selected declarations through the kernel.
 This boundary depends on the host OS and is not a universal sandbox-escape proof.
 The four-hour/24-GiB verification limits constrain proof processing separately from
 machine scoring. Yukon service promotion and repository administration are additional
-operational trust boundaries.
+operational trust boundaries. Each track's directory (`submission/` or
+`submission-pareto/`) should change only through that track's verified promotions;
+Yukon enforces this, not the repository.
 
 Changes to security games, prices, workloads or dependency assumptions require an
 explicitly versioned challenge. Necessary verifier repairs require independent review
