@@ -143,7 +143,7 @@ count=0
 if [[ -f "$BOOT_TEST_COUNT" ]]; then read -r count < "$BOOT_TEST_COUNT"; fi
 count=$((count+1)); echo "$count" > "$BOOT_TEST_COUNT"
 if [[ "$BOOT_TEST_MODE" == hung_update ||
-      ( "$BOOT_TEST_MODE" == hung_install && " $* " == *' install '* ) ]]; then exec /bin/sleep 5; fi
+      ( "$BOOT_TEST_MODE" == hung_install && " $* " == *' install '* ) ]]; then exec /bin/sleep 30; fi
 if [[ "$BOOT_TEST_MODE" == failed_update ||
       ( "$BOOT_TEST_MODE" == recovered_update && "$count" == 1 ) ]]; then
   echo 'File has unexpected size / Hash Sum mismatch' >&2; exit 100
@@ -166,16 +166,18 @@ class PackageBootstrapTests(unittest.TestCase):
             script = (ROOT / 'scripts/vm-packages.sh').read_text()
             if mode in ('hung_update', 'hung_install'):
                 # Exercise the actual timeout/exit path without waiting the production 300s.
+                # Two seconds leaves the fake apt-get ample time to log its call under load
+                # before it is killed; the fake hang lasts 30s, so it always times out.
                 self.assertIn('timeout --kill-after=10s 300s apt-get', script)
                 duration = '300s' if mode == 'hung_update' else '480s'
-                script = script.replace(duration + ' apt-get', '0.05s apt-get')
+                script = script.replace(duration + ' apt-get', '2s apt-get')
             helper = project / 'packages.sh'
             helper.write_text(script)
             log = project / 'calls'
             result = subprocess.run(['bash', str(helper)], env={**os.environ,
                 'PATH': str(binaries) + os.pathsep + os.environ['PATH'],
                 'BOOT_TEST_LOG': str(log), 'BOOT_TEST_COUNT': str(project / 'count'),
-                'BOOT_TEST_MODE': mode}, capture_output=True, text=True, timeout=10)
+                'BOOT_TEST_MODE': mode}, capture_output=True, text=True, timeout=60)
             return result, [shlex.split(line) for line in log.read_text().splitlines()]
 
     def assert_verified_update(self, call):
