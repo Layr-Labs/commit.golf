@@ -1,4 +1,4 @@
-import CommitGolfCandidate.SharedHeapQueries
+import CommitGolfCandidate.HidingOpeningQueries
 import CommitGolfCandidate.HidingStages
 import CommitGolfCandidate.LeafResourceBridge
 
@@ -100,24 +100,33 @@ theorem query_leaf_except_reference (oracle : Oracle) (message : Message) (salt 
 
 def queryTranscriptExcept (message : Message) (salt : Index → Digest) (positions : Positions)
     (hidden : Index) (digest : Digest) : OracleComp World (Commitment × Proof) :=
-  querySharedTranscript LENGTH (queryLeafExcept message salt hidden digest)
+  queryTranscript (queryHeap LENGTH (queryLeafExcept message salt hidden digest) LOG_LENGTH)
     (Function.update salt hidden 0) positions
+
+attribute [local irreducible] heapQueryBudget queryHeap queryTranscript
 
 theorem query_transcript_except_bound (message : Message) (salt : Index → Digest)
     (positions : Positions) (hidden : Index) (digest : Digest) :
-    PublicQueryBound (queryTranscriptExcept message salt positions hidden digest) (9*LENGTH-1) := by
-  have run := query_shared_transcript_bound LENGTH _ 8
-    (query_leaf_except_bound message salt hidden digest) (Function.update salt hidden 0) positions
-  convert run using 1 <;> norm_num [queryTranscriptExcept,LENGTH,LOG_LENGTH]
+    PublicQueryBound (queryTranscriptExcept message salt positions hidden digest)
+      ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH) := by
+  unfold queryTranscriptExcept
+  apply query_transcript_bound
+  intro node
+  exact query_heap_bound LENGTH _ 8 (query_leaf_except_bound message salt hidden digest) LOG_LENGTH node
 
 theorem query_transcript_except_reference (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions) (hidden : Index) (digest : Digest) :
-    fixedOracleRun oracle (queryTranscriptExcept message salt positions hidden digest)=
+    fixedOracleRun oracle (queryTranscriptExcept message salt positions hidden digest) =
       let heap := referenceHeap oracle.compression LENGTH
         (leafValuesExcept oracle.compression message salt hidden digest)
-      pure (heap 1,referenceOpening heap (Function.update salt hidden 0) positions) := by
-  exact query_shared_transcript_reference oracle LENGTH (by decide) _ _
-    (query_leaf_except_reference oracle message salt hidden digest) _ _
+      pure (heap 1, referenceOpening heap (Function.update salt hidden 0) positions) := by
+  apply query_transcript_reference
+  intro node positive inside
+  apply query_heap_reference oracle LENGTH _ _
+    (query_leaf_except_reference oracle message salt hidden digest) LOG_LENGTH node positive inside
+  change LENGTH ≤ LENGTH*node
+  have larger := Nat.mul_le_mul_left LENGTH positive
+  simpa only [Nat.mul_one] using larger
 
 /-- Restoring the hidden leaf's digest gives precisely the tree for the updated
 message and fresh salt; every other leaf is unchanged. -/

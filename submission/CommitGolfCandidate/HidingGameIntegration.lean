@@ -35,14 +35,14 @@ theorem fixed_oracle_run_coins (oracle : Oracle) {α : Type} (coins : ProbComp �
 
 def referenceContinuation {α : Type} (message : Message) (positions : Positions)
     (observe : Commitment → Proof → OracleComp World α) : OracleComp World α := do
-  let salt ← (liftM ($ᵗ (Index → Nonce192)) : OracleComp World (Index → Nonce192))
-  let transcript ← queryActualTranscript message (expandNonceVector salt) positions
+  let salt ← (liftM ($ᵗ (Index → Digest)) : OracleComp World (Index → Digest))
+  let transcript ← queryActualTranscript message salt positions
   observe transcript.1 transcript.2
 
 theorem reference_continuation_run {α : Type} (oracle : Oracle) (message : Message)
     (positions : Positions) (observe : Commitment → Proof → OracleComp World α) :
     fixedOracleRun oracle (referenceContinuation message positions observe) =
-      (($ᵗ (Index → Nonce192)) >>= fun salt => observeTranscript oracle message (expandNonceVector salt) positions observe) := by
+      (($ᵗ (Index → Digest)) >>= fun salt => observeTranscript oracle message salt positions observe) := by
   rw [referenceContinuation, fixed_oracle_run_bind, fixed_oracle_run_coins]
   apply bind_congr
   intro salt
