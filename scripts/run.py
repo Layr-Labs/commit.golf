@@ -1,4 +1,4 @@
-"""Verify the machine certificate and record its combined cycle-times-bytes score."""
+"""Verify the machine certificate and record the selected track’s certified score."""
 import argparse
 import hashlib
 import json
@@ -11,13 +11,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
 from scoring import score_claim
 
 parser = argparse.ArgumentParser()
-parser.parse_args()
+parser.add_argument("--track", choices=("product", "pareto"), default="product")
+args = parser.parse_args()
+submission = Path("submission-pareto" if args.track == "pareto" else "submission")
 
-score_path = Path("scripts/score.json")
+score_path = Path("scripts/pareto/score.json" if args.track == "pareto" else "scripts/score.json")
+score_path.parent.mkdir(parents=True, exist_ok=True)
 score_path.unlink(missing_ok=True)
 if sys.platform != "linux":
     raise SystemExit("Official verification requires Linux; the macOS mode is unsandboxed")
-command = [sys.executable, "verifier/verify.py", "--local", "submission",
+command = [sys.executable, "verifier/verify.py", "--local", str(submission),
            "--trusted", ".", "--work", f".work/{uuid.uuid4().hex}"]
 result = subprocess.run(command, stdout=subprocess.PIPE, text=True)
 print(result.stdout, end="")
@@ -36,12 +39,14 @@ if type(report.get("score")) is not int or report["score"] != score:
 contract = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 if report["contract_commit"] != contract:
     raise SystemExit("Verifier used a different contract from the repository commit")
-artifact_digest = hashlib.sha256(Path('submission/programs.json').read_bytes()).hexdigest()
+artifact_digest = hashlib.sha256((submission / 'programs.json').read_bytes()).hexdigest()
 if report.get('artifact_digest') != artifact_digest:
     raise SystemExit('Verifier used a different delivered program manifest')
 metrics = {**claim,
            "proverCycles": claim["commitCycles"] + claim["openingCycles"],
            "contractCommit": contract, "artifactDigest": artifact_digest, "verified": True}
 temporary = score_path.with_suffix(".tmp")
-temporary.write_text(json.dumps({"score": score, "metrics": metrics}) + "\n")
+payload = ({"valid": True, "scores": [metrics["proverCycles"], claim["proofBytes"]],
+            "metrics": metrics} if args.track == "pareto" else {"score": score, "metrics": metrics})
+temporary.write_text(json.dumps(payload) + "\n")
 temporary.replace(score_path)
