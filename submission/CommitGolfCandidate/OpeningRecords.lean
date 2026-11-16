@@ -9,37 +9,34 @@ private theorem prepared_memory (state : MachineState) :
 
 private theorem path_memory (state : MachineState) :
     (openingPositionPathState state).mem =
-      (openingNonceCopyState (openingPositionPreparedState state)).mem := by
-  unfold openingPositionPathState
-  generalize openingNonceCopyState (openingPositionPreparedState state) = copied
-  rfl
+      (openingCopyState (openingPositionPreparedState state)).mem := rfl
 
 private theorem next_memory (state : MachineState) :
     (openingNextState state).mem = state.mem := rfl
 
 private theorem salt_pointer (base index : Nat) :
-    BitVec.ofNat 64 base + nonceOffset (BitVec.ofNat 64 index) =
-      BitVec.ofNat 64 (base+24*index) := by
-  rw [nonce_offset_mul]
-  change BitVec.ofNat 64 base + BitVec.ofNat 64 index * BitVec.ofNat 64 24 = _
+    BitVec.ofNat 64 base + (BitVec.ofNat 64 index <<< 5) =
+      BitVec.ofNat 64 (base+32*index) := by
+  rw [BitVec.shiftLeft_eq_mul_twoPow]
+  change BitVec.ofNat 64 base + BitVec.ofNat 64 index * BitVec.ofNat 64 32 = _
   rw [← BitVec.ofNat_mul, ← BitVec.ofNat_add, Nat.mul_comm index]
 
 /-- The first record is the original private salt, copied by the actual image. -/
 theorem opening_position_salt_copy (state : MachineState) (source destination : Nat)
-    (sourcePointer : state.getReg .x18 + nonceOffset (state.getMem (state.getReg .x24)) =
+    (sourcePointer : state.getReg .x18 + (state.getMem (state.getReg .x24) <<< 5) =
       BitVec.ofNat 64 source)
     (destinationPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
     (sourceAligned : source % 8 = 0) (destinationAligned : destination % 8 = 0)
     (sourceBound : source+32 ≤ 2^64) (destinationBound : destination+32 ≤ 2^64)
     (separated : source+32 ≤ destination) :
-    readBuffer (openingPositionPathState state) destination 32 = readNonce state source := by
+    readBuffer (openingPositionPathState state) destination 32 = readBuffer state source 32 := by
   rw [read_buffer_memory_congr _ _ (path_memory state)]
-  rw [opening_nonce_copy_digest _ source destination
+  rw [opening_copy_digest _ source destination
     ((opening_position_prepared state).2.trans sourcePointer)
     ((opening_position_prepare_register state .x25 (by decide) (by decide) (by decide)).trans
       destinationPointer)
     sourceAligned destinationAligned sourceBound destinationBound (Or.inl separated)]
-  exact nonce_read_memory_congr _ _ (prepared_memory state) _
+  exact read_buffer_memory_congr _ _ (prepared_memory state) _ _
 
 /-- Copying the salt preserves the heap and every earlier digest. -/
 theorem opening_position_setup_preserves (state : MachineState) (destination address : Nat)
@@ -48,7 +45,7 @@ theorem opening_position_setup_preserves (state : MachineState) (destination add
     (separated : address+32 ≤ destination) :
     readBuffer (openingPositionPathState state) address 32 = readBuffer state address 32 := by
   rw [read_buffer_memory_congr _ _ (path_memory state)]
-  rw [opening_nonce_copy_preserves_digest _ destination address
+  rw [opening_copy_preserves_digest _ destination address
     ((opening_position_prepare_register state .x25 (by decide) (by decide) (by decide)).trans
       destinationPointer) aligned bounded (by omega) (Or.inl separated)]
   exact read_buffer_memory_congr _ _ (prepared_memory state) _ _
@@ -67,7 +64,7 @@ theorem opening_position_records (state : MachineState) (heap : Nat → Digest)
     (indexBound : index < LENGTH) (heapSeparated : base+2^30 ≤ destination)
     (saltSeparated : salts+2^29 ≤ destination) (bounded : destination+800 ≤ MEMORY_BYTES)
     (data : ∀ slot < 2^25, readBuffer state (base+32*slot) 32 = heap slot) :
-    readBuffer (openingPositionState state) destination 32 = readNonce state (salts+24*index) ∧
+    readBuffer (openingPositionState state) destination 32 = readBuffer state (salts+32*index) 32 ∧
     ∀ level < 24, readBuffer (openingPositionState state) (destination+32+32*level) 32 =
       heap (((LENGTH+index)/2^level) ^^^ 1) := by
   let path := openingPositionPathState state
@@ -105,7 +102,7 @@ theorem opening_position_records (state : MachineState) (heap : Nat → Digest)
       · rw [pathDestinationNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
         omega
     rw [retained]
-    exact opening_position_salt_copy state (salts+24*index) destination
+    exact opening_position_salt_copy state (salts+32*index) destination
       (by rw [saltPointer, selected]; exact salt_pointer salts index)
       destinationPointer (by omega) destinationAligned (by omega) (by omega) (by omega)
   · intro level inside
@@ -174,7 +171,7 @@ theorem opening_all_records (state : MachineState) (heap saltValue : Nat → Dig
       state.getMem (BitVec.ofNat 64 (indexAddress+8*ordinal)) = BitVec.ofNat 64 (indices ordinal))
     (indexBound : ∀ ordinal < count, indices ordinal < LENGTH)
     (heapData : ∀ slot < 2^25, readBuffer state (base+32*slot) 32 = heap slot)
-    (saltData : ∀ index < LENGTH, readNonce state (salts+24*index) = saltValue index) :
+    (saltData : ∀ index < LENGTH, readBuffer state (salts+32*index) 32 = saltValue index) :
     ∀ ordinal < count,
       readBuffer (openingPositionState^[count] state) (destination+800*ordinal) 32 =
         saltValue (indices ordinal) ∧
@@ -213,10 +210,9 @@ theorem opening_all_records (state : MachineState) (heap saltValue : Nat → Dig
         outputPointer (by omega) (by omega) (by omega)]
       exact heapData slot inside
     have nextSaltData (index : Nat) (inside : index < LENGTH) :
-        readNonce next (salts+24*index) = saltValue index := by
+        readBuffer next (salts+32*index) 32 = saltValue index := by
       have small : index < 16777216 := inside
-      unfold readNonce
-      rw [opening_position_preserves_digest state destination (salts+24*index)
+      rw [opening_position_preserves_digest state destination (salts+32*index)
         outputPointer (by omega) (by omega) (by omega)]
       exact saltData index inside
     intro ordinal inside
