@@ -111,5 +111,5 @@ CLOUD
   stop)
     if [[ -f "${vm}/qemu.pid" ]]; then sudo kill "$(sudo cat "${vm}/qemu.pid")"; fi
     ;;
-  *) echo 'Usage: blacksmith.sh image-key | prepare-image | start | setup | cache | run | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
+  *) echo 'Usage: blacksmith.sh start | setup | cache | run | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
 esac
