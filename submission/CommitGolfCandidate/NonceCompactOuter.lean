@@ -39,11 +39,11 @@ theorem nonce_compact_outer_next (base count remaining : Nat) (state : MachineSt
 
 theorem nonce_compact_outer_execute (base count remaining : Nat) (state : MachineState)
     (ready : NonceCompactOuterReady base count remaining state) (fuel : Nat) (coins : Bool) :
-    execute nonceCompactImage (402*remaining+fuel) state coins=
+    execute nonceCompactImage (411*remaining+fuel) state coins=
       (do let result ← execute nonceCompactImage fuel
             (capCountedRun nonceCompactRecordState remaining state) coins
-          return result.charge (402*remaining) 0) := by
-  refine cap_counted_run_execute nonceCompactImage 402 nonceCompactRecordState
+          return result.charge (411*remaining) 0) := by
+  refine cap_counted_run_execute nonceCompactImage 411 nonceCompactRecordState
     (NonceCompactOuterReady base count)
     (fun remaining current => nonce_compact_outer_next base count remaining current)
     ?_ remaining state ready fuel coins

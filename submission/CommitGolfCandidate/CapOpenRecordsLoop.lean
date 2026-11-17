@@ -29,11 +29,11 @@ theorem cap_open_records_loop_execute (context : CapOpenRecordContext)
     (remaining : Nat) (state : MachineState)
     (ready : CapOpenRecordsReady context records reference remaining state)
     (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (219*remaining+fuel) state allowCoins =
+    execute ((capExperimental 24).image .opening) (263*remaining+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capCountedRun capOpenRecordState remaining state) allowCoins
-          return result.charge (222*remaining) 0) := by
-  apply cap_counted_run_execute_costed _ 219 222 capOpenRecordState
+          return result.charge (266*remaining) 0) := by
+  apply cap_counted_run_execute_costed _ 263 266 capOpenRecordState
     (CapOpenRecordsReady context records reference)
     (fun residual current currentReady =>
       cap_open_records_ready_next context records reference current residual

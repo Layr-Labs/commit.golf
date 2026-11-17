@@ -1,9 +1,8 @@
 import CommitGolfCandidate.NonceCompactTail
-import CommitGolfCandidate.NonceFixedCopy
 
 /-! One concrete outer record iteration consists of a three-word nonce copy,
 a padding skip, a sixty-four-word sibling copy and the counted loop tail.
-The exact cycle total is 402; memory-window readiness remains explicit. -/
+The exact cycle total is 411; memory-window readiness remains explicit. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 8192
@@ -81,31 +80,32 @@ theorem nonce_compact_record_execute (state : MachineState) (pc : state.pc=4560)
     (nonceReady : NonceCopyReady.Forward 4620 source target 3 3 (nonceCompactNonceCall state))
     (siblingsReady : NonceCopyReady.Forward 4620 (source+32) (target+24) 64 64
       (nonceCompactSiblingCall state)) (fuel : Nat) (coins : Bool) :
-    execute nonceCompactImage (402+fuel) state coins=
+    execute nonceCompactImage (411+fuel) state coins=
       (do let result ← execute nonceCompactImage fuel (nonceCompactRecordState state) coins
-          return result.charge 402 0) := by
+          return result.charge 411 0) := by
   have noncePc:=nonce_compact_nonce_return_pc state pc
   have siblingsPc:=nonce_compact_sibling_return_pc state pc
-  have firstCall:=nonce_compact_call_execute false state pc (10+(3+(385+(2+fuel)))) coins
-  change execute nonceCompactImage (2+(10+(3+(385+(2+fuel))))) state coins=_ at firstCall
+  have firstCall:=nonce_compact_call_execute false state pc (19+(3+(385+(2+fuel)))) coins
+  change execute nonceCompactImage (2+(19+(3+(385+(2+fuel))))) state coins=_ at firstCall
   have secondCall:=nonce_compact_call_execute true (nonceCompactNonceCopied state) noncePc
     (385+(2+fuel)) coins
   change execute nonceCompactImage (3+(385+(2+fuel))) (nonceCompactNonceCopied state) coins=_ at secondCall
-  rw [show 402+fuel=2+(10+(3+(385+(2+fuel)))) by omega, firstCall]
-  change ((execute nonceCompactImage (10+(3+(385+(2+fuel))))
-    ((nonceCompactNonceCall state).setPC 4648) coins) >>= fun result => pure (result.charge 2 0))=_
-  rw [nonce_fixed_copy_execute source target _ nonceReady (3+(385+(2+fuel))) coins]
+  rw [show 411+fuel=2+(19+(3+(385+(2+fuel)))) by omega, firstCall]
+  change ((execute nonceCompactImage (19+(3+(385+(2+fuel))))
+    (nonceCompactNonceCall state) coins) >>= fun result => pure (result.charge 2 0))=_
+  rw [NonceCopyProcedure.compact_copy_execute source target 3 _ nonceReady
+    (3+(385+(2+fuel))) coins]
   change (((execute nonceCompactImage (3+(385+(2+fuel)))
-    (nonceCompactNonceCopied state) coins) >>= fun result => pure (result.charge 10 0))
+    (nonceCompactNonceCopied state) coins) >>= fun result => pure (result.charge 19 0))
     >>= fun result => pure (result.charge 2 0))=_
   rw [secondCall]
   change ((((execute nonceCompactImage (385+(2+fuel)) (nonceCompactSiblingCall state) coins)
-    >>= fun result => pure (result.charge 3 0)) >>= fun result => pure (result.charge 10 0))
+    >>= fun result => pure (result.charge 3 0)) >>= fun result => pure (result.charge 19 0))
     >>= fun result => pure (result.charge 2 0))=_
   rw [NonceCopyProcedure.compact_copy_execute (source+32) (target+24) 64 _ siblingsReady (2+fuel) coins]
   change (((((execute nonceCompactImage (2+fuel) (nonceCompactSiblingsCopied state) coins)
     >>= fun result => pure (result.charge 385 0)) >>= fun result => pure (result.charge 3 0))
-    >>= fun result => pure (result.charge 10 0)) >>= fun result => pure (result.charge 2 0))=_
+    >>= fun result => pure (result.charge 19 0)) >>= fun result => pure (result.charge 2 0))=_
   rw [nonce_compact_tail_execute _ siblingsPc fuel coins]
   simp only [bind_assoc, pure_bind, charges]
   rfl

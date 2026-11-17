@@ -11,7 +11,7 @@ manifest. Only the official verifier can accept the delivered submission. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
-theorem nonce_certificate : Certificate nonceCompressedProgram 72704 1678770611 92441 where
+theorem nonce_certificate : Certificate nonceCompressedProgram 72704 1678377395 99225 where
   admission := nonce_compressed_admission
   machineSuccess := nonce_program_machine_success
   termination := nonce_program_termination

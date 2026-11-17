@@ -1,47 +1,46 @@
+import CommitGolfCandidate.UnrolledBlock
 import CommitGolfCandidate.LongParentSchedule
-import CommitGolfCandidate.UnrolledLoop
 
-/-! Tree construction with the unrolled leaf groups: the entry jump lands on the first
-group, the last group jumps to parent setup, and the parent schedule and root
-serialization are unchanged. -/
+/-! The unrolled leaf phase jumps directly to the retained parent setup, then the
+unchanged long parent schedule and root serialization finish the commitment. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
 set_option maxHeartbeats 2000000
-attribute [local irreducible] execute pointerParentState commitBody
+attribute [local irreducible] execute commitBody
 
-/-- The entry jump reaches leaf 0 of the first group with no lag. -/
-theorem unrolled_entry_frame (state : MachineState) (messageBase : Word) :
-    ((cursorLeafFrame state messageBase).setReg .x1 4316).setPC 1011404 =
-      unrolledState 0 (state.setReg .x1 4316) messageBase := by
-  refine unrolled_state_congr state _ _ _ _ _ _ ?_ rfl rfl
-  funext reg
-  cases reg <;> first
-    | rfl
-    | exact (BitVec.sub_zero _).symm
-
-/-- Six positive parent-setup instructions follow the group exit jump. -/
+/-- The six positive parent-setup instructions, entered directly by the block exit. -/
 theorem unrolled_parent_setup (state : MachineState) (messageBase : Word)
     (pc : state.pc = 4364) (nonempty : state.getReg .x19 - 1 ≠ 0) (fuel : Nat) :
-    execute (submission.image .commit) (6 + fuel)
-      (cursorNormalize state messageBase 4364) true =
+    execute (submission.image .commit) (6 + fuel) (cursorNormalize state messageBase 4364) true =
       (do let result ← execute (submission.image .commit) fuel
             (cursorBaseFrame (commitParentsStartState state) messageBase) true
           return result.charge 6 0) := by
   rw [commit_parents_start (cursorNormalize state messageBase 4364) rfl nonempty,
-    cursor_parent_boundary, ← pc, hoist_pc_self]
+    cursor_parent_boundary]
+  rw [← pc, hoist_pc_self]
 
-/-- The complete tree run after the two checked entry jumps, with the unrolled leaf
-groups in place of the per-leaf latch loop. -/
+theorem unrolled_entry_frame (state : MachineState) (messageBase entry : Word) :
+    ((cursorLeafFrame state messageBase).setReg .x1 4316).setPC entry =
+      cursorNormalize (state.setReg .x1 4316) messageBase entry := by
+  cases state
+  dsimp [cursorNormalize, cursorLeafFrame, cursorBaseFrame, MachineState.setReg,
+    MachineState.getReg, MachineState.setPC]
+  congr 1
+  funext reg
+  cases reg <;> rfl
+
+/-- The complete tree run after the entry jumps, with the unrolled leaf blocks. -/
 theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : schedule.Valid)
-    (entryPC : schedule.initialPlan.entry=4388) (saltFetched : ContiguousSaltFetched (submission.image .commit))
-    (prefixFetched : ContiguousPrefixFetched (submission.image .commit))
-    (tailFetched : ContiguousTailFetched (submission.image .commit))
+    (entryPC : schedule.initialPlan.entry=4388)
+    (start : Word) (exitOffset loopOffset : BitVec 21)
+    (leafFetched : UnrolledBlockFetched (submission.image .commit) start exitOffset loopOffset)
+    (exitJump : start + 31780 + signExtend21 exitOffset = 4364)
+    (loopJump : start + 31784 + signExtend21 loopOffset = start)
     (parentFetched : LongParentSchedule.Fetched (submission.image .commit) schedule)
-    (state : MachineState) (count groups leafGroups : Nat) (messageBase : Word)
-    (evenCount : count = schedule.parents groups + 1)
-    (leafCount : count = 64 * (leafGroups + 1)) (bounded : count ≤ 2 ^ 24)
-    (positiveGroups : 0<groups)
+    (state : MachineState) (count groups blocks : Nat) (messageBase : Word)
+    (evenCount : count = schedule.parents groups + 1) (blockCount : count = 256 * (blocks + 1))
+    (bounded : count ≤ 2 ^ 24) (positiveGroups : 0<groups)
     (leaves : CommitLeavesInvariant state count)
     (heapWindow : (state.getReg .x23).toNat + 32 * count = (state.getReg .x22).toNat)
     (total : state.getReg .x19 = BitVec.ofNat 64 count)
@@ -52,34 +51,36 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
     execute (submission.image .commit)
-        (1988 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel)
-      (((cursorLeafFrame state messageBase).setReg .x1 4316).setPC 1011404) true =
+      (7946 * (blocks + 1) + schedule.instructions groups + 17 + fuel)
+      (((cursorLeafFrame state messageBase).setReg .x1 4316).setPC start) true =
       (do let finished ← commitBody state count
           return ⟨.success, cursorBaseFrame finished messageBase,
-            5572 * (leafGroups + 1) + schedule.cycles groups + 17, 9 * count - 1⟩) := by
+            22282 * (blocks + 1) + schedule.cycles groups + 17, 9 * count - 1⟩) := by
   have mainPositive : 0<schedule.width*groups := Nat.mul_pos valid.positive positiveGroups
   have residualPositive : 0<schedule.parents groups := by
     change 0<schedule.initialPlan.parents+schedule.width*groups
     omega
   have nonzero : count ≠ 0 := by omega
   have residualCount : count - 1 = schedule.parents groups := by omega
-  have initialPC : state.pc = 4280 := by simpa [nonzero] using leaves.pc
   have linkedInvariant := contiguous_link_invariant state count 4316 leaves
   have linkedWindow : ((state.setReg .x1 4316).getReg .x23).toNat + 32 * count =
       ((state.setReg .x1 4316).getReg .x22).toNat := by
     simpa [MachineState.setReg, MachineState.getReg] using heapWindow
-  have leavesRun := unrolled_groups saltFetched prefixFetched tailFetched leafGroups
-    (state.setReg .x1 4316) messageBase (by rw [← leafCount]; exact linkedInvariant)
-    (by simp only [MachineState.getReg_setReg_eq (by decide : Reg.x1 ≠ .x0)])
-    (by rw [← leafCount]; exact linkedWindow) (6 + (schedule.instructions groups + (11 + fuel)))
-  rw [← leafCount] at leavesRun
+  have progress : UnrolledProgress (state.setReg .x1 4316) (256 * (blocks + 1)) := by
+    rw [← blockCount]
+    exact ⟨linkedInvariant,
+      by simp only [MachineState.getReg_setReg_eq (by decide : Reg.x1 ≠ .x0)], linkedWindow⟩
+  have leavesRun := unrolled_loop (submission.image .commit) start exitOffset loopOffset
+    leafFetched exitJump loopJump (state.setReg .x1 4316) blocks messageBase progress
+    (6 + (schedule.instructions groups + (11 + fuel)))
+  rw [← blockCount] at leavesRun
   have erased : commitLeaves (state.setReg .x1 4316) count = commitLeaves state count := by
     have positive := contiguous_positive_leaves state (count - 1) 4316 (state.setReg .x1 4316).pc
     rw [hoist_pc_self] at positive
     simpa only [show count - 1 + 1 = count by omega] using positive
   rw [erased] at leavesRun
-  rw [show 1988 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel =
-      1988 * (leafGroups + 1) + (6 + (schedule.instructions groups + (11 + fuel))) by omega,
+  rw [show 7946 * (blocks + 1) + schedule.instructions groups + 17 + fuel =
+      7946 * (blocks + 1) + (6 + (schedule.instructions groups + (11 + fuel))) by omega,
     unrolled_entry_frame, leavesRun]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
@@ -111,7 +112,8 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
   have readyBuffers : ParentBuffers (ready.getReg .x9) (count - 1) := by
     rw [readyHeap]
     exact parents
-  have parentRun := long_parent_schedule_execute_framed schedule valid parentFetched ready groups messageBase positiveGroups
+  have parentRun := long_parent_schedule_execute_framed schedule valid parentFetched ready groups
+    messageBase positiveGroups
     (by omega) (by rw [entryPC]; exact commit_parents_start_pc hashed nonempty)
     (by rw [← residualCount]; exact readyPointers)
     (commit_parents_start_constants hashed leafInvariant.oracleReady)
@@ -136,7 +138,5 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
   simp only [pure_bind, Execution.charge, Nat.add_zero]
   congr 1
   congr 1 <;> omega
-
-
 
 end CommitGolfCandidate

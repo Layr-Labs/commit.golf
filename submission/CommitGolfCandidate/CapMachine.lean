@@ -79,7 +79,7 @@ theorem cap_program_machine_success : capProgram.MachineSuccess := by
 theorem cap_machine_support_cycles (message : Message) (positions : Positions)
     (batch : positions.card = BATCH) (result : MachineResult)
     (reachable : result ∈ support (capProgram.honestMachine message positions)) :
-    result.commitCycles ≤ 1678770611 ∧ result.openingCycles ≤ 37899 := by
+    result.commitCycles ≤ 1678377395 ∧ result.openingCycles ≤ 43531 := by
   rw [honest_machine] at reachable
   simp only [mem_support_bind_iff] at reachable
   obtain ⟨committed,committedReached,opened,openedReached,returned⟩ := reachable
@@ -93,7 +93,7 @@ theorem cap_machine_support_cycles (message : Message) (positions : Positions)
   exact ⟨resources.2.1.le,
     cap_open_result_batch_cycles (capProgram.readCommit committed).2 positions batch⟩
 
-theorem cap_program_prover_cycles : capProgram.ProverCycles 1678770611 37899 := by
+theorem cap_program_prover_cycles : capProgram.ProverCycles 1678377395 43531 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached

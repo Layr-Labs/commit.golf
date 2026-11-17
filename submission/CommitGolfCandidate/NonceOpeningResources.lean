@@ -21,7 +21,7 @@ theorem nonce_batch_footer_bound (trapdoor : BitVec (8*capProgram.sizes.trapdoor
 
 theorem nonce_batch_codec_cycles (trapdoor : BitVec (8*capProgram.sizes.trapdoor))
     (positions : Positions) (batch : positions.card=BATCH) :
-    nonceCodecCycles positions.card (nonceOldFooterWords trapdoor positions) ≤ 54542 := by
+    nonceCodecCycles positions.card (nonceOldFooterWords trapdoor positions) ≤ 55694 := by
   have footer:=nonce_batch_footer_bound trapdoor positions batch
   rw [batch]
   unfold nonceCodecCycles
@@ -30,15 +30,15 @@ theorem nonce_batch_codec_cycles (trapdoor : BitVec (8*capProgram.sizes.trapdoor
 
 theorem nonce_compressed_batch_cycles (trapdoor : BitVec (8*capProgram.sizes.trapdoor))
     (positions : Positions) (batch : positions.card=BATCH) :
-    (nonceCompressedOpeningResult trapdoor positions).cycles ≤ 92441 := by
+    (nonceCompressedOpeningResult trapdoor positions).cycles ≤ 99225 := by
   have positive : 0 < positions.card := by rw [batch]; decide
-  have retained : (nonceOldOpeningResult trapdoor positions).cycles ≤ 37899 := by
+  have retained : (nonceOldOpeningResult trapdoor positions).cycles ≤ 43531 := by
     unfold nonceOldOpeningResult
     rw [if_neg (by omega : positions.card ≠ 0)]
     exact cap_open_result_batch_cycles trapdoor positions batch
   have codec:=nonce_batch_codec_cycles trapdoor positions batch
   change (nonceOldOpeningResult trapdoor positions).cycles+
-    nonceCodecCycles positions.card (nonceOldFooterWords trapdoor positions) ≤ 92441
+    nonceCodecCycles positions.card (nonceOldFooterWords trapdoor positions) ≤ 99225
   omega
 
 theorem nonce_compressed_batch_bytes (trapdoor : BitVec (8*capProgram.sizes.trapdoor))
@@ -66,7 +66,7 @@ theorem nonce_opening_program_termination (oracle : Oracle)
 theorem nonce_opening_batch_resources (oracle : Oracle)
     (trapdoor : BitVec (8*capProgram.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card=BATCH) :
-    prEvent ((fun result => result.1.exit=Exit.success ∧ result.1.cycles ≤ 92441 ∧
+    prEvent ((fun result => result.1.exit=Exit.success ∧ result.1.cycles ≤ 99225 ∧
       result.2=0 ∧ (nonceCompressedProgram.readProof result.1).length ≤ 72704) <$>
       oracle.run (nonceCompressedProgram.run .opening (trapdoor,positions)))=1 := by
   rw [nonce_compressed_opening_run,oracle_pure]

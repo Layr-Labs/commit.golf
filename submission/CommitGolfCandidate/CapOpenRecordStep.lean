@@ -1,11 +1,10 @@
 import CommitGolfCandidate.CapOpenRecordStart
-import CommitGolfCandidate.CapFastPath
 import CommitGolfCandidate.CapOpenPathFrame
 import CommitGolfCandidate.CapOpenGroupControl
 
 /-! One complete, checked opening record. It copies a salt and sixteen lower
 siblings, then sets the corresponding cap leaf mark. The loaded index bounds
-identify the final heap node; the macro charges exactly 222 cycles across 219 instructions
+identify the final heap node; the macro charges exactly 266 cycles across 263 instructions
 and makes no oracle query. Original input/serialized-byte refinements are
 proved separately from this runtime composition. -/
 namespace CommitGolfCandidate
@@ -68,14 +67,14 @@ theorem cap_open_record_execute (state : MachineState)
     (marks : state.getReg .x22 = 28672)
     (stride : state.getReg .x17 = 24)
     (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (219+fuel) state allowCoins =
+    execute ((capExperimental 24).image .opening) (263+fuel) state allowCoins =
       (do let result ← execute ((capExperimental 24).image .opening) fuel
             (capOpenRecordState state) allowCoins
-          return result.charge 222 0) := by
+          return result.charge 266 0) := by
   have ready := cap_open_record_path_ready rootBase limit cursor position state
     pc roots pointer cursorAligned space positionBound loaded leaves
-  have pathRun := cap_fast_path_execute rootBase limit rootBound rootAligned
-    limitBound (capOpenRecordPathState state) ready (6+fuel) allowCoins
+  have pathRun := cap_open_path_loop_execute rootBase limit rootBound rootAligned
+    limitBound 16 (capOpenRecordPathState state) ready (6+fuel) allowCoins
   have groupPC : (capOpenRecordGroupState state).pc = 4340 := by
     rw [capOpenRecordGroupState]
     exact (cap_open_path_loop_finished rootBase limit limitBound 16 _ ready).1
@@ -84,7 +83,7 @@ theorem cap_open_record_execute (state : MachineState)
   have groupIndex := cap_open_record_group_index state position positionBound loaded leaves
   have groupRun := cap_open_group_execute (capOpenRecordGroupState state)
     (256+position/65536) groupPC groupMark groupIndex (by omega) fuel allowCoins
-  rw [show 219+fuel = 17+(196+(6+fuel)) by omega,
+  rw [show 263+fuel = 17+(15*16+(6+fuel)) by omega,
     cap_open_record_start_execute state position saltBase cursor pc indexValid loaded
       salts pointer saltAligned saltBound cursorAligned (by omega) stride,
     pathRun]
