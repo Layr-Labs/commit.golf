@@ -51,12 +51,12 @@ private theorem scheme_commit_map (program : Submission) (message : Message) :
 attribute [local irreducible] commitFinalResult submission readBuffer saltedHeap referenceOpening
 
 private theorem final_transcript (oracle : Oracle) (message : Message) {bits : Nat}
-    (answer : BitVec bits) (width : bits = 256*LENGTH) (positions : Positions) :
+    (answer : BitVec bits) (width : bits = 192*LENGTH) (positions : Positions) :
     let result := (commitFinalResult oracle message answer).1
     let (root, trapdoor) := submission.readCommit result
     (root, submission.readProof (openingResult trapdoor positions)) =
       referenceTranscript oracle.compression message
-        (fun index => answer.extractLsb' (256*index.val) 256) positions := by
+        (fun index => expandNonce192 (answer.extractLsb' (192*index.val) 192)) positions := by
   have contents := commit_final_contents oracle message answer width
   apply Prod.ext
   · exact committed_root_reference oracle message _ contents.1 _ contents.2
@@ -68,7 +68,7 @@ theorem honest_transcript_distribution (oracle : Oracle) (message : Message)
     (positions : Positions) :
     fixedOracleRun oracle (honestTranscript message positions) =
       (commitSaltCoins message >>= fun answer => pure (referenceTranscript oracle.compression message
-        (fun index => answer.extractLsb' (256*index.val) 256) positions)) := by
+        (fun index => expandNonce192 (answer.extractLsb' (192*index.val) 192)) positions)) := by
   have finish (root : Commitment) (trapdoor : submission.scheme.Trapdoor) :
       fixedOracleRun oracle (do
         let proof ← submission.scheme.opening trapdoor positions
@@ -102,8 +102,8 @@ def referenceHiding {AdversaryState Output : Type} {openingSize : Nat}
     (selectSecond : Bool) : ProbComp Output := do
   let challenge ← fixedOracleRun oracle adversary.choose
   let message := if selectSecond then challenge.message₁ else challenge.message₀
-  let salt ← $ᵗ (Index → Digest)
-  let (root, proof) := referenceTranscript oracle.compression message salt challenge.positions
+  let salt ← $ᵗ (Index → Nonce192)
+  let (root, proof) := referenceTranscript oracle.compression message (expandNonceVector salt) challenge.positions
   fixedOracleRun oracle (adversary.observe challenge.aux root proof)
 
 private theorem hiding_experiment_transcript {AdversaryState Output : Type} {openingSize : Nat}
@@ -131,9 +131,9 @@ theorem hiding_fixed_reference {AdversaryState Output : Type} {openingSize : Nat
   exact commit_salts_uniform (if selectSecond then challenge.message₁ else challenge.message₀)
     (fun salt => fixedOracleRun oracle (adversary.observe challenge.aux
       (referenceTranscript oracle.compression
-        (if selectSecond then challenge.message₁ else challenge.message₀) salt challenge.positions).1
+        (if selectSecond then challenge.message₁ else challenge.message₀) (expandNonceVector salt) challenge.positions).1
       (referenceTranscript oracle.compression
-        (if selectSecond then challenge.message₁ else challenge.message₀) salt challenge.positions).2))
+        (if selectSecond then challenge.message₁ else challenge.message₀) (expandNonceVector salt) challenge.positions).2))
 
 /-- The original hiding game and the reference game are the same distribution.
 The final hiding proof must still bound the distance between the two selectors. -/
