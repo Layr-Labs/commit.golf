@@ -46,7 +46,7 @@ theorem opening_output_records (committed : MachineState) (positions : Positions
     ∀ ordinal < positions.card,
       readBuffer (openingResult trapdoor positions).state
         (submission.layout.proof+800*ordinal) 32 =
-          readBuffer committed (5368713248+32*openingIndex positions ordinal) 32 ∧
+          readNonce committed (5368713248+24*openingIndex positions ordinal) ∧
       ∀ level < 24,
         readBuffer (openingResult trapdoor positions).state
           (submission.layout.proof+800*ordinal+32+32*level) 32 =
@@ -82,17 +82,18 @@ theorem opening_output_records (committed : MachineState) (positions : Positions
     exact opening_input_roundtrip committed positions (32*slot) (by
       change 32*slot+32 ≤ 1610612736; omega)
   have saltData (index : Nat) (inside : index < LENGTH) :
-      readBuffer ready (5368713248+32*index) 32 = readBuffer committed (5368713248+32*index) 32 := by
+      readNonce ready (5368713248+24*index) = readNonce committed (5368713248+24*index) := by
     have small : index < 16777216 := inside
+    unfold readNonce
     rw [read_buffer_memory_congr _ _ memory]
-    have result := opening_input_roundtrip committed positions (1073741824+32*index) (by
-      change 1073741824+32*index+32 ≤ 1610612736; omega)
-    change readBuffer initial (4294971424+(1073741824+32*index)) 32 =
-      readBuffer committed (4294971424+(1073741824+32*index)) 32 at result
-    simpa only [← Nat.add_assoc] using result
+    have result := opening_input_roundtrip committed positions (1073741824+24*index) (by
+      change 1073741824+24*index+32 ≤ 1610612736; omega)
+    change readBuffer initial (4294971424+(1073741824+24*index)) 32 =
+      readBuffer committed (4294971424+(1073741824+24*index)) 32 at result
+    exact congrArg (fun bits : BitVec 256 => expandNonce192 (bits.extractLsb' 0 192)) (by simpa only [← Nat.add_assoc] using result)
   have records := opening_all_records ready
     (fun slot => readBuffer committed (4294971424+32*slot) 32)
-    (fun index => readBuffer committed (5368713248+32*index) 32)
+    (fun index => readNonce committed (5368713248+24*index))
     (openingIndex positions) 4294971424 5368713248 5905584160 10334769184 positions.card
     heap salts leaves indices output (by decide) (by decide) (by decide)
     (by decide) (by decide) (by omega)

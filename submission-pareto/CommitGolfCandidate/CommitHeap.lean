@@ -1,119 +1,53 @@
-import CommitGolfCandidate.LeafHeap
+import CommitGolfCandidate.S3LeavesMemory
+import CommitGolfCandidate.S3TreeExec
 import CommitGolfCandidate.ParentRefinement
-import CommitGolfCandidate.BufferRefinement
-import CommitGolfCandidate.CommitInput
 
-/-! Leaf contents established from the real commitment ABI and private salt reply. -/
+/-! The heap built by the stage-3 commitment: the appended leaf phase leaves the stage-3
+digest of every input entry in its leaf slot (S3LeavesMemory), and the retained parent loop
+makes every internal node the compression of its children. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-private theorem setup_memory (state : MachineState) :
-    (commitSetupState state).mem = state.mem := rfl
+private theorem parents_start_heap (state : MachineState) :
+    (commitParentsStartState state).getReg .x9 = state.getReg .x9 :=
+  commit_parents_start_register state .x9 (by simp)
 
-private theorem ready_memory (state : MachineState) :
-    (commitReadyState state).mem = state.mem := rfl
+private theorem parents_start_memory (state : MachineState) :
+    (commitParentsStartState state).mem = state.mem := commit_parents_start_memory state
 
-private theorem initialized_memory (initial : MachineState) {bits : Nat} (answer : BitVec bits)
-    (destination : Word) (pointer : initial.getReg .x12+1073741824 = destination) :
-    (commitReadyState (writeBits (commitSetupState initial)
-      ((commitSetupState initial).getReg .x10) answer)).mem =
-      (writeBits initial destination answer).mem := by
-  rw [ready_memory, (commit_setup_registers initial).2.2.2.1, pointer]
-  exact write_bits_memory_congr _ _ _ answer (setup_memory _)
+private theorem ready_heap (message : Message) {bits : Nat} (answer : BitVec bits) :
+    (s3CommitReady message answer).getReg .x9 = BitVec.ofNat 64 4294971424 :=
+  (s3_ready_register message answer .x9 (by decide)).trans (commit_input_registers message answer).2.1
 
-private theorem initial_heap_pointer (candidate : Submission) (message : Message) :
-    (candidate.initialState .commit message).getReg .x12 =
-      BitVec.ofNat 64 candidate.layout.trapdoor := rfl
+private theorem ready_total (message : Message) {bits : Nat} (answer : BitVec bits) :
+    (s3CommitReady message answer).getReg .x19 = BitVec.ofNat 64 LENGTH :=
+  (s3_ready_register message answer .x19 (by decide)).trans
+    (commit_input_registers message answer).2.2.2.1
 
-/-- Setup changes registers only; the random syscall writes exactly the salt buffer. -/
-theorem commit_input_memory (message : Message) {bits : Nat} (answer : BitVec bits) :
-    (commitInputReady message answer).mem =
-      (writeBits (submission.initialState .commit message) (BitVec.ofNat 64 5368713248) answer).mem := by
-  apply initialized_memory
-  rw [initial_heap_pointer]
-  rfl
+attribute [local irreducible] s3Leaves commitParents s3CommitReady checkEvaluation
 
-/-- Random salt generation leaves all original message blocks intact. -/
-theorem commit_ready_message_block (message : Message) (answer : BitVec (256*LENGTH))
-    (index : Index) (block : Nat) (inside : block < 8) :
-    readBuffer (commitInputReady message answer) (4096+256*index.val+32*block) 32 =
-      (message index).extractLsb' (256*block) 256 := by
-  have indexBound : index.val < 2^24 := index.isLt
-  rw [read_buffer_memory_congr _ _ (commit_input_memory message answer)]
-  rw [write_bits_read_outside _ answer 5368713248 _ 32 (by decide)
-    (by omega) (Or.inl (by omega))]
-  exact commit_input_block message index block inside
-
-/-- Each sampled 256-bit salt occupies its designated digest slot. -/
-theorem commit_ready_salt (message : Message) (answer : BitVec (256*LENGTH))
-    (index : Index) :
-    readBuffer (commitInputReady message answer) (5368713248+32*index.val) 32 =
-      answer.extractLsb' (256*index.val) 256 := by
-  have indexBound : index.val < 2^24 := index.isLt
-  rw [read_buffer_memory_congr _ _ (commit_input_memory message answer)]
-  have written := write_bits_digest (submission.initialState .commit message) 5368713248
-    (32*index.val) answer (by change 32*index.val+32 ≤ 536870912; omega) (by decide)
-  simpa only [← Nat.mul_assoc, Nat.reduceMul] using written
-
-attribute [local irreducible] commitLeaves commitInputReady checkEvaluation
-
-/-- After all 2^24 actual leaf iterations, each heap leaf is the salted digest of
-that exact input entry, for every message, salt reply, and compression oracle. -/
-theorem commit_input_leaf_heap (oracle : Oracle) (message : Message)
-    (answer : BitVec (256*LENGTH)) (index : Index) :
-    readBuffer (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
-      (4831842336+32*index.val) 32 =
-        leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index) := by
-  let wrap (i : Nat) : Index := ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩
-  have wrapped (i : Nat) (inside : i < LENGTH) : (wrap i).val = i := Nat.mod_eq_of_lt inside
-  have regs := commit_input_registers message answer
-  have result := commit_leaves_digests oracle (commitInputReady message answer)
-    4096 4831842336 5368713248 LENGTH (fun i => message (wrap i))
-    (fun i => answer.extractLsb' (256*i) 256)
-    regs.2.2.2.2.2.2.1 regs.1 regs.2.2.2.2.1 regs.2.2.1
-    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-    (by
-      intro i hi block hb
-      have loaded := commit_ready_message_block message answer (wrap i) block hb
-      rw [wrapped i hi] at loaded
-      exact loaded)
-    (by
-      intro i hi
-      have loaded := commit_ready_salt message answer (wrap i)
-      rw [wrapped i hi] at loaded
-      exact loaded)
-    index.val index.isLt
-  have same : wrap index.val = index := Fin.ext (wrapped index.val index.isLt)
-  simpa only [same] using result
-
-private theorem parent_start_heap (state : MachineState) :
-    (commitParentsStartState state).getReg .x9 = state.getReg .x9 := rfl
-
-private theorem parent_start_counter (state : MachineState) :
-    (commitParentsStartState state).getReg .x20 = state.getReg .x19-1 := rfl
-
-private theorem parent_start_memory (state : MachineState) :
-    (commitParentsStartState state).mem = state.mem := rfl
-
-/-- The actual leaf and parent loops together construct a consistent heap whose
-leaves are the salted input digests. No hypothesis about heap contents is required. -/
-theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec (256*LENGTH)) :
-    let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
+/-- The leaf phase and the parent loop together construct a consistent heap whose leaves are
+the stage-3 digests of the input entries. No hypothesis about heap contents is required. -/
+theorem commit_input_tree (oracle : Oracle) (message : Message)
+    (answer : BitVec (192*LENGTH)) :
+    let leaves := (checkEvaluation oracle (s3Leaves (s3CommitReady message answer) (2^18))).1
     let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH-1))).1
     HeapParents oracle.compression finished 4294971424 LENGTH 0 ∧
       ∀ index : Index, heapDigest finished 4294971424 (LENGTH+index.val) =
-        leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index) := by
-  let ready := commitInputReady message answer
-  let leaves := (checkEvaluation oracle (commitLeaves ready LENGTH)).1
+        s3LeafDigest oracle.permutation (expandNonce192 (answer.extractLsb' (192*index.val) 192))
+          (message index) := by
+  let ready := s3CommitReady message answer
+  let leaves := (checkEvaluation oracle (s3Leaves ready (2^18))).1
   let parents := commitParentsStartState leaves
-  have input := commit_input_registers message answer
-  have leafRegs := (commit_leaves_finished ready LENGTH (commit_input_leaves message answer) leaves
-    (check_evaluation_support oracle _)).2
-  have parentHeap : parents.getReg .x9 = BitVec.ofNat 64 4294971424 := by
-    exact (parent_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
-  have parentCounter : parents.getReg .x20 = BitVec.ofNat 64 (LENGTH-1) := by
-    rw [parent_start_counter, leafRegs .x19 (by simp), input.2.2.2.1]
-    rfl
+  have leafRegs (reg : Reg) (member : reg ∈ [Reg.x9, .x19, .x26]) :
+      leaves.getReg reg = ready.getReg reg := s3_leaves_register oracle ready (2^18) reg member
+  have parentHeap : parents.getReg .x9 = BitVec.ofNat 64 4294971424 :=
+    (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans (ready_heap message answer))
+  have parentCounter : ParentPointerInvariant parents (LENGTH-1) := by
+    apply commit_parents_start_pointers_of_count leaves LENGTH
+    · exact (leafRegs .x19 (by simp)).trans (ready_total message answer)
+    · decide
+    · decide
   constructor
   · exact commit_parents_heap oracle parents 4294971424 LENGTH (by decide)
       parentHeap parentCounter (by decide) (by decide)
@@ -129,17 +63,18 @@ theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec
       change 4294971424+32*(16777216+index.val) = _
       omega
     unfold heapDigest
-    rw [read_buffer_memory_congr _ _ (parent_start_memory leaves), address]
-    exact commit_input_leaf_heap oracle message answer index
+    rw [read_buffer_memory_congr _ _ (parents_start_memory leaves), address]
+    exact s3_leaves_digest oracle message answer index
 
 /-- Every path through that constructed heap reconstructs the root from the
-corresponding salted input leaf. -/
+corresponding stage-3 leaf digest. -/
 theorem commit_input_tree_reconstruct (oracle : Oracle) (message : Message)
-    (answer : BitVec (256*LENGTH)) (index : Index) :
-    let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
+    (answer : BitVec (192*LENGTH)) (index : Index) :
+    let leaves := (checkEvaluation oracle (s3Leaves (s3CommitReady message answer) (2^18))).1
     let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH-1))).1
     climb oracle.compression
-      (leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index))
+      (s3LeafDigest oracle.permutation (expandNonce192 (answer.extractLsb' (192*index.val) 192))
+        (message index))
       (heapPath (heapDigest finished 4294971424) (LENGTH+index.val) LOG_LENGTH) =
         heapDigest finished 4294971424 1 := by
   have tree := commit_input_tree oracle message answer
