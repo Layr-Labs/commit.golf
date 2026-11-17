@@ -1,9 +1,8 @@
 import CommitGolfCandidate.CapOpenPathPrepare
 
-/-! One actual lower-path iteration: prepare the sibling address, copy four
-words, advance the output cursor, move to the parent and decrement the bounded
-path counter. The copy access premises are checked at the actual prepared
-state. Honest path semantics and the sixteen-iteration loop are separate. -/
+/-! The reference lower-path iteration prepares the sibling address, copies
+four words, advances the cursor, moves to the parent and decrements the path
+counter. CapFastPath executes the equivalent unrolled path. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
@@ -46,26 +45,6 @@ theorem cap_open_path_tail_pc (state : MachineState) (count : Nat)
   · simp
   all_goals rfl
 
-theorem cap_open_path_tail_execute (state : MachineState) (pc : state.pc = 4324)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (4+fuel) state allowCoins =
-      (do let result ← execute ((capExperimental 24).image .opening) fuel
-            (capOpenPathTailPrefix state 4) allowCoins
-          return result.charge 4 0) := by
-  apply execute_unit_steps (states := capOpenPathTailPrefix state)
-  intro i bounded
-  refine ⟨.base ((capOpenPathTailInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply cap_image_fetch _ _ (57+i) _ (by omega)
-    · rw [cap_open_path_tail_pc state i (by omega), pc]
-      interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  · rw [cap_open_path_tail_succ state i bounded]
-    interval_cases i <;>
-      simp only [capOpenPathTailInstructions, List.getElem?_cons_zero,
-        List.getElem?_cons_succ, Option.getD_some, ordinaryStep,
-        memoryArgumentsValid, memAccess, ↓reduceIte]
-  · interval_cases i <;> rfl
-
 theorem cap_open_path_copy_access (state : MachineState) (node rootBase cursor : Nat)
     (index : state.getReg .x20 = BitVec.ofNat 64 node)
     (base : state.getReg .x9 = BitVec.ofNat 64 rootBase)
@@ -97,44 +76,5 @@ theorem cap_open_path_copy_access (state : MachineState) (node rootBase cursor :
   · apply opening_digest_access_valid
     · simpa only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt cursorSmall] using cursorBound
     · simpa only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt cursorSmall] using cursorAligned
-
-private theorem charge_pair (result : Execution) (first second : Nat) :
-    (result.charge first 0).charge second 0 = result.charge (second+first) 0 := by
-  simp only [Execution.charge, Nat.zero_add, Nat.add_assoc]
-
-theorem cap_open_path_execute (state : MachineState) (node rootBase cursor : Nat)
-    (pc : state.pc = 4280)
-    (index : state.getReg .x20 = BitVec.ofNat 64 node)
-    (base : state.getReg .x9 = BitVec.ofNat 64 rootBase)
-    (pointer : state.getReg .x25 = BitVec.ofNat 64 cursor)
-    (rootBound : rootBase + 32*(node ^^^ 1) + 32 ≤ MEMORY_BYTES)
-    (rootAligned : rootBase % 8 = 0)
-    (cursorBound : cursor + 32 ≤ MEMORY_BYTES) (cursorAligned : cursor % 8 = 0)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (15+fuel) state allowCoins =
-      (do let result ← execute ((capExperimental 24).image .opening) fuel
-            (capOpenPathState state) allowCoins
-          return result.charge 15 0) := by
-  have accesses := cap_open_path_copy_access state node rootBase cursor index base pointer
-    rootBound rootAligned cursorBound cursorAligned
-  have copyPC : (capOpenPathPrefix state 3).pc = 4292 := by
-    rw [cap_open_path_prepare_pc state 3 (by decide), pc]
-    rfl
-  have tailPC : (capOpenPathCopied state).pc = 4324 := by
-    rw [capOpenPathCopied, cap_copy_prefix_pc false _ 8 (by decide), copyPC]
-    rfl
-  have tailRun : execute ((capExperimental 24).image .opening) (4+fuel)
-      (capDigestCopyPrefix false (capOpenPathPrefix state 3) 8) allowCoins =
-      (do let result ← execute ((capExperimental 24).image .opening) fuel
-            (capOpenPathState state) allowCoins
-          return result.charge 4 0) :=
-    cap_open_path_tail_execute (capOpenPathCopied state) tailPC fuel allowCoins
-  rw [show 15+fuel = 3+(8+(4+fuel)) by omega,
-    cap_open_path_prepare_execute state pc,
-    cap_digest_copy_execute _ false 4292 cap_open_path_copy_fetched
-      (capOpenPathPrefix state 3) copyPC accesses.1 accesses.2,
-    tailRun]
-  simp only [capOpenPathState, capOpenPathCopied, bind_assoc, pure_bind, charge_pair,
-    Nat.reduceAdd]
 
 end CommitGolfCandidate

@@ -1,8 +1,8 @@
 import CommitGolfCandidate.ContiguousLoop
 import CommitGolfCandidate.UnrolledReloc
 
-/-! The unrolled leaf loop. Thirty-two relocated leaf bodies run back to back; one
-three-instruction latch per group advances the nonce and heap registers and repeats
+/-! The unrolled leaf loop. Sixty-four relocated leaf bodies run back to back. A
+four-instruction latch per group advances the nonce and heap registers and repeats
 the group until the heap end. Each leaf reuses the proved original body through the
 relocation simulation; the reference still supplies virtual per-leaf progress. -/
 namespace CommitGolfCandidate
@@ -267,143 +267,34 @@ theorem unrolled_leaves_add (first second : Nat) (state : MachineState) :
     rw [show first + 1 + second = first + second + 1 by omega]
     simp only [commitLeaves, bind_assoc, ih]
 
-/-! ### Group latch -/
-
-/-- The state after the three pointer advances of the group latch. -/
-def unrolledLatchState (state : MachineState) (messageBase : Word) : MachineState :=
-  execInstrBr (execInstrBr (execInstrBr (unrolledState 64 state messageBase) (.ADDI .x18 .x18 1536))
-    (.ADDI .x23 .x23 1024)) (.ADDI .x23 .x23 1024)
-
-theorem unrolled_latch_first (x a b : Word) (same : b = a) : x - a + b = x - 0 := by
-  subst same
-  rw [BitVec.sub_add_cancel]
-  first
-    | exact (BitVec.sub_zero x).symm
-    | simp
-
-theorem unrolled_latch_last (x a b : Word) (same : b = a) : x - a + b = x := by
-  subst same
-  rw [BitVec.sub_add_cancel]
-
-theorem unrolled_latch_heap (x : Word) :
-    x - BitVec.ofNat 64 (32 * 64) + signExtend12 1024 + signExtend12 1024 = x := by
-  rw [BitVec.add_assoc]
-  exact unrolled_latch_last x _ _ (by decide)
-
-theorem unrolled_latch_heap0 (x : Word) :
-    x - BitVec.ofNat 64 (32 * 64) + signExtend12 1024 + signExtend12 1024 = x - 0 := by
-  rw [unrolled_latch_heap]
-  first
-    | exact (BitVec.sub_zero x).symm
-    | simp
-
-theorem unrolled_latch_registers (state : MachineState) (messageBase : Word) :
-    (unrolledLatchState state messageBase).getReg .x23 = state.getReg .x23 ∧
-    (unrolledLatchState state messageBase).getReg .x22 = state.getReg .x22 := by
-  constructor
-  · exact unrolled_latch_heap (state.getReg .x23)
-  · rfl
-
-/-- Branch after the latch: back toward the re-entry jump while heap remains, else
-fall through to the exit jump. -/
-theorem unrolled_latch_branch (state : MachineState) (messageBase : Word) :
-    execInstrBr (unrolledLatchState state messageBase) (.BLTU .x23 .x22 8) =
-      if BitVec.ult (state.getReg .x23) (state.getReg .x22) = true
-        then unrolledShift 0 (cursorLeafFrame state messageBase) 1019360
-        else cursorNormalize state messageBase 1019356 := by
-  have heap := (unrolled_latch_registers state messageBase).1
-  have ending := (unrolled_latch_registers state messageBase).2
-  show (if BitVec.ult ((unrolledLatchState state messageBase).getReg .x23)
-        ((unrolledLatchState state messageBase).getReg .x22) = true
-      then (unrolledLatchState state messageBase).setPC
-        ((unrolledLatchState state messageBase).pc + signExtend13 8)
-      else (unrolledLatchState state messageBase).setPC
-        ((unrolledLatchState state messageBase).pc + 4)) = _
-  rw [heap, ending]
-  by_cases taken : BitVec.ult (state.getReg .x23) (state.getReg .x22) = true
-  · rw [if_pos taken, if_pos taken]
-    have target : (unrolledLatchState state messageBase).pc + signExtend13 8 = 1019360 := by
-      show (1019352 : Word) + signExtend13 8 = 1019360
-      first
-        | simp [signExtend13]
-        | decide +kernel
-    refine unrolled_state_congr state _ _ _ _ _ _ ?_ rfl target
-    funext reg
-    cases reg <;> first
-      | rfl
-      | exact unrolled_latch_first _ _ _ rfl
-      | exact unrolled_latch_heap0 _
-  · rw [if_neg taken, if_neg taken]
-    refine unrolled_state_congr state _ _ _ _ _ _ ?_ rfl rfl
-    funext reg
-    cases reg <;> first
-      | rfl
-      | exact unrolled_latch_last _ _ _ rfl
-      | exact unrolled_latch_heap _
-
-/-- The re-entry jump after a non-final group. -/
-theorem unrolled_loop_jump (state : MachineState) (messageBase : Word) (fuel : Nat) :
-    execute (submission.image .commit) (1 + fuel)
-        (unrolledShift 0 (cursorLeafFrame state messageBase) 1019360) true =
-      (do let result ← execute (submission.image .commit) fuel (unrolledState 0 state messageBase) true
-          return result.charge 1 0) := by
-  have stepped : ordinaryStep (unrolledShift 0 (cursorLeafFrame state messageBase) 1019360)
-      (.base (.JAL .x0 2089196)) = some (unrolledState 0 state messageBase) := by
-    have pc : (unrolledShift 0 (cursorLeafFrame state messageBase) 1019360).pc = 1019360 := rfl
-    simp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21, pc,
-      reduceIte, Bool.false_eq_true]
-    first
-      | rfl
-      | (simp [unrolledState, unrolledShift, unrolledLeafPC, MachineState.setPC, MachineState.setReg]; rfl)
-  rw [Nat.add_comm 1 fuel,
-    execute_ordinary_step _ _ _ _ _ _ (t1_image_group_loop _ rfl) stepped]
-  rfl
-
-/-- Four latch instructions per group of 64 leaves (before the final jump). -/
-theorem unrolled_latch (state : MachineState) (messageBase : Word) (fuel : Nat) :
+/-- The last digest address advances the physical heap cursor in one ADDI. -/
+theorem unrolled_latch (state : MachineState) (messageBase : Word)
+    (last : state.getReg .x12 + 32 = state.getReg .x23) (fuel : Nat) :
     execute (submission.image .commit) (4 + fuel) (unrolledState 64 state messageBase) true =
       (do let result ← execute (submission.image .commit) fuel
-            (if BitVec.ult (state.getReg .x23) (state.getReg .x22) = true
-              then unrolledShift 0 (cursorLeafFrame state messageBase) 1019360
-              else cursorNormalize state messageBase 1019356) true
+            (if BitVec.ult (state.getReg .x23) (state.getReg .x22) then
+                unrolledState 0 state messageBase else cursorNormalize state messageBase 4364) true
           return result.charge 4 0) := by
-  have first : ordinaryStep (unrolledState 64 state messageBase)
-      (.base (.ADDI .x18 .x18 1536)) =
-      some (execInstrBr (unrolledState 64 state messageBase) (.ADDI .x18 .x18 1536)) := rfl
-  have second : ordinaryStep
-      (execInstrBr (unrolledState 64 state messageBase) (.ADDI .x18 .x18 1536))
-      (.base (.ADDI .x23 .x23 1024)) =
-      some (execInstrBr (execInstrBr (unrolledState 64 state messageBase) (.ADDI .x18 .x18 1536))
-        (.ADDI .x23 .x23 1024)) := rfl
-  have third : ordinaryStep
-      (execInstrBr (execInstrBr (unrolledState 64 state messageBase) (.ADDI .x18 .x18 1536))
-        (.ADDI .x23 .x23 1024))
-      (.base (.ADDI .x23 .x23 1024)) = some (unrolledLatchState state messageBase) := rfl
-  have fourth : ordinaryStep (unrolledLatchState state messageBase)
-      (.base (.BLTU .x23 .x22 8)) =
-      some (execInstrBr (unrolledLatchState state messageBase) (.BLTU .x23 .x22 8)) := rfl
-  rw [show 4 + fuel = fuel + 1 + 1 + 1 + 1 by omega,
-    execute_ordinary_step _ _ _ _ _ _ (t1_image_nonce_step _ rfl) first,
-    execute_ordinary_step _ _ _ _ _ _ (t1_image_heap_step _ rfl) second,
-    execute_ordinary_step _ _ _ _ _ _ (t1_image_heap_step2 _ rfl) third,
-    execute_ordinary_step _ _ _ _ _ _ (t1_image_group_branch _ rfl) fourth,
-    unrolled_latch_branch]
-  simp [Execution.charge, instructionCycles, ← Nat.add_assoc]
+  let frame := cursorLeafFrame state messageBase
+  have cursor : frame.getReg .x12 + 32 = frame.getReg .x23 := last
+  have checked := wide_leaf_latch _ frame 1019340 1011404 4364 2089200 1082164
+    t1_wide_latch (by decide) (by decide) cursor fuel
+  change execute _ _ (wideLeafBeforeLatch frame 1019340) _ = _
+  rw [checked]
+  have start : frame.setPC 1011404 = unrolledState 0 state messageBase := by
+    refine unrolled_state_congr state _ _ _ _ _ _ ?_ rfl rfl
+    funext reg
+    cases reg <;> first | rfl | exact (BitVec.sub_zero _).symm
+  have branch : frame.setPC (if BitVec.ult (frame.getReg .x23) (frame.getReg .x22) then 1011404 else 4364) =
+      (if BitVec.ult (frame.getReg .x23) (frame.getReg .x22) then unrolledState 0 state messageBase
+       else cursorNormalize state messageBase 4364) := by
+    by_cases h : BitVec.ult (frame.getReg .x23) (frame.getReg .x22) = true
+    · simpa only [h, ite_true] using start
+    · simp only [h, Bool.false_eq_true, ite_false]
+      rfl
+  rw [branch] <;> rfl
 
-/-- The fall-through jump after the last group enters parent setup. -/
-theorem unrolled_exit (state : MachineState) (pc : state.pc = 1019356) (fuel : Nat) :
-    execute (submission.image .commit) (1 + fuel) state true =
-      (do let result ← execute (submission.image .commit) fuel (state.setPC 4364) true
-          return result.charge 1 0) := by
-  have stepped : ordinaryStep state (.base (.JAL .x0 1082160)) =
-      some (state.setPC 4364) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21,
-      pc, MachineState.setReg]
-  rw [Nat.add_comm 1 fuel,
-    execute_ordinary_step _ _ _ _ _ _ (t1_image_group_exit state pc) stepped]
-  rfl
-
-/-- One whole group: 64 leaves and the latch branch use 1988 instructions and 5572 cycles. -/
+/-- One whole group: 64 leaves and the latch use 1988 instructions and 5572 cycles. -/
 theorem unrolled_group (saltFetched : ContiguousSaltFetched (submission.image .commit))
     (prefixFetched : ContiguousPrefixFetched (submission.image .commit))
     (tailFetched : ContiguousTailFetched (submission.image .commit))
@@ -414,18 +305,18 @@ theorem unrolled_group (saltFetched : ContiguousSaltFetched (submission.image .c
       (do let middle ← commitLeaves state 64
           let result ← execute (submission.image .commit) fuel
             (if BitVec.ult (middle.getReg .x23) (middle.getReg .x22) = true
-              then unrolledShift 0 (cursorLeafFrame middle messageBase) 1019360
-              else cursorNormalize middle messageBase 1019356) true
+              then unrolledState 0 middle messageBase
+              else cursorNormalize middle messageBase 4364) true
           return result.charge 5572 512) := by
   rw [show 1988 + fuel = 31 * 64 + (4 + fuel) by omega,
     unrolled_leaves saltFetched prefixFetched tailFetched 64 0 (by omega) state remaining
       messageBase invariant link]
   apply bind_congr_of_forall_mem_support
-  intro middle _
-  rw [show 0 + 64 = 64 from rfl, unrolled_latch middle messageBase]
+  intro middle reached
+  rw [show 0 + 64 = 64 from rfl, unrolled_latch middle messageBase (group_output_cursor state 63 middle reached)]
   simp [Execution.charge, ← Nat.add_assoc]
 
-/-- The whole leaf loop over `groups + 1` groups, including the exit jump. -/
+/-- The whole leaf loop over `groups + 1` groups, including the selected exit jump. -/
 theorem unrolled_groups (saltFetched : ContiguousSaltFetched (submission.image .commit))
     (prefixFetched : ContiguousPrefixFetched (submission.image .commit))
     (tailFetched : ContiguousTailFetched (submission.image .commit))
@@ -435,18 +326,18 @@ theorem unrolled_groups (saltFetched : ContiguousSaltFetched (submission.image .
     (window : (state.getReg .x23).toNat + 32 * (64 * (groups + 1)) =
       (state.getReg .x22).toNat)
     (fuel : Nat) :
-    execute (submission.image .commit) (1989 * (groups + 1) + fuel)
+    execute (submission.image .commit) (1988 * (groups + 1) + fuel)
         (unrolledState 0 state messageBase) true =
       (do let finished ← commitLeaves state (64 * (groups + 1))
           let result ← execute (submission.image .commit) fuel
             (cursorNormalize finished messageBase 4364) true
-          return result.charge (5573 * (groups + 1)) (512 * (groups + 1))) := by
+          return result.charge (5572 * (groups + 1)) (512 * (groups + 1))) := by
   induction groups generalizing state with
   | zero =>
     have current : CommitLeavesInvariant state (64 + 0) := invariant
     have currentWindow : (state.getReg .x23).toNat + 32 * (64 + 0) =
         (state.getReg .x22).toNat := window
-    rw [show 1989 * (0 + 1) + fuel = 1988 + (1 + fuel) by omega,
+    rw [show 1988 * (0 + 1) + fuel = 1988 + fuel by omega,
       unrolled_group saltFetched prefixFetched tailFetched state messageBase 0 current link]
     apply bind_congr_of_forall_mem_support
     intro middle reached
@@ -455,19 +346,18 @@ theorem unrolled_groups (saltFetched : ContiguousSaltFetched (submission.image .
     have done : ¬ BitVec.ult (middle.getReg .x23) (middle.getReg .x22) = true := by
       simp only [BitVec.ult, decide_eq_true_eq]
       omega
-    rw [if_neg done, unrolled_exit _ rfl]
-    simp [cursorNormalize, hoist_pc_pc, Execution.charge, ← Nat.add_assoc]
+    rw [if_neg done]
   | succ groups ih =>
     have current : CommitLeavesInvariant state (64 + 64 * (groups + 1)) := by
       rw [show 64 + 64 * (groups + 1) = 64 * (groups + 1 + 1) by omega]
       exact invariant
     have currentWindow : (state.getReg .x23).toNat + 32 * (64 + 64 * (groups + 1)) =
         (state.getReg .x22).toNat := by omega
-    rw [show 1989 * (groups + 1 + 1) + fuel = 1988 + (1 + (1989 * (groups + 1) + fuel)) by omega,
+    rw [show 1988 * (groups + 1 + 1) + fuel = 1988 + (1988 * (groups + 1) + fuel) by omega,
       unrolled_group saltFetched prefixFetched tailFetched state messageBase
         (64 * (groups + 1)) current link,
       show 64 * (groups + 1 + 1) = 64 + 64 * (groups + 1) by omega, unrolled_leaves_add,
-      show 5573 * (groups + 1 + 1) = 5573 + 5573 * (groups + 1) by omega,
+      show 5572 * (groups + 1 + 1) = 5572 + (5572 * (groups + 1)) by omega,
       show 512 * (groups + 1 + 1) = 512 + 512 * (groups + 1) by omega]
     simp only [bind_assoc]
     apply bind_congr_of_forall_mem_support
@@ -478,8 +368,7 @@ theorem unrolled_groups (saltFetched : ContiguousSaltFetched (submission.image .
     have again : BitVec.ult (middle.getReg .x23) (middle.getReg .x22) = true := by
       simp only [BitVec.ult, decide_eq_true_eq]
       omega
-    rw [if_pos again, unrolled_loop_jump, ih middle middleInvariant middleLink middleWindow]
+    rw [if_pos again, ih middle middleInvariant middleLink middleWindow]
     simp [Execution.charge, Nat.add_assoc]
-    simp only [show ∀ x : Nat, 5572 + (1 + x) = 5573 + x from fun x => by omega]
 
 end CommitGolfCandidate

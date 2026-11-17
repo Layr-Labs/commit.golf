@@ -87,7 +87,7 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, cursorBaseFrame body.1 4096, 5573*(262143+1)+3*LENGTH+838862*200+195, 9*LENGTH-1⟩, body.2)
+  (⟨.success, cursorBaseFrame body.1 4096, 5572*(262143+1)+3*LENGTH+838862*200+195, 9*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
     (packCommitResult body).1.state = cursorBaseFrame body.1 4096 := rfl

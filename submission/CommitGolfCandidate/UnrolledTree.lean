@@ -2,7 +2,7 @@ import CommitGolfCandidate.LongParentSchedule
 import CommitGolfCandidate.UnrolledLoop
 
 /-! Tree construction with the unrolled leaf groups: the entry jump lands on the first
-group, the last group falls through to parent setup, and the parent schedule and root
+group, the last group jumps to parent setup, and the parent schedule and root
 serialization are unchanged. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -52,11 +52,11 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
     execute (submission.image .commit)
-        (1989 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel)
+        (1988 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel)
       (((cursorLeafFrame state messageBase).setReg .x1 4316).setPC 1011404) true =
       (do let finished ← commitBody state count
           return ⟨.success, cursorBaseFrame finished messageBase,
-            5573 * (leafGroups + 1) + schedule.cycles groups + 17, 9 * count - 1⟩) := by
+            5572 * (leafGroups + 1) + schedule.cycles groups + 17, 9 * count - 1⟩) := by
   have mainPositive : 0<schedule.width*groups := Nat.mul_pos valid.positive positiveGroups
   have residualPositive : 0<schedule.parents groups := by
     change 0<schedule.initialPlan.parents+schedule.width*groups
@@ -78,8 +78,8 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
     rw [hoist_pc_self] at positive
     simpa only [show count - 1 + 1 = count by omega] using positive
   rw [erased] at leavesRun
-  rw [show 1989 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel =
-      1989 * (leafGroups + 1) + (6 + (schedule.instructions groups + (11 + fuel))) by omega,
+  rw [show 1988 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel =
+      1988 * (leafGroups + 1) + (6 + (schedule.instructions groups + (11 + fuel))) by omega,
     unrolled_entry_frame, leavesRun]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support

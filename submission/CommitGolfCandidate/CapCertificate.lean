@@ -11,7 +11,7 @@ this theorem alone is not an official verifier receipt. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
-theorem cap_certificate : Certificate capProgram 73728 1679032755 43531 where
+theorem cap_certificate : Certificate capProgram 73728 1678770611 37899 where
   admission := cap_program_admission
   machineSuccess := cap_program_machine_success
   termination := cap_program_termination

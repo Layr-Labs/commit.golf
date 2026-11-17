@@ -28,8 +28,8 @@ theorem submission_admission : submission.Admission := by
   cases program with
   | commit =>
     refine ⟨?_,by decide,by decide⟩
-    apply image_valid_of_lengths _ _ 253817 0
-    · change group341ImageWords.length=253817
+    apply image_valid_of_lengths _ _ 253816 0
+    · change group341ImageWords.length=253816
       exact group341_image_length
     · rfl
     · decide
