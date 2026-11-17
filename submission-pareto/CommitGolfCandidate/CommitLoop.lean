@@ -179,4 +179,33 @@ theorem commit_leaves_finished (state : MachineState) (remaining : Nat)
     exact ⟨done.1, fun reg member => (done.2 reg member).trans
       ((commit_position_registers state next reached).2.2.2.2.2 reg member)⟩
 
+/-- Storing a completed leaf and advancing its pointers preserve the oracle's
+constant argument registers. -/
+theorem commit_position_oracle_registers (state finished : MachineState)
+    (reachable : finished ∈ support (commitPositionRun state)) :
+    finished.getReg .x5 = 0 ∧ finished.getReg .x11 = 64 ∧ finished.getReg .x13 = 0 := by
+  simp only [commitPositionRun, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
+  obtain ⟨leaf, reached, rfl⟩ := reachable
+  have registers := commit_leaf_loop_oracle_registers _ 8 (by decide) leaf reached
+  simpa [commitPositionNextState, MachineState.getReg_setPC,
+    MachineState.getReg_setReg_ne, commit_copy_register] using registers
+
+/-- After any positive number of leaves, the parent loop can reuse the constant
+syscall arguments without issuing extra initialization instructions. -/
+theorem commit_leaves_oracle_registers (state : MachineState) (remaining : Nat)
+    (positive : 0 < remaining) (finished : MachineState)
+    (reachable : finished ∈ support (commitLeaves state remaining)) :
+    finished.getReg .x5 = 0 ∧ finished.getReg .x11 = 64 ∧ finished.getReg .x13 = 0 := by
+  induction remaining generalizing state with
+  | zero => omega
+  | succ remaining ih =>
+    simp only [commitLeaves, mem_support_bind_iff] at reachable
+    obtain ⟨next, reached, rest⟩ := reachable
+    cases remaining with
+    | zero =>
+      simp only [commitLeaves, support_pure, Set.mem_singleton_iff] at rest
+      subst finished
+      exact commit_position_oracle_registers state next reached
+    | succ remaining => exact ih _ (by omega) rest
+
 end CommitGolfCandidate

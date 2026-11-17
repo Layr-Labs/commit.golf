@@ -437,4 +437,34 @@ theorem commit_leaf_loop_registers (state : MachineState) (count : Nat) (finishe
     · intro reg preserved
       exact (rest.2 reg preserved).trans (commit_leaf_block_preserves state answer reg preserved)
 
+/-- Each leaf compression establishes the constant syscall arguments needed by
+the following parent loop, independently of its input and the oracle's reply. -/
+theorem commit_leaf_step_oracle_registers (state : MachineState) (answer : BitVec 256) :
+    (commitLeafStepState state answer).getReg .x5 = 0 ∧
+    (commitLeafStepState state answer).getReg .x11 = 64 ∧
+    (commitLeafStepState state answer).getReg .x13 = 0 := by
+  simp only [commitLeafStepState, commitLeafNextState, MachineState.getReg_setPC]
+  simp (disch := decide) only [MachineState.getReg_setReg_ne]
+  simp only [commitCompressionState, writeBits_register]
+  simp [commitCompressionPrefix, commitCompressionInstructions,
+    execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
+
+/-- A nonempty leaf-hash loop returns with the constant oracle arguments set. -/
+theorem commit_leaf_loop_oracle_registers (state : MachineState) (count : Nat)
+    (positive : 0 < count) (finished : MachineState)
+    (reachable : finished ∈ support (commitLeafLoop state count)) :
+    finished.getReg .x5 = 0 ∧ finished.getReg .x11 = 64 ∧ finished.getReg .x13 = 0 := by
+  induction count generalizing state with
+  | zero => omega
+  | succ count ih =>
+    simp only [commitLeafLoop, mem_support_bind_iff] at reachable
+    obtain ⟨answer, _, reached⟩ := reachable
+    change BitVec 256 at answer
+    cases count with
+    | zero =>
+      simp only [commitLeafLoop, support_pure, Set.mem_singleton_iff] at reached
+      subst finished
+      exact commit_leaf_step_oracle_registers state answer
+    | succ count => exact ih _ (by omega) reached
+
 end CommitGolfCandidate

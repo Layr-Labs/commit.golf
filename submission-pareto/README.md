@@ -127,11 +127,43 @@ segment are compiled supporting lemmas; their imports do not establish separate 
 evidence. [ResourceTests](CommitGolfCandidate/ResourceTests.lean), imported by `Solution.lean`,
 checks that seven calls do not suffice and that block order and trailing zero blocks are preserved.
 
-## Initial implementation
+## Pareto optimization: reuse parent-call arguments
+
+This candidate starts from the salted Merkle baseline at contract commit
+`0585bfb7ab74cad0be5d213dcdb20b433dffebb2`. It replaces the first redundant
+parent-call argument initialization with a jump over the remaining two. Leaf
+hashing establishes `t0 = 0`, `a1 = 64`, and `a3 = 0`; new lemmas prove that these
+values hold after every nonempty leaf loop and remain unchanged through all
+parent iterations. The memory writes, oracle queries, commitment, private state,
+and opening/checking programs retain their previous behavior.
+
+Each of the `2^24 - 1` internal nodes now takes eight instructions and fifteen
+cycles, saving two cycles per node. The candidate claims:
+
+- `commitCycles`: 3925868582
+- `openingCycles`: 48670
+- `proofBytes`: 102400
+- Combined prover cycles: 3925917252
+
+This reduces the baseline's combined prover cost by 33554430 cycles (about
+0.8474%) at the same proof size. The unused instruction words remain in the
+commit image to preserve all later instruction addresses. `programs.json`
+changes exactly one 32-bit instruction; the certificate must prove equality
+with this delivered image as well as all original challenge requirements.
+
+On 2026-11-17, `yukon run --track pareto` accepted this candidate after an
+isolated rebuild and Lean kernel replay, including equality with the delivered
+manifest. The verified Pareto pair is `[3925917252, 102400]`; the corresponding
+product is `402013926604800`. The manifest SHA-256 is
+`9341839a262a0e090d35bdcfa0f09c6f8265efdbf5ed013c58c7e835acac49bf`.
+All 91 Python verifier tests passed. Small-tree executions at depths 0 through 3
+also passed, including honest openings and rejection of altered proofs and values.
+
+## Inherited initial implementation
 
 This directory contains the initial machine submission and a complete Lean
 `CommitGolf.Challenge.certificate` theorem, including binding and hiding for the
-actual machine-derived scheme. The current claims are 102400 proof bytes,
+actual machine-derived scheme. The upstream baseline claims were 102400 proof bytes,
 3959423012 commitment cycles, and 48670 opening cycles, giving a score of
 **405,449,900,236,800**. The cycle bounds use the exact resource counts already
 proved for the images; tightening these claims does not change the programs.
@@ -160,10 +192,10 @@ implementation uses compression only; access to the permutation remains availabl
 - `CommitGolfCandidate/Counting.lean`: proves that coin-free interpreter executions report exactly the number of calls independently accumulated by the security-game oracle runner.
 - `CommitGolfCandidate/CheckInput.lean`: discharges the loop invariants for every actual ABI input, including arbitrary commitments, values, positions, and proof bytes. Proves checker termination in the certificate's probability-one form for every fixed oracle. The actual runner uses at most `1100 * positions.card + 20` cycles and `32 * positions.card` public queries; for 128 positions, those bounds are 140820 cycles and 4096 queries. This does not establish acceptance of honest proofs or the cryptographic security properties.
 - `CommitGolfCandidate/CommitLeaf.lean` and `Commit.lean`: exact instruction proofs for setup, private salt sampling, leaf hashing, digest copying, and one full leaf iteration (159 instructions, 215 cycles, eight queries).
-- `CommitGolfCandidate/CommitLoop.lean`, `CommitParents.lean`, and `CommitTree.lean`: all leaf and internal-node iterations, root output, and successful HALT. After salt/scratch initialization, tree construction takes `169*N + 3` instructions, `232*N - 4` cycles, and `9*N - 1` queries. These are execution proofs for all oracle answers, not tests or a cryptographic refinement proof.
+- `CommitGolfCandidate/CommitLoop.lean`, `CommitParents.lean`, and `CommitTree.lean`: all leaf and internal-node iterations, root output, and successful HALT. After salt/scratch initialization, tree construction takes `167*N + 5` instructions, `230*N - 2` cycles, and `9*N - 1` queries. These are execution proofs for all oracle answers, not tests or a cryptographic refinement proof.
 - `CommitGolfCandidate/CommitInput.lean`: establishes every loop, alignment, and buffer-safety invariant from the actual input loader, for arbitrary messages and salt contents.
-- `CommitGolfCandidate/CommitRuntime.lean`: connects setup, private randomness, tree construction, and the actual submitted instruction allowance. Every commitment succeeds in exactly 3959423012 cycles and records 150994943 public queries in the interpreter. `CountingCoins.lean` and `Budgets.lean` connect this to the independent security-game query counter, including private randomness.
-- `CommitGolfCandidate/Machine.lean`: proves the complete certificate fields `MachineSuccess`, `Termination`, and `ProverCycles 3959423012 48670`, using the real machine-derived scheme and oracle runner. Completeness, binding, and hiding are supplied by their corresponding modules.
+- `CommitGolfCandidate/CommitRuntime.lean`: connects setup, private randomness, tree construction, and the actual submitted instruction allowance. Every commitment succeeds in exactly 3925868582 cycles and records 150994943 public queries in the interpreter. `CountingCoins.lean` and `Budgets.lean` connect this to the independent security-game query counter, including private randomness.
+- `CommitGolfCandidate/Machine.lean`: proves the complete certificate fields `MachineSuccess`, `Termination`, and `ProverCycles 3925868582 48670`, using the real machine-derived scheme and oracle runner. Completeness, binding, and hiding are supplied by their corresponding modules.
 - `CommitGolfCandidate/CountingCoins.lean`: extends the independent counter equality to executions with private randomness.
 - `CommitGolfCandidate/CheckEvaluation.lean`: connects the deterministic checker evaluator to the counted oracle runner and proves the scheme checks use at most 32 queries per opened leaf.
 - `CommitGolfCandidate/Budgets.lean`: proves the complete `HonestBudgets` field: exactly 150994943 commitment queries, zero opening queries, and at most 32 checking queries per opened leaf.

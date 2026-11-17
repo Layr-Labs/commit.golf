@@ -107,7 +107,11 @@ def commitCode (depth : Nat) : List Asm :=
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
    addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
-   addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x73,
+   -- Leaf hashing already established t0=0, a1=64 and a3=0, and the oracle
+   -- preserves them. Skip their repeated initialization at every parent.
+   -- Keep the unused words so all later instruction addresses stay fixed.
+   .jump 0 "commit-parent-call", addi 11 0 64, addi 13 0 0,
+   .label "commit-parent-call", insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
   copyDigest 9 26 32 ++ halt true ++ leafSubroutine
 

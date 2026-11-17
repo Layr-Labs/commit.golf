@@ -42,16 +42,17 @@ theorem commit_parent_step_pc (state : MachineState) (answer : BitVec 256) :
 
 attribute [local irreducible] execute commitParentState commitParentNextState
 
-/-- All internal nodes are processed in descending heap order. Each costs ten
-instructions, seventeen cycles, and one query, independently of oracle answers. -/
+/-- All internal nodes are processed in descending heap order. Each costs eight
+instructions, fifteen cycles, and one query, independently of oracle answers. -/
 theorem commit_parents (state : MachineState) (remaining : Nat) (bounded : remaining < 2 ^ 24)
     (pc : 0 < remaining → state.pc = 4348)
     (counter : state.getReg .x20 = BitVec.ofNat 64 remaining)
-    (buffers : ParentBuffers (state.getReg .x9) remaining) (fuel : Nat) :
-    execute (submission.image .commit) (10 * remaining + fuel) state true =
+    (buffers : ParentBuffers (state.getReg .x9) remaining)
+    (arguments : ParentOracleRegisters state) (fuel : Nat) :
+    execute (submission.image .commit) (8 * remaining + fuel) state true =
       (do let finished ← commitParents state remaining
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (17 * remaining) remaining) := by
+          return result.charge (15 * remaining) remaining) := by
   induction remaining generalizing state with
   | zero => simp [commitParents, Execution.charge]
   | succ remaining ih =>
@@ -76,14 +77,18 @@ theorem commit_parents (state : MachineState) (remaining : Nat) (bounded : remai
         ParentBuffers ((commitParentNextState (commitParentState state answer)).getReg .x9) remaining := by
       rw [commit_parent_step_register state answer .x9 (by simp)]
       exact fun node positive bound => buffers node positive (by omega)
-    rw [show 10 * (remaining + 1) + fuel = 10 + (10 * remaining + fuel) by omega,
-      commit_parent state (pc (by omega)) current.1 current.2.1 current.2.2.1 current.2.2.2]
+    have nextArguments (answer : BitVec 256) :
+        ParentOracleRegisters (commitParentNextState (commitParentState state answer)) := by
+      simpa [ParentOracleRegisters, commitParentNextState, MachineState.getReg_setPC,
+        MachineState.getReg_setReg_ne] using commit_parent_oracle_registers state answer arguments
+    rw [show 8 * (remaining + 1) + fuel = 8 + (8 * remaining + fuel) by omega,
+      commit_parent state (pc (by omega)) arguments current.1 current.2.1 current.2.2.1 current.2.2.2]
     simp only [commitParents, bind_assoc]
     apply congrArg (fun continuation =>
       (liftM (World.query (.inr (commitParentQuery state))) : OracleComp World (BitVec 256)) >>= continuation)
     funext answer
     change BitVec 256 at answer
-    rw [ih _ (by omega) (nextPC answer) (nextCounter answer) (nextBuffers answer)]
+    rw [ih _ (by omega) (nextPC answer) (nextCounter answer) (nextBuffers answer) (nextArguments answer)]
     simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
 
 theorem commit_parents_finished (state : MachineState) (remaining : Nat)
@@ -203,11 +208,11 @@ theorem commit_body (state : MachineState) (count : Nat)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (169 * count + 3 + fuel) state true =
+    execute (submission.image .commit) (167 * count + 5 + fuel) state true =
       (do let finished ← commitBody state count
-          return ⟨.success, finished, 232 * count - 4, 9 * count - 1⟩) := by
-  rw [show 169 * count + 3 + fuel =
-    159 * count + (2 + (10 * (count - 1) + (11 + fuel))) by omega,
+          return ⟨.success, finished, 230 * count - 2, 9 * count - 1⟩) := by
+  rw [show 167 * count + 5 + fuel =
+    159 * count + (2 + (8 * (count - 1) + (11 + fuel))) by omega,
     commit_leaves state count leaves]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
@@ -241,8 +246,13 @@ theorem commit_body (state : MachineState) (count : Nat)
     (readyRegister .x26 (by decide)).trans (leafDone.2 .x26 (by simp))
   have readyBuffers : ParentBuffers (ready.getReg .x9) (count - 1) := by
     rw [readyHeap]; exact parents
+  have leafArguments := commit_leaves_oracle_registers state count (by omega) hashed reached
+  have readyArguments : ParentOracleRegisters ready :=
+    ⟨(readyRegister .x5 (by decide)).trans leafArguments.1,
+      (readyRegister .x11 (by decide)).trans leafArguments.2.1,
+      (readyRegister .x13 (by decide)).trans leafArguments.2.2⟩
   rw [commit_parents_start hashed leafDone.1,
-    commit_parents ready (count - 1) (by omega) readyPC readyCount readyBuffers]
+    commit_parents ready (count - 1) (by omega) readyPC readyCount readyBuffers readyArguments]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro finished reachedParents
