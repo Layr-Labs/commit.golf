@@ -1,20 +1,19 @@
-import CommitGolfCandidate.NonceCertificate
-import CommitGolf.Artifact
-import CommitGolfCandidate.CapPackedImageEquality
+import CommitGolfCandidate.TwoPermutationWideLeafMeaning
+import CommitGolfCandidate.TwoPermutationCheckerWideArtifact
 
-/-! Concrete nonce-packed cap multiproof certificate. The security scheme and
-resource bounds come from these executable images, which are compared with
-the exact independently generated manifest artifact below. -/
 namespace CommitGolf.Challenge
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.nonceCompressedProgram
+open TwoPermutationPrototype
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 20000000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  exact CommitGolfCandidate.nonce_packed_submission_matches
+def submission : CommitGolf.Submission := WideCertificate.wideSubmission
 
-theorem certificate : CommitGolf.Certificate submission 72704 688652773 92441 :=
-  CommitGolfCandidate.nonce_certificate
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission :=
+  WideCertificate.wide_submission_matches_artifact
+
+theorem certificate : CommitGolf.Certificate submission 71680 671613460 42744 := by
+  apply WideCertificate.wide_certificate RV64.WideLeaves.executableLeaves
+    (RV64.wideVerifiedTranscript RV64.WideLeaves.executableLeaves RV64.WideLeaves.executableMeaning)
+  rw [WideCertificate.wide_submission_matches_artifact]
+  exact WideCertificate.artifact_checker_facts
 
 end CommitGolf.Challenge
