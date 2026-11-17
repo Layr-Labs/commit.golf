@@ -20,25 +20,25 @@ theorem commit_counted (oracle : Oracle) (message : Message) (result : Execution
 private theorem scheme_commit (candidate : Submission) (message : Message) :
     candidate.scheme.commit message = candidate.readCommit <$> candidate.run .commit message := rfl
 
-/-- Each honest commitment makes exactly 9*N-1 public queries, including every
-underlying compression call in the eight-block salted leaf construction. -/
+/-- Each honest commitment makes exactly 3*N-1 public queries: two permutation
+calls per leaf digest and one compression call per internal node. -/
 theorem scheme_commit_calls (oracle : Oracle) (message : Message)
     (result : (Commitment × submission.scheme.Trapdoor) × Nat)
     (reachable : result ∈ support (oracle.run (submission.scheme.commit message))) :
-    result.2 = 150994943 := by
+    result.2 = 50331647 := by
   rw [scheme_commit] at reachable
   change result ∈ support (oracle.run (submission.readCommit <$>
     submission.run .commit (message : Input submission.sizes .commit))) at reachable
   rw [oracle_run_map] at reachable
   simp only [support_map] at reachable
   obtain ⟨committed, reached, rfl⟩ := reachable
-  change committed.2 = 150994943
+  change committed.2 = 50331647
   rw [← commit_counted oracle message committed reached]
   exact (commit_input_resources message committed.1
     (writer_support (oracle.world.withAddCost Oracle.callCost) _ committed reached)).2.2
 
 /-- The complete honest-budget certificate field, for every fixed oracle, message,
-and set of opened positions. Commitment uses 9*N-1 calls, opening uses zero, and
+and set of opened positions. Commitment uses 3*N-1 calls, opening uses zero, and
 checking uses at most 32 calls per opened leaf. -/
 theorem submission_honest_budgets : submission.scheme.HonestBudgets := by
   intro oracle message positions
