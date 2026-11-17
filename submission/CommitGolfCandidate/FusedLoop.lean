@@ -15,7 +15,8 @@ theorem fused_normalize_self_pc (state : MachineState) (messageBase : Word) :
 
 /-- Natural reference progress proves all memory accesses and heap-end branches.
 The real repeated cost is 36 instructions and 92 cycles per committed leaf. -/
-theorem fused_leaves (saltFetched : CursorSaltFetched (submission.image .commit))
+theorem fused_leaves (callFetched : CommitLeafCallFetched)
+    (saltFetched : CursorSaltFetched (submission.image .commit))
     (prefixFetched : CursorPrefixFetched (submission.image .commit))
     (tailFetched : FusedTailFetched (submission.image .commit))
     (latchFetched : FusedLatchFetched (submission.image .commit))
@@ -36,7 +37,7 @@ theorem fused_leaves (saltFetched : CursorSaltFetched (submission.image .commit)
     simp only [show remaining + 1 ≠ 0 by omega, ite_false]
     rw [← pc, fused_normalize_self_pc,
       show 36 * (remaining + 1) + fuel = 36 + (36 * remaining + fuel) by omega,
-      fused_position saltFetched prefixFetched tailFetched latchFetched state messageBase pc
+      fused_position callFetched saltFetched prefixFetched tailFetched latchFetched state messageBase pc
         invariant.scratch invariant.sourceAbove invariant.oracleReady
         (fun word => invariant.salts word.val (by omega))
         (fun word => invariant.heap word.val (by omega))

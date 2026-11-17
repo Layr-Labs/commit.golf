@@ -12,7 +12,8 @@ set_option maxHeartbeats 2000000
 
 /-- The complete physical position uses 36 instructions, 92 cycles and eight
 queries. Delivered-image fetch premises remain explicit until image assembly. -/
-theorem fused_position (saltFetched : CursorSaltFetched (submission.image .commit))
+theorem fused_position (callFetched : CommitLeafCallFetched)
+    (saltFetched : CursorSaltFetched (submission.image .commit))
     (prefixFetched : CursorPrefixFetched (submission.image .commit))
     (tailFetched : FusedTailFetched (submission.image .commit))
     (latchFetched : FusedLatchFetched (submission.image .commit))
@@ -96,7 +97,7 @@ theorem fused_position (saltFetched : CursorSaltFetched (submission.image .commi
   dsimp only [ready, commitPositionState] at leafRun
   rw [show 36 + fuel = 8 + (1 + (24 + (3 + fuel))) by omega,
     cursor_salt_execute _ saltFetched _ physicalPC physicalSalt destinationValid,
-    cursor_salt_copy_frame, commit_leaf_call _ copyPC, cursor_call_frame, leafRun]
+    cursor_salt_copy_frame, commit_leaf_call callFetched _ copyPC, cursor_call_frame, leafRun]
   rw [fused_leaf_reference_bind (commitLeafCallState (commitCopyState state 46))
     cursor (readySource.trans source) readyChain
     (by
