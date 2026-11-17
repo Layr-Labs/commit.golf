@@ -40,7 +40,7 @@ theorem unrolled_state_congr (base : MachineState) (regs regs' : Reg → Word)
 theorem unrolled_sub_add (x a b : Word) : x - a + (a + b) = x + b := by
   rw [← BitVec.add_assoc, BitVec.sub_add_cancel]
 
-theorem unrolled_nonce_address (u k : Nat) (hu : u < 32) (hk : k = 0 ∨ k = 8 ∨ k = 16)
+theorem unrolled_nonce_address (u k : Nat) (hu : u < 64) (hk : k = 0 ∨ k = 8 ∨ k = 16)
     (x : Word) :
     x - BitVec.ofNat 64 (24 * u) + signExtend12 (BitVec.ofNat 12 (24 * u + k)) =
       x + signExtend12 (BitVec.ofNat 12 k) := by
@@ -49,7 +49,7 @@ theorem unrolled_nonce_address (u k : Nat) (hu : u < 32) (hk : k = 0 ∨ k = 8 �
     rcases hk with rfl | rfl | rfl <;> interval_cases u <;> rfl
   rw [extended, unrolled_sub_add]
 
-theorem unrolled_heap_address (u : Nat) (hu : u < 32) (x : Word) :
+theorem unrolled_heap_address (u : Nat) (hu : u < 64) (x : Word) :
     x - BitVec.ofNat 64 (32 * u) + signExtend12 (BitVec.ofNat 12 (32 * u)) =
       x + signExtend12 (BitVec.ofNat 12 0) := by
   have extended : signExtend12 (BitVec.ofNat 12 (32 * u)) =
@@ -342,7 +342,7 @@ theorem unrolled_run_heap (image : Image) (u : Nat) (delta : Word) (value value'
     (fun next stepped => rest next (unrolled_ordinary_pc state next _ rfl rfl stepped))
 
 /-- One instruction of leaf `u` simulates the same instruction of the original body. -/
-theorem unrolled_reloc_step (u : Nat) (hu : u < 32) (i : Nat) (hi : i < 31) (fuel : Nat)
+theorem unrolled_reloc_step (u : Nat) (hu : u < 64) (i : Nat) (hi : i < 31) (fuel : Nat)
     (allowCoins : Bool) (state : MachineState)
     (pc : state.pc = BitVec.ofNat 64 (4456 + 4 * i))
     (rest : ∀ next : MachineState, next.pc = BitVec.ofNat 64 (4456 + 4 * (i + 1)) →
@@ -390,7 +390,7 @@ theorem unrolled_reloc_step (u : Nat) (hu : u < 32) (i : Nat) (hi : i < 31) (fue
     | exact unrolled_execute_call _ u _ state fuel allowCoins oldFetched newFetched advance
 
 /-- Leaf `u` of the group and the original body run in lockstep from any instruction. -/
-theorem unrolled_reloc (u : Nat) (hu : u < 32) (allowCoins : Bool) (fuel : Nat) :
+theorem unrolled_reloc (u : Nat) (hu : u < 64) (allowCoins : Bool) (fuel : Nat) :
     ∀ i : Nat, i + fuel = 31 → ∀ state : MachineState,
       state.pc = BitVec.ofNat 64 (4456 + 4 * i) →
       execute (submission.image .commit) fuel

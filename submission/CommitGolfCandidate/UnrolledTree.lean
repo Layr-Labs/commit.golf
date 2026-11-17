@@ -40,7 +40,7 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
     (parentFetched : LongParentSchedule.Fetched (submission.image .commit) schedule)
     (state : MachineState) (count groups leafGroups : Nat) (messageBase : Word)
     (evenCount : count = schedule.parents groups + 1)
-    (leafCount : count = 32 * (leafGroups + 1)) (bounded : count ≤ 2 ^ 24)
+    (leafCount : count = 64 * (leafGroups + 1)) (bounded : count ≤ 2 ^ 24)
     (positiveGroups : 0<groups)
     (leaves : CommitLeavesInvariant state count)
     (heapWindow : (state.getReg .x23).toNat + 32 * count = (state.getReg .x22).toNat)
@@ -52,11 +52,11 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
     execute (submission.image .commit)
-        (995 * (leafGroups + 1) + schedule.instructions groups + 18 + fuel)
+        (1989 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel)
       (((cursorLeafFrame state messageBase).setReg .x1 4316).setPC 1011404) true =
       (do let finished ← commitBody state count
           return ⟨.success, cursorBaseFrame finished messageBase,
-            2787 * (leafGroups + 1) + schedule.cycles groups + 18, 9 * count - 1⟩) := by
+            5573 * (leafGroups + 1) + schedule.cycles groups + 17, 9 * count - 1⟩) := by
   have mainPositive : 0<schedule.width*groups := Nat.mul_pos valid.positive positiveGroups
   have residualPositive : 0<schedule.parents groups := by
     change 0<schedule.initialPlan.parents+schedule.width*groups
@@ -78,8 +78,8 @@ theorem unrolled_schedule_linked_body (schedule : LongParentSchedule) (valid : s
     rw [hoist_pc_self] at positive
     simpa only [show count - 1 + 1 = count by omega] using positive
   rw [erased] at leavesRun
-  rw [show 995 * (leafGroups + 1) + schedule.instructions groups + 18 + fuel =
-      995 * (leafGroups + 1) + 1 + (6 + (schedule.instructions groups + (11 + fuel))) by omega,
+  rw [show 1989 * (leafGroups + 1) + schedule.instructions groups + 17 + fuel =
+      1989 * (leafGroups + 1) + (6 + (schedule.instructions groups + (11 + fuel))) by omega,
     unrolled_entry_frame, leavesRun]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
