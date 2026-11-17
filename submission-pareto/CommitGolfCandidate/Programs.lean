@@ -92,6 +92,18 @@ def leafSubroutine : List Asm :=
   copyDigest 8 21 0 32 ++ compressScratch ++
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
+/-- Commitment-image variant of `leafSubroutine`, computing the same salted leaf hash.
+The five constant syscall-argument registers (x5=0, x10=x12=256, x11=64, x13=0) are set
+once per leaf instead of once per block, and the eight blocks are unrolled, removing the
+counter and branch. The compression syscall preserves every general-purpose register and
+each block writes only x6 and x8, so every ECALL sees the same arguments and scratch memory
+as in `leafSubroutine` (whose scratch pointer x21 is 256 at every call site). Consumes
+256 bytes from x8, preserves x8's final pointer, and returns through x1. -/
+def commitLeafSubroutine : List Asm :=
+  [.label "leaf", addi 5 0 0, addi 10 0 256, addi 11 0 64, addi 12 0 256, addi 13 0 0] ++
+  (List.range 8).flatMap (fun _ => copyDigest 8 21 0 32 ++ [insn 0x73, addi 8 8 32]) ++
+  [insn 0x00008067]
+
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
@@ -109,7 +121,7 @@ def commitCode (depth : Nat) : List Asm :=
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
    addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ leafSubroutine
+  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
