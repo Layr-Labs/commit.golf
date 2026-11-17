@@ -83,14 +83,14 @@ def openingResult (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) : Execution :=
   ⟨.success, openingExitState (openingPositionState^[positions.card]
     (openingInitializedState (submission.initialState .opening (trapdoor, positions)))),
-    30 + 380 * positions.card, 0⟩
+    13 + 379 * positions.card, 0⟩
 
 set_option maxRecDepth 4096 in
 private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (fuel : Nat) :
-    execute (submission.image .opening) (380 * positions.card + (7 + fuel))
+    execute (submission.image .opening) (379 * positions.card + (4 + fuel))
       (openingInitializedState (submission.initialState .opening (trapdoor, positions))) true =
-        pure ⟨.success, (openingResult trapdoor positions).state, 380 * positions.card + 10, 0⟩ := by
+        pure ⟨.success, (openingResult trapdoor positions).state, 379 * positions.card + 4, 0⟩ := by
   let initial := submission.initialState .opening (trapdoor, positions)
   let ready := openingInitializedState initial
   have cardinal : positions.card ≤ LENGTH := by
@@ -148,11 +148,11 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
     norm_num [LENGTH, LOG_LENGTH] at cardinal
     omega
   have outputAligned : (ready.getReg .x25).toNat % 8 = 0 := by rw [outputPointer]; decide
-  have finishedPC : (openingPositionState^[positions.card] ready).pc = 4316 := by
+  have finishedPC : (openingPositionState^[positions.card] ready).pc = 4320 := by
     by_cases empty : positions.card = 0
     · simp [empty, ready, openingInitializedState, MachineState.setPC, initialCount]
     · exact (opening_positions_finished positions.card (by omega) ready counter).1
-  change execute (submission.image .opening) (380 * positions.card + (7 + fuel)) ready true = _
+  change execute (submission.image .opening) (379 * positions.card + (4 + fuel)) ready true = _
   rw [opening_positions_loop positions.card cardinal ready counter readyPC indices indexSpace indexAligned
       leaves saltBound saltAligned heapBound heapAligned outputBound outputAligned,
     opening_exit _ finishedPC]
@@ -161,7 +161,7 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
 
 private theorem opening_execution_extra (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (fuel : Nat) :
-    execute (submission.image .opening) (20 + (380 * positions.card + (7 + fuel)))
+    execute (submission.image .opening) (9 + (379 * positions.card + (4 + fuel)))
       (submission.initialState .opening (trapdoor, positions)) true =
         pure (openingResult trapdoor positions) := by
   rw [opening_setup _ rfl, opening_ready_execution]
@@ -183,7 +183,7 @@ theorem opening_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor))
   have cardinal : positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ positions
   have steps : submission.steps .opening =
-      20 + (380 * positions.card + (7 + (submission.steps .opening - (27 + 380 * positions.card)))) := by
+      9 + (379 * positions.card + (4 + (submission.steps .opening - (13 + 379 * positions.card)))) := by
     norm_num [submission, candidate, LENGTH, LOG_LENGTH] at cardinal ⊢
     omega
   exact (run_opening_eq_execute submission (trapdoor, positions)).trans
@@ -197,8 +197,9 @@ theorem opening_result_length (trapdoor : BitVec (8 * submission.sizes.trapdoor)
     ((openingResult trapdoor positions).state.getReg .x11).toNat = 800 * positions.card := by
   apply opening_exit_length
   · simpa [Index] using Finset.card_le_univ positions
-  · rw [opening_positions_preserves_count, (opening_setup_registers _).2.2.2.2.2.2.1]
-    rfl
+  · rw [opening_positions_output, opening_positions_preserves_proof_base,
+      (opening_setup_registers _).2.2.1]
+    rw [opening_setup_proof_base]
 
 /-- No opening is rejected or cut off, and its reported length fits the declared buffer. -/
 theorem opening_result_succeeded (trapdoor : BitVec (8 * submission.sizes.trapdoor))
@@ -214,7 +215,7 @@ theorem opening_result_succeeded (trapdoor : BitVec (8 * submission.sizes.trapdo
 /-- The scored batch's actual opening cost, proved for arbitrary trapdoors and sets. -/
 theorem opening_batch_cycles (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (batch : positions.card = BATCH) :
-    (openingResult trapdoor positions).cycles = 48670 := by
+    (openingResult trapdoor positions).cycles = 48525 := by
   simp [openingResult, batch, BATCH]
 
 
@@ -262,12 +263,10 @@ theorem submission_proof_size : submission.scheme.ProofSize 102400 := by
   simp [opening_proof_length trapdoor positions, batch, BATCH]
 
 
-/-- Exact resources for a scored opening, expressed through the same oracle runner
-used by the certificate: 48,670 cycles, zero queries, and 102,400 proof bytes. -/
 theorem opening_batch_resources (oracle : Oracle)
     (trapdoor : BitVec (8 * submission.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
-    (prEvent ((fun result => result.1.cycles = 48670 ∧ result.2 = 0 ∧
+    (prEvent ((fun result => result.1.cycles = 48525 ∧ result.2 = 0 ∧
       (submission.readProof result.1).length = 102400) <$> (oracle.run (submission.run .opening (trapdoor, positions))))) = 1 := by
   rw [opening_execution, oracle_run_pure]
   simp [opening_batch_cycles trapdoor positions batch, opening_proof_length trapdoor positions,
