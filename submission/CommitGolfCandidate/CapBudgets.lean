@@ -5,7 +5,8 @@ import CommitGolfCandidate.Budgets
 
 /-! Honest query budgets for the actual cap scheme. Commitment retains the
 original paid run, opening is query-free, and the new checker has a universal
-32-per-record bound, including malformed cap suffixes. -/
+26-per-record bound (18 lower-record calls and 8 cap calls), including
+malformed cap suffixes. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp
 set_option maxRecDepth 4096

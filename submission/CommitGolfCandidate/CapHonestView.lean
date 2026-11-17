@@ -24,7 +24,7 @@ theorem cap_requested_leaf_domain (positions : Positions) (group : Nat) :
 
 theorem cap_honest_roots_lookup (oracle : Oracle) (message : Message)
     (committed : MachineState) (positions : Positions) (roots : CapRootMap)
-    (accepted : capLowerBatchRoots oracle.compression
+    (accepted : capLowerBatchRoots oracle.compression oracle.permutation
       (capHonestLowerRecords message committed positions) (fun _ => none) = some roots)
     (agree : CapRootsAgree (fun group => heapDigest committed 4294971424 (256+group)) roots)
     (group : Nat) :
@@ -65,7 +65,7 @@ private theorem view_shape (heap : Nat → Digest) (marked : Nat → Bool)
 
 theorem cap_honest_known_view (oracle : Oracle) (message : Message)
     (committed : MachineState) (positions : Positions) (roots : CapRootMap)
-    (accepted : capLowerBatchRoots oracle.compression
+    (accepted : capLowerBatchRoots oracle.compression oracle.permutation
       (capHonestLowerRecords message committed positions) (fun _ => none) = some roots)
     (agree : CapRootsAgree (fun group => heapDigest committed 4294971424 (256+group)) roots) :
     capKnownView roots 8 0 =

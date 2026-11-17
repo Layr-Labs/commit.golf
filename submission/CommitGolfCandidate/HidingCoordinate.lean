@@ -1,10 +1,12 @@
 import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingLeafReplacement
-import CommitGolfCandidate.NoncePrivacy
+import CommitGolfCandidate.S3HideLeaf
 
-/-! Replace one unopened message coordinate in the complete public transcript.
-The other salts are sampled first; the isolated salt is still fresh and private.
-The observer sees both the root and every serialized proof byte, with the same oracle. -/
+/-! Replace one message coordinate in the complete reference game. The uniform
+permutation is sampled for the whole game, the first stage runs inside the step,
+and the other salts are sampled first; the isolated nonce is still fresh and
+private. The step itself is the per-leaf permutation lemma `s3_leaf_replacement`
+(S3HideLeaf.lean). -/
 namespace CommitGolfCandidate
 
 -- Observations retain the discrete measurable structure used by the contract.
@@ -39,16 +41,14 @@ theorem uniform_coordinate_bind {D R α : Type} [DecidableEq D] [Finite D] [Fini
 def observeTranscript {α : Type} (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions)
     (observe : Commitment → Proof → OracleComp World α) : ProbComp α :=
-  let transcript := referenceTranscript oracle.compression message salt positions
+  let transcript := referenceTranscript oracle.compression oracle.permutation message salt positions
   fixedOracleRun oracle (observe transcript.1 transcript.2)
 
-def referenceObservation {α : Type} (permutation : Perm) (cache : CompressionCache)
-    (message : Message) (positions : Positions)
-    (observe : Commitment → Proof → OracleComp World α) : ProbComp α := do
-  let table ← $ᵗ Compression
-  let salt ← $ᵗ (Index → Nonce192)
-  observeTranscript ⟨tableExtending cache table,permutation⟩ message (expandNonceVector salt) positions observe
-
+/-- The observer on a transcript whose leaves are all hashed through the oracle. -/
+def observeFull {α : Type} (message : Message) (salt : Index → Digest) (positions : Positions)
+    (observe : Commitment → Proof → OracleComp World α) : OracleComp World α := do
+  let transcript ← queryFullTranscript message salt positions
+  observe transcript.1 transcript.2
 
 def observeExcept {α : Type} (message : Message) (salt : Index → Digest) (positions : Positions)
     (hidden : Index) (observe : Commitment → Proof → OracleComp World α) (digest : Digest) :
@@ -56,95 +56,193 @@ def observeExcept {α : Type} (message : Message) (salt : Index → Digest) (pos
   let transcript ← queryTranscriptExcept message salt positions hidden digest
   observe transcript.1 transcript.2
 
-attribute [local irreducible] heapQueryBudget queryHeap queryTranscript queryTranscriptExcept
+attribute [local irreducible] queryFullTranscript queryTranscriptExcept
+
+theorem observe_full_bound {α : Type} (message : Message) (salt : Index → Digest)
+    (positions : Positions) (observe : Commitment → Proof → OracleComp World α)
+    (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget) :
+    PublicQueryBound (observeFull message salt positions observe) ((3*LENGTH-1) + budget) :=
+  public_query_bound_bind (query_full_transcript_bound message salt positions)
+    (fun transcript => bounded transcript.1 transcript.2)
 
 theorem observe_except_bound {α : Type} (message : Message) (salt : Index → Digest)
     (positions : Positions) (hidden : Index) (observe : Commitment → Proof → OracleComp World α)
     (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget)
     (digest : Digest) :
     PublicQueryBound (observeExcept message salt positions hidden observe digest)
-      ((9*LENGTH-1) + budget) :=
+      ((3*LENGTH-1) + budget) :=
   public_query_bound_bind (query_transcript_except_bound message salt positions hidden digest)
     (fun transcript => bounded transcript.1 transcript.2)
+
+theorem observe_full_reference {α : Type} (oracle : Oracle) (message : Message)
+    (salt : Index → Digest) (positions : Positions)
+    (observe : Commitment → Proof → OracleComp World α) :
+    fixedOracleRun oracle (observeFull message salt positions observe) =
+      observeTranscript oracle message salt positions observe := by
+  rw [observeFull, fixed_oracle_run_bind, query_full_transcript_reference, pure_bind]
+  rfl
 
 theorem observe_except_reference {α : Type} (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions) (hidden : Index) (unopened : hidden ∉ positions)
     (observe : Commitment → Proof → OracleComp World α) (value : Entry) (fresh : Digest) :
     fixedOracleRun oracle
-      (observeExcept message salt positions hidden observe (leafDigest oracle.compression fresh value)) =
+      (observeExcept message salt positions hidden observe (s3LeafDigest oracle.permutation fresh value)) =
       observeTranscript oracle (Function.update message hidden value)
         (Function.update salt hidden fresh) positions observe := by
   rw [observeExcept, fixed_oracle_run_bind, query_transcript_hidden_update oracle message salt positions hidden unopened,
     pure_bind]
   rfl
 
-theorem reference_observation_split {α : Type} (permutation : Perm) (cache : CompressionCache)
-    (message : Message) (positions : Positions) (observe : Commitment → Proof → OracleComp World α)
-    (hidden : Index) :
-    𝒟[referenceObservation permutation cache message positions observe]=
-      𝒟[do let salt ← $ᵗ (Index → Nonce192)
-           let table ← $ᵗ Compression
-           let fresh ← $ᵗ Nonce192
-           observeTranscript ⟨tableExtending cache table,permutation⟩ message
-             (expandNonceVector (Function.update salt hidden fresh)) positions observe] := by
-  unfold referenceObservation
-  trans 𝒟[do let table ← $ᵗ Compression
+section game
+
+variable {State Output : Type} {openingSize : Nat}
+
+/-- The reference game with a challenge-dependent committed message. -/
+def hidingGame (adversary : Hiding.HidingAdversary State Output openingSize)
+    (message : Hiding.HidingChallenge State openingSize → Message) : ProbComp Output := do
+  let compression ← $ᵗ Compression
+  let permutation ← $ᵗ Perm
+  let challenge ← fixedOracleRun ⟨compression, permutation⟩ adversary.choose
+  let salt ← $ᵗ (Index → Nonce192)
+  observeTranscript ⟨compression, permutation⟩ (message challenge) (expandNonceVector salt)
+    challenge.positions (adversary.observe challenge.aux)
+
+/-- The second stage after coordinate `index` has been isolated. Opened: recompute
+the whole transcript with the isolated nonce. Unopened: use only the leaf digest. -/
+def coordinateNext (adversary : Hiding.HidingAdversary State Output openingSize)
+    (base : Hiding.HidingChallenge State openingSize → Message) (index : Index)
+    (salt : Index → Digest) (challenge : Hiding.HidingChallenge State openingSize)
+    (nonce : Nonce192) (digest : Digest) : OracleComp World Output :=
+  if index ∈ challenge.positions then
+    observeFull (base challenge) (Function.update salt index (expandNonce192 nonce))
+      challenge.positions (adversary.observe challenge.aux)
+  else
+    observeExcept (base challenge) salt challenge.positions index
+      (adversary.observe challenge.aux) digest
+
+theorem coordinate_next_bound (adversary : Hiding.HidingAdversary State Output openingSize)
+    (budget : Nat)
+    (observeBound : ∀ aux root proof, PublicQueryBound (adversary.observe aux root proof) budget)
+    (base : Hiding.HidingChallenge State openingSize → Message) (index : Index)
+    (salt : Index → Digest) (challenge : Hiding.HidingChallenge State openingSize)
+    (nonce : Nonce192) (digest : Digest) :
+    PublicQueryBound (coordinateNext adversary base index salt challenge nonce digest)
+      ((3*LENGTH-1) + budget) := by
+  unfold coordinateNext
+  split
+  · exact observe_full_bound _ _ _ _ budget (observeBound challenge.aux)
+  · exact observe_except_bound _ _ _ _ _ budget (observeBound challenge.aux) digest
+
+theorem coordinate_next_run (adversary : Hiding.HidingAdversary State Output openingSize)
+    (base : Hiding.HidingChallenge State openingSize → Message) (index : Index)
+    (compression : Compression) (permutation : Perm) (salt : Index → Nonce192)
+    (challenge : Hiding.HidingChallenge State openingSize) (nonce : Nonce192) (value : Entry)
+    (agree : index ∈ challenge.positions → value = base challenge index) :
+    fixedOracleRun ⟨compression, permutation⟩
+      (coordinateNext adversary base index (expandNonceVector salt) challenge nonce
+        (s3LeafDigest permutation (expandNonce192 nonce) value)) =
+      observeTranscript ⟨compression, permutation⟩ (Function.update (base challenge) index value)
+        (expandNonceVector (Function.update salt index nonce)) challenge.positions
+        (adversary.observe challenge.aux) := by
+  rw [expand_nonce_vector_update]
+  unfold coordinateNext
+  split
+  · rename_i opened
+    rw [agree opened, Function.update_eq_self, observe_full_reference]
+  · rename_i unopened
+    exact observe_except_reference ⟨compression, permutation⟩ (base challenge)
+      (expandNonceVector salt) challenge.positions index unopened _ value _
+
+/-- The game with coordinate `index` isolated, in the shape of `s3_leaf_replacement`
+under the outer draws of the compression function and the other nonces. -/
+def coordinateGame (adversary : Hiding.HidingAdversary State Output openingSize)
+    (base : Hiding.HidingChallenge State openingSize → Message) (index : Index)
+    (value : Hiding.HidingChallenge State openingSize → Entry) : ProbComp Output := do
+  let compression ← $ᵗ Compression
+  let salt ← $ᵗ (Index → Nonce192)
+  let permutation ← $ᵗ Perm
+  let challenge ← fixedOracleRun ⟨compression, permutation⟩ adversary.choose
+  let nonce ← $ᵗ Nonce192
+  fixedOracleRun ⟨compression, permutation⟩
+    (coordinateNext adversary base index (expandNonceVector salt) challenge nonce
+      (s3LeafDigest permutation (expandNonce192 nonce) (value challenge)))
+
+theorem hiding_game_coordinate (adversary : Hiding.HidingAdversary State Output openingSize)
+    (base : Hiding.HidingChallenge State openingSize → Message) (index : Index)
+    (value : Hiding.HidingChallenge State openingSize → Entry)
+    (agree : ∀ challenge, index ∈ challenge.positions → value challenge = base challenge index) :
+    𝒟[hidingGame adversary fun challenge => Function.update (base challenge) index (value challenge)] =
+      𝒟[coordinateGame adversary base index value] := by
+  unfold hidingGame coordinateGame
+  apply _root_.evalDist_bind_congr
+  intro compression
+  trans 𝒟[do let permutation ← $ᵗ Perm
               let salt ← $ᵗ (Index → Nonce192)
-              let fresh ← $ᵗ Nonce192
-              observeTranscript ⟨tableExtending cache table,permutation⟩ message
-                (expandNonceVector (Function.update salt hidden fresh)) positions observe]
+              let challenge ← fixedOracleRun ⟨compression, permutation⟩ adversary.choose
+              let nonce ← $ᵗ Nonce192
+              fixedOracleRun ⟨compression, permutation⟩
+                (coordinateNext adversary base index (expandNonceVector salt) challenge nonce
+                  (s3LeafDigest permutation (expandNonce192 nonce) (value challenge)))]
   · apply _root_.evalDist_bind_congr
-    intro table
-    exact (uniform_coordinate_bind hidden (fun salt =>
-      observeTranscript ⟨tableExtending cache table,permutation⟩ message (expandNonceVector salt) positions observe)).symm
-  · exact distribution_bind_comm _ _ _
+    intro permutation
+    trans 𝒟[do let challenge ← fixedOracleRun ⟨compression, permutation⟩ adversary.choose
+                let salt ← $ᵗ (Index → Nonce192)
+                let nonce ← $ᵗ Nonce192
+                fixedOracleRun ⟨compression, permutation⟩
+                  (coordinateNext adversary base index (expandNonceVector salt) challenge nonce
+                    (s3LeafDigest permutation (expandNonce192 nonce) (value challenge)))]
+    · apply _root_.evalDist_bind_congr
+      intro challenge
+      refine Eq.trans (uniform_coordinate_bind index (fun salt =>
+        observeTranscript ⟨compression, permutation⟩
+          (Function.update (base challenge) index (value challenge)) (expandNonceVector salt)
+          challenge.positions (adversary.observe challenge.aux))).symm ?_
+      apply _root_.evalDist_bind_congr
+      intro salt
+      apply _root_.evalDist_bind_congr
+      intro nonce
+      rw [coordinate_next_run adversary base index compression permutation salt challenge nonce
+        (value challenge) (agree challenge)]
+    · exact (distribution_bind_comm _ _ _).symm
+  · exact (distribution_bind_comm _ _ _).symm
 
-theorem reference_observation_update {α : Type} (permutation : Perm) (cache : CompressionCache)
-    (message : Message) (positions : Positions) (observe : Commitment → Proof → OracleComp World α)
-    (hidden : Index) (unopened : hidden∉positions) (value : Entry) :
-    𝒟[referenceObservation permutation cache (Function.update message hidden value) positions observe]=
-      𝒟[do let salt ← $ᵗ (Index → Nonce192)
-           let table ← $ᵗ Compression
-           let fresh ← $ᵗ Nonce192
-           fixedOracleRun ⟨tableExtending cache table,permutation⟩
-             (observeExcept message (expandNonceVector salt) positions hidden observe
-               (leafDigest (tableExtending cache table) (expandNonce192 fresh) value))] := by
-  rw [reference_observation_split permutation cache _ positions observe hidden]
-  apply _root_.evalDist_bind_congr
-  intro salt
-  apply _root_.evalDist_bind_congr
-  intro table
-  apply _root_.evalDist_bind_congr
-  intro fresh
-  rw [expand_nonce_vector_update,observe_except_reference _ message (expandNonceVector salt) positions hidden unopened]
-
-theorem reference_observation_coordinate_distance {α : Type}
-    (permutation : Perm) (cache : CompressionCache) (keys : Finset (BitVec 512))
-    (covered : ∀ input, cache input ≠ none → input ∈ keys)
-    (message : Message) (positions : Positions) (observe : Commitment → Proof → OracleComp World α)
-    (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget)
-    (hidden : Index) (unopened : hidden ∉ positions) (left right : Entry) :
+/-- One hybrid step: changing coordinate `index` of the committed message, where
+both values agree with `base` whenever the first stage opens that coordinate. -/
+theorem hiding_coordinate_distance
+    (adversary : Hiding.HidingAdversary State Output openingSize) (budget : Nat)
+    (chooseBound : PublicQueryBound adversary.choose budget)
+    (observeBound : ∀ aux root proof, PublicQueryBound (adversary.observe aux root proof) budget)
+    (base : Hiding.HidingChallenge State openingSize → Message) (index : Index)
+    (left right : Hiding.HidingChallenge State openingSize → Entry)
+    (agreeLeft : ∀ challenge, index ∈ challenge.positions → left challenge = base challenge index)
+    (agreeRight : ∀ challenge, index ∈ challenge.positions → right challenge = base challenge index) :
     measureTVDist
-      (referenceObservation permutation cache (Function.update message hidden left) positions observe)
-      (referenceObservation permutation cache (Function.update message hidden right) positions observe) ≤
-      16 * ((keys.card + ((9*LENGTH-1) + budget) + 8 : Nat) : ℝ) / 2^192 := by
-  have distance := measureTVDist_bind_left_le_of_forall_le ($ᵗ (Index → Nonce192))
-    (fun salt => do
-      let table ← $ᵗ Compression
-      let fresh ← $ᵗ Nonce192
-      fixedOracleRun ⟨tableExtending cache table, permutation⟩
-        (observeExcept message (expandNonceVector salt) positions hidden observe (leafDigest (tableExtending cache table) (expandNonce192 fresh) left)))
-    (fun salt => do
-      let table ← $ᵗ Compression
-      let fresh ← $ᵗ Nonce192
-      fixedOracleRun ⟨tableExtending cache table, permutation⟩
-        (observeExcept message (expandNonceVector salt) positions hidden observe (leafDigest (tableExtending cache table) (expandNonce192 fresh) right)))
-    (by positivity) (fun salt => nonce_leaf_indistinguishable permutation cache keys covered left right
-      (observeExcept message (expandNonceVector salt) positions hidden observe)
-      ((9*LENGTH-1) + budget)
-      (observe_except_bound message (expandNonceVector salt) positions hidden observe budget bounded))
-  simpa only [measureTVDist, reference_observation_update permutation cache message positions observe hidden unopened] using distance
+      (hidingGame adversary fun challenge => Function.update (base challenge) index (left challenge))
+      (hidingGame adversary fun challenge => Function.update (base challenge) index (right challenge)) ≤
+      4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192 := by
+  have distance : measureTVDist (coordinateGame adversary base index left)
+      (coordinateGame adversary base index right) ≤
+      4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192 := by
+    unfold coordinateGame
+    apply measureTVDist_bind_left_le_of_forall_le _ _ _ (by positivity)
+    intro compression
+    apply measureTVDist_bind_left_le_of_forall_le _ _ _ (by positivity)
+    intro salt
+    exact s3_leaf_replacement compression adversary.choose
+      (fun challenge => decide (index ∉ challenge.positions)) left right
+      (fun challenge opened => by
+        have member : index ∈ challenge.positions := by simpa using opened
+        rw [agreeLeft challenge member, agreeRight challenge member])
+      (coordinateNext adversary base index (expandNonceVector salt))
+      (fun challenge unopened nonce nonce' digest => by
+        have absent : index ∉ challenge.positions := by simpa using unopened
+        simp only [coordinateNext, if_neg absent])
+      budget ((3*LENGTH-1) + budget) chooseBound
+      (fun challenge nonce digest =>
+        coordinate_next_bound adversary budget observeBound base index _ challenge nonce digest)
+  simpa only [measureTVDist, hiding_game_coordinate adversary base index left agreeLeft,
+    hiding_game_coordinate adversary base index right agreeRight] using distance
 
-
+end game
 
 end CommitGolfCandidate

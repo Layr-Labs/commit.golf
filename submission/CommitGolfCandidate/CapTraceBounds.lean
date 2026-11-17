@@ -54,21 +54,15 @@ theorem cap_path_trace_length (node : Digest) (path : List (Bool × Digest))
 
 theorem cap_lower_trace_length (record : CapLowerRecord) (root : Digest)
     (inputs : List (BitVec 512))
-    (reached : (root, inputs) ∈ support (capReplayLower record)) : inputs.length = 24 := by
+    (reached : (root, inputs) ∈ support (capReplayLower record)) : inputs.length = 16 := by
   rw [capReplayLower] at reached
-  obtain ⟨⟨leaf, leafInputs⟩, leafReached, afterLeaf⟩ := mem_support_bind_peel _ _ reached
-  obtain ⟨⟨lowerRoot, lowerInputs⟩, lowerReached, afterLower⟩ := mem_support_bind_peel _ _ afterLeaf
-  have same := eq_of_mem_support_pure (lowerRoot, leafInputs ++ lowerInputs) afterLower
-  have trace := congrArg Prod.snd same
-  simp only [Prod.snd] at trace
-  rw [trace, List.length_append, cap_chain_trace_length _ _ _ _ leafReached,
-    cap_path_trace_length _ _ _ _ lowerReached, cap_lower_path_length]
-  simp [leafBlocks]
+  obtain ⟨leaf, _, lowerReached⟩ := mem_support_bind_peel _ _ reached
+  rw [cap_path_trace_length _ _ _ _ lowerReached, cap_lower_path_length]
 
 theorem cap_lower_batch_trace_length (records : List CapLowerRecord)
     (roots finalRoots : CapRootMap) (inputs : List (BitVec 512))
     (reached : some (finalRoots, inputs) ∈ support (capReplayLowerBatch records roots)) :
-    inputs.length = 24 * records.length := by
+    inputs.length = 16 * records.length := by
   induction records generalizing roots finalRoots inputs with
   | nil =>
       have same := eq_of_mem_support_pure (some (roots, [])) reached

@@ -1,7 +1,7 @@
 import CommitGolfCandidate.CapCheckLowerRecordFrame
 import CommitGolfCandidate.CapCheckCollected
 
-/-! The 25 paid lower-record queries cannot alter any collected cap leaf or
+/-! The 18 paid lower-record queries cannot alter any collected cap leaf or
 occupancy entry. This invariant holds on every supported reply continuation,
 including replies inconsistent with the fixed-oracle digest semantics. -/
 namespace CommitGolfCandidate
@@ -11,11 +11,11 @@ set_option maxHeartbeats 200000
 
 private theorem word_outside_scratch (address : Nat) (above : 320 ≤ address)
     (small : address < 2^64) :
-    ∀ i < 8, BitVec.ofNat 64 address ≠ BitVec.ofNat 64 (256+8*i) := by
+    ∀ i < 40, BitVec.ofNat 64 address ≠ BitVec.ofNat 64 (8*i) := by
   intro i inside equal
   have numeric := congrArg BitVec.toNat equal
   rw [BitVec.toNat_ofNat,BitVec.toNat_ofNat,Nat.mod_eq_of_lt small,
-    Nat.mod_eq_of_lt (by omega : 256+8*i<2^64)] at numeric
+    Nat.mod_eq_of_lt (by omega : 8*i<2^64)] at numeric
   omega
 
 theorem cap_check_lower_record_collected (state finished : MachineState)

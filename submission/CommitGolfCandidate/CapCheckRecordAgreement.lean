@@ -26,9 +26,9 @@ theorem cap_check_record_insert_agreement (oracle : Oracle) (state : MachineStat
     (marks : state.getReg .x9=28672) (rootBase : state.getReg .x18=12288)
     (one : state.getReg .x31=1)
     (digest : readBuffer (checkEvaluation oracle (capCheckLowerRecord state)).1 256 32=
-      record.root oracle.compression) :
+      record.root oracle.compression oracle.permutation) :
     (checkEvaluation oracle (capCheckRecordRun state)).1.2=true ↔
-      (capInsert roots (capGroup record.index).val (record.root oracle.compression)).isSome=true := by
+      (capInsert roots (capGroup record.index).val (record.root oracle.compression oracle.permutation)).isSome=true := by
   let lower := (checkEvaluation oracle (capCheckLowerRecord state)).1
   have reachable := check_evaluation_support oracle (capCheckLowerRecord state)
   have bounded : record.index.val<2^24 := record.index.isLt
@@ -50,9 +50,9 @@ theorem cap_check_record_insert_result (oracle : Oracle) (state : MachineState)
     (marks : state.getReg .x9=28672) (rootBase : state.getReg .x18=12288)
     (one : state.getReg .x31=1)
     (digest : readBuffer (checkEvaluation oracle (capCheckLowerRecord state)).1 256 32=
-      record.root oracle.compression)
+      record.root oracle.compression oracle.permutation)
     (accepted : capInsert roots (capGroup record.index).val
-      (record.root oracle.compression)=some next) :
+      (record.root oracle.compression oracle.permutation)=some next) :
     CapCheckCollected (checkEvaluation oracle (capCheckRecordRun state)).1.1 next := by
   let lower := (checkEvaluation oracle (capCheckLowerRecord state)).1
   have reachable := check_evaluation_support oracle (capCheckLowerRecord state)

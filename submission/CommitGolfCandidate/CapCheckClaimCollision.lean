@@ -1,34 +1,25 @@
 import CommitGolfCandidate.CapCheckReplayAccepted
 
-/-! A winning claim against the actual cap checker yields a collision in two
-paid batch replays. The selected records retain the original shared Index and
-different supplied values. The reply probe pays for every repeated query too;
-the later ROM reduction still supplies cache preservation and probability. -/
+/-! A winning claim against the actual cap checker yields, for the fixed oracle,
+a compression reply collision in two paid batch replays or a collision among
+the replayed stage-3 leaves. The selected records retain the original shared
+Index and different supplied values. The reply probe pays for every repeated
+query too; the ROM reduction supplies cache preservation and probability. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
 set_option autoImplicit false
 
-theorem cap_check_replay_trace_unique (oracle : Oracle)
-    (computation : OracleComp World (Option (List (BitVec 512))))
-    (inputs inputs' : List (BitVec 512)) (calls calls' : Nat)
-    (first : oracle.run computation=pure (some inputs,calls))
-    (second : oracle.run computation=pure (some inputs',calls')) :
-    inputs=inputs' := by
-  have reachable : (some inputs,calls) ∈ support (oracle.run computation) := by
-    rw [first]
-    simp
-  rw [second] at reachable
-  have same := eq_of_mem_support_pure (some inputs',calls') reachable
-  exact Option.some.inj (congrArg Prod.fst same)
-
 theorem cap_check_claim_probe_collision (oracle : Oracle) (claim : Scheme.Claim)
     (breaks : capProgram.scheme.Breaks oracle claim) :
-    ∃ replies calls,
+    (∃ replies calls,
       oracle.run (capProbePair
         (capCheckLoadedRecords (claimLeft claim)) (capCheckLoadedRecords (claimRight claim))
         (capCheckSuffixWords (claimLeft claim) (544*claim.positions₀.card))
         (capCheckSuffixWords (claimRight claim) (544*claim.positions₁.card))
-        claim.root)=pure (replies,calls) ∧ ReplyCollision replies := by
+        claim.root)=pure (replies,calls) ∧ ReplyCollision replies) ∨
+    LeafCollision (s3LeafReplies oracle.permutation
+      (capRecordLeaves (capCheckLoadedRecords (claimLeft claim)) ++
+        capRecordLeaves (capCheckLoadedRecords (claimRight claim)))) := by
   obtain ⟨index,leftMember,rightMember,different⟩ := breaks.1
   have leftNonempty : 0<claim.positions₀.card :=
     Finset.card_pos.mpr ⟨index,leftMember⟩
@@ -45,29 +36,12 @@ theorem cap_check_claim_probe_collision (oracle : Oracle) (claim : Scheme.Claim)
   have differentRecords : leftRecord.value≠rightRecord.value := by
     rw [leftValue,rightValue]
     exact different
-  obtain ⟨leftCapInputs,rightCapInputs,leftRun,rightRun,collision⟩ :=
-    cap_batch_collision oracle
-      (capCheckLoadedRecords (claimLeft claim)) (capCheckLoadedRecords (claimRight claim))
-      (capCheckSuffixWords (claimLeft claim) (544*claim.positions₀.card))
-      (capCheckSuffixWords (claimRight claim) (544*claim.positions₁.card))
-      claim.root leftRoots rightRoots leftLower rightLower leftCap rightCap
-      leftRecord rightRecord leftPresent rightPresent
-      (leftIndex.trans rightIndex.symm) differentRecords
-  obtain ⟨leftInputs,leftCalls,leftAccepted,leftBound⟩ :=
-    cap_check_accepted_replay oracle (claimLeft claim) breaks.2.1 leftNonempty
-  obtain ⟨rightInputs,rightCalls,rightAccepted,rightBound⟩ :=
-    cap_check_accepted_replay oracle (claimRight claim) breaks.2.2 rightNonempty
-  have leftSame := cap_check_replay_trace_unique oracle _
-    (capLowerBatchInputs oracle.compression (capCheckLoadedRecords (claimLeft claim))++
-      leftCapInputs) leftInputs _ leftCalls leftRun leftAccepted
-  have rightSame := cap_check_replay_trace_unique oracle _
-    (capLowerBatchInputs oracle.compression (capCheckLoadedRecords (claimRight claim))++
-      rightCapInputs) rightInputs _ rightCalls rightRun rightAccepted
-  apply cap_probe_pair_collision oracle _ _ _ _ _ _ _ _ _ leftRun rightRun
-  · rw [leftSame,cap_check_loaded_records_length]
-    exact leftBound
-  · rw [rightSame,cap_check_loaded_records_length]
-    exact rightBound
-  · exact collision
+  exact cap_accepted_pair_collision oracle
+    (capCheckLoadedRecords (claimLeft claim)) (capCheckLoadedRecords (claimRight claim))
+    (capCheckSuffixWords (claimLeft claim) (544*claim.positions₀.card))
+    (capCheckSuffixWords (claimRight claim) (544*claim.positions₁.card))
+    claim.root leftRoots rightRoots leftLower rightLower leftCap rightCap
+    leftRecord rightRecord leftPresent rightPresent
+    (leftIndex.trans rightIndex.symm) differentRecords
 
 end CommitGolfCandidate

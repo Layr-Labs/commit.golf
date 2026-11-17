@@ -35,7 +35,7 @@ Scratch registers are restored to their loader values before the original
 initializer resumes after its first root-pointer move. -/
 def nonceExpandedCheckCode : List Asm :=
   [.jump 0 "expand-entry", .label "expand-initializer-tail"] ++
-  (capCheckCode LOG_LENGTH).drop 1 ++
+  (capCheckCore LOG_LENGTH).drop 1 ++ s3CheckFiller 19 ++
   [.label "expand-entry", mv 26 11, mv 24 16,
    insn (7*2^20 + 17*2^15 + 7*2^12 + 6*2^7 + 0x13),
    .branch 1 6 0 "reject"] ++ li 29 536 ++
@@ -51,7 +51,8 @@ def nonceExpandedCheckCode : List Asm :=
    addi 24 24 (-1), .branch 1 24 0 "expand-record",
    .label "expand-finish", mv 17 18] ++
    ([1,6,7,18,19,23,24,25,28,29].map fun reg => addi reg 0 0) ++
-   [.jump 0 "expand-initializer-tail"] ++ nonceCopyLoop "expand-copy" true
+   [.jump 0 "expand-initializer-tail"] ++ nonceCopyLoop "expand-copy" true ++
+   s3LeafSubroutine
 
 def nonceCompressedProgram : Submission :=
   { capExperimental LOG_LENGTH with

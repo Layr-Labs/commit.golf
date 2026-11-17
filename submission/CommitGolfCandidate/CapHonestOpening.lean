@@ -27,7 +27,7 @@ theorem cap_honest_opening_bytes (oracle : Oracle) (message : Message)
 theorem cap_honest_cap_accepts (oracle : Oracle) (message : Message)
     (committed : MachineState) (correct : CommittedState oracle message committed)
     (positions : Positions) (roots : CapRootMap)
-    (accepted : capLowerBatchRoots oracle.compression
+    (accepted : capLowerBatchRoots oracle.compression oracle.permutation
       (capHonestLowerRecords message committed positions) (fun _ => none) = some roots)
     (agree : CapRootsAgree (fun group => heapDigest committed 4294971424 (256+group)) roots) :
     capDecode oracle.compression (capKnownView roots 8 0)

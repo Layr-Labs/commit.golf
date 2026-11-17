@@ -3,8 +3,8 @@ import CommitGolfCandidate.CapCheckPathInit
 import CommitGolfCandidate.CapCheckPathLoop
 import CommitGolfCandidate.CapCheckPathOutcome
 
-/-! A lower record pays for its salt, eight leaf queries and sixteen sibling
-queries. Its parity-dependent instruction count uses the loaded index, which
+/-! A lower record pays for its salt, two leaf permutation queries and sixteen
+sibling queries. Its parity-dependent instruction count uses the loaded index, which
 is preserved through the arbitrary leaf replies and path-counter setup. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
@@ -17,16 +17,7 @@ def capCheckLowerRecord (state : MachineState) : OracleComp World MachineState :
   capCheckPathLoop (capCheckPathInitState leaf) 16
 
 def capCheckLowerRecordSteps (state : MachineState) : Nat :=
-  153+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16
-
-theorem cap_check_record_leaf_pc (state finished : MachineState)
-    (reachable : finished ∈ support (capCheckRecordLeaf state)) :
-    finished.pc = 4256 := by
-  simp only [capCheckRecordLeaf, mem_support_bind_iff] at reachable
-  obtain ⟨body, _, tail⟩ := reachable
-  simp only [support_pure, Set.mem_singleton_iff] at tail
-  subst finished
-  rfl
+  105+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16
 
 private theorem lower_charge (computation : OracleComp World Execution) (pathSteps : Nat) :
     (do
@@ -35,8 +26,8 @@ private theorem lower_charge (computation : OracleComp World Execution) (pathSte
           let result ← computation
           return result.charge (pathSteps+112) 16)
         return result.charge 4 0)
-      return result.charge 205 8) =
-      (do let result ← computation; return result.charge (pathSteps+321) 24) := by
+      return result.charge 115 2) =
+      (do let result ← computation; return result.charge (pathSteps+231) 18) := by
   simp [bind_assoc, Execution.charge, ← Nat.add_assoc]
   congr 1
   funext result
@@ -58,10 +49,10 @@ theorem cap_check_lower_record_execute (state : MachineState)
       (do let finished ← capCheckLowerRecord state
           let result ← execute ((capExperimental 24).image .check) fuel finished allowCoins
           return result.charge
-            (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+321) 24) := by
+            (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+231) 18) := by
   unfold capCheckLowerRecordSteps
-  rw [show 153+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+fuel =
-      149+(4+(capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+fuel)) by omega,
+  rw [show 105+capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+fuel =
+      101+(4+(capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+fuel)) by omega,
     cap_check_record_leaf_execute state pc scratch indexValid saltValid sourceValid]
   unfold capCheckLowerRecord
   simp only [bind_assoc]
@@ -106,7 +97,7 @@ theorem cap_check_lower_record_execute (state : MachineState)
     (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16)
 
 theorem cap_check_lower_record_query_bound (state : MachineState) :
-    IsTotalQueryBound (capCheckLowerRecord state) 24 := by
+    IsTotalQueryBound (capCheckLowerRecord state) 18 := by
   unfold capCheckLowerRecord
   exact isTotalQueryBound_bind (cap_check_record_leaf_query_bound state)
     (fun leaf => cap_check_path_loop_query_bound (capCheckPathInitState leaf) 16)

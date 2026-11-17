@@ -1,7 +1,8 @@
 import CommitGolfCandidate.CommitHeap
 import CommitGolfCandidate.CommitRuntime
+import CommitGolfCandidate.CommitRefinement
 
-/-! The returned commitment and private heap of the actual commitment program. -/
+/-! The returned commitment and private heap of the actual stage-3 commitment program. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
@@ -24,7 +25,7 @@ theorem commit_output_root (state : MachineState) (base output : Nat)
   · omega
   · exact Or.inr (by omega)
 
-/-- Returning the commitment preserves every digest in the private heap and salts. -/
+/-- Returning the commitment preserves every digest in the private heap and nonces. -/
 theorem commit_output_preserves_digest (state : MachineState) (output address : Nat)
     (outputPointer : state.getReg .x26 = BitVec.ofNat 64 output)
     (aligned : address % 8 = 0) (bounded : address+32 ≤ 2^64)
@@ -34,22 +35,23 @@ theorem commit_output_preserves_digest (state : MachineState) (output address : 
   exact commit_copy_preserves_digest state 79 output address (by simp) outputPointer aligned
     (by omega) bounded (Or.inr separated)
 
-/-- Evaluate the full post-randomness body through its actual two loops and return. -/
-theorem commit_body_evaluation (oracle : Oracle) (state : MachineState) (count : Nat) :
-    checkEvaluation oracle (commitBody state count) =
-      let leaves := checkEvaluation oracle (commitLeaves state count)
-      let parents := checkEvaluation oracle (commitParents (commitParentsStartState leaves.1) (count-1))
+/-- Evaluate the full post-randomness body through its leaf phase, parent loop and return. -/
+theorem commit_body_evaluation (oracle : Oracle) (state : MachineState) (groups : Nat) :
+    checkEvaluation oracle (s3CommitBody state groups) =
+      let leaves := checkEvaluation oracle (s3Leaves state groups)
+      let parents := checkEvaluation oracle
+        (commitParents (commitParentsStartState leaves.1) (64*groups-1))
       (commitExitState (commitCopyState parents.1 79), leaves.2+parents.2) := by
-  rw [commitBody, check_evaluation_bind]
+  rw [s3CommitBody, check_evaluation_bind]
   simp only [check_evaluation_bind, check_evaluation_pure, Nat.add_zero]
 
 /-- Contents needed to authenticate every honest opening. The root is the returned
-commitment; the salts and heap are exactly the private memory returned as trapdoor. -/
+commitment; the nonces and heap are exactly the private memory returned as trapdoor. -/
 def CommittedState (oracle : Oracle) (message : Message) (state : MachineState) : Prop :=
   readBuffer state 4294971392 32 = heapDigest state 4294971424 1 ∧
   HeapParents oracle.compression state 4294971424 LENGTH 0 ∧
   ∀ index : Index, heapDigest state 4294971424 (LENGTH+index.val) =
-    leafDigest oracle.compression (readNonce state (5368713248+24*index.val)) (message index)
+    s3LeafDigest oracle.permutation (readNonce state (5368713248+24*index.val)) (message index)
 
 private theorem parents_start_heap (state : MachineState) :
     (commitParentsStartState state).getReg .x9 = state.getReg .x9 :=
@@ -59,32 +61,41 @@ private theorem parents_start_output (state : MachineState) :
     (commitParentsStartState state).getReg .x26 = state.getReg .x26 :=
   commit_parents_start_register state .x26 (by simp)
 
-private theorem parents_start_counter (state : MachineState) :
-    (commitParentsStartState state).getReg .x20 = state.getReg .x19-1 :=
-  commit_parents_start_counter state
-
 private theorem parents_start_memory (state : MachineState) :
     (commitParentsStartState state).mem = state.mem := commit_parents_start_memory state
 
-attribute [local irreducible] commitBody commitLeaves commitParents commitInputReady checkEvaluation
+private theorem ready_heap (message : Message) {bits : Nat} (answer : BitVec bits) :
+    (s3CommitReady message answer).getReg .x9 = BitVec.ofNat 64 4294971424 :=
+  (s3_ready_register message answer .x9 (by decide)).trans (commit_input_registers message answer).2.1
 
-/-- Both loops and the final return preserve the sampled salt buffer. -/
-theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : BitVec (192*LENGTH))
-    (index : Index) :
-    let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) LENGTH)).1
+private theorem ready_total (message : Message) {bits : Nat} (answer : BitVec bits) :
+    (s3CommitReady message answer).getReg .x19 = BitVec.ofNat 64 LENGTH :=
+  (s3_ready_register message answer .x19 (by decide)).trans
+    (commit_input_registers message answer).2.2.2.1
+
+private theorem ready_output (message : Message) {bits : Nat} (answer : BitVec bits) :
+    (s3CommitReady message answer).getReg .x26 = BitVec.ofNat 64 4294971392 :=
+  (s3_ready_register message answer .x26 (by decide)).trans
+    (commit_input_registers message answer).2.2.2.2.2.1
+
+attribute [local irreducible] s3CommitBody s3Leaves commitParents s3CommitReady checkEvaluation
+
+/-- The parent loop preserves the nonce buffer left by the leaf phase. -/
+theorem commit_input_tree_salt (oracle : Oracle) (message : Message)
+    (answer : BitVec (192*LENGTH)) (index : Index) :
+    let leaves := (checkEvaluation oracle (s3Leaves (s3CommitReady message answer) (2^18))).1
     let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH-1))).1
     readNonce finished (5368713248+24*index.val) = expandNonce192 (answer.extractLsb' (192*index.val) 192) := by
-  let ready := commitInputReady message answer
-  let leaves := (checkEvaluation oracle (commitLeaves ready LENGTH)).1
+  let ready := s3CommitReady message answer
+  let leaves := (checkEvaluation oracle (s3Leaves ready (2^18))).1
   let parents := commitParentsStartState leaves
-  have input := commit_input_registers message answer
-  have leafRegs := (commit_leaves_finished ready LENGTH (commit_input_leaves message answer) leaves
-    (check_evaluation_support oracle _)).2
+  have leafRegs (reg : Reg) (member : reg ∈ [Reg.x9, .x19, .x26]) :
+      leaves.getReg reg = ready.getReg reg := s3_leaves_register oracle ready (2^18) reg member
   have heap : parents.getReg .x9 = BitVec.ofNat 64 4294971424 :=
-    (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
+    (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans (ready_heap message answer))
   have counter : ParentPointerInvariant parents (LENGTH-1) := by
     apply commit_parents_start_pointers_of_count leaves LENGTH
-    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · exact (leafRegs .x19 (by simp)).trans (ready_total message answer)
     · decide
     · decide
   have indexBound : index.val < 2^24 := index.isLt
@@ -96,12 +107,7 @@ theorem commit_input_tree_salt (oracle : Oracle) (message : Message) (answer : B
     (5368713248+24*index.val) 32 heap counter
     (by change 4294971424+32*(16777216-1+1)≤5368713248+24*index.val;omega) (by omega)]
   rw [read_buffer_memory_congr _ _ (parents_start_memory leaves)]
-  rw [commit_leaves_preserves_digest oracle ready 4096 4831842336 LENGTH (5368713248+24*index.val)
-    (commit_input_leaves message answer).scratch input.1 input.2.2.2.2.1
-    (by decide) (by decide) (by omega) (by change 4831842336+32*16777216≤2^64;omega) (by omega)
-    (Or.inr (by change 4096+256*16777216≤_;omega))
-    (Or.inr (by change 4831842336+32*16777216≤_;omega))]
-  exact commit_ready_salt message answer index
+  exact s3_leaves_salt oracle message answer index
 
 /-- Returning the root preserves the complete authentication invariant. -/
 theorem commit_output_matches (oracle : Oracle) (message : Message) (state : MachineState)
@@ -109,7 +115,7 @@ theorem commit_output_matches (oracle : Oracle) (message : Message) (state : Mac
     (outputPointer : state.getReg .x26 = BitVec.ofNat 64 4294971392)
     (parents : HeapParents oracle.compression state 4294971424 LENGTH 0)
     (leaves : ∀ index : Index, heapDigest state 4294971424 (LENGTH+index.val) =
-      leafDigest oracle.compression (readNonce state (5368713248+24*index.val)) (message index)) :
+      s3LeafDigest oracle.permutation (readNonce state (5368713248+24*index.val)) (message index)) :
     CommittedState oracle message (commitExitState (commitCopyState state 79)) := by
   let finished := commitExitState (commitCopyState state 79)
   have preserved (node : Nat) (below : node < 3*LENGTH) :
@@ -133,63 +139,63 @@ theorem commit_output_matches (oracle : Oracle) (message : Message) (state : Mac
     rw [salts]
     exact leaves index
 
+private theorem parent_count : 64 * 2 ^ 18 - 1 = LENGTH - 1 := by decide
+
 /-- The complete post-randomness body produces a returned root and private heap
-that authenticate the original message, for every possible salt reply. -/
-theorem commit_body_matches (oracle : Oracle) (message : Message) (answer : BitVec (192*LENGTH)) :
+that authenticate the original message, for every possible nonce reply. -/
+theorem commit_body_matches (oracle : Oracle) (message : Message)
+    (answer : BitVec (192*LENGTH)) :
     CommittedState oracle message
-      (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 := by
-  let ready := commitInputReady message answer
-  let leaves := (checkEvaluation oracle (commitLeaves ready LENGTH)).1
+      (checkEvaluation oracle (s3CommitBody (s3CommitReady message answer) (2^18))).1 := by
+  let ready := s3CommitReady message answer
+  let leaves := (checkEvaluation oracle (s3Leaves ready (2^18))).1
   let parents := commitParentsStartState leaves
   let finished := (checkEvaluation oracle (commitParents parents (LENGTH-1))).1
-  have input := commit_input_registers message answer
-  have leafRegs := (commit_leaves_finished ready LENGTH (commit_input_leaves message answer) leaves
-    (check_evaluation_support oracle _)).2
+  have leafRegs (reg : Reg) (member : reg ∈ [Reg.x9, .x19, .x26]) :
+      leaves.getReg reg = ready.getReg reg := s3_leaves_register oracle ready (2^18) reg member
   have heap : parents.getReg .x9 = BitVec.ofNat 64 4294971424 :=
-    (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans input.2.1)
+    (parents_start_heap leaves).trans ((leafRegs .x9 (by simp)).trans (ready_heap message answer))
   have output : parents.getReg .x26 = BitVec.ofNat 64 4294971392 :=
-    (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans input.2.2.2.2.2.1)
+    (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans (ready_output message answer))
   have counter : ParentPointerInvariant parents (LENGTH-1) := by
     apply commit_parents_start_pointers_of_count leaves LENGTH
-    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · exact (leafRegs .x19 (by simp)).trans (ready_total message answer)
     · decide
     · decide
   have parentRegs := (commit_parents_finished parents (LENGTH-1) (by decide) counter finished
     (check_evaluation_support oracle _)).2
   have tree := commit_input_tree oracle message answer
-  rw [commit_body_evaluation]
+  rw [commit_body_evaluation, parent_count]
   apply commit_output_matches oracle message finished
     ((parentRegs .x9 (by simp)).trans heap) ((parentRegs .x26 (by simp)).trans output) tree.1
   intro index
   rw [commit_input_tree_salt oracle message answer index]
   exact tree.2 index
 
-/-- The returned private state retains exactly the random salt reply, including
-after the final root-copy instructions. This identifies the randomness visible in
-an opening without making any distributional assumption about the oracle. -/
+/-- The returned private state retains exactly the random nonce reply, including
+after the final root-copy instructions. -/
 theorem commit_body_salt (oracle : Oracle) (message : Message)
     (answer : BitVec (192*LENGTH)) (index : Index) :
     readNonce (checkEvaluation oracle
-      (commitBody (commitInputReady message answer) LENGTH)).1
+      (s3CommitBody (s3CommitReady message answer) (2^18))).1
       (5368713248+24*index.val) = expandNonce192 (answer.extractLsb' (192*index.val) 192) := by
-  let ready := commitInputReady message answer
-  let leaves := (checkEvaluation oracle (commitLeaves ready LENGTH)).1
+  let ready := s3CommitReady message answer
+  let leaves := (checkEvaluation oracle (s3Leaves ready (2^18))).1
   let parents := commitParentsStartState leaves
   let finished := (checkEvaluation oracle (commitParents parents (LENGTH-1))).1
-  have input := commit_input_registers message answer
-  have leafRegs := (commit_leaves_finished ready LENGTH (commit_input_leaves message answer) leaves
-    (check_evaluation_support oracle _)).2
+  have leafRegs (reg : Reg) (member : reg ∈ [Reg.x9, .x19, .x26]) :
+      leaves.getReg reg = ready.getReg reg := s3_leaves_register oracle ready (2^18) reg member
   have output : parents.getReg .x26 = BitVec.ofNat 64 4294971392 :=
-    (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans input.2.2.2.2.2.1)
+    (parents_start_output leaves).trans ((leafRegs .x26 (by simp)).trans (ready_output message answer))
   have counter : ParentPointerInvariant parents (LENGTH-1) := by
     apply commit_parents_start_pointers_of_count leaves LENGTH
-    · exact (leafRegs .x19 (by simp)).trans input.2.2.2.1
+    · exact (leafRegs .x19 (by simp)).trans (ready_total message answer)
     · decide
     · decide
   have parentRegs := (commit_parents_finished parents (LENGTH-1) (by decide) counter finished
     (check_evaluation_support oracle _)).2
   have indexBound : index.val < 16777216 := index.isLt
-  rw [commit_body_evaluation]
+  rw [commit_body_evaluation, parent_count]
   dsimp only
   unfold readNonce
   rw [commit_output_preserves_digest finished 4294971392 (5368713248+24*index.val)

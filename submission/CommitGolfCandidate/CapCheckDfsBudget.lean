@@ -4,7 +4,8 @@ import CommitGolfCandidate.CapCheckDfsFinish
 /-! Finer all-reply query accounting for the actual terminating cap traversal.
 Early short-input failure can only reduce its structural query total. When
 finalized marks describe a view with at most n known leaves, the cap costs
-at most 8*n queries; the lower-record loop pays its separate 24*n calls. -/
+at most 8*n queries; the lower-record loop pays its separate 18*n calls
+(2 leaf permutation calls and 16 path compressions per record). -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
 set_option maxRecDepth 4096

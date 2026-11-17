@@ -1,5 +1,5 @@
 import CommitGolfCandidate.CapCheckPathLoop
-import CommitGolfCandidate.CapCheckLeafFrame
+import CommitGolfCandidate.CapMemoryFrame
 
 /-! Universal query and supported register outcomes for the lower path.
 These bounds cover every reply continuation; natural node progress is

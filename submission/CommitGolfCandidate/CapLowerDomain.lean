@@ -7,9 +7,10 @@ namespace CommitGolfCandidate
 open CommitGolf
 set_option maxHeartbeats 200000
 
-theorem cap_lower_batch_domain (compress : Compression) (records : List CapLowerRecord)
+theorem cap_lower_batch_domain (compress : Compression) (permutation : Perm)
+    (records : List CapLowerRecord)
     (roots finalRoots : CapRootMap)
-    (accepted : capLowerBatchRoots compress records roots = some finalRoots)
+    (accepted : capLowerBatchRoots compress permutation records roots = some finalRoots)
     (group : Nat) :
     (finalRoots group).isSome = true ↔
       (roots group).isSome = true ∨
@@ -20,10 +21,10 @@ theorem cap_lower_batch_domain (compress : Compression) (records : List CapLower
       subst finalRoots
       simp
   | cons head rest ih =>
-      cases inserted : capInsert roots (capGroup head.index).val (head.root compress) with
+      cases inserted : capInsert roots (capGroup head.index).val (head.root compress permutation) with
       | none => simp [capLowerBatchRoots, inserted] at accepted
       | some next =>
-          have later : capLowerBatchRoots compress rest next = some finalRoots := by
+          have later : capLowerBatchRoots compress permutation rest next = some finalRoots := by
             simpa [capLowerBatchRoots, inserted] using accepted
           rw [ih next later, cap_insert_lookup roots next _ group _ inserted]
           by_cases same : group = (capGroup head.index).val
@@ -33,12 +34,12 @@ theorem cap_lower_batch_domain (compress : Compression) (records : List CapLower
 theorem cap_honest_lower_domain (oracle : Oracle) (message : Message)
     (committed : RiscvZkvm.Rv64.MachineState) (positions : Positions)
     (roots : CapRootMap)
-    (accepted : capLowerBatchRoots oracle.compression
+    (accepted : capLowerBatchRoots oracle.compression oracle.permutation
       (capHonestLowerRecords message committed positions) (fun _ => none) = some roots)
     (group : Nat) :
     (roots group).isSome = true ↔
       ∃ index ∈ positions, (capGroup index).val = group := by
-  rw [cap_lower_batch_domain _ _ _ _ accepted]
+  rw [cap_lower_batch_domain _ _ _ _ _ accepted]
   simp only [Option.isSome_none, Bool.false_eq_true, false_or,
     capHonestLowerRecords, List.mem_map]
   constructor

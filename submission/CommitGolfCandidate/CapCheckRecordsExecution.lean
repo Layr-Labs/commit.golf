@@ -21,10 +21,10 @@ def capCheckRecordsContinue : Nat → MachineState → Nat → Bool → OracleCo
           (fuel-capCheckLowerRecordSteps state-capCheckGroupSteps lower-3) allowCoins
         return result.charge
           (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+
-            321+capCheckGroupSteps lower+3) 24
+            231+capCheckGroupSteps lower+3) 18
       else pure ⟨.failure,(capCheckGroupResult lower).1,
         capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+
-          321+capCheckGroupSteps lower,24⟩
+          231+capCheckGroupSteps lower,18⟩
 
 theorem cap_check_records_execute (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof)

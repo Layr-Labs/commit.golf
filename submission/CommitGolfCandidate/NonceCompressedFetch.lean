@@ -34,14 +34,20 @@ theorem nonce_expanded_copy_fetched : NonceBackwardReady.Fetched nonceExpandedIm
   · interval_cases index <;> rfl
 
 theorem nonce_compact_image_length : nonceCompactImage.code.length=138 := by decide
-theorem nonce_expanded_image_length : nonceExpandedImage.code.length=257 := by decide
+theorem nonce_expanded_image_length : nonceExpandedImage.code.length=347 := by decide
 
 theorem nonce_compact_old_prefix :
     nonceCompactImage.code.take 110=(assemble (capOpeningCode LOG_LENGTH)).take 110 := by
   decide
 
+/-- The packed checker keeps cap words 1..199 (retained core and the
+never-executed filler) and the stage-3 leaf routine at words 257..346. -/
 theorem nonce_expanded_old_core :
-    (nonceExpandedImage.code.drop 1).take 199=(assemble (capCheckCode LOG_LENGTH)).drop 1 := by
+    (nonceExpandedImage.code.drop 1).take 199=((assemble (capCheckCode LOG_LENGTH)).drop 1).take 199 := by
+  decide
+
+theorem nonce_expanded_old_leaf :
+    nonceExpandedImage.code.drop 257=(assemble (capCheckCode LOG_LENGTH)).drop 257 := by
   decide
 
 theorem nonce_compact_prefix_word (index : Nat) (inside : index<110) :
@@ -55,6 +61,13 @@ theorem nonce_expanded_core_word (index : Nat) (positive : 1 ≤ index) (inside 
   have equal := congrArg (fun words : List (BitVec 32) => words[index-1]?) nonce_expanded_old_core
   simp only [List.getElem?_take, if_pos bounded, List.getElem?_drop] at equal
   have offset : 1+(index-1)=index := by omega
+  simpa only [offset] using equal
+
+theorem nonce_expanded_leaf_word (index : Nat) (above : 257 ≤ index) :
+    nonceExpandedImage.code[index]?=(assemble (capCheckCode LOG_LENGTH))[index]? := by
+  have equal := congrArg (fun words : List (BitVec 32) => words[index-257]?) nonce_expanded_old_leaf
+  simp only [List.getElem?_drop] at equal
+  have offset : 257+(index-257)=index := by omega
   simpa only [offset] using equal
 
 theorem nonce_fetch_at_index_congr (left right : Image) (state : MachineState)
@@ -79,5 +92,11 @@ theorem nonce_expanded_core_fetch (state : MachineState) (index : Nat)
     (pc : state.pc=BitVec.ofNat 64 (4096+4*index)) :
     fetch nonceExpandedImage state=fetch ((capExperimental LOG_LENGTH).image .check) state :=
   nonce_fetch_at_index_congr _ _ state index (by omega) pc (nonce_expanded_core_word index positive inside)
+
+theorem nonce_expanded_leaf_fetch (state : MachineState) (index : Nat)
+    (above : 257 ≤ index) (inside : index<347)
+    (pc : state.pc=BitVec.ofNat 64 (4096+4*index)) :
+    fetch nonceExpandedImage state=fetch ((capExperimental LOG_LENGTH).image .check) state :=
+  nonce_fetch_at_index_congr _ _ state index (by omega) pc (nonce_expanded_leaf_word index above)
 
 end CommitGolfCandidate

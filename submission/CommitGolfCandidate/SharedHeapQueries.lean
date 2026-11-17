@@ -1,4 +1,4 @@
-import CommitGolfCandidate.HidingOpeningQueries
+import CommitGolfCandidate.S3HidingBase
 
 /-! Compute every leaf and parent once for a shared public transcript.
 The fixed-oracle refinement proves agreement with the original reference heap;
@@ -61,7 +61,7 @@ theorem leaf_cache_apply (offset : Nat) (values : Nat → Digest) (count : Nat)
 def queryParentCache : Nat → (Nat → Digest) → OracleComp World (Nat → Digest)
   | 0, heap => pure heap
   | count+1, heap => do
-      let value ← hashBlocks [heap (2*(count+1)+1)] (heap (2*(count+1)))
+      let value ← chainBlocks [heap (2*(count+1)+1)] (heap (2*(count+1)))
       queryParentCache count (Function.update heap (count+1) value)
 
 def parentCache (compression : Compression) : Nat → (Nat → Digest) → (Nat → Digest)
@@ -74,7 +74,7 @@ theorem query_parent_cache_bound (count : Nat) (heap : Nat → Digest) :
   induction count generalizing heap with
   | zero => trivial
   | succ count ih =>
-    have run := public_query_bound_bind (hash_blocks_bound [heap (2*(count+1)+1)] (heap (2*(count+1))))
+    have run := public_query_bound_bind (chain_blocks_bound [heap (2*(count+1)+1)] (heap (2*(count+1))))
       (fun value => ih (Function.update heap (count+1) value))
     simpa only [queryParentCache,List.length_singleton,Nat.add_comm] using run
 
@@ -84,7 +84,7 @@ theorem query_parent_cache_reference (oracle : Oracle) (count : Nat) (heap : Nat
   | zero => exact fixed_oracle_run_pure _ _
   | succ count ih =>
     rw [queryParentCache,fixed_oracle_run_bind]
-    have hashed := fixed_hash_blocks oracle [heap (2*(count+1)+1)] (heap (2*(count+1))) pure
+    have hashed := fixed_chain_blocks oracle [heap (2*(count+1)+1)] (heap (2*(count+1))) pure
     simp only [bind_pure,List.foldl_cons,List.foldl_nil,fixed_oracle_run_pure] at hashed
     rw [hashed,pure_bind,ih]
     rfl

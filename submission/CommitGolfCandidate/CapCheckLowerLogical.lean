@@ -27,7 +27,7 @@ theorem cap_check_lower_logical_digest (oracle : Oracle) (state : MachineState)
     (siblings : ∀ i : Fin 16,
       readBuffer state (saltAddress + 32 + 32*i.val) 32 = record.sibling i) :
     readBuffer (checkEvaluation oracle (capCheckLowerRecord state)).1 256 32 =
-      record.root oracle.compression := by
+      record.root oracle.compression oracle.permutation := by
   rw [CapLowerRecord.root]
   have result := cap_check_lower_record_digest oracle state saltAddress valueAddress
     record.value record.path (cap_lower_path_length record) scratch saltPointer

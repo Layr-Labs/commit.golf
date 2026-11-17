@@ -23,14 +23,15 @@ theorem images_agree (state : MachineState) (control : StateControl state) :
   · simp only [fetch,zero]
     rfl
   · let index := (state.pc.toNat-4096)/4
-    have positive : 1 ≤ index := by dsimp only [index]; unfold CorePC at core; omega
-    have bounded : index<200 := by dsimp only [index]; unfold CorePC at core; omega
     have numeric : state.pc.toNat=4096+4*index := by dsimp only [index]; unfold CorePC at core; omega
     have pc : state.pc=BitVec.ofNat 64 (4096+4*index) := by
       calc
         state.pc=BitVec.ofNat 64 state.pc.toNat := by simp
         _ = _ := by rw [numeric]
-    exact nonce_expanded_core_fetch state index positive bounded pc
+    unfold CorePC at core
+    rcases core with ⟨⟨low,high⟩ | ⟨low,high⟩,_⟩
+    · exact nonce_expanded_core_fetch state index (by omega) (by omega) pc
+    · exact nonce_expanded_leaf_fetch state index (by omega) (by omega) pc
 
 theorem fetched_step_control (state next : MachineState) (instruction : Instruction)
     (control : StateControl state) (fetched : fetch oldImage state=some instruction)

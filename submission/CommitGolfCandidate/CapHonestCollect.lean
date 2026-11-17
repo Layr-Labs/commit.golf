@@ -30,11 +30,12 @@ theorem cap_insert_agrees (expected : Nat → Digest) (roots : CapRootMap)
       refine ⟨roots, ?_, agree⟩
       simp only [capInsert, prior, correct, ite_true]
 
-theorem cap_lower_batch_agrees (compress : Compression) (records : List CapLowerRecord)
+theorem cap_lower_batch_agrees (compress : Compression) (permutation : Perm)
+    (records : List CapLowerRecord)
     (expected : Nat → Digest)
-    (honest : ∀ record ∈ records, record.root compress = expected (capGroup record.index).val)
+    (honest : ∀ record ∈ records, record.root compress permutation = expected (capGroup record.index).val)
     (roots : CapRootMap) (agree : CapRootsAgree expected roots) :
-    ∃ finalRoots, capLowerBatchRoots compress records roots = some finalRoots ∧
+    ∃ finalRoots, capLowerBatchRoots compress permutation records roots = some finalRoots ∧
       CapRootsAgree expected finalRoots := by
   induction records generalizing roots with
   | nil => exact ⟨roots, rfl, agree⟩
@@ -43,7 +44,7 @@ theorem cap_lower_batch_agrees (compress : Compression) (records : List CapLower
         (capGroup head.index).val
       have headRoot := honest head (by simp)
       have laterHonest : ∀ record ∈ rest,
-          record.root compress = expected (capGroup record.index).val := by
+          record.root compress permutation = expected (capGroup record.index).val := by
         intro record member
         exact honest record (by simp [member])
       obtain ⟨finalRoots, later, finalAgree⟩ := ih laterHonest next nextAgree
@@ -54,7 +55,7 @@ theorem cap_lower_batch_agrees (compress : Compression) (records : List CapLower
 theorem cap_honest_lower_collection (oracle : Oracle) (message : Message)
     (committed : MachineState) (correct : CommittedState oracle message committed)
     (positions : Positions) :
-    ∃ roots, capLowerBatchRoots oracle.compression
+    ∃ roots, capLowerBatchRoots oracle.compression oracle.permutation
         (capHonestLowerRecords message committed positions) (fun _ => none) = some roots ∧
       CapRootsAgree (fun group => heapDigest committed 4294971424 (256+group)) roots := by
   apply cap_lower_batch_agrees

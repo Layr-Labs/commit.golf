@@ -44,10 +44,10 @@ theorem cap_check_records_logical (oracle : Oracle) (input : CheckInput)
     (ordinal count : Nat) (state : MachineState)
     (ready : CapCheckRecordsReady input ordinal count state)
     (roots : CapRootMap) (collected : CapCheckCollected state roots) :
-    ((capLowerBatchRoots oracle.compression (records.drop ordinal) roots).isSome=true ↔
+    ((capLowerBatchRoots oracle.compression oracle.permutation (records.drop ordinal) roots).isSome=true ↔
       (checkEvaluation oracle (capCheckRecordsRun count state)).1.2=true) ∧
     (∀ next : CapRootMap,
-      capLowerBatchRoots oracle.compression (records.drop ordinal) roots=some next →
+      capLowerBatchRoots oracle.compression oracle.permutation (records.drop ordinal) roots=some next →
       CapCheckCollected (checkEvaluation oracle (capCheckRecordsRun count state)).1.1 next) := by
   induction count generalizing ordinal state roots with
   | zero =>
@@ -77,7 +77,7 @@ theorem cap_check_records_logical (oracle : Oracle) (input : CheckInput)
       collected loaded ready.scratch ready.leaves ready.marks ready.roots ready.one digest
     have dropHead := List.drop_eq_getElem_cons recordPresent
     cases inserted : capInsert roots (capGroup records[ordinal].index).val
-        (records[ordinal].root oracle.compression) with
+        (records[ordinal].root oracle.compression oracle.permutation) with
     | none =>
       have rejected : (checkEvaluation oracle (capCheckRecordRun state)).1.2=false := by
         apply Bool.eq_false_iff.mpr

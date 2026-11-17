@@ -111,12 +111,11 @@ theorem fused_root (state : MachineState) (messageBase : Word)
 
 /-- For even count=2*pairs+2, exact post-random cost is 36*count+7*pairs+23
 instructions and 92*count+21*pairs+30 cycles. The zero-parent case is separate. -/
-theorem fused_body (saltFetched : CursorSaltFetched (submission.image .commit))
+theorem fused_body (callFetched : CommitLeafCallFetched)
+    (saltFetched : CursorSaltFetched (submission.image .commit))
     (prefixFetched : CursorPrefixFetched (submission.image .commit))
     (tailFetched : FusedTailFetched (submission.image .commit))
     (latchFetched : FusedLatchFetched (submission.image .commit))
-    (callFetched : ∀ state : MachineState, state.pc = 4312 →
-      fetch (submission.image .commit) state = some (.base (.JAL .x1 144)))
     (exitFetched : FusedExitFetched (submission.image .commit))
     (parentFetched : FusedParentFetched (submission.image .commit))
     (state : MachineState) (count pairs : Nat) (messageBase : Word)
@@ -138,7 +137,7 @@ theorem fused_body (saltFetched : CursorSaltFetched (submission.image .commit))
   have nonzero : count ≠ 0 := by omega
   have residualCount : count - 1 = 2 * pairs + 1 := by omega
   have initialPC : state.pc = 4280 := by simpa [nonzero] using leaves.pc
-  have leavesRun := fused_leaves saltFetched prefixFetched tailFetched latchFetched callFetched
+  have leavesRun := fused_leaves callFetched saltFetched prefixFetched tailFetched latchFetched
     state count messageBase leaves heapWindow (7 + (7 * pairs + 5 + (11 + fuel)))
   simp only [if_neg nonzero] at leavesRun
   rw [← initialPC, fused_normalize_self_pc] at leavesRun

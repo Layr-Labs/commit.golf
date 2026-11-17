@@ -75,8 +75,8 @@ theorem cap_check_lower_record_finished (state finished : MachineState)
 theorem cap_check_lower_record_word_frame (state finished : MachineState)
     (scratch : state.getReg .x21 = 256)
     (reachable : finished ∈ support (capCheckLowerRecord state))
-    (address : Word) (outside : ∀ i < 8,
-      address ≠ BitVec.ofNat 64 (256+8*i)) :
+    (address : Word) (outside : ∀ i < 40,
+      address ≠ BitVec.ofNat 64 (8*i)) :
     finished.getMem address = state.getMem address := by
   simp only [capCheckLowerRecord, mem_support_bind_iff] at reachable
   obtain ⟨leaf, leafReachable, pathReachable⟩ := reachable
@@ -84,11 +84,16 @@ theorem cap_check_lower_record_word_frame (state finished : MachineState)
     rw [cap_check_path_init_state_register leaf .x21 (by decide),
       cap_check_record_leaf_register state leaf leafReachable .x21 (by decide)]
     exact scratch
+  have pathOutside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i) := by
+    intro i inside
+    have distinct := outside (32+i) (by omega)
+    rwa [show 8*(32+i) = 256+8*i by omega] at distinct
   have pathFrame := cap_check_path_loop_word_frame _ 16 pathScratch finished pathReachable
-    address outside
+    address pathOutside
   have initFrame := congrFun (cap_check_path_init_memory leaf) address
   exact pathFrame.trans (initFrame.trans
-    (cap_check_record_leaf_word_frame state leaf scratch leafReachable address outside))
+    (cap_check_record_leaf_word_frame state leaf scratch leafReachable address
+      (fun i inside => outside i (by omega))))
 
 theorem cap_check_lower_record_high_frame (state reference finished : MachineState)
     (scratch : state.getReg .x21 = 256) (frame : CapHighBytes state reference)

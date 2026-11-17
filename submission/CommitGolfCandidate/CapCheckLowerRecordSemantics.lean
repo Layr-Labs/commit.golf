@@ -3,7 +3,7 @@ import CommitGolfCandidate.CapCheckRecordLeafDigest
 import CommitGolfCandidate.CapCheckPathSemantics
 
 /-! Fixed-oracle lower-record refinement: the exact loaded salt and value
-produce a leaf digest, followed by the sixteen serialized siblings in index
+produce the stage-3 leaf digest, followed by the sixteen serialized siblings in index
 bit order. Earlier scratch writes cannot alter those later proof slots. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -33,7 +33,7 @@ theorem cap_check_lower_leaf_read (state leaf : MachineState)
   have numeric := congrArg BitVec.toNat equal
   rw [BitVec.toNat_ofNat, BitVec.toNat_ofNat,
     Nat.mod_eq_of_lt (by omega : address+8*word < 2^64),
-    Nat.mod_eq_of_lt (by omega : 256+8*i < 2^64)] at numeric
+    Nat.mod_eq_of_lt (by omega : 8*i < 2^64)] at numeric
   omega
 
 theorem cap_check_lower_record_digest (oracle : Oracle) (state : MachineState)
@@ -54,7 +54,7 @@ theorem cap_check_lower_record_digest (oracle : Oracle) (state : MachineState)
       (state.getMem (state.getReg .x24)).getLsbD i = (path[i]'inside).1) :
     readBuffer (checkEvaluation oracle (capCheckLowerRecord state)).1 256 32 =
       climb oracle.compression
-        (leafDigest oracle.compression (readBuffer state saltAddress 32) value) path := by
+        (s3LeafDigest oracle.permutation (readBuffer state saltAddress 32) value) path := by
   let leaf := (checkEvaluation oracle (capCheckRecordLeaf state)).1
   have reachable : leaf ∈ support (capCheckRecordLeaf state) :=
     check_evaluation_support oracle _

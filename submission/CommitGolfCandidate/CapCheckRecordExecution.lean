@@ -15,9 +15,9 @@ private theorem record_success_charge (computation : OracleComp World Execution)
     (lowerCycles groupSteps : Nat) :
     (do
       let result ← computation
-      return ((result.charge 3 0).charge groupSteps 0).charge lowerCycles 24) =
+      return ((result.charge 3 0).charge groupSteps 0).charge lowerCycles 18) =
     (do let result ← computation
-        return result.charge (lowerCycles+groupSteps+3) 24) := by
+        return result.charge (lowerCycles+groupSteps+3) 18) := by
   simp [Execution.charge,Nat.add_assoc,Nat.add_comm,Nat.add_left_comm]
 
 theorem cap_check_record_execute (state : MachineState) (index : Nat)
@@ -43,10 +43,10 @@ theorem cap_check_record_execute (state : MachineState) (index : Nat)
             (capCheckRecordResult lower).1 allowCoins
           return result.charge
             (capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+
-              321+capCheckGroupSteps lower+3) 24
+              231+capCheckGroupSteps lower+3) 18
         else pure ⟨.failure,(capCheckGroupResult lower).1,
           capCheckPathLoopSteps (state.getMem (state.getReg .x24)) 16+
-            321+capCheckGroupSteps lower,24⟩) := by
+            231+capCheckGroupSteps lower,18⟩) := by
   have lowerBound := cap_check_lower_record_steps_bound state
   rw [show 671+fuel=capCheckLowerRecordSteps state+
       (671-capCheckLowerRecordSteps state+fuel) by omega,

@@ -16,7 +16,7 @@ def CapCheckProgramAccepts (oracle : Oracle) (input : CheckInput) : Prop :=
   input.proof.length ≤ capProgram.sizes.proof ∧
   if input.positions.card=0 then input.proof=[] else
     544*input.positions.card ≤ input.proof.length ∧
-    ∃ roots, capLowerBatchRoots oracle.compression (capCheckLoadedRecords input)
+    ∃ roots, capLowerBatchRoots oracle.compression oracle.permutation (capCheckLoadedRecords input)
       (fun _ => none)=some roots ∧ CapCheckLoadedAcceptance oracle input roots
 
 theorem cap_check_program_acceptance (oracle : Oracle) (input : CheckInput) :

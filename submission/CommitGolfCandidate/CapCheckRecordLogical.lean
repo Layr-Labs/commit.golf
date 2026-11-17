@@ -25,7 +25,7 @@ theorem cap_check_record_logical (oracle : Oracle) (input : CheckInput)
       input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
         simpa using present))) :
     readBuffer (checkEvaluation oracle (capCheckLowerRecord state)).1 256 32 =
-      records[ordinal].root oracle.compression := by
+      records[ordinal].root oracle.compression oracle.permutation := by
   have cardinal : input.positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ input.positions
   have sourceBounds :

@@ -19,7 +19,7 @@ theorem cap_check_program_fuel (input : CheckInput) :
   omega
 
 theorem cap_check_program_queries (input : CheckInput) :
-    (capProgram.run .check input).IsTotalQueryBound (32*input.positions.card) := by
+    (capProgram.run .check input).IsTotalQueryBound (26*input.positions.card) := by
   by_cases admitted : input.proof.length ≤ capProgram.sizes.proof
   · change (if decide (input.proof.length ≤ capProgram.sizes.proof) then
         execute (capProgram.image .check) (capProgram.steps .check)

@@ -13,7 +13,7 @@ theorem cap_check_encoded_accepts (oracle : Oracle) (input : CheckInput)
     (records : List CapLowerRecord) (suffix : List Digest)
     (parsed : CapCheckParsedRecords input records (capDigestEncoding suffix))
     (nonempty : 0 < input.positions.card) (roots : CapRootMap)
-    (lower : capLowerBatchRoots oracle.compression records (fun _ => none)=some roots)
+    (lower : capLowerBatchRoots oracle.compression oracle.permutation records (fun _ => none)=some roots)
     (cap : capDecode oracle.compression (capKnownView roots 8 0) suffix=
       some (input.commitment,[])) :
     (oracle.eval (capProgram.scheme.check input.commitment input.positions

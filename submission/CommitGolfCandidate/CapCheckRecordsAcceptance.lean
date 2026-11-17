@@ -34,7 +34,7 @@ theorem cap_check_records_continue_acceptance (oracle : Oracle) (input : CheckIn
     (fuel : Nat) (sufficient : 671*count+19945 ≤ fuel) (allowCoins : Bool) :
     (checkEvaluation oracle
       (capCheckRecordsContinue count state fuel allowCoins)).1.exit=.success ↔
-      ∃ next, capLowerBatchRoots oracle.compression
+      ∃ next, capLowerBatchRoots oracle.compression oracle.permutation
         ((capCheckLoadedRecords input).drop ordinal) roots=some next ∧
         CapCheckLoadedAcceptance oracle input next := by
   have parsed := cap_check_loaded_records_parsed input admitted enough
@@ -78,7 +78,7 @@ theorem cap_check_records_continue_acceptance (oracle : Oracle) (input : CheckIn
     have dropHead := List.drop_eq_getElem_cons recordPresent
     cases inserted : capInsert roots
         (capGroup (capCheckLoadedRecords input)[ordinal].index).val
-        ((capCheckLoadedRecords input)[ordinal].root oracle.compression) with
+        ((capCheckLoadedRecords input)[ordinal].root oracle.compression oracle.permutation) with
     | none =>
       have rejected : (checkEvaluation oracle (capCheckRecordRun state)).1.2=false := by
         apply Bool.eq_false_iff.mpr

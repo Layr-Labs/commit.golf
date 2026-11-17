@@ -8,7 +8,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
 set_option maxHeartbeats 200000
 attribute [local irreducible] readBuffer capCheckRecordLeafStart
-  checkEvaluation capCheckLeafLoop
+  checkEvaluation capCheckLeaf
 
 private theorem read_pc (state : MachineState) (pc : Word) :
     readBuffer (state.setPC pc) 256 32 = readBuffer state 256 32 :=
@@ -16,8 +16,8 @@ private theorem read_pc (state : MachineState) (pc : Word) :
 
 theorem cap_check_record_leaf_evaluation (oracle : Oracle) (state : MachineState) :
     checkEvaluation oracle (capCheckRecordLeaf state) =
-      ((checkEvaluation oracle (capCheckLeafLoop (capCheckRecordLeafStart state) 8)).1.setPC 4256,
-       (checkEvaluation oracle (capCheckLeafLoop (capCheckRecordLeafStart state) 8)).2) := by
+      ((checkEvaluation oracle (capCheckLeaf (capCheckRecordLeafStart state))).1.setPC 4256,
+       (checkEvaluation oracle (capCheckLeaf (capCheckRecordLeafStart state))).2) := by
   unfold capCheckRecordLeaf
   rw [check_evaluation_bind]
   simp only [check_evaluation_pure, Nat.add_zero]
@@ -61,17 +61,16 @@ theorem cap_check_record_leaf_digest (oracle : Oracle) (state : MachineState)
     (data : ∀ i < 8, readBuffer state (valueAddress + 32*i) 32 =
       value.extractLsb' (256*i) 256) :
     readBuffer (checkEvaluation oracle (capCheckRecordLeaf state)).1 256 32 =
-      leafDigest oracle.compression (readBuffer state saltAddress 32) value := by
+      s3LeafDigest oracle.permutation (readBuffer state saltAddress 32) value := by
   rw [cap_check_record_leaf_evaluation]
   have pcMemory : readBuffer
-      ((checkEvaluation oracle (capCheckLeafLoop (capCheckRecordLeafStart state) 8)).1.setPC 4256)
+      ((checkEvaluation oracle (capCheckLeaf (capCheckRecordLeafStart state))).1.setPC 4256)
       256 32 =
-      readBuffer (checkEvaluation oracle (capCheckLeafLoop (capCheckRecordLeafStart state) 8)).1
+      readBuffer (checkEvaluation oracle (capCheckLeaf (capCheckRecordLeafStart state))).1
         256 32 := read_pc _ _
   rw [pcMemory]
   apply cap_check_leaf_digest oracle (capCheckRecordLeafStart state)
     valueAddress (readBuffer state saltAddress 32) value
-  · exact (cap_check_record_leaf_start_register state .x21 (by decide)).trans scratch
   · exact (cap_check_record_leaf_start_register state .x8 (by decide)).trans valuePointer
   · exact valueAligned
   · exact valueAbove

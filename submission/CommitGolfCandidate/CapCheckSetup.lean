@@ -1,4 +1,5 @@
-import CommitGolfCandidate.CapCheckLeafCall
+import CommitGolfCandidate.CapWordCopy
+import CommitGolfCandidate.CapCheckCompression
 import CommitGolfCandidate.CapFlow
 
 /-! The real cap checker first retains ABI pointers, computes the proof end,

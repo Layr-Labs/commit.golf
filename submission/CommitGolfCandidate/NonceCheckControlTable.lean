@@ -2,7 +2,7 @@ import CommitGolfCandidate.NonceOpeningFetch
 
 /-! Finite control-flow facts for the retained checker instruction bytes.
 No old ordinary instruction jumps back to its replaced first word. The sole
-link-producing call returns to4256; its sole indirect return uses that link. -/
+link-producing call returns to 4256; its sole indirect return uses that link. -/
 namespace CommitGolfCandidate.NonceCheckControl
 open CommitGolfCandidate CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 20000
@@ -10,7 +10,10 @@ set_option maxHeartbeats 4000000
 
 def oldImage : Image := capProgram.image .check
 
-def CorePC (pc : Word) : Prop := 4100 ≤ pc.toNat ∧ pc.toNat ≤ 4892 ∧ pc.toNat%4=0
+/-- Retained checker words 1..199 and the stage-3 leaf routine, words 257..346;
+the packed expansion wrapper at words 200..256 lies outside. -/
+def CorePC (pc : Word) : Prop :=
+  ((4100 ≤ pc.toNat ∧ pc.toNat ≤ 4892) ∨ (5124 ≤ pc.toNat ∧ pc.toNat ≤ 5480)) ∧ pc.toNat%4=0
 instance (pc : Word) : Decidable (CorePC pc) := by unfold CorePC; infer_instance
 
 def Link (state : MachineState) : Prop := state.getReg .x1=0 ∨ state.getReg .x1=4256
@@ -36,9 +39,9 @@ def checkedIndex (index : Nat) : Bool :=
   | some instruction => checked (BitVec.ofNat 64 (4096+4*index)) instruction
   | none => false
 
-theorem old_length : oldImage.code.length=200 := by decide
+theorem old_length : oldImage.code.length=347 := by decide
 
-theorem checked_table : ∀ index : Fin 200, checkedIndex index=true := by decide
+theorem checked_table : ∀ index : Fin 347, checkedIndex index=true := by decide
 
 theorem fetched_checked (state : MachineState) (instruction : Instruction)
     (fetched : fetch oldImage state=some instruction) : checked state.pc instruction=true := by

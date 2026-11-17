@@ -61,7 +61,7 @@ theorem cap_check_termination (oracle : Oracle) (input : CheckInput) :
 
 theorem cap_check_scheme_budget (oracle : Oracle) (input : CheckInput) :
     (oracle.eval (capProgram.scheme.check input.commitment input.positions
-      input.values input.proof)).2 ≤ 32*input.positions.card := by
+      input.values input.proof)).2 ≤ 26*input.positions.card := by
   rw [scheme_check_evaluation]
   exact cap_check_evaluation_bound oracle _ _ (cap_check_program_queries input)
 

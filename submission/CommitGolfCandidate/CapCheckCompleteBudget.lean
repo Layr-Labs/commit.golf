@@ -21,7 +21,7 @@ theorem cap_check_records_continue_budget (input : CheckInput)
     (zeroSelectors : count = 0 → CapCheckSelectors state)
     (fuel : Nat) (sufficient : 671*count+19945 ≤ fuel) (allowCoins : Bool) :
     (capCheckRecordsContinue count state fuel allowCoins).IsTotalQueryBound
-      (24*count+8*(capMarkedCount (capKnownView roots 8 0)+count)) := by
+      (18*count+8*(capMarkedCount (capKnownView roots 8 0)+count)) := by
   induction count generalizing ordinal state roots fuel with
   | zero =>
     rw [capCheckRecordsContinue]
@@ -33,8 +33,8 @@ theorem cap_check_records_continue_budget (input : CheckInput)
   | succ count ih =>
     rw [capCheckRecordsContinue]
     have restBound :
-        24*(count+1)+8*(capMarkedCount (capKnownView roots 8 0)+(count+1)) =
-        24+(24*count+8*(capMarkedCount (capKnownView roots 8 0)+1+count)) := by omega
+        18*(count+1)+8*(capMarkedCount (capKnownView roots 8 0)+(count+1)) =
+        18+(18*count+8*(capMarkedCount (capKnownView roots 8 0)+1+count)) := by omega
     rw [restBound]
     apply isTotalQueryBound_bind_of_mem_support (cap_check_lower_record_query_bound state)
     intro lower reachable
@@ -59,8 +59,8 @@ theorem cap_check_records_continue_budget (input : CheckInput)
         nextCollected (fun _ => selectors)
         (fuel-capCheckLowerRecordSteps state-capCheckGroupSteps lower-3) (by omega)
       have enlarged := tail.mono (show
-        24*count+8*(capMarkedCount (capKnownView next 8 0)+count) ≤
-        24*count+8*(capMarkedCount (capKnownView roots 8 0)+1+count) by omega)
+        18*count+8*(capMarkedCount (capKnownView next 8 0)+count) ≤
+        18*count+8*(capMarkedCount (capKnownView roots 8 0)+1+count) by omega)
       simpa only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff] using enlarged
 
 theorem cap_check_nonempty_continue_budget (input : CheckInput)
@@ -71,7 +71,7 @@ theorem cap_check_nonempty_continue_budget (input : CheckInput)
     (allowCoins : Bool) :
     (execute (capProgram.image .check) fuel
       (capCheckRecordEntry (capCheckLengthState (capProgram.initialState .check input)))
-      allowCoins).IsTotalQueryBound (32*input.positions.card) := by
+      allowCoins).IsTotalQueryBound (26*input.positions.card) := by
   let state := capCheckRecordEntry (capCheckLengthState (capProgram.initialState .check input))
   have ready := cap_check_records_ready_initial input nonempty
   rw [cap_check_records_execute input admitted enough 0 input.positions.card state ready
@@ -82,8 +82,8 @@ theorem cap_check_nonempty_continue_budget (input : CheckInput)
   have empty : capMarkedCount (capKnownView (fun _ => none) 8 0) = 0 := by
     rw [cap_known_view_card]
     simp
-  have total : 32*input.positions.card =
-      24*input.positions.card+
+  have total : 26*input.positions.card =
+      18*input.positions.card+
         8*(capMarkedCount (capKnownView (fun _ => none) 8 0)+input.positions.card) := by
     rw [empty]
     omega

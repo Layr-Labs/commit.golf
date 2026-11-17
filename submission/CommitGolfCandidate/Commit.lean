@@ -113,27 +113,13 @@ private def compactReadyInstructions : List Instr :=
 private def compactReadyPrefix (state : MachineState) (count : Nat) : MachineState :=
   (compactReadyInstructions.take count).foldl execInstrBr state
 
-private theorem compact_ready_ten (state : MachineState) (pc : state.pc=4240) :
-    compactReadyPrefix state 10 = (commitReadyState state).setPC 4312 := by
+set_option maxRecDepth 1000000 in
+private theorem compact_ready_same (state : MachineState) (pc : state.pc=4240) :
+    compactReadyPrefix state 11 = ((commitReadyState state).setReg .x1 4316).setPC 1011404 := by
   simp [compactReadyPrefix,compactReadyInstructions,commitReadyState,commitReadyPrefix,
     commitReadyInstructions,execInstrBr,signExtend21,signExtend12,pc,
     MachineState.setPC,MachineState.setReg,MachineState.getReg,BitVec.add_assoc]
 
-private theorem compact_ready_same (state : MachineState) (pc : state.pc=4240) :
-    compactReadyPrefix state 11 = ((commitReadyState state).setReg .x1 4316).setPC 1011404 := by
-  have split : compactReadyPrefix state 11 =
-      execInstrBr (compactReadyPrefix state 10) (.JAL .x1 1007092) := by
-    simp only [compactReadyPrefix, compactReadyInstructions, List.take, List.foldl]
-  rw [split, compact_ready_ten state pc]
-  show (((commitReadyState state).setPC 4312).setReg .x1 ((4312 : Word) + 4)).setPC
-      ((4312 : Word) + signExtend21 1007092) = _
-  rw [show (4312 : Word) + signExtend21 1007092 = 1011404 by decide,
-    show (4312 : Word) + 4 = 4316 by decide]
-  generalize commitReadyState state = ready
-  cases ready
-  rfl
-
-/-- The second entry jump links x1 to 4316 and enters the unrolled leaf block. -/
 theorem commit_ready_linked (state : MachineState) (pc : state.pc = 4240) (fuel : Nat) :
     execute (submission.image .commit) (11 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel
@@ -304,12 +290,19 @@ theorem commit_copy (state : MachineState) (start : Nat)
 /-- The leaf call stores the actual continuation address, immediately before the digest store. -/
 def commitLeafCallState (state : MachineState) : MachineState := (state.setReg .x1 4316).setPC 4456
 
-theorem commit_leaf_call (state : MachineState) (pc : state.pc = 4312)
-    (fetched : fetch (submission.image .commit) state = some (.base (.JAL .x1 144)))
-    (fuel : Nat) :
+/-- The reference leaf call at word 54, kept as an explicit premise of the retained
+reference bridges; the delivered image calls the unrolled leaf group instead. -/
+def CommitLeafCallFetched : Prop :=
+  ∀ state : MachineState, state.pc = 4312 →
+    fetch (submission.image .commit) state = some (.base (.JAL .x1 144))
+
+theorem commit_leaf_call (callFetched : CommitLeafCallFetched) (state : MachineState)
+    (pc : state.pc = 4312) (fuel : Nat) :
     execute (submission.image .commit) (1 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitLeafCallState state) true
           return result.charge 1 0) := by
+  have fetched : fetch (submission.image .commit) state = some (.base (.JAL .x1 144)) :=
+    callFetched state pc
   have stepped : ordinaryStep state (.base (.JAL .x1 144)) = some (commitLeafCallState state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21,
       commitLeafCallState, MachineState.setPC, pc]

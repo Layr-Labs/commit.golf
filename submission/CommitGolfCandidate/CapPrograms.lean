@@ -58,7 +58,7 @@ def capOpeningCode (depth : Nat) : List Asm :=
   capMarkParents 22 29 ++ capWalk false 22 29 9 0 ++
   [.label "open-done", regop 11 25 15 0 32] ++ halt true
 
-def capCheckCode (depth : Nat) : List Asm :=
+def capCheckCore (depth : Nat) : List Asm :=
   let lower := capLowerHeight depth
   let capLeaves := 2^(capHeight depth)
   [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16, regop 22 15 17] ++
@@ -84,7 +84,31 @@ def capCheckCode (depth : Nat) : List Asm :=
   ((List.range 4).flatMap fun word =>
     [ld 6 18 (32+8*word), ld 7 26 (8*word), .branch 1 6 7 "reject"]) ++
   [.jump 0 "accept", .label "cap-empty", .branch 1 17 0 "reject",
-   .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++ leafSubroutine
+   .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false
+
+/-- Stage-3 leaf recompute. On entry scratch words 256..272 hold the nonce and
+x8 points to the 256-byte value. Two permutation calls: the first on
+`0^16 || value[0..184)` built at address 0 and answered in place, the second on
+`nonce || reply[96..200) || value[184..256)` read at address 72. The digest
+words are copied to 256..280, x8 advances by 256, and x1 returns. Only memory
+below 288 is written; x5, x6, x8, x10..x13 are clobbered. -/
+def s3LeafSubroutine : List Asm :=
+  [.label "leaf", sd 0 0 0, sd 0 0 8] ++
+  ((List.range 23).flatMap fun word => [ld 6 8 (8*word), sd 6 0 (16+8*word)]) ++
+  [addi 5 0 0, addi 10 0 0, addi 11 0 200, addi 12 0 0, addi 13 0 1, insn 0x73] ++
+  ((List.range 3).flatMap fun word => [ld 6 0 (256+8*word), sd 6 0 (72+8*word)]) ++
+  ((List.range 9).flatMap fun word => [ld 6 8 (184+8*word), sd 6 0 (200+8*word)]) ++
+  [addi 10 0 72, insn 0x73] ++
+  ((List.range 4).flatMap fun word => [ld 6 0 (8*word), sd 6 0 (256+8*word)]) ++
+  [addi 8 8 256, insn 0x00008067]
+
+/-- Never executed: every filler word jumps to the rejecting halt. -/
+def s3CheckFiller (count : Nat) : List Asm := List.replicate count (.jump 0 "reject")
+
+/-- Words 0..180 are the retained checker, 181..256 filler (the packed image
+keeps its expansion wrapper at 200..256), 257..346 the stage-3 leaf. -/
+def capCheckCode (depth : Nat) : List Asm :=
+  capCheckCore depth ++ s3CheckFiller 76 ++ s3LeafSubroutine
 
 /-- Cap images; the complete certificate is assembled separately. -/
 def capExperimental (depth : Nat) : Submission :=

@@ -37,15 +37,15 @@ theorem cap_honest_lower_path (message : Message) (committed : MachineState)
 theorem cap_honest_lower_root (oracle : Oracle) (message : Message)
     (committed : MachineState) (correct : CommittedState oracle message committed)
     (index : Index) :
-    (capHonestLowerRecord message committed index).root oracle.compression =
+    (capHonestLowerRecord message committed index).root oracle.compression oracle.permutation =
       heapDigest committed 4294971424 (256+(capGroup index).val) := by
   rw [CapLowerRecord.root, cap_honest_lower_path]
   have leaf := correct.2.2 index
   change heapDigest committed 4294971424 (LENGTH+index.val) =
-    leafDigest oracle.compression
+    s3LeafDigest oracle.permutation
       (readNonce committed (5368713248+24*index.val)) (message index) at leaf
   change climb oracle.compression
-    (leafDigest oracle.compression
+    (s3LeafDigest oracle.permutation
       (readNonce committed (5368713248+24*index.val)) (message index))
     (heapPath (heapDigest committed 4294971424) (LENGTH+index.val) 16) = _
   rw [← leaf, reconstruct_heap_ancestor oracle.compression
