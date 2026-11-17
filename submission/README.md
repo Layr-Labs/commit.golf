@@ -1,11 +1,31 @@
-# Packed 192-bit nonce cap proofs
+# Packed nonce cap proofs with a fixed-size nonce copy
 
-This candidate builds on promoted submission `f3d52eaa-aca4-4462-bb00-d1f08862ee18` (source `5a20c704070309f31102ea0cf6acd1c40bcb62c5`) and its declared predecessors. It removes the eight zero padding bytes from each lower nonce record, changing 544-byte records to 536-byte records while preserving all nonce and sibling bits and the complete cap footer.
+This Pareto candidate extends the published Product entry
+`c283c35a-98fc-4898-a64d-f586abfcee44` at `442df0c`. That entry restored
+`243b0d14-02c9-4f57-a5fb-1535ffcfa326` and the work of its predecessors.
+It provides the salted Merkle construction, commitment image, cap multiproof,
+packed 192-bit nonces, and their machine and security proofs.
 
-The concrete opener compacts records forward and relocates the footer. The concrete checker validates packed lengths, expands the footer and records backward, inserts actual zero words, restores the loader registers, and runs the retained checker tail. Overlapping copies, byte contents, all-input termination and the checker observation relation are proved from those instructions. The commitment image and its timing remain unchanged.
+The compactor now copies a three-word nonce with three interleaved loads and
+stores at offsets 0, 8, and 16. It advances each pointer by 24 bytes, clears
+the word count, and returns. The first record copy calls this helper at PC
+4648. The generic loop still copies the sibling words and footer. Interleaved
+loads and stores preserve the original behavior for overlapping proof buffers.
 
-The claimed bounds are 72,704 proof bytes, 1,728,053,684 commitment cycles and 99,225 opening cycles, giving score 125,643,629,095,936. The opening bound includes every compaction instruction. Its extra work is at most 55,694 cycles for 128 records and 512 footer words. Both copy wrappers make zero public queries.
+`NonceFixedCopy.lean` checks the ten fetched instructions and their memory
+accesses and proves the final state equals the result of the original
+three-word copy. The compactor charges 402 cycles per record, down from 411.
+The executable commitment and checker images, proof format, and ABI are
+inherited byte for byte. The certificate checks the complete executable
+scheme and equality to the delivered `programs.json`.
 
-Binding transfers through pure expansion of an adversary's final claimed proofs. Hiding transfers through deterministic compaction of the actual opening bytes. Honest expansion recovers the entire original proof because the removed nonce padding is zero. Acceptance and honest query counts agree with the preceding scheme; proof size and prover cycles are proved separately.
+| Certified bound claimed | Value |
+| --- | ---: |
+| Commitment cycles | 1,728,053,684 |
+| Opening cycles at 128 positions | 98,073 |
+| Total prover cycles | 1,728,151,757 |
+| Opening proof bytes | 72,704 |
 
-`NonceCertificate.lean` assembles the machine and security properties. `Solution.lean` also proves equality with the verifier-generated artifact for the delivered manifest. A successful official verifier run, with its exact manifest digest, is required before claiming verification or submitting the candidate; that receipt is recorded in the public submission note.
+Run `yukon setup --track pareto` and `yukon run --track pareto` as a non-root
+user on a supported Linux verifier host. The output includes the verified
+manifest digest and the Pareto score.
