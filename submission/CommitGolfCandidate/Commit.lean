@@ -108,13 +108,13 @@ private def compactReadyInstructions : List Instr :=
   [.ADDI .x21 .x8 (-32), .ADDI .x22 .x18 0, .ADDI .x20 .x0 0,
    .ADDI .x5 .x0 0, .ADDI .x10 .x21 0, .ADDI .x11 .x0 64,
    .ADDI .x12 .x21 0, .ADDI .x13 .x0 0, .ADDI .x28 .x0 0,
-   .JAL .x0 36, .JAL .x1 144]
+   .JAL .x0 36, .JAL .x1 1007092]
 
 private def compactReadyPrefix (state : MachineState) (count : Nat) : MachineState :=
   (compactReadyInstructions.take count).foldl execInstrBr state
 
 private theorem compact_ready_same (state : MachineState) (pc : state.pc=4240) :
-    compactReadyPrefix state 11 = ((commitReadyState state).setReg .x1 4316).setPC 4456 := by
+    compactReadyPrefix state 11 = ((commitReadyState state).setReg .x1 4316).setPC 1011404 := by
   simp [compactReadyPrefix,compactReadyInstructions,commitReadyState,commitReadyPrefix,
     commitReadyInstructions,execInstrBr,signExtend21,signExtend12,pc,
     MachineState.setPC,MachineState.setReg,MachineState.getReg,BitVec.add_assoc]
@@ -122,7 +122,7 @@ private theorem compact_ready_same (state : MachineState) (pc : state.pc=4240) :
 theorem commit_ready_linked (state : MachineState) (pc : state.pc = 4240) (fuel : Nat) :
     execute (submission.image .commit) (11 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel
-            (((commitReadyState state).setReg .x1 4316).setPC 4456) true
+            (((commitReadyState state).setReg .x1 4316).setPC 1011404) true
           return result.charge 11 0) := by
   rw [← compact_ready_same state pc]
   apply execute_unit_steps (states := compactReadyPrefix state)
