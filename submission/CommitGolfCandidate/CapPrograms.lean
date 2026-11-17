@@ -39,7 +39,7 @@ def capWalk (checking : Bool) (marks leafCount roots proofEnd : Nat) : List Asm 
   [.jump 0 "cap-advance", .label "cap-right", addi 20 20 1, .jump 0 "cap-visit",
    .label "cap-done"]
 
-def capOpeningCode (depth : Nat) : List Asm :=
+def capOpeningBeforeHalt (depth : Nat) : List Asm :=
   let lower := capLowerHeight depth
   let leaves := 2^depth
   let capLeaves := 2^(capHeight depth)
@@ -50,13 +50,27 @@ def capOpeningCode (depth : Nat) : List Asm :=
   (copyDigest 23 25).take 6 ++ [sd 0 25 24, addi 0 0 0] ++
   [addi 25 25 32, regop 20 20 19] ++ li 28 lower ++
   [.branch 0 28 0 "open-group", .label "open-path",
-   insn (1*2^20 + 20*2^15 + 4*2^12 + 7*2^7 + 0x13),
+   (if lower = 16 then .jump 0 "open-unrolled"
+    else insn (1*2^20 + 20*2^15 + 4*2^12 + 7*2^7 + 0x13)),
    shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
   [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
    .label "open-group", shift 7 20 3, regop 23 22 7, sd 31 23 0,
    addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position"] ++
   capMarkParents 22 29 ++ capWalk false 22 29 9 0 ++
-  [.label "open-done", regop 11 25 15 0 32] ++ halt true
+  [.label "open-done", regop 11 25 15 0 32, addi 5 0 1, addi 10 0 0]
+
+def capUnrolledPathCode : List Asm :=
+  [.label "open-unrolled"] ++
+  ((List.range 16).flatMap fun level =>
+    [insn (1*2^20 + 20*2^15 + 4*2^12 + 7*2^7 + 0x13),
+     shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 0 (32*level) ++
+    [shift 20 20 1 true]) ++
+  [addi 25 25 512, addi 28 0 0, .jump 0 "open-group"]
+
+/-- The packed opener uses this gap for its codec and shares the fixed path suffix. -/
+def capOpeningCode (depth : Nat) : List Asm :=
+  capOpeningBeforeHalt depth ++ [insn 0x73] ++
+  (if capLowerHeight depth = 16 then List.replicate 37 (insn 0) ++ capUnrolledPathCode else [])
 
 def capCheckCore (depth : Nat) : List Asm :=
   let lower := capLowerHeight depth

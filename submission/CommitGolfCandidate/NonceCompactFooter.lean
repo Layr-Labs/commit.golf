@@ -13,7 +13,7 @@ def nonceCompactFooterInstructions : List Instr :=
 def nonceCompactFooterPrefix (state : MachineState) (count : Nat) : MachineState :=
   (nonceCompactFooterInstructions.take count).foldl execInstrBr state
 
-theorem nonce_compact_footer_execute (state : MachineState) (pc : state.pc=5112)
+theorem nonce_compact_footer_execute (state : MachineState) (pc : state.pc=4588)
     (fuel : Nat) (coins : Bool) :
     execute nonceCompactImage (3+fuel) state coins=
       (do let result ← execute nonceCompactImage fuel (nonceCompactFooterPrefix state 3) coins
@@ -21,7 +21,7 @@ theorem nonce_compact_footer_execute (state : MachineState) (pc : state.pc=5112)
   apply execute_unit_steps (states := nonceCompactFooterPrefix state)
   intro count bounded
   refine ⟨.base ((nonceCompactFooterInstructions[count]?).getD .EBREAK),?_,?_,?_⟩
-  · apply cap_image_fetch _ _ (254+count) _ (by omega)
+  · apply cap_image_fetch _ _ (123+count) _ (by omega)
     · interval_cases count <;>
         simp [nonceCompactFooterPrefix, nonceCompactFooterInstructions, execInstrBr,
           MachineState.setPC, pc]

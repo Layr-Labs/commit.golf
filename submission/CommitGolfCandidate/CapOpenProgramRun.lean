@@ -16,7 +16,7 @@ private theorem opening_run_eq (program : Submission)
         (program.initialState .opening (trapdoor, positions)) true := rfl
 
 def capOpenInstructionCount (positions : Positions) : Nat :=
-  29+263*positions.card+2552+2+
+  29+219*positions.card+2552+2+
     capDfsInstructionTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4
 
 theorem cap_open_program_fuel (positions : Positions) :
@@ -25,7 +25,7 @@ theorem cap_open_program_fuel (positions : Positions) :
     simpa [Index] using Finset.card_le_univ positions
   have traversal := cap_dfs_instruction_total_bound false
     (capOpenRequestedMarks positions) 1022 (.visit 1)
-  change 29+263*positions.card+2552+2+
+  change 29+219*positions.card+2552+2+
     capDfsInstructionTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4 ≤
       13421773824
   norm_num [LENGTH, LOG_LENGTH] at cardinal
@@ -39,7 +39,7 @@ theorem cap_open_nonempty_program_run
   have fuel := cap_open_program_fuel positions
   have execution := cap_open_loaded_execution trapdoor positions positive
     (capProgram.steps .opening-capOpenInstructionCount positions) true
-  have count : 29+263*positions.card+2552+2+
+  have count : 29+219*positions.card+2552+2+
       capDfsInstructionTotal false (capOpenRequestedMarks positions) 1022 (.visit 1)+4+
       (capProgram.steps .opening-capOpenInstructionCount positions) =
         capProgram.steps .opening := by

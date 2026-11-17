@@ -1,9 +1,9 @@
 import CommitGolfCandidate.CapOpenPathEffect
 import CommitGolfCandidate.CapCountedLoop
 
-/-! Bounded execution of the actual lower-path loop. Each iteration checks a
-sibling root read and one output digest write. The residual counter and natural
-output window prevent wrapping; honest sibling meaning is a separate frame. -/
+/-! Readiness and cursor arithmetic for the reference lower-path loop.
+CapFastPath refines this loop with the fixed-offset machine code. Each modeled
+step consumes one admitted sibling read and one 32-byte output slot. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
@@ -38,28 +38,6 @@ theorem cap_open_path_ready_next (rootBase limit remaining : Nat) (state : Machi
     rw [(cap_open_path_projection state).1, pointer]
     exact (BitVec.ofNat_add cursor 32).symm
 
-theorem cap_open_path_loop_execute (rootBase limit : Nat)
-    (rootBound : rootBase + 1073741824 ≤ MEMORY_BYTES)
-    (rootAligned : rootBase % 8 = 0) (limitBound : limit ≤ MEMORY_BYTES)
-    (remaining : Nat) (state : MachineState)
-    (ready : CapOpenPathReady rootBase limit remaining state)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (15*remaining+fuel) state allowCoins =
-      (do let result ← execute ((capExperimental 24).image .opening) fuel
-            (capCountedRun capOpenPathState remaining state) allowCoins
-          return result.charge (15*remaining) 0) := by
-  apply cap_counted_run_execute _ 15 capOpenPathState
-    (CapOpenPathReady rootBase limit)
-    (cap_open_path_ready_next rootBase limit · · limitBound) ?_ remaining state ready fuel allowCoins
-  intro residual current currentReady extra coins
-  obtain ⟨node, nodeBound, index⟩ := currentReady.node
-  obtain ⟨cursor, pointer, aligned, space⟩ := currentReady.cursor
-  have sibling : node ^^^ 1 < 33554432 :=
-    Nat.xor_lt_two_pow (n := 25) nodeBound (by decide)
-  apply cap_open_path_execute current node rootBase cursor
-    (by simpa using currentReady.pc) index currentReady.roots pointer
-    (by omega) rootAligned (by omega) aligned extra coins
-
 theorem cap_open_path_loop_finished (rootBase limit : Nat)
     (limitBound : limit ≤ MEMORY_BYTES)
     (remaining : Nat) (state : MachineState)
@@ -70,5 +48,19 @@ theorem cap_open_path_loop_finished (rootBase limit : Nat)
     (CapOpenPathReady rootBase limit)
     (cap_open_path_ready_next rootBase limit · · limitBound) remaining state ready
   exact ⟨by simpa using finished.pc, by simpa using finished.counter⟩
+
+theorem cap_open_path_loop_cursor (remaining : Nat) (state : MachineState) :
+    (capCountedRun capOpenPathState remaining state).getReg .x25 =
+      state.getReg .x25 + BitVec.ofNat 64 (32*remaining) := by
+  induction remaining generalizing state with
+  | zero =>
+      rw [capCountedRun.eq_1, Nat.mul_zero]
+      change state.getReg .x25 = state.getReg .x25 + (0 : Word)
+      exact (BitVec.add_zero _).symm
+  | succ remaining ih =>
+      rw [capCountedRun.eq_2, ih, (cap_open_path_projection state).1]
+      rw [show 32*(remaining+1) = 32 + 32*remaining by omega, BitVec.ofNat_add,
+        BitVec.add_assoc]
+      rfl
 
 end CommitGolfCandidate

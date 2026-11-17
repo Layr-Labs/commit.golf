@@ -115,6 +115,6 @@ def s3CommitExecution (message : Message) : OracleComp World Execution := do
   let answer ← liftM ($ᵗ BitVec (8 * (setup.getReg .x11).toNat) :
     ProbComp (BitVec (8 * (setup.getReg .x11).toNat)))
   let finished ← s3CommitBody (s3CommitReady message answer) (2 ^ 18)
-  return ⟨.success, finished, 688652773, 3 * 2 ^ 24 - 1⟩
+  return ⟨.success, finished, 688456169, 3 * 2 ^ 24 - 1⟩
 
 end CommitGolfCandidate

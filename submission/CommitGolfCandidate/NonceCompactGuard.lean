@@ -8,14 +8,14 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 400000
 
 def nonceCompactGuardState (state : MachineState) : MachineState :=
-  execInstrBr state (.BEQ .x24 .x0 556)
+  execInstrBr state (.BEQ .x24 .x0 32)
 
 theorem nonce_compact_guard_execute (state : MachineState) (pc : state.pc=4556)
     (fuel : Nat) (coins : Bool) :
     execute nonceCompactImage (1+fuel) state coins=
       (do let result ← execute nonceCompactImage fuel (nonceCompactGuardState state) coins
           return result.charge 1 0) := by
-  have fetched : fetch nonceCompactImage state=some (.base (.BEQ .x24 .x0 556)) := by
+  have fetched : fetch nonceCompactImage state=some (.base (.BEQ .x24 .x0 32)) := by
     apply cap_image_fetch _ state 115 _ (by decide) pc
     rfl
   rw [Nat.add_comm 1 fuel, execute_ordinary_step nonceCompactImage _ state
@@ -33,15 +33,15 @@ private theorem branch_register (state : MachineState) (offset : BitVec 13) (reg
   split <;> exact MachineState.getReg_setPC
 
 theorem nonce_compact_guard_memory (state : MachineState) :
-    (nonceCompactGuardState state).mem=state.mem := branch_memory state 556
+    (nonceCompactGuardState state).mem=state.mem := branch_memory state 32
 
 theorem nonce_compact_guard_register (state : MachineState) (reg : Reg) :
-    (nonceCompactGuardState state).getReg reg=state.getReg reg := branch_register state 556 reg
+    (nonceCompactGuardState state).getReg reg=state.getReg reg := branch_register state 32 reg
 
 theorem nonce_compact_guard_pc (state : MachineState) (pc : state.pc=4556)
     (count : Nat) (small : count<2^64)
     (counter : state.getReg .x24=BitVec.ofNat 64 count) :
-    (nonceCompactGuardState state).pc=if count=0 then 5112 else 4560 := by
+    (nonceCompactGuardState state).pc=if count=0 then 4588 else 4560 := by
   have zero : (BitVec.ofNat 64 count : Word)=0 ↔ count=0 := by
     constructor
     · intro equal

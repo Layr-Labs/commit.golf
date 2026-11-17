@@ -11,7 +11,7 @@ attribute [local irreducible] execute s3CommitBody
 instructions, the random syscall, 11 readiness instructions, then the leaf phase, the parent
 phase and the root copy. Additional instruction fuel does not change the successful result. -/
 theorem commit_execute (message : Message) (fuel : Nat) :
-    execute (submission.image .commit) (285999596 + fuel)
+    execute (submission.image .commit) (285802992 + fuel)
       (submission.initialState .commit message) true = s3CommitExecution message := by
   let initial := submission.initialState .commit message
   let setup := commitSetupState initial
@@ -25,7 +25,7 @@ theorem commit_execute (message : Message) (fuel : Nat) :
     have sum : (4294971424 : Word) + 1073741824 = 5368713248#64 := rfl
     rw [sum]
     rfl
-  rw [show 285999596 + fuel = 12 + (1 + (11 + (899 * 2 ^ 18 + 50 +
+  rw [show 285802992 + fuel = 12 + (1 + (11 + (7186 * 2 ^ 15 + 54 +
       (6 + (251660 * 200 + 49 + (11 + fuel)))))) by omega,
     commit_setup _ rfl, commit_random setup setupPC regs.1 valid]
   simp only [s3CommitExecution, bind_assoc]
@@ -35,8 +35,14 @@ theorem commit_execute (message : Message) (fuel : Nat) :
     simp only [writeBits, MachineState.setPC]
     rw [setupPC]
     rfl
-  have ready : ((commitReadyState (writeBits setup (setup.getReg .x10) answer)).setReg .x1 4316).setPC
+  have original : ((commitReadyState (writeBits setup (setup.getReg .x10) answer)).setReg .x1 4316).setPC
       1011404 = s3CommitReady message answer := rfl
+  have ready : ((commitReadyState (writeBits setup (setup.getReg .x10) answer)).setReg .x1 4316).setPC
+      1015200 = (s3CommitReady message answer).setPC 1015200 := by
+    rw [← original]
+    generalize (commitReadyState (writeBits setup (setup.getReg .x10) answer)).setReg .x1 4316 = linked
+    cases linked
+    rfl
   rw [commit_ready_linked _ pc, ready, s3_body_execute message answer fuel]
   simp only [bind_assoc, pure_bind]
   refine bind_congr fun finished => ?_
@@ -53,14 +59,14 @@ successful execution above; no truncation is used to obtain the cost bound. -/
 theorem commit_execution (message : Message) :
     submission.run .commit message = s3CommitExecution message := by
   rw [run_commit]
-  have allowance : submission.steps .commit = 285999596 + 8303936020 := by decide
+  have allowance : submission.steps .commit = 285802992 + 8304132624 := by decide
   rw [allowance, commit_execute]
 
 /-- Exact machine resources for every commitment, before interpreting oracle calls.
 These counts include the private-randomness syscall's work. -/
 theorem commit_input_resources (message : Message) (result : Execution)
     (reachable : result ∈ support (submission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 688652773 ∧ result.oracleCalls = 50331647 := by
+    result.exit = .success ∧ result.cycles = 688456169 ∧ result.oracleCalls = 50331647 := by
   rw [commit_execution] at reachable
   simp only [s3CommitExecution, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨answer, _, finished, _, rfl⟩ := reachable

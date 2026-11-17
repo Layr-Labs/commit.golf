@@ -14,21 +14,21 @@ def nonceCopyLoop (name : String) (backward : Bool) : List Asm :=
    addi 28 28 (-1), .branch 1 28 0 name, insn 0x00008067]
 
 /-- The old opening's last HALT becomes a jump into this in-place compactor.
-Each requested leaf record is moved by one straight-line block: three nonce
-words, the zero padding word skipped, and sixty-four sibling words. The canonical suffix is copied unchanged. -/
+It copies three nonce words, skips the zero padding word, and copies sixty-four
+sibling words per requested leaf. The canonical suffix is copied unchanged. -/
 def nonceCompactOpeningCode : List Asm :=
-  let original := capOpeningCode LOG_LENGTH
-  original.take (original.length-1) ++ [.jump 0 "compact-entry",
+  capOpeningBeforeHalt LOG_LENGTH ++ [.jump 0 "compact-entry",
     .label "compact-entry", mv 22 25, mv 23 15, mv 25 15, mv 24 16,
-    .branch 0 24 0 "compact-footer", .label "compact-record"] ++
-    (List.range 67).flatMap (fun index =>
-      [ld 6 23 (8*(if index<3 then index else index+1)), sd 6 25 (8*index)]) ++
-    [addi 23 23 544, addi 25 25 536, addi 24 24 (-1),
+    .branch 0 24 0 "compact-footer", .label "compact-record",
+    addi 28 0 3, .jump 1 "compact-nonce-copy", addi 23 23 8,
+    addi 28 0 64, .jump 1 "compact-copy", addi 24 24 (-1),
     .branch 1 24 0 "compact-record", .label "compact-footer",
     regop 28 22 23 0 32, shift 28 28 3 true,
     .branch 0 28 0 "compact-finish", .jump 1 "compact-copy",
     .label "compact-finish", regop 11 25 15 0 32] ++
-    halt true ++ nonceCopyLoop "compact-copy" false
+    halt true ++ nonceCopyLoop "compact-copy" false ++ [.label "compact-nonce-copy"] ++
+    ([0, 8, 16].flatMap fun offset => [ld 6 23 offset, sd 6 25 offset]) ++
+    [addi 23 23 24, addi 25 25 24, addi 28 0 0, insn 0x00008067] ++ capUnrolledPathCode
 
 /-- Expansion checks byte alignment, the lower-record minimum and total expanded
 capacity before touching the proof. The footer and records move high-to-low.

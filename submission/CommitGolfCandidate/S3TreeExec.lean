@@ -1,4 +1,5 @@
 import CommitGolfCandidate.S3LoopExec
+import CommitGolfCandidate.S4Leaves
 
 /-! Stage-3 commitment after the private nonces are written: the appended leaf phase
 (S3LoopExec), then the retained parent setup, the long parent schedule, the root copy and
@@ -144,10 +145,10 @@ set_option maxHeartbeats 16000000 in
 halt. -/
 theorem s3_body_execute (message : Message) {bits : Nat} (answer : BitVec bits) (fuel : Nat) :
     execute (submission.image .commit)
-        (899 * 2 ^ 18 + 50 + (6 + (251660 * 200 + 49 + (11 + fuel))))
-        (s3CommitReady message answer) true =
+        (7186 * 2 ^ 15 + 54 + (6 + (251660 * 200 + 49 + (11 + fuel))))
+        ((s3CommitReady message answer).setPC 1015200) true =
       (do let finished ← s3CommitBody (s3CommitReady message answer) (2 ^ 18)
-          return ⟨.success, finished, 1795 * 2 ^ 18 + 50 + (838862 * 200 + 171),
+          return ⟨.success, finished, 14354 * 2 ^ 15 + 54 + (838862 * 200 + 171),
             128 * 2 ^ 18 + (2 ^ 24 - 1)⟩) := by
   have regs := commit_input_registers message answer
   have ready (reg : Reg) (h1 : reg ≠ .x1 := by decide) :
@@ -164,7 +165,17 @@ theorem s3_body_execute (message : Message) {bits : Nat} (answer : BitVec bits) 
   have groupCount : 2 ^ 18 - 1 + 1 = 2 ^ 18 := by decide
   have parentCount : 64 * 2 ^ 18 - 1 = 2 ^ 24 - 1 := by decide
   rw [groupCount] at leavesRun
-  rw [leavesRun.1]
+  have physRun := s4_leaves_execute (s3CommitReady message answer) (2 ^ 15 - 1) 4064 4096
+    5368713248 4831842336 (s3_ready_pc message answer)
+    ((ready .x5).trans (s3_ready_selector message answer))
+    ((ready .x10).trans (s3_ready_input message answer))
+    ((ready .x8).trans regs.1) ((ready .x18).trans regs.2.2.1)
+    ((ready .x23).trans regs.2.2.2.2.1) ((ready .x22).trans (s3_ready_limit message answer))
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (6 + (251660 * 200 + 49 + (11 + fuel)))
+  rw [show 8 * (2 ^ 15 - 1 + 1) = 2 ^ 18 by decide, show 2 ^ 15 - 1 + 1 = 2 ^ 15 by decide,
+    show (1024 : Nat) * 2 ^ 15 = 128 * 2 ^ 18 by decide] at physRun
+  rw [physRun]
   simp only [s3CommitBody, bind_assoc, pure_bind, parentCount]
   apply bind_congr_of_forall_mem_support
   intro leaves reached

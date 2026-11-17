@@ -1,9 +1,8 @@
 import CommitGolfCandidate.CapDigestCopy
 
-/-! The actual lower-path sibling address in the cap opening. The three
-instructions toggle the heap node's low bit and select that 32-byte root slot.
-This modular address identity is separate from runtime admission and honest
-heap semantics. -/
+/-! The reference lower path toggles the current node’s low bit and selects
+that sibling’s 32-byte heap slot. CapFastPath proves the corresponding actual
+fetches and reuses this modular address calculation. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
@@ -50,29 +49,5 @@ theorem cap_open_path_address (state : MachineState) (node rootBase : Nat)
   rw [← BitVec.ofNat_xor, BitVec.shiftLeft_eq_mul_twoPow,
     show BitVec.twoPow 64 5 = BitVec.ofNat 64 32 by decide,
     ← BitVec.ofNat_mul, ← BitVec.ofNat_add, Nat.mul_comm (node ^^^ 1) 32]
-
-theorem cap_open_path_prepare_execute (state : MachineState)
-    (pc : state.pc = 4280) (fuel : Nat) (allowCoins : Bool) :
-    execute ((capExperimental 24).image .opening) (3+fuel) state allowCoins =
-      (do let result ← execute ((capExperimental 24).image .opening) fuel
-            (capOpenPathPrefix state 3) allowCoins
-          return result.charge 3 0) := by
-  apply execute_unit_steps (states := capOpenPathPrefix state)
-  intro i bounded
-  refine ⟨.base ((capOpenPathInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply cap_image_fetch _ _ (46+i) _ (by omega)
-    · rw [cap_open_path_prepare_pc state i (by omega), pc]
-      interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
-
-theorem cap_open_path_copy_fetched :
-    CapDigestCopyFetched ((capExperimental 24).image .opening) false 4292 := by
-  intro state i bounded pc
-  apply cap_image_fetch _ _ (49+i) _ (by omega)
-  · rw [cap_copy_prefix_pc false state i (by omega), pc]
-    interval_cases i <;> rfl
-  · interval_cases i <;> rfl
 
 end CommitGolfCandidate

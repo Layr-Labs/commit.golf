@@ -12,12 +12,16 @@ theorem group341_head_length : group341HeadWords.length=166 := rfl
 theorem group341_body_length : group341BodyWords.length=251658 := by
   simp only [group341BodyWords,List.length_ofFn]
 
-theorem s3_appended_length : s3AppendedWords.length=949 := rfl
+theorem s3_base_length : s3BaseWords.length=949 := rfl
 
-theorem group341_end_length : group341EndWords.length=952 := by
+theorem s4_window_length : s4WindowWords.length=1796 := rfl
+
+theorem s3_appended_length : s3AppendedWords.length=8145 := rfl
+
+theorem group341_end_length : group341EndWords.length=8148 := by
   simp only [group341EndWords,List.length_cons,s3_appended_length]
 
-theorem group341_image_length : group341ImageWords.length=252776 := by
+theorem group341_image_length : group341ImageWords.length=259972 := by
   simp only [group341ImageWords,List.length_append,group341_head_length,group341_body_length,
     group341_end_length]
 

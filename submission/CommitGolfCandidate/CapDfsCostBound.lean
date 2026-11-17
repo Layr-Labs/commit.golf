@@ -108,6 +108,6 @@ theorem cap_dfs_query_total_bound (checking : Bool) (marked : Nat → Bool)
 record, mark and exit allowances. This arithmetic is not yet a full runtime
 certificate for those phases. -/
 theorem cap_coarse_opening_arithmetic :
-    1022 * 15 + 128 * 266 + 2552 + 33 + 2 ≤ 60000 := by decide
+    1022 * 15 + 128 * 222 + 2552 + 33 + 2 ≤ 60000 := by decide
 
 end CommitGolfCandidate

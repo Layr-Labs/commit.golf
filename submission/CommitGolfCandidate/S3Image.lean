@@ -37,7 +37,7 @@ theorem s3_finish_decoded (k : Nat) (hk : k < 45) :
 
 /-- Word `k` of the appended code is fetched at PC `1011404 + 4k`. -/
 theorem s3_image_word (k : Nat) (instruction : Instr) (state : MachineState)
-    (bounded : k < 949) (pc : state.pc = BitVec.ofNat 64 (1011404 + 4 * k))
+    (bounded : k < 8145) (pc : state.pc = BitVec.ofNat 64 (1011404 + 4 * k))
     (decoded : (s3AppendedWords[k]?).bind decodeInstruction = some (.base instruction)) :
     fetch (submission.image .commit) state = some (.base instruction) := by
   apply commit_fetch state (251827 + k) _ (by omega)

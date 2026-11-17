@@ -37,7 +37,7 @@ theorem nonce_compact_footer_ready (state : MachineState) (base count words : Na
     (proofBase : state.getReg .x15=BitVec.ofNat 64 base)
     (counter : state.getReg .x16=BitVec.ofNat 64 count)
     (oldEnd : state.getReg .x25=BitVec.ofNat 64 (base+544*count+8*words)) :
-    NonceCopyReady.Forward 5144 (base+544*count) (base+536*count) words words
+    NonceCopyReady.Forward 4620 (base+544*count) (base+536*count) words words
       (nonceCompactFooterCall (nonceCompactFooterPrefix (nonceCompactRecordsEnd state count) 3)) := by
   have entryReady:=nonce_compact_entry_ready base count state pc small (by omega) aligned proofBase counter
   have records:=nonce_compact_outer_finished base count count (nonceCompactEntryState state) entryReady
@@ -50,7 +50,7 @@ theorem nonce_compact_footer_ready (state : MachineState) (base count words : Na
     (base+544*count) words records.2.1 (saved.1.trans oldEnd) (by
       norm_num [MEMORY_BYTES] at window
       omega)
-  have callPc : (nonceCompactFooterPrefix (nonceCompactRecordsEnd state count) 3).pc=5124 := by
+  have callPc : (nonceCompactFooterPrefix (nonceCompactRecordsEnd state count) 3).pc=4600 := by
     simpa only [if_neg (by omega : words ≠ 0)] using footerPc
   have control:=nonce_compact_footer_call_pc _ callPc
   refine ⟨by omega,?_,by omega,window,by omega,by omega,by omega,?_,?_,?_,?_⟩
