@@ -1,4 +1,5 @@
 import CommitGolfCandidate.HeapModel
+import CommitGolfCandidate.S3Leaf
 
 /-! A memory-independent description of the honest Merkle tree. The hiding proof
 can reason about salted leaves and their ancestors; machine refinement must still
@@ -54,19 +55,19 @@ theorem heap_eq_reference (compress : Compression) (leafCount : Nat)
 termination_by 2*leafCount-node
 decreasing_by all_goals omega
 
-/-- The mathematical heap for this submission, using exactly its eight-block
-salted leaf hash and the same compression function for all internal nodes. -/
-def saltedHeap (compress : Compression) (message : Message) (salt : Index → Digest) :
-    Nat → Digest :=
+/-- The mathematical heap for this submission: stage-3 leaves (two permutation
+calls on the salted leaf) and the compression function for all internal nodes. -/
+def saltedHeap (compress : Compression) (permutation : Perm) (message : Message)
+    (salt : Index → Digest) : Nat → Digest :=
   referenceHeap compress LENGTH fun index =>
     if inside : index < LENGTH then
-      leafDigest compress (salt ⟨index, inside⟩) (message ⟨index, inside⟩)
+      s3LeafDigest permutation (salt ⟨index, inside⟩) (message ⟨index, inside⟩)
     else 0
 
-theorem salted_heap_leaf (compress : Compression) (message : Message)
+theorem salted_heap_leaf (compress : Compression) (permutation : Perm) (message : Message)
     (salt : Index → Digest) (index : Index) :
-    saltedHeap compress message salt (LENGTH+index.val) =
-      leafDigest compress (salt index) (message index) := by
+    saltedHeap compress permutation message salt (LENGTH+index.val) =
+      s3LeafDigest permutation (salt index) (message index) := by
   rw [saltedHeap, reference_heap_leaf _ _ _ _ index.isLt, dif_pos index.isLt]
 
 /-- Every sibling read by a valid authentication path is a used heap slot. -/
