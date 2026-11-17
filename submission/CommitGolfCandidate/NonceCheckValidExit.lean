@@ -1,5 +1,6 @@
 import CommitGolfCandidate.NonceCheckLoaderEquiv
 import CommitGolfCandidate.NonceExpandEntry
+import CommitGolfCandidate.NonceCompressedAdmission
 
 /-! The actual compressed checker agrees in exit status with the retained
 checker on a valid expanded input. The extra declared fuel pays for every
