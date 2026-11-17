@@ -264,17 +264,16 @@ theorem s3_progress_group_leaves (oracle : Oracle) (source slots nonces total : 
 
 theorem s3_latch_memory (state : MachineState) : (s3LatchState state).mem = state.mem := by
   rw [s3_latch_state]
-  simp only [execInstrBr]
   split <;> rfl
 
 theorem s3_latch_nonces (state : MachineState) :
     (s3LatchState state).getReg .x18 = state.getReg .x18 + signExtend12 1536 := by
-  rw [s3_latch_state, s3_branch_register]
+  rw [s3_latch_post_register]
   rfl
 
 theorem s3_latch_slots (state : MachineState) :
     (s3LatchState state).getReg .x23 = state.getReg .x23 + state.getReg .x7 := by
-  rw [s3_latch_state, s3_branch_register]
+  rw [s3_latch_post_register]
   rfl
 
 /-- One group: 64 leaves, then the two pointer advances of the latch. -/

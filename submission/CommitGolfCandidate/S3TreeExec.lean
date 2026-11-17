@@ -144,17 +144,17 @@ set_option maxHeartbeats 16000000 in
 halt. -/
 theorem s3_body_execute (message : Message) {bits : Nat} (answer : BitVec bits) (fuel : Nat) :
     execute (submission.image .commit)
-        (899 * 2 ^ 18 + 50 + (6 + (251660 * 200 + 49 + (11 + fuel))))
+        ((898 * 2 ^ 18 + 2 * (2 ^ 18 / 8)) + 50 + (6 + (251660 * 200 + 49 + (11 + fuel))))
         (s3CommitReady message answer) true =
       (do let finished ← s3CommitBody (s3CommitReady message answer) (2 ^ 18)
-          return ⟨.success, finished, 1795 * 2 ^ 18 + 50 + (838862 * 200 + 171),
+          return ⟨.success, finished, (1794 * 2 ^ 18 + 2 * (2 ^ 18 / 8)) + 50 + (838862 * 200 + 171),
             128 * 2 ^ 18 + (2 ^ 24 - 1)⟩) := by
   have regs := commit_input_registers message answer
   have ready (reg : Reg) (h1 : reg ≠ .x1 := by decide) :
       (s3CommitReady message answer).getReg reg = (commitInputReady message answer).getReg reg :=
     s3_ready_register message answer reg h1
   have leavesRun := s3_leaves_execute (s3CommitReady message answer) (2 ^ 18 - 1) 4064 4096
-    5368713248 4831842336 (s3_ready_pc message answer)
+    5368713248 4831842336 (by decide) (s3_ready_pc message answer)
     ((ready .x5).trans (s3_ready_selector message answer))
     ((ready .x10).trans (s3_ready_input message answer))
     ((ready .x8).trans regs.1) ((ready .x18).trans regs.2.2.1)

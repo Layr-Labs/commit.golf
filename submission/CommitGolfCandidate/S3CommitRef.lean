@@ -6,8 +6,9 @@ Definitions only. The execution proofs (image fetches, cycles) and the memory
 refinement (digests, nonce repair) are both stated against these definitions.
 
 Appended code (word index 251827, PC 1011404, entered by the jump at word 54):
-five entry instructions, groups of 64 unrolled leaves (14 instructions each) with a
-three-instruction latch, the 42-instruction nonce repair, three exit instructions
+five entry instructions, eight segments of 64 unrolled leaves (14 instructions each),
+two pointer advances per segment, a two-instruction long transfer per eight segments,
+the 42-instruction nonce repair, three exit instructions
 ending in the jump to parent setup (PC 4364). -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -68,7 +69,11 @@ def s3LatchInstructions : List Instr :=
   [.ADDI .x18 .x18 1536, .ADD .x23 .x23 .x7, .BLTU .x23 .x22 4600]
 
 def s3LatchState (state : MachineState) : MachineState :=
-  s3LatchInstructions.foldl execInstrBr state
+  let advanced := (s3LatchInstructions.take 2).foldl execInstrBr state
+  if advanced.pc = 1040160 then
+    advanced.setPC (if BitVec.ult (advanced.getReg .x23) (advanced.getReg .x22)
+      then 1011424 else 1040172)
+  else advanced
 
 def s3Group (state : MachineState) : OracleComp World MachineState := do
   let leaves ← s3GroupLeaves state 0 64
@@ -89,7 +94,7 @@ def s3RepairInstructions : List Instr :=
 
 /-- Restore the compression width and selector and jump to parent setup (PC 4364). -/
 def s3ExitInstructions : List Instr :=
-  [.ADDI .x11 .x0 64, .ADDI .x13 .x0 0, .JAL .x0 1086320]
+  [.ADDI .x11 .x0 64, .ADDI .x13 .x0 0, .JAL .x0 1061168]
 
 def s3FinishState (state : MachineState) : MachineState :=
   (s3RepairInstructions ++ s3ExitInstructions).foldl execInstrBr state
@@ -115,6 +120,6 @@ def s3CommitExecution (message : Message) : OracleComp World Execution := do
   let answer ← liftM ($ᵗ BitVec (8 * (setup.getReg .x11).toNat) :
     ProbComp (BitVec (8 * (setup.getReg .x11).toNat)))
   let finished ← s3CommitBody (s3CommitReady message answer) (2 ^ 18)
-  return ⟨.success, finished, 688652773, 3 * 2 ^ 24 - 1⟩
+  return ⟨.success, finished, 688456165, 3 * 2 ^ 24 - 1⟩
 
 end CommitGolfCandidate

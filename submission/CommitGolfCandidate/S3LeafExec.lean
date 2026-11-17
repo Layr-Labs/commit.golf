@@ -67,8 +67,8 @@ theorem s3_leaf_support (u : Nat) (state next : MachineState)
 
 set_option maxHeartbeats 8000000 in
 /-- Leaf `u` of a group: head, in-place call, nonce copy, heap call, cursor advance. -/
-theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor nonce heap : Nat)
-    (pc : state.pc = BitVec.ofNat 64 (1011424 + 56 * u))
+theorem s3_leaf_execute (segment : Nat) (hs : segment < 8) (u : Nat) (hu : u < 64) (state : MachineState) (cursor nonce heap : Nat)
+    (pc : state.pc = BitVec.ofNat 64 (s3SegmentPC segment + 56 * u))
     (ready : S3PermReady state)
     (input : state.getReg .x10 = BitVec.ofNat 64 cursor)
     (nonces : state.getReg .x18 = BitVec.ofNat 64 nonce)
@@ -81,13 +81,16 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
           let result ← execute (submission.image .commit) fuel next true
           return result.charge 28 2) ∧
     (∀ first second, (s3LeafResult u state first second).pc =
-      BitVec.ofNat 64 (1011424 + 56 * (u + 1))) ∧
+      BitVec.ofNat 64 (s3SegmentPC segment + 56 * (u + 1))) ∧
     (∀ first second, (s3LeafResult u state first second).getReg .x10 =
       BitVec.ofNat 64 (cursor + 256)) := by
+  have segmentBound : s3SegmentPC segment < 1040160 := by
+    simp only [s3SegmentPC]
+    omega
   have head := s3_straight_execute (submission.image .commit) s3LeafHeadInstructions 3
-    (1011424 + 56 * u) state (1 + (8 + (1 + (1 + fuel)))) true rfl pc (by decide)
+    (s3SegmentPC segment + 56 * u) state (1 + (8 + (1 + (1 + fuel)))) true rfl pc (by decide)
     (fun k bound current currentPC => by
-      have fetched := s3_image_leaf u k hu (by omega) current currentPC
+      have fetched := s3_image_leaf segment u k hs hu (by omega) current currentPC
       interval_cases k <;> exact fetched)
     (fun k bound => by
       interval_cases k
@@ -98,7 +101,7 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
       (do let result ← execute (submission.image .commit) (1 + (8 + (1 + (1 + fuel))))
             (s3LeafHead state) true
           return result.charge 3 0) := head.1
-  have headPC : (s3LeafHead state).pc = BitVec.ofNat 64 (1011424 + 56 * u + 4 * 3) := head.2
+  have headPC : (s3LeafHead state).pc = BitVec.ofNat 64 (s3SegmentPC segment + 56 * u + 4 * 3) := head.2
   have headInput : (s3LeafHead state).getReg .x10 = BitVec.ofNat 64 cursor := input
   have headOutput : (s3LeafHead state).getReg .x12 = BitVec.ofNat 64 cursor := by
     show state.getReg .x10 + signExtend12 0 = _
@@ -107,7 +110,7 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
   have headReady : S3PermReady (s3LeafHead state) := ready
   have firstCall := s3_perm_call (submission.image .commit) (s3LeafHead state)
     (8 + (1 + (1 + fuel))) true
-    (s3_image_leaf u 3 hu (by decide) (s3LeafHead state) headPC) headReady
+    (s3_image_leaf segment u 3 hs hu (by decide) (s3LeafHead state) headPC) headReady
     (by rw [s3_pointer_nat _ cursor headInput (by omega)]; exact cursorAligned)
     (by rw [s3_pointer_nat _ cursor headOutput (by omega)]; exact cursorAligned)
     (by rw [s3_pointer_nat _ cursor headInput (by omega)]; omega)
@@ -116,18 +119,18 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
       (s3PermReply (s3LeafHead state) first).getReg reg = state.getReg reg := by
     rw [s3_perm_reply_register, s3_leaf_head_register _ _ h12]
   have repliedPC (first : BitVec PERMUTATION_WIDTH) :
-      (s3PermReply (s3LeafHead state) first).pc = BitVec.ofNat 64 (1011424 + 56 * u + 16) := by
+      (s3PermReply (s3LeafHead state) first).pc = BitVec.ofNat 64 (s3SegmentPC segment + 56 * u + 16) := by
     show (s3LeafHead state).pc + 4 = _
     exact s3_pc_next _ _ 4 _ headPC (by omega)
   have mid (first : BitVec PERMUTATION_WIDTH) := s3_straight_execute (submission.image .commit)
-    (s3LeafMidInstructions u) 8 (1011424 + 56 * u + 16) (s3PermReply (s3LeafHead state) first)
+    (s3LeafMidInstructions u) 8 (s3SegmentPC segment + 56 * u + 16) (s3PermReply (s3LeafHead state) first)
     (1 + (1 + fuel)) true rfl (repliedPC first)
     (by
       intro instruction member
       simp only [s3LeafMidInstructions, List.mem_cons, List.not_mem_nil, or_false] at member
       rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl)
     (fun k bound current currentPC => by
-      have fetched := s3_image_leaf u (4 + k) hu (by omega) current
+      have fetched := s3_image_leaf segment u (4 + k) hs hu (by omega) current
         (by rw [currentPC]; congr 1; omega)
       interval_cases k <;> exact fetched)
     (fun k bound => by
@@ -154,7 +157,7 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
           return result.charge 8 0) := (mid first).1
   have midPC (first : BitVec PERMUTATION_WIDTH) :
       (s3LeafMid u (s3PermReply (s3LeafHead state) first)).pc =
-        BitVec.ofNat 64 (1011424 + 56 * u + 16 + 4 * 8) := (mid first).2
+        BitVec.ofNat 64 (s3SegmentPC segment + 56 * u + 16 + 4 * 8) := (mid first).2
   have midInput (first : BitVec PERMUTATION_WIDTH) :
       (s3LeafMid u (s3PermReply (s3LeafHead state) first)).getReg .x10 =
         BitVec.ofNat 64 (cursor + 72) := by
@@ -174,7 +177,7 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
   have secondCall (first : BitVec PERMUTATION_WIDTH) :=
     s3_perm_call (submission.image .commit) (s3LeafMid u (s3PermReply (s3LeafHead state) first))
       (1 + fuel) true
-      (s3_image_leaf u 12 hu (by decide) _ (by rw [midPC first]))
+      (s3_image_leaf segment u 12 hs hu (by decide) _ (by rw [midPC first]))
       (midReady first)
       (by rw [s3_pointer_nat _ _ (midInput first) (by omega)]; omega)
       (by rw [s3_pointer_nat _ _ (midOutput first) (by omega)]; omega)
@@ -182,14 +185,14 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
       (by rw [s3_pointer_nat _ _ (midOutput first) (by omega)]; omega)
   have tail (first second : BitVec PERMUTATION_WIDTH) :=
     s3_straight_execute (submission.image .commit) [.ADDI .x10 .x10 184] 1
-      (1011424 + 56 * u + 52)
+      (s3SegmentPC segment + 56 * u + 52)
       (s3PermReply (s3LeafMid u (s3PermReply (s3LeafHead state) first)) second) fuel true rfl
       (by
         show (s3LeafMid u (s3PermReply (s3LeafHead state) first)).pc + 4 = _
         exact s3_pc_next _ _ 4 _ (midPC first) (by omega))
       (by decide)
       (fun k bound current currentPC => by
-        have fetched := s3_image_leaf u (13 + k) hu (by omega) current
+        have fetched := s3_image_leaf segment u (13 + k) hs hu (by omega) current
           (by rw [currentPC]; congr 1; omega)
         interval_cases k <;> exact fetched)
       (fun k bound => by interval_cases k; rfl)
@@ -214,7 +217,7 @@ theorem s3_leaf_execute (u : Nat) (hu : u < 64) (state : MachineState) (cursor n
   · intro first second
     have final := (tail first second).2
     show (s3LeafResult u state first second).pc = _
-    rw [show 1011424 + 56 * (u + 1) = 1011424 + 56 * u + 52 + 4 * 1 by omega]
+    rw [show s3SegmentPC segment + 56 * (u + 1) = s3SegmentPC segment + 56 * u + 52 + 4 * 1 by omega]
     exact final
   · intro first second
     show (s3PermReply (s3LeafMid u (s3PermReply (s3LeafHead state) first)) second).getReg .x10 +

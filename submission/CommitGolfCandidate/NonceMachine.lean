@@ -4,7 +4,7 @@ import CommitGolfCandidate.Machine
 
 /-! Machine success and scored prover cycles for the concrete codec images.
 Commitment execution is unchanged; every actual opening succeeds and its
-complete additional work is included in the99225-cycle batch bound. -/
+complete additional work is included in the92441-cycle batch bound. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv OracleComp
 set_option maxRecDepth 8192
@@ -55,7 +55,7 @@ theorem nonce_program_machine_success : nonceCompressedProgram.MachineSuccess :=
 theorem nonce_machine_support_cycles (message : Message) (positions : Positions)
     (batch : positions.card = BATCH) (result : MachineResult)
     (reachable : result ∈ support (nonceCompressedProgram.honestMachine message positions)) :
-    result.commitCycles ≤ 688652773 ∧ result.openingCycles ≤ 99225 := by
+    result.commitCycles ≤ 688456165 ∧ result.openingCycles ≤ 92441 := by
   rw [honest_machine] at reachable
   simp only [mem_support_bind_iff] at reachable
   obtain ⟨committed,committedReached,opened,openedReached,returned⟩ := reachable
@@ -68,7 +68,7 @@ theorem nonce_machine_support_cycles (message : Message) (positions : Positions)
   exact ⟨resources.2.1.le,
     nonce_compressed_batch_cycles (nonceCompressedProgram.readCommit committed).2 positions batch⟩
 
-theorem nonce_program_prover_cycles : nonceCompressedProgram.ProverCycles 688652773 99225 := by
+theorem nonce_program_prover_cycles : nonceCompressedProgram.ProverCycles 688456165 92441 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached

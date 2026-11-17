@@ -14,7 +14,7 @@ set_option maxHeartbeats 20000000 in
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
   exact CommitGolfCandidate.nonce_packed_submission_matches
 
-theorem certificate : CommitGolf.Certificate submission 72704 688652773 99225 :=
+theorem certificate : CommitGolf.Certificate submission 72704 688456165 92441 :=
   CommitGolfCandidate.nonce_certificate
 
 end CommitGolf.Challenge
