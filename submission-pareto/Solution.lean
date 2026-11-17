@@ -1,37 +1,19 @@
-import CommitGolfCandidate.Properties
-import CommitGolfCandidate.Binding
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.OpeningInput
-import CommitGolfCandidate.CheckInput
-import CommitGolfCandidate.Budgets
-import CommitGolfCandidate.CheckAcceptance
-import CommitGolfCandidate.Completeness
-import CommitGolfCandidate.BindingSecurity
-import CommitGolfCandidate.HidingSecurity
-import CommitGolf.Artifact
-import CommitGolfCandidate.LeafResourceBridge
-import CommitGolfCandidate.ResourceTests
+import CommitGolfCandidate.TwoPermutationWideLeafMeaning
+import CommitGolfCandidate.TwoPermutationCheckerWideArtifact
 
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
 namespace CommitGolf.Challenge
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+open TwoPermutationPrototype
 
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+def submission : CommitGolf.Submission := WideCertificate.wideSubmission
 
-theorem certificate : CommitGolf.Certificate submission 102400 3959423012 48670 where
-  admission := CommitGolfCandidate.submission_admission
-  machineSuccess := CommitGolfCandidate.submission_machine_success
-  termination := CommitGolfCandidate.submission_termination
-  completeness := CommitGolfCandidate.submission_completeness
-  honestBudgets := CommitGolfCandidate.submission_honest_budgets
-  proofSize := CommitGolfCandidate.submission_proof_size
-  proverCycles := CommitGolfCandidate.submission_prover_cycles
-  binding := CommitGolfCandidate.submission_binding
-  hidingProperty := CommitGolfCandidate.submission_hiding
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission :=
+  WideCertificate.wide_submission_matches_artifact
+
+theorem certificate : CommitGolf.Certificate submission 71680 671416733 33671 := by
+  apply WideCertificate.wide_certificate RV64.WideLeaves.executableLeaves
+    (RV64.wideVerifiedTranscript RV64.WideLeaves.executableLeaves RV64.WideLeaves.executableMeaning)
+  rw [WideCertificate.wide_submission_matches_artifact]
+  exact WideCertificate.artifact_checker_facts
 
 end CommitGolf.Challenge
