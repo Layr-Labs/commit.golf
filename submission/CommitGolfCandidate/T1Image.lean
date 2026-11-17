@@ -2,10 +2,10 @@ import CommitGolfCandidate.StreamingLeaf
 import CommitGolfCandidate.Group341Encoding
 
 /-! Instruction fetches of the unrolled leaf group. Word 54 calls the appended group at
-word 251827 (PC 1011404). Leaf `u < 32` of the group occupies words `251827+31u+i`, `i < 31`:
+word 251827 (PC 1011404). Leaf `u < 64` of the group occupies words `251827+31u+i`, `i < 31`:
 the 31-instruction leaf body of words 90..120 with the nonce offset `24u` folded into its three
 loads and the heap offset `32u` into its last-block address. The group latch follows at words
-252819..252822. -/
+253811..253816. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 100000
@@ -36,7 +36,7 @@ def t1LeafInstr (u i : Nat) : Instr :=
   t1BaseLeafInstr i
 
 /-- The appended group, word by word, decodes to the relocated leaf bodies. -/
-theorem t1_group_leaf_word (u i : Nat) (hu : u < 32) (hi : i < 31) :
+theorem t1_group_leaf_word (u i : Nat) (hu : u < 64) (hi : i < 31) :
     (t1GroupWords[31 * u + i]?).bind decodeInstruction = some (.base (t1LeafInstr u i)) := by
   interval_cases u <;> interval_cases i <;> rfl
 
@@ -47,7 +47,7 @@ theorem t1_image_call (state : MachineState) (pc : state.pc = 4312) :
   rfl
 
 /-- Leaf `u`, instruction `i` of the group, at PC `1011404 + 124u + 4i`. -/
-theorem t1_image_leaf (u i : Nat) (hu : u < 32) (hi : i < 31) (state : MachineState)
+theorem t1_image_leaf (u i : Nat) (hu : u < 64) (hi : i < 31) (state : MachineState)
     (pc : state.pc = BitVec.ofNat 64 (1011404 + 124 * u + 4 * i)) :
     fetch (submission.image .commit) state = some (.base (t1LeafInstr u i)) := by
   apply commit_fetch state (251827 + (31 * u + i)) _ (by omega)
@@ -59,7 +59,7 @@ theorem t1_image_leaf (u i : Nat) (hu : u < 32) (hi : i < 31) (state : MachineSt
     exact t1_group_leaf_word u i hu hi
 
 private theorem t1_image_latch_word (k : Nat) (instruction : Instr) (state : MachineState)
-    (bounded : k < 996)
+    (bounded : k < 1990)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * (251827 + k)))
     (decoded : (t1GroupWords[k]?).bind decodeInstruction = some (.base instruction)) :
     fetch (submission.image .commit) state = some (.base instruction) := by
@@ -68,25 +68,35 @@ private theorem t1_image_latch_word (k : Nat) (instruction : Instr) (state : Mac
   rw [t1_group_word]
   exact decoded
 
-/-- Group latch, word 252819: advance the nonce cursor past 32 leaves. -/
-theorem t1_image_nonce_step (state : MachineState) (pc : state.pc = 1015372) :
-    fetch (submission.image .commit) state = some (.base (.ADDI .x18 .x18 768)) :=
-  t1_image_latch_word 992 _ state (by decide) pc rfl
+/-- Group latch word 0 (PC 1019340): advance the nonce cursor past 64 leaves. -/
+theorem t1_image_nonce_step (state : MachineState) (pc : state.pc = 1019340) :
+    fetch (submission.image .commit) state = some (.base (.ADDI .x18 .x18 1536)) :=
+  t1_image_latch_word 1984 _ state (by decide) pc rfl
 
-/-- Group latch, word 252820: advance the heap cursor past 32 leaves. -/
-theorem t1_image_heap_step (state : MachineState) (pc : state.pc = 1015376) :
+/-- Group latch word 1 (PC 1019344): first half of the heap advance. -/
+theorem t1_image_heap_step (state : MachineState) (pc : state.pc = 1019344) :
     fetch (submission.image .commit) state = some (.base (.ADDI .x23 .x23 1024)) :=
-  t1_image_latch_word 993 _ state (by decide) pc rfl
+  t1_image_latch_word 1985 _ state (by decide) pc rfl
 
-/-- Group latch, word 252821: `bltu x23, x22, -3976` back to the group start (PC 1011404). -/
-theorem t1_image_group_branch (state : MachineState) (pc : state.pc = 1015380) :
-    fetch (submission.image .commit) state = some (.base (.BLTU .x23 .x22 4216)) :=
-  t1_image_latch_word 994 _ state (by decide) pc rfl
+/-- Group latch word 2 (PC 1019348): second half of the heap advance. -/
+theorem t1_image_heap_step2 (state : MachineState) (pc : state.pc = 1019348) :
+    fetch (submission.image .commit) state = some (.base (.ADDI .x23 .x23 1024)) :=
+  t1_image_latch_word 1986 _ state (by decide) pc rfl
 
-/-- Group latch, word 252822: `jal x0, -1011020` to word 67 (PC 4364), the old leaf-loop exit. -/
-theorem t1_image_group_exit (state : MachineState) (pc : state.pc = 1015384) :
-    fetch (submission.image .commit) state = some (.base (.JAL .x0 1086132)) :=
-  t1_image_latch_word 995 _ state (by decide) pc rfl
+/-- Group latch word 3 (PC 1019352): `bltu x23, x22, +8` to the re-entry jump. -/
+theorem t1_image_group_branch (state : MachineState) (pc : state.pc = 1019352) :
+    fetch (submission.image .commit) state = some (.base (.BLTU .x23 .x22 8)) :=
+  t1_image_latch_word 1987 _ state (by decide) pc rfl
+
+/-- Group latch word 4 (PC 1019356): `jal x0` to word 67 (PC 4364), the old leaf-loop exit. -/
+theorem t1_image_group_exit (state : MachineState) (pc : state.pc = 1019356) :
+    fetch (submission.image .commit) state = some (.base (.JAL .x0 1082160)) :=
+  t1_image_latch_word 1988 _ state (by decide) pc rfl
+
+/-- Group latch word 5 (PC 1019360): `jal x0` back to the group start (PC 1011404). -/
+theorem t1_image_group_loop (state : MachineState) (pc : state.pc = 1019360) :
+    fetch (submission.image .commit) state = some (.base (.JAL .x0 2089196)) :=
+  t1_image_latch_word 1989 _ state (by decide) pc rfl
 
 /-- The relocated leaf agrees with the base body away from the four relocated slots. -/
 theorem t1_leaf_instr_base (u i : Nat) (h0 : i ≠ 0) (h2 : i ≠ 2) (h4 : i ≠ 4) (h28 : i ≠ 28) :
