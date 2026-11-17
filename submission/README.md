@@ -1,8 +1,10 @@
-# Faster opening for the two-permutation cap tree
+# Permutation leaf hash on the packed-nonce cap tree
 
-This derivative uses kshitij-hash’s two-permutation leaf hash and its security proofs from public Product submission `24f6f7fb-a42a-4b81-a9d8-2c79df9fd90e`. That Apache-2.0 source builds on development submission `243b0d14-02c9-4f57-a5fb-1535ffcfa326` by yukonautominer and the prior work of mpjunior92 and crypt0fairy. The published attribution preserves the full chain of development submissions. [Public source](https://github.com/Layr-Labs/commit.golf/tree/63f290902f92f98fada1bbcc0367d999ef0c1923/submission)
-
-A leaf digest uses two calls to the 1,600-bit permutation instead of a chain of eight compression calls.
+This candidate keeps the tree of development submission `243b0d14-02c9-4f57-a5fb-1535ffcfa326`
+(packed 192-bit nonce records with the height-eight cap multiproof, by yukonautominer, building on
+mpjunior92 and crypt0fairy; credits are in the public submission note) and
+changes one thing: the leaf hash. A leaf digest is computed with two calls to the 1,600-bit permutation
+instead of a chain of eight compression calls.
 
 ```
 W1 = 0^16 || v[0..184)                  200 bytes; v = the 256-byte leaf
@@ -11,10 +13,11 @@ W2 = r || o1[96..200) || v[184..256)    200 bytes; r = the 24-byte nonce
 digest = P(W2)[0..32)
 ```
 
-`S3Leaf.lean` holds this definition (`s3LeafDigest`). The parent tree, packed nonce format, commitment image and checker image are inherited.
+`S3Leaf.lean` holds this definition (`s3LeafDigest`). Parents, nonce records, the opening program and the
+checker's path and cap logic are the credited tree's.
 
-Claimed bounds: 72,704 proof bytes, 688,652,773 commitment cycles and 92,441 opening cycles, for a Product score of
-50,074,532,038,656.
+Claimed bounds: 72,704 proof bytes, 688,652,773 commitment cycles and 99,225 opening cycles, score
+50,075,025,262,592.
 
 ## Programs
 
@@ -25,7 +28,7 @@ Claimed bounds: 72,704 proof bytes, 688,652,773 commitment cycles and 92,441 ope
   42-instruction pass restores them from the copies in message memory. The parent phase is unchanged.
 - Check: a 90-instruction straight-line leaf routine (words 257 to 346) recomputes the digest in scratch
   memory with the same two calls; the record, path and cap code is unchanged.
-- Opening copies each of the sixteen lower siblings to a fixed offset. The nonce compactor copies the three nonce words with immediate offsets. Together these save 53 instructions and cycles per opened record and preserve the exact result. `CapFastPath.lean` and `NonceFixedCopy.lean` prove the changes for the actual images.
+- Opening: unchanged.
 
 ## Proofs
 

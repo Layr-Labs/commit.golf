@@ -12,7 +12,7 @@ structure NonceCompactOuterReady (base count remaining : Nat) (state : MachineSt
   count_bound : count < 2^64
   window : base+544*count ≤ MEMORY_BYTES
   aligned : base%8=0
-  pc : state.pc=if remaining=0 then 4588 else 4560
+  pc : state.pc=if remaining=0 then 5112 else 4560
   source : state.getReg .x23=BitVec.ofNat 64 (base+544*(count-remaining))
   target : state.getReg .x25=BitVec.ofNat 64 (base+536*(count-remaining))
   counter : state.getReg .x24=BitVec.ofNat 64 remaining
@@ -39,25 +39,22 @@ theorem nonce_compact_outer_next (base count remaining : Nat) (state : MachineSt
 
 theorem nonce_compact_outer_execute (base count remaining : Nat) (state : MachineState)
     (ready : NonceCompactOuterReady base count remaining state) (fuel : Nat) (coins : Bool) :
-    execute nonceCompactImage (402*remaining+fuel) state coins=
+    execute nonceCompactImage (138*remaining+fuel) state coins=
       (do let result ← execute nonceCompactImage fuel
             (capCountedRun nonceCompactRecordState remaining state) coins
-          return result.charge (402*remaining) 0) := by
-  refine cap_counted_run_execute nonceCompactImage 402 nonceCompactRecordState
+          return result.charge (138*remaining) 0) := by
+  refine cap_counted_run_execute nonceCompactImage 138 nonceCompactRecordState
     (NonceCompactOuterReady base count)
     (fun remaining current => nonce_compact_outer_next base count remaining current)
     ?_ remaining state ready fuel coins
   intro remaining current currentReady extra allowCoins
   have recordReady:=nonce_compact_outer_record_ready base count remaining current currentReady
-  exact nonce_compact_record_execute current recordReady.pc
-    (base+544*(count-(remaining+1))) (base+536*(count-(remaining+1)))
-    (nonce_compact_nonce_ready base count (remaining+1) current recordReady)
-    (nonce_compact_siblings_ready base count (remaining+1) current recordReady) extra allowCoins
+  exact nonce_compact_record_execute base count (remaining+1) current recordReady extra allowCoins
 
 theorem nonce_compact_outer_finished (base count remaining : Nat) (state : MachineState)
     (ready : NonceCompactOuterReady base count remaining state) :
     let final := capCountedRun nonceCompactRecordState remaining state
-    final.pc=4588 ∧ final.getReg .x23=BitVec.ofNat 64 (base+544*count) ∧
+    final.pc=5112 ∧ final.getReg .x23=BitVec.ofNat 64 (base+544*count) ∧
     final.getReg .x25=BitVec.ofNat 64 (base+536*count) ∧ final.getReg .x24=0 := by
   have final:=cap_counted_run_ready nonceCompactRecordState (NonceCompactOuterReady base count)
     (fun remaining current => nonce_compact_outer_next base count remaining current)

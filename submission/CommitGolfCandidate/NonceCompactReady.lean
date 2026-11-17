@@ -18,70 +18,27 @@ structure NonceCompactRecordReady (base count remaining : Nat) (state : MachineS
   target : state.getReg .x25=BitVec.ofNat 64 (base+536*(count-remaining))
   counter : state.getReg .x24=BitVec.ofNat 64 remaining
 
-theorem nonce_compact_nonce_ready (base count remaining : Nat) (state : MachineState)
+theorem nonce_compact_record_window (base count remaining : Nat) (state : MachineState)
     (ready : NonceCompactRecordReady base count remaining state) :
-    NonceCopyReady.Forward 4620 (base+544*(count-remaining))
-      (base+536*(count-remaining)) 3 3 (nonceCompactNonceCall state) := by
-  have control:=nonce_compact_call_control false state ready.pc
-  refine ⟨by omega, by decide, by omega, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · have window:=ready.window
-    have bound:=ready.remaining_le
-    have positive:=ready.positive
-    omega
-  · have window:=ready.window
-    have bound:=ready.remaining_le
-    have positive:=ready.positive
-    omega
-  · have aligned:=ready.aligned
-    omega
-  · have aligned:=ready.aligned
-    omega
-  · exact control.2.1
-  · exact control.1
-  · change (nonceCompactCallPrefix false state (nonceCompactCallCount false)).getReg .x23=_
-    rw [nonce_compact_call_source, ready.source]
-    simp
-  · change (nonceCompactCallPrefix false state (nonceCompactCallCount false)).getReg .x25=_
-    rw [nonce_compact_call_register false state .x25 (by decide), ready.target]
-    simp
+    NonceRecordWindow (base+544*(count-remaining)) (base+536*(count-remaining)) state := by
+  have window:=ready.window
+  have bound:=ready.remaining_le
+  have positive:=ready.positive
+  have aligned:=ready.aligned
+  refine ⟨by omega, ?_, by omega, by omega, ready.source, ready.target⟩
+  have step : 544*(count-remaining)+544 ≤ 544*count := by
+    have : count-remaining+1 ≤ count := by omega
+    calc 544*(count-remaining)+544=544*(count-remaining+1) := by ring
+      _ ≤ 544*count := Nat.mul_le_mul_left 544 this
+  omega
 
-theorem nonce_compact_siblings_ready (base count remaining : Nat) (state : MachineState)
-    (ready : NonceCompactRecordReady base count remaining state) :
-    NonceCopyReady.Forward 4620 (base+544*(count-remaining)+32)
-      (base+536*(count-remaining)+24) 64 64 (nonceCompactSiblingCall state) := by
-  have nonceReady:=nonce_compact_nonce_ready base count remaining state ready
-  have copied:=nonce_copy_returned_finished _ _ 3 _ nonceReady
-  have returned:=nonce_compact_nonce_return_pc state ready.pc
-  have control:=nonce_compact_call_control true (nonceCompactNonceCopied state) returned
-  refine ⟨by omega, by decide, by omega, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · have window:=ready.window
-    have bound:=ready.remaining_le
-    have positive:=ready.positive
-    omega
-  · have window:=ready.window
-    have bound:=ready.remaining_le
-    have positive:=ready.positive
-    omega
-  · have aligned:=ready.aligned
-    omega
-  · have aligned:=ready.aligned
-    omega
-  · exact control.2.1
-  · exact control.1
-  · change (nonceCompactCallPrefix true (nonceCompactNonceCopied state)
-      (nonceCompactCallCount true)).getReg .x23=_
-    rw [nonce_compact_call_source]
-    have source : (nonceCompactNonceCopied state).getReg .x23=
-        BitVec.ofNat 64 (base+544*(count-remaining)+8*3) := copied.1
-    rw [source]
-    simp only [Nat.sub_self, Nat.mul_zero, Nat.add_zero]
-    change BitVec.ofNat 64 (base+544*(count-remaining)+8*3)+BitVec.ofNat 64 8=_
-    rw [← BitVec.ofNat_add]
-  · change (nonceCompactCallPrefix true (nonceCompactNonceCopied state)
-      (nonceCompactCallCount true)).getReg .x25=_
-    rw [nonce_compact_call_register true _ .x25 (by decide)]
-    change (nonceCompactNonceCopied state).getReg .x25=_
-    exact copied.2.1
+theorem nonce_compact_record_execute (base count remaining : Nat) (state : MachineState)
+    (ready : NonceCompactRecordReady base count remaining state) (fuel : Nat) (coins : Bool) :
+    execute nonceCompactImage (138+fuel) state coins=
+      (do let result ← execute nonceCompactImage fuel (nonceCompactRecordState state) coins
+          return result.charge 138 0) :=
+  nonce_compact_record_block_execute _ _ state ready.pc
+    (nonce_compact_record_window base count remaining state ready) fuel coins
 
 theorem nonce_compact_record_effects (base count remaining : Nat) (state : MachineState)
     (ready : NonceCompactRecordReady base count remaining state) :
@@ -89,33 +46,53 @@ theorem nonce_compact_record_effects (base count remaining : Nat) (state : Machi
     final.getReg .x23=BitVec.ofNat 64 (base+544*(count-remaining+1)) ∧
     final.getReg .x25=BitVec.ofNat 64 (base+536*(count-remaining+1)) ∧
     final.getReg .x24=BitVec.ofNat 64 (remaining-1) ∧
-    final.pc=(if remaining=1 then 4588 else 4560) := by
-  have siblingsReady:=nonce_compact_siblings_ready base count remaining state ready
-  have copied:=nonce_copy_returned_finished _ _ 64 _ siblingsReady
-  have copiedSource : (nonceCompactSiblingsCopied state).getReg .x23=
-      BitVec.ofNat 64 (base+544*(count-remaining)+32+8*64) := copied.1
-  have copiedTarget : (nonceCompactSiblingsCopied state).getReg .x25=
-      BitVec.ofNat 64 (base+536*(count-remaining)+24+8*64) := copied.2.1
-  have outer : (nonceCompactSiblingsCopied state).getReg .x24=BitVec.ofNat 64 remaining :=
-    (nonce_compact_record_outer_counter state).trans ready.counter
+    final.pc=(if remaining=1 then 5112 else 4560) := by
+  let pairs := nonceRecordPairs state 67
+  have sourceReg : pairs.getReg .x23=BitVec.ofNat 64 (base+544*(count-remaining)) :=
+    (nonce_record_pairs_register state 67 .x23 (by decide)).trans ready.source
+  have targetReg : pairs.getReg .x25=BitVec.ofNat 64 (base+536*(count-remaining)) :=
+    (nonce_record_pairs_register state 67 .x25 (by decide)).trans ready.target
+  have counterReg : pairs.getReg .x24=BitVec.ofNat 64 remaining :=
+    (nonce_record_pairs_register state 67 .x24 (by decide)).trans ready.counter
+  have pairsPc : pairs.pc=4560+BitVec.ofNat 64 (8*67) := by
+    rw [nonce_record_pairs_pc, ready.pc]
   have positive:=ready.positive
   have remainingLe:=ready.remaining_le
   have countBound:=ready.count_bound
-  have decrement : remaining-1+1=remaining := by omega
-  have counterAfter:=nonce_compact_tail_counter (nonceCompactSiblingsCopied state) (remaining-1)
-    (by omega) (by simpa only [decrement] using outer)
-  have pcAfter:=nonce_compact_tail_pc (nonceCompactSiblingsCopied state) (remaining-1)
-    (nonce_compact_sibling_return_pc state ready.pc) (by omega)
-    (by simpa only [decrement] using outer)
-  refine ⟨?_,?_,counterAfter,?_⟩
-  · change (nonceCompactTailState (nonceCompactSiblingsCopied state)).getReg .x23=_
-    rw [nonce_compact_tail_register _ .x23 (by decide), copiedSource]
+  have adds:=nonce_record_tail_adds pairs
+  have decremented : (nonceRecordTailAdds pairs).getReg .x24=BitVec.ofNat 64 (remaining-1) := by
+    rw [adds.2.2.1, counterReg]
+    have equation : remaining=remaining-1+1 := by omega
+    conv_lhs => rw [equation]
+    exact NonceWordCopy.decrement (remaining-1+1) (by omega)
+  have zero : (BitVec.ofNat 64 (remaining-1) : Word)=0 ↔ remaining=1 := by
+    constructor
+    · intro equal
+      have numeric:=congrArg BitVec.toNat equal
+      simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : remaining-1<2^64)] at numeric
+      change remaining-1=0 at numeric
+      omega
+    · intro one
+      rw [one]
+      rfl
+  refine ⟨?_,?_,?_,?_⟩
+  · change (nonceRecordTailState pairs).getReg .x23=_
+    rw [nonce_record_tail_state_register, adds.1, sourceReg,
+      show signExtend12 (544 : BitVec 12)=BitVec.ofNat 64 544 from by decide, ← BitVec.ofNat_add]
     congr 1
-  · change (nonceCompactTailState (nonceCompactSiblingsCopied state)).getReg .x25=_
-    rw [nonce_compact_tail_register _ .x25 (by decide), copiedTarget]
+  · change (nonceRecordTailState pairs).getReg .x25=_
+    rw [nonce_record_tail_state_register, adds.2.1, targetReg,
+      show signExtend12 (536 : BitVec 12)=BitVec.ofNat 64 536 from by decide, ← BitVec.ofNat_add]
     congr 1
-  · have last : remaining-1=0 ↔ remaining=1 := by omega
-    change (nonceCompactTailState (nonceCompactSiblingsCopied state)).pc=_
-    simpa only [last] using pcAfter
+  · change (nonceRecordTailState pairs).getReg .x24=_
+    rw [nonce_record_tail_state_register]
+    exact decremented
+  · change (nonceRecordTailState pairs).pc=_
+    rw [nonce_record_tail_state_pc, decremented, adds.2.2.2.1, pairsPc]
+    by_cases last : remaining=1
+    · rw [if_pos (zero.mpr last), if_pos last]
+      decide
+    · rw [if_neg (by rw [zero]; exact last), if_neg last]
+      decide
 
 end CommitGolfCandidate

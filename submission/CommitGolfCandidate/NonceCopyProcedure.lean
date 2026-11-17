@@ -31,9 +31,9 @@ theorem return_pc (state : MachineState)
     (returnState state).pc=state.getReg .x1 := by
   simpa [returnState, execInstrBr, signExtend12, MachineState.setPC] using aligned
 
-theorem compact_return_fetched (state : MachineState) (pc : state.pc=4644) :
+theorem compact_return_fetched (state : MachineState) (pc : state.pc=5168) :
     fetch nonceCompactImage state=some (.base (.JALR .x0 .x1 0)) := by
-  apply cap_image_fetch _ state 137 _ (by decide) pc
+  apply cap_image_fetch _ state 268 _ (by decide) pc
   rfl
 
 theorem expanded_return_fetched (state : MachineState) (pc : state.pc=5120) :
@@ -46,19 +46,19 @@ private theorem charges (result : Execution) (first second : Nat) :
   simp only [Execution.charge, Nat.zero_add, Nat.add_assoc]
 
 theorem compact_copy_execute (source target count : Nat) (state : MachineState)
-    (ready : NonceCopyReady.Forward 4620 source target count count state)
+    (ready : NonceCopyReady.Forward 5144 source target count count state)
     (fuel : Nat) (coins : Bool) :
     execute nonceCompactImage (6*count+1+fuel) state coins=
       (do let result ← execute nonceCompactImage fuel
             (returnState (capCountedRun (fun current => NonceWordCopy.copyPrefix false current 6) count state)) coins
           return result.charge (6*count+1) 0) := by
   let final := capCountedRun (fun current => NonceWordCopy.copyPrefix false current 6) count state
-  have pc : final.pc=4644 := by
-    have finished:=NonceCopyReady.forward_finished 4620 source target count count state ready
-    have numeric : (4620:Word)+24=4644 := by decide
+  have pc : final.pc=5168 := by
+    have finished:=NonceCopyReady.forward_finished 5144 source target count count state ready
+    have numeric : (5144:Word)+24=5168 := by decide
     simpa only [final, numeric] using finished.1
   rw [show 6*count+1+fuel=6*count+(1+fuel) by omega,
-    NonceCopyReady.forward_execute nonceCompactImage 4620 source target count count state ready
+    NonceCopyReady.forward_execute nonceCompactImage 5144 source target count count state ready
       nonce_compact_copy_fetched (1+fuel) coins,
     return_execute nonceCompactImage final fuel coins (compact_return_fetched final pc)]
   simp only [bind_assoc, pure_bind, charges]

@@ -13,11 +13,11 @@ set_option maxHeartbeats 2000000
 def nonceCompactImage : Image := nonceCompressedProgram.image .opening
 def nonceExpandedImage : Image := nonceCompressedProgram.image .check
 
-theorem nonce_compact_copy_fetched : NonceCopyReady.Fetched nonceCompactImage 4620 := by
+theorem nonce_compact_copy_fetched : NonceCopyReady.Fetched nonceCompactImage 5144 := by
   intro state index bounded pc
-  apply cap_image_fetch _ state (131+index) _ (by omega)
+  apply cap_image_fetch _ state (262+index) _ (by omega)
   · rw [pc]
-    change BitVec.ofNat 64 4620+BitVec.ofNat 64 (4*index)=_
+    change BitVec.ofNat 64 5144+BitVec.ofNat 64 (4*index)=_
     rw [← BitVec.ofNat_add]
     congr 1
     omega
@@ -33,15 +33,11 @@ theorem nonce_expanded_copy_fetched : NonceBackwardReady.Fetched nonceExpandedIm
     omega
   · interval_cases index <;> rfl
 
-theorem nonce_compact_image_length : nonceCompactImage.code.length=343 := by decide
+theorem nonce_compact_image_length : nonceCompactImage.code.length=269 := by decide
 theorem nonce_expanded_image_length : nonceExpandedImage.code.length=347 := by decide
 
 theorem nonce_compact_old_prefix :
     nonceCompactImage.code.take 110=(assemble (capOpeningCode LOG_LENGTH)).take 110 := by
-  decide
-
-theorem nonce_compact_old_path :
-    nonceCompactImage.code.drop 148=(assemble (capOpeningCode LOG_LENGTH)).drop 148 := by
   decide
 
 /-- The packed checker keeps cap words 1..199 (retained core and the
@@ -58,12 +54,6 @@ theorem nonce_compact_prefix_word (index : Nat) (inside : index<110) :
     nonceCompactImage.code[index]?=(assemble (capOpeningCode LOG_LENGTH))[index]? := by
   have equal := congrArg (fun words : List (BitVec 32) => words[index]?) nonce_compact_old_prefix
   simpa only [List.getElem?_take, if_pos inside] using equal
-
-theorem nonce_compact_path_word (index : Nat) (inside : 148 ≤ index) :
-    nonceCompactImage.code[index]?=(assemble (capOpeningCode LOG_LENGTH))[index]? := by
-  have equal := congrArg (fun words : List (BitVec 32) => words[index-148]?) nonce_compact_old_path
-  have offset : 148+(index-148)=index := by omega
-  simpa only [List.getElem?_drop, offset] using equal
 
 theorem nonce_expanded_core_word (index : Nat) (positive : 1 ≤ index) (inside : index<200) :
     nonceExpandedImage.code[index]?=(assemble (capCheckCode LOG_LENGTH))[index]? := by
@@ -96,12 +86,6 @@ theorem nonce_compact_prefix_fetch (state : MachineState) (index : Nat)
     (inside : index<110) (pc : state.pc=BitVec.ofNat 64 (4096+4*index)) :
     fetch nonceCompactImage state=fetch ((capExperimental LOG_LENGTH).image .opening) state :=
   nonce_fetch_at_index_congr _ _ state index (by omega) pc (nonce_compact_prefix_word index inside)
-
-theorem nonce_compact_path_fetch (state : MachineState) (index : Nat)
-    (above : 148 ≤ index) (below : index < 343)
-    (pc : state.pc=BitVec.ofNat 64 (4096+4*index)) :
-    fetch nonceCompactImage state=fetch ((capExperimental LOG_LENGTH).image .opening) state :=
-  nonce_fetch_at_index_congr _ _ state index (by omega) pc (nonce_compact_path_word index above)
 
 theorem nonce_expanded_core_fetch (state : MachineState) (index : Nat)
     (positive : 1 ≤ index) (inside : index<200)

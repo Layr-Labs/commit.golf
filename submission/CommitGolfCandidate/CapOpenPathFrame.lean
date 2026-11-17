@@ -46,6 +46,20 @@ theorem cap_open_path_loop_register (remaining : Nat) (state : MachineState) (re
       rw [capCountedRun.eq_2, ih]
       exact cap_open_path_register state reg outside
 
+theorem cap_open_path_loop_cursor (remaining : Nat) (state : MachineState) :
+    (capCountedRun capOpenPathState remaining state).getReg .x25 =
+      state.getReg .x25 + BitVec.ofNat 64 (32*remaining) := by
+  induction remaining generalizing state with
+  | zero =>
+      rw [capCountedRun.eq_1, Nat.mul_zero]
+      change state.getReg .x25 = state.getReg .x25 + (0 : Word)
+      exact (BitVec.add_zero _).symm
+  | succ remaining ih =>
+      rw [capCountedRun.eq_2, ih, (cap_open_path_projection state).1]
+      rw [show 32*(remaining+1) = 32 + 32*remaining by omega, BitVec.ofNat_add,
+        BitVec.add_assoc]
+      rfl
+
 theorem cap_open_path_loop_index (remaining : Nat) (state : MachineState) (node : Nat)
     (bounded : node < 2^64) (index : state.getReg .x20 = BitVec.ofNat 64 node) :
     (capCountedRun capOpenPathState remaining state).getReg .x20 =

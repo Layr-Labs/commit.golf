@@ -1,9 +1,8 @@
 import CommitGolfCandidate.NonceCompressedFetch
-import CommitGolfCandidate.CapExperimentalABI
+import CommitGolfCandidate.NonceCompressedAdmission
 
-/-! The retained opener has one HALT and an appended fixed path. An undecodable
-gap separates them, so a syscall other than HALT at the halt site faults on its
-next fetch. The packed opener shares all reachable ordinary code. -/
+/-! The retained opening has one syscall, its final HALT. The next word is
+outside that image. These facts support transport of its ordinary prefix. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 20000
@@ -15,9 +14,9 @@ def nonceIsEcall : Option Instruction → Bool
   | some (.base .ECALL) => true
   | _ => false
 
-theorem nonce_old_opening_length : nonceOldOpeningImage.code.length=343 := by decide
+theorem nonce_old_opening_length : nonceOldOpeningImage.code.length=111 := by decide
 
-theorem nonce_opening_ecall_table : ∀ index : Fin 343,
+theorem nonce_opening_ecall_table : ∀ index : Fin 111,
     nonceIsEcall ((nonceOldOpeningImage.code[index.val]?).bind decodeInstruction)=
       decide (index.val=110) := by decide
 
@@ -35,7 +34,7 @@ theorem nonce_opening_ecall_pc (state : MachineState)
       | some word => decodeInstruction word | none => none)=some (.base .ECALL) at equality
     cases item : nonceOldOpeningImage.code[index]? <;>
       simpa only [item, Option.bind] using equality
-  have bounded : index<343 := by
+  have bounded : index<111 := by
     by_contra outside
     have absent : nonceOldOpeningImage.code[index]?=none :=
       List.getElem?_eq_none (by rw [nonce_old_opening_length]; omega)
@@ -50,17 +49,12 @@ theorem nonce_opening_ecall_pc (state : MachineState)
   apply BitVec.eq_of_toNat_eq
   exact numeric
 
-private theorem nonce_opening_padding :
-    ∀ index : Fin 37,
-      (nonceOldOpeningImage.code[111+index.val]?).bind decodeInstruction = none := by
-  decide
-
 theorem nonce_opening_after_halt_fetch (state : MachineState) (pc : state.pc=4540) :
     fetch nonceOldOpeningImage state=none := by
-  have trap : nonceOldOpeningImage.code[111]?=some 0 := by rfl
+  have absent : nonceOldOpeningImage.code[111]?=none :=
+    List.getElem?_eq_none (by rw [nonce_old_opening_length])
   have numeric : state.pc.toNat=4540 := by rw [pc]; decide
-  simp only [fetch, numeric, show 4096 ≤ 4540 ∧ 4540 % 4 = 0 by decide,
-    ↓reduceIte, show (4540-4096)/4 = 111 by decide, trap] <;> rfl
+  simp [fetch, numeric, absent]
 
 theorem nonce_fetch_some_index (image : Image) (state : MachineState) (instruction : Instruction)
     (fetched : fetch image state=some instruction) :
@@ -101,17 +95,7 @@ theorem nonce_opening_ordinary_fetch (state : MachineState) (instruction : Instr
     have last : (nonceOldOpeningImage.code[110]?).bind decodeInstruction=some (.base .ECALL) := by rfl
     rw [last] at decoded
     exact ordinary (Option.some.inj decoded.symm)
-  by_cases early : index < 110
-  · exact (nonce_compact_prefix_fetch state index early pc).trans fetched
-  · have afterPadding : 148 ≤ index := by
-      by_contra late
-      have paddingIndex : index-111 < 37 := by omega
-      have pad := nonce_opening_padding ⟨index-111,paddingIndex⟩
-      have offset : 111+(index-111)=index := by omega
-      simp only [offset] at pad
-      rw [pad] at decoded
-      contradiction
-    exact (nonce_compact_path_fetch state index afterPadding bounded pc).trans fetched
+  exact (nonce_compact_prefix_fetch state index (by omega) pc).trans fetched
 
 theorem nonce_opening_halt_replacement (state : MachineState) (pc : state.pc=4536)
     (fuel : Nat) (coins : Bool) :
