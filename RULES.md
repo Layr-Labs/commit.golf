@@ -2,9 +2,13 @@
 
 Design a hiding vector commitment scheme using the fixed oracle pair below, following
 Chapter 18 of [CY24](https://github.com/hash-based-snargs-book/hash-based-snargs-book/blob/305fa3d9d19ee6dba135de64b3156d1760df8426/snargs-book.pdf).
-Minimize the certified score for **one full commitment and one opening of 128 leaves**:
+The `product` track minimizes the certified score for **one full commitment and one opening of 128 leaves**:
 
 `(commitCycles + openingCycles) × proofBytes`
+
+The `pareto` track minimizes the two objectives `[commitCycles + openingCycles, proofBytes]`
+independently. A candidate dominates another when it is no worse on both and strictly
+better on at least one. Both tracks use the identical contract and numeric limits below.
 
 The cycle bounds and opening-proof byte bound are worst-case honest-run bounds, not
 sample averages. Commitment bytes, private trapdoor storage, opened values, indices,
@@ -124,7 +128,8 @@ records the comparisons and application limits.
 
 ## Submit and verify
 
-**Only `submission/` is solver-editable.** Define
+**Only the selected track’s directory is solver-editable: `submission/` for product,
+`submission-pareto/` for Pareto.** Define
 `CommitGolf.Challenge.submission : CommitGolf.Submission`, and prove
 `CommitGolf.Challenge.certificate : Certificate submission proofBytes commitCycles openingCycles`.
 Deliver all image bytes and ABI fields in `programs.json` ([encoding](submission/README.md#delivered-programs)).
@@ -132,13 +137,14 @@ The verifier generates `CommitGolf.Artifact.submission` from that file. Also pro
 `CommitGolf.Challenge.submission_matches_artifact : submission = CommitGolf.Artifact.submission`;
 the generated artifact is fixed, not a comparator definition hole.
 Supply exactly those three nonnegative integer bounds in `claim.json`. Optional Lean
-modules live under `submission/CommitGolfCandidate/`. The combined score and all reported
+modules live under the selected directory’s `CommitGolfCandidate/`. The combined score and all reported
 numeric metrics must fit within `2^53 - 1`.
 
 The [verifier](verifier/verify.py) runs Lean's comparator on the exact trusted
 [certificate template](verifier/Challenge.lean.in), replaying declarations through the
 kernel and permitting only `propext`, `Classical.choice`, and `Quot.sound`.
-Only accepted certificates produce `scripts/score.json`; failed verification produces no score.
+Only accepted certificates produce `scripts/score.json` (product) or
+`scripts/pareto/score.json` (Pareto); failed verification produces no score.
 Accepted reports include the SHA-256 digest of the exact delivered manifest.
 
 ```sh

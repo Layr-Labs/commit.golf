@@ -36,7 +36,7 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
   let indices : Nat → Index := fun ordinal =>
     ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
   let heap : Nat → Digest := fun slot => readBuffer committed (4294971424+32*slot) 32
-  let salts : Index → Digest := fun index => readNonce committed (5368713248+24*index.val)
+  let salts : Index → Digest := fun index => readBuffer committed (5368713248+32*index.val) 32
   have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
   have small : positions.card ≤ 16777216 := cardinal
   have registers := check_ready_registers initial

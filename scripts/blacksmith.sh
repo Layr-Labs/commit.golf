@@ -86,9 +86,13 @@ CLOUD
     # Export before any candidate code runs; only trusted dependency/build trees.
     guest 'sudo tar --zstd -C /srv -cf - golf/.elan commit-benchmark/.lake commit-benchmark/verifier/.tools' > .cache/trusted.tar.zst
     ;;
-  run)
+  run|run-pareto)
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
-    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 scripts/run.py'
+    case "$1" in
+      run) track=product ;;
+      run-pareto) track=pareto ;;
+    esac
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 scripts/run.py --track '"$track"
     ;;
   test-linkage)
     # Equality-only regression fixtures; production scoring above still requires the full certificate.
@@ -111,5 +115,5 @@ CLOUD
   stop)
     if [[ -f "${vm}/qemu.pid" ]]; then sudo kill "$(sudo cat "${vm}/qemu.pid")"; fi
     ;;
-  *) echo 'Usage: blacksmith.sh start | setup | cache | run | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
+  *) echo 'Usage: blacksmith.sh start | setup | cache | run | run-pareto | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
 esac

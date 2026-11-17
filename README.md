@@ -10,6 +10,15 @@ compound functions from these primitives. Every underlying primitive call counts
 including repeated and inverse queries. Submissions cannot declare extra instances,
 change widths, or access a built-in variable-input RO or XOF.
 
+## Tracks
+
+- `product`: minimize `(commitCycles + openingCycles) × proofBytes`; edit `submission/`.
+- `pareto`: minimize `[commitCycles + openingCycles, proofBytes]` independently; edit `submission-pareto/`.
+
+Both use the same certificate and numeric limits. Use `yukon run --track <track>` or
+`python3 scripts/run.py --track <track>` (default: product). `yukon switch <track>`
+selects a track without changing Git state.
+
 ## Score and certificate
 
 Minimize `(commitCycles + openingCycles) × proofBytes` for one full
@@ -28,12 +37,12 @@ machine interface, cost schedule, and security requirements, and
 
 ## Submit and validate
 
-**`submission/` is the only solver-editable directory.** All supporting implementation
+**Only the selected track’s submission directory is solver-editable.** All supporting implementation
 and proof modules must live inside it. The contract, parameters, oracle definitions,
 verifier, build configuration, scripts, and workflows are maintained by the challenge
 authors and are not part of a submission.
 
-Use `submission/` for `Solution.lean`, `claim.json`, `programs.json`, and optional
+Use `submission/` (product) or `submission-pareto/` (Pareto) for `Solution.lean`, `claim.json`, `programs.json`, and optional
 `CommitGolfCandidate/` modules. The included [salted Merkle submission](submission/README.md)
 provides a complete certificate for the current contract. Run the verifier below to
 check the submission against the exact checkout and toolchain being used.
@@ -61,9 +70,9 @@ Keep the checkout and verifier work directory outside `/tmp` and `/var/tmp`:
 the sandbox's `PrivateTmp` setting hides those host directories. The verifier
 uses a fresh directory under the current directory's `.work/` by default.
 
-The runner and Benchmark workflow verify `submission/` directly. There is no oracle
+Each track’s workflow verifies its own submission directory. There is no oracle
 selector: both primitives are available together to every solver.
-The score report is written to `scripts/score.json`.
+Reports are `scripts/score.json` (product) and `scripts/pareto/score.json` (Pareto).
 
 The binding game follows the original sampled-function design: sample the two
 primitives once, run the adversary, and check both openings against those same
@@ -100,14 +109,13 @@ they do not claim elapsed time on a physical processor.
 
 ## Yukon setup
 
-`benchmark.json` defines one standalone, lower-is-better benchmark. Only `submission/`
-is editable. On the supported Linux verifier host, `yukon setup` runs `scripts/setup.sh`
-and `yukon run` runs `scripts/run.py`; successful verification writes `scripts/score.json`.
-The dispatched `benchmark.yml` runs the same setup and scoring inside the verifier VM
-and uploads that exact path inside its score artifact.
+`benchmark.json` defines schema-v2 product and Pareto tracks, sharing setup and verification.
+`benchmark.yml` runs product; `benchmark-pareto.yml` runs Pareto. Each uploads its own report.
+Yukon must support mixed modes before import. For an existing standalone import, convert it
+into the product track first, then import Pareto. Mixed-mode reorgs require `trackScope: "track"`.
 
-`Test PR` compares the PR's exact head and target commits and runs at most one Benchmark job.
-Differences outside `submission/` enable the artifact-linkage matrix and maximum-image
+`Test PR` compares the PR's exact head and target commits and checks both tracks when required.
+Differences outside both submission directories enable the artifact-linkage matrix and maximum-image
 admission test. Submission-only PRs on Yukon's same-repository `submissions/*` branches
 leave Benchmark execution to Yukon; contract changes on those branches still run the
 full checks here. Forks and other branches run Benchmark here.

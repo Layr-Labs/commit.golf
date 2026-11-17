@@ -1,7 +1,7 @@
 # Agent instructions
 
-- Solvers edit only `submission/`: `claim.json`, `programs.json`, `Solution.lean`, and
-  supporting modules under `submission/CommitGolfCandidate/`, and the optional README.
+- Solvers edit only their selected track: `submission/` (product) or `submission-pareto/` (Pareto): `claim.json`, `programs.json`, `Solution.lean`, and
+  supporting modules under the selected directory’s `CommitGolfCandidate/`, and the optional README.
   No other repository directory is solver-editable. Everything else is the contract; preserve it.
 - Submissions prove `CommitGolf.Certificate submission proofBytes commitCycles openingCycles`
   about a `CommitGolf.Submission` of machine images. The security-game scheme must be
@@ -9,8 +9,10 @@
 - `programs.json` delivers the instruction bytes, embedded data and ABI. The verifier generates
   `CommitGolf.Artifact.submission`; `submission_matches_artifact` must prove that the certified
   submission equals this exact value. The generated artifact is not a comparator definition hole.
-- The score is `(commitCycles + openingCycles) * proofBytes` for a full commitment
+- The product score is `(commitCycles + openingCycles) * proofBytes` for a full commitment
   and one opening of 128 leaves. Binding and hiding target 120 bits; leaves are 2,048 bits.
+- The Pareto track minimizes `[commitCycles + openingCycles, proofBytes]` independently
+  under the same certificate and numeric admission limits. Run it with `python3 scripts/run.py --track pareto`.
 - `Oracle.lean` fixes a 512→256 compression function and 1,600-bit permutation. Both public
   syscalls cost eight abstract cycles. Queries and cycles are separate accounting systems.
 - Historical baselines are preserved but excluded from compilation and submission imports.

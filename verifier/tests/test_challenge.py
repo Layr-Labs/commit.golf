@@ -29,7 +29,7 @@ class ChallengeTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(ROOT / "scripts/run.py"),
                                  "--track", "ideal-xof"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
-        self.assertIn("unrecognized arguments", result.stderr)
+        self.assertIn("invalid choice", result.stderr)
 
     def test_fetch_only_uses_submission_directory(self):
         commit = "a" * 40

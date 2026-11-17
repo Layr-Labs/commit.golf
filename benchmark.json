@@ -1,25 +1,75 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "name": "commit-golf",
-  "description": "Optimize a statistically hiding vector commitment with 120-bit binding and hiding security. Minimize (commitment cycles + opening cycles) times opening-proof bytes for 128 leaves of 2048 bits each.",
-  "category": "cryptography",
-  "direction": "-",
-  "editablePaths": [
-    "submission"
-  ],
-  "setupCommand": [
-    "bash",
-    "scripts/setup.sh"
-  ],
-  "benchmarkCommand": [
-    "python3",
-    "scripts/run.py"
-  ],
-  "scorePath": "scripts/score.json",
-  "maxSubmissionBytes": 33554432,
-  "runner": {
-    "provider": "github-actions",
-    "workflow": "benchmark.yml",
-    "maxConcurrentWorkflows": 2
-  }
+  "tracks": [
+    {
+      "name": "product",
+      "description": "Optimize a statistically hiding vector commitment with 120-bit binding and hiding security. Minimize (commitment cycles + opening cycles) times opening-proof bytes for 128 leaves of 2048 bits each.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py"
+      ],
+      "scorePath": "scripts/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark.yml",
+        "maxConcurrentWorkflows": 2
+      }
+    },
+    {
+      "name": "pareto",
+      "description": "Minimize certified total prover cycles and opening-proof bytes independently for the same hiding vector commitment contract.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission-pareto"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py",
+        "--track",
+        "pareto"
+      ],
+      "scorePath": "scripts/pareto/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-pareto.yml",
+        "maxConcurrentWorkflows": 2
+      },
+      "mode": "pareto",
+      "objectives": [
+        {
+          "name": "proverCycles",
+          "direction": "-"
+        },
+        {
+          "name": "proofBytes",
+          "direction": "-"
+        }
+      ],
+      "paretoPolicies": {
+        "scoring": {
+          "version": "cycles-bytes-v1"
+        },
+        "validity": {
+          "version": "certificate-v1"
+        }
+      }
+    }
+  ]
 }
