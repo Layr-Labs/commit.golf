@@ -55,7 +55,7 @@ theorem opening_proof_authenticates (oracle : Oracle) (message : Message)
   let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
   have leaf := correct.2.2 index
   change readBuffer committed (4294971424+32*(LENGTH+index.val)) 32 =
-    leafDigest oracle.compression (readBuffer committed (5368713248+32*index.val) 32)
+    leafDigest oracle.compression (readNonce committed (5368713248+24*index.val))
       (message index) at leaf
   rw [← leaf]
   have root := reconstruct_heap_root oracle.compression
