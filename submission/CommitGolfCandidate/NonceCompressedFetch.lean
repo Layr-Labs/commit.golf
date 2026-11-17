@@ -33,7 +33,7 @@ theorem nonce_expanded_copy_fetched : NonceBackwardReady.Fetched nonceExpandedIm
     omega
   · interval_cases index <;> rfl
 
-theorem nonce_compact_image_length : nonceCompactImage.code.length=138 := by decide
+theorem nonce_compact_image_length : nonceCompactImage.code.length=148 := by decide
 theorem nonce_expanded_image_length : nonceExpandedImage.code.length=257 := by decide
 
 theorem nonce_compact_old_prefix :

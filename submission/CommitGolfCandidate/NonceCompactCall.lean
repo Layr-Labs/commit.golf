@@ -18,38 +18,63 @@ abbrev nonceCompactCallCount (siblings : Bool) : Nat := if siblings then 3 else 
 
 abbrev nonceCompactCallEntry (siblings : Bool) : Word := if siblings then 4568 else 4560
 
-theorem nonce_compact_call_fetch (siblings : Bool) (state : MachineState)
+private def nonceCompactMachineCallInstructions (siblings : Bool) : List Instr :=
+  if siblings then nonceCompactCallInstructions true else [.ADDI .x28 .x0 3, .JAL .x1 84]
+
+private def nonceCompactMachineCallPrefix (siblings : Bool) (state : MachineState)
+    (count : Nat) : MachineState :=
+  ((nonceCompactMachineCallInstructions siblings).take count).foldl execInstrBr state
+
+/-- The short nonce call retains the reference registers and link, and enters
+the specialized helper appended after the shared copy routine. -/
+def nonceCompactMachineCallState (siblings : Bool) (state : MachineState) : MachineState :=
+  let reference := nonceCompactCallPrefix siblings state (nonceCompactCallCount siblings)
+  if siblings then reference else reference.setPC 4648
+
+private theorem nonce_compact_machine_call_state (siblings : Bool) (state : MachineState)
+    (pc : state.pc=nonceCompactCallEntry siblings) :
+    nonceCompactMachineCallPrefix siblings state (nonceCompactCallCount siblings)=
+      nonceCompactMachineCallState siblings state := by
+  cases siblings
+  · simp [nonceCompactCallEntry] at pc
+    simp [nonceCompactMachineCallPrefix, nonceCompactMachineCallInstructions,
+      nonceCompactMachineCallState, nonceCompactCallPrefix, nonceCompactCallCount,
+      nonceCompactCallInstructions, execInstrBr, signExtend21, MachineState.setPC, pc]
+  · rfl
+
+private theorem nonce_compact_call_fetch (siblings : Bool) (state : MachineState)
     (pc : state.pc=nonceCompactCallEntry siblings) (count : Nat)
     (bounded : count < nonceCompactCallCount siblings) :
-    fetch nonceCompactImage (nonceCompactCallPrefix siblings state count)=
-      some (.base (((nonceCompactCallInstructions siblings)[count]?).getD .EBREAK)) := by
+    fetch nonceCompactImage (nonceCompactMachineCallPrefix siblings state count)=
+      some (.base (((nonceCompactMachineCallInstructions siblings)[count]?).getD .EBREAK)) := by
   cases siblings with
   | false =>
     change count < 2 at bounded
     change state.pc=4560 at pc
     apply cap_image_fetch _ _ (116+count) _ (by omega)
     · interval_cases count <;>
-        simp [nonceCompactCallPrefix, nonceCompactCallInstructions, execInstrBr,
-          MachineState.setPC, pc] <;> rfl
+        simp [nonceCompactMachineCallPrefix, nonceCompactMachineCallInstructions, execInstrBr,
+          MachineState.setPC, pc, nonceCompactCallInstructions] <;> rfl
     · interval_cases count <;> rfl
   | true =>
     change count < 3 at bounded
     change state.pc=4568 at pc
     apply cap_image_fetch _ _ (118+count) _ (by omega)
     · interval_cases count <;>
-        simp [nonceCompactCallPrefix, nonceCompactCallInstructions, execInstrBr,
-          MachineState.setPC, pc] <;> rfl
+        simp [nonceCompactMachineCallPrefix, nonceCompactMachineCallInstructions, execInstrBr,
+          MachineState.setPC, pc, nonceCompactCallInstructions] <;> rfl
     · interval_cases count <;> rfl
 
 theorem nonce_compact_call_execute (siblings : Bool) (state : MachineState)
     (pc : state.pc=nonceCompactCallEntry siblings) (fuel : Nat) (coins : Bool) :
     execute nonceCompactImage (nonceCompactCallCount siblings+fuel) state coins=
       (do let result ← execute nonceCompactImage fuel
-            (nonceCompactCallPrefix siblings state (nonceCompactCallCount siblings)) coins
+            (nonceCompactMachineCallState siblings state) coins
           return result.charge (nonceCompactCallCount siblings) 0) := by
-  apply execute_unit_steps (states := nonceCompactCallPrefix siblings state)
+  rw [← nonce_compact_machine_call_state siblings state pc]
+  apply execute_unit_steps (states := nonceCompactMachineCallPrefix siblings state)
   intro count bounded
-  refine ⟨.base (((nonceCompactCallInstructions siblings)[count]?).getD .EBREAK),
+  refine ⟨.base (((nonceCompactMachineCallInstructions siblings)[count]?).getD .EBREAK),
     nonce_compact_call_fetch siblings state pc count bounded, ?_, ?_⟩
   · cases siblings with
     | false =>

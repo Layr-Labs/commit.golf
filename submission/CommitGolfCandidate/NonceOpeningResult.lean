@@ -10,7 +10,7 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 400000
 
 def nonceCodecCycles (count words : Nat) : Nat :=
-  if words=0 then 12+411*count else 14+411*count+6*words
+  if words=0 then 12+402*count else 14+402*count+6*words
 
 def nonceCodecFinalState (state : MachineState) (count words : Nat) : MachineState :=
   if words=0 then nonceCompactExitState
