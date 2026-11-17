@@ -1,9 +1,8 @@
 import CommitGolfCandidate.HidingCoordinate
 
-/-! Compose the single-coordinate bound across the complete message. Each hybrid
-is a whole game (first stage inside), so the adaptive choice of messages and
-positions needs no conditioning. Coordinates the first stage opens are equal in
-both messages; the per-leaf statement covers them at no extra cost. -/
+/-! Compose the single-unopened-coordinate bound across the complete message.
+Coordinates opened by the verifier are equal in both messages and cost nothing.
+The fixed-cache result will be averaged over the adaptive first stage. -/
 namespace CommitGolfCandidate
 
 -- Observations retain the discrete measurable structure used by the contract.
@@ -26,89 +25,64 @@ theorem hybrid_message_cons (left right : Message) (index : Index) (indices : Li
     simp [hybridMessage]
   · simp [hybridMessage, same]
 
-variable {State Output : Type} {openingSize : Nat}
+attribute [local irreducible] heapQueryBudget
 
-theorem hybrid_game_step
-    (adversary : Hiding.HidingAdversary State Output openingSize) (budget : Nat)
-    (chooseBound : PublicQueryBound adversary.choose budget)
-    (observeBound : ∀ aux root proof, PublicQueryBound (adversary.observe aux root proof) budget)
-    (index : Index) (indices : List Index) :
-    measureTVDist
-      (hidingGame adversary fun challenge =>
-        hybridMessage challenge.message₀ challenge.message₁ indices)
-      (hidingGame adversary fun challenge =>
-        hybridMessage challenge.message₀ challenge.message₁ (index :: indices)) ≤
-      4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192 := by
-  have step := hiding_coordinate_distance adversary budget chooseBound observeBound
-    (fun challenge => hybridMessage challenge.message₀ challenge.message₁ indices) index
-    (fun challenge => hybridMessage challenge.message₀ challenge.message₁ indices index)
-    (fun challenge => challenge.message₁ index)
-    (fun _ _ => rfl)
-    (fun challenge opened => by
-      show challenge.message₁ index =
-        if index ∈ indices then challenge.message₁ index else challenge.message₀ index
-      split
-      · rfl
-      · exact (congrFun challenge.agree ⟨index, opened⟩).symm)
-  have left : (fun challenge : Hiding.HidingChallenge State openingSize =>
-      hybridMessage challenge.message₀ challenge.message₁ indices) =
-      fun challenge => Function.update (hybridMessage challenge.message₀ challenge.message₁ indices)
-        index (hybridMessage challenge.message₀ challenge.message₁ indices index) := by
-    funext challenge
-    rw [Function.update_eq_self]
-  have right : (fun challenge : Hiding.HidingChallenge State openingSize =>
-      hybridMessage challenge.message₀ challenge.message₁ (index :: indices)) =
-      fun challenge => Function.update (hybridMessage challenge.message₀ challenge.message₁ indices)
-        index (challenge.message₁ index) := by
-    funext challenge
-    rw [hybrid_message_cons]
-  rw [right, left]
-  exact step
-
-theorem hybrid_game_distance
-    (adversary : Hiding.HidingAdversary State Output openingSize) (budget : Nat)
-    (chooseBound : PublicQueryBound adversary.choose budget)
-    (observeBound : ∀ aux root proof, PublicQueryBound (adversary.observe aux root proof) budget)
+theorem reference_observation_hybrid {α : Type}
+    (permutation : Perm) (cache : CompressionCache) (keys : Finset (BitVec 512))
+    (covered : ∀ input, cache input ≠ none → input ∈ keys)
+    (left right : Message) (positions : Positions)
+    (agree : ∀ index ∈ positions, left index = right index)
+    (observe : Commitment → Proof → OracleComp World α)
+    (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget)
     (indices : List Index) :
-    measureTVDist
-      (hidingGame adversary fun challenge =>
-        hybridMessage challenge.message₀ challenge.message₁ [])
-      (hidingGame adversary fun challenge =>
-        hybridMessage challenge.message₀ challenge.message₁ indices) ≤
+    measureTVDist (referenceObservation permutation cache left positions observe)
+      (referenceObservation permutation cache (hybridMessage left right indices) positions observe) ≤
       (indices.length : ℝ) *
-        (4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192) := by
-  let loss : ℝ := 4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192
+        (16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) := by
+  let loss : ℝ := 16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256
+  have nonnegative : 0 ≤ loss := by positivity
   change _ ≤ (indices.length : ℝ)*loss
   induction indices with
-  | nil => simp only [measureTVDist_self, List.length_nil, Nat.cast_zero, zero_mul, le_refl]
+  | nil => simp only [hybrid_message_nil, measureTVDist_self, List.length_nil, Nat.cast_zero, zero_mul, le_refl]
   | cons index indices ih =>
     have step : measureTVDist
-        (hidingGame adversary fun challenge =>
-          hybridMessage challenge.message₀ challenge.message₁ indices)
-        (hidingGame adversary fun challenge =>
-          hybridMessage challenge.message₀ challenge.message₁ (index :: indices)) ≤ loss :=
-      hybrid_game_step adversary budget chooseBound observeBound index indices
+        (referenceObservation permutation cache (hybridMessage left right indices) positions observe)
+        (referenceObservation permutation cache (hybridMessage left right (index :: indices)) positions observe) ≤ loss := by
+      rw [hybrid_message_cons]
+      by_cases opened : index ∈ positions
+      · have same : right index = hybridMessage left right indices index := by
+          unfold hybridMessage
+          split
+          · rfl
+          · exact (agree index opened).symm
+        rw [same, Function.update_eq_self, measureTVDist_self]
+        exact nonnegative
+      · have changed := reference_observation_coordinate_distance permutation cache keys covered
+          (hybridMessage left right indices) positions observe budget bounded index opened
+          (hybridMessage left right indices index) (right index)
+        simpa only [Function.update_eq_self] using changed
     refine ((measureTVDist_triangle _ _ _).trans (add_le_add ih step)).trans ?_
     simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
     exact le_of_eq (by ring)
 
-/-- Statistical hiding of the reference game for an adversary whose two stages
-are each structurally bounded: all `LENGTH` coordinates are replaced in turn. -/
-theorem hiding_game_distance
-    (adversary : Hiding.HidingAdversary State Output openingSize) (budget : Nat)
-    (chooseBound : PublicQueryBound adversary.choose budget)
-    (observeBound : ∀ aux root proof, PublicQueryBound (adversary.observe aux root proof) budget) :
-    measureTVDist (hidingGame adversary fun challenge => challenge.message₀)
-      (hidingGame adversary fun challenge => challenge.message₁) ≤
+/-- Full statistical hiding for two fixed messages agreeing on the opened set,
+conditional on any finite cache of earlier oracle answers. -/
+theorem reference_observation_distance {α : Type}
+    (permutation : Perm) (cache : CompressionCache) (keys : Finset (BitVec 512))
+    (covered : ∀ input, cache input ≠ none → input ∈ keys)
+    (left right : Message) (positions : Positions)
+    (agree : ∀ index ∈ positions, left index = right index)
+    (observe : Commitment → Proof → OracleComp World α)
+    (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget) :
+    measureTVDist (referenceObservation permutation cache left positions observe)
+      (referenceObservation permutation cache right positions observe) ≤
       (LENGTH : ℝ) *
-        (4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192) := by
-  have all (left right : Message) :
-      hybridMessage left right (Finset.univ.toList : List Index) = right := by
+        (16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) := by
+  have all : hybridMessage left right (Finset.univ.toList : List Index) = right := by
     funext index
     simp [hybridMessage]
-  have result := hybrid_game_distance adversary budget chooseBound observeBound
-    (Finset.univ.toList : List Index)
-  simpa only [all, hybrid_message_nil, Finset.length_toList, Finset.card_univ, Index,
-    Fintype.card_fin] using result
+  have result := reference_observation_hybrid permutation cache keys covered left right positions agree
+    observe budget bounded (Finset.univ.toList : List Index)
+  simpa only [all, Finset.length_toList, Finset.card_univ, Index, Fintype.card_fin] using result
 
 end CommitGolfCandidate

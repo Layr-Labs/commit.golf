@@ -1,9 +1,10 @@
-import CommitGolfCandidate.SharedHeapQueries
+import CommitGolfCandidate.HidingOpeningQueries
+import CommitGolfCandidate.HidingStages
+import CommitGolfCandidate.LeafResourceBridge
 
 /-! Isolate one unopened leaf inside the full root-and-opening continuation.
 Its salt is absent from the public proof, and the continuation uses that leaf only
-through the supplied digest. All other leaves retain their actual oracle hashes
-(two forward permutation queries each). -/
+through the supplied digest. All other leaves retain their actual oracle hashes. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
@@ -41,36 +42,37 @@ theorem reference_opening_hidden_salt (heap : Nat → Digest) (salt : Index → 
   intro index member
   exact Function.update_of_ne (by intro same; subst index; exact unopened member) _ _
 
-/-- The actual stage-3 leaf computation, with unused natural indices zeroed. -/
+/-- The actual eight-block leaf computation, with unused natural indices zeroed. -/
 def queryLeaf (message : Message) (salt : Index → Digest) (index : Nat) : OracleComp World Digest :=
   if inside : index < LENGTH then
-    s3HashLeaf (salt ⟨index, inside⟩) (message ⟨index, inside⟩)
+    hashBlocks ((List.range 8).map fun block => (message ⟨index, inside⟩).extractLsb' (256*block) 256)
+      (salt ⟨index, inside⟩)
   else pure 0
 
 def queryLeafExcept (message : Message) (salt : Index → Digest) (hidden : Index)
     (digest : Digest) (index : Nat) : OracleComp World Digest :=
   if index = hidden.val then pure digest else queryLeaf message salt index
 
-def leafValues (permutation : Perm) (message : Message) (salt : Index → Digest)
+def leafValues (compress : Compression) (message : Message) (salt : Index → Digest)
     (index : Nat) : Digest :=
-  if inside : index < LENGTH then
-    s3LeafDigest permutation (salt ⟨index, inside⟩) (message ⟨index, inside⟩)
+  if inside : index < LENGTH then leafDigest compress (salt ⟨index, inside⟩) (message ⟨index, inside⟩)
   else 0
 
-def leafValuesExcept (permutation : Perm) (message : Message) (salt : Index → Digest)
+def leafValuesExcept (compress : Compression) (message : Message) (salt : Index → Digest)
     (hidden : Index) (digest : Digest) (index : Nat) : Digest :=
-  if index = hidden.val then digest else leafValues permutation message salt index
+  if index = hidden.val then digest else leafValues compress message salt index
 
 theorem query_leaf_bound (message : Message) (salt : Index → Digest) (index : Nat) :
-    PublicQueryBound (queryLeaf message salt index) 2 := by
+    PublicQueryBound (queryLeaf message salt index) 8 := by
   unfold queryLeaf
   split
-  · exact s3_hash_leaf_public_bound _ _
+  · exact ResourceBridge.leaf_public_query_bound
+      (salt ⟨index, by assumption⟩) (message ⟨index, by assumption⟩)
   · trivial
 
 theorem query_leaf_except_bound (message : Message) (salt : Index → Digest)
     (hidden : Index) (digest : Digest) (index : Nat) :
-    PublicQueryBound (queryLeafExcept message salt hidden digest index) 2 := by
+    PublicQueryBound (queryLeafExcept message salt hidden digest index) 8 := by
   unfold queryLeafExcept
   split
   · trivial
@@ -78,67 +80,60 @@ theorem query_leaf_except_bound (message : Message) (salt : Index → Digest)
 
 theorem query_leaf_reference (oracle : Oracle) (message : Message) (salt : Index → Digest)
     (index : Nat) : fixedOracleRun oracle (queryLeaf message salt index) =
-      pure (leafValues oracle.permutation message salt index) := by
+      pure (leafValues oracle.compression message salt index) := by
   unfold queryLeaf leafValues
   split
-  · exact fixed_s3_hash_leaf oracle _ _
+  · have result := fixed_hash_blocks oracle
+      ((List.range 8).map fun block => (message ⟨index, by assumption⟩).extractLsb' (256*block) 256)
+      (salt ⟨index, by assumption⟩) pure
+    simpa only [bind_pure, List.foldl_map, fixed_oracle_run_pure, leafDigest] using result
   · exact fixed_oracle_run_pure _ _
 
 theorem query_leaf_except_reference (oracle : Oracle) (message : Message) (salt : Index → Digest)
     (hidden : Index) (digest : Digest) (index : Nat) :
     fixedOracleRun oracle (queryLeafExcept message salt hidden digest index) =
-      pure (leafValuesExcept oracle.permutation message salt hidden digest index) := by
+      pure (leafValuesExcept oracle.compression message salt hidden digest index) := by
   unfold queryLeafExcept leafValuesExcept
   split
   · exact fixed_oracle_run_pure _ _
   · exact query_leaf_reference oracle message salt index
 
-/-- Root and opening computed with every leaf hashed through the oracle. -/
-def queryFullTranscript (message : Message) (salt : Index → Digest) (positions : Positions) :
-    OracleComp World (Commitment × Proof) :=
-  querySharedTranscript LENGTH (queryLeaf message salt) salt positions
-
-theorem query_full_transcript_bound (message : Message) (salt : Index → Digest)
-    (positions : Positions) :
-    PublicQueryBound (queryFullTranscript message salt positions) (3*LENGTH-1) := by
-  have run := query_shared_transcript_bound LENGTH _ 2
-    (query_leaf_bound message salt) salt positions
-  convert run using 1 <;> norm_num [queryFullTranscript,LENGTH,LOG_LENGTH]
-
-theorem query_full_transcript_reference (oracle : Oracle) (message : Message)
-    (salt : Index → Digest) (positions : Positions) :
-    fixedOracleRun oracle (queryFullTranscript message salt positions) =
-      pure (referenceTranscript oracle.compression oracle.permutation message salt positions) :=
-  query_shared_transcript_reference oracle LENGTH (by decide) _ _
-    (query_leaf_reference oracle message salt) _ _
-
 def queryTranscriptExcept (message : Message) (salt : Index → Digest) (positions : Positions)
     (hidden : Index) (digest : Digest) : OracleComp World (Commitment × Proof) :=
-  querySharedTranscript LENGTH (queryLeafExcept message salt hidden digest)
+  queryTranscript (queryHeap LENGTH (queryLeafExcept message salt hidden digest) LOG_LENGTH)
     (Function.update salt hidden 0) positions
+
+attribute [local irreducible] heapQueryBudget queryHeap queryTranscript
 
 theorem query_transcript_except_bound (message : Message) (salt : Index → Digest)
     (positions : Positions) (hidden : Index) (digest : Digest) :
-    PublicQueryBound (queryTranscriptExcept message salt positions hidden digest) (3*LENGTH-1) := by
-  have run := query_shared_transcript_bound LENGTH _ 2
-    (query_leaf_except_bound message salt hidden digest) (Function.update salt hidden 0) positions
-  convert run using 1 <;> norm_num [queryTranscriptExcept,LENGTH,LOG_LENGTH]
+    PublicQueryBound (queryTranscriptExcept message salt positions hidden digest)
+      ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH) := by
+  unfold queryTranscriptExcept
+  apply query_transcript_bound
+  intro node
+  exact query_heap_bound LENGTH _ 8 (query_leaf_except_bound message salt hidden digest) LOG_LENGTH node
 
 theorem query_transcript_except_reference (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions) (hidden : Index) (digest : Digest) :
-    fixedOracleRun oracle (queryTranscriptExcept message salt positions hidden digest)=
+    fixedOracleRun oracle (queryTranscriptExcept message salt positions hidden digest) =
       let heap := referenceHeap oracle.compression LENGTH
-        (leafValuesExcept oracle.permutation message salt hidden digest)
-      pure (heap 1,referenceOpening heap (Function.update salt hidden 0) positions) := by
-  exact query_shared_transcript_reference oracle LENGTH (by decide) _ _
-    (query_leaf_except_reference oracle message salt hidden digest) _ _
+        (leafValuesExcept oracle.compression message salt hidden digest)
+      pure (heap 1, referenceOpening heap (Function.update salt hidden 0) positions) := by
+  apply query_transcript_reference
+  intro node positive inside
+  apply query_heap_reference oracle LENGTH _ _
+    (query_leaf_except_reference oracle message salt hidden digest) LOG_LENGTH node positive inside
+  change LENGTH ≤ LENGTH*node
+  have larger := Nat.mul_le_mul_left LENGTH positive
+  simpa only [Nat.mul_one] using larger
 
 /-- Restoring the hidden leaf's digest gives precisely the tree for the updated
 message and fresh salt; every other leaf is unchanged. -/
-theorem leaf_values_except_update (permutation : Perm) (message : Message)
+theorem leaf_values_except_update (compress : Compression) (message : Message)
     (salt : Index → Digest) (hidden : Index) (value : Entry) (fresh : Digest) :
-    leafValuesExcept permutation message salt hidden (s3LeafDigest permutation fresh value) =
-      leafValues permutation (Function.update message hidden value) (Function.update salt hidden fresh) := by
+    leafValuesExcept compress message salt hidden (leafDigest compress fresh value) =
+      leafValues compress (Function.update message hidden value) (Function.update salt hidden fresh) := by
   funext index
   unfold leafValuesExcept leafValues
   by_cases same : index = hidden.val
@@ -159,13 +154,13 @@ theorem query_transcript_hidden_update (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions) (hidden : Index) (unopened : hidden ∉ positions)
     (value : Entry) (fresh : Digest) :
     fixedOracleRun oracle
-      (queryTranscriptExcept message salt positions hidden (s3LeafDigest oracle.permutation fresh value)) =
-      pure (referenceTranscript oracle.compression oracle.permutation
+      (queryTranscriptExcept message salt positions hidden (leafDigest oracle.compression fresh value)) =
+      pure (referenceTranscript oracle.compression
         (Function.update message hidden value) (Function.update salt hidden fresh) positions) := by
   rw [query_transcript_except_reference, leaf_values_except_update]
-  change pure ((saltedHeap oracle.compression oracle.permutation (Function.update message hidden value)
+  change pure ((saltedHeap oracle.compression (Function.update message hidden value)
       (Function.update salt hidden fresh)) 1,
-    referenceOpening (saltedHeap oracle.compression oracle.permutation (Function.update message hidden value)
+    referenceOpening (saltedHeap oracle.compression (Function.update message hidden value)
       (Function.update salt hidden fresh)) (Function.update salt hidden 0) positions) = _
   unfold referenceTranscript
   dsimp only
