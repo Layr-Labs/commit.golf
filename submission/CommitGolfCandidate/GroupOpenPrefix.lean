@@ -102,6 +102,7 @@ structure PrefixStart (s : MachineState) (i : Index) (o : Nat) : Prop where
   pc : s.pc=0x103c
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
   slots : s.getReg .x24=BitVec.ofNat 64 groupSlots
+  mult : s.getReg .x4=368
   nonce : s.getReg .x22=BitVec.ofNat 64 nonceBase
   groups : s.getReg .x19=BitVec.ofNat 64 4194304
   output : s.getReg .x21=BitVec.ofNat 64 (recordBase o)
@@ -112,7 +113,7 @@ structure GroupCursor (s : MachineState) (i : Index) (o j : Nat) : Prop where
   pc : s.pc=BitVec.ofNat 64 (4096+4*(39+36*j))
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
   groups : s.getReg .x19=BitVec.ofNat 64 4194304
-  group : s.getReg .x7=BitVec.ofNat 64 (groupSlots+512*(i.val/4))
+  group : s.getReg .x7=BitVec.ofNat 64 (groupSlots+368*(i.val/4))
   low : s.getReg .x10=BitVec.ofNat 64 (i.val%4)
   index : s.getReg .x6=BitVec.ofNat 64 i.val
   output : s.getReg .x21=BitVec.ofNat 64 (recordBase o+16)
@@ -121,7 +122,7 @@ def saltStart (s : MachineState) : MachineState := slotStart (copyState .nonce (
 
 theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := saltStart s
-    RunsOpeningBlock s u 24 ∧ GroupCursor u i o 0 ∧ PrefixWrites s u i o 0 16 ∧ Keeps s u := by
+    RunsOpeningSlack s u 27 3 ∧ GroupCursor u i o 0 ∧ PrefixWrites s u i o 0 16 ∧ Keeps s u := by
   let t := nonceSetup s
   let v := copyState .nonce t
   have h := nonce_setup_post s
@@ -150,14 +151,15 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
     · intro b hb; simp [firstSource,hb]
     · intro a ha
       exact field.words_before proofBase a ha (by unfold recordBase; omega) (by decide)
-  refine ⟨(gate.next field.run).next (run_slot v fieldPC), ⟨?_,?_,?_,?_,?_,?_,?_⟩,
+  refine ⟨(gate.next field.run).thenSlack (run_slot v fieldPC), ⟨?_,?_,?_,?_,?_,?_,?_⟩,
     sourceBytes.move h.2.1.symm z.2.1, stable⟩
   · change (slotStart v).pc = _
     rw [z.1,fieldPC]; rfl
   · exact (stable .x9 (by decide)).trans start.heap
   · exact (stable .x19 (by decide)).trans start.groups
   · change (slotStart v).getReg .x7 = _
-    rw [z.2.2.2.1,rd,masked_group,(fixed .x24 (by decide) (by decide) (by decide)),start.slots,
+    rw [z.2.2.2.1,rd,(fixed .x4 (by decide) (by decide) (by decide)),start.mult,scaled_group,
+      (fixed .x24 (by decide) (by decide) (by decide)),start.slots,
       ← BitVec.ofNat_add,Nat.add_comm]
   · change (slotStart v).getReg .x10 = _
     rw [z.2.2.2.2.1,rd,low_selector]
@@ -225,7 +227,7 @@ def recordPrefix (s : MachineState) := quartetExit (groupStep 2 (groupStep 1 (gr
 
 theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := recordPrefix s
-    RunsOpeningBlock s u 135 ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧ Keeps s u := by
+    RunsOpeningSlack s u 138 3 ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧ Keeps s u := by
   have ⟨salt,g0,w0,k0⟩ := run_salt_start s i o fit start
   have ⟨s0,g1,w1,k1⟩ := run_group_step _ i o 0 fit g0
   have ⟨s1,g2,w2,k2⟩ := run_group_step _ i o 1 fit g1
@@ -238,7 +240,7 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
     simp only [prefixScratch,List.mem_cons,List.not_mem_nil,or_false,not_or] at free
     exact e.2.2.2.2 r free.2.2.2.1 free.1
   have writes : PrefixWrites s last i o 0 112 := (((w0.join w1 (by decide) fit).join w2 (by decide) fit).join w3 (by decide) fit)
-  refine ⟨(((salt.next s0).next s1).next s2).next (run_quartet_exit _ g3.pc), ⟨?_,?_,?_,?_⟩,
+  refine ⟨(((salt.then s0).then s1).then s2).then (run_quartet_exit _ g3.pc), ⟨?_,?_,?_,?_⟩,
     writes.move rfl e.2.1,past.next kept⟩
   · change (quartetExit last).pc = _
     rw [e.1,show last.pc = _ from g3.pc]; rfl

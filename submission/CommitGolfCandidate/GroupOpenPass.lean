@@ -6,6 +6,7 @@ import CommitGolfCandidate.GroupOpenRecords
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open Opening (sortedIndex RecordMarks machineMarks groupsBefore)
+open TwoPermutationPrototype.Grouped (rank)
 set_option maxRecDepth 20000
 set_option maxHeartbeats 2000000
 
@@ -32,7 +33,7 @@ def Preserved (u s : MachineState) :=
 def StoredKey (s : MachineState) (k : BitVec 192) :=
   ∀ j, 0<j → j<25 → memoryView s (128+j)=Grouped.keyBlock k j
 
-def passPC (p : Positions) (j : Nat) := if j=p.card then address 15 else address 739
+def passPC (p : Positions) (j : Nat) := if j=p.card then address 762 else address 739
 
 structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s : MachineState) (j : Nat) : Prop extends Registers s j (p.card-j), Base s p where
@@ -63,7 +64,7 @@ theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key 
   have card : p.card≤16777216:=by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
   have inp:=input_of_ready td p key s j r hj
   have ⟨reg,pc,_⟩:=finish_regs s i j _ (by omega) (by omega) inp y
-  have keep (a : Reg) (safe : Saved a := by unfold Saved;decide) := finish_keep s i j (p.card-j) inp y a safe
+  have keep (a : Reg) (safe : Saved a := by unfold Saved;decide) := finish_keep s i (p.card-j) y a safe
   have same := outside_writes s i j (p.card-j) (by omega) (by omega) inp y
   refine ⟨by simpa only [show p.card-j-1=p.card-(j+1) by omega] using reg,
     ⟨(keep .x8).trans r.indices,(keep .x9).trans r.heap,(keep .x18).trans r.count,
@@ -102,7 +103,7 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     (s : MachineState) (n j fuel : Nat) (r : Ready td p key s j) (bound : j+n≤p.card) :
     execute openingImage (passSteps p n j+fuel) s true=(do
       let t ← passTrace p n j s;let z ← execute openingImage fuel t true
-      return z.charge (passSteps p n j+10*n) n) := by
+      return z.charge (passSteps p n j+13*n) n) := by
   induction n generalizing j s with
   | zero => simp [passSteps,passTrace,Execution.charge]
   | succ n ih =>
@@ -115,16 +116,16 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     apply bind_congr;intro t;apply bind_congr;intro z;apply congrArg (fun x : Execution => (pure x : OracleComp World Execution))
     cases z;simp [Execution.charge,passSteps,perCycles,Nat.mul_succ] <;> omega
 
-theorem pass_steps_bound (p : Positions) (n j : Nat) (bound : j+n ≤ p.card) : passSteps p n j ≤ 34*n+1 := by
+theorem pass_steps_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passSteps p n j≤21*n+1 := by
   induction n generalizing j with
   | zero => simp [passSteps]
   | succ n ih =>
     rw [passSteps]
     have h:=ih (j+1) (by omega)
-    have e:=per_steps_le (pos p j) (p.card-j)
+    unfold perSteps
     by_cases last : p.card-j=1
     · have empty : n=0 := by omega
-      subst n;simp only [passSteps] at h ⊢;rw [if_pos last] at e;omega
-    · rw [if_neg last] at e;omega
+      subst n;simp [last,passSteps];split <;> omega
+    · simp only [if_neg last];split <;> omega
 
 end TwoPermutationPrototype.GroupedOpening

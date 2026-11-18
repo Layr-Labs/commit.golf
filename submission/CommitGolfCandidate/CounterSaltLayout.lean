@@ -41,10 +41,7 @@ noncomputable def splitReply : Word1600 ≃ Block × Key :=
   Equiv.ofBijective parts ((Fintype.bijective_iff_injective_and_card _).mpr
     ⟨parts_injective,Fintype.card_congr NonceChain.blockEquiv⟩)
 
-/-- Head pair of local head index `l` in a 4,096-leaf body: heads sit at pairs 11m and 11m+5. -/
-def hpl (l : Nat) := 11*(l/2)+5*(l%2)
-/-- The counter's leaf: the odd leaf of the head pair (the image stores its entry address). -/
-def firstLeaf (j : Fin groups) := 4096*(j.val/373)+2*hpl (j.val%373)+1
+def firstLeaf (j : Fin groups) := 4096*(j.val/373)+11*(j.val%373)
 def ctr (j : Fin groups) := BitVec.ofNat 64 (4096+256*firstLeaf j)
 def input (j : Fin groups) (k : Key) : Word1600 := (0#1344) ++ (k ++ ctr j)
 
@@ -65,51 +62,17 @@ theorem counter_distinct (k : Key) : Function.Injective (fun j => input j k) := 
     exact (low a).symm.trans (e.trans (low b))
   have bound (j : Fin groups) : 4096+256*firstLeaf j<2^64 := by
     have sz : j.val < 1527808 := j.isLt
-    unfold firstLeaf hpl
+    unfold firstLeaf
     omega
   have en := congrArg BitVec.toNat c
   simp only [ctr,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (bound a),Nat.mod_eq_of_lt (bound b)] at en
-  unfold firstLeaf hpl at en
+  unfold firstLeaf at en
   apply Fin.ext
   omega
 
-/-- (local head index, slot) of leaf slot `n` of a body. Slot 0 = reply bytes 184..200 (odd leaf of the head pair),
-slot 1 = bytes 0..16 (even leaf of the head pair), slot c+2 = table salt c (bytes 16+16c); the 12th leaf of a
-12-leaf group takes slot 10 of the previous head. -/
-def localCoord (n : Nat) : Nat × Nat :=
-  let p := n/2
-  let par := n%2
-  let r := p%11
-  let l := 2*(p/11)+(if r<5 then 0 else 1)
-  let k := if r<5 then r else r-5
-  if k=0 then (l,1-par)
-  else if 2*(k-1)+par ≤ 8 then (l,2*(k-1)+par+2)
-  else (l-1,10)
-
-/-- Inverse of `localCoord` on a body. -/
-def leafOf (c : Nat × Nat) : Nat :=
-  let hp := hpl c.1
-  if c.2=0 then 2*hp+1
-  else if c.2=1 then 2*hp
-  else if c.1%2=0 ∧ c.2=10 then 2*hp+21
-  else 2*hp+c.2
-
-theorem local_coord_bounds : ∀ n : Fin 4096, (localCoord n.val).1<373 ∧ (localCoord n.val).2<11 := by
-  decide +kernel
-
-theorem leaf_of_local : ∀ n : Fin 4096, leafOf (localCoord n.val) = n.val := by
-  decide +kernel
-
-theorem local_head_lt (n : Nat) (h : n<4096) : (localCoord n).1<373 := (local_coord_bounds ⟨n,h⟩).1
-theorem local_slot_lt (n : Nat) (h : n<4096) : (localCoord n).2<11 := (local_coord_bounds ⟨n,h⟩).2
-theorem leaf_of_local' (n : Nat) (h : n<4096) : leafOf (localCoord n) = n := leaf_of_local ⟨n,h⟩
-
 def coord (i : Index) : Fin groups × Fin 11 :=
-  (⟨373*(i.val/4096)+(localCoord (i.val%4096)).1, by
-      have hi : i.val<16777216 := i.isLt
-      have b := local_head_lt (i.val%4096) (by omega)
-      unfold groups;omega⟩,
-   ⟨(localCoord (i.val%4096)).2, local_slot_lt (i.val%4096) (by omega)⟩)
+  (⟨373*(i.val/4096)+(i.val%4096)/11, by have hi : i.val<16777216 := i.isLt; unfold groups;omega⟩,
+   ⟨(i.val%4096)%11, Nat.mod_lt _ (by decide)⟩)
 
 def nonceAt (p : Fin groups → Block) (i : Index) := p (coord i).1 (coord i).2
 
@@ -118,14 +81,9 @@ private theorem coord_injective : Function.Injective coord := by
   have fst := congrArg (fun p : Fin groups × Fin 11 => p.1.val) eq
   have snd := congrArg (fun p : Fin groups × Fin 11 => p.2.val) eq
   dsimp only [coord] at fst snd
-  have ba := local_head_lt (a.val%4096) (by omega)
-  have bb := local_head_lt (b.val%4096) (by omega)
-  have body : a.val/4096=b.val/4096 := by omega
-  have major : (localCoord (a.val%4096)).1=(localCoord (b.val%4096)).1 := by omega
-  have same : localCoord (a.val%4096)=localCoord (b.val%4096) := Prod.ext major snd
-  have la := leaf_of_local' (a.val%4096) (by omega)
-  have lb := leaf_of_local' (b.val%4096) (by omega)
-  rw [same] at la
+  have low (i : Index) : (i.val%4096)/11 < 373 := by omega
+  have group : a.val/4096=b.val/4096 := by omega
+  have major : (a.val%4096)/11=(b.val%4096)/11 := by omega
   apply Fin.ext
   omega
 

@@ -16,6 +16,7 @@ structure HeaderRegisters (s : MachineState) (p : Positions) where
 theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 0) (nr : init.getReg .x16≠0#64)
     (base0 : Base (setupPrefix init 15) p)
     (salt0 : (setupPrefix init 15).getReg .x22=6979325984) (marks0 : (setupPrefix init 15).getReg .x26=4096)
+    (sel0 : (setupPrefix init 15).getReg .x5=0)
     (mem0 : (setupPrefix init 15).mem=init.mem) :
     legal headerRows init ∧ Nonempty (HeaderRegisters (header init) p) ∧ (header init).mem=(keyCopy init).mem := by
   let l:=walkRows init layoutRows
@@ -27,7 +28,8 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
   have salt : l.getReg .x22=6979325984 := by rw [eq,MachineState.getReg_setPC];exact salt0
   have marks : l.getReg .x26=4096 := by rw [eq,MachineState.getReg_setPC];exact marks0
   have lm : l.mem=init.mem := by rw [eq];exact mem0
-  obtain ⟨cp,cm,cb,cr⟩:=config_frame l lpc p base salt marks
+  have sel : l.getReg .x5=0 := by rw [eq,MachineState.getReg_setPC];exact sel0
+  obtain ⟨cp,cm,cb,cr⟩:=config_frame l lpc p base salt marks sel
   have cMem : c.mem=init.mem := cm.trans lm
   obtain ⟨tpc,tm,keep⟩:=key_frame c p cp cr
   have mem : t.mem=(keyCopy init).mem := tm.trans (by simp only [keyCopy,MachineState.setMem,MachineState.getMem,cMem])
@@ -43,7 +45,7 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     exact ⟨⟨tpc,⟨(keep _ (by decide)).trans cr.input,(keep _ (by decide)).trans cr.output,
       (keep _ (by decide)).trans cr.selector,(keep _ (by decide)).trans cr.width,(keep _ (by decide)).trans cr.primitive,
       (keep _ (by decide)).trans cr.index,(keep _ (by decide)).trans cr.leftReg,(keep _ (by decide)).trans cr.salt,
-      (keep _ (by decide)).trans cr.base,(keep _ (by decide)).trans cr.divReg⟩,
+      (keep _ (by decide)).trans cr.base,(keep _ (by decide)).trans cr.divReg,(keep _ (by decide)).trans cr.mult⟩,
       ⟨(keep _ (by decide)).trans cb.indices,(keep _ (by decide)).trans cb.heap,(keep _ (by decide)).trans cb.count,
        (keep _ (by decide)).trans cb.leaves,(keep _ (by decide)).trans cb.start,(keep _ (by decide)).trans cb.dest,
        (keep _ (by decide)).trans cb.mark,(keep _ (by decide)).trans cb.slots,(keep _ (by decide)).trans cb.cap,

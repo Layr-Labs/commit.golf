@@ -38,51 +38,40 @@ theorem fetch_decoded (state : MachineState) (index : Nat)
 
 
 
-/-- Number of heads among the first n slots of a 4096-leaf period (373 groups: 372 of eleven leaves, one of 4). -/
+/-- Number of heads among the first n slots of a 4,096-leaf period. -/
 def heads (n : Nat) := 373*(n/4096)+((n%4096+10)/11)
 def rank (n : Nat) := (n%4096)%11
-def pairPos (n : Nat) := (n%4096)%22
-def pairHeads (n : Nat) := 187*(n/4096)+(n%4096+21)/22
-def firstWord (n : Nat) := 21+11*n+pairHeads n+n/32
-def heapImm (n : Nat) := BitVec.ofNat 12 (2048+512*((n/4)%8)+72+32*(n%4))
-def sourceImm (n : Nat) := BitVec.ofNat 12 (2560+2816*((n%4096/11)%2)+16*(rank n-1))
+/-- The register cache represents loads charged earlier in this group. -/
+def cacheCredit (n : Nat) : Nat :=
+  if n%4096≥4092 ∨ rank n=0 then 0 else if rank n≤9 then 4 else 2
+
+def bodyLen (n : Nat) : Nat :=
+  if rank n=0 then (if n%4096=4092 then 11 else 15) else if rank n≤8 then 11 else 9
+
+/-- Byte offset of leaf slot n inside the quartet blocks of one body (368-byte blocks). -/
+def slotOff (n : Nat) := 368*(n/4)+72+32*(n%4)
+/-- Number of quartet-pointer rebases (4,096-byte windows) before leaf slot n of a body. -/
+def rb (n : Nat) := slotOff n/4096
+/-- Leaf slot n is followed by a rebase of the quartet pointer. -/
+def rebase (n : Nat) : Prop := rb (n+1) ≠ rb n
+instance (n : Nat) : Decidable (rebase n) := inferInstanceAs (Decidable (_ ≠ _))
+def firstWord (n : Nat) := 21+11*n+cacheCredit n+rb n
+def heapImm (n : Nat) := BitVec.ofNat 12 (2048+slotOff n-4096*rb n)
+def sourceImm (n : Nat) := BitVec.ofNat 12 (3992-240*rank n)
 
 def packet (n : Nat) : List Instr :=
   [.ADDI .x12 .x10 (-32),.ECALL] ++
   (if rank n=0 then
-    [.SD .x24 .x10 0,.ADDI .x12 .x10 (-120),.ADDI .x10 .x24 0,.ECALL] ++ (if pairPos n=0 then [.ADDI .x7 .x12 1536] else []) ++
+    [.SD .x24 .x10 0,.ADDI .x12 .x10 (-120),.ADDI .x10 .x24 0,.ECALL] ++
+    (if n%4096=4092 then [] else
+       [.LD .x14 .x12 128,.LD .x15 .x12 136,.LD .x16 .x12 144,.LD .x17 .x12 152]) ++
      [.ADDI .x10 .x12 176,.SD .x10 .x10 0]
-  else [.ADDI .x10 .x10 56,.SD .x10 .x10 0,.LD .x31 .x7 (sourceImm n),
-    .SD .x10 .x31 8,.LD .x31 .x7 (sourceImm n+8),.SD .x10 .x31 16]) ++
+   else [.ADDI .x10 .x10 56,.SD .x10 .x10 0] ++
+     (if rank n≤8 then [.LD .x31 .x12 (sourceImm n),.SD .x10 .x31 8,
+                         .LD .x31 .x12 (sourceImm n+8),.SD .x10 .x31 16]
+      else if rank n=9 then [.SD .x10 .x14 8,.SD .x10 .x15 16]
+      else [.SD .x10 .x16 8,.SD .x10 .x17 16])) ++
   [.ADDI .x12 .x20 (heapImm n),.ECALL,.ADDI .x10 .x10 200] ++
-  (if n%32=31 then [.ADD .x20 .x20 .x23] else [])
-
-/-! ## Pair heads: the leaf body runs 2,048 pair packets (even leaf 2p, odd leaf 2p+1) per 4,096-leaf body. -/
-
-/-- Pair `p` of a body is a head pair (one generator call fills both leaves' salts in place): pairs 11m, 11m+5. -/
-abbrev pairHead (p : Nat) : Prop := p%11=0 ∨ p%11=5
-/-- Head pairs among the first `p` pairs of a body. -/
-def headsBefore (p : Nat) := 2*(p/11)+(if p%11=0 then 0 else if p%11≤5 then 1 else 2)
-/-- First word of pair packet `p` (non-head packets have 22 words, head packets 19, plus one rebase per 16 pairs). -/
-def pairWord (p : Nat) := 21+22*p+p/16-3*headsBefore p
-/-- Index of leaf `n`'s salt among its group's copied salts (non-head pairs): 0..8 own table, 9 = previous table. -/
-def copyIndex (n : Nat) : Nat :=
-  let r := (n/2)%11
-  2*((if r<5 then r else r-5)-1)+n%2
-/-- t2-relative immediate of leaf `n`'s copied salt (t2 = the group head's reply − 400 bytes). -/
-def srcImm (n : Nat) : BitVec 12 :=
-  if copyIndex n=9 then BitVec.ofNat 12 2080 else BitVec.ofNat 12 (416+16*copyIndex n)
-
-def pairPacket (p : Nat) : List Instr :=
-  [.ADDI .x10 .x10 256,.ADDI .x12 .x10 (-256),.ECALL,.ADDI .x10 .x10 200,.ADDI .x12 .x10 (-32),.ECALL] ++
-  (if pairHead p then
-    [.SD .x24 .x10 0,.ADDI .x12 .x10 (-120),.ADDI .x10 .x24 0,.ECALL,.ADDI .x7 .x12 (-400),.ADDI .x10 .x12 (-184)]
-  else
-    [.LD .x31 .x7 (srcImm (2*p)),.SD .x10 .x31 (-120),.LD .x31 .x7 (srcImm (2*p)+8),.SD .x10 .x31 (-112),
-     .LD .x31 .x7 (srcImm (2*p+1)),.SD .x10 .x31 64,.LD .x31 .x7 (srcImm (2*p+1)+8),.SD .x10 .x31 72,
-     .ADDI .x10 .x10 (-304)]) ++
-  [.SD .x10 .x10 0,.ADDI .x12 .x20 (heapImm (2*p)),.ECALL,
-   .ADDI .x10 .x10 360,.SD .x10 .x10 0,.ADDI .x12 .x20 (heapImm (2*p+1)),.ECALL] ++
-  (if p%16=15 then [.ADD .x20 .x20 .x23] else [])
+  (if rebase n then [.ADD .x20 .x20 .x23] else [])
 
 end TwoPermutationPrototype.Grouped

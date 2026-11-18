@@ -15,7 +15,7 @@ structure Kept (s : MachineState) : Prop where
   output : s.getReg .x8=4294971392
   stride : s.getReg .x19=536870912
 
-theorem quartet_entry (s : MachineState) (r : Live s NP) :
+theorem quartet_entry (s : MachineState) (r : Live s N) :
     s.pc=wordPC 45591 ∧ (qStartPrefix s 3).pc=quadPC 0 ∧ QRegs (qStartPrefix s 3) 0 ∧ Kept (qStartPrefix s 3) := by
   have pc : s.pc=wordPC 45591 := by simpa only [startPC,ite_true] using r.pc
   refine ⟨pc,?_,?_,⟨r.heapBase,r.out,r.strideBase⟩⟩
@@ -45,7 +45,7 @@ def tailBody (s : MachineState) : OracleComp World MachineState := do
   let parents ← packedParentGroups GroupedUpper.loopBase 32767 128 us
   return rootPrefix parents 10
 
-theorem tail_run (s : MachineState) (r : Live s NP) (fuel : Nat) :
+theorem tail_run (s : MachineState) (r : Live s N) (fuel : Nat) :
     execute image (29361422+fuel) s true = (do let t ← tailBody s; return ⟨.success,t, 88081671,8388607⟩) := by
   have same_image : image=GroupedUpper.packedWideCommitImage := exact_image.trans GroupedUpper.packed_manifest_image.symm
   rw [show 29361422+fuel=3+(12583935+(6+(508+(16776959+(11+fuel))))) by omega]
@@ -74,32 +74,31 @@ theorem tail_run (s : MachineState) (r : Live s NP) (fuel : Nat) :
 
 def commitTrace (s : MachineState) : OracleComp World Execution := do
   let key ← liftM ($ᵗ Key : ProbComp Key)
-  let leaves ← scan NP 0 (readyState s key)
+  let leaves ← scan N 0 (readyState s key)
   let out ← tailBody leaves
-  return ⟨.success,out,514155807,43470847⟩
+  return ⟨.success,out,518591774,43470847⟩
 
 attribute [local irreducible] tailBody readyState
 
 theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
-    execute image (209859875+fuel) s true = commitTrace s := by
-  rw [show 209859875+fuel=21+(180498432+(29361422+fuel)) by omega,setup_run s e]
+    execute image (214295842+fuel) s true = commitTrace s := by
+  rw [show 214295842+fuel=21+(184934399+(29361422+fuel)) by omega,setup_run s e]
   simp only [commitTrace,bind_assoc,pure_bind];apply bind_congr;intro key
   have read := ready_live s e key
-  have run := run_scan NP 0 _ (by decide) read (29361422+fuel)
-  have tot := totals
-  rw [show S (0+NP)-S 0=180498432 by rw [Nat.zero_add,tot.1]; decide,show C (0+NP)-C 0=426074112 by rw [Nat.zero_add,tot.2.2]; decide,
-    show Q (0+NP)-Q 0=35082240 by rw [Nat.zero_add,tot.2.1]; decide] at run
+  have run := run_scan N 0 _ (by decide) read (29361422+fuel)
+  rw [show S (0+N)-S 0=184934399 by decide,show C (0+N)-C 0=430510079 by decide,
+    show Q (0+N)-Q 0=35082240 by decide] at run
   rw [run];simp only [bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support;intro leaves hit
-  have last := scan_post NP 0 _ _ (by decide) read hit
+  have last := scan_post N 0 _ _ (by decide) read hit
   rw [tail_run leaves (by simpa only [Nat.zero_add] using last)]
   simp only [bind_assoc,pure_bind,Execution.charge]
 
 theorem commit_of_image (program : Submission) (im : program.image .commit=image)
-    (allowance : 209859875≤program.steps .commit) (m : Message) (e : CommitEntry (program.initialState .commit m)) :
+    (allowance : 214295842≤program.steps .commit) (m : Message) (e : CommitEntry (program.initialState .commit m)) :
     program.run .commit m = commitTrace (program.initialState .commit m) := by
   change execute (program.image .commit) (program.steps .commit) _ true=_
-  rw [im, show program.steps .commit=209859875+(program.steps .commit-209859875) by omega]
+  rw [im, show program.steps .commit=214295842+(program.steps .commit-214295842) by omega]
   exact full_commit _ e _
 
 theorem actual_commit (m : Message) : GroupedArtifact.submission.run .commit m =
@@ -107,7 +106,7 @@ theorem actual_commit (m : Message) : GroupedArtifact.submission.run .commit m =
   commit_of_image _ exact_image.symm (by decide) m ⟨rfl,rfl,rfl,rfl⟩
 
 theorem commit_resources (m : Message) (z : Execution) (reachable : z∈support (GroupedArtifact.submission.run .commit m)) :
-    z.exit=.success ∧ z.cycles=514155807 ∧ z.oracleCalls≤COMMIT_BUDGET := by
+    z.exit=.success ∧ z.cycles=518591774 ∧ z.oracleCalls≤COMMIT_BUDGET := by
   rw [actual_commit] at reachable
   simp only [commitTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reachable
   obtain ⟨_,_,_,_,_,_,rfl⟩:=reachable

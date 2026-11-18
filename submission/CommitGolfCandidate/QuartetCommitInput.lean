@@ -1,5 +1,9 @@
 import CommitGolfCandidate.QuartetManifest
-import CommitGolfCandidate.QuartetCommitSetup
+import CommitGolfCandidate.Execution
+import CommitGolfCandidate.QuartetCommitRanges
+import CommitGolfCandidate.TwoPermutationCommitSetup
+import CommitGolfCandidate.TwoPermutationManifest
+import CommitGolfCandidate.TwoPermutationPackedParents
 import CommitGolfCandidate.QuartetCommitLeafSpill
 import CommitGolfCandidate.TwoPermutationInputWords
 namespace TwoPermutationPrototype.QuartetCommit
