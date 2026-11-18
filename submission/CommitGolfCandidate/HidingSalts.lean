@@ -56,20 +56,20 @@ theorem split_blocks_uniform_bind (width count : Nat) (positive : 0 < width)
   exact ((SampleableType.map_uniformSample_evalDistEq_of_bijective
     (split_blocks_bijective width count positive)).bind_left next).evalDist_eq
 
-private theorem sized_salts {bits : Nat} (width : bits = 192*LENGTH)
-    {α : Type} (next : (Index → Nonce192) → ProbComp α) :
-    𝒟[($ᵗ BitVec bits) >>= fun packed => next (fun index => packed.extractLsb' (192*index.val) 192)] =
-      𝒟[($ᵗ (Index → Nonce192)) >>= next] := by
+private theorem sized_salts {bits : Nat} (width : bits = 256*LENGTH)
+    {α : Type} (next : (Index → Digest) → ProbComp α) :
+    𝒟[($ᵗ BitVec bits) >>= fun packed => next (fun index => packed.extractLsb' (256*index.val) 256)] =
+      𝒟[($ᵗ (Index → Digest)) >>= next] := by
   subst bits
-  exact split_blocks_uniform_bind 192 LENGTH (by decide) next
+  exact split_blocks_uniform_bind 256 LENGTH (by decide) next
 
 /-- The actual RANDOM syscall has precisely the independent-salt distribution
 used by the mathematical hiding experiment. -/
 theorem commit_salts_uniform {α : Type} (message : Message)
-    (next : (Index → Nonce192) → ProbComp α) :
+    (next : (Index → Digest) → ProbComp α) :
     𝒟[commitSaltCoins message >>= fun packed =>
-      next (fun index => packed.extractLsb' (192*index.val) 192)] =
-      𝒟[($ᵗ (Index → Nonce192)) >>= next] := by
+      next (fun index => packed.extractLsb' (256*index.val) 256)] =
+      𝒟[($ᵗ (Index → Digest)) >>= next] := by
   unfold commitSaltCoins
   exact sized_salts (commit_salt_width message) next
 

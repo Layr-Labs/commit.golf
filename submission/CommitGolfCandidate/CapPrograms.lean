@@ -39,7 +39,7 @@ def capWalk (checking : Bool) (marks leafCount roots proofEnd : Nat) : List Asm 
   [.jump 0 "cap-advance", .label "cap-right", addi 20 20 1, .jump 0 "cap-visit",
    .label "cap-done"]
 
-def capOpeningBeforeHalt (depth : Nat) : List Asm :=
+def capOpeningCode (depth : Nat) : List Asm :=
   let lower := capLowerHeight depth
   let leaves := 2^depth
   let capLeaves := 2^(capHeight depth)
@@ -50,29 +50,15 @@ def capOpeningBeforeHalt (depth : Nat) : List Asm :=
   (copyDigest 23 25).take 6 ++ [sd 0 25 24, addi 0 0 0] ++
   [addi 25 25 32, regop 20 20 19] ++ li 28 lower ++
   [.branch 0 28 0 "open-group", .label "open-path",
-   (if lower = 16 then .jump 0 "open-unrolled"
-    else insn (1*2^20 + 20*2^15 + 4*2^12 + 7*2^7 + 0x13)),
+   insn (1*2^20 + 20*2^15 + 4*2^12 + 7*2^7 + 0x13),
    shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
   [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
    .label "open-group", shift 7 20 3, regop 23 22 7, sd 31 23 0,
    addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position"] ++
   capMarkParents 22 29 ++ capWalk false 22 29 9 0 ++
-  [.label "open-done", regop 11 25 15 0 32, addi 5 0 1, addi 10 0 0]
+  [.label "open-done", regop 11 25 15 0 32] ++ halt true
 
-def capUnrolledPathCode : List Asm :=
-  [.label "open-unrolled"] ++
-  ((List.range 16).flatMap fun level =>
-    [insn (1*2^20 + 20*2^15 + 4*2^12 + 7*2^7 + 0x13),
-     shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 0 (32*level) ++
-    [shift 20 20 1 true]) ++
-  [addi 25 25 512, addi 28 0 0, .jump 0 "open-group"]
-
-/-- The packed opener uses this gap for its codec and shares the fixed path suffix. -/
-def capOpeningCode (depth : Nat) : List Asm :=
-  capOpeningBeforeHalt depth ++ [insn 0x73] ++
-  (if capLowerHeight depth = 16 then List.replicate 37 (insn 0) ++ capUnrolledPathCode else [])
-
-def capCheckCore (depth : Nat) : List Asm :=
+def capCheckCode (depth : Nat) : List Asm :=
   let lower := capLowerHeight depth
   let capLeaves := 2^(capHeight depth)
   [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16, regop 22 15 17] ++
@@ -98,32 +84,7 @@ def capCheckCore (depth : Nat) : List Asm :=
   ((List.range 4).flatMap fun word =>
     [ld 6 18 (32+8*word), ld 7 26 (8*word), .branch 1 6 7 "reject"]) ++
   [.jump 0 "accept", .label "cap-empty", .branch 1 17 0 "reject",
-   .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false
-
-/-- Stage-3 leaf recompute. On entry scratch words 256..272 hold the nonce and
-x8 points to the 256-byte value. Two permutation calls: the first on
-`value[0..200)` copied to address 32 and answered at address 0, the second on
-`nonce || reply[112..200) || value[168..256)` read at address 88; the value
-bytes 168..200 are still at 200..232 from the first window. The digest
-words are copied to 256..280, x8 advances by 256, two no-ops follow, and x1
-returns. Only memory below 288 is written; x5, x6, x8, x10..x13 are clobbered. -/
-def s3LeafSubroutine : List Asm :=
-  [.label "leaf"] ++
-  ((List.range 25).flatMap fun word => [ld 6 8 (8*word), sd 6 0 (32+8*word)]) ++
-  [addi 5 0 0, addi 10 0 32, addi 11 0 200, addi 12 0 0, addi 13 0 1, insn 0x73] ++
-  ((List.range 3).flatMap fun word => [ld 6 0 (256+8*word), sd 6 0 (88+8*word)]) ++
-  ((List.range 7).flatMap fun word => [ld 6 8 (200+8*word), sd 6 0 (232+8*word)]) ++
-  [addi 10 0 88, insn 0x73] ++
-  ((List.range 4).flatMap fun word => [ld 6 0 (8*word), sd 6 0 (256+8*word)]) ++
-  [addi 8 8 256, addi 0 0 0, addi 0 0 0, insn 0x00008067]
-
-/-- Never executed: every filler word jumps to the rejecting halt. -/
-def s3CheckFiller (count : Nat) : List Asm := List.replicate count (.jump 0 "reject")
-
-/-- Words 0..180 are the retained checker, 181..256 filler (the packed image
-keeps its expansion wrapper at 200..256), 257..346 the stage-3 leaf. -/
-def capCheckCode (depth : Nat) : List Asm :=
-  capCheckCore depth ++ s3CheckFiller 76 ++ s3LeafSubroutine
+   .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++ leafSubroutine
 
 /-- Cap images; the complete certificate is assembled separately. -/
 def capExperimental (depth : Nat) : Submission :=
