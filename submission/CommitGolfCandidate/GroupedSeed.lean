@@ -107,15 +107,18 @@ theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n�
     rw [show i+(n+1)=(i+1)+n by omega];omega
 
 theorem scan_content (o : Oracle) (k : Key) (msg : Message) (n i : Nat) (s : MachineState)
-    (bound : i+n≤N) (r : Live s i) (good : Good o k msg (memoryView s) i) :
+    (bound : i+n≤N) (r : Live s i) (good : Good o k msg (memoryView s) i)
+    (saved : Prefetched s.getReg (memoryView s) i) :
     Good o k msg (memoryView (fixedScan o n i s)) (i+n) := by
   induction n generalizing i s with
   | zero => exact good
   | succ n ih =>
     have hi : i<N:=by omega
     let idx : Index := ⟨i,hi⟩
-    have next := fixed_packet_good o k msg s idx r.toPacketRegs good
+    obtain ⟨next,carry⟩ := fixed_packet_good o k msg s idx r.toPacketRegs good saved
     have live := step_live s i hi r _ (fixed_leaf_supported o s i)
-    exact (show i+(n+1)=(i+1)+n by omega) ▸ ih (i+1) _ (by omega) live next
+    exact (show i+(n+1)=(i+1)+n by omega) ▸ ih (i+1) _ (by omega) live next (by
+      intro a b j
+      simpa only [fixedLeaf,MachineState.getReg_setPC,memoryView,MachineState.getMem_setPC] using carry a b j)
 
 end TwoPermutationPrototype.Grouped

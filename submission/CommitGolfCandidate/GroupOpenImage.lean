@@ -7,7 +7,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 8192
 
 /-- Quaternary-bottom opener, with no image data. -/
-def openingImage : Image := ⟨[
+def openingHead : List (BitVec 32) := [
   0x00078a13, 0x00078a93, 0x300806e3, 0x3190006f, 0x00060493, 0x00080913, 0x004009b7, 0x44000c37,
   0x01848c33, 0x5c000337, 0x006c0b33, 0x00100b93, 0x00048c93, 0x00001d37, 0x10000d93, 0x00043303,
   0x00431393, 0x007b03b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223,
@@ -103,7 +103,9 @@ def openingImage : Image := ⟨[
   0x01f53823, 0x018b3f83, 0x01f53c23, 0x00073303, 0x03a37e33, 0x03de7e33, 0x41c303b3, 0x00839393,
   0x01a383b3, 0x00753023, 0x00000073, 0xfffe0393, 0x00439393, 0x000e1463, 0x0b800393, 0x00c383b3,
   0x00431f13, 0x016f0f33, 0x0003bf83, 0x01ff3023, 0x0083bf83, 0x01ff3423, 0x00870713, 0xfff88893,
-  0xfa0896e3, 0xc58ff06f], []⟩
+  0xfa0896e3, 0x0040006f]
+
+def openingImage : Image := ⟨openingHead ++ (ArtifactEncoding.decode 32 MaterializedArtifact.openingCode).drop 762, []⟩
 
 theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : Instr)
     (bounded : index < 762) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
@@ -129,23 +131,28 @@ theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : In
 
 /-- All decoded instruction literals and all data bytes match the submitted JSON image. -/
 private theorem image_word_match : ∀ k : Fin 762,
-    (MaterializedArtifact.submission.image .opening).code.getD k.val 0 = openingImage.code.getD k.val 0 := by
+    (ArtifactEncoding.decode 32 MaterializedArtifact.openingCode).getD k.val 0 = openingHead.getD k.val 0 := by
   intro k
-  simp only [MaterializedArtifact.submission]
-  rw [ArtifactEncoding.getD_decode 32 _ _ k.isLt]
+  rw [ArtifactEncoding.getD_decode 32 _ _ (by have h:=k.isLt;omega)]
   revert k
   decide
 
 theorem image_actual : (MaterializedArtifact.submission.image .opening) = openingImage := by
-  have words : (MaterializedArtifact.submission.image .opening).code = openingImage.code := by
+  let data := ArtifactEncoding.decode 32 MaterializedArtifact.openingCode
+  have len : data.length=2680 := ArtifactEncoding.length_decode _ _
+  have count : openingHead.length=762 := rfl
+  have hd : data.take 762=openingHead := by
     apply List.ext_getElem
-    · simp only [MaterializedArtifact.submission,ArtifactEncoding.length_decode];rfl
-    · intro n hn hn'
-      have h := image_word_match ⟨n,hn'⟩
-      change (MaterializedArtifact.submission.image .opening).code[n]?.getD 0 = openingImage.code[n]?.getD 0 at h
-      rw [List.getElem?_eq_getElem hn, List.getElem?_eq_getElem hn'] at h
-      exact h
-  exact congrArg₂ Image.mk words rfl
+    · rw [List.length_take,len,count];rfl
+    · intro n hin hn
+      have bound : n<762 := hn.trans_eq count
+      have room : n<data.length := by omega
+      have v:=image_word_match ⟨n,bound⟩
+      change data.getD n 0=openingHead.getD n 0 at v
+      rw [List.getD_eq_getElem _ _ room,List.getD_eq_getElem _ _ hn] at v
+      simpa only [List.getElem_take] using v
+  change Image.mk data []=Image.mk (openingHead++data.drop 762) []
+  rw [←hd,List.take_append_drop]
 
 inductive CopySite where
   | nonce

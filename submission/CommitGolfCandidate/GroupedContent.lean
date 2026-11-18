@@ -42,12 +42,6 @@ def packetMem (o : Oracle) (m : Memory) (i : Nat) :=
 
 attribute [local irreducible] packBuffer writeWord writeWindow window
 
-theorem plan_meaning (o : Oracle) (v : View) (i : Nat) (inputReg : v.regs .x10=wordAddress (msgWord i)) :
-    ((plan i).foldl (viewStep o) v).mem=packetMem o v.mem i := by
-  by_cases d : rank i=0 <;> by_cases p : pairPos i=0 <;> by_cases shift : rebase (i%4096) <;>
-    simp [plan,within_rank,within_pair,p,d,shift,packetMem,digestReply,preSecond,directState,laterState,seededMem,
-      generated,firstReply,firstState,viewStep,View.reg,View.store,View.reply,inputReg]
-
 theorem coordinate_first (i : Index) : firstLeaf (coord i).1=i.val-rank i.val := by
   unfold firstLeaf coord rank
   dsimp only
@@ -134,5 +128,60 @@ theorem later_eq (o : Oracle) (m : Memory) (i : Nat) (notHead : rank i≠0) :
   simp only [writeWord,show sourceWord i≠msgWord i+7 by omega,show sourceWord i+1≠msgWord i+7 by omega,
     show sourceWord i+1≠msgWord i+8 by omega,ite_false,Nat.add_zero,Fin.val_zero] at *
   simp only [v0,v1];rfl
+
+def cacheReg (j : Fin 4) : Reg :=
+  if j.val=0 then .x14 else if j.val=1 then .x15 else if j.val=2 then .x16 else .x17
+
+def Prefetched (regs : Reg → Word) (m : Memory) (i : Nat) : Prop :=
+  0<rank i → i%4096<4092 → ∀ j : Fin 4, regs (cacheReg j)=m (groupBuffer i+(16+j.val))
+
+private theorem ready_late (o : Oracle) (m : Memory) (i : Nat) (h : rank i≠0) :
+    let b:=writeWord (firstState o m i) (msgWord i+7) (wordAddress (msgWord i+7))
+    let c:=writeWord b (msgWord i+8) (b (sourceWord i))
+    b (sourceWord i)=m (sourceWord i) ∧ c (sourceWord i+1)=m (sourceWord i+1) := by
+  have lo:=earlier_buffer i h
+  simp only [firstState,writeWord,writeWindow,ite_false,dite_false,and_self,show sourceWord i≠msgWord i+7 by omega,
+    show sourceWord i+1≠msgWord i+7 by omega,show sourceWord i+1≠msgWord i+8 by omega,
+    show ¬(msgWord i-4≤sourceWord i ∧ sourceWord i<msgWord i-4+25) by omega,
+    show ¬(msgWord i-4≤sourceWord i+1 ∧ sourceWord i+1<msgWord i-4+25) by omega]
+
+theorem plan_meaning (o : Oracle) (v : View) (i : Nat) (inputReg : v.regs .x10=wordAddress (msgWord i))
+    (ready : Prefetched v.regs v.mem i) :
+    ((plan i).foldl (viewStep o) v).mem=packetMem o v.mem i := by
+  by_cases direct : rank i=0
+  · by_cases short : i%4096=4092 <;> by_cases shift : rebase (i%4096) <;>
+      simp [plan,within_rank,within_period,direct,short,(show ¬rebase 4092 by decide),(show rank 4092=0 by decide),shift,packetMem,digestReply,preSecond,directState,seededMem,
+        generated,firstReply,firstState,viewStep,View.reg,View.store,View.reply,inputReg]
+  · by_cases near : rank i≤8
+    · by_cases shift : rebase (i%4096) <;>
+        simp [plan,within_rank,within_period,direct,near,shift,packetMem,digestReply,preSecond,laterState,
+          firstReply,firstState,viewStep,View.reg,View.store,View.reply,inputReg]
+    · have short : i%4096<4092 := by unfold rank at near;omega
+      have j:=ready (by omega) short
+      have reads:=ready_late o v.mem i direct
+      have pack (a b : Reg) (h0 : v.regs a=v.mem (sourceWord i)) (h1 : v.regs b=v.mem (sourceWord i+1)) :
+          let t:=writeWord (firstState o v.mem i) (msgWord i+7) (wordAddress (msgWord i+7))
+          writeWord (writeWord t (msgWord i+8) (v.regs a)) (msgWord i+9) (v.regs b)=laterState o v.mem i := by
+        unfold laterState;dsimp only
+        rw [←reads.1] at h0
+        rw [h0,h1,reads.2]
+      by_cases ninth : rank i=9
+      · have a : v.regs .x14=v.mem (sourceWord i) := by
+          have h:=j 0;simpa [cacheReg,sourceWord,ninth] using h
+        have b : v.regs .x15=v.mem (sourceWord i+1) := by
+          have h:=j 1;simpa [cacheReg,sourceWord,ninth,Nat.add_assoc] using h
+        have eq:=pack .x14 .x15 a b
+        by_cases shift : rebase (i%4096) <;>
+          simp [plan,within_rank,direct,near,ninth,shift,packetMem,digestReply,preSecond,viewStep,View.reg,View.store,
+            View.reply,inputReg,←eq,firstState,firstReply]
+      · have tenth : rank i=10 := by unfold rank at *;omega
+        have a : v.regs .x16=v.mem (sourceWord i) := by
+          have h:=j 2;simpa [cacheReg,sourceWord,tenth] using h
+        have b : v.regs .x17=v.mem (sourceWord i+1) := by
+          have h:=j 3;simpa [cacheReg,sourceWord,tenth,Nat.add_assoc] using h
+        have eq:=pack .x16 .x17 a b
+        by_cases shift : rebase (i%4096) <;>
+          simp [plan,within_rank,direct,near,ninth,shift,packetMem,digestReply,preSecond,viewStep,View.reg,View.store,
+            View.reply,inputReg,←eq,firstState,firstReply]
 
 end TwoPermutationPrototype.Grouped

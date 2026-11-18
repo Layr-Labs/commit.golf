@@ -45,7 +45,7 @@ theorem q_segment_post (s : MachineState) (g slot count : Nat)
     simpa only [Nat.add_assoc,Nat.add_comm 1 n] using ih _ (g+1) (slot+1) (q_next_regs s g answer r) afterPC rest
 
 def qLatchCost (k : Nat) := if k+1=512 then 1 else 2
-def qLatchPC (k : Nat) : Word := if k+1=512 then wordPC 70173 else quadPC 0
+def qLatchPC (k : Nat) : Word := if k+1=512 then wordPC 70172 else quadPC 0
 
 theorem q_latch (s : MachineState) (k fuel : Nat) (bound : k<512)
     (r : QRegs s (8192*(k+1))) (pc : s.pc=quadPC 8192) :
@@ -60,13 +60,13 @@ theorem q_latch (s : MachineState) (k fuel : Nat) (bound : k<512)
       unfold qSource at j;omega
     · intro h;rw [h]
   by_cases last : k+1=512
-  · have step : ordinaryStep s (.base (.BEQ .x10 .x24 12))=some (s.setPC (wordPC 70173)) := by
+  · have step : ordinaryStep s (.base (.BEQ .x10 .x24 8))=some (s.setPC (wordPC 70172)) := by
       simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,addr,eq.mpr last,signExtend13,wordPC]
     rw [qLatchCost,if_pos last,qLatchPC,if_pos last,Nat.add_comm 1 fuel,
       CommitGolfCandidate.execute_ordinary_step _ _ _ _ _ _ (fetch_quad_branch s addr) step];rfl
   · let mid := s.setPC (wordPC 70171)
     have neq : s.getReg .x10≠s.getReg .x24 := fun same => last (eq.mp same)
-    have step : ordinaryStep s (.base (.BEQ .x10 .x24 12))=some mid := by
+    have step : ordinaryStep s (.base (.BEQ .x10 .x24 8))=some mid := by
       simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,addr,neq,mid,wordPC]
     have jump : ordinaryStep mid (.base (.JAL .x0 1998844))=some (s.setPC (quadPC 0)) := by
       simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,mid,MachineState.setReg,MachineState.setPC];rfl

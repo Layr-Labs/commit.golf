@@ -27,7 +27,7 @@ private theorem seeded_summary (o : Oracle) (m : Message) (k : Key) (s : Machine
     Live (fixedScan o n 0 s) n ∧ Good o k m (memoryView (fixedScan o n 0 s)) n := by
   have b : 0+n≤N := by omega
   have live := scan_post n 0 s (fixedScan o n 0 s) b start (fixed_supported o s n 0 b)
-  have endGood := scan_content o k m n 0 s b start good
+  have endGood := scan_content o k m n 0 s b start good (by intro h;exact False.elim ((Nat.lt_irrefl 0) h))
   simpa only [Nat.zero_add] using And.intro live endGood
 
 theorem seeded_content (o : Oracle) (m : Message) (k : Key) :

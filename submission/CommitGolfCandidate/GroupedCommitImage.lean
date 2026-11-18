@@ -9,18 +9,12 @@ theorem heads_succ (n : Nat) : heads (n+1)=heads n+(if rank n=0 then 1 else 0) :
   · rw [show (n+1)/4096=n/4096+1 by omega,show (n+1)%4096=0 by omega,last]
     norm_num;omega
   · rw [show (n+1)/4096=n/4096 by omega,show (n+1)%4096=n%4096+1 by omega]
-    have tab : (n%4096+1+10)/11=(n%4096+10)/11+(if n%4096%11=0 then 1 else 0) := by split <;> omega
-    rw [tab]; simp only [Nat.add_assoc]
+    by_cases h : n%4096%11=0 <;> simp [h] <;> omega
 
-theorem pair_succ (n : Nat) : pairHeads (n+1)=pairHeads n+(if pairPos n=0 then 1 else 0) := by
-  unfold pairHeads pairPos
-  by_cases last : n%4096=4095
-  · rw [show (n+1)/4096=n/4096+1 by omega,show (n+1)%4096=0 by omega,last];norm_num;omega
-  · rw [show (n+1)/4096=n/4096 by omega,show (n+1)%4096=n%4096+1 by omega]
-    have tab : (n%4096+1+21)/22=(n%4096+21)/22+(if n%4096%22=0 then 1 else 0) := by split <;> omega
-    rw [tab];simp only [Nat.add_assoc]
-
-theorem pair_head (n : Nat) (h : pairPos n=0) : rank n=0 := by unfold pairPos rank at *;omega
+theorem credit_succ (n : Nat) : 11+cacheCredit (n+1)=cacheCredit n+bodyLen n := by
+  unfold cacheCredit bodyLen rank
+  have e : (n+1)%4096 = if n%4096=4095 then 0 else n%4096+1 := by split <;> omega
+  rw [e];split_ifs <;> omega
 
 theorem rb_succ (n : Nat) : rb (n+1)=rb n+(if rebase n then 1 else 0) := by
   have step : rb n≤rb (n+1) ∧ rb (n+1)≤rb n+1 := by unfold rb slotOff;omega
@@ -45,20 +39,26 @@ theorem rebases_succ (i : Nat) :
     · rw [if_pos h];omega
     · rw [if_neg h];omega
 
+theorem packet_length (n : Nat) : (packet n).length=bodyLen n+(if rebase n then 1 else 0) := by
+  unfold packet bodyLen
+  split_ifs <;> rfl
+
 theorem packet_next (n : Nat) : firstWord (n+1)=firstWord n+(packet n).length := by
-  unfold firstWord;rw [pair_succ,rb_succ]
-  by_cases p : pairPos n=0 <;> by_cases r : rank n=0 <;> by_cases sh : rebase n
-  all_goals simp [packet,p,r,sh] <;> first | omega | exact False.elim (r (pair_head n p))
+  rw [packet_length];unfold firstWord
+  have h:=credit_succ n
+  rw [rb_succ]
+  split_ifs <;> omega
 
 theorem fetch_packet (n : Fin 4096) (i : Nat) (hi : i<(packet n.val).length)
     (state : MachineState) (pc : state.pc=wordPC (firstWord n.val+i)) :
     fetch image state=some (.base ((packet n.val)[i]?.getD .EBREAK)) := by
   have hn:=n.isLt
-  have len : (packet n.val).length≤13 := by by_cases r : rank n.val=0 <;> by_cases p : pairPos n.val=0 <;> by_cases sh : rebase n.val <;> simp [packet,r,p,sh]
+  have len : (packet n.val).length≤16 := by rw [packet_length];unfold bodyLen;split_ifs <;> decide
   have ix : 64*(n.val/64)+n.val%64=n.val := Nat.div_add_mod ..
   have h := packet_tiles ⟨n.val/64,by omega⟩ ⟨n.val%64,by omega⟩ ⟨i,by omega⟩
   simp only [Fin.val_mk,ix] at h
-  have rbn := rb_le n.val hn
-  exact fetch_decoded state _ (by unfold firstWord pairHeads;omega) pc _ (h hi)
+  have rbBound:=rb_le n.val hn
+  have cap : cacheCredit n.val≤4 := by unfold cacheCredit;split_ifs <;> decide
+  exact fetch_decoded state (firstWord n.val+i) (by unfold firstWord;omega) pc _ (h hi)
 
 end TwoPermutationPrototype.Grouped

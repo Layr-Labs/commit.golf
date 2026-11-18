@@ -52,7 +52,7 @@ def postRows (direct last : Bool) : List Row :=
   [(751,.ADD .x7 .x7 .x12),(752,.SLLI .x30 .x6 4),(753,.ADD .x30 .x30 .x22),
    (754,.LD .x31 .x7 0),(755,.SD .x30 .x31 0),(756,.LD .x31 .x7 8),(757,.SD .x30 .x31 8),
    (758,.ADDI .x14 .x14 8),(759,.ADDI .x17 .x17 (-1)),(760,.BNE .x17 .x0 8108)] ++
-  (if last then [(761,.JAL .x0 2094168)] else [])
+  (if last then [(761,.JAL .x0 4)] else [])
 
 private theorem row_fetch (row : Row) (bounded : row.1<762) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
     ∀ st : MachineState, st.pc=address row.1 → fetch openingImage st=some (.base row.2) :=

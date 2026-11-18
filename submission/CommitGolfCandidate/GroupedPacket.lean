@@ -11,8 +11,6 @@ set_option maxHeartbeats 1800000
 
 def msgWord (i : Nat) := 512+32*i
 def groupBuffer (i : Nat) := msgWord (i-rank i)-15
-def pairBuffer (i : Nat) := msgWord (i-pairPos i)-15
-def saltAnchor (i : Nat) := pairBuffer i+192
 def cursor (i : Nat) := qSource (1024*(i/4096))+512*rb (i%4096)+256
 def sourceWord (i : Nat) := groupBuffer i+2*(rank i-1)
 
@@ -23,18 +21,22 @@ def plan (i : Nat) : List Action :=
   (if rank n=0 then
     [.store .x24 .x10 0 (qSalt 0),.offset .x12 .x10 (-120) (m-15),
      .offset .x10 .x24 0 (qSalt 0),.perm (qSalt 0) (m-15)] ++
-    (if pairPos n=0 then [.offset .x7 .x12 1536 (saltAnchor i)] else []) ++
+    (if n%4096=4092 then [] else
+      [.load .x14 .x12 128 (m-15+16),.load .x15 .x12 136 (m-15+17),
+       .load .x16 .x12 144 (m-15+18),.load .x17 .x12 152 (m-15+19)]) ++
     [.offset .x10 .x12 176 (m+7),.store .x10 .x10 0 (m+7)]
-  else [.offset .x10 .x10 56 (m+7),.store .x10 .x10 0 (m+7),
-     .load .x31 .x7 (sourceImm n) (sourceWord i),.store .x10 .x31 8 (m+8),
-     .load .x31 .x7 (sourceImm n+8) (sourceWord i+1),.store .x10 .x31 16 (m+9)]) ++
+  else [.offset .x10 .x10 56 (m+7),.store .x10 .x10 0 (m+7)] ++
+     (if rank n≤8 then [.load .x31 .x12 (sourceImm n) (sourceWord i),.store .x10 .x31 8 (m+8),
+                        .load .x31 .x12 (sourceImm n+8) (sourceWord i+1),.store .x10 .x31 16 (m+9)]
+      else if rank n=9 then [.store .x10 .x14 8 (m+8),.store .x10 .x15 16 (m+9)]
+      else [.store .x10 .x16 8 (m+8),.store .x10 .x17 16 (m+9)])) ++
   [.offset .x12 .x20 (heapImm n) (qLeaf i),.perm (m+7) (qLeaf i),
    .offset .x10 .x10 200 (msgWord (i+1))] ++
   (if rebase n then [.add .x20 .x20 .x23 (cursor (i+1))] else [])
 
 theorem plan_words (i : Nat) : (plan i).map Action.op=packet (i%4096) := by
-  by_cases h : rank (i%4096)=0 <;> by_cases p : pairPos (i%4096)=0 <;> by_cases k : rebase (i%4096) <;>
-    simp [plan,packet,h,k,Action.op,p]
+  unfold plan packet;dsimp only
+  split_ifs <;> rfl
 
 theorem plan_fetch (i : Nat) : fetchOps (firstWord (i%4096)) (plan i) := by
   intro j s pc
@@ -51,16 +53,15 @@ structure PacketRegs (s : MachineState) (i : Nat) : Prop where
   heap : s.getReg .x20=wordAddress (cursor i)
   stride : s.getReg .x23=4096
   counter : s.getReg .x24=wordAddress (qSalt 0)
-  buf : pairPos i≠0 → s.getReg .x7=wordAddress (saltAnchor i)
+  reserved : True
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
   primitive : s.getReg .x13=1
 
 theorem within_rank (i : Nat) : rank (i%4096)=rank i := by
-  unfold rank;rw [Nat.mod_mod]
+  unfold rank;rw [show i%4096%4096=i%4096 by omega]
 
-theorem within_pair (i : Nat) : pairPos (i%4096)=pairPos i := by
-  unfold pairPos;rw [Nat.mod_mod]
+theorem within_period (i : Nat) : i%4096%4096=i%4096 := by omega
 
 theorem centered_imm : ∀ x : Fin 4096, signExtend12 (BitVec.ofNat 12 (2048+x.val))=-(2048:Word)+BitVec.ofNat 64 x.val := by
   decide +kernel
@@ -81,29 +82,19 @@ theorem heap_address (i : Nat) : wordAddress (cursor i)+signExtend12 (heapImm (i
   rw [←BitVec.ofNat_add]
   congr 1 <;> (try simp only [slotOff] at low ⊢) <;> omega
 
-theorem src_address (i : Nat) (d : Fin 2) :
-    wordAddress (saltAnchor i)+signExtend12 (sourceImm (i%4096)+BitVec.ofNat 12 (8*d.val))=
+theorem src_address (i : Nat) (d : Fin 2) (lo : 0<rank i) (hi : rank i≤8) :
+    wordAddress (msgWord i-4)+signExtend12 (sourceImm (i%4096)+BitVec.ofNat 12 (8*d.val))=
       wordAddress (sourceWord i+d.val) := by
-  have tab : ∀ k : Fin 22, ∀ d : Fin 2,
-      signExtend12 (BitVec.ofNat 12 (2560+2816*(k.val/11)+16*(k.val%11-1))+BitVec.ofNat 12 (8*d.val))=
-        QuartetLeaves.centeredOffset (512+2816*(k.val/11)+16*(k.val%11-1)+8*d.val) := by decide +kernel
-  have val:=tab ⟨i%4096%22,by omega⟩ d
-  simp only [Fin.val_mk] at val
-  have half : i%4096/11%2=i%4096%22/11 := by omega
-  have low : i%4096%11=i%4096%22%11 := by omega
-  unfold sourceImm rank;rw [Nat.mod_mod,half,low,val]
-  have da : wordAddress (saltAnchor i)=wordAddress (pairBuffer i-64)+2048 := by
-    change wordAddress (_+192)=wordAddress (_-64)+wordAddress 256
-    rw [←wordAddress_add];congr 1;unfold pairBuffer msgWord;omega
-  rw [da,QuartetLeaves.centered_add]
-  change BitVec.ofNat 64 _+BitVec.ofNat 64 _=BitVec.ofNat 64 _
-  rw [←BitVec.ofNat_add];congr 1
-  unfold pairBuffer sourceWord groupBuffer msgWord rank pairPos
-  have bound : i % 4096 ≤ i := Nat.mod_le ..
-  have e : i%4096%22=i%4096%11+11*(i%4096/11%2) := by omega
-  have z : i % 4096 % 22 ≤ i := by have:=Nat.mod_le (i%4096) 22;omega
-  have y : i % 4096 % 11 ≤ i :=by have:=Nat.mod_le (i%4096) 11;omega
-  omega
+  have tab : ∀ r : Fin 9, ∀ j : Fin 2,
+    signExtend12 (BitVec.ofNat 12 (3992-240*r.val)+BitVec.ofNat 12 (8*j.val))=
+      -(BitVec.ofNat 64 (104+240*r.val-8*j.val)) := by decide +kernel
+  have h:=tab ⟨rank i,by omega⟩ d
+  simp only [Fin.val_mk] at h
+  unfold sourceImm;rw [within_rank,h]
+  have bd : rank i ≤ i := by unfold rank;have:=Nat.mod_le (i%4096) 11;have:=Nat.mod_le i 4096;omega
+  have m : 8*(msgWord i-4) = 8*(sourceWord i+d.val)+(104+240*rank i-8*d.val) := by
+    have dj:=d.isLt;unfold sourceWord groupBuffer msgWord;omega
+  unfold wordAddress;rw [m,BitVec.ofNat_add,BitVec.add_assoc,BitVec.add_neg_eq_sub,BitVec.sub_self,BitVec.add_zero]
 
 private theorem word_disp (i : Nat) (d : Nat) : wordAddress i+BitVec.ofNat 64 (8*d)=wordAddress (i+d) :=
   (wordAddress_add i d).symm

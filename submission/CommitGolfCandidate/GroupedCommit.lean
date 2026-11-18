@@ -14,32 +14,29 @@ structure Kept (s : MachineState) : Prop where
   heap : s.getReg .x9=4294971424
   output : s.getReg .x8=4294971392
   stride : s.getReg .x19=536870912
-  bias : s.getReg .x7=134217728
 
 theorem quartet_entry (s : MachineState) (r : Live s N) :
     s.pc=wordPC 45591 ∧ (qStartPrefix s 3).pc=quadPC 0 ∧ QRegs (qStartPrefix s 3) 0 ∧ Kept (qStartPrefix s 3) := by
   have pc : s.pc=wordPC 45591 := by simpa only [startPC,ite_true] using r.pc
-  refine ⟨pc,?_,?_,⟨r.heapBase,r.out,r.strideBase,?_⟩⟩
+  refine ⟨pc,?_,?_,⟨r.heapBase,r.out,r.strideBase⟩⟩
   · change s.pc+4+4+4=_;rw [pc];rfl
   · refine ⟨?_,?_,r.selector,r.size,r.primitive,r.counter⟩
     · change s.getReg .x21+0=_;rw [r.quartet];rfl
     · change s.getReg .x9+(s.getReg .x19 >>> (2:Nat))=_;rw [r.heapBase,r.strideBase];rfl
-  · change s.getReg .x19 >>> (2:Nat)=_;rw [r.strideBase];rfl
 
 theorem start_upper (before : MachineState) (r : QRegs before 0) (pc : before.pc=quadPC 0)
     (carry : Kept before) {s : MachineState} (hit : s ∈ support (qGroups 512 0 before)) :
-    s.pc=wordPC 70173 ∧ (upStartPrefix s 6).pc=284808 ∧ ParentRegs (upStartPrefix s 6) 4194303 ∧
+    s.pc=wordPC 70172 ∧ (upStartPrefix s 6).pc=284808 ∧ ParentRegs (upStartPrefix s 6) 4194303 ∧
       (upStartPrefix s 6).getReg .x8=4294971392 := by
   obtain ⟨regs,here⟩ := q_groups_end before 512 0 (by decide) (by decide) r pc hit
   have stride := (q_groups_saved before 0 512 .x19 (by decide) (by decide) hit).trans carry.stride
   have heap := (q_groups_saved before 0 512 .x9 (by decide) (by decide) hit).trans carry.heap
   have output := (q_groups_saved before 0 512 .x8 (by decide) (by decide) hit).trans carry.output
-  have bias := (q_groups_saved before 0 512 .x7 (by decide) (by decide) hit).trans carry.bias
   refine ⟨here,?_,?_,output⟩
-  · change s.pc+4+4+4+4+4=_;rw [here];rfl
+  · change s.pc+4+4+4+4+4+4=_;rw [here];rfl
   · refine ⟨?_,?_,regs.selector,rfl,rfl,heap⟩
     · change s.getReg .x12+signExtend12 4032=_;rw [regs.dest];rfl
-    · change s.getReg .x12-s.getReg .x7+signExtend12 4064=_;rw [regs.dest,bias];rfl
+    · change s.getReg .x12-(s.getReg .x19 >>> (2 : Nat))+signExtend12 4064=_;rw [regs.dest,stride];rfl
 
 
 def tailBody (s : MachineState) : OracleComp World MachineState := do
@@ -49,9 +46,9 @@ def tailBody (s : MachineState) : OracleComp World MachineState := do
   return rootPrefix parents 10
 
 theorem tail_run (s : MachineState) (r : Live s N) (fuel : Nat) :
-    execute image (29361421+fuel) s true = (do let t ← tailBody s; return ⟨.success,t, 88081670,8388607⟩) := by
+    execute image (29361422+fuel) s true = (do let t ← tailBody s; return ⟨.success,t, 88081671,8388607⟩) := by
   have same_image : image=GroupedUpper.packedWideCommitImage := exact_image.trans GroupedUpper.packed_manifest_image.symm
-  rw [show 29361421+fuel=3+(12583935+(5+(508+(16776959+(11+fuel))))) by omega]
+  rw [show 29361422+fuel=3+(12583935+(6+(508+(16776959+(11+fuel))))) by omega]
   unfold tailBody
   obtain ⟨lpc,qpc,qregs,carry⟩ := quartet_entry s r
   rw [qStart_run _ lpc,entire_quartet_phase _ _ qregs qpc]
@@ -79,17 +76,17 @@ def commitTrace (s : MachineState) : OracleComp World Execution := do
   let key ← liftM ($ᵗ Key : ProbComp Key)
   let leaves ← scan N 0 (readyState s key)
   let out ← tailBody leaves
-  return ⟨.success,out,519357725,43470847⟩
+  return ⟨.success,out,518591774,43470847⟩
 
 attribute [local irreducible] tailBody readyState
 
 theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
-    execute image (215061793+fuel) s true = commitTrace s := by
-  rw [show 215061793+fuel=21+(185700351+(29361421+fuel)) by omega,setup_run s e]
+    execute image (214295842+fuel) s true = commitTrace s := by
+  rw [show 214295842+fuel=21+(184934399+(29361422+fuel)) by omega,setup_run s e]
   simp only [commitTrace,bind_assoc,pure_bind];apply bind_congr;intro key
   have read := ready_live s e key
-  have run := run_scan N 0 _ (by decide) read (29361421+fuel)
-  rw [show S (0+N)-S 0=185700351 by decide,show C (0+N)-C 0=431276031 by decide,
+  have run := run_scan N 0 _ (by decide) read (29361422+fuel)
+  rw [show S (0+N)-S 0=184934399 by decide,show C (0+N)-C 0=430510079 by decide,
     show Q (0+N)-Q 0=35082240 by decide] at run
   rw [run];simp only [bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support;intro leaves hit
@@ -98,10 +95,10 @@ theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
   simp only [bind_assoc,pure_bind,Execution.charge]
 
 theorem commit_of_image (program : Submission) (im : program.image .commit=image)
-    (allowance : 215061793≤program.steps .commit) (m : Message) (e : CommitEntry (program.initialState .commit m)) :
+    (allowance : 214295842≤program.steps .commit) (m : Message) (e : CommitEntry (program.initialState .commit m)) :
     program.run .commit m = commitTrace (program.initialState .commit m) := by
   change execute (program.image .commit) (program.steps .commit) _ true=_
-  rw [im, show program.steps .commit=215061793+(program.steps .commit-215061793) by omega]
+  rw [im, show program.steps .commit=214295842+(program.steps .commit-214295842) by omega]
   exact full_commit _ e _
 
 theorem actual_commit (m : Message) : GroupedArtifact.submission.run .commit m =
@@ -109,7 +106,7 @@ theorem actual_commit (m : Message) : GroupedArtifact.submission.run .commit m =
   commit_of_image _ exact_image.symm (by decide) m ⟨rfl,rfl,rfl,rfl⟩
 
 theorem commit_resources (m : Message) (z : Execution) (reachable : z∈support (GroupedArtifact.submission.run .commit m)) :
-    z.exit=.success ∧ z.cycles=519357725 ∧ z.oracleCalls≤COMMIT_BUDGET := by
+    z.exit=.success ∧ z.cycles=518591774 ∧ z.oracleCalls≤COMMIT_BUDGET := by
   rw [actual_commit] at reachable
   simp only [commitTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reachable
   obtain ⟨_,_,_,_,_,_,rfl⟩:=reachable

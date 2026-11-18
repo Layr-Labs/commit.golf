@@ -1,3 +1,5 @@
+import CommitGolfCandidate.PhaseContext
+import CommitGolfCandidate.PhaseBridge
 import CommitGolfCandidate.GroupOpenInitial
 import CommitGolfCandidate.GroupOpenFinish
 
@@ -44,12 +46,13 @@ private theorem byte_memory (before after : MachineState) (address : Nat) (fit :
 attribute [local irreducible] execute capPreparation setupPrefix readBuffer
 
 /-- The original record writer and cap walk from a materialized virtual trapdoor. -/
-theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (abi : OpeningABI s)
+theorem body_from_boundary (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState) (positive : 0<positions.card)
-    (ready : RecordBoundary s trapdoor positions begin 0) (marks : Opening.RecordMarks positions begin 0)
+    (startPC : begin.pc=PhaseOpening.rowAddress 762)
+    (ready : RecordBoundary s trapdoor positions (begin.setPC 0x103c) 0) (marks : Opening.RecordMarks positions begin 0)
     (surplus : Nat) :
-    ∃ final, execute openingImage (openCycles positions-15+surplus) begin true =
-        pure ⟨.success,final,openCycles positions-15,0⟩ ∧
+    ∃ final, execute openingImage (PhaseOpening.fastCycles positions-15+surplus) begin true =
+        pure ⟨.success,final,PhaseOpening.fastCycles positions-15,0⟩ ∧
       OpenPhysical s trapdoor positions ⟨.success,final,openCycles positions,0⟩ := by
     let initial := s.initialState .opening (trapdoor, positions)
     have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
@@ -58,16 +61,8 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     let grouped := groupsBefore positions positions.card
     let nodes := capFrontierNodes grouped 1 8
     let dest := recordBase positions.card
-    let lower := runRecords positions.card 0 positions.card begin
-    let prepared := capPreparation lower
-    have assembled := recordsExecute s abi.toOpeningLayout trapdoor positions begin 0 positions.card
-      (by omega) ready marks (fun j _ first => (by omega : False).elim)
-    have atCap : RecordBoundary s trapdoor positions lower positions.card := by
-      simpa only [Nat.zero_add] using assembled.boundary
-    have written : CompletedRecords s trapdoor positions lower positions.card := by
-      simpa only [Nat.zero_add] using assembled.bytes
-    have groups : Opening.RecordMarks positions lower positions.card := by
-      simpa only [Nat.zero_add] using assembled.marks
+    obtain ⟨lower,ranRecords,atCap,groups,written⟩:=PhaseOpening.complete_records s abi.toOpeningLayout trapdoor positions begin positive startPC ready marks PhaseOpening.actual_stitched
+    let prepared:=capPreparation lower
     have leafMarks (node : Nat) (leaf : 255 < node) (inside : node < 512) :
         Opening.machineMarks lower node = Opening.markWord grouped node := by
       rw [groups node inside, Opening.mark_word_leaf grouped ⟨node,inside⟩ (show 256 ≤ node by omega)]
@@ -84,14 +79,10 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     obtain ⟨after, ranCap, afterPC, endPosition, footerBytes⟩ :=
       cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC ((show Opening.proofBase≤proofBase by decide).trans above) aligned room
     let final := exitPrefix (advancePrefix after 41 2) 3
-    have charge : openCycles positions = 15+(637*positions.card-1)+2552+capSubtreeCycles grouped 1 8+6 := by
-      rw [openCycles, scheduledCycles, if_neg empty]
+    have charge : PhaseOpening.fastCycles positions = 15+(PhaseOpening.recordCost positions.card+3*positions.card)+2552+capSubtreeCycles grouped 1 8+6 := by
+      rw [PhaseOpening.fastCycles, if_neg empty]
       dsimp only [grouped]
       omega
-    have ranRecords : RunsOpeningSlack begin lower (637*positions.card-1) (3*positions.card) := by
-      have charged : recordsCost positions.card 0 positions.card = 637*positions.card-1 := by
-        simp [recordsCost, positive]
-      exact charged ▸ assembled.run
     have ranPrep : RunsOpeningBlock lower prepared 2552 :=
       execute_cap_preparation lower (by simpa using atCap.pc) atCap.marks
     have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord (3*positions.card+surplus) true
@@ -107,8 +98,8 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
       have eq : final.mem = after.mem := finalMem
       simpa only [MachineState.getByte, MachineState.getMem, eq] using unchanged
     refine ⟨final,?_,⟨rfl,?_,rfl,rfl,?_,?_⟩⟩
-    · rw [show openCycles positions-15+surplus=
-          (637*positions.card-1)+2552+capSubtreeCycles grouped 1 8+(6+surplus) by omega]
+    · rw [show PhaseOpening.fastCycles positions-15+surplus=
+          (PhaseOpening.recordCost positions.card+3*positions.card)+2552+capSubtreeCycles grouped 1 8+(6+surplus) by omega]
       rw [((ranRecords.then ranPrep).then ranCap) (6+surplus) true,
         show 3*positions.card+(6+surplus)=6+(3*positions.card+surplus) by omega,ranExit]
       simp [Execution.charge,final]

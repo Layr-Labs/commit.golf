@@ -8,8 +8,8 @@ set_option maxRecDepth 18000
 set_option maxHeartbeats 1700000
 
 theorem abi : OpeningABI actual := ⟨actual_layout,image_actual,by decide,by decide⟩
-private def leftOver (p : Positions) := actual.steps .opening-(30+passSteps p p.card 0+(openCycles p-15))
-private def recordsFuel (p : Positions) := openCycles p-15+leftOver p
+private def leftOver (p : Positions) := actual.steps .opening-(30+passSteps p p.card 0+(PhaseOpening.fastCycles p-15))
+private def recordsFuel (p : Positions) := PhaseOpening.fastCycles p-15+leftOver p
 
 private theorem allowance (p : Positions) (nz : 0<p.card) :
     actual.steps .opening=30+(passSteps p p.card 0+recordsFuel p) := by
@@ -20,9 +20,10 @@ private theorem allowance (p : Positions) (nz : 0<p.card) :
   have notZero := Nat.ne_of_gt nz
   unfold Opening.openingNodes at nodes;rw [if_neg notZero] at nodes
   unfold recordsFuel leftOver;change 17179934720=_
-  have h : openCycles p≤15+637*p.card+100000 := by
-    rw [openCycles,scheduledCycles,if_neg notZero,PackedOpening.cap_cycle_delta];omega
-  change 17179934720=30+(passSteps p p.card 0+(openCycles p-15+(17179934720-(30+passSteps p p.card 0+(openCycles p-15)))))
+  have h : PhaseOpening.fastCycles p≤15+637*p.card+100000 := by
+    have price:=PhaseOpening.cost_cap p.card
+    rw [PhaseOpening.fastCycles,if_neg notZero,PackedOpening.cap_cycle_delta];omega
+  change 17179934720=30+(passSteps p p.card 0+(PhaseOpening.fastCycles p-15+(17179934720-(30+passSteps p p.card 0+(PhaseOpening.fastCycles p-15)))))
   omega
 
 private theorem run_from (s : Submission) (td : BitVec (8*s.sizes.trapdoor)) (p : Positions) (im : Image) (n : Nat)
@@ -47,9 +48,9 @@ theorem machine_run (hc : HeaderFacts) (td : BitVec (8*actual.sizes.trapdoor)) (
 
 theorem body_result (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card)
     (s : MachineState) (r : Ready td p (keyOf td) s p.card) :
-    ∃ final, execute openingImage (recordsFuel p) s true=Pure.pure ⟨.success,final,openCycles p-15,0⟩ ∧
+    ∃ final, execute openingImage (recordsFuel p) s true=Pure.pure ⟨.success,final,PhaseOpening.fastCycles p-15,0⟩ ∧
       OpenPhysical actual (virtualTd s) p ⟨.success,final,openCycles p,0⟩ :=
-  body_from_boundary (execute_records_from_step execute_record) actual abi (virtualTd s) p s nz
+  body_from_boundary actual abi (virtualTd s) p s nz (by simpa [passPC,address,PhaseOpening.rowAddress,PhaseOpening.addr] using r.pc)
     (boundary_at_end td p _ s nz r).1 (boundary_at_end td p _ s nz r).2 (leftOver p)
 
 theorem empty_result (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (empty : p.card=0) :
@@ -70,7 +71,7 @@ theorem empty_result (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (em
 theorem all_resources (hc : HeaderFacts) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (z : Execution)
     (hit : z∈support (actual.run .opening (td,p))) :
     z.exit=.success ∧ actual.openingSucceeded z=true ∧
-      (p.card=BATCH → z.cycles≤98825 ∧ (actual.readProof z).length≤72192) ∧ z.oracleCalls≤100*p.card := by
+      (p.card=BATCH → z.cycles≤78922 ∧ (actual.readProof z).length≤72192) ∧ z.oracleCalls≤100*p.card := by
   by_cases empty : p.card=0
   · obtain ⟨out,run,ex,ok,calls,_⟩:=empty_result td p empty
     rw [run,support_pure,Set.mem_singleton_iff] at hit;subst z
@@ -86,11 +87,11 @@ theorem all_resources (hc : HeaderFacts) (td : BitVec (8*actual.sizes.trapdoor))
     have ok := opening_success actual abi (virtualTd s) p ref phys
     refine ⟨rfl,ok,?_,by change p.card+0≤100*p.card;omega⟩
     intro batch
-    have max:=QuartetOpening.scored_limits p batch
+    have max:=PhaseOpening.fast_scored p batch
     have cap:=pass_steps_bound p p.card 0 (by omega)
     have k : p.card=128:=batch
     have oc : openCycles p=scheduledCycles p+3*p.card := rfl
-    refine ⟨by change 30+passSteps p p.card 0+13*p.card+(openCycles p-15)≤98825;omega,?_⟩
+    refine ⟨by change 30+passSteps p p.card 0+13*p.card+(PhaseOpening.fastCycles p-15)≤78922;omega,?_⟩
     have length : (actual.readProof ref).length=(st.getReg .x11).toNat := by
       simp only [Submission.readProof,ok,ite_true,List.length_map,List.length_range];rfl
     exact (length.trans phys.length).le.trans max.2

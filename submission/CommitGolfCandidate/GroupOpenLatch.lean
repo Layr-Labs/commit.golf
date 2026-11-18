@@ -8,7 +8,7 @@ set_option maxHeartbeats 1800000
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.getReg_setPC pc_of_set mem_of_set open_zero
 attribute [local simp] mem_of_reg MachineState.getMem_setPC MachineState.getMem_setReg
 
-def finalPC (left : Nat) := if left=1 then address 15 else address 739
+def finalPC (left : Nat) := if left=1 then address 762 else address 739
 def advanced (s : MachineState) (left : Nat) := walkRows s (nextRows (decide (left=1)))
 
 private theorem decremented (left : Nat) (l : 0<left) :
@@ -53,12 +53,12 @@ private theorem fall (s : MachineState) (pc : s.pc=address 760) (z : s.getReg .x
   exact congrArg s.setPC (by decide : address 760+4=address 761)
 
 private theorem exit_jump (s : MachineState) (pc : s.pc=address 761) :
-    execInstrBr s (.JAL .x0 2094168)=s.setPC (address 15) := by
-  change s.setPC (s.pc+signExtend21 2094168)=_
-  rw [pc];exact congrArg s.setPC (by decide : address 761+signExtend21 2094168=address 15)
+    execInstrBr s (.JAL .x0 4)=s.setPC (address 762) := by
+  change s.setPC (s.pc+signExtend21 4)=_
+  rw [pc];exact congrArg s.setPC (by decide : address 761+signExtend21 4=address 762)
 
 private def firstMoves : List Row := [(758,.ADDI .x14 .x14 8),(759,.ADDI .x17 .x17 (-1))]
-private def lastMoves (last : Bool) : List Row := if last then [(760,.BNE .x17 .x0 8108),(761,.JAL .x0 2094168)]
+private def lastMoves (last : Bool) : List Row := if last then [(760,.BNE .x17 .x0 8108),(761,.JAL .x0 4)]
   else [(760,.BNE .x17 .x0 8108)]
 
 private theorem next_parts (last : Bool) : nextRows last=firstMoves++lastMoves last := by cases last <;> rfl
@@ -69,7 +69,7 @@ private theorem first_legal (s : MachineState) (pc : s.pc=address 758) : legal f
   rw [pc];rfl
 
 private theorem last_done (s : MachineState) (pc : s.pc=address 760) (z : s.getReg .x17=0#64) :
-    legal (lastMoves true) s ∧ walkRows s (lastMoves true)=s.setPC (address 15) := by
+    legal (lastMoves true) s ∧ walkRows s (lastMoves true)=s.setPC (address 762) := by
   have first:=fall s pc z
   have atJump:=congrArg MachineState.pc first
   refine ⟨⟨pc,rfl,atJump,rfl,trivial⟩,?_⟩

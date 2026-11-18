@@ -29,7 +29,7 @@ theorem q_groups_saved (s : MachineState) (k count : Nat) (reg : Reg) (src : reg
 
 theorem q_groups_end (s : MachineState) (count k : Nat) (finish : k+count=512) (positive : 0<count)
     (r : QRegs s (8192*k)) (pc : s.pc=quadPC 0) {out : MachineState}
-    (hit : out ∈ support (qGroups count k s)) : QRegs out 4194304 ∧ out.pc=wordPC 70173 := by
+    (hit : out ∈ support (qGroups count k s)) : QRegs out 4194304 ∧ out.pc=wordPC 70172 := by
   induction count generalizing s k with
   | zero => omega
   | succ n ih =>

@@ -109,13 +109,52 @@ theorem good_congr (o : Oracle) (k : BitVec 192) (msg : Message) (m m' : Memory)
   · intro i hi a j nz;apply Eq.trans _ (h.group i hi a j nz);funext v
     apply eq;have:=j.isLt;have:=v.isLt;unfold groupBuffer msgWord;omega
 
+/-- The four preloaded words remain equal to their retained generator slice after each packet. -/
+theorem plan_saved (o : Oracle) (v : View) (i : Nat) (hi : i<16777216)
+    (inputReg : v.regs .x10=wordAddress (msgWord i)) (old : Prefetched v.regs v.mem i) :
+    Prefetched ((plan i).foldl (viewStep o) v).regs (packetMem o v.mem i) (i+1) := by
+  intro active nextFull j
+  have base:=buffer_next i (by omega : rank (i+1)≠0)
+  rw [base]
+  have small : i%4096<4092 := by unfold rank at active;omega
+  have jhi:=j.isLt
+  by_cases direct : rank i=0
+  · have start : groupBuffer i=msgWord i-15 := by simp [groupBuffer,direct]
+    let a:=msgWord i-15+(16+j.val)
+    have apartQ : ¬(qLeaf i≤a ∧ a<qLeaf i+25) := by dsimp [a];unfold qLeaf qSource msgWord;omega
+    have apartTag : a≠msgWord i+7 := by dsimp [a];unfold msgWord;omega
+    have frame : packetMem o v.mem i a=
+        writeWindow (seededMem o v.mem i) (msgWord i-15) (replyWords (generated o v.mem i)) a := by
+      unfold packetMem preSecond;rw [if_pos direct];simp only [directState,writeWindow,apartQ,dite_false,writeWord,apartTag,ite_false]
+    rw [start]
+    change _=packetMem o v.mem i a
+    rw [frame]
+    fin_cases j <;> by_cases shift : rebase (i%4096) <;>
+      simp [plan,within_rank,within_period,direct,show i%4096≠4092 by omega,shift,
+        cacheReg,viewStep,View.reg,View.store,View.reply,seededMem,generated,firstState,firstReply,inputReg,a]
+  · have stable : packetMem o v.mem i (groupBuffer i+(16+j.val))=v.mem (groupBuffer i+(16+j.val)) := by
+      apply packet_frame o v.mem i _ hi
+      all_goals simp only [groupBuffer,msgWord,rank,qSalt,qLeaf,qSource] at * <;> omega
+    rw [stable,←(old (by omega) small j)]
+    fin_cases j <;> by_cases near : rank i≤8 <;> by_cases ninth : rank i=9 <;> by_cases shift : rebase (i%4096) <;>
+      simp [plan,within_rank,direct,near,ninth,shift,cacheReg,viewStep,View.reg,View.store,View.reply]
+
 theorem fixed_packet_good (o : Oracle) (k : BitVec 192) (msg : Message) (s : MachineState)
-    (i : Index) (r : PacketRegs s i.val) (h : Good o k msg (memoryView s) i.val) :
-    Good o k msg (memoryView ((plan i.val).foldl (fixedStep o) s)) (i.val+1) := by
+    (i : Index) (r : PacketRegs s i.val) (h : Good o k msg (memoryView s) i.val)
+    (saved : Prefetched s.getReg (memoryView s) i.val) :
+    let next:=(plan i.val).foldl (fixedStep o) s
+    Good o k msg (memoryView next) (i.val+1) ∧ Prefetched next.getReg (memoryView next) (i.val+1) := by
   let v : View := ⟨s.getReg,memoryView s⟩
   have mat:=matches_ops o s v _ (walk_post _ _ _ (packet_walk s i.val i.isLt r)).1 (matches_initial s)
-  have eq:=plan_meaning o v i.val r.msg
+  have eq:=plan_meaning o v i.val r.msg saved
   have mm:=mat.2;rw [eq] at mm
-  exact good_congr o k msg _ _ _ mm (by have := i.isLt;exact Nat.succ_le_of_lt this) (good_step o k msg _ i h)
+  constructor
+  · exact good_congr o k msg _ _ _ mm (by have := i.isLt;exact Nat.succ_le_of_lt this) (good_step o k msg _ i h)
+  · intro live full j
+    have hi : i.val<16777216:=i.isLt
+    have ji:=j.isLt
+    have budget : groupBuffer (i.val+1)+(16+j.val)<2^33 := by unfold groupBuffer msgWord;omega
+    rw [mat.1,mm _ budget]
+    exact plan_saved o v i.val hi r.msg saved live full j
 
 end TwoPermutationPrototype.Grouped

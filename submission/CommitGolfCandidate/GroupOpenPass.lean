@@ -33,7 +33,7 @@ def Preserved (u s : MachineState) :=
 def StoredKey (s : MachineState) (k : BitVec 192) :=
   ∀ j, 0<j → j<25 → memoryView s (128+j)=Grouped.keyBlock k j
 
-def passPC (p : Positions) (j : Nat) := if j=p.card then address 15 else address 739
+def passPC (p : Positions) (j : Nat) := if j=p.card then address 762 else address 739
 
 structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s : MachineState) (j : Nat) : Prop extends Registers s j (p.card-j), Base s p where

@@ -4,7 +4,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototy
 set_option maxHeartbeats 6000000
 set_option maxRecDepth 16384
 def PacketTile (t : Nat) : Prop :=
-  ∀ u : Fin 64, ∀ i : Fin 13,
+  ∀ u : Fin 64, ∀ i : Fin 16,
     let n := 64*t+u.val
     i.val < (packet n).length →
       Manifest.decodeBase (codeWord (firstWord n+i.val)) = some ((packet n)[i.val]?.getD .EBREAK)

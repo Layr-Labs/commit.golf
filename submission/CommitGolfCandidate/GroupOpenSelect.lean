@@ -13,7 +13,7 @@ def selectRows (direct : Bool) : List Row :=
   [(751,.ADD .x7 .x7 .x12),(752,.SLLI .x30 .x6 4),(753,.ADD .x30 .x30 .x22)]
 def copyRows : List Row := [(754,.LD .x31 .x7 0),(755,.SD .x30 .x31 0),(756,.LD .x31 .x7 8),(757,.SD .x30 .x31 8)]
 def nextRows (last : Bool) : List Row := [(758,.ADDI .x14 .x14 8),(759,.ADDI .x17 .x17 (-1)),(760,.BNE .x17 .x0 8108)] ++
-  (if last then [(761,.JAL .x0 2094168)] else [])
+  (if last then [(761,.JAL .x0 4)] else [])
 theorem post_parts (direct last : Bool) : postRows direct last=selectRows direct++copyRows++nextRows last := by
   cases direct <;> cases last <;> rfl
 
