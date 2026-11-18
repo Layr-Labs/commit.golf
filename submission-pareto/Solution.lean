@@ -1,37 +1,23 @@
-import CommitGolfCandidate.Properties
-import CommitGolfCandidate.Binding
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.OpeningInput
-import CommitGolfCandidate.CheckInput
-import CommitGolfCandidate.Budgets
-import CommitGolfCandidate.CheckAcceptance
-import CommitGolfCandidate.Completeness
-import CommitGolfCandidate.BindingSecurity
-import CommitGolfCandidate.HidingSecurity
-import CommitGolf.Artifact
-import CommitGolfCandidate.LeafResourceBridge
-import CommitGolfCandidate.ResourceTests
+import CommitGolfCandidate.QuartetChainAssembly
+import CommitGolfCandidate.TwoPermutationPackedCheckerCertificate
+import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
 
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
 namespace CommitGolf.Challenge
+open TwoPermutationPrototype
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+set_option maxRecDepth 65536
+set_option exponentiation.threshold 2048
 
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+def submission : CommitGolf.Submission := CommitGolf.Artifact.submission
 
-theorem certificate : CommitGolf.Certificate submission 102400 3959423012 48670 where
-  admission := CommitGolfCandidate.submission_admission
-  machineSuccess := CommitGolfCandidate.submission_machine_success
-  termination := CommitGolfCandidate.submission_termination
-  completeness := CommitGolfCandidate.submission_completeness
-  honestBudgets := CommitGolfCandidate.submission_honest_budgets
-  proofSize := CommitGolfCandidate.submission_proof_size
-  proverCycles := CommitGolfCandidate.submission_prover_cycles
-  binding := CommitGolfCandidate.submission_binding
-  hidingProperty := CommitGolfCandidate.submission_hiding
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
+
+/-- Quartet with paired permutation expansion: commit, opening and hiding from
+`QuartetChainAssembly`, using the role-separated extension of c28dd9ca's chain replay proof;
+the four check-program facts
+(termination, query budget, binding through `Quartet.quartet_scheme_binding`, honest acceptance)
+from the variant-B checker proof. -/
+theorem certificate : CommitGolf.Certificate submission 72192 522614991 93945 :=
+  QuartetChainAssembly.quartet_certificate (Packed.Checker.executable_checker_facts Sampling.pinned_replay_bound)
 
 end CommitGolf.Challenge
