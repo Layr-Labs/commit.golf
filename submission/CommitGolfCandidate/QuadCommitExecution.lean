@@ -25,11 +25,11 @@ attribute [local irreducible] body Leaves.groups Quads.groups packedParentGroups
 
 /-- From the leaf-entry state: 4096 leaf bodies, 256 quad bodies, 267 parent bodies, root, HALT. -/
 theorem execute_after_ready (ready : MachineState) (r : ReadyRegs ready) (fuel : Nat) :
-    execute image (214434860+fuel) ready true =
+    execute image (214369324+fuel) ready true =
       (do let result ← body ready
-          return ⟨.success,result,508036133,41943039⟩) := by
+          return ⟨.success,result,507970597,41943039⟩) := by
   have rs := r.regs
-  rw [show 214434860+fuel=185073663+(9+(12583423+(9+(16777745+(11+fuel))))) by omega,
+  rw [show 214369324+fuel=185008127+(9+(12583423+(9+(16777745+(11+fuel))))) by omega,
     Leaves.groups_run _ 4096 0 _ (by decide) (fun _ => rs) r.out]
   simp only [body,bind_assoc]
   apply bind_congr_of_forall_mem_support

@@ -20,38 +20,38 @@ def nonceCommitTrace (initial : MachineState) : OracleComp World Execution := do
   let k ← liftM ($ᵗ BitVec 192 : ProbComp (BitVec 192))
   let last ← Chain.expansion initial k
   let state ← body (Chain.chainFinish last)
-  return ⟨.success,state,523312474,43468287⟩
+  return ⟨.success,state,523246938,43468287⟩
 
 private theorem body_charge (s : MachineState) :
-    (⟨.success,s,508036133,41943039⟩ : Execution).charge 15276324 Chain.nonceChainCount =
-      ⟨.success,s,523312457,43468287⟩ := by
-  have cost : 15276324+508036133=523312457 := by norm_num
+    (⟨.success,s,507970597,41943039⟩ : Execution).charge 15276324 Chain.nonceChainCount =
+      ⟨.success,s,523246921,43468287⟩ := by
+  have cost : 15276324+507970597=523246921 := by norm_num
   have calls : Chain.nonceChainCount+41943039=43468287 := by norm_num [Chain.nonceChainCount]
   simp only [Execution.charge,cost,calls]
 
 private theorem seed_charge (s : MachineState) :
-    ((⟨.success,s,523312457,43468287⟩ : Execution).charge 4 0).charge 13 0 =
-      ⟨.success,s,523312474,43468287⟩ := by
-  have cost : 13+(4+523312457)=523312474 := by norm_num
+    ((⟨.success,s,523246921,43468287⟩ : Execution).charge 4 0).charge 13 0 =
+      ⟨.success,s,523246938,43468287⟩ := by
+  have cost : 13+(4+523246921)=523246938 := by norm_num
   simp only [Execution.charge,cost,Nat.zero_add]
 
 private theorem seeded_execution (initial : MachineState) (entry : CommitEntry initial)
     (k : BitVec 192) (fuel : Nat) :
-    execute image (4599588+(214434860+fuel)) (Chain.seedWritten initial k) true =
+    execute image (4599588+(214369324+fuel)) (Chain.seedWritten initial k) true =
       (do let last ← Chain.expansion initial k
           let state ← body (Chain.chainFinish last)
-          return ⟨.success,state,523312457,43468287⟩) := by
-  rw [Chain.after_draw initial entry k (214434860+fuel)]
+          return ⟨.success,state,523246921,43468287⟩) := by
+  rw [Chain.after_draw initial entry k (214369324+fuel)]
   apply bind_congr_of_forall_mem_support
   intro last reached
   have r := (Chain.expansion_post initial entry k last reached).2
   rw [execute_after_ready (Chain.chainFinish last) r fuel]
   simp only [bind_assoc,pure_bind,body_charge]
 
-/-- The actual image runs the intended trace in 219034462 instruction steps. -/
+/-- The actual image runs the intended trace in 218968926 instruction steps. -/
 theorem execute_nonce_commit (initial : MachineState) (entry : CommitEntry initial) (fuel : Nat) :
-    execute image (219034462+fuel) initial true = nonceCommitTrace initial := by
-  have clock : 219034462+fuel=13+(1+(4599588+(214434860+fuel))) := by omega
+    execute image (218968926+fuel) initial true = nonceCommitTrace initial := by
+  have clock : 218968926+fuel=13+(1+(4599588+(214369324+fuel))) := by omega
   rw [clock,Chain.seed_run initial entry.pc,Chain.seed_draw initial entry]
   simp only [nonceCommitTrace,bind_assoc,pure_bind]
   apply bind_congr
@@ -62,22 +62,22 @@ theorem execute_nonce_commit (initial : MachineState) (entry : CommitEntry initi
 attribute [local irreducible] nonceCommitTrace
 
 theorem program_nonce_commit_run (program : Submission) (code : program.image .commit=image)
-    (enough : 219034462≤program.steps .commit) (message : Message)
+    (enough : 218968926≤program.steps .commit) (message : Message)
     (entry : CommitEntry (program.initialState .commit message)) :
     program.run .commit message=nonceCommitTrace (program.initialState .commit message) := by
   change execute (program.image .commit) (program.steps .commit) (program.initialState .commit message) true=_
-  rw [code,show program.steps .commit=219034462+(program.steps .commit-219034462) by omega]
+  rw [code,show program.steps .commit=218968926+(program.steps .commit-218968926) by omega]
   exact execute_nonce_commit _ entry _
 
 theorem submission_nonce_commit_run (opening checker : Image) (message : Message) :
     (submission opening checker).run .commit message =
       nonceCommitTrace ((submission opening checker).initialState .commit message) := by
-  exact program_nonce_commit_run (submission opening checker) rfl (by change 219034462≤1073807360;decide) message
+  exact program_nonce_commit_run (submission opening checker) rfl (by change 218968926≤1073807360;decide) message
     (abi_entry _ (abi opening checker) message)
 
 theorem nonce_trace_resources (initial : MachineState) (run : Execution)
     (reached : run ∈ support (nonceCommitTrace initial)) :
-    run.exit=.success ∧ run.cycles=523312474 ∧ run.oracleCalls=43468287 := by
+    run.exit=.success ∧ run.cycles=523246938 ∧ run.oracleCalls=43468287 := by
   unfold nonceCommitTrace at reached
   simp only [mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reached
   obtain ⟨_,_,_,_,_,_,rfl⟩ := reached
@@ -86,14 +86,14 @@ theorem nonce_trace_resources (initial : MachineState) (run : Execution)
 /-- Exact resources of every reachable commit run. -/
 theorem reachable_nonce_commit_resources (opening checker : Image) (message : Message) (run : Execution)
     (reached : run ∈ support ((submission opening checker).run .commit message)) :
-    run.exit=.success ∧ run.cycles=523312474 ∧ run.oracleCalls=43468287 := by
+    run.exit=.success ∧ run.cycles=523246938 ∧ run.oracleCalls=43468287 := by
   rw [submission_nonce_commit_run] at reached
   exact nonce_trace_resources _ run reached
 
 /-- The resource fact in the form consumed by `quad_nonce_certificate`. -/
 theorem nonce_commit_resources (opening checker : Image) :
     ∀ message run, run ∈ support ((submission opening checker).run .commit message) →
-      run.exit = .success ∧ run.cycles = 523312474 ∧ run.oracleCalls ≤ COMMIT_BUDGET := by
+      run.exit = .success ∧ run.cycles = 523246938 ∧ run.oracleCalls ≤ COMMIT_BUDGET := by
   intro message run reached
   obtain ⟨exit,cycles,calls⟩ := reachable_nonce_commit_resources opening checker message run reached
   refine ⟨exit,cycles,?_⟩
@@ -113,7 +113,7 @@ theorem counted_ready_body (oracle : Oracle) (ready : MachineState) :
 
 /-- The commit execution under a fixed oracle and seed. -/
 def nonceOutput (oracle : Oracle) (initial : MachineState) (k : Key) : Execution :=
-  ⟨.success,finalState oracle (Chain.chainFinalReady oracle.permutation initial k),523312474,43468287⟩
+  ⟨.success,finalState oracle (Chain.chainFinalReady oracle.permutation initial k),523246938,43468287⟩
 
 theorem nonce_counted_trace (oracle : Oracle) (initial : MachineState) :
     oracle.run (nonceCommitTrace initial) =

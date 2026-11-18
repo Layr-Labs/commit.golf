@@ -17,7 +17,7 @@ def initialInstructions : List Instr :=
 
 
 def readyInstructions : List Instr :=
-  [.ADDI .x5 .x0 0,.ADDI .x11 .x0 200,.ADDI .x13 .x0 1,.ADDI .x10 .x18 0,.SLLI .x7 .x13 11]
+  [.ADDI .x5 .x0 0,.ADDI .x11 .x0 200,.ADDI .x13 .x0 1,.ADDI .x10 .x18 0,.SLLI .x7 .x13 12]
 
 
 def setupOps := initialInstructions++[.ECALL]++readyInstructions
@@ -69,14 +69,14 @@ attribute [local irreducible] privateDraw
 
 private theorem ready_prefix_register (s : MachineState) (r : Reg) :
     (readyPrefix s 5).getReg r = match r with
-      | .x5 => 0 | .x7 => 2048 | .x10 => s.getReg .x18
+      | .x5 => 0 | .x7 => 4096 | .x10 => s.getReg .x18
       | .x11 => 200 | .x13 => 1 | _ => s.getReg r := by
   cases r <;> first | rfl | simp [readyPrefix,readyInstructions,List.take,List.foldl,execInstrBr,
     MachineState.getReg_setPC,Opening.getReg_setReg] <;> rfl
 
 theorem ready_register (s : MachineState) {bits : Nat} (coins : BitVec bits) (r : Reg) :
     (readyState s coins).getReg r = match r with
-      | .x5 => 0 | .x7 => 2048 | .x10 => (initialPrefix s 13).getReg .x18
+      | .x5 => 0 | .x7 => 4096 | .x10 => (initialPrefix s 13).getReg .x18
       | .x11 => 200 | .x13 => 1 | _ => (initialPrefix s 13).getReg r := by
   unfold readyState
   rw [ready_prefix_register]

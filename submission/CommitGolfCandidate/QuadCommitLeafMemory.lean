@@ -9,7 +9,7 @@ set_option maxHeartbeats 650000
 structure LeafReady (s : MachineState) (slot : Fin 4096) (start index dst salts : Nat) : Prop where
   source : s.getReg .x10=wordAddress (start+5)
   destination : s.getReg .x20+signExtend12 (slotImmediate slot.val)=wordAddress dst
-  nonces : s.getReg .x22=wordAddress salts
+  nonces : s.getReg .x22+nonceOffset slot=wordAddress salts
   tag : firstTag index=wordAddress start
   sourceBound : start+37≤2^33
   heapBound : dst+25≤2^33
@@ -39,13 +39,13 @@ theorem after_a_reg (s : MachineState) (slot : Fin 4096) (start : Nat) (a : BitV
     (p : r≠.x10) (q : r≠.x12) : (repliedA s slot start a).getReg r=s.getReg r := by
   rw [repliedA,CommitGolfCandidate.writeBits_register,first_keeps _ _ _ p q]
 
-def saltWord (salts : Nat) (slot : Fin 4096) := salts+2*(slot.val%128)
+def saltWord (salts : Nat) (_slot : Fin 4096) := salts
 
 private theorem salt_addr (salts : Nat) (slot : Fin 4096) :
-    wordAddress salts+BitVec.ofNat 64 (16*(slot.val%128))=wordAddress (saltWord salts slot) ∧
-    wordAddress salts+BitVec.ofNat 64 (16*(slot.val%128)+8)=wordAddress (saltWord salts slot+1) := by
-  unfold saltWord wordAddress
-  constructor <;> rw [←BitVec.ofNat_add] <;> congr 1 <;> omega
+    wordAddress salts=wordAddress (saltWord salts slot) ∧
+    wordAddress salts+8#64=wordAddress (saltWord salts slot+1) := by
+  unfold saltWord
+  exact ⟨rfl,(wordAddress_add salts 1).symm⟩
 
 private theorem address_const (base n : Nat) : wordAddress base+BitVec.ofNat 64 (8*n)=wordAddress (base+n) :=
   (wordAddress_add base n).symm
@@ -66,7 +66,7 @@ theorem second_separate (s : MachineState) (slot : Fin 4096) (start index dst sa
   have distinct (u v : Nat) (ub : u<2^61) (vb : v<2^61) (ne : u≠v) :
       wordAddress u ≠ wordAddress v := fun eq => ne (wordAddress_injective_of_bound ub vb eq)
   unfold StampSeparate
-  rw [tagged_addr _ _ _ _ _ _ ready,after_a_reg _ _ _ _ _ (by decide) (by decide),ready.nonces,(salt_addr salts slot).1]
+  rw [tagged_addr _ _ _ _ _ _ ready,after_a_reg _ _ _ _ _ (by decide) (by decide),ready.nonces]
   change wordAddress _≠_ ∧ wordAddress _+BitVec.ofNat 64 (8*1)≠_ ∧
     wordAddress _+BitVec.ofNat 64 (8*1)≠wordAddress _+BitVec.ofNat 64 (8*1)
   simp only [address_const]
@@ -85,7 +85,7 @@ theorem after_a_nonce (s : MachineState) (slot : Fin 4096) (start index dst salt
   have so : salts≤saltWord salts slot ∧ saltWord salts slot+1<salts+256 := by unfold saltWord; omega
   funext i
   simp only [nonceWords,after_a_reg _ _ _ _ _ (by decide : Reg.x22≠.x10) (by decide),ready.nonces,
-    (salt_addr salts slot).1,(salt_addr salts slot).2]
+    (salt_addr salts slot).2]
   split <;> apply outside _ (by omega) (by omega)
 
 theorem prepared_b_memory (s : MachineState) (slot : Fin 4096) (start index dst salts w : Nat)

@@ -14,18 +14,18 @@ def slotImmediate (u : Nat) : BitVec 12 :=
 
 def leafWords (u : Nat) : List (BitVec 32) :=
   [0xfe050613, 0x00000073, 0x03850513, 0x00a53023,
-   BitVec.ofNat 32 (0x000b3f83 + 1048576 * (16 * (u % 128))), 0x01f53423,
-   BitVec.ofNat 32 (0x008b3f83 + 1048576 * (16 * (u % 128))), 0x01f53823,
+   BitVec.ofNat 32 (0x000b3f83 + 1048576 * (16 * (u % 256))), 0x01f53423,
+   BitVec.ofNat 32 (0x008b3f83 + 1048576 * (16 * (u % 256))), 0x01f53823,
    BitVec.ofNat 32 (0x000a0613 + 1048576 * (slotImmediate u).toNat),
    0x00000073, 0x0c850513] ++
   (if u % 44 = 43 ∨ u = 4095 then [0x7f860a13] else []) ++
-  (if u % 128 = 127 then [0x007b0b33] else [])
+  (if u % 256 = 127 then [0x007b0b33] else [])
 
 def setupWords : List (BitVec 32) :=
-  [0x00058413, 0x00060493, 0x00050913, 0x10001a37, 0x6e8a0a13, 0x01448a33, 0x6c001b37, 0x000b0b13, 0x01648b33, 0x00200293, 0xf50b0513, 0x01800593, 0x00058593, 0x00000073, 0x00000293, 0x0c800593, 0x00100693, 0x05d9906f, 0x00b69393]
+  [0x00058413, 0x00060493, 0x00050913, 0x10001a37, 0x6e8a0a13, 0x01448a33, 0x6c001b37, 0x000b0b13, 0x01648b33, 0x00200293, 0xf50b0513, 0x01800593, 0x00058593, 0x00000073, 0x00000293, 0x0c800593, 0x00100693, 0x05d9906f, 0x00c69393]
 
 def leafLatchWords : List (BitVec 32) :=
-  [0x00850463, 0xe05d306f]
+  [0x04850463, 0xe45d306f, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013, 0x00000013]
 
 def quadSetupWords : List (BitVec 32) :=
   [0x10001537, 0xfb850513, 0x00a48533, 0x08000637, 0x00060613, 0x00c48633, 0x10000ab7, 0x000a8a93, 0x01548ab3]
@@ -87,9 +87,9 @@ def submission (opening checker : Image) : Submission where
   steps := fun | .commit => 1073807360 | .opening => 17179934720 | .check => 34359803904
 
 /-- Number of ordinary machine steps of the intended successful trace (seed draw, generator, tree). -/
-def executionSteps : Nat := 219034462
+def executionSteps : Nat := 218968926
 /-- Sum of the phase ledger; reachability is proved in `QuadNonceCommitTranscript`. -/
-def executionCycles : Nat := 523312474
+def executionCycles : Nat := 523246938
 def executionCalls : Nat := 43468287
 
 theorem submission_commit_image (opening checker : Image) :
@@ -104,7 +104,7 @@ theorem call_ledger : executionCalls = 1525248 + (2 * 2^24 + 2^22 + (2^22 - 1)) 
 
 theorem cycle_ledger : executionCycles =
     (13 + 4 + 8 + (10 * 1525248 + 1525248 / 64) + 4) + (9 + 9 + 11) +
-    ((11 * 4096 + 94 + 32 + 14 * 4096) * 4096 + (2 * 4096 - 1)) +
+    ((11 * 4096 + 94 + 16 + 14 * 4096) * 4096 + (2 * 4096 - 1)) +
     (10 * 2^22 + (2 * 256 - 1)) +
     (11 * (2^22 - 1) + (2 * 267 - 1)) := by decide
 

@@ -32,7 +32,7 @@ theorem fetch_heap_rebase (slot : Fin 4096) (h : slot.val%44=43 ∨ slot.val=409
   unfold decodeInstruction
   rfl
 
-theorem fetch_nonce_rebase (slot : Fin 4096) (h : slot.val%128=127)
+theorem fetch_nonce_rebase (slot : Fin 4096) (h : slot.val%256=127)
     (s : MachineState) (pc : s.pc=leafPC slot (11+heapExtra slot.val)) :
     fetch image s=some (.base (.ADD .x22 .x22 .x7)) := by
   apply fetch_leaf_word slot (11+heapExtra slot.val) (by rw [leaf_word_count];unfold extra nonceExtra;rw [if_pos h];omega) s pc

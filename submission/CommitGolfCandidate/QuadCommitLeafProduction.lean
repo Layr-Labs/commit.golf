@@ -10,7 +10,24 @@ def idx (g : Nat) (u : Fin 4096) := 4096*g+u.val
 def leafDest (i : Nat) := leafWord i
 def leafSalt (i : Nat) := Commit.saltWord i
 def heapBase (g pos : Nat) := if pos=4096 then windowWord (g+1) 0 else windowWord g pos
-def nonceBase (g pos : Nat) := leafSalt (4096*g+128*(pos/128))
+def nonceBase (g pos : Nat) := leafSalt (4096*g+256*((pos+128)/256))
+
+private theorem salt_offset_table : ∀ s : Fin 256,
+    wordAddress 1024 + signExtend12 (BitVec.ofNat 12 (16*s.val)) =
+      wordAddress (1024 + 2*s.val - 512*(if 128 ≤ s.val then 1 else 0)) := by decide +kernel
+
+/-- The salt register points at the centre of a 256-leaf window; the signed offset reaches the leaf's salt. -/
+theorem salt_window_address (g : Nat) (u : Fin 4096) :
+    wordAddress (nonceBase g u.val) + nonceOffset u = wordAddress (leafSalt (4096*g+u.val)) := by
+  have table := salt_offset_table ⟨u.val%256, Nat.mod_lt _ (by decide)⟩
+  have big : 1024 ≤ nonceBase g u.val := by unfold nonceBase leafSalt Commit.saltWord; omega
+  unfold nonceOffset
+  rw [show nonceBase g u.val = (nonceBase g u.val - 1024) + 1024 by omega, wordAddress_add, BitVec.add_assoc,
+    table, ←wordAddress_add]
+  congr 1
+  simp only [Fin.val_mk]
+  unfold nonceBase leafSalt Commit.saltWord
+  split <;> omega
 
 private theorem destination_table : ∀ u : Fin 44,
     wordAddress 221 + signExtend12 (slotImmediate u.val) =
@@ -44,16 +61,16 @@ structure Regs (s : MachineState) (g pos : Nat) : Prop where
   source : s.getReg .x10=wordAddress (leafStart (4096*g+pos)+5)
   heap : s.getReg .x20=wordAddress (heapBase g pos)
   salts : s.getReg .x22=wordAddress (nonceBase g pos)
-  stride : s.getReg .x7=2048
+  stride : s.getReg .x7=4096
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
   primitive : s.getReg .x13=1
   pc : s.pc=BitVec.ofNat 64 (4096+4*leafIndex pos)
 
 theorem ready_slot (s : MachineState) (g : Nat) (u : Fin 4096) (bound : g<2^12) (r : Regs s g u.val) :
-    LeafReady s u (leafStart (idx g u)) (idx g u) (leafDest (idx g u)) (nonceBase g u.val) := by
+    LeafReady s u (leafStart (idx g u)) (idx g u) (leafDest (idx g u)) (leafSalt (idx g u)) := by
   have h := u.isLt
-  refine ⟨r.source,?_,r.salts,?_,?_,?_,?_,?_,r.selector,r.size,r.primitive⟩
+  refine ⟨r.source,?_,(by rw [r.salts];exact salt_window_address g u),?_,?_,?_,?_,?_,r.selector,r.size,r.primitive⟩
   · rw [r.heap]
     exact window_destination g u.val u.isLt
   · rw [commit_tag_address,wordAddress];congr 1;unfold leafStart;omega
@@ -64,7 +81,7 @@ structure RawRegs (s : MachineState) (g : Nat) (u : Fin 4096) : Prop where
   dest : s.getReg .x12=wordAddress (leafDest (idx g u))
   heap : s.getReg .x20=wordAddress (heapBase g u.val)
   salts : s.getReg .x22=wordAddress (nonceBase g u.val)
-  stride : s.getReg .x7=2048
+  stride : s.getReg .x7=4096
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
   primitive : s.getReg .x13=1
@@ -135,7 +152,7 @@ theorem post_slot (s : MachineState) (g : Nat) (u : Fin 4096) (bound : g<2^12) (
   let i := idx g u
   let start := leafStart i
   let dst := leafDest i
-  let salt := nonceBase g u.val
+  let salt := leafSalt (idx g u)
   have ready : LeafReady s u start i dst salt := ready_slot s g u bound r
   have hold := finished_reg_frame s u start dst a b
   exact ⟨(finish_source_at s u start i dst salt ready a b).trans (congrArg wordAddress (next_source g u)),

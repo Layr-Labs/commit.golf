@@ -121,6 +121,6 @@ theorem leaf_rebase_count :
     ((List.range 4096).filter (fun u => u%44=43 ∨ u=4095)).length = 94 := by decide +kernel
 
 theorem salt_rebase_count :
-    ((List.range 4096).filter (fun u => u%128=127)).length = 32 := by decide +kernel
+    ((List.range 4096).filter (fun u => u%256=127)).length = 16 := by decide +kernel
 
 end TwoPermutationPrototype.Quad.Commit

@@ -21,70 +21,70 @@ theorem walk_range_join (g : Nat → List (BitVec 32)) (i j k s m c : Nat)
     walk 32 Artifact.commitCode g i (List.range' s (m + c)) = some k := by
   rw [range'_split]; exact walk_append 32 _ g _ _ i j k first rest
 
-theorem leaf_from_3968 : walk 32 Artifact.commitCode leafWords 43788 (List.range' 3968 128) = some 45201 :=
+theorem leaf_from_3968 : walk 32 Artifact.commitCode leafWords 43773 (List.range' 3968 128) = some 45185 :=
   leaf_block_3968
-theorem leaf_from_3840 : walk 32 Artifact.commitCode leafWords 42376 (List.range' 3840 256) = some 45201 :=
-  walk_range_join leafWords 42376 43788 45201 3840 128 128 leaf_block_3840 leaf_from_3968
-theorem leaf_from_3712 : walk 32 Artifact.commitCode leafWords 40964 (List.range' 3712 384) = some 45201 :=
-  walk_range_join leafWords 40964 42376 45201 3712 128 256 leaf_block_3712 leaf_from_3840
-theorem leaf_from_3584 : walk 32 Artifact.commitCode leafWords 39552 (List.range' 3584 512) = some 45201 :=
-  walk_range_join leafWords 39552 40964 45201 3584 128 384 leaf_block_3584 leaf_from_3712
-theorem leaf_from_3456 : walk 32 Artifact.commitCode leafWords 38140 (List.range' 3456 640) = some 45201 :=
-  walk_range_join leafWords 38140 39552 45201 3456 128 512 leaf_block_3456 leaf_from_3584
-theorem leaf_from_3328 : walk 32 Artifact.commitCode leafWords 36728 (List.range' 3328 768) = some 45201 :=
-  walk_range_join leafWords 36728 38140 45201 3328 128 640 leaf_block_3328 leaf_from_3456
-theorem leaf_from_3200 : walk 32 Artifact.commitCode leafWords 35316 (List.range' 3200 896) = some 45201 :=
-  walk_range_join leafWords 35316 36728 45201 3200 128 768 leaf_block_3200 leaf_from_3328
-theorem leaf_from_3072 : walk 32 Artifact.commitCode leafWords 33904 (List.range' 3072 1024) = some 45201 :=
-  walk_range_join leafWords 33904 35316 45201 3072 128 896 leaf_block_3072 leaf_from_3200
-theorem leaf_from_2944 : walk 32 Artifact.commitCode leafWords 32492 (List.range' 2944 1152) = some 45201 :=
-  walk_range_join leafWords 32492 33904 45201 2944 128 1024 leaf_block_2944 leaf_from_3072
-theorem leaf_from_2816 : walk 32 Artifact.commitCode leafWords 31081 (List.range' 2816 1280) = some 45201 :=
-  walk_range_join leafWords 31081 32492 45201 2816 128 1152 leaf_block_2816 leaf_from_2944
-theorem leaf_from_2688 : walk 32 Artifact.commitCode leafWords 29669 (List.range' 2688 1408) = some 45201 :=
-  walk_range_join leafWords 29669 31081 45201 2688 128 1280 leaf_block_2688 leaf_from_2816
-theorem leaf_from_2560 : walk 32 Artifact.commitCode leafWords 28257 (List.range' 2560 1536) = some 45201 :=
-  walk_range_join leafWords 28257 29669 45201 2560 128 1408 leaf_block_2560 leaf_from_2688
-theorem leaf_from_2432 : walk 32 Artifact.commitCode leafWords 26845 (List.range' 2432 1664) = some 45201 :=
-  walk_range_join leafWords 26845 28257 45201 2432 128 1536 leaf_block_2432 leaf_from_2560
-theorem leaf_from_2304 : walk 32 Artifact.commitCode leafWords 25433 (List.range' 2304 1792) = some 45201 :=
-  walk_range_join leafWords 25433 26845 45201 2304 128 1664 leaf_block_2304 leaf_from_2432
-theorem leaf_from_2176 : walk 32 Artifact.commitCode leafWords 24021 (List.range' 2176 1920) = some 45201 :=
-  walk_range_join leafWords 24021 25433 45201 2176 128 1792 leaf_block_2176 leaf_from_2304
-theorem leaf_from_2048 : walk 32 Artifact.commitCode leafWords 22609 (List.range' 2048 2048) = some 45201 :=
-  walk_range_join leafWords 22609 24021 45201 2048 128 1920 leaf_block_2048 leaf_from_2176
-theorem leaf_from_1920 : walk 32 Artifact.commitCode leafWords 21197 (List.range' 1920 2176) = some 45201 :=
-  walk_range_join leafWords 21197 22609 45201 1920 128 2048 leaf_block_1920 leaf_from_2048
-theorem leaf_from_1792 : walk 32 Artifact.commitCode leafWords 19785 (List.range' 1792 2304) = some 45201 :=
-  walk_range_join leafWords 19785 21197 45201 1792 128 2176 leaf_block_1792 leaf_from_1920
-theorem leaf_from_1664 : walk 32 Artifact.commitCode leafWords 18373 (List.range' 1664 2432) = some 45201 :=
-  walk_range_join leafWords 18373 19785 45201 1664 128 2304 leaf_block_1664 leaf_from_1792
-theorem leaf_from_1536 : walk 32 Artifact.commitCode leafWords 16961 (List.range' 1536 2560) = some 45201 :=
-  walk_range_join leafWords 16961 18373 45201 1536 128 2432 leaf_block_1536 leaf_from_1664
-theorem leaf_from_1408 : walk 32 Artifact.commitCode leafWords 15550 (List.range' 1408 2688) = some 45201 :=
-  walk_range_join leafWords 15550 16961 45201 1408 128 2560 leaf_block_1408 leaf_from_1536
-theorem leaf_from_1280 : walk 32 Artifact.commitCode leafWords 14138 (List.range' 1280 2816) = some 45201 :=
-  walk_range_join leafWords 14138 15550 45201 1280 128 2688 leaf_block_1280 leaf_from_1408
-theorem leaf_from_1152 : walk 32 Artifact.commitCode leafWords 12726 (List.range' 1152 2944) = some 45201 :=
-  walk_range_join leafWords 12726 14138 45201 1152 128 2816 leaf_block_1152 leaf_from_1280
-theorem leaf_from_1024 : walk 32 Artifact.commitCode leafWords 11314 (List.range' 1024 3072) = some 45201 :=
-  walk_range_join leafWords 11314 12726 45201 1024 128 2944 leaf_block_1024 leaf_from_1152
-theorem leaf_from_896 : walk 32 Artifact.commitCode leafWords 9902 (List.range' 896 3200) = some 45201 :=
-  walk_range_join leafWords 9902 11314 45201 896 128 3072 leaf_block_896 leaf_from_1024
-theorem leaf_from_768 : walk 32 Artifact.commitCode leafWords 8490 (List.range' 768 3328) = some 45201 :=
-  walk_range_join leafWords 8490 9902 45201 768 128 3200 leaf_block_768 leaf_from_896
-theorem leaf_from_640 : walk 32 Artifact.commitCode leafWords 7078 (List.range' 640 3456) = some 45201 :=
-  walk_range_join leafWords 7078 8490 45201 640 128 3328 leaf_block_640 leaf_from_768
-theorem leaf_from_512 : walk 32 Artifact.commitCode leafWords 5666 (List.range' 512 3584) = some 45201 :=
-  walk_range_join leafWords 5666 7078 45201 512 128 3456 leaf_block_512 leaf_from_640
-theorem leaf_from_384 : walk 32 Artifact.commitCode leafWords 4254 (List.range' 384 3712) = some 45201 :=
-  walk_range_join leafWords 4254 5666 45201 384 128 3584 leaf_block_384 leaf_from_512
-theorem leaf_from_256 : walk 32 Artifact.commitCode leafWords 2842 (List.range' 256 3840) = some 45201 :=
-  walk_range_join leafWords 2842 4254 45201 256 128 3712 leaf_block_256 leaf_from_384
-theorem leaf_from_128 : walk 32 Artifact.commitCode leafWords 1430 (List.range' 128 3968) = some 45201 :=
-  walk_range_join leafWords 1430 2842 45201 128 128 3840 leaf_block_128 leaf_from_256
-theorem leaf_from_0 : walk 32 Artifact.commitCode leafWords 19 (List.range' 0 4096) = some 45201 :=
-  walk_range_join leafWords 19 1430 45201 0 128 3968 leaf_block_0 leaf_from_128
+theorem leaf_from_3840 : walk 32 Artifact.commitCode leafWords 42361 (List.range' 3840 256) = some 45185 :=
+  walk_range_join leafWords 42361 43773 45185 3840 128 128 leaf_block_3840 leaf_from_3968
+theorem leaf_from_3712 : walk 32 Artifact.commitCode leafWords 40950 (List.range' 3712 384) = some 45185 :=
+  walk_range_join leafWords 40950 42361 45185 3712 128 256 leaf_block_3712 leaf_from_3840
+theorem leaf_from_3584 : walk 32 Artifact.commitCode leafWords 39538 (List.range' 3584 512) = some 45185 :=
+  walk_range_join leafWords 39538 40950 45185 3584 128 384 leaf_block_3584 leaf_from_3712
+theorem leaf_from_3456 : walk 32 Artifact.commitCode leafWords 38127 (List.range' 3456 640) = some 45185 :=
+  walk_range_join leafWords 38127 39538 45185 3456 128 512 leaf_block_3456 leaf_from_3584
+theorem leaf_from_3328 : walk 32 Artifact.commitCode leafWords 36715 (List.range' 3328 768) = some 45185 :=
+  walk_range_join leafWords 36715 38127 45185 3328 128 640 leaf_block_3328 leaf_from_3456
+theorem leaf_from_3200 : walk 32 Artifact.commitCode leafWords 35304 (List.range' 3200 896) = some 45185 :=
+  walk_range_join leafWords 35304 36715 45185 3200 128 768 leaf_block_3200 leaf_from_3328
+theorem leaf_from_3072 : walk 32 Artifact.commitCode leafWords 33892 (List.range' 3072 1024) = some 45185 :=
+  walk_range_join leafWords 33892 35304 45185 3072 128 896 leaf_block_3072 leaf_from_3200
+theorem leaf_from_2944 : walk 32 Artifact.commitCode leafWords 32481 (List.range' 2944 1152) = some 45185 :=
+  walk_range_join leafWords 32481 33892 45185 2944 128 1024 leaf_block_2944 leaf_from_3072
+theorem leaf_from_2816 : walk 32 Artifact.commitCode leafWords 31070 (List.range' 2816 1280) = some 45185 :=
+  walk_range_join leafWords 31070 32481 45185 2816 128 1152 leaf_block_2816 leaf_from_2944
+theorem leaf_from_2688 : walk 32 Artifact.commitCode leafWords 29659 (List.range' 2688 1408) = some 45185 :=
+  walk_range_join leafWords 29659 31070 45185 2688 128 1280 leaf_block_2688 leaf_from_2816
+theorem leaf_from_2560 : walk 32 Artifact.commitCode leafWords 28247 (List.range' 2560 1536) = some 45185 :=
+  walk_range_join leafWords 28247 29659 45185 2560 128 1408 leaf_block_2560 leaf_from_2688
+theorem leaf_from_2432 : walk 32 Artifact.commitCode leafWords 26836 (List.range' 2432 1664) = some 45185 :=
+  walk_range_join leafWords 26836 28247 45185 2432 128 1536 leaf_block_2432 leaf_from_2560
+theorem leaf_from_2304 : walk 32 Artifact.commitCode leafWords 25424 (List.range' 2304 1792) = some 45185 :=
+  walk_range_join leafWords 25424 26836 45185 2304 128 1664 leaf_block_2304 leaf_from_2432
+theorem leaf_from_2176 : walk 32 Artifact.commitCode leafWords 24013 (List.range' 2176 1920) = some 45185 :=
+  walk_range_join leafWords 24013 25424 45185 2176 128 1792 leaf_block_2176 leaf_from_2304
+theorem leaf_from_2048 : walk 32 Artifact.commitCode leafWords 22601 (List.range' 2048 2048) = some 45185 :=
+  walk_range_join leafWords 22601 24013 45185 2048 128 1920 leaf_block_2048 leaf_from_2176
+theorem leaf_from_1920 : walk 32 Artifact.commitCode leafWords 21190 (List.range' 1920 2176) = some 45185 :=
+  walk_range_join leafWords 21190 22601 45185 1920 128 2048 leaf_block_1920 leaf_from_2048
+theorem leaf_from_1792 : walk 32 Artifact.commitCode leafWords 19778 (List.range' 1792 2304) = some 45185 :=
+  walk_range_join leafWords 19778 21190 45185 1792 128 2176 leaf_block_1792 leaf_from_1920
+theorem leaf_from_1664 : walk 32 Artifact.commitCode leafWords 18367 (List.range' 1664 2432) = some 45185 :=
+  walk_range_join leafWords 18367 19778 45185 1664 128 2304 leaf_block_1664 leaf_from_1792
+theorem leaf_from_1536 : walk 32 Artifact.commitCode leafWords 16955 (List.range' 1536 2560) = some 45185 :=
+  walk_range_join leafWords 16955 18367 45185 1536 128 2432 leaf_block_1536 leaf_from_1664
+theorem leaf_from_1408 : walk 32 Artifact.commitCode leafWords 15545 (List.range' 1408 2688) = some 45185 :=
+  walk_range_join leafWords 15545 16955 45185 1408 128 2560 leaf_block_1408 leaf_from_1536
+theorem leaf_from_1280 : walk 32 Artifact.commitCode leafWords 14133 (List.range' 1280 2816) = some 45185 :=
+  walk_range_join leafWords 14133 15545 45185 1280 128 2688 leaf_block_1280 leaf_from_1408
+theorem leaf_from_1152 : walk 32 Artifact.commitCode leafWords 12722 (List.range' 1152 2944) = some 45185 :=
+  walk_range_join leafWords 12722 14133 45185 1152 128 2816 leaf_block_1152 leaf_from_1280
+theorem leaf_from_1024 : walk 32 Artifact.commitCode leafWords 11310 (List.range' 1024 3072) = some 45185 :=
+  walk_range_join leafWords 11310 12722 45185 1024 128 2944 leaf_block_1024 leaf_from_1152
+theorem leaf_from_896 : walk 32 Artifact.commitCode leafWords 9899 (List.range' 896 3200) = some 45185 :=
+  walk_range_join leafWords 9899 11310 45185 896 128 3072 leaf_block_896 leaf_from_1024
+theorem leaf_from_768 : walk 32 Artifact.commitCode leafWords 8487 (List.range' 768 3328) = some 45185 :=
+  walk_range_join leafWords 8487 9899 45185 768 128 3200 leaf_block_768 leaf_from_896
+theorem leaf_from_640 : walk 32 Artifact.commitCode leafWords 7076 (List.range' 640 3456) = some 45185 :=
+  walk_range_join leafWords 7076 8487 45185 640 128 3328 leaf_block_640 leaf_from_768
+theorem leaf_from_512 : walk 32 Artifact.commitCode leafWords 5664 (List.range' 512 3584) = some 45185 :=
+  walk_range_join leafWords 5664 7076 45185 512 128 3456 leaf_block_512 leaf_from_640
+theorem leaf_from_384 : walk 32 Artifact.commitCode leafWords 4253 (List.range' 384 3712) = some 45185 :=
+  walk_range_join leafWords 4253 5664 45185 384 128 3584 leaf_block_384 leaf_from_512
+theorem leaf_from_256 : walk 32 Artifact.commitCode leafWords 2841 (List.range' 256 3840) = some 45185 :=
+  walk_range_join leafWords 2841 4253 45185 256 128 3712 leaf_block_256 leaf_from_384
+theorem leaf_from_128 : walk 32 Artifact.commitCode leafWords 1430 (List.range' 128 3968) = some 45185 :=
+  walk_range_join leafWords 1430 2841 45185 128 128 3840 leaf_block_128 leaf_from_256
+theorem leaf_from_0 : walk 32 Artifact.commitCode leafWords 19 (List.range' 0 4096) = some 45185 :=
+  walk_range_join leafWords 19 1430 45185 0 128 3968 leaf_block_0 leaf_from_128
 theorem quad_from_15872 : walk 32 Artifact.commitCode (fun _ => quadWords) 92828 (List.range' 15872 512) = some 94364 :=
   quad_block_15872
 theorem quad_from_15360 : walk 32 Artifact.commitCode (fun _ => quadWords) 91292 (List.range' 15360 1024) = some 94364 :=
@@ -212,10 +212,10 @@ theorem parent_from_512 : walk 32 Artifact.commitCode (fun _ => parentWords) 964
 theorem parent_from_0 : walk 32 Artifact.commitCode (fun _ => parentWords) 94375 (List.range' 0 15709) = some 157211 :=
   walk_range_join (fun _ => parentWords) 94375 96423 157211 0 512 15197 parent_block_0 parent_from_512
 theorem seg_setupWords : walk 32 Artifact.commitCode id 0 [setupWords] = some 19 := by decide +kernel
-theorem seg_leafCode : walk 32 Artifact.commitCode id 19 [leafCode] = some 45201 := by
+theorem seg_leafCode : walk 32 Artifact.commitCode id 19 [leafCode] = some 45185 := by
   rw [show leafCode = (List.range' 0 4096).flatMap leafWords by rw [leafCode, List.range_eq_range']]
-  exact walk_flatten 32 _ leafWords _ 19 45201 leaf_from_0
-theorem seg_leafLatchWords : walk 32 Artifact.commitCode id 45201 [leafLatchWords] = some 45203 := by decide +kernel
+  exact walk_flatten 32 _ leafWords _ 19 45185 leaf_from_0
+theorem seg_leafLatchWords : walk 32 Artifact.commitCode id 45185 [leafLatchWords] = some 45203 := by decide +kernel
 theorem seg_quadSetupWords : walk 32 Artifact.commitCode id 45203 [quadSetupWords] = some 45212 := by decide +kernel
 theorem seg_quadCode : walk 32 Artifact.commitCode id 45212 [quadCode] = some 94364 := by
   rw [show quadCode = (List.range' 0 16384).flatMap (fun _ => quadWords) by rw [quadCode, replicate_flatten_eq]]
@@ -229,7 +229,7 @@ theorem seg_parentLatchWords : walk 32 Artifact.commitCode id 157211 [parentLatc
 theorem seg_rootWords : walk 32 Artifact.commitCode id 157213 [rootWords] = some 157424 := by decide +kernel
 
 theorem code_walk : walk 32 Artifact.commitCode id 0 [setupWords, leafCode, leafLatchWords, quadSetupWords, quadCode, quadLatchWords, parentSetupWords, parentCode, parentLatchWords, rootWords] = some 157424 := by
-  exact (walk_append 32 _ id [setupWords] ([leafCode] ++ ([leafLatchWords] ++ ([quadSetupWords] ++ ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords])))))))) 0 19 157424 seg_setupWords (walk_append 32 _ id [leafCode] ([leafLatchWords] ++ ([quadSetupWords] ++ ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords]))))))) 19 45201 157424 seg_leafCode (walk_append 32 _ id [leafLatchWords] ([quadSetupWords] ++ ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords])))))) 45201 45203 157424 seg_leafLatchWords (walk_append 32 _ id [quadSetupWords] ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords]))))) 45203 45212 157424 seg_quadSetupWords (walk_append 32 _ id [quadCode] ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords])))) 45212 94364 157424 seg_quadCode (walk_append 32 _ id [quadLatchWords] ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords]))) 94364 94366 157424 seg_quadLatchWords (walk_append 32 _ id [parentSetupWords] ([parentCode] ++ ([parentLatchWords] ++ [rootWords])) 94366 94375 157424 seg_parentSetupWords (walk_append 32 _ id [parentCode] ([parentLatchWords] ++ [rootWords]) 94375 157211 157424 seg_parentCode (walk_append 32 _ id [parentLatchWords] [rootWords] 157211 157213 157424 seg_parentLatchWords seg_rootWords)))))))))
+  exact (walk_append 32 _ id [setupWords] ([leafCode] ++ ([leafLatchWords] ++ ([quadSetupWords] ++ ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords])))))))) 0 19 157424 seg_setupWords (walk_append 32 _ id [leafCode] ([leafLatchWords] ++ ([quadSetupWords] ++ ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords]))))))) 19 45185 157424 seg_leafCode (walk_append 32 _ id [leafLatchWords] ([quadSetupWords] ++ ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords])))))) 45185 45203 157424 seg_leafLatchWords (walk_append 32 _ id [quadSetupWords] ([quadCode] ++ ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords]))))) 45203 45212 157424 seg_quadSetupWords (walk_append 32 _ id [quadCode] ([quadLatchWords] ++ ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords])))) 45212 94364 157424 seg_quadCode (walk_append 32 _ id [quadLatchWords] ([parentSetupWords] ++ ([parentCode] ++ ([parentLatchWords] ++ [rootWords]))) 94364 94366 157424 seg_quadLatchWords (walk_append 32 _ id [parentSetupWords] ([parentCode] ++ ([parentLatchWords] ++ [rootWords])) 94366 94375 157424 seg_parentSetupWords (walk_append 32 _ id [parentCode] ([parentLatchWords] ++ [rootWords]) 94375 157211 157424 seg_parentCode (walk_append 32 _ id [parentLatchWords] [rootWords] 157211 157213 157424 seg_parentLatchWords seg_rootWords)))))))))
 
 theorem commit_code_matches : matchesFrom 32 Artifact.commitCode 0 image.code = true := by
   obtain ⟨ok, len⟩ := walk_sound 32 _ id _ 0 157424 code_walk

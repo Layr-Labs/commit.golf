@@ -16,7 +16,7 @@ theorem latch_run (s : MachineState) (g fuel : Nat) (bound : g<2^12) (r : Regs s
     execute image (latchCost g+fuel) s true =
       (do let y ← execute image fuel (s.setPC (latchPC g)) true
           return y.charge (latchCost g) 0) := by
-  have here : s.pc=184900 := by rw [r.pc,leaf_body_end];rfl
+  have here : s.pc=184836 := by rw [r.pc,leaf_body_end];rfl
   have eq : s.getReg .x10=s.getReg .x8 ↔ g+1=2^12 := by
     rw [r.source,stop]
     constructor
@@ -31,15 +31,15 @@ theorem latch_run (s : MachineState) (g fuel : Nat) (bound : g<2^12) (r : Regs s
       congr 2
       omega
   by_cases last : g+1=2^12
-  · have step : ordinaryStep s (.base (.BEQ .x10 .x8 8))=some (s.setPC 184908) := by
+  · have step : ordinaryStep s (.base (.BEQ .x10 .x8 72))=some (s.setPC 184908) := by
       simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,here,eq.mpr last,signExtend13]
     rw [latchCost,if_pos last,latchPC,if_pos last,Nat.add_comm 1 fuel,
       CommitGolfCandidate.execute_ordinary_step _ _ _ _ _ _ (fetch_leaf_latch s here) step];rfl
-  · let middle := s.setPC 184904
+  · let middle := s.setPC 184840
     have diff : s.getReg .x10≠s.getReg .x8 := fun h => last (eq.mp h)
-    have step : ordinaryStep s (.base (.BEQ .x10 .x8 8))=some middle := by
+    have step : ordinaryStep s (.base (.BEQ .x10 .x8 72))=some middle := by
       simp [middle,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,here,diff]
-    have jump : ordinaryStep middle (.base (.JAL .x0 1916420))=some (s.setPC 4172) := by
+    have jump : ordinaryStep middle (.base (.JAL .x0 1916484))=some (s.setPC 4172) := by
       simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,middle,MachineState.setReg,MachineState.setPC]
       rfl
     rw [latchCost,if_neg last,latchPC,if_neg last,show 2+fuel=(fuel+1)+1 by omega,
@@ -55,7 +55,7 @@ theorem latch_next (s : MachineState) (g : Nat) (more : g+1<2^12) (r : Regs s g 
   · change s.getReg .x20=wordAddress (heapBase _ _)
     rw [r.heap]
     simp [heapBase]
-  · change s.getReg .x22=wordAddress (nonceBase _ _);rw [r.salts];unfold nonceBase;rw [show 4096*g+128*(4096/128)=4096*(g+1)+128*(0/128) by omega]
+  · change s.getReg .x22=wordAddress (nonceBase _ _);rw [r.salts];unfold nonceBase;rw [show 4096*g+256*((4096+128)/256)=4096*(g+1)+256*((0+128)/256) by omega]
   · change latchPC g=_;rw [latchPC,if_neg (by omega)];rfl
 
 def batch (g : Nat) (s : MachineState) : OracleComp World MachineState := do
@@ -64,11 +64,11 @@ def batch (g : Nat) (s : MachineState) : OracleComp World MachineState := do
 
 theorem batch_run (s : MachineState) (g fuel : Nat) (bound : g<2^12) (r : Regs s g 0)
     (stop : s.getReg .x8=wordAddress (leafStart (2^24)+5)) :
-    execute image (45182+latchCost g+fuel) s true =
+    execute image (45166+latchCost g+fuel) s true =
       (do let next ← batch g s
           let result ← execute image fuel next true
-          return result.charge (102526+latchCost g) 8192) := by
-  rw [show 45182+latchCost g+fuel=span 11 0 4096+(latchCost g+fuel) by change 45182+_+_=45182+(_+_);omega,
+          return result.charge (102510+latchCost g) 8192) := by
+  rw [show 45166+latchCost g+fuel=span 11 0 4096+(latchCost g+fuel) by change 45166+_+_=45166+(_+_);omega,
     group_run s g 4096 0 _ bound (by decide) r]
   simp only [batch,bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support
@@ -96,18 +96,18 @@ def groups : Nat → Nat → MachineState → OracleComp World MachineState
 
 theorem groups_run (s : MachineState) (cnt g fuel : Nat) (limit : g+cnt=2^12)
     (r : 0<cnt → Regs s g 0) (stop : s.getReg .x8=wordAddress (leafStart (2^24)+5)) :
-    execute image ((45184*cnt-1)+fuel) s true =
+    execute image ((45168*cnt-1)+fuel) s true =
       (do let next ← groups cnt g s
           let result ← execute image fuel next true
-          return result.charge (102528*cnt-1) (8192*cnt)) := by
+          return result.charge (102512*cnt-1) (8192*cnt)) := by
   induction cnt generalizing g s with
   | zero => simp [groups,Execution.charge]
   | succ k ih =>
-    have last : (45184*(k+1)-1)=45182+latchCost g+(45184*k-1) ∧
-        (102528*(k+1)-1)=102526+latchCost g+(102528*k-1) := by
+    have last : (45168*(k+1)-1)=45166+latchCost g+(45168*k-1) ∧
+        (102512*(k+1)-1)=102510+latchCost g+(102512*k-1) := by
       unfold latchCost;split <;> constructor <;> omega
     have valid := r (by omega)
-    rw [last.1,Nat.add_assoc (45182+latchCost g),batch_run s g _ (by omega) valid stop]
+    rw [last.1,Nat.add_assoc (45166+latchCost g),batch_run s g _ (by omega) valid stop]
     simp only [groups,bind_assoc]
     apply bind_congr_of_forall_mem_support
     intro next reached

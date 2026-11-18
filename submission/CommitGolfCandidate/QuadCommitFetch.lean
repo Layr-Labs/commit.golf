@@ -43,30 +43,30 @@ theorem code_segment_at (head chunk suffix : List (BitVec 32))
 def leafLatchPrefix := setupWords++leafCode
 def leafLatchSuffix := quadSetupWords++quadCode++quadLatchWords++parentSetupWords++parentCode++parentLatchWords++rootWords
 
-theorem leaf_latch_prefix_length : leafLatchPrefix.length=45201 := by
+theorem leaf_latch_prefix_length : leafLatchPrefix.length=45185 := by
   unfold leafLatchPrefix
   rw [List.length_append,leaf_code_word_count]
   rfl
 
-theorem fetch_leaf_latch (s : MachineState) (pc : s.pc=184900) :
-    fetch image s=some (.base (.BEQ .x10 .x8 8)) := by
-  apply fetch_code_index s 45201 (by omega) pc
+theorem fetch_leaf_latch (s : MachineState) (pc : s.pc=184836) :
+    fetch image s=some (.base (.BEQ .x10 .x8 72)) := by
+  apply fetch_code_index s 45185 (by omega) pc
   have atIndex := code_segment_at leafLatchPrefix leafLatchWords leafLatchSuffix
     (by unfold image leafLatchPrefix leafLatchSuffix;simp only [List.append_assoc]) 0 (by decide)
   rw [leaf_latch_prefix_length,Nat.add_zero] at atIndex
   rw [atIndex]
-  change decodeInstruction 0x00850463=some (.base (.BEQ .x10 .x8 8))
+  change decodeInstruction 0x04850463=some (.base (.BEQ .x10 .x8 72))
   unfold decodeInstruction
   rfl
 
-theorem fetch_leaf_jump (s : MachineState) (pc : s.pc=184904) :
-    fetch image s=some (.base (.JAL .x0 1916420)) := by
-  apply fetch_code_index s 45202 (by omega) pc
+theorem fetch_leaf_jump (s : MachineState) (pc : s.pc=184840) :
+    fetch image s=some (.base (.JAL .x0 1916484)) := by
+  apply fetch_code_index s 45186 (by omega) pc
   have atIndex := code_segment_at leafLatchPrefix leafLatchWords leafLatchSuffix
     (by unfold image leafLatchPrefix leafLatchSuffix;simp only [List.append_assoc]) 1 (by decide)
   rw [leaf_latch_prefix_length] at atIndex
   rw [atIndex]
-  change decodeInstruction 0xe05d306f=some (.base (.JAL .x0 1916420))
+  change decodeInstruction 0xe45d306f=some (.base (.JAL .x0 1916484))
   unfold decodeInstruction
   rfl
 

@@ -5,7 +5,7 @@ namespace TwoPermutationPrototype.Quad.Commit.Leaves
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 def heapExtra (u : Nat) : Nat := if u%44=43 ∨ u=4095 then 1 else 0
-def nonceExtra (u : Nat) : Nat := if u%128=127 then 1 else 0
+def nonceExtra (u : Nat) : Nat := if u%256=127 then 1 else 0
 def extra (u : Nat) : Nat := heapExtra u + nonceExtra u
 
 theorem leaf_word_count (u : Nat) : (leafWords u).length = 11+extra u := by
@@ -21,12 +21,12 @@ theorem leaf_index_next (u : Nat) : leafIndex (u+1) = leafIndex u+11+extra u := 
   omega
 
 theorem extra_count (u : Nat) (inside : u<4096) :
-    (u+1)/44+(u+1)/128+(if u+1=4096 then 1 else 0) = u/44+u/128+extra u := by
+    (u+1)/44+(u+1+128)/256+(if u+1=4096 then 1 else 0) = u/44+(u+128)/256+extra u := by
   unfold extra heapExtra nonceExtra
   split <;> split <;> split <;> omega
 
 theorem leaf_index_formula (u : Nat) (inside : u≤4096) :
-    leafIndex u = 19+11*u+u/44+u/128+(if u=4096 then 1 else 0) := by
+    leafIndex u = 19+11*u+u/44+(u+128)/256+(if u=4096 then 1 else 0) := by
   induction u with
   | zero => rfl
   | succ u ih =>
@@ -36,12 +36,12 @@ theorem leaf_index_formula (u : Nat) (inside : u≤4096) :
     rw [leaf_index_next,old,if_neg (by omega)]
     omega
 
-theorem leaf_body_end : leafIndex 4096 = 45201 := by
+theorem leaf_body_end : leafIndex 4096 = 45185 := by
   rw [leaf_index_formula 4096 (by omega)]
   decide
 
-theorem leaf_code_word_count : leafCode.length = 45182 := by
-  change ((List.range 4096).flatMap leafWords).length = 45182
+theorem leaf_code_word_count : leafCode.length = 45166 := by
+  change ((List.range 4096).flatMap leafWords).length = 45166
   have endIndex := leaf_body_end
   unfold leafIndex at endIndex
   omega

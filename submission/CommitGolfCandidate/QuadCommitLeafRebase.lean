@@ -1,7 +1,7 @@
 import CommitGolfCandidate.QuadCommitLeafControlFetch
 import CommitGolfCandidate.QuadCommitLeafProduction
 
-/-! Exact rebases of the centered 44-leaf output window and 128-leaf salt window. -/
+/-! Exact rebases of the centered 44-leaf output window and 256-leaf salt window. -/
 namespace TwoPermutationPrototype.Quad.Commit.Leaves
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64
@@ -13,7 +13,7 @@ def heapUpdate (s : MachineState) := (s.setReg .x20 (s.getReg .x12+2040)).setPC 
 def nonceUpdate (s : MachineState) := (s.setReg .x22 (s.getReg .x22+s.getReg .x7)).setPC (s.pc+4)
 def rebased (s : MachineState) (u : Nat) :=
   let h := if u%44=43 ∨ u=4095 then heapUpdate s else s
-  if u%128=127 then nonceUpdate h else h
+  if u%256=127 then nonceUpdate h else h
 
 theorem heap_at (s : MachineState) (u : Fin 4096) (here : s.pc=leafPC u 11)
     (h : u.val%44=43 ∨ u.val=4095) (fuel : Nat) :
@@ -25,7 +25,7 @@ theorem heap_at (s : MachineState) (u : Fin 4096) (here : s.pc=leafPC u 11)
   rfl
 
 theorem nonce_at (s : MachineState) (u : Fin 4096)
-    (here : s.pc=leafPC u (11+heapExtra u.val)) (h : u.val%128=127) (fuel : Nat) :
+    (here : s.pc=leafPC u (11+heapExtra u.val)) (h : u.val%256=127) (fuel : Nat) :
     execute image (1+fuel) s true =
       (do let out ← execute image fuel (nonceUpdate s) true
           return out.charge 1 0) := by
@@ -38,7 +38,7 @@ theorem rebase_run (s : MachineState) (u : Fin 4096) (here : s.pc=leafPC u 11) (
       (do let out ← execute image fuel (rebased s u.val) true
           return out.charge (extra u.val) 0) := by
   by_cases h : u.val%44=43 ∨ u.val=4095
-  · by_cases n : u.val%128=127
+  · by_cases n : u.val%256=127
     · simp only [extra,heapExtra,nonceExtra,rebased,h,n,ite_true]
       rw [show 1+1+fuel=1+(1+fuel) by omega,heap_at s u here h]
       have next : (heapUpdate s).pc=leafPC u (11+heapExtra u.val) := by
@@ -48,7 +48,7 @@ theorem rebase_run (s : MachineState) (u : Fin 4096) (here : s.pc=leafPC u 11) (
       rw [nonce_at _ u next n]
       simp [Execution.charge,←Nat.add_assoc]
     · simpa only [extra,heapExtra,nonceExtra,rebased,h,n,ite_true,ite_false,Nat.add_zero] using heap_at s u here h fuel
-  · by_cases n : u.val%128=127
+  · by_cases n : u.val%256=127
     · have next : s.pc=leafPC u (11+heapExtra u.val) := by simpa only [heapExtra,if_neg h,Nat.add_zero] using here
       simpa only [extra,heapExtra,nonceExtra,rebased,h,n,ite_false,ite_true,Nat.zero_add] using nonce_at s u next n fuel
     · simp [extra,heapExtra,nonceExtra,rebased,h,n,Execution.charge]
@@ -75,9 +75,9 @@ private theorem same_heap (g u : Nat) (hu : u<4096) (h : ¬(u%44=43 ∨ u=4095))
   congr 2
   omega
 
-private theorem next_nonce (g u : Nat) (h : u%128=127) :
-    wordAddress (nonceBase g u)+2048=wordAddress (nonceBase g (u+1)) := by
-  change wordAddress _+wordAddress 256=_
+private theorem next_nonce (g u : Nat) (h : u%256=127) :
+    wordAddress (nonceBase g u)+4096=wordAddress (nonceBase g (u+1)) := by
+  change wordAddress _+wordAddress 512=_
   rw [←wordAddress_add]
   congr 1
   unfold nonceBase leafSalt Commit.saltWord
@@ -89,7 +89,7 @@ theorem rebase_regs (s : MachineState) (g : Nat) (u : Fin 4096) (r : RawRegs s g
     simpa only [idx,Nat.add_assoc] using r.source
   have pc := pc_step u
   by_cases h : u.val%44=43 ∨ u.val=4095
-  · by_cases n : u.val%128=127
+  · by_cases n : u.val%256=127
     · simp only [rebased,h,n,ite_true]
       simp only [extra,heapExtra,nonceExtra,h,n,ite_true] at pc
       refine ⟨src,?_,?_,r.stride,r.selector,r.size,r.primitive,?_⟩
@@ -111,11 +111,11 @@ theorem rebase_regs (s : MachineState) (g : Nat) (u : Fin 4096) (r : RawRegs s g
       · change s.getReg .x22=_
         rw [r.salts]
         unfold nonceBase
-        rw [show (u.val+1)/128=u.val/128 by omega]
+        rw [show (u.val+1+128)/256=(u.val+128)/256 by omega]
       · change s.pc+4=_
         rw [r.pc]
         exact pc
-  · by_cases n : u.val%128=127
+  · by_cases n : u.val%256=127
     · simp only [rebased,h,n,ite_false,ite_true]
       simp only [extra,heapExtra,nonceExtra,h,n,ite_false,ite_true] at pc
       refine ⟨src,?_,?_,r.stride,r.selector,r.size,r.primitive,?_⟩
@@ -133,7 +133,7 @@ theorem rebase_regs (s : MachineState) (g : Nat) (u : Fin 4096) (r : RawRegs s g
       · rw [r.heap,same_heap g u.val u.isLt h]
       · rw [r.salts]
         unfold nonceBase
-        rw [show (u.val+1)/128=u.val/128 by omega]
+        rw [show (u.val+1+128)/256=(u.val+128)/256 by omega]
       · rw [r.pc]
         simpa using pc
 

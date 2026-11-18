@@ -68,7 +68,7 @@ def nonceSetupOps : List Instr :=
    .LUI .x22 442369,.ADDI .x22 .x22 0,.ADD .x22 .x9 .x22,
    .ADDI .x5 .x0 2,.ADDI .x10 .x22 (-176),.ADDI .x11 .x0 24,.ADDI .x11 .x11 0,
    .ECALL,
-   .ADDI .x5 .x0 0,.ADDI .x11 .x0 200,.ADDI .x13 .x0 1,.JAL .x0 628828,.SLLI .x7 .x13 11]
+   .ADDI .x5 .x0 0,.ADDI .x11 .x0 200,.ADDI .x13 .x0 1,.JAL .x0 628828,.SLLI .x7 .x13 12]
 
 private theorem gen_decoded : ∀ j : Fin 200,
     (genWords[j.val]?).bind decodeInstruction = some (.base ((genOps[j.val]?).getD .EBREAK)) := by

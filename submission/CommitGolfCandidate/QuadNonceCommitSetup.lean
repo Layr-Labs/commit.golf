@@ -1,7 +1,7 @@
 import CommitGolfCandidate.QuadNonceCommitExec
 
 /-! Words 0..13 (24-byte seed RANDOM at saltBase-176), the jump into the generator, the
-generator return (x10 := x18, x12 := x9, jump to word 18) and word 18 (x7 := 2048).
+generator return (x10 := x18, x12 := x9, jump to word 18) and word 18 (x7 := 4096).
 The resulting leaf-entry state satisfies `ReadyRegs` (PC 4172). -/
 namespace TwoPermutationPrototype.Quad.Commit.Chain
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
@@ -19,7 +19,7 @@ def startOps : List Instr :=
   [.ADDI .x5 .x0 0,.ADDI .x11 .x0 200,.ADDI .x13 .x0 1,.JAL .x0 628828,
     .ADDI .x12 .x22 0,.LUI .x7 65538,.ADDI .x7 .x7 0,.ADD .x7 .x7 .x22]
 def finishOps : List Instr :=
-  [.ADDI .x10 .x18 0,.ADDI .x12 .x9 0,.JAL .x0 1467532,.SLLI .x7 .x13 11]
+  [.ADDI .x10 .x18 0,.ADDI .x12 .x9 0,.JAL .x0 1467532,.SLLI .x7 .x13 12]
 
 def seedSetup (s : MachineState) := seedOps.foldl execInstrBr s
 def seedWritten (s : MachineState) (k : BitVec 192) :=
@@ -206,7 +206,7 @@ theorem finish_regs (s : MachineState) (frame : NonceChainFrame s nonceChainCoun
   · change s.getReg .x18+signExtend12 0=_
     rw [h.source]
     rfl
-  · change s.getReg .x13 <<< (11 : Nat) = _
+  · change s.getReg .x13 <<< (12 : Nat) = _
     rw [primitive]
     rfl
   · change s.pc+4+4+signExtend21 1467532+4=_

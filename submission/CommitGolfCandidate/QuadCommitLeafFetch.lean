@@ -62,7 +62,7 @@ theorem leaf_code_at (u k : Nat) (hu : u<4096) (hk : k<(leafWords u).length) :
   rw [List.getElem?_append_right (by omega),Nat.add_sub_cancel_left]
   exact List.getElem?_append_left (by have := leaf_words_length_min u; omega)
 
-private theorem nonce_load_table : ∀ s : Fin 128,
+private theorem nonce_load_table : ∀ s : Fin 256,
     decodeInstruction (BitVec.ofNat 32 (0x000b3f83 + 1048576 * (16*s.val))) =
       some (.base (.LD .x31 .x22 (BitVec.ofNat 12 (16*s.val)))) ∧
     decodeInstruction (BitVec.ofNat 32 (0x008b3f83 + 1048576 * (16*s.val))) =
@@ -82,7 +82,7 @@ attribute [local irreducible] decodeInstruction
 
 private theorem leaf_decoded (u : Fin 4096) (k : Nat) (hk : k<11) :
     ((leafWords u.val)[k]?).bind decodeInstruction = some (.base (leafInstr u k)) := by
-  have nonce := nonce_load_table ⟨u.val%128,Nat.mod_lt _ (by decide)⟩
+  have nonce := nonce_load_table ⟨u.val%256,Nat.mod_lt _ (by decide)⟩
   have output := output_table ⟨u.val%44,Nat.mod_lt _ (by decide)⟩
   have tableLen := leaf_words_length_min u.val
   unfold leafWords
