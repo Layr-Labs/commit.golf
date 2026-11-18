@@ -1,102 +1,79 @@
-import CommitGolfCandidate.HidingTree
+import CommitGolfCandidate.S3HidingTransfer
 import CommitGolfCandidate.CommitSemantics
-import CommitGolfCandidate.OpeningOutput
+import CommitGolfCandidate.CapOpenProgramRun
+import CommitGolfCandidate.CapHonestOpening
+import CommitGolfCandidate.NonceOpeningResult
+import CommitGolfCandidate.NonceOpeningBridge
+import CommitGolfCandidate.NonceOpeningBytes
 
-/-! Identify the commitment and every transmitted proof byte with the salted
-reference tree. This removes machine memory from the remaining privacy argument,
-without replacing the machine-derived scheme being certified. -/
+/-! Identify the returned commitment and every transmitted proof byte with the
+reference tree (tagged leaves, group nodes, truncated internal nodes). For a
+committed state the cap opener emits the cap-level proof of `referenceTranscript`;
+the compaction pass then applies the pure transformation `noncePostprocess`. This
+removes machine memory from the remaining privacy argument, without replacing the
+machine-derived scheme being certified. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
+set_option maxRecDepth 100000
+set_option maxHeartbeats 400000
 
-/-- The heap constructed by the machine is the unique reference heap for its
-message and retained salts, on every used slot. -/
-theorem committed_heap_reference (oracle : Oracle) (message : Message)
-    (state : MachineState) (correct : CommittedState oracle message state)
-    (salt : Index → Digest)
-    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
-    (node : Nat) (positive : 0 < node) (inside : node < 2*LENGTH) :
-    heapDigest state 4294971424 node = saltedHeap oracle.compression message salt node := by
-  apply heap_eq_reference oracle.compression LENGTH _ _ correct.2.1 _ node positive inside
-  intro index below
-  have leaf := correct.2.2 ⟨index, below⟩
-  rw [salts] at leaf
-  simpa only [dif_pos below] using leaf
+/-- The pure transformation applied by the opening's compaction pass. -/
+def noncePostprocess (positions : Positions) (proof : Proof) : Proof :=
+  s6Pack positions.card proof
 
-theorem committed_root_reference (oracle : Oracle) (message : Message)
-    (state : MachineState) (correct : CommittedState oracle message state)
-    (salt : Index → Digest)
-    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index) :
-    readBuffer state submission.layout.commitment 32 =
-      saltedHeap oracle.compression message salt 1 :=
-  correct.1.trans (committed_heap_reference oracle message state correct salt salts
-    1 (by decide) (by decide))
+private theorem opening_map (program : Submission)
+    (trapdoor : BitVec (8*program.sizes.trapdoor)) (positions : Positions) :
+    program.scheme.opening trapdoor positions =
+      program.readProof <$> program.run .opening (trapdoor,positions) := rfl
 
-/-- An opening record contains its leaf's salt followed by its 24 siblings.
-`part = 0` selects the salt; parts 1 through 24 select siblings. -/
-def referenceOpeningDigest (heap : Nat → Digest) (salt : Index → Digest)
-    (positions : Positions) (ordinal part : Nat) : Digest :=
-  let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-  if part = 0 then salt index
-  else heap (((LENGTH+index.val)/2^(part-1)) ^^^ 1)
-
-/-- Exact little-endian proof bytes, in the ABI's sorted position order. -/
-def referenceOpening (heap : Nat → Digest) (salt : Index → Digest)
-    (positions : Positions) : Proof :=
-  (List.range (800*positions.card)).map fun offset =>
-    (referenceOpeningDigest heap salt positions (offset/800) ((offset%800)/32)).extractLsb'
-      (8*(offset%32)) 8
-
-theorem reference_opening_length (heap : Nat → Digest) (salt : Index → Digest)
-    (positions : Positions) : (referenceOpening heap salt positions).length = 800*positions.card := by
-  simp only [referenceOpening, List.length_map, List.length_range]
-
-theorem opening_reference_digest (oracle : Oracle) (message : Message)
-    (state : MachineState) (correct : CommittedState oracle message state)
-    (salt : Index → Digest)
-    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
-    (positions : Positions) (ordinal part : Nat)
-    (present : ordinal < positions.card) (inside : part < 25) :
-    let trapdoor := readBuffer state submission.layout.trapdoor submission.sizes.trapdoor
-    readBuffer (openingResult trapdoor positions).state
-      (submission.layout.proof+800*ordinal+32*part) 32 =
-    referenceOpeningDigest (saltedHeap oracle.compression message salt) salt positions ordinal part := by
-  dsimp only
-  let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-  have records := opening_output_records state positions ordinal present
-  by_cases zero : part = 0
-  · subst part
-    simpa only [referenceOpeningDigest, if_pos rfl, ite_true, Nat.mul_zero, Nat.add_zero]
-      using records.1.trans (salts index)
-  · have level : part-1 < LOG_LENGTH := by change part-1 < 24; omega
-    have address : submission.layout.proof+800*ordinal+32*part =
-        submission.layout.proof+800*ordinal+32+32*(part-1) := by omega
-    rw [address, records.2 (part-1) level]
-    simp only [referenceOpeningDigest, if_neg zero]
-    have bounds := opening_sibling_bounds index (part-1) level
-    exact committed_heap_reference oracle message state correct salt salts _ bounds.1 bounds.2
-
-/-- All bytes emitted by the actual opening image equal the reference proof.
-The proof covers arbitrary opening sets, including the empty set. -/
-theorem opening_reference_bytes (oracle : Oracle) (message : Message)
-    (state : MachineState) (correct : CommittedState oracle message state)
-    (salt : Index → Digest)
-    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
+/-- The submitted opening is the cap opening followed by the compaction pass. -/
+theorem nonce_compressed_opening_scheme (trapdoor : BitVec (8*capProgram.sizes.trapdoor))
     (positions : Positions) :
-    let trapdoor := readBuffer state submission.layout.trapdoor submission.sizes.trapdoor
-    submission.readProof (openingResult trapdoor positions) =
-      referenceOpening (saltedHeap oracle.compression message salt) salt positions := by
-  dsimp only
-  rw [Submission.readProof, opening_result_succeeded, if_pos rfl, opening_result_length]
-  unfold referenceOpening
-  apply List.map_congr_left
-  intro offset present
-  have below := List.mem_range.mp present
-  have ordinal : offset/800 < positions.card := (Nat.div_lt_iff_lt_mul (by decide)).mpr (by omega)
-  have part : (offset%800)/32 < 25 := by omega
-  have address : submission.layout.proof+800*(offset/800)+32*((offset%800)/32)+offset%32 =
-      submission.layout.proof+offset := by omega
-  have digest := opening_reference_digest oracle message state correct salt salts positions
-    (offset/800) ((offset%800)/32) ordinal part
-  rw [← digest, read_buffer_byte _ _ 32 (offset%32) (by omega), address]
+    nonceCompressedProgram.scheme.opening trapdoor positions =
+      noncePostprocess positions <$> capProgram.scheme.opening trapdoor positions := by
+  erw [opening_map nonceCompressedProgram, opening_map capProgram,
+    nonce_compressed_opening_run, nonce_old_opening_run]
+  simp only [map_pure]
+  exact congrArg (pure : Proof → OracleComp World Proof)
+    (nonce_opening_proof_compaction trapdoor positions)
+
+/-- The submitted commitment phase is the cap program's (and the base program's). -/
+theorem nonce_compressed_commit_run (message : Message) :
+    nonceCompressedProgram.run .commit message = submission.run .commit message := rfl
+
+/-- The returned root of a committed state is the reference root. -/
+theorem committed_root_reference (oracle : Oracle) (message : Message) (state : MachineState)
+    (correct : CommittedState oracle message state) (positions : Positions) :
+    readBuffer state nonceCompressedProgram.layout.commitment DIGEST_BYTES =
+      (referenceTranscript oracle.compression oracle.permutation message
+        (expandTaggedVector (committedNonce state)) positions).1 :=
+  correct.1.trans (correct.2.1 1 (by decide) (by decide))
+
+/-- The cap-level opening of a committed state emits the cap-level reference proof,
+for arbitrary opening sets including the empty set. -/
+theorem cap_opening_reference (oracle : Oracle) (message : Message) (state : MachineState)
+    (correct : CommittedState oracle message state) (positions : Positions) :
+    capProgram.scheme.opening
+        (readBuffer state capProgram.layout.trapdoor capProgram.sizes.trapdoor) positions =
+      pure (referenceTranscript oracle.compression oracle.permutation message
+        (expandTaggedVector (committedNonce state)) positions).2 := by
+  by_cases empty : positions.card = 0
+  · rw [cap_open_empty_scheme_bytes _ _ empty, reference_transcript_proof, if_pos empty]
+  · rw [cap_open_nonempty_scheme_bytes _ _ (Nat.pos_of_ne_zero empty),
+      cap_honest_opening_transcript oracle message state correct positions (Nat.pos_of_ne_zero empty)]
+
+/-- All bytes emitted by the submitted opening image for a committed state are the
+transformed reference proof, for arbitrary opening sets including the empty set. -/
+theorem opening_reference_bytes (oracle : Oracle) (message : Message) (state : MachineState)
+    (correct : CommittedState oracle message state) (positions : Positions) :
+    nonceCompressedProgram.scheme.opening
+        (readBuffer state nonceCompressedProgram.layout.trapdoor nonceCompressedProgram.sizes.trapdoor)
+        positions =
+      pure (noncePostprocess positions (referenceTranscript oracle.compression oracle.permutation
+        message (expandTaggedVector (committedNonce state)) positions).2) := by
+  have delivered := nonce_compressed_opening_scheme
+    (readBuffer state capProgram.layout.trapdoor capProgram.sizes.trapdoor) positions
+  rw [cap_opening_reference oracle message state correct positions, map_pure] at delivered
+  exact delivered
 
 end CommitGolfCandidate

@@ -40,19 +40,19 @@ theorem check_input_invariant (input : CheckInput) :
     simp only [zero]
   · rw [regs.2.1]
     change ∀ word < input.positions.card,
-      accessValid (BitVec.ofNat 64 5905584160 + BitVec.ofNat 64 (8 * word)) 8 = true
+      accessValid (BitVec.ofNat 64 6442455072 + BitVec.ofNat 64 (8 * word)) 8 = true
     intro word inside
     exact check_buffer_access _ input.positions.card word (by
       norm_num [LENGTH, LOG_LENGTH, MEMORY_BYTES] at cardinal ⊢; omega) (by decide) inside
   · rw [regs.2.2.1]
     change ∀ word < 32 * input.positions.card,
-      accessValid (BitVec.ofNat 64 6039801888 + BitVec.ofNat 64 (8 * word)) 8 = true
+      accessValid (BitVec.ofNat 64 6576672800 + BitVec.ofNat 64 (8 * word)) 8 = true
     intro word inside
     exact check_buffer_access _ (32 * input.positions.card) word (by
       norm_num [LENGTH, LOG_LENGTH, MEMORY_BYTES] at cardinal ⊢; omega) (by decide) inside
   · rw [regs.2.2.2.1]
     change ∀ word < 100 * input.positions.card,
-      accessValid (BitVec.ofNat 64 10334769184 + BitVec.ofNat 64 (8 * word)) 8 = true
+      accessValid (BitVec.ofNat 64 10871640096 + BitVec.ofNat 64 (8 * word)) 8 = true
     intro word inside
     exact check_buffer_access _ (100 * input.positions.card) word (by
       norm_num [LENGTH, LOG_LENGTH, MEMORY_BYTES] at cardinal ⊢; omega) (by decide) inside
