@@ -1,5 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedLeafSpill
 import CommitGolfCandidate.TwoPermutationPackedLeafInput
+import CommitGolfCandidate.TwoPermutationPackedMeaning
 import CommitGolfCandidate.TwoPermutationPackedLeafLatch
 
 namespace TwoPermutationPrototype.RV64.PackedLeaves
@@ -113,16 +114,14 @@ attribute [local irreducible] groups group batch
 
 def executableMeaning : PackedLeafMeaning executableLeaves where
   counted oracle s := counted_groups oracle s (2^12) 0
-  content oracle msg packed := by
-    let s := packedSubmission.initialState .commit msg
-    let ready := packed_wideReadyState s packed
-    have entry : CommitEntry s := ⟨rfl,rfl,rfl,rfl⟩
-    have rs := (entry_regs s entry packed).1
-    have readySalts (i : Index) : (window (memoryView ready) (leafSalt i.val) : Words 2)=saltWords (splitBlocks 128 LENGTH packed i) := by
-      rw [show memoryView ready=memoryView (readyState s packed) from wide_ready_memory_view s packed]
-      exact ready_salts s packed i
+  content oracle msg salts ready frame bytes := by
+    have ref (i : Index) : packedPublicTree oracle msg salts (LENGTH+i.val) =
+        outputDigest (pinnedFinalReply oracle (memoryView ready) i.val) := by
+      rw [packedPublicTree,transcript_heap_leaf,pinnedFinalReply,bytes.messages i,bytes.nonces i]
+      simp only [pinnedFullLeafDigests,pinnedLeafDigest,pinnedFirstRow,pinnedSecondRow,pinned_typed_words]
+      rfl
     exact pinned_parent_content_of_leaf_prefix oracle (memoryView ready) _ _ _
-      (prefix_groups oracle (memoryView ready) ready (2^12) 0 (by decide) (fun _ => rs) (empty_pinned_leaf_prefix oracle ready))
-      (wide_reference_leaf oracle msg packed) readySalts
+      (prefix_groups oracle (memoryView ready) ready (2^12) 0 (by decide) (fun _ => chain_regs ready frame)
+        (empty_pinned_leaf_prefix oracle ready)) ref bytes.nonces
 
 end TwoPermutationPrototype.RV64.PackedLeaves

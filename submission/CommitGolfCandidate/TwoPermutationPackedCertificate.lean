@@ -1,3 +1,4 @@
+import CommitGolfCandidate.NonceChainSecurity
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationTranscript
 import CommitGolf.Statements
@@ -19,7 +20,7 @@ structure OpeningFacts (s : Submission) : Prop where
     s.run .opening (trapdoor, positions) = pure result ∧ result.exit = .success ∧
     s.openingSucceeded result = true ∧
     (positions.card = BATCH → result.cycles ≤ 88311 ∧ (s.readProof result).length ≤ 67584)
-  refines : PinnedTranscriptRefines s.scheme (transcriptBuilder true)
+  refines : ChainTranscriptRefines s.scheme (transcriptBuilder true)
 
 def honestCheckInput (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) : CheckInput :=
@@ -36,7 +37,7 @@ structure CheckerFacts (s : Submission) : Prop where
 
 variable {s : Submission} {commitCycles : Nat}
 variable (commit : ∀ (message : Message) (result : Execution), result ∈ support (s.run .commit message) →
-  result.exit = .success ∧ result.cycles = commitCycles ∧ result.oracleCalls = 50331647)
+  result.exit = .success ∧ result.cycles = commitCycles ∧ result.oracleCalls ≤ COMMIT_BUDGET)
 
 private theorem scheme_check_observation (oracle : Oracle) (input : CheckInput) :
     oracle.eval (s.scheme.check input.commitment input.positions input.values input.proof) =
@@ -76,8 +77,8 @@ private theorem scheme_commit_budget (oracle : Oracle) (message : Message)
   have calls := execute_counted_with_coins oracle (s.image .commit) (s.steps .commit)
     (s.initialState .commit message) true execution execReached
   have equal : execution.2 = result.2 := congrArg Prod.snd same
-  rw [← equal, ← calls, actual.2.2]
-  decide
+  rw [← equal, ← calls]
+  exact actual.2.2
 
 private theorem opening_run (opens : OpeningFacts s) (trapdoor : s.scheme.Trapdoor) (positions : Positions)
     (opened : Execution) (reached : opened ∈ support (s.run .opening (trapdoor,positions))) :
@@ -196,7 +197,8 @@ theorem completeness (opens : OpeningFacts s) (checks : CheckerFacts s) : s.sche
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro view reached
   simp only [mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reached
-  obtain ⟨salts,_,rfl⟩ := reached
+  obtain ⟨key,_,rfl⟩ := reached
+  let salts := CommitGolfCandidate.Permutation.NonceChain.actualNonces oracle.permutation key
   let input := honestCheckInput oracle message positions salts
   change (oracle.eval (s.scheme.check input.commitment input.positions input.values input.proof)).1 = true
   rw [scheme_check_observation]

@@ -1623,7 +1623,7 @@ theorem packed_index_fetch (state : MachineState) (index : Nat)
     fetch packedWideCommitImage state=decodeInstruction (expectedWord index) := by
   have pc : state.pc.toNat=4096+4*index := by
     rw [point,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
-  have inPacked : index<233170 := by omega
+  have inPacked : index<233369 := by omega
   have packed := parent_packed_matches ⟨index,inPacked⟩
     (by simpa only [Nat.zero_add,Fin.val_mk] using lower)
     (by simpa only [Nat.zero_add,Fin.val_mk] using upper)
