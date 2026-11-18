@@ -1,7 +1,6 @@
 import CommitGolfCandidate.K3OpenChainPost
 
-/-! Opener chain block (rows 777..795 and the link calls at rows 896..929), the reply: `chain_reply`. Owner: C3
-(draft by S9-L2; 33-call chain). -/
+/-! Opener chain block (rows 777..795 and the link block 896..929), the reply: `chain_reply`. Owner: C3 (draft by S9-L2). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -53,30 +52,24 @@ private theorem window_query (s : MachineState) (R : BitVec 1600)
   apply congrArg packBuffer;funext m
   exact hw m
 
-/-- One link call with the oracle fixed advances the window by one permutation. -/
-private theorem call_window (o : Oracle) (s : MachineState) (R : BitVec 1600)
-    (hw : ∀ m : Fin 25, memoryView s (192+m.val)=replyWords R m) :
-    ∀ m : Fin 25, memoryView (callState o s) (192+m.val)=replyWords (o.permutation R) m := by
-  intro m
-  have q : linkQuery s=R := window_query s R hw
-  show memoryView (writeBits s (wordAddress 192) (o.permutation (linkQuery s))) (192+m.val)=_
-  exact (reply_inside s _ m).trans (congrArg (fun x : BitVec 1600 => replyWords (o.permutation x) m) q)
-
-private theorem rows_window {s t : MachineState} (mem : t.mem=s.mem) (R : BitVec 1600)
-    (hw : ∀ m : Fin 25, memoryView s (192+m.val)=replyWords R m) :
-    ∀ m : Fin 25, memoryView t (192+m.val)=replyWords R m := by
-  intro m; rw [chain_view_of_mem mem]; exact hw m
-
-private theorem calls_window (o : Oracle) (c : Nat) : ∀ (s : MachineState) (R : BitVec 1600),
+private theorem link_window (o : Oracle) (c : Nat) : ∀ (s : MachineState) (R : BitVec 1600),
     (∀ m : Fin 25, memoryView s (192+m.val)=replyWords R m) →
-    ∀ m : Fin 25, memoryView ((callState o)^[c] s) (192+m.val)=replyWords ((⇑o.permutation)^[c] R) m := by
+    ∀ m : Fin 25, memoryView (linkState o c s) (192+m.val)=replyWords ((⇑o.permutation)^[c] R) m := by
   induction c with
-  | zero => intro s R hw m; exact hw m
+  | zero =>
+    intro s R hw m
+    rw [linkState_zero]
+    exact hw m
   | succ c ih =>
     intro s R hw m
-    have it : (⇑o.permutation)^[c+1] R=(⇑o.permutation)^[c] (o.permutation R) := Function.iterate_succ_apply _ _ _
-    rw [Function.iterate_succ_apply]
-    exact (ih _ _ (call_window o s R hw) m).trans (congrArg (fun x => replyWords x m) it.symm)
+    have q : linkQuery s = R := window_query s R hw
+    have hY : ∀ m' : Fin 25, memoryView (linkStep o s) (192+m'.val) = replyWords (o.permutation R) m' := by
+      intro m'
+      show memoryView (writeBits s (wordAddress 192) (o.permutation (linkQuery s))) (192+m'.val) = _
+      exact (reply_inside s _ m').trans (congrArg (fun x : BitVec 1600 => replyWords (o.permutation x) m') q)
+    rw [linkState_succ,
+      show (⇑o.permutation)^[c+1] R = (⇑o.permutation)^[c] (o.permutation R) from Function.iterate_succ_apply _ _ _]
+    exact ih _ _ hY m
 
 theorem chain_reply (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index) (e : ChainEntry h i)
     (key : KeyWords h k) (j : Fin 25) :
@@ -92,7 +85,10 @@ theorem chain_reply (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index)
     exact oc
   rw [final]
   unfold chainState
-  rw [chain_view_of_mem (out_rows_mem _)]
-  exact calls_window o _ _ R (rows_window (enter_rows_mem _) R aw) j
+  rw [chain_view_of_mem (exit_rows_mem _)]
+  apply link_window o (chainLinks i) _ R _ j
+  intro m
+  rw [chain_view_of_mem (enter_rows_mem _)]
+  exact aw m
 
 end TwoPermutationPrototype.GroupedOpening

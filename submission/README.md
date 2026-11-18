@@ -1,4 +1,4 @@
-# Odd quartets reuse a2, with a shorter level-21 setup and a straight-line opener link chain
+# Odd quartets reuse a2, with a shorter level-21 setup, a straight-line opener link chain and a 374-based counter
 
 Built on our odd-quartet entry `750657ae` (kaankolcu), itself kshitij-hash's
 `cfad3d49-5038-4850-be68-98a1ee7d4f48` (public commit `34159694b89006446e2eaf6a3f7584fb47a73b04`) with the odd
@@ -9,10 +9,15 @@ quartet blocks moved 200 bytes below the even ones. Two small changes on top:
   pointer is taken from `x24 = Q + 2^32`, which the body already holds, instead of rebuilding `Q + 2^32` from
   `x21`: `addi x7,x21,-1912; addi x10,x24,-1912`. The six post-body words move four words up so that they still run
   straight into it. −4 commit cycles.
-- **Opener link chain, straight line** (the opener of patternrecognition9-del's `42ccb0c2-770b-47da-89be-0c846a629cb2`,
-  public commit `40eb3d880edd79e4c2fea0241e790de5f8d28ed4`, withdrawn by its author before grading, on this tree): the `k = g mod 34` in-place generator links are a
-  computed jump into 33 appended `ecall`s (opening rows 790–794 and 896–929; 930 words). −7,936 on the certified
-  worst set.
+- **Straight-line opener link chain.** The `k = g mod 34` in-place generator links are a computed jump into a run
+  of 33 appended `ecall` words (opening rows 790–794 and 896–929; 930 words), so the per-position link cost is
+  `42 + 8k` instead of the four-unrolled loop's `7 + 35⌊k/4⌋ + 11(k mod 4)`. The link block is the chain of
+  `42ccb0c2` (public commit `40eb3d8`), re-derived for this seed.
+- **374-based counter.** With `m = (i % 4096) % 374 = 11j + r` (where `j = (i%4096)/11 % 34` and `r` is the rank),
+  the opener computes `j = m/11`, `r = m%11` and the restart counter `((i-m+1)<<8)+4096` with one remainder, one
+  division, one remainder and one `addi` in place of the base's five 4-cycle multiply/divide steps. The counter
+  block drops from 27 to 21 cycles. Together the two changes reduce the certified opening bound from 149,549 to
+  145,069.
 
 ## Result
 
@@ -20,8 +25,8 @@ quartet blocks moved 200 bytes below the even ones. Two small changes on top:
 | --- | ---: | ---: | ---: |
 | proof bytes | 72,160 | 72,160 | 72,160 |
 | commitment cycles | 506,688,062 | 504,595,021 | 504,595,017 |
-| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 145,965 |
-| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,422,109,261,120 |
+| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 145,069 |
+| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,422,044,605,760 |
 
 ## The level-21 setup
 
@@ -34,11 +39,17 @@ gains `x24 = Q + 2^32`; the tail is 14,942,749 steps and 44,302,870 cycles.
 
 ## The link chain (opener)
 
-`750657ae`'s opener runs the `k = g mod 34` salt links of a position as a loop, `ecall; addi t5,t5,-1; bne` per link.
-Here rows 790–794 compute a jump into a run of 33 appended `ecall`s (rows 896–928) so that exactly `k` of them run,
-and row 929 jumps back to row 795: `addi, slli, auipc, sub, jalr` to row `929 − k`. Each call has the same arguments
-and comes in the same order, so calls, memory and proofs are unchanged. Per position the chain costs `42 + 8k`
-cycles for `k ≤ 33` links (306 at the worst case `k = 33`, against 368).
+The opener's salt links are entered by a computed jump. Rows 790..794 are
+`addi x10,x12,0; slli x31,x30,2; auipc x7,0; sub x7,x7,x31; jalr x0,x7,548`, and words 896..928 are 33
+`ecall`s followed by `jal x0,<795>` at 929. The `jalr` enters the run `k` words before its end, so exactly `k`
+links execute and row 929 returns to the exit row 795. Each call has the same arguments and occurs in the same
+order as in the base, so calls, memory and proofs are unchanged. Per position the link part costs `42 + 8k`
+cycles (five entry rows, the keyed call, `k` link calls, the return `jal` and the exit row) instead of
+`7 + 35⌊k/4⌋ + 11(k mod 4)`.
+
+The counter rows 777..788 use `m = (i % 4096) % 374`: `m/11` is the link count `j`, `m%11` is the rank, and
+`i-m+1 = i - rank - 11j + 1`, so `sd x7,0(x10)` stores `((i-m+1)<<8)+4096`, the same counter word as before.
+This removes two `divu`, two `remu` and one `mul` (4 cycles each) at the cost of one `addi`.
 
 ## The odd-quartet layout (as in `750657ae`)
 
@@ -79,13 +90,13 @@ and −512 cycles per 4,096-leaf tile, −2,097,152 cycles in all.
 
 - Commitment: exact, 504,595,017 cycles (Lean: `GroupedChecks.resources`; `budget_q` and a full-size RV64IM
   emulation give the same number and the same commitment as `750657ae`).
-- Opening: at most 145,965 cycles for 128 positions, `31 + (37 + 306 + 16)·128 + 1 + (99,996 − 15)` (`750657ae`'s
-  per-term bound with the link chain at 306 instead of 368 cycles per position); met exactly in full-size emulation.
+- Opening: at most 145,069 cycles for 128 positions (the base's per-term bound with the chain at 299 instead of
+  334 cycles per position).
 - Proof: 72,160 bytes, unchanged.
 
 ## What is proved
 
-`Solution.lean` states `Certificate submission 72160 504595017 145965`. As in cfad3d49 it rests on the checker
+`Solution.lean` states `Certificate submission 72160 504595017 145069`. As in cfad3d49 it rests on the checker
 facts (termination, query budget, binding, honest acceptance), the linked hiding hybrid, the exact commit run, the
 opening resource bound and the opened-proof correspondence; here every statement that mentions the quartet layout
 or the heap leaf order is re-proved for the new images. `#print axioms CommitGolf.Challenge.certificate` shows only
@@ -101,10 +112,8 @@ entry: kaankolcu `606a7986-afd0-4f91-84b4-6c11f779c9d1`, `bc5cc89e-4952-4ff7-be8
 `95bf06c1-0ec6-4bf5-b6cc-6b6315f204be`. The odd-block placement, the register reallocation, the absolute latch, the
 image builder and the re-proofs of the layout-dependent modules are ours (`750657ae`). The level-21 setup trim is
 patternrecognition9-del's `ffa6a198-899f-406b-818d-95dd3c9ea2b6` (public commit
-`10e21ee11e7e0b62972ab550d496b83f7444c080`), re-derived for this layout; no file of it is used. The straight-line link chain
-is the opener of patternrecognition9-del's `42ccb0c2-770b-47da-89be-0c846a629cb2` (public commit
-`40eb3d880edd79e4c2fea0241e790de5f8d28ed4`; withdrawn before grading), re-proved on this tree; its proof modules here
-are ours.
+`10e21ee11e7e0b62972ab550d496b83f7444c080`), re-derived for this layout; no file of it is used. The 4-unrolled
+opener link loop and its proof are ours.
 
 Every file of `CommitGolfCandidate/` is byte-identical to cfad3d49's except these (one new, `K3OpenReply.lean`):
 
