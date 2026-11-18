@@ -5,13 +5,15 @@ import CommitGolfCandidate.TwoPermutationSyscall
 import CommitGolfCandidate.K6Chain
 
 /-! Opener prefix, salt regeneration of one position on the linked (chain) schedule: rows
-`chainStart .. chainStart+18`. With `n = i % 4096`, `r = n % 11` (rank), `h = n / 11` (head in the tile),
+`chainStart .. chainStart+18` and the link block at words 896..929. With `n = i % 4096`, `r = n % 11` (rank), `h = n / 11` (head in the tile),
 `j = h % 34` (links after the keyed restart):
 ```
 remu x28,x6,x26 ; divu x30,x28,x29 ; remu x28,x28,x29 ; addi x31,x0,34 ; remu x30,x30,x31 ; mul x31,x30,x29 ;
 sub x7,x6,x28 ; sub x7,x7,x31 ; addi x7,x7,1 ; slli x7,x7,8 ; add x7,x7,x26 ; sd x7,0(x10) ; ecall ;
-beq x30,x0,+24 ; addi x10,x12,0 ; L: ecall ; addi x30,x30,-1 ; bne x30,x0,L ; addi x10,x0,1024
+addi x10,x12,0 ; slli x31,x30,2 ; auipc x7,0 ; sub x7,x7,x31 ; jalr x0,548(x7) ;
+[896..928: 33 x ecall] ; 929: jal x0,<795> ; 795: addi x10,x0,1024
 ```
+(the `jalr` enters the unrolled link block `j` words before its end, so link calls cost no ordinary instructions)
 the keyed generator call of head `h - j` (counter = base of its C leaf, K1 input layout at word 128, reply at
 `[1536, 1736)`), then `j` in-place links on `[1536, 1736)`. The counter arithmetic and the reply of the
 restart-plus-links walk are S9-K6P's `K6Chain.restart_counter` / `K6Chain.opener_chain`. -/
@@ -29,8 +31,8 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 abbrev chainStart : Nat := 777
 /-- Links of position `i`: its head is `chainLinks i` heads after the keyed restart. -/
 def chainLinks (i : Index) : Nat := ((i.val%4096)/11)%34
-/-- Steps: 14 rows and calls without links (`beq` taken), else 16 + 3 per link. -/
-def chainSteps (i : Index) : Nat := if chainLinks i=0 then 14 else 16+3*chainLinks i
+/-- Steps: 12 counter rows, the keyed call, 5 entry rows, one call per link, the `jal` back and the exit row. -/
+def chainSteps (i : Index) : Nat := 20+chainLinks i
 def chainCalls (i : Index) : Nat := 1+chainLinks i
 /-- Three `remu`, one `divu`, one `mul` (4 cycles each) and 8 cycles per call. -/
 def chainCycles (i : Index) : Nat := chainSteps i+15+7*chainCalls i
@@ -61,26 +63,39 @@ def KeyWords (h : MachineState) (k : BitVec 192) : Prop :=
 def chainPreRows : List Row := [(777,.REMU .x28 .x6 .x26),(778,.DIVU .x30 .x28 .x29),(779,.REMU .x28 .x28 .x29),
   (780,.ADDI .x31 .x0 34),(781,.REMU .x30 .x30 .x31),(782,.MUL .x31 .x30 .x29),(783,.SUB .x7 .x6 .x28),
   (784,.SUB .x7 .x7 .x31),(785,.ADDI .x7 .x7 1),(786,.SLLI .x7 .x7 8),(787,.ADD .x7 .x7 .x26),(788,.SD .x10 .x7 0)]
-def chainSkipRows : List Row := [(790,.BEQ .x30 .x0 24)]
-def chainEnterRows : List Row := [(790,.BEQ .x30 .x0 24),(791,.ADDI .x10 .x12 0)]
-def chainLinkRows : List Row := [(793,.ADDI .x30 .x30 (-1)),(794,.BNE .x30 .x0 8184)]
-def chainExitRows : List Row := [(795,.ADDI .x10 .x0 1024)]
+def chainEnterRows : List Row := [(790,.ADDI .x10 .x12 0),(791,.SLLI .x31 .x30 2),(792,.AUIPC .x7 0),
+  (793,.SUB .x7 .x7 .x31),(794,.JALR .x0 .x7 548)]
+/-- First word after the unrolled link block (the `jal` back to the exit row). -/
+abbrev linkEnd : Nat := 929
+def chainExitRows : List Row := [(929,.JAL .x0 2096616),(795,.ADDI .x10 .x0 1024)]
+
+/-- `presentRows` for rows anywhere in the 930-word opener (`rows_present` stops at 813). -/
+theorem rows_present_any (rows : List Row)
+    (raw : ∀ i : Fin rows.length, rows[i].1<930 ∧ (openingImage.code[rows[i].1]?).bind Opening.decodeBase=some rows[i].2) :
+    presentRows rows := by
+  intro p hp;obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp hp
+  subst p
+  exact fun st pc => packed_fetch_base_any st _ _ (raw ⟨i,hi⟩).1 pc (raw ⟨i,hi⟩).2
 
 theorem chain_pre_fetch : presentRows chainPreRows := by apply rows_present; decide +kernel
-theorem chain_skip_fetch : presentRows chainSkipRows := by apply rows_present; decide +kernel
 theorem chain_enter_fetch : presentRows chainEnterRows := by apply rows_present; decide +kernel
-theorem chain_link_fetch : presentRows chainLinkRows := by apply rows_present; decide +kernel
-theorem chain_exit_fetch : presentRows chainExitRows := by apply rows_present; decide +kernel
+theorem chain_exit_fetch : presentRows chainExitRows := by apply rows_present_any; decide +kernel
 
 theorem keyed_fetch (s : MachineState) (pc : s.pc=address 789) : fetch openingImage s=some (.base .ECALL) :=
   packed_fetch_base _ 789 _ (by decide) pc (by decide +kernel)
 
-theorem link_fetch (s : MachineState) (pc : s.pc=address 792) : fetch openingImage s=some (.base .ECALL) :=
-  packed_fetch_base _ 792 _ (by decide) pc (by decide +kernel)
+private theorem link_words : ∀ k : Fin 33,
+    (openingImage.code[896+k.val]?).bind Opening.decodeBase=some .ECALL := by decide +kernel
+
+/-- Words `linkEnd-c` (`1 ≤ c ≤ 33`) of the link block are `ecall`s. -/
+theorem link_fetch (s : MachineState) (c : Nat) (lo : 0<c) (hc : c<34) (pc : s.pc=address (linkEnd-c)) :
+    fetch openingImage s=some (.base .ECALL) := by
+  refine packed_fetch_base_any _ (linkEnd-c) _ (by unfold linkEnd; omega) pc ?_
+  have h := link_words ⟨33-c,by omega⟩
+  rwa [show 896+(33-c)=linkEnd-c by unfold linkEnd; omega] at h
 
 theorem chain_lengths : chainPreRows.length=12 ∧ price chainPreRows=27 ∧
-    chainSkipRows.length=1 ∧ price chainSkipRows=1 ∧ chainEnterRows.length=2 ∧ price chainEnterRows=2 ∧
-    chainLinkRows.length=2 ∧ price chainLinkRows=2 ∧ chainExitRows.length=1 ∧ price chainExitRows=1 := by decide
+    chainEnterRows.length=5 ∧ price chainEnterRows=5 ∧ chainExitRows.length=2 ∧ price chainExitRows=2 := by decide
 
 /-! ### Arithmetic of the counter rows -/
 
@@ -136,16 +151,17 @@ theorem chain_before (h : MachineState) (i : Index) (e : ChainEntry h i) :
 
 def linkQuery (s : MachineState) := packBuffer (window (memoryView s) 192)
 
-/-- `c` in-place links from a state at row 792: query the reply window, write the answer back, `addi; bne`. -/
+/-- `c` in-place links from a state in the link block: query the reply window, write the answer back
+(the `ecall` only moves the PC by one word). -/
 def linkTrace : Nat → MachineState → OracleComp World MachineState
   | 0,s => pure s
   | c+1,s => do
       let z ← World.query (.inr (.inr (.inl (linkQuery s))))
-      linkTrace c (walkRows (writeBits s (wordAddress 192) z) chainLinkRows)
+      linkTrace c (writeBits s (wordAddress 192) z)
 
 /-- One in-place link with the oracle fixed. -/
 noncomputable def linkStep (o : Oracle) (s : MachineState) : MachineState :=
-  walkRows (writeBits s (wordAddress 192) (o.permutation (linkQuery s))) chainLinkRows
+  writeBits s (wordAddress 192) (o.permutation (linkQuery s))
 
 /-- `c` in-place links with the oracle fixed (an iterate, so unfolding never reduces the reply write). -/
 noncomputable def linkState (o : Oracle) (c : Nat) (s : MachineState) : MachineState := (linkStep o)^[c] s
@@ -155,10 +171,9 @@ theorem linkState_zero (o : Oracle) (s : MachineState) : linkState o 0 s=s := rf
 theorem linkState_succ (o : Oracle) (c : Nat) (s : MachineState) :
     linkState o (c+1) s=linkState o c (linkStep o s) := Function.iterate_succ_apply _ _ _
 
-/-- Registers the loop relies on, with `c` links still to go. -/
+/-- Registers the link block relies on, with `c` links still to go (PC `c` words before `linkEnd`). -/
 structure LinkReady (s : MachineState) (c : Nat) : Prop where
-  pc : s.pc=address 792
-  count : s.getReg .x30=BitVec.ofNat 64 c
+  pc : s.pc=address (linkEnd-c)
   input : s.getReg .x10=1536
   output : s.getReg .x12=1536
   selector : s.getReg .x5=0
@@ -169,16 +184,6 @@ structure LinkReady (s : MachineState) (c : Nat) : Prop where
 theorem write_pc {bits : Nat} (s : MachineState) (dst : Word) (z : BitVec bits) :
     (writeBits s dst z).pc=s.pc+4 := by simp only [writeBits,MachineState.setPC]
 
-theorem dec_word (c : Nat) (hc : c+1<34) : BitVec.ofNat 64 (c+1)+signExtend12 4095#12=BitVec.ofNat 64 c := by
-  have small : c<33 := by omega
-  interval_cases c <;> decide
-
-theorem small_ne (c : Nat) (hc : c<34) (nz : c≠0) : BitVec.ofNat 64 c≠0#64 := by
-  intro e
-  have t := congrArg BitVec.toNat e
-  rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt (show c<2^64 by omega)] at t
-  exact nz t
-
 /-! ### The block -/
 
 /-- The keyed generator query (counter word 128, key words 129..131, zeros). -/
@@ -188,20 +193,14 @@ def keyedQuery (h : MachineState) := packBuffer (window (memoryView (chainBefore
 `chainStart+19`. -/
 def chainTrace (h : MachineState) (i : Index) : OracleComp World MachineState := do
   let z ← World.query (.inr (.inr (.inl (keyedQuery h))))
-  if chainLinks i=0 then
-    return walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainSkipRows
-  else do
-    let b ← linkTrace (chainLinks i) (walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainEnterRows)
-    return walkRows b chainExitRows
+  let b ← linkTrace (chainLinks i) (walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainEnterRows)
+  return walkRows b chainExitRows
 
 /-- The block's result when the oracle is fixed. -/
 noncomputable def chainState (o : Oracle) (h : MachineState) (i : Index) : MachineState :=
-  if chainLinks i=0 then
-    walkRows (writeBits (chainBefore h) (wordAddress 192) (o.permutation (keyedQuery h))) chainSkipRows
-  else
-    walkRows (linkState o (chainLinks i)
-      (walkRows (writeBits (chainBefore h) (wordAddress 192) (o.permutation (keyedQuery h))) chainEnterRows))
-      chainExitRows
+  walkRows (linkState o (chainLinks i)
+    (walkRows (writeBits (chainBefore h) (wordAddress 192) (o.permutation (keyedQuery h))) chainEnterRows))
+    chainExitRows
 
 theorem after_keyed {bits : Nat} (h : MachineState) (i : Index) (e : ChainEntry h i) (z : BitVec bits) :
     let a:=writeBits (chainBefore h) (wordAddress 192) z
@@ -213,32 +212,25 @@ theorem after_keyed {bits : Nat} (h : MachineState) (i : Index) (e : ChainEntry 
   refine ⟨?_,fun x a b c d => (regs x).trans (keep x a b c d),(regs _).trans r30,(regs _).trans r28⟩
   rw [write_pc,pc]; exact address_succ 789
 
-theorem skip_rows (a : MachineState) (pc : a.pc=address 790) (zero : a.getReg .x30=0#64) :
-    legal chainSkipRows a ∧ (walkRows a chainSkipRows).pc=address 796 ∧
-      (∀ x, (walkRows a chainSkipRows).getReg x=a.getReg x) ∧ (walkRows a chainSkipRows).mem=a.mem := by
-  refine ⟨?_,?_,?_,?_⟩
-  · simp [chainSkipRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc]
-  · simp [chainSkipRows,walkRows,execInstrBr,pc,zero,address]
-    decide
-  · intro x
-    simp only [chainSkipRows,walkRows,List.foldl,execInstrBr]
-    split <;> simp
-  · simp only [chainSkipRows,walkRows,List.foldl,execInstrBr]
-    split <;> simp
+/-- The entry target: `((address 792 + 0) - 4c + 548) & ~1 = address (linkEnd - c)`. -/
+theorem enter_target (c : Nat) (hc : c<34) :
+    (address 792+(((0#20).zeroExtend 32 <<< 12 : BitVec 32).signExtend 64)-(BitVec.ofNat 64 c <<< (2#6).toNat)
+      +signExtend12 548#12) &&& ~~~1#64=address (linkEnd-c) := by
+  interval_cases c <;> decide
 
 theorem enter_rows (a : MachineState) (c : Nat) (pc : a.pc=address 790)
-    (cnt : a.getReg .x30=BitVec.ofNat 64 (c+1)) (hc : c+1<34) :
-    legal chainEnterRows a ∧ (walkRows a chainEnterRows).pc=address 792 ∧
+    (cnt : a.getReg .x30=BitVec.ofNat 64 c) (hc : c<34) :
+    legal chainEnterRows a ∧ (walkRows a chainEnterRows).pc=address (linkEnd-c) ∧
       (walkRows a chainEnterRows).getReg .x10=a.getReg .x12 ∧
-      (∀ x, x≠.x10 → (walkRows a chainEnterRows).getReg x=a.getReg x) ∧
+      (∀ x, x≠.x7 → x≠.x10 → x≠.x31 → (walkRows a chainEnterRows).getReg x=a.getReg x) ∧
       (walkRows a chainEnterRows).mem=a.mem := by
-  have ne := small_ne (c+1) hc (by omega)
   refine ⟨?_,?_,?_,?_,?_⟩
-  · simp [chainEnterRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,cnt,ne,address]
-  · simp [chainEnterRows,walkRows,execInstrBr,pc,cnt,ne,address]
-  · simp [chainEnterRows,walkRows,execInstrBr,cnt,ne,show signExtend12 0#12=0#64 by decide]
-  · intro x hx
-    simp [chainEnterRows,walkRows,execInstrBr,cnt,ne,Ne.symm hx]
-  · simp [chainEnterRows,walkRows,execInstrBr,cnt,ne]
+  · simp [chainEnterRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
+  · rw [← enter_target c hc]
+    simp [chainEnterRows,walkRows,execInstrBr,pc,cnt,address]
+  · simp [chainEnterRows,walkRows,execInstrBr,show signExtend12 0#12=0#64 by decide]
+  · intro x h7 h10 h31
+    simp [chainEnterRows,walkRows,execInstrBr,Ne.symm h7,Ne.symm h10,Ne.symm h31]
+  · simp [chainEnterRows,walkRows,execInstrBr]
 
 end TwoPermutationPrototype.GroupedOpening

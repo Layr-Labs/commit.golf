@@ -1,6 +1,6 @@
 import CommitGolfCandidate.K3OpenChainPost
 
-/-! Opener chain block (rows 777..795), the reply: `chain_reply`. Owner: C3 (draft by S9-L2). -/
+/-! Opener chain block (rows 777..795 and the link block 896..929), the reply: `chain_reply`. Owner: C3 (draft by S9-L2). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -65,9 +65,7 @@ private theorem link_window (o : Oracle) (c : Nat) : ∀ (s : MachineState) (R :
     have q : linkQuery s = R := window_query s R hw
     have hY : ∀ m' : Fin 25, memoryView (linkStep o s) (192+m'.val) = replyWords (o.permutation R) m' := by
       intro m'
-      show memoryView (walkRows (writeBits s (wordAddress 192) (o.permutation (linkQuery s))) chainLinkRows)
-        (192+m'.val) = _
-      rw [chain_view_of_mem (link_rows_mem _)]
+      show memoryView (writeBits s (wordAddress 192) (o.permutation (linkQuery s))) (192+m'.val) = _
       exact (reply_inside s _ m').trans (congrArg (fun x : BitVec 1600 => replyWords (o.permutation x) m') q)
     rw [linkState_succ,
       show (⇑o.permutation)^[c+1] R = (⇑o.permutation)^[c] (o.permutation R) from Function.iterate_succ_apply _ _ _]
@@ -87,15 +85,10 @@ theorem chain_reply (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index)
     exact oc
   rw [final]
   unfold chainState
-  by_cases zero : chainLinks i=0
-  · simp only [zero,if_pos,Function.iterate_zero,id]
-    rw [chain_view_of_mem (skip_rows_mem _)]
-    exact aw j
-  · simp only [zero,if_neg,not_false_eq_true]
-    rw [chain_view_of_mem (exit_rows_mem _)]
-    apply link_window o (chainLinks i) _ R _ j
-    intro m
-    rw [chain_view_of_mem (enter_rows_mem _)]
-    exact aw m
+  rw [chain_view_of_mem (exit_rows_mem _)]
+  apply link_window o (chainLinks i) _ R _ j
+  intro m
+  rw [chain_view_of_mem (enter_rows_mem _)]
+  exact aw m
 
 end TwoPermutationPrototype.GroupedOpening

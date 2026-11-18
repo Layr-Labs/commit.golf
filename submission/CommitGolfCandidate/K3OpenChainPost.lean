@@ -1,7 +1,7 @@
 import CommitGolfCandidate.K3OpenChainLink
 import CommitGolfCandidate.Counting
 
-/-! Opener chain block (rows 777..795), fixed oracle and memory views: `chain_fixed`. Owner: H (draft by S9-L2). -/
+/-! Opener chain block (rows 777..795 and the link block 896..929), fixed oracle and memory views: `chain_fixed`. Owner: H (draft by S9-L2). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -35,12 +35,9 @@ theorem chain_fixed (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index)
   rw [chainTrace,oracle_run_public_bind]
   simp only [answer_forward]
   unfold chainState chainCalls
-  by_cases zero : chainLinks i=0
-  · simp only [if_pos zero,oracle_run_pure,pure_bind]
-    rw [zero]
-    rfl
-  · simp only [if_neg zero,oracle_run_bind,link_fixed,oracle_run_pure,pure_bind,Nat.add_zero]
-    rfl
+  simp only [oracle_run_bind,link_fixed,oracle_run_pure,pure_bind,Nat.add_zero]
+  rw [Nat.add_comm]
+  rfl
 
 /-! ### Memory views -/
 
@@ -73,38 +70,15 @@ theorem before_view (h : MachineState) (i : Index) (e : ChainEntry h i) (w : Nat
   rw [chain_view_of_mem mem]
   exact memory_at_store (address:=128) (index:=w) (by decide) (by omega)
 
-/-- One `addi`, `beq` or `bne` row leaves memory unchanged (immediates kept abstract). -/
-theorem exec_mem_addi (s : MachineState) (rd rs : Reg) (imm : BitVec 12) :
-    (execInstrBr s (.ADDI rd rs imm)).mem=s.mem :=
-  (mem_of_set _ _).trans (mem_of_reg _ _ _)
-
-theorem exec_mem_beq (s : MachineState) (a b : Reg) (off : BitVec 13) :
-    (execInstrBr s (.BEQ a b off)).mem=s.mem := by
-  show (if s.getReg a == s.getReg b then s.setPC _ else s.setPC _).mem=s.mem
-  split <;> rfl
-
-theorem exec_mem_bne (s : MachineState) (a b : Reg) (off : BitVec 13) :
-    (execInstrBr s (.BNE a b off)).mem=s.mem := by
-  show (if s.getReg a != s.getReg b then s.setPC _ else s.setPC _).mem=s.mem
-  split <;> rfl
-
-/-- Two rows that each keep memory keep memory (rows kept abstract, so no immediate is reduced). -/
-theorem walk_two_mem (w : MachineState) (r q : Row) (hr : ∀ s, (execInstrBr s r.2).mem=s.mem)
-    (hq : ∀ s, (execInstrBr s q.2).mem=s.mem) : (walkRows w [r,q]).mem=w.mem :=
-  (hq _).trans (hr w)
-
-theorem link_rows_mem (w : MachineState) : (walkRows w chainLinkRows).mem=w.mem := by
-  apply walk_two_mem
-  · exact fun s => exec_mem_addi s _ _ _
-  · exact fun s => exec_mem_bne s _ _ _
-
 theorem enter_rows_mem (a : MachineState) : (walkRows a chainEnterRows).mem=a.mem := by
-  simp only [chainEnterRows,walkRows,List.foldl,exec_mem_addi,exec_mem_beq]
-
-theorem skip_rows_mem (a : MachineState) : (walkRows a chainSkipRows).mem=a.mem := by
-  simp only [chainSkipRows,walkRows,List.foldl,exec_mem_beq]
+  simp only [chainEnterRows,walkRows,List.foldl,execInstrBr,mem_of_set,mem_of_reg]
 
 theorem exit_rows_mem (b : MachineState) : (walkRows b chainExitRows).mem=b.mem := by
-  simp only [chainExitRows,walkRows,List.foldl,exec_mem_addi]
+  have jm (s : MachineState) (offset : BitVec 21) : (execInstrBr s (.JAL .x0 offset)).mem=s.mem := by
+    simp [execInstrBr]
+  have am (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x10 .x0 imm)).mem=s.mem := by
+    simp [execInstrBr]
+  change (execInstrBr (execInstrBr b (.JAL .x0 2096616)) (.ADDI .x10 .x0 1024)).mem=b.mem
+  rw [am,jm]
 
 end TwoPermutationPrototype.GroupedOpening

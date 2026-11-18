@@ -107,8 +107,8 @@ def openingImage : Image := ⟨[
   0x40000513, 0x00100693, 0x17038f13, 0x0080006f, 0x15038f13, 0x001e4e13, 0x013e0e33, 0x005e1e13,
   0x009e0e33, 0x000f3f83, 0x01fe3023, 0x008f3f83, 0x01fe3423, 0x010f3f83, 0x01fe3823, 0x018f3f83,
   0x01fe3c23, 0x03a37e33, 0x03de5f33, 0x03de7e33, 0x02200f93, 0x03ff7f33, 0x03df0fb3, 0x41c303b3,
-  0x41f383b3, 0x00138393, 0x00839393, 0x01a383b3, 0x00753023, 0x00000073, 0x000f0c63, 0x00060513,
-  0x00000073, 0xffff0f13, 0xfe0f1ce3, 0x40000513, 0xfffe0393, 0x00439393, 0x01cbe863, 0x00000393,
+  0x41f383b3, 0x00138393, 0x00839393, 0x01a383b3, 0x00753023, 0x00000073, 0x00060513, 0x002f1f93,
+  0x00000397, 0x41f383b3, 0x22438067, 0x40000513, 0xfffe0393, 0x00439393, 0x01cbe863, 0x00000393,
   0x017e1463, 0x0b800393, 0x00c383b3, 0x00431f13, 0x016f0f33, 0x0003bf83, 0x01ff3023, 0x0083bf83,
   0x01ff3423, 0x00870713, 0xfff88893, 0xee0892e3, 0xb8cff06f, 0x01e3df83, 0x01fa9f23, 0x020a8a93,
   0xeb4ff06f, 0xf4aade03, 0x00ef9e93, 0x01de6e33, 0xf5ca9523, 0x002fdf93, 0xf68ade03, 0x00ef9e93,
@@ -120,10 +120,15 @@ def openingImage : Image := ⟨[
   0x002fdf93, 0xf68ade03, 0x00ef9e93, 0x01de6e33, 0xf7ca9423, 0x002fdf93, 0xf86ade03, 0x00ef9e93,
   0x01de6e33, 0xf9ca9323, 0x002fdf93, 0xfa4ade03, 0x00ef9e93, 0x01de6e33, 0xfbca9223, 0x002fdf93,
   0xfc2ade03, 0x00ef9e93, 0x01de6e33, 0xfdca9123, 0x002fdf93, 0xfe0ade03, 0x00ef9e93, 0x01de6e33,
-  0xffca9023, 0x002fdf93, 0xffeade03, 0x00ef9e93, 0x01de6e33, 0xffca9f23, 0xffea8a93, 0xcf5ff06f], []⟩
+  0xffca9023, 0x002fdf93, 0xffeade03, 0x00ef9e93, 0x01de6e33, 0xffca9f23, 0xffea8a93, 0xcf5ff06f,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0xde9ff06f], []⟩
 
 /-- Number of words in the opener image. -/
-abbrev openingWords : Nat := 896
+abbrev openingWords : Nat := 930
 
 /-! T238 writer blocks appended after the prefix pass (all writer code addresses live here). -/
 /-- A1: the 16th halfword of the level-1 sibling, then `addi x21,x21,32; jal <221>`. -/
@@ -137,8 +142,8 @@ def wkStart : Nat := 855
 /-- WS: `addi x30,x0,7`, the fold (34 words), `addi x21,x21,-2; jal <700>`. -/
 def wsStart : Nat := 859
 
-theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : Instr)
-    (bounded : index < 896) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
+theorem packed_fetch_base_any (state : MachineState) (index : Nat) (instruction : Instr)
+    (bounded : index < 930) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
     (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
     fetch openingImage state = some (.base instruction) := by
   have current : state.pc.toNat = 4096+4*index := by
@@ -159,9 +164,15 @@ theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : In
       | word op rd rs₁ rs₂ => simp [dec] at decoded
       | sraiw rd rs sh => simp [dec] at decoded
 
+theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : Instr)
+    (bounded : index < 896) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
+    (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
+    fetch openingImage state = some (.base instruction) :=
+  packed_fetch_base_any state index instruction (by omega) pc decoded
+
 set_option maxHeartbeats 1600000 in
 /-- All decoded instruction literals and all data bytes match the submitted JSON image. -/
-private theorem image_word_match : ∀ k : Fin 896,
+private theorem image_word_match : ∀ k : Fin 930,
     (K1Artifact.submission.image .opening).code.getD k.val 0 = openingImage.code.getD k.val 0 := by
   intro k
   simp only [K1Artifact.submission]

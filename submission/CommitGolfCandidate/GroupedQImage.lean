@@ -26,14 +26,13 @@ structure TailEntry (s : MachineState) : Prop where
   out : s.getReg .x8=4294971392
   heap : s.getReg .x9=4294971424
   cells : s.getReg .x21=wordAddress cellFirst
-  key : s.getReg .x24=9126809632
 
 theorem l21_start_regs (s : MachineState) (e : TailEntry s) :
     L21Regs (l21StartPrefix s GroupedUpper.l21SetupLen) 2097152 := by
   constructor <;> dsimp [l21StartPrefix,GroupedUpper.l21SetupLen,GroupedUpper.l21SetupOps,List.take,List.foldl,
     execInstrBr,MachineState.setPC,MachineState.setReg,MachineState.getReg]
   all_goals try simp only [show s.regs .x5=0 from e.selector,show s.regs .x9=4294971424 from e.heap,
-    show s.regs .x21=wordAddress cellFirst from e.cells,show s.regs .x24=9126809632 from e.key]
+    show s.regs .x21=wordAddress cellFirst from e.cells]
   all_goals first | rfl | decide
 
 theorem l21_start_x8 (s : MachineState) :
