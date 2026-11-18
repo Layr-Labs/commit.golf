@@ -1,23 +1,23 @@
 import CommitGolfCandidate.S3Leaf
 import CommitGolfCandidate.CompressionSampling
 
-/-! Oracle programs that evaluate the leaf hash, used only in security proofs:
+/-! Oracle programs that evaluate the stage-3 leaf hash, used only in security proofs:
 the replay of claimed leaves and the event that two replayed leaves collide. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec
 
 /-- Two forward permutation queries; the digest is computed from the replies. -/
 def s3HashLeaf (salt : BitVec 256) (value : Entry) : OracleComp World (BitVec 256) := do
-  let first ← (liftM (World.query (.inr (.inr (.inl (s3First salt value))))) :
+  let first ← (liftM (World.query (.inr (.inr (.inl (s3First value))))) :
     OracleComp World (BitVec PERMUTATION_WIDTH))
-  let second ← (liftM (World.query (.inr (.inr (.inl (s3Second first value))))) :
+  let second ← (liftM (World.query (.inr (.inr (.inl (s3Second salt first value))))) :
     OracleComp World (BitVec PERMUTATION_WIDTH))
   return BitVec.ofNat 256 second.toNat
 
 theorem s3_hash_leaf_run (oracle : Oracle) (salt : BitVec 256) (value : Entry) :
     oracle.run (s3HashLeaf salt value) = pure (s3LeafDigest oracle.permutation salt value, 2) := by
   unfold s3HashLeaf
-  erw [oracle_run_public_bind oracle (.inr (.inl (s3First salt value)))]
+  erw [oracle_run_public_bind oracle (.inr (.inl (s3First value)))]
   erw [oracle_run_public_bind oracle]
   simp only [oracle_run_pure, pure_bind]
   rfl

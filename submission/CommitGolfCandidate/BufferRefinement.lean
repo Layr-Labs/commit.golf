@@ -50,7 +50,7 @@ theorem opening_input_byte (trapdoor : BitVec (8*submission.sizes.trapdoor))
     (submission.initialState .opening (trapdoor, positions)).getByte
       (BitVec.ofNat 64 (submission.layout.trapdoor+offset)) =
         trapdoor.extractLsb' (8*offset) 8 := by
-  have size : submission.sizes.trapdoor = 2147483648 := rfl
+  have size : submission.sizes.trapdoor = 1610612736 := rfl
   rw [initial_input_byte submission .opening (trapdoor, positions) _ (by change 4294971424+offset < 2^64; omega)]
   have selected : submission.layout.trapdoor ≤ submission.layout.trapdoor+offset ∧
       submission.layout.trapdoor+offset < submission.layout.trapdoor + (8*submission.sizes.trapdoor+7)/8 := by
@@ -103,20 +103,20 @@ theorem check_input_proof_byte (input : CheckInput)
       (BitVec.ofNat 64 (submission.layout.proof+offset)) = input.proof[offset] := by
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte submission .check input _ (by
-    change 10871640096+offset < 2^64
+    change 10334769184+offset < 2^64
     change input.proof.length ≤ 13421772800 at valid
     omega)]
   have outsideRoot : ¬ (submission.layout.commitment ≤ submission.layout.proof+offset ∧
       submission.layout.proof+offset < submission.layout.commitment+(DIGEST_BITS+7)/8) := by
-    change ¬ (4294971392 ≤ 10871640096+offset ∧ 10871640096+offset < 4294971424)
+    change ¬ (4294971392 ≤ 10334769184+offset ∧ 10334769184+offset < 4294971424)
     omega
   have outsideIndices : ¬ (submission.layout.indices ≤ submission.layout.proof+offset ∧
       submission.layout.proof+offset < submission.layout.indices+8*input.positions.card) := by
-    change ¬ (6442455072 ≤ 10871640096+offset ∧ 10871640096+offset < 6442455072+8*input.positions.card)
+    change ¬ (5905584160 ≤ 10334769184+offset ∧ 10334769184+offset < 5905584160+8*input.positions.card)
     omega
   have outsideValues : ¬ (submission.layout.values ≤ submission.layout.proof+offset ∧
       submission.layout.proof+offset < submission.layout.values+(LEAF_SIZE/8)*input.positions.card) := by
-    change ¬ (6576672800 ≤ 10871640096+offset ∧ 10871640096+offset < 6576672800+256*input.positions.card)
+    change ¬ (6039801888 ≤ 10334769184+offset ∧ 10334769184+offset < 6039801888+256*input.positions.card)
     omega
   have selected : submission.layout.proof ≤ submission.layout.proof+offset ∧
       submission.layout.proof+offset < submission.layout.proof+input.proof.length := by omega
@@ -149,16 +149,16 @@ theorem check_input_value_byte (input : CheckInput) (ordinal offset : Nat)
         simpa using present))).extractLsb' (8*offset) 8 := by
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte submission .check input _ (by
-    change 6576672800+256*ordinal+offset < 2^64
+    change 6039801888+256*ordinal+offset < 2^64
     omega)]
   have outsideRoot : ¬ (submission.layout.commitment ≤ submission.layout.values+256*ordinal+offset ∧
       submission.layout.values+256*ordinal+offset < submission.layout.commitment+(DIGEST_BITS+7)/8) := by
-    change ¬ (4294971392 ≤ 6576672800+256*ordinal+offset ∧ 6576672800+256*ordinal+offset < 4294971424)
+    change ¬ (4294971392 ≤ 6039801888+256*ordinal+offset ∧ 6039801888+256*ordinal+offset < 4294971424)
     omega
   have outsideIndices : ¬ (submission.layout.indices ≤ submission.layout.values+256*ordinal+offset ∧
       submission.layout.values+256*ordinal+offset < submission.layout.indices+8*input.positions.card) := by
-    change ¬ (6442455072 ≤ 6576672800+256*ordinal+offset ∧
-      6576672800+256*ordinal+offset < 6442455072+8*input.positions.card)
+    change ¬ (5905584160 ≤ 6039801888+256*ordinal+offset ∧
+      6039801888+256*ordinal+offset < 5905584160+8*input.positions.card)
     omega
   have selected : submission.layout.values ≤ submission.layout.values+256*ordinal+offset ∧
       submission.layout.values+256*ordinal+offset < submission.layout.values+(LEAF_SIZE/8)*input.positions.card := by

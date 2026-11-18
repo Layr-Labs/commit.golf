@@ -1,10 +1,8 @@
 import CommitGolfCandidate.CapWitness
 import CommitGolfCandidate.CapQueries
-import CommitGolfCandidate.S6Tree
 
 /-! Instrumented cap replay. Inputs are retained only after issuing the actual
-public compression query. The reply transcript is not a free oracle evaluation.
-Every cap node is the reply with its top two bytes cleared (`s6Compress`). -/
+public compression query. The reply transcript is not a free oracle evaluation. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec
 
@@ -26,8 +24,8 @@ def capReplayQ : {height : Nat} → CapView height → List Digest →
                 | none => pure none
                 | some (rroot, rest', rightInputs) =>
                     let input := rroot ++ lroot
-                    let reply ← (liftM (World.query (.inr (.inl input))) : OracleComp World Digest)
-                    return some (s6Trunc reply, rest', leftInputs ++ rightInputs ++ [input])
+                    let root ← (liftM (World.query (.inr (.inl input))) : OracleComp World Digest)
+                    return some (root, rest', leftInputs ++ rightInputs ++ [input])
       else pure (match proof with
         | [] => none
         | value :: rest => some (value, rest, []))
@@ -37,7 +35,7 @@ and every recorded compression input is paid once. -/
 theorem cap_replay_witness_run (oracle : Oracle) {height : Nat}
     {view : CapView height} {proof rest : List Digest} {root : Digest}
     {inputs : List (BitVec 512)}
-    (witness : CapDecodeWitness (s6Compress oracle.compression) view proof root rest inputs) :
+    (witness : CapDecodeWitness oracle.compression view proof root rest inputs) :
     oracle.run (capReplayQ view proof) = pure (some (root, rest, inputs), inputs.length) := by
   induction witness with
   | unknown view root rest unoccupied =>
@@ -52,7 +50,7 @@ theorem cap_replay_witness_run (oracle : Oracle) {height : Nat}
       simp only [pure_bind]
       erw [oracle_run_public_bind oracle (.inl _)]
       simp only [oracle_run_pure, pure_bind]
-      simp [combine, s6Compress, Oracle.answer, List.length_append]
+      simp [combine, Oracle.answer, List.length_append]
       rfl
 
 /-- Universal continuation accounting includes early parser failures and arbitrary
@@ -88,16 +86,15 @@ theorem cap_replay_query_bound {height : Nat} (view : CapView height) (proof : L
 known leaf's authentication path to the accepted root. -/
 theorem cap_accepted_replay_path (oracle : Oracle) {height : Nat}
     (view : CapView height) (proof rest : List Digest) (root : Digest)
-    (accepted : capDecode (s6Compress oracle.compression) view proof = some (root, rest))
+    (accepted : capDecode oracle.compression view proof = some (root, rest))
     (path : Path height) (value : Digest) (known : capLeafValue view path = some value) :
     ∃ inputs : List (BitVec 512),
       oracle.run (capReplayQ view proof) = pure (some (root, rest, inputs), inputs.length) ∧
       ∃ siblings : List (Bool × Digest), siblings.length = height ∧
         siblings.map Prod.fst = capPathBits path ∧
-        climb (s6Compress oracle.compression) value siblings = root ∧
-        ∀ input ∈ pathInputs (s6Compress oracle.compression) value siblings, input ∈ inputs := by
-  obtain ⟨inputs, witness⟩ :=
-    cap_decode_witness (s6Compress oracle.compression) view proof rest root accepted
+        climb oracle.compression value siblings = root ∧
+        ∀ input ∈ pathInputs oracle.compression value siblings, input ∈ inputs := by
+  obtain ⟨inputs, witness⟩ := cap_decode_witness oracle.compression view proof rest root accepted
   exact ⟨inputs, cap_replay_witness_run oracle witness,
-    cap_witness_path (s6Compress oracle.compression) witness path value known⟩
+    cap_witness_path oracle.compression witness path value known⟩
 end CommitGolfCandidate

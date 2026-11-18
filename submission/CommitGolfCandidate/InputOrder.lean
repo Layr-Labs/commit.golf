@@ -51,11 +51,11 @@ theorem check_input_position (input : CheckInput) (ordinal : Nat)
       (submission.initialState .check input).getByte
         (BitVec.ofNat 64 (submission.layout.indices+8*ordinal+offset)) =
           (BitVec.ofNat 64 index.val).extractLsb' (8*offset) 8 := by
-    rw [initial_input_byte submission .check input _ (by change 6442455072+8*ordinal+offset < 2^64; omega)]
+    rw [initial_input_byte submission .check input _ (by change 5905584160+8*ordinal+offset < 2^64; omega)]
     have outside : ¬ (submission.layout.commitment ≤ submission.layout.indices+8*ordinal+offset ∧
         submission.layout.indices+8*ordinal+offset < submission.layout.commitment+(DIGEST_BITS+7)/8) := by
-      change ¬ (4294971392 ≤ 6442455072+8*ordinal+offset ∧
-        6442455072+8*ordinal+offset < 4294971424)
+      change ¬ (4294971392 ≤ 5905584160+8*ordinal+offset ∧
+        5905584160+8*ordinal+offset < 4294971424)
       omega
     have selected : submission.layout.indices ≤ submission.layout.indices+8*ordinal+offset ∧
         submission.layout.indices+8*ordinal+offset <
@@ -73,7 +73,7 @@ theorem check_input_position (input : CheckInput) (ordinal : Nat)
   have decoded := read_serialized_slice (submission.initialState .check input)
     (BitVec.ofNat 64 index.val) (submission.layout.indices+8*ordinal) 0 8 (by
       simpa only [Nat.zero_add] using bytes)
-  rw [read_word _ _ (by change (6442455072+8*ordinal)%8 = 0; omega)] at decoded
+  rw [read_word _ _ (by change (5905584160+8*ordinal)%8 = 0; omega)] at decoded
   change (submission.initialState .check input).getMem
     (BitVec.ofNat 64 (submission.layout.indices+8*ordinal)) =
       (BitVec.ofNat 64 index.val).extractLsb' 0 64 at decoded

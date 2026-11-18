@@ -1,5 +1,4 @@
 import CommitGolfCandidate.Model
-import CommitGolfCandidate.S3Leaf
 
 /-! Deterministic collision extraction for the submitted construction. These lemmas
 identify actual compression inputs; the random-oracle probability bound and machine
@@ -125,6 +124,12 @@ theorem leafDigest_eq_fold (compress : Compression) (salt : Digest) (value : Ent
     leafDigest compress salt value = (leafBlocks value).foldl (combine compress) salt := by
   simp [leafDigest, leafBlocks, List.foldl_map]
 
+/-- All compression inputs needed to verify one position. -/
+def openingInputs (compress : Compression) (salt : Digest) (value : Entry)
+    (path : List (Bool × Digest)) : List (BitVec 512) :=
+  chainInputs compress salt (leafBlocks value) ++
+    pathInputs compress (leafDigest compress salt value) path
+
 theorem chainInputs_length (compress : Compression) (state : Digest) (blocks : List Digest) :
     (chainInputs compress state blocks).length = blocks.length := by
   induction blocks generalizing state with
@@ -139,5 +144,34 @@ theorem pathInputs_length (compress : Compression) (node : Digest)
     rcases head with ⟨right, sibling⟩
     simp only [pathInputs, List.length_cons]
     exact congrArg (fun n : Nat => n + 1) (ih _)
+
+/-- A collision extractor need only replay eight leaf calls and one per tree level
+for each of the two conflicting positions, independently of the opening batch size. -/
+theorem openingInputs_length (compress : Compression) (salt : Digest) (value : Entry)
+    (path : List (Bool × Digest)) :
+    (openingInputs compress salt value path).length = 8 + path.length := by
+  simp [openingInputs, chainInputs_length, pathInputs_length, leafBlocks]
+
+/-- Two different opened values at the same position and root force a collision.
+This covers collisions inside the salted leaf chain as well as in the tree path. -/
+theorem collision_of_openings_eq (compress : Compression)
+    (salt salt' : Digest) (value value' : Entry) (path path' : List (Bool × Digest))
+    (samePosition : path.map Prod.fst = path'.map Prod.fst)
+    (different : value ≠ value')
+    (sameRoot : climb compress (leafDigest compress salt value) path =
+      climb compress (leafDigest compress salt' value') path') :
+    ∃ input ∈ openingInputs compress salt value path,
+      ∃ input' ∈ openingInputs compress salt' value' path',
+        input ≠ input' ∧ compress input = compress input' := by
+  by_cases leavesEqual : leafDigest compress salt value = leafDigest compress salt' value'
+  · have blocksDifferent : leafBlocks value ≠ leafBlocks value' :=
+      fun h => different (leafBlocks_injective h)
+    obtain ⟨x, hx, y, hy, collision⟩ := collision_of_chain_eq compress salt salt'
+      (leafBlocks value) (leafBlocks value') (by simp [leafBlocks])
+      (Or.inr blocksDifferent) (by simpa only [leafDigest_eq_fold] using leavesEqual)
+    exact ⟨x, List.mem_append_left _ hx, y, List.mem_append_left _ hy, collision⟩
+  · obtain ⟨x, hx, y, hy, collision⟩ := collision_of_climb_eq compress _ _ path path'
+      samePosition leavesEqual sameRoot
+    exact ⟨x, List.mem_append_right _ hx, y, List.mem_append_right _ hy, collision⟩
 
 end CommitGolfCandidate
