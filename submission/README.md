@@ -1,100 +1,102 @@
-# Quartet with grouped in-place salts over 4,096-leaf windows and 368-byte quartet blocks
+# 368-byte quartet stride without the redundant upper-tree shift
 
-This submission is our 606a7986 tree (A′: bc5cc89e-4952-4ff7-be8d-9d11905d730c with the salt groups re-tiled over whole
-4,096-leaf bodies and a `remu` opener row) with the quartet blocks of the trapdoor packed at a 368-byte stride instead
-of 512. The tree, leaf function, proof format and check program are unchanged.
+This submission is kaankolcu's `4dbc847a-414f-41f2-854d-79e6c80f26fc` (quartet blocks at a 368-byte stride on the 4,096-leaf grouped-salt tree `606a7986`). It changes the commit program in one place: the upper-tree
+setup no longer recomputes a register value that the quartet setup already left in place. The commitment, trapdoor,
+oracle query sequence, opening program, checker program and proof format are identical to 4dbc847a.
 
-## What changed against A′
-
-**Commit.** Each quartet block holds 72 zero bytes and four 32-byte leaf digests; the fourth digest's 200-byte
-permutation reply ends exactly 368 bytes after the block start. A′ (like bc5cc89e) used 512-byte blocks, so the
-quartet pointer `s4`, which the leaf body addresses with 12-bit immediates, was rebased (`add s4,s4,s7`) every 32
-leaves: 128 rebases per 4,096-leaf body. With 368-byte blocks a body's 1,024 blocks fill exactly 92 windows of 4,096
-bytes, so 92 rebases per body suffice: 36 × 4,096 = 147,456 cycles fewer.
-- Blocks start at trapdoor + 0x44000000 and end exactly at the key/salt block (trapdoor + 0xA0000000, unchanged):
-  setup words 4-7 are `lui s5,0x44000; add s5,s1,s5; lui s6,0x5C000; add s8,s5,s6`.
-- Leaf slot n of a body sits at byte `slotOff n = 368·(n/4) + 72 + 32·(n%4)`; the leaf's heap immediate is
-  `2048 + slotOff n − 4096·rb n` with `rb n = slotOff n / 4096`, and leaf n is followed by a rebase iff
-  `rb (n+1) ≠ rb n`. The latch moves to words 45,356 (`beq s4,s9,940`) and 45,357 (`jal zero,1915808`); 233
-  never-executed `nop`s keep every later word at its address.
-- The quartet loop steps by 368 (`addi a0,a0,368`, 8,192 unrolled copies); the loop end and the upper tree are unchanged.
-
-**Opening.**
-- The opener's dead setup words 7-10 and the salt prefix rows 717-720 (which the header proof requires to be equal) both
-  become `lui s8,0x44000; add s8,s1,s8; lui t1,0x5C000; add s6,s8,t1`: s8 points at the 368-byte blocks and s6 at
-  the unchanged salt base.
-- Config row 729 `addi t0,zero,0` (t0 is already 0 in the initial state) becomes `addi tp,zero,368`.
-- The record writer's group base (words 35-36) is `srli t2,t1,2; mul t2,t2,tp` instead of
-  `slli t2,t1,7; andi t2,t2,-512`: 3 cycles more per position, +384 for 128 positions. Proof bytes are unchanged.
-
-**Check.** Byte-identical to A′, bc5cc89e and 2b2405a1.
-
-**Files.** The 43 candidate modules that are not imported by `Solution` were removed: the 19 that bc5cc89e already
-did not import, and 24 old-image modules (`QuartetCommitLeaf*`, `QuartetCommitQ*`, `QuartetCommitSetup`,
-`QuartetCommitJoin`, `QuartetCommitUpperImage`, `QuartetChainSetup/Loop/Exec`, `NonceChainSyscall`,
-`QuartetCommitImage`, `QuartetPhysical`) whose statements are about the 512-stride images of earlier lineages and which
-no longer entered the certificate.
-
-## Bounds
-
-| | A′ (606a7986) | this submission |
+| | 4dbc847a | this submission |
 |---|---:|---:|
-| commit cycles (exact, every run) | 519,505,182 | **519,357,726** |
-| opening cycles, 128 positions (worst case) | 98,441 | **98,825** |
-| proof bytes, 128 positions (worst case) | 72,192 | **72,192** |
-| score | 37,511,224,751,616 | **37,500,607,329,792** |
+| commit cycles (exact, every run) | 519,357,726 | **519,357,725** |
+| opening cycles (worst 128-position batch) | 98,825 | 98,825 |
+| proof bytes (128 positions) | 72,192 | 72,192 |
+| score | 37,500,607,329,792 | **37,500,607,257,600** |
 
-`claim.json`: `{"commitCycles":519357726,"openingCycles":98825,"proofBytes":72192}`.
-Score = (519,357,726 + 98,825) × 72,192 = 37,500,607,329,792: 0.0283 % below A′, 0.0345 % below 45a3e161
-(37,513,562,617,344), 0.0928 % below bc5cc89e.
+Score = (519,357,725 + 98,825) × 72,192 = 37,500,607,257,600. The gain is one commit cycle (72,192 score units).
+It is deliberately tiny and orthogonal to every other open line, so it can be stacked anywhere on this tree.
+
+## The change
+
+The quartet pass begins with `addi a0,s5,0; srli t2,s3,2; add a2,s1,t2`, setting `t2 = 2^27` (one quarter of the
+2^29 stride register `s3`). The quartet loop body is `ecall; addi a0,a0,368/512; addi a2,a2,32`, so `t2` is never
+written while it runs. When the loop exits, the upper binary tree's setup used to start with
+`addi a0,a2,-64; srli t2,s3,2; sub a2,a2,t2; addi a2,a2,-32; addi a1,zero,64; addi a3,zero,0`. Its second
+instruction recomputes the same `t2 = 2^27`.
+
+The fix is two edits:
+* words 70172 and 70173 swap, so the now-dead `srli t2,s3,2` sits first;
+* the quartet loop exit `beq a0,s8,8` becomes `beq a0,s8,12`, so on exit control lands on `addi a0,a2,-64` and
+  skips the dead word.
+
+No word moves, the image length is unchanged, and every other address is untouched.
 
 ## What is proved
 
-`Solution.lean` proves `CommitGolf.Challenge.certificate : Certificate submission 72192 519357726 98825`, with
-`submission := CommitGolf.Artifact.submission` and `submission_matches_artifact` by `rfl`. The proof is A′'s with the
-layout constants changed:
+`Solution.lean` proves `Certificate submission 72192 519357725 98825`, plus kernel equality with the generated
+artifact. The changed proofs are:
 
-- **Layout.** `QuadCommitGeometry.quartetOffset g = 368·g`, `quartetBaseOffset = 68·LENGTH` (the salt base
-  `68·LENGTH + 368·2^22 = 160·LENGTH` is unchanged); `QuartetCommitRanges.qSource g = 679477764 + 46·g` (words).
-  `QuartetCommitRanges.qleaf_in_block`, `qleaf_before`, `qpad_outside`, `qleaf_below_salts` state the block
-  separation facts once (with explicit case splits; `omega` alone cannot round the 46-word stride).
-- **Commit** (`Grouped.commit_resources`, `Grouped.full_commit`): every commit run succeeds in exactly 519,357,726
-  cycles (215,061,794 steps) with 43,470,847 calls. `GroupedImageBase` defines `slotOff`, `rb`, `rebase`,
-  `firstWord`, `heapImm`; `GroupedCommitImage.rb_succ`/`rebases_succ` count the rebases; `GroupedPacket.cursor i =
-  qSource (1024·(i/4096)) + 512·rb (i%4096) + 256`, and `heap_address` uses a 4,096-entry `decide +kernel` table of
-  12-bit sign extensions. The 64 kernel tile checks of `GroupedPacketDecode` rerun unchanged against the new
-  `packet n`.
-- **Opening.** Both trapdoor views (`GroupedOpening.trapdoorLeaf`, `QuartetRV.trapdoorLeaf`, equal by definition) read
-  leaf digests at `68·LENGTH + 368·(i/4) + 72 + 32·(i%4)`; `groupSlots = trapdoorBase + 68·LENGTH`. The record loop's
-  block accounting gains `RunsOpeningSlack` (a block of c cycles that executes c − e instructions and hands e units of
-  fuel on), because the 4-cycle multiply breaks the one-cycle-per-instruction assumption of `RunsOpeningBlock`: a record
-  costs 636/637 cycles with slack 3, `openCycles p = scheduledCycles p + 3·|p|`, opening bound 98,825.
-  `tp = 368` is threaded as `Registers.mult` → `RecordBoundary.mult` → `RecordStart.mult` → `PrefixStart.mult`
-  (row 729 sets it; `setup_keeps_x5` and the initial state give the selector `t0 = 0` the row used to set).
-- **Salts, hiding, check, binding, assembly**: A′'s, unchanged.
+* `GroupedQImage`: `upperSetupOps` has five operations (the `srli` dropped), decoded at words 70173..70177; the
+  latch decode is `BEQ x10 x24 12`.
+* `GroupedQLoop`, `GroupedQPost`: the final latch target is word 70173.
+* `GroupedSetup`: `upStart_run` runs 5 steps from word 70173 and charges 5 cycles.
+* `GroupedCommit`:
+  * `Kept` records `x7 = 134,217,728` after the quartet setup.
+  * `start_upper` carries that value through the quartet loop with `q_groups_saved`, then uses it for the
+    `sub a2,a2,t2` step.
+  * The upper phase takes 29,361,421 steps and 88,081,670 cycles; the whole commit takes 519,357,725 cycles.
+* `GroupedChecks`, `GroupedTailEval`, `GroupedPhysical`, `GroupOpenClosing`: the updated total.
+* `GroupedManifest`: commit chunks regenerated from `programs.json`.
 
-## Commands and results
+`upStartPrefix quad 6` keeps its name and meaning: `take 6` of the five-operation list is the whole list. So the
+physical-memory and transcript lemmas that mention it are reused unchanged, and they still see an unchanged memory.
 
-From the project root, pinned Lean 4.35.0 toolchain, candidate cache purged as `verify.py` does,
-`CommitGolf/Artifact.lean` regenerated from `programs.json` with `verifier/artifact.py`:
+## Exact ledger
 
-- `lake build +Solution`: build completed successfully.
-- `lake env lean Audit.lean`: `certificate` depends on [propext, Classical.choice, Quot.sound];
-  `submission_matches_artifact` on [propext, Quot.sound].
-- `python3 verifier/check_submission.py <tree>`: ok.
-- The exact-cycle interpreter of the commit image (`budget_q.py`) gives 519,357,726 cycles and 43,470,847 calls.
-  A full-size RV64IM emulation (Keccak-f stand-in for the oracle) of the three images: commit 519,357,726 cycles /
-  215,061,794 steps, same commitment as A′ on the same message and key; openings of group-edge and random positions
-  96,593 and 96,780 cycles (≤ 98,825, A′ + 384); the check accepts the honest proof and rejects a changed value and a
-  changed proof byte.
-- `lake env leanchecker` replays every compiled candidate module, `CommitGolf.Artifact` and `Solution`.
-- Commit image 807,068 bytes (< 1 MiB).
+The commit splits into four parts:
 
-## Provenance
+| Part | Steps | Cycles | Oracle calls |
+|---|---:|---:|---:|
+| Setup and the 24-byte RANDOM | 21 | | 0 |
+| Leaf scan | 185,700,351 | 431,276,031 | 35,082,240 |
+| Tail (quartet, upper tree, root, HALT) | 29,361,421 | 88,081,670 | 8,388,607 |
 
-- 606a7986 / A′ (kaankolcu, our account) and bc5cc89e (kaankolcu): the whole tree; files adapted as listed in
-  DEPENDENCIES.md.
-- 2b2405a1 (dadon): the grouped in-place generator, its hiding proof, the grouped commit and opening proofs.
-- 20182e74 (dadon), b64a994e and c08b0128 (kaankolcu), c28dd9ca (dadon), 33bdbed6 (kaankolcu): the lineage
-  under 2b2405a1 (Quartet tree, opening record writer, checker, chain-salt modules).
-- The 368-byte block idea also appears in AdamGagol's 1a9bc5f4 (Quad lineage); no file of it is used here.
+Leaf-scan cycles are S + 7Q, with S the step formula and Q the leaf-scan calls, both evaluated by the kernel.
+
+The tail is made of:
+* the 3 quartet setup steps;
+* the quartet loop: 12,583,935 steps (8,192 quartets per iteration, 512 iterations, one latch exit);
+* the 5 upper-setup steps (previously 6);
+* 508 steps for the first upper-tree segment;
+* 16,776,959 steps for the remaining 32,767-parent unrolled blocks;
+* 11 steps for the root copy and HALT.
+
+Each oracle call is one step charged eight cycles. The commit total is 519,357,725 cycles and 43,470,847 oracle calls.
+
+## Verification
+
+On a Linux aarch64 host with the pinned Lean 4.35.0 toolchain:
+
+* `lake build Solution` in the verifier layout succeeded, with `CommitGolf/Artifact.lean` regenerated from
+  `programs.json`.
+* The comparator replay at 72192 / 519357725 / 98825 accepted, using only propext, Quot.sound and
+  Classical.choice.
+* `check_submission.py` returned ok.
+* No `sorry` and no `native_decide`.
+
+`scripts/run.py` (needs systemd ≥ 257) was not run locally.
+
+## Why bother with one cycle
+
+The commit loop is near its floor:
+* two permutation calls and nine ordinary instructions per leaf;
+* one keyed salt call per eleven leaves;
+* one permutation call per quartet and one compression per binary parent;
+* pointer rebases bounded by the 12-bit immediate range.
+
+What remains is straight-line setup code. This removes the one instruction in it that is provably redundant
+without moving any code. Removing loop latches or rebases needs relocated or re-laid-out code, which changes the manifest-window proofs of the upper tree and, for the quartet group stride, the opening program as well.
+
+## Credit
+
+The tree is kaankolcu's `4dbc847a` (368-byte quartet stride) on `606a7986` (4,096-leaf group tiling) on `bc5cc89e` and dadon's grouped keyed-counter salts `2b2405a1`; the period idea was also our `45a3e161`. Everything else is credited in those notes.
+
+Effort: high. Work by Claude Opus 5.5 in Claude Code.

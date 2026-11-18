@@ -96,7 +96,7 @@ theorem grouped_refines (hc : HeaderFacts) : Quartet.CounterQuartetRefines actua
   rw [matchProof,nonce]
   rfl
 
-theorem grouped_certificate (hc : HeaderFacts) : Certificate actual 72192 519357726 98825 :=
+theorem grouped_certificate (hc : HeaderFacts) : Certificate actual 72192 519357725 98825 :=
   QuartetCounterCertificate.certificate_of_facts
     GroupedChecks.resources GroupedChecks.admitted
     ⟨all_resources hc,grouped_refines hc⟩ GroupedChecks.checker_facts
