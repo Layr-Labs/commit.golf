@@ -44,8 +44,8 @@ attribute [local irreducible] packBuffer writeWord writeWindow window
 
 theorem plan_meaning (o : Oracle) (v : View) (i : Nat) (inputReg : v.regs .x10=wordAddress (msgWord i)) :
     ((plan i).foldl (viewStep o) v).mem=packetMem o v.mem i := by
-  by_cases d : rank i=0 <;> by_cases shift : i%32=31 <;>
-    simp [plan,within_rank,d,shift,packetMem,digestReply,preSecond,directState,laterState,seededMem,
+  by_cases d : rank i=0 <;> by_cases p : pairPos i=0 <;> by_cases shift : i%32=31 <;>
+    simp [plan,within_rank,within_pair,p,d,shift,packetMem,digestReply,preSecond,directState,laterState,seededMem,
       generated,firstReply,firstState,viewStep,View.reg,View.store,View.reply,inputReg]
 
 theorem coordinate_first (i : Index) : firstLeaf (coord i).1=i.val-rank i.val := by

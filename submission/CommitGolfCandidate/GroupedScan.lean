@@ -10,22 +10,22 @@ set_option maxHeartbeats 2000000
 abbrev N : Nat := 16777216
 def startPC (i : Nat) := if i=N then wordPC 45591 else wordPC (firstWord (i%4096))
 def edgeCost (i : Nat) := if i%4096=4095 then if i+1=N then 1 else 2 else 0
-def S (i : Nat) := 11*i+heads i+i/32+2*(i/4096)-(if i=N then 1 else 0)
+def S (i : Nat) := 11*i+pairHeads i+i/32+2*(i/4096)-(if i=N then 1 else 0)
 def Q (i : Nat) := 2*i+heads i
 def C (i : Nat) := S i+7*Q i
 
 theorem calls_plan (i : Nat) : opCalls (plan i)=2+(if rank i=0 then 1 else 0) := by
-  by_cases h : rank (i%4096)=0 <;> by_cases b : i%32=31 <;>
-    simp [plan,opCalls,Action.calls,h,b,←within_rank i]
+  by_cases h : rank i=0 <;> by_cases p : pairPos i=0 <;> by_cases b : i%32=31 <;>
+    simp [plan,opCalls,Action.calls,within_rank,within_pair,h,p,b]
 
-theorem length_plan (i : Nat) : (plan i).length=11+(if rank i=0 then 1 else 0)+(if i%32=31 then 1 else 0) := by
-  by_cases h : rank (i%4096)=0 <;> by_cases b : i%32=31 <;>
-    simp [plan,h,b,←within_rank i]
+theorem length_plan (i : Nat) : (plan i).length=11+(if pairPos i=0 then 1 else 0)+(if i%32=31 then 1 else 0) := by
+  by_cases h : rank i=0 <;> by_cases p : pairPos i=0 <;> by_cases b : i%32=31
+  all_goals simp [plan,within_rank,within_pair,h,p,b] <;> exact False.elim (h (pair_head i p))
 
 theorem cumul (i : Nat) (hi : i<N) :
     S (i+1)=S i+(plan i).length+edgeCost i ∧ Q (i+1)=Q i+opCalls (plan i) := by
   rw [calls_plan,length_plan];unfold S Q edgeCost
-  rw [heads_succ,if_neg (Nat.ne_of_lt hi)]
+  rw [heads_succ,pair_succ,if_neg (Nat.ne_of_lt hi)]
   change i<16777216 at hi
   dsimp only [N]
   split_ifs <;> constructor <;> omega
@@ -62,8 +62,8 @@ theorem edge_run (s : MachineState) (i fuel : Nat) (hi : i<N)
     have h:=congrArg List.length (plan_words i); simpa using h
   rw [len,←packet_next] at start
   by_cases edge : i%4096=4095
-  · have pc : s.pc=wordPC 45589 := by rw [start,edge];rfl
-    have fetchB : fetch image s=some (.base (.BEQ .x20 .x25 8)) := fetch_decoded s 45589 (by decide) pc _ (by decide +kernel)
+  · have pc : s.pc=wordPC 45397 := by rw [start,edge];rfl
+    have fetchB : fetch image s=some (.base (.BEQ .x20 .x25 776)) := fetch_decoded s 45397 (by decide) pc _ (by decide +kernel)
     have same : s.getReg .x20=s.getReg .x25 ↔ i+1=N := by
       rw [hp,stop,show wordAddress (cursor (i+1))=wordAddress (qSource (8*((i+1)/32)))+2048 from wordAddress_add ..,BitVec.add_left_inj]
       constructor
@@ -72,15 +72,15 @@ theorem edge_run (s : MachineState) (i fuel : Nat) (hi : i<N)
         unfold qSource at w;dsimp [N];omega
       · intro h;rw [h];rfl
     by_cases last : i+1=N
-    · have op : ordinaryStep s (.base (.BEQ .x20 .x25 8))=some (s.setPC (wordPC 45591)) := by
+    · have op : ordinaryStep s (.base (.BEQ .x20 .x25 776))=some (s.setPC (wordPC 45591)) := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,same.mpr last,wordPC,signExtend13]
       rw [edgeCost,if_pos edge,if_pos last,startPC,if_pos last,Nat.add_comm 1 fuel,execute_ordinary_step _ _ _ _ _ _ fetchB op];rfl
-    · let mid := s.setPC (wordPC 45590)
+    · let mid := s.setPC (wordPC 45398)
       have next : (i+1)%4096=0 := by omega
-      have op : ordinaryStep s (.base (.BEQ .x20 .x25 8))=some mid := by
+      have op : ordinaryStep s (.base (.BEQ .x20 .x25 776))=some mid := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,mid,mt same.mp last];rfl
-      have fj : fetch image mid=some (.base (.JAL .x0 1914876)) := fetch_decoded mid 45590 (by decide) rfl _ (by decide +kernel)
-      have jump : ordinaryStep mid (.base (.JAL .x0 1914876))=some (s.setPC (wordPC 21)) := by
+      have fj : fetch image mid=some (.base (.JAL .x0 1915644)) := fetch_decoded mid 45398 (by decide) rfl _ (by decide +kernel)
+      have jump : ordinaryStep mid (.base (.JAL .x0 1915644))=some (s.setPC (wordPC 21)) := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,mid,MachineState.setPC,MachineState.setReg];rfl
       rw [edgeCost,if_pos edge,if_neg last,startPC,if_neg last,next,show firstWord 0=21 by decide,
         show 2+fuel=(fuel+1)+1 by omega,execute_ordinary_step _ _ _ _ _ _ fetchB op,

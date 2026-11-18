@@ -41,15 +41,17 @@ theorem fetch_decoded (state : MachineState) (index : Nat)
 /-- Number of heads among the first n slots of a 64-leaf period. -/
 def heads (n : Nat) := 6*(n/64)+((n%64+10)/11)
 def rank (n : Nat) := (n%64)%11
-def firstWord (n : Nat) := 21+11*n+heads n+n/32
+def pairPos (n : Nat) := (n%64)%22
+def pairHeads (n : Nat) := 3*(n/64)+(n%64+21)/22
+def firstWord (n : Nat) := 21+11*n+pairHeads n+n/32
 def heapImm (n : Nat) := BitVec.ofNat 12 (2048+512*((n/4)%8)+72+32*(n%4))
-def sourceImm (n : Nat) := BitVec.ofNat 12 (16*(rank n-1))
+def sourceImm (n : Nat) := BitVec.ofNat 12 (2560+2816*((n%64/11)%2)+16*(rank n-1))
 
 def packet (n : Nat) : List Instr :=
   [.ADDI .x12 .x10 (-32),.ECALL] ++
   (if rank n=0 then
-    [.SD .x24 .x10 0,.ADDI .x12 .x10 (-120),.ADDI .x10 .x24 0,.ECALL,
-     .ADDI .x7 .x12 0,.ADDI .x10 .x12 176,.SD .x10 .x10 0]
+    [.SD .x24 .x10 0,.ADDI .x12 .x10 (-120),.ADDI .x10 .x24 0,.ECALL] ++ (if pairPos n=0 then [.ADDI .x7 .x12 1536] else []) ++
+     [.ADDI .x10 .x12 176,.SD .x10 .x10 0]
   else [.ADDI .x10 .x10 56,.SD .x10 .x10 0,.LD .x31 .x7 (sourceImm n),
     .SD .x10 .x31 8,.LD .x31 .x7 (sourceImm n+8),.SD .x10 .x31 16]) ++
   [.ADDI .x12 .x20 (heapImm n),.ECALL,.ADDI .x10 .x10 200] ++

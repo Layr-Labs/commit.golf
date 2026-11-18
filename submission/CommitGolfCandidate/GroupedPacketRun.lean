@@ -51,6 +51,13 @@ theorem buffer_next (i : Nat) (more : rank (i+1)≠0) : groupBuffer (i+1)=groupB
   have rk : (i%64+1)%11=i%64%11+1 := by omega
   unfold groupBuffer rank;rw [rel,rk];simp
 
+theorem anchor_next (i : Nat) (more : pairPos (i+1)≠0) : saltAnchor (i+1)=saltAnchor i := by
+  have h : i%64≠63 := by intro h;apply more;unfold pairPos;rw [show (i+1)%64=0 by omega]
+  have rel : (i+1)%64=i%64+1 := by omega
+  unfold pairPos at more;rw [rel] at more
+  have rk : (i%64+1)%22=i%64%22+1 := by omega
+  unfold saltAnchor pairBuffer pairPos;rw [rel,rk];simp
+
 theorem cursor_next (i : Nat) :
     (i%4096%32=31 → wordAddress (cursor i)+4096=wordAddress (cursor (i+1))) ∧
     (i%4096%32≠31 → cursor (i+1)=cursor i) := by
@@ -65,7 +72,7 @@ theorem cursor_next (i : Nat) :
 def finish (s t : MachineState) (i : Nat) : Prop :=
   t.getReg .x10=wordAddress (msgWord (i+1)) ∧ t.getReg .x20=wordAddress (cursor (i+1)) ∧
   t.getReg .x23=4096 ∧ t.getReg .x24=wordAddress (qSalt 0) ∧
-  (rank (i+1)≠0 → t.getReg .x7=wordAddress (groupBuffer (i+1))) ∧
+  (pairPos (i+1)≠0 → t.getReg .x7=wordAddress (saltAnchor (i+1))) ∧
   t.getReg .x5=0 ∧ t.getReg .x11=200 ∧ t.getReg .x13=1 ∧
   t.getReg .x8=s.getReg .x8 ∧ t.getReg .x9=s.getReg .x9 ∧
   t.getReg .x19=s.getReg .x19 ∧ t.getReg .x21=s.getReg .x21 ∧ t.getReg .x25=s.getReg .x25
@@ -78,7 +85,7 @@ private theorem offset_getReg (s : MachineState) (rd : Reg) (value : Word) (reg 
   simp only [putReg,MachineState.getReg_setPC]
   cases rd <;> cases reg <;> rfl
 
-attribute [local irreducible] wordAddress msgWord cursor groupBuffer sourceWord qSalt qLeaf qSource writeBits
+attribute [local irreducible] wordAddress msgWord cursor saltAnchor groupBuffer sourceWord qSalt qLeaf qSource writeBits
 
 theorem packet_walk (s : MachineState) (i : Nat) (limit : i<16777216) (r : PacketRegs s i) :
     walk (fun t => finish s t i) (plan i) s := by
@@ -87,9 +94,9 @@ theorem packet_walk (s : MachineState) (i : Nat) (limit : i<16777216) (r : Packe
   have boundM : msgWord i+32≤2^33 := by unfold msgWord;omega
   have boundQ : qLeaf i+25≤2^33 := by unfold qLeaf qSource;omega
   have boundSource : sourceWord i+2≤2^33 := by unfold sourceWord groupBuffer msgWord rank;omega
-  have src0 : wordAddress (groupBuffer i)+signExtend12 (sourceImm (i%4096))=wordAddress (sourceWord i) := by
+  have src0 : wordAddress (saltAnchor i)+signExtend12 (sourceImm (i%4096))=wordAddress (sourceWord i) := by
     simpa using src_address i 0
-  have src1 : wordAddress (groupBuffer i)+signExtend12 (sourceImm (i%4096)+8)=wordAddress (sourceWord i+1) := src_address i 1
+  have src1 : wordAddress (saltAnchor i)+signExtend12 (sourceImm (i%4096)+8)=wordAddress (sourceWord i+1) := src_address i 1
   have c := cursor_next i
   simp only [show i%4096%32=i%32 by omega] at c
   have ctrRoom : qSalt 0+25≤2^33 := by unfold qSalt;decide
@@ -101,28 +108,37 @@ theorem packet_walk (s : MachineState) (i : Nat) (limit : i<16777216) (r : Packe
   change wordAddress (msgWord i+7)+signExtend12 8#12=_ at a4
   change wordAddress (msgWord i+7)+signExtend12 16#12=_ at a5
   change wordAddress (msgWord i+7)+signExtend12 200#12=_ at a6
-  change wordAddress (groupBuffer i)+signExtend12 (sourceImm (i%4096)+8#12)=_ at src1
+  change wordAddress (saltAnchor i)+signExtend12 (sourceImm (i%4096)+8#12)=_ at src1
+  have retained (more : pairPos (i+1)≠0) : wordAddress (saltAnchor i)=wordAddress (saltAnchor (i+1)) :=
+    congrArg wordAddress (anchor_next i more).symm
   by_cases direct : rank i=0
   · have dr : rank (i%4096)=0 := (within_rank i).trans direct
-    have buf : groupBuffer i=msgWord i-15 := by unfold groupBuffer;rw [direct,Nat.sub_zero]
-    have saved (more : rank (i+1)≠0) : wordAddress (msgWord i-15)=wordAddress (groupBuffer (i+1)) :=
-      congrArg wordAddress ((buffer_next i more).trans buf).symm
-    by_cases shift : i%32=31
-    all_goals simp [plan,dr,shift,walk,finish,Action.valid,offset_getReg,word_getReg,writeBits_register,
-      r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2]
-    all_goals simp only [a0,a1,a2,a3,a4,a5,a6,z,true_and,and_true]
-    all_goals try rw [show wordAddress (cursor i)+4096#64=wordAddress (cursor (i+1)) from c.1 shift]
-    all_goals repeat' apply And.intro
-    all_goals first | omega | exact saved | rfl
+    by_cases reset : pairPos i=0
+    · have here : wordAddress (msgWord i-15)+signExtend12 1536=wordAddress (saltAnchor i) := by
+        have disp : signExtend12 (1536 : BitVec 12)=wordAddress 192 := by unfold wordAddress;rfl
+        rw [disp,←wordAddress_add];unfold saltAnchor pairBuffer;rw [reset,Nat.sub_zero]
+      by_cases shift : i%32=31
+      all_goals simp [plan,dr,within_pair,reset,shift,walk,finish,Action.valid,offset_getReg,word_getReg,writeBits_register,
+        r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2]
+      all_goals simp only [a0,a1,a2,a3,a4,a5,a6,here,z,true_and,and_true]
+      all_goals try rw [show wordAddress (cursor i)+4096#64=wordAddress (cursor (i+1)) from c.1 shift]
+      all_goals repeat' apply And.intro
+      all_goals first | omega | exact retained | rfl
+    · by_cases shift : i%32=31
+      all_goals simp [plan,dr,within_pair,reset,shift,walk,finish,Action.valid,offset_getReg,word_getReg,writeBits_register,
+        r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2,r.buf reset]
+      all_goals simp only [a0,a1,a2,a3,a4,a5,a6,z,true_and,and_true]
+      all_goals try rw [show wordAddress (cursor i)+4096#64=wordAddress (cursor (i+1)) from c.1 shift]
+      all_goals repeat' apply And.intro
+      all_goals first | omega | exact retained | rfl
   · have dr : rank (i%4096)≠0 := by rwa [within_rank]
-    have saved (more : rank (i+1)≠0) : wordAddress (groupBuffer i)=wordAddress (groupBuffer (i+1)) :=
-      congrArg wordAddress (buffer_next i more).symm
+    have active : pairPos i≠0 := fun h => direct (pair_head i h)
     by_cases shift : i%32=31
     all_goals simp [plan,dr,shift,walk,finish,Action.valid,offset_getReg,word_getReg,writeBits_register,
-      r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2,r.buf direct]
+      r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2,r.buf active]
     all_goals simp only [a0,a1,a2,a3,a4,a5,a6,src0,src1,z,true_and,and_true]
     all_goals try rw [show wordAddress (cursor i)+4096#64=wordAddress (cursor (i+1)) from c.1 shift]
     all_goals repeat' apply And.intro
-    all_goals first | omega | exact saved | rfl
+    all_goals first | omega | exact retained | rfl
 
 end TwoPermutationPrototype.Grouped
