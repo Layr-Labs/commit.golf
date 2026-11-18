@@ -1,120 +1,127 @@
 import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingHybrid
-import CommitGolfCandidate.HidingQueries
 
-/-! Connect the contract-level reference game to the hybrid games. The second
-stage is only bounded after reachable first-stage results, so it is guarded:
-after an unreachable state it returns a fixed output without queries. Guarding
-does not change the game, and gives the uniform bound the hybrid needs. -/
+/-! Preserve the full two-stage adversary while moving its first stage to lazy
+compression sampling. The selected messages, positions, retained state, and cache
+stay jointly distributed, and the observing stage keeps its certified query bound. -/
 namespace CommitGolfCandidate
 
 -- Observations retain the discrete measurable structure used by the contract.
 local instance hidingGameIntegrationDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
-variable {State Output : Type} {openingSize : Nat}
+def queryActualTranscript (message : Message) (salt : Index → Digest) (positions : Positions) :
+    OracleComp World (Commitment × Proof) :=
+  queryTranscript (queryHeap LENGTH (queryLeaf message salt) LOG_LENGTH) salt positions
 
-/-- The sampled-oracle reference game is the hybrid game at one end. -/
-theorem reference_hiding_game (adversary : Hiding.HidingAdversary State Output openingSize)
-    (selectSecond : Bool) :
-    (Oracle.sample >>= fun oracle => referenceHiding oracle adversary selectSecond) =
-      hidingGame adversary fun challenge =>
-        if selectSecond then challenge.message₁ else challenge.message₀ := by
-  unfold hidingGame
-  simp only [Oracle.sample, bind_assoc, pure_bind]
+attribute [local irreducible] heapQueryBudget queryHeap queryTranscript
+
+theorem query_actual_transcript_reference (oracle : Oracle) (message : Message)
+    (salt : Index → Digest) (positions : Positions) :
+    fixedOracleRun oracle (queryActualTranscript message salt positions) =
+      pure (referenceTranscript oracle.compression message salt positions) := by
+  have correct (node : Nat) (positive : 0 < node) (inside : node < 2*LENGTH) :=
+    query_heap_reference oracle LENGTH (queryLeaf message salt)
+      (leafValues oracle.compression message salt) (query_leaf_reference oracle message salt)
+      LOG_LENGTH node positive inside (by
+        change LENGTH ≤ LENGTH*node
+        simpa only [Nat.mul_one] using Nat.mul_le_mul_left LENGTH positive)
+  exact query_transcript_reference oracle _ _ correct salt positions
+
+theorem fixed_oracle_run_coins (oracle : Oracle) {α : Type} (coins : ProbComp α) :
+    fixedOracleRun oracle (liftM coins : OracleComp World α) = coins := by
+  rw [fixedOracleRun, oracle_run_coins, Functor.map_map]
+  exact id_map coins
+
+def referenceContinuation {α : Type} (message : Message) (positions : Positions)
+    (observe : Commitment → Proof → OracleComp World α) : OracleComp World α := do
+  let salt ← (liftM ($ᵗ (Index → Digest)) : OracleComp World (Index → Digest))
+  let transcript ← queryActualTranscript message salt positions
+  observe transcript.1 transcript.2
+
+theorem reference_continuation_run {α : Type} (oracle : Oracle) (message : Message)
+    (positions : Positions) (observe : Commitment → Proof → OracleComp World α) :
+    fixedOracleRun oracle (referenceContinuation message positions observe) =
+      (($ᵗ (Index → Digest)) >>= fun salt => observeTranscript oracle message salt positions observe) := by
+  rw [referenceContinuation, fixed_oracle_run_bind, fixed_oracle_run_coins]
+  apply bind_congr
+  intro salt
+  rw [fixed_oracle_run_bind, query_actual_transcript_reference, pure_bind]
   rfl
 
-/-- The observing stage, cut off after states for which it has no query bound.
-The decision is classical and never evaluated. -/
-noncomputable def guardedObserve (adversary : Hiding.HidingAdversary State Output openingSize)
-    (budget : Nat) (aux : State) (root : Commitment) (proof : Proof) : OracleComp World Output :=
-  @ite _ (∀ root proof, PublicQueryBound (adversary.observe aux root proof) budget)
-    (Classical.propDecidable _)
-    (adversary.observe aux root proof)
-    (pure (OracleComp.support_nonempty (adversary.observe aux root proof)).some)
+def referenceExperiment {State Output : Type} {openingSize : Nat}
+    (adversary : Hiding.HidingAdversary State Output openingSize) (selectSecond : Bool) :
+    OracleComp World Output := do
+  let challenge ← adversary.choose
+  referenceContinuation (if selectSecond then challenge.message₁ else challenge.message₀)
+    challenge.positions (adversary.observe challenge.aux)
 
-noncomputable def guardedAdversary (adversary : Hiding.HidingAdversary State Output openingSize)
-    (budget : Nat) : Hiding.HidingAdversary State Output openingSize where
-  choose := adversary.choose
-  observe := guardedObserve adversary budget
+theorem reference_experiment_run {State Output : Type} {openingSize : Nat}
+    (oracle : Oracle) (adversary : Hiding.HidingAdversary State Output openingSize) (selectSecond : Bool) :
+    fixedOracleRun oracle (referenceExperiment adversary selectSecond) =
+      referenceHiding oracle adversary selectSecond := by
+  rw [referenceExperiment, fixed_oracle_run_bind]
+  unfold referenceHiding
+  apply bind_congr
+  intro challenge
+  rw [reference_continuation_run]
+  rfl
 
-theorem guarded_observe_bound (adversary : Hiding.HidingAdversary State Output openingSize)
-    (budget : Nat) (aux : State) (root : Commitment) (proof : Proof) :
-    PublicQueryBound ((guardedAdversary adversary budget).observe aux root proof) budget := by
-  change PublicQueryBound (guardedObserve adversary budget aux root proof) budget
-  unfold guardedObserve
-  split
-  · rename_i bounded
-    exact bounded root proof
-  · trivial
+def stagedHiding {State Output : Type} {openingSize : Nat} (permutation : Perm)
+    (adversary : Hiding.HidingAdversary State Output openingSize) (selectSecond : Bool) : ProbComp Output := do
+  let (challenge, cache) ← compressionRun permutation adversary.choose ∅
+  referenceObservation permutation cache
+    (if selectSecond then challenge.message₁ else challenge.message₀)
+    challenge.positions (adversary.observe challenge.aux)
 
-/-- Any challenge produced under a fixed oracle is a possible syntactic first-stage
-result, so the contract's shared query-budget promise applies to it. -/
-theorem reached_observe_query_bound {budget : Nat} (oracle : Oracle)
-    (adversary : Hiding.HidingAdversary State Output openingSize)
+/-- Exact transition to the cache-conditioned game; no adversary independence is
+assumed and neither the cache nor the full oracle is exposed in the output. -/
+theorem hiding_staged_distribution {State Output : Type} {openingSize : Nat}
+    (adversary : Hiding.HidingAdversary State Output openingSize) (selectSecond : Bool) :
+    𝒟[Hiding.runHiding (Hiding.hidingExperiment submission.scheme adversary selectSecond)] =
+      𝒟[($ᵗ Perm) >>= fun permutation => stagedHiding permutation adversary selectSecond] := by
+  rw [hiding_reference_distribution]
+  simp only [Oracle.sample, bind_assoc, pure_bind, ← reference_experiment_run]
+  trans 𝒟[do let permutation ← $ᵗ Perm
+              let table ← $ᵗ Compression
+              fixedOracleRun ⟨table, permutation⟩ (referenceExperiment adversary selectSecond)]
+  · exact distribution_bind_comm _ _ _
+  · apply _root_.evalDist_bind_congr
+    intro permutation
+    rw [referenceExperiment, staged_compression_sampling]
+    unfold stagedHiding referenceObservation
+    apply _root_.evalDist_bind_congr
+    intro result
+    cases result with
+    | mk challenge cache =>
+      apply _root_.evalDist_bind_congr
+      intro table
+      rw [reference_continuation_run]
+
+/-- Any challenge produced by lazy oracle simulation is a possible syntactic
+first-stage result, so the contract's shared query-budget promise applies to it. -/
+theorem staged_observe_query_bound {State Output : Type} {openingSize budget : Nat}
+    (permutation : Perm) (adversary : Hiding.HidingAdversary State Output openingSize)
     (bounded : Hiding.QueryBound adversary budget)
-    (challenge : Hiding.HidingChallenge State openingSize)
-    (reached : challenge ∈ support (fixedOracleRun oracle adversary.choose))
+    (result : Hiding.HidingChallenge State openingSize × CompressionCache)
+    (reached : result ∈ support (compressionRun permutation adversary.choose ∅))
     (root : Commitment) (proof : Proof) :
-    PublicQueryBound (adversary.observe challenge.aux root proof) budget := by
-  have possible := fixed_oracle_run_support oracle adversary.choose reached
-  have instrumented : challenge ∈ support (Prod.fst <$> Hiding.counted adversary.choose) := by
+    PublicQueryBound (adversary.observe result.1.aux root proof) budget := by
+  have projected : result.1 ∈ support
+      ((simulateQ (compressionHandler permutation) adversary.choose).run' ∅) := by
+    rw [StateT.run'_eq, support_map]
+    exact ⟨result, reached, rfl⟩
+  have possible := support_simulateQ_run'_subset (compressionHandler permutation) adversary.choose ∅ projected
+  have instrumented : result.1 ∈ support (Prod.fst <$> Hiding.counted adversary.choose) := by
     have projection : Prod.fst <$> Hiding.counted adversary.choose = adversary.choose :=
       fst_map_costDist adversary.choose ⟨Oracle.callCost⟩
     rw [projection]
     exact possible
   rw [support_map] at instrumented
-  obtain ⟨⟨first, calls⟩, counted, equal⟩ := instrumented
-  change first = challenge at equal
-  subst first
-  exact (hiding_observe_query_bound adversary bounded (challenge, calls) counted root proof).mono
+  obtain ⟨⟨challenge, calls⟩, counted, equal⟩ := instrumented
+  change challenge = result.1 at equal
+  subst challenge
+  exact (hiding_observe_query_bound adversary bounded (result.1, calls) counted root proof).mono
     (Nat.sub_le _ _)
-
-theorem guarded_reference {budget : Nat} (oracle : Oracle)
-    (adversary : Hiding.HidingAdversary State Output openingSize)
-    (bounded : Hiding.QueryBound adversary budget) (selectSecond : Bool) :
-    referenceHiding oracle (guardedAdversary adversary budget) selectSecond =
-      referenceHiding oracle adversary selectSecond := by
-  unfold referenceHiding
-  refine bind_congr_of_forall_mem_support (fixedOracleRun oracle adversary.choose) ?_
-  intro challenge reached
-  have guard : ∀ root proof, PublicQueryBound (adversary.observe challenge.aux root proof) budget :=
-    reached_observe_query_bound oracle adversary bounded challenge reached
-  simp only [guardedAdversary, guardedObserve, if_pos guard]
-
-/-- `LENGTH` steps of the per-leaf loss stay below the 120-bit target. -/
-theorem hiding_loss_le_target (budget : Nat) :
-    (LENGTH : ℝ) *
-      (4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192) ≤
-      ((budget : ℝ)+1) / 2^HIDING_SECURITY_BITS := by
-  norm_num [LENGTH,LOG_LENGTH,HIDING_SECURITY_BITS,Nat.cast_add,Nat.cast_mul]
-  nlinarith [Nat.cast_nonneg (α := ℝ) budget]
-
-/-- Statistical hiding of the reference game for the stage-3 tree, for the
-contract's shared two-stage query budget and every opening size. -/
-theorem reference_hiding_distance {budget : Nat}
-    (adversary : Hiding.HidingAdversary State Output openingSize)
-    (bounded : Hiding.QueryBound adversary budget) :
-    measureTVDist
-      (Oracle.sample >>= fun oracle => referenceHiding oracle adversary false)
-      (Oracle.sample >>= fun oracle => referenceHiding oracle adversary true) ≤
-      ((budget : ℝ)+1) / 2^HIDING_SECURITY_BITS := by
-  have same (selectSecond : Bool) :
-      (Oracle.sample >>= fun oracle => referenceHiding oracle adversary selectSecond) =
-        hidingGame (guardedAdversary adversary budget) fun challenge =>
-          if selectSecond then challenge.message₁ else challenge.message₀ := by
-    rw [← reference_hiding_game]
-    exact congrArg (fun next => Oracle.sample >>= next)
-      (funext fun oracle => (guarded_reference oracle adversary bounded selectSecond).symm)
-  have distance : measureTVDist
-      (hidingGame (guardedAdversary adversary budget) fun challenge =>
-        if false then challenge.message₁ else challenge.message₀)
-      (hidingGame (guardedAdversary adversary budget) fun challenge =>
-        if true then challenge.message₁ else challenge.message₀) ≤
-      (LENGTH : ℝ) * (4 * ((budget + ((3*LENGTH-1) + budget) + 4 : Nat) : ℝ) / 2^192) :=
-    hiding_game_distance (guardedAdversary adversary budget) budget
-      (hiding_choose_query_bound adversary bounded) (guarded_observe_bound adversary budget)
-  rw [same false, same true]
-  exact distance.trans (hiding_loss_le_target budget)
 
 end CommitGolfCandidate
