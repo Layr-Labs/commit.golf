@@ -57,10 +57,10 @@ structure PacketRegs (s : MachineState) (i : Nat) : Prop where
   primitive : s.getReg .x13=1
 
 theorem within_rank (i : Nat) : rank (i%4096)=rank i := by
-  unfold rank;rw [show i%4096%64=i%64 by omega]
+  unfold rank;rw [Nat.mod_mod]
 
 theorem within_pair (i : Nat) : pairPos (i%4096)=pairPos i := by
-  unfold pairPos;rw [show i%4096%64=i%64 by omega]
+  unfold pairPos;rw [Nat.mod_mod]
 
 theorem heap_address (i : Nat) : wordAddress (cursor i)+signExtend12 (heapImm (i%4096))=wordAddress (qLeaf i) := by
   have off : ∀ k : Fin 32, signExtend12 (BitVec.ofNat 12 (2048+512*(k.val/4)+72+32*(k.val%4)))=
@@ -80,12 +80,14 @@ theorem heap_address (i : Nat) : wordAddress (cursor i)+signExtend12 (heapImm (i
 theorem src_address (i : Nat) (d : Fin 2) :
     wordAddress (saltAnchor i)+signExtend12 (sourceImm (i%4096)+BitVec.ofNat 12 (8*d.val))=
       wordAddress (sourceWord i+d.val) := by
-  have tab : ∀ i : Fin 64, ∀ d : Fin 2,
-      signExtend12 (BitVec.ofNat 12 (2560+2816*(i.val/11%2)+16*(i.val%11-1))+BitVec.ofNat 12 (8*d.val))=
-        QuartetLeaves.centeredOffset (512+2816*(i.val/11%2)+16*(i.val%11-1)+8*d.val) := by decide +kernel
-  have val:=tab ⟨i%64,by omega⟩ d
+  have tab : ∀ k : Fin 22, ∀ d : Fin 2,
+      signExtend12 (BitVec.ofNat 12 (2560+2816*(k.val/11)+16*(k.val%11-1))+BitVec.ofNat 12 (8*d.val))=
+        QuartetLeaves.centeredOffset (512+2816*(k.val/11)+16*(k.val%11-1)+8*d.val) := by decide +kernel
+  have val:=tab ⟨i%4096%22,by omega⟩ d
   simp only [Fin.val_mk] at val
-  unfold sourceImm rank;rw [show i%4096%64=i%64 by omega,val]
+  have half : i%4096/11%2=i%4096%22/11 := by omega
+  have low : i%4096%11=i%4096%22%11 := by omega
+  unfold sourceImm rank;rw [Nat.mod_mod,half,low,val]
   have da : wordAddress (saltAnchor i)=wordAddress (pairBuffer i-64)+2048 := by
     change wordAddress (_+192)=wordAddress (_-64)+wordAddress 256
     rw [←wordAddress_add];congr 1;unfold pairBuffer msgWord;omega
@@ -93,10 +95,10 @@ theorem src_address (i : Nat) (d : Fin 2) :
   change BitVec.ofNat 64 _+BitVec.ofNat 64 _=BitVec.ofNat 64 _
   rw [←BitVec.ofNat_add];congr 1
   unfold pairBuffer sourceWord groupBuffer msgWord rank pairPos
-  have bound : i % 64 ≤ i := Nat.mod_le ..
-  have e : i%64%22=i%64%11+11*(i%64/11%2) := by omega
-  have z : i % 64 % 22 ≤ i := by have:=Nat.mod_le (i%64) 22;omega
-  have y : i % 64 % 11 ≤ i :=by have:=Nat.mod_le (i%64) 11;omega
+  have bound : i % 4096 ≤ i := Nat.mod_le ..
+  have e : i%4096%22=i%4096%11+11*(i%4096/11%2) := by omega
+  have z : i % 4096 % 22 ≤ i := by have:=Nat.mod_le (i%4096) 22;omega
+  have y : i % 4096 % 11 ≤ i :=by have:=Nat.mod_le (i%4096) 11;omega
   omega
 
 private theorem word_disp (i : Nat) (d : Nat) : wordAddress i+BitVec.ofNat 64 (8*d)=wordAddress (i+d) :=

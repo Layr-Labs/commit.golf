@@ -23,10 +23,10 @@ structure Good (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (n : N
     window m (groupBuffer n+2*(j.val-1))=Counter.slice (replyWords (groupReply o k i)) j
 
 theorem next_coord (i j : Index) (step : j.val=i.val+1) (active : rank j.val≠0) : (coord j).1=(coord i).1 := by
-  have edge : i.val%64≠63 := by intro h;apply active;unfold rank;rw [step,show (i.val+1)%64=0 by omega]
-  have a : j.val/64=i.val/64 := by omega
-  have b : j.val%64=i.val%64+1 := by omega
-  have c : j.val%64/11=i.val%64/11 := by unfold rank at active;rw [b] at active ⊢;omega
+  have edge : i.val%4096≠4095 := by intro h;apply active;unfold rank;rw [step,show (i.val+1)%4096=0 by omega]
+  have a : j.val/4096=i.val/4096 := by omega
+  have b : j.val%4096=i.val%4096+1 := by omega
+  have c : j.val%4096/11=i.val%4096/11 := by unfold rank at active;rw [b] at active ⊢;omega
   apply Fin.ext;simp only [coord,a,c]
 
 theorem digest_meaning (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory)

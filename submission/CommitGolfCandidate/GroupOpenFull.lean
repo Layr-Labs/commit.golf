@@ -38,7 +38,7 @@ theorem machine_run (hc : HeaderFacts) (td : BitVec (8*actual.sizes.trapdoor)) (
     actual.run .opening (td,p)=(do
       let s ← passTrace p p.card 0 (header initial)
       let z ← execute openingImage (recordsFuel p) s true
-      return z.charge (30+passSteps p p.card 0+10*p.card) p.card) := by
+      return z.charge (30+passSteps p p.card 0+13*p.card) p.card) := by
   let init:=actual.initialState .opening (td,p)
   rw [run_from actual td p openingImage _ abi.image (allowance p nz),hc.run td p nz,pass_run td p (keyOf td) (header init) p.card 0 _ (hc.ready td p nz) (by omega)]
   simp only [bind_assoc,pure_bind]
@@ -70,7 +70,7 @@ theorem empty_result (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (em
 theorem all_resources (hc : HeaderFacts) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (z : Execution)
     (hit : z∈support (actual.run .opening (td,p))) :
     z.exit=.success ∧ actual.openingSucceeded z=true ∧
-      (p.card=BATCH → z.cycles≤98057 ∧ (actual.readProof z).length≤72192) ∧ z.oracleCalls≤100*p.card := by
+      (p.card=BATCH → z.cycles≤98441 ∧ (actual.readProof z).length≤72192) ∧ z.oracleCalls≤100*p.card := by
   by_cases empty : p.card=0
   · obtain ⟨out,run,ex,ok,calls,_⟩:=empty_result td p empty
     rw [run,support_pure,Set.mem_singleton_iff] at hit;subst z
@@ -89,7 +89,7 @@ theorem all_resources (hc : HeaderFacts) (td : BitVec (8*actual.sizes.trapdoor))
     have max:=QuartetOpening.scored_limits p batch
     have cap:=pass_steps_bound p p.card 0 (by omega)
     have k : p.card=128:=batch
-    refine ⟨by change 30+passSteps p p.card 0+10*p.card+(scheduledCycles p-15)≤98057;omega,?_⟩
+    refine ⟨by change 30+passSteps p p.card 0+13*p.card+(scheduledCycles p-15)≤98441;omega,?_⟩
     have length : (actual.readProof ref).length=(st.getReg .x11).toNat := by
       simp only [Submission.readProof,ok,ite_true,List.length_map,List.length_range];rfl
     exact (length.trans phys.length).le.trans max.2

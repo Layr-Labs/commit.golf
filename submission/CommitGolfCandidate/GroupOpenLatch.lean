@@ -145,13 +145,13 @@ def perTrace (s : MachineState) (i : Index) (left : Nat) : OracleComp World Mach
   return finishOne s i left y
 
 def perSteps (i : Index) (left : Nat) := 21+(if rank i.val=0 then 1 else 0)+(if left=1 then 1 else 0)
-def perCycles (i : Index) (left : Nat) := perSteps i left+10
+def perCycles (i : Index) (left : Nat) := perSteps i left+13
 
 theorem per_run (s : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<left) (hi : left≤16777216)
     (r : Input s i ord left) : execute openingImage (perSteps i left+fuel) s true =
       (do let t ← perTrace s i left; let z ← execute openingImage fuel t true; return z.charge (perCycles i left) 1) := by
   let rows:=postRows (Direct i) (decide (left=1))
-  have lengths : perSteps i left=7+1+rows.length ∧ perCycles i left=10+8+price rows := by
+  have lengths : perSteps i left=7+1+rows.length ∧ perCycles i left=13+8+price rows := by
     dsimp [rows,Direct,perSteps,perCycles,postRows,price]
     by_cases z : rank i.val=0 <;> by_cases x : left=1 <;> simp [z,x,instructionCycles]
   obtain ⟨pr,idx,sub,pc,_⟩:=before_regs s i ord left r
@@ -178,7 +178,7 @@ theorem per_run (s : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<left
     apply legal_append
     · exact legal_append w _ _ chooseOk (copy_legal a i ap ar ad)
     · simpa only [b,a,copied,choose,walkRows,List.foldl_append] using t.1
-  change (do let z ← execute openingImage (rows.length+fuel) w true;return (z.charge 8 1).charge 10 0)=_
+  change (do let z ← execute openingImage (rows.length+fuel) w true;return (z.charge 8 1).charge 13 0)=_
   rw [walk_rows_run w rows ok (post_row_fetch (Direct i) (decide (left=1))) fuel true]
   have same : walkRows w rows=finishOne s i left y := by
     rw [show rows=selectRows (Direct i)++copyRows++nextRows (decide (left=1)) from post_parts ..]
