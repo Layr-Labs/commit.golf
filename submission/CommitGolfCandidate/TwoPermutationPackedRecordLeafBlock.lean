@@ -58,8 +58,8 @@ def block (oracle : Oracle) (ordinal : Nat) (index : Index) (s : MachineState) :
 
 theorem block_digest_rows (oracle : Oracle) (ordinal : Nat) (index : Index) (s : MachineState) :
     let message := window (memoryView (staged s)) (checkSourceWord ordinal+5)
-    let a := firstRow oracle.permutation index (checkerNonce (staged s)) message
-    let b := taglessSecondRow oracle.permutation message a.2
+    let a := pinnedFirstRow oracle.permutation message
+    let b := pinnedSecondRow oracle.permutation index (checkerNonce (staged s)) a.2 message
     (block oracle ordinal index s).rows=[.permutation a.1 a.2,.permutation b.1 b.2] ∧
       readBuffer (block oracle ordinal index s).state 12288 32 = outputDigest b.2 := by
   simp only [block,rawLeaf,checker_leaf_rows]
@@ -73,7 +73,7 @@ theorem raw_view (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (h : ord
     raw.pc=0x10e8 ∧ raw.getReg .x6=BitVec.ofNat 64 (honestIndex input.positions ordinal h).val.val ∧
       (∀ reg : Reg, reg≠.x6 → reg≠.x28 → reg≠.x10 → reg≠.x11 → reg≠.x13 → reg≠.x12 → reg≠.x31 →
         raw.getReg reg=s.getReg reg) ∧
-      (∀ word < 2^33, (word<checkSourceWord ordinal ∨ checkSourceWord ordinal+25≤word) →
+      (∀ word < 2^33, (word<checkSourceWord ordinal ∨ checkSourceWord ordinal+26≤word) →
         (word<1534 ∨ 1576≤word) → memoryView raw word=memoryView s word) := by
   dsimp only [rawLeaf]
   rw [checker_leaf_rows]

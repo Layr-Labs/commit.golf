@@ -37,7 +37,7 @@ structure RecordBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat
     BitVec.ofNat 64 (capGroup (honestIndex input.positions ordinal present).val)
   proof : block.state.getReg .x21=BitVec.ofNat 64 (checkProofByte (ordinal+1))
   saved : ∀ r, RecordSaved r → block.state.getReg r=before.getReg r
-  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+25 ≤ word) →
+  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) →
     (word < 1534 ∨ 1576 ≤ word) → memoryView block.state word=memoryView before word
   trace :
     let index := honestIndex input.positions ordinal present

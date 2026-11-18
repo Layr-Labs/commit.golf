@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationCollectTable
 import CommitGolfCandidate.TwoPermutationPackedPaths
 import CommitGolfCandidate.TwoPermutationPackedHonestInput
@@ -16,16 +16,16 @@ structure RecordedLower (oracle : Oracle) (index : Index) (value : Entry) (group
     (rows : List PublicRow) where
   nonce : Words 2
   first : PublicRow.permutation
-    (firstRow oracle.permutation index nonce (entryWords value)).1
-    (firstRow oracle.permutation index nonce (entryWords value)).2 ∈ rows
+    (pinnedFirstRow oracle.permutation (entryWords value)).1
+    (pinnedFirstRow oracle.permutation (entryWords value)).2 ∈ rows
   second : PublicRow.permutation
-    (taglessSecondRow oracle.permutation (entryWords value)
-      (firstRow oracle.permutation index nonce (entryWords value)).2).1
-    (taglessSecondRow oracle.permutation (entryWords value)
-      (firstRow oracle.permutation index nonce (entryWords value)).2).2 ∈ rows
+    (pinnedSecondRow oracle.permutation index nonce
+      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).1
+    (pinnedSecondRow oracle.permutation index nonce
+      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).2 ∈ rows
   path : ProjectedPath rows (LENGTH+index.val) 16
-    (outputDigest (taglessSecondRow oracle.permutation (entryWords value)
-      (firstRow oracle.permutation index nonce (entryWords value)).2).2) groupRoot
+    (outputDigest (pinnedSecondRow oracle.permutation index nonce
+      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).2) groupRoot
 
 def RecordedLower.mono {oracle : Oracle} {index : Index} {value : Entry} {groupRoot : Digest}
     {before after : List PublicRow} (lower : RecordedLower oracle index value groupRoot before)

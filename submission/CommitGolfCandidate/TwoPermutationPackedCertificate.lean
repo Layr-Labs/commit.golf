@@ -1,5 +1,4 @@
-import CommitGolfCandidate.TwoPermutationTaglessHiding
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationTranscript
 import CommitGolf.Statements
 import CommitGolfCandidate.TwoPermutationCheckerReplay
@@ -20,11 +19,11 @@ structure OpeningFacts (s : Submission) : Prop where
     s.run .opening (trapdoor, positions) = pure result ∧ result.exit = .success ∧
     s.openingSucceeded result = true ∧
     (positions.card = BATCH → result.cycles ≤ 88311 ∧ (s.readProof result).length ≤ 67584)
-  refines : TaglessTranscriptRefines s.scheme (transcriptBuilder true)
+  refines : PinnedTranscriptRefines s.scheme (transcriptBuilder true)
 
 def honestCheckInput (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) : CheckInput :=
-  let view := taglessHonestView (transcriptBuilder true) oracle.compression
+  let view := pinnedHonestView (transcriptBuilder true) oracle.compression
     (BiPermutation.equiv Block oracle.permutation) message positions salts
   ⟨view.1, positions, message.restrict positions, view.2⟩
 
@@ -206,7 +205,8 @@ theorem completeness (opens : OpeningFacts s) (checks : CheckerFacts s) : s.sche
   rfl
 
 include commit in
-theorem certificate_of_facts (admitted : s.Admission) (opens : OpeningFacts s) (checks : CheckerFacts s) :
+theorem certificate_of_facts (admitted : s.Admission) (opens : OpeningFacts s) (checks : CheckerFacts s)
+    (privateView : s.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
     Certificate s 67584 commitCycles 88311 where
   admission := admitted
   machineSuccess := machine_success commit opens
@@ -216,6 +216,6 @@ theorem certificate_of_facts (admitted : s.Admission) (opens : OpeningFacts s) (
   proofSize := proof_size opens
   proverCycles := prover_cycles commit opens
   binding := checks.binding
-  hidingProperty := tagless_hiding_of_transcript _ _ opens.refines
+  hidingProperty := privateView
 
 end TwoPermutationPrototype.PackedCertificate

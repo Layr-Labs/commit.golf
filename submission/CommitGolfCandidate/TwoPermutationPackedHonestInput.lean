@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.InputOrder
 import CommitGolfCandidate.TwoPermutationPackedTrustedInput
 import CommitGolfCandidate.TwoPermutationPackedCertificate
@@ -15,7 +15,7 @@ set_option maxRecDepth 16384
 
 def honestHeap (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) : Nat → Digest :=
   transcriptHeap true oracle.compression
-    (taglessFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)
+    (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)
 
 def honestOrder (positions : Positions) : List {index // index ∈ positions} :=
   positions.attach.sort (fun i j => i.val ≤ j.val)

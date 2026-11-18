@@ -1,21 +1,29 @@
-# Packed vector commitment
+# Packed vector commitment with a position-tagged second input
 
-The RISC-V commitment program uses two forward permutation calls per leaf. The
-first absorbs a private 128-bit salt, the entry position, and the first 160 bytes
-of the entry. The second absorbs 104 bytes of the first reply and the remaining 96 entry bytes. The 256-bit leaf digests feed a binary
-compression tree whose internal digests keep 240 bits and zero the top 16 bits.
-The root is serialized as a 32-byte commitment.
+The RISC-V commitment program makes two forward permutation calls per leaf.
+The first absorbs the first 200 entry bytes. The second absorbs a position tag,
+a private 128-bit salt, 88 bytes of the first reply and the final 88 entry
+bytes. The 256-bit leaf digests feed a binary compression tree whose internal
+digests keep 240 bits and zero the top 16 bits. The root is serialized as a
+32-byte commitment.
 
-The opening program emits one 498-byte record per position. Each record includes
-the salt, a 32-byte leaf sibling, and fifteen 30-byte internal siblings. The
-last eight levels use a shared frontier with 30 bytes per boundary node. The
-checker expands the internal digests while reading the proof and authenticates
-each disclosed entry to the root.
+Each opened position contributes a 498-byte record with its salt, a 32-byte
+leaf sibling, and fifteen 30-byte internal siblings. The last eight levels
+use a shared frontier with 30 bytes per boundary node. The checker reconstructs
+the digests and authenticates each disclosed entry to the root.
 
-For 128 distinct positions, the claimed bounds are 671,294,179 commitment
-cycles, 88,311 opening cycles, and 67,584 proof bytes. The total is 671,382,490
-prover cycles, for a Product score of 45,374,714,204,160 byte-cycles.
+The commit loop enters each leaf with its input pointer at the first entry byte.
+It writes the first reply 32 bytes before this address and advances 200 bytes after
+the second permutation to reach the next entry.
 
-The three RISC-V images are in [programs.json](programs.json). The bounds are in
-[claim.json](claim.json). [Solution.lean](Solution.lean) connects the generated
-artifact to the machine and security proofs in `CommitGolfCandidate/`.
+The bounds for 128 distinct positions are 637,936,351 commitment cycles,
+88,311 opening cycles, and 67,584 proof bytes. Total prover work is
+638,024,662 cycles for a Product score of 43,120,258,756,608 byte-cycles.
+
+[Solution.lean](Solution.lean) connects [programs.json](programs.json) and
+[claim.json](claim.json) to the execution and security proofs. The
+position-binding proof adapts the recorded-query collision analysis from
+[i34-9's public submission](https://github.com/Layr-Labs/commit.golf/pull/109)
+at commit `604a4c90c6560e7c2da10b2a097d116c7a679ce9`. The exact checker
+transcript, packed tree and adaptive statistical hiding proof are checked for
+this implementation.

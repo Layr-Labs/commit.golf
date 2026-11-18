@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationPackedCertificate
 import CommitGolfCandidate.TwoPermutationPackedMeaning
 import CommitGolfCandidate.TwoPermutationPackedOpeningTranscript
@@ -37,7 +37,7 @@ theorem packed_opening_facts (committed : PackedCommitTranscript) : OpeningFacts
 
 theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Message)
     (result : Execution) (reachable : result ∈ support (packedSubmission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 671294179 ∧ result.oracleCalls = 50331647 := by
+    result.exit = .success ∧ result.cycles = 637936351 ∧ result.oracleCalls = 50331647 := by
   have entry : RV64.CommitEntry (packedSubmission.initialState .commit message) := ⟨rfl,rfl,rfl,rfl⟩
   erw [RV64.packed_submission_wide_commit_run leaves packedSubmission RV64.packed_manifest_image.symm
     (by decide) message entry] at reachable
@@ -46,8 +46,10 @@ theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Messag
   exact ⟨rfl,rfl,rfl⟩
 
 theorem packed_certificate (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
-    (checks : CheckerFacts packedSubmission) : Certificate packedSubmission 67584 671294179 88311 :=
+    (checks : CheckerFacts packedSubmission)
+    (privateView : packedSubmission.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
+    Certificate packedSubmission 67584 637936351 88311 :=
   certificate_of_facts (packed_commit_resources leaves) packed_admitted
-    (packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)) checks
+    (packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)) checks privateView
 
 end TwoPermutationPrototype.PackedCertificate

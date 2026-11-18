@@ -36,7 +36,7 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (canonical : input = honestCheckInput oracle message input.positions salts) :
     let item := honestIndex input.positions ordinal present
     readBuffer (block oracle ordinal item.val state).state 12288 32 =
-      taglessFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts item.val := by
+      pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts item.val := by
   let item := honestIndex input.positions ordinal present
   have digest := (block_digest_rows oracle ordinal item.val state).2
   dsimp only at digest ⊢

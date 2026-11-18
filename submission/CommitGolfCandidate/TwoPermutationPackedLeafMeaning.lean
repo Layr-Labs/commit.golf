@@ -10,7 +10,7 @@ set_option maxHeartbeats 1000000
 attribute [local irreducible] checkEvaluation leavesTrace fullParents rootPrefix parentSetup readyState
 
 theorem same_mem_prefix (oracle : Oracle) (before : Memory) (s t : MachineState) (pos : Nat) (h : t.mem=s.mem)
-    (prev : TaglessLeafPrefix oracle before s pos) : TaglessLeafPrefix oracle before t pos := by
+    (prev : PinnedLeafPrefix oracle before s pos) : PinnedLeafPrefix oracle before t pos := by
   have mem : memoryView t=memoryView s := by funext word;change t.mem _=s.mem _;rw [h]
   refine ⟨?_,?_,?_⟩
   · intro i hi;rw [mem];exact prev.digests i hi
@@ -18,10 +18,10 @@ theorem same_mem_prefix (oracle : Oracle) (before : Memory) (s t : MachineState)
   · intro i hi;rw [mem];exact prev.salts i hi
 
 theorem prefix_unit (oracle : Oracle) (before : Memory) (s : MachineState) (g u : Nat)
-    (bound : g<2^12) (inside : u<4096) (r : Regs s g u) (prev : TaglessLeafPrefix oracle before s (4096*g+u)) :
-    TaglessLeafPrefix oracle before (checkEvaluation oracle (unitTrace s g u)).1 (4096*g+u+1) := by
+    (bound : g<2^12) (inside : u<4096) (r : Regs s g u) (prev : PinnedLeafPrefix oracle before s (4096*g+u)) :
+    PinnedLeafPrefix oracle before (checkEvaluation oracle (unitTrace s g u)).1 (4096*g+u+1) := by
   have eq : (posSlot u).val=u := Nat.mod_eq_of_lt inside
-  have start : TaglessLeafPrefix oracle before s (4096*g+(posSlot u).val) := by rw [eq];exact prev
+  have start : PinnedLeafPrefix oracle before s (4096*g+(posSlot u).val) := by rw [eq];exact prev
   have ru : Regs s g (posSlot u).val := by rw [eq];exact r
   have raw := production_prefix_step oracle before s g (posSlot u) bound ru start
   simp only [eq] at raw
@@ -29,8 +29,8 @@ theorem prefix_unit (oracle : Oracle) (before : Memory) (s : MachineState) (g u 
   exact same_mem_prefix _ _ _ _ _ (rebase_mem _ u) raw
 
 theorem prefix_group (oracle : Oracle) (before : Memory) (s : MachineState) (g cnt u : Nat)
-    (bound : g<2^12) (inside : u+cnt≤4096) (r : Regs s g u) (prev : TaglessLeafPrefix oracle before s (4096*g+u)) :
-    TaglessLeafPrefix oracle before (checkEvaluation oracle (group g cnt u s)).1 (4096*g+u+cnt) := by
+    (bound : g<2^12) (inside : u+cnt≤4096) (r : Regs s g u) (prev : PinnedLeafPrefix oracle before s (4096*g+u)) :
+    PinnedLeafPrefix oracle before (checkEvaluation oracle (group g cnt u s)).1 (4096*g+u+cnt) := by
   induction cnt generalizing s u with
   | zero => simpa only [group,check_evaluation_pure,Nat.add_zero] using prev
   | succ k ih =>
@@ -41,11 +41,11 @@ theorem prefix_group (oracle : Oracle) (before : Memory) (s : MachineState) (g c
     exact ih _ (u+1) (by omega) regs (by simpa only [←Nat.add_assoc] using next)
 
 theorem prefix_batch (oracle : Oracle) (before : Memory) (s : MachineState) (g : Nat) (bound : g<2^12)
-    (r : Regs s g 0) (prev : TaglessLeafPrefix oracle before s (4096*g)) :
-    TaglessLeafPrefix oracle before (checkEvaluation oracle (batch g s)).1 (4096*(g+1)) := by
+    (r : Regs s g 0) (prev : PinnedLeafPrefix oracle before s (4096*g)) :
+    PinnedLeafPrefix oracle before (checkEvaluation oracle (batch g s)).1 (4096*(g+1)) := by
   have carry (p : OracleComp World MachineState) (pc : Word) (cnt : Nat)
-      (h : TaglessLeafPrefix oracle before (checkEvaluation oracle p).1 cnt) :
-      TaglessLeafPrefix oracle before (checkEvaluation oracle (p >>= fun z => pure (z.setPC pc))).1 cnt := by
+      (h : PinnedLeafPrefix oracle before (checkEvaluation oracle p).1 cnt) :
+      PinnedLeafPrefix oracle before (checkEvaluation oracle (p >>= fun z => pure (z.setPC pc))).1 cnt := by
     simp only [check_evaluation_bind,check_evaluation_pure]
     exact same_mem_prefix _ _ (checkEvaluation oracle p).1 _ _ rfl h
   unfold batch
@@ -54,8 +54,8 @@ theorem prefix_batch (oracle : Oracle) (before : Memory) (s : MachineState) (g :
   exact prefix_group oracle before s g 4096 0 bound (by decide) r prev
 
 theorem prefix_groups (oracle : Oracle) (before : Memory) (s : MachineState) (cnt g : Nat)
-    (limit : g+cnt=2^12) (r : 0<cnt → Regs s g 0) (prev : TaglessLeafPrefix oracle before s (4096*g)) :
-    TaglessLeafPrefix oracle before (checkEvaluation oracle (groups cnt g s)).1 (4096*(g+cnt)) := by
+    (limit : g+cnt=2^12) (r : 0<cnt → Regs s g 0) (prev : PinnedLeafPrefix oracle before s (4096*g)) :
+    PinnedLeafPrefix oracle before (checkEvaluation oracle (groups cnt g s)).1 (4096*(g+cnt)) := by
   induction cnt generalizing s g with
   | zero => simpa only [groups,check_evaluation_pure,Nat.add_zero] using prev
   | succ k ih =>
@@ -102,10 +102,11 @@ theorem wide_ready_memory_view (s : MachineState) {bits : Nat} (packed : BitVec 
 
 theorem wide_reference_leaf (oracle : Oracle) (msg : Message) (packed : BitVec (128*LENGTH)) (i : Index) :
     packedPublicTree oracle msg (splitBlocks 128 LENGTH packed) (LENGTH+i.val)=
-      outputDigest (taglessFinalReply oracle (memoryView (packed_wideReadyState (packedSubmission.initialState .commit msg) packed)) i.val) := by
+      outputDigest (pinnedFinalReply oracle (memoryView (packed_wideReadyState (packedSubmission.initialState .commit msg) packed)) i.val) := by
   rw [wide_ready_memory_view]
-  rw [packedPublicTree,transcript_heap_leaf,taglessFinalReply,wide_ready_messages packedSubmission rfl msg packed i,
+  rw [packedPublicTree,transcript_heap_leaf,pinnedFinalReply,wide_ready_messages packedSubmission rfl msg packed i,
     ready_salts _ packed i]
+  simp only [pinnedFullLeafDigests,pinnedLeafDigest,pinnedFirstRow,pinnedSecondRow,pinned_typed_words]
   rfl
 
 attribute [local irreducible] groups group batch
@@ -120,8 +121,8 @@ def executableMeaning : PackedLeafMeaning executableLeaves where
     have readySalts (i : Index) : (window (memoryView ready) (leafSalt i.val) : Words 2)=saltWords (splitBlocks 128 LENGTH packed i) := by
       rw [show memoryView ready=memoryView (readyState s packed) from wide_ready_memory_view s packed]
       exact ready_salts s packed i
-    exact tagless_parent_content_of_leaf_prefix oracle (memoryView ready) _ _ _
-      (prefix_groups oracle (memoryView ready) ready (2^12) 0 (by decide) (fun _ => rs) (empty_tagless_leaf_prefix oracle ready))
+    exact pinned_parent_content_of_leaf_prefix oracle (memoryView ready) _ _ _
+      (prefix_groups oracle (memoryView ready) ready (2^12) 0 (by decide) (fun _ => rs) (empty_pinned_leaf_prefix oracle ready))
       (wide_reference_leaf oracle msg packed) readySalts
 
 end TwoPermutationPrototype.RV64.PackedLeaves

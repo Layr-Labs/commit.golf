@@ -18,7 +18,7 @@ structure PhysicalFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (befor
       ((tail.1.1.charge out.cycles 2,out.rows++tail.1.2),2+tail.2)
   cursor : LowerCursor ordinal index 0 out.state
   saved : LowerSaved before out.state
-  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+25 ≤ word) →
+  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) →
     (word < 1534 ∨ 1576 ≤ word) → memoryView out.state word=memoryView before word
 
 private theorem nonce_stage_run (input : CheckInput) (ordinal : Nat) (h : ordinal < input.positions.card)

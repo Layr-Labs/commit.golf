@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationPackedCommit
 import CommitGolfCandidate.TwoPermutationPackedParentMeaning
 import CommitGolfCandidate.TwoPermutationOpeningTranscript
@@ -13,7 +13,7 @@ open CommitGolfCandidate (checkEvaluation check_evaluation_support check_evaluat
 abbrev packedSubmission : Submission := Artifact.submission
 
 def packedPublicTree (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) : Nat → BitVec 256 :=
-  transcriptHeap true oracle.compression (taglessFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)
+  transcriptHeap true oracle.compression (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)
 
 set_option maxRecDepth 16384
 set_option maxHeartbeats 1500000
@@ -40,7 +40,7 @@ theorem packed_wide_counted_body (leaves : PackedLeafExecution) (meaning : Packe
 
 def packed_widePackedOutput (leaves : PackedLeafExecution) (oracle : Oracle) (initial : MachineState)
     {bits : Nat} (packed : BitVec bits) : Execution :=
-  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,671294179,50331647⟩
+  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,637936351,50331647⟩
 
 theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (oracle : Oracle) (initial : MachineState) :
@@ -59,10 +59,10 @@ theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : Pack
 private theorem packed_wide_output_eq (leaves : PackedLeafExecution) (oracle : Oracle)
     (initial : MachineState) {bits : Nat} (packed : BitVec bits) :
     packed_widePackedOutput leaves oracle initial packed =
-      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,671294179,50331647⟩ := rfl
+      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,637936351,50331647⟩ := rfl
 
 private theorem execution_state (state : MachineState) :
-    (⟨.success,state,671294179,50331647⟩ : Execution).state = state := rfl
+    (⟨.success,state,637936351,50331647⟩ : Execution).state = state := rfl
 
 attribute [local irreducible] packed_widePackedOutput
 
@@ -75,19 +75,19 @@ private theorem evaluated_finish (oracle : Oracle) (p : OracleComp World Machine
 private theorem packed_wide_eval_body (oracle : Oracle) (p : OracleComp World MachineState) :
     (checkEvaluation oracle (do
         let out ← p
-        let parents ← packedParentGroups 217396 46995 357 (parentSetup out 5)
+        let parents ← packedParentGroups 184804 46995 357 (parentSetup out 5)
         return rootPrefix parents 10)).1 =
-      rootPrefix (checkEvaluation oracle (packedParentGroups 217396 46995 357
+      rootPrefix (checkEvaluation oracle (packedParentGroups 184804 46995 357
         (parentSetup (checkEvaluation oracle p).1 5))).1 10 :=
   evaluated_finish oracle p
-    (fun out => packedParentGroups 217396 46995 357 (parentSetup out 5))
+    (fun out => packedParentGroups 184804 46995 357 (parentSetup out 5))
     (fun parents => rootPrefix parents 10)
 
 private theorem packed_wide_packed_state (leaves : PackedLeafExecution) (oracle : Oracle)
     (initial : MachineState) {bits : Nat} (packed : BitVec bits) :
     let state := packed_wideReadyState initial packed
     let out := (checkEvaluation oracle (leaves.trace state)).1
-    let parents := (checkEvaluation oracle (packedParentGroups 217396 46995 357 (parentSetup out 5))).1
+    let parents := (checkEvaluation oracle (packedParentGroups 184804 46995 357 (parentSetup out 5))).1
     (packed_widePackedOutput leaves oracle initial packed).state = rootPrefix parents 10 := by
   have projection := congrArg Execution.state (packed_wide_output_eq leaves oracle initial packed)
   refine projection.trans ((execution_state _).trans ?_)
@@ -129,7 +129,7 @@ theorem packed_wide_physical_results (leaves : PackedLeafExecution) (meaning : P
   let ready := packed_wideReadyState initial packed
   let out := (checkEvaluation oracle (leaves.trace ready)).1
   let start := parentSetup out 5
-  let parents := (checkEvaluation oracle (packedParentGroups 217396 46995 357 start)).1
+  let parents := (checkEvaluation oracle (packedParentGroups 184804 46995 357 start)).1
   let salts := splitBlocks 128 LENGTH packed
   let heap := packedPublicTree oracle message salts
   have tree (n : Nat) (positive : 0<n) (inner : n<LENGTH) :
@@ -140,9 +140,9 @@ theorem packed_wide_physical_results (leaves : PackedLeafExecution) (meaning : P
     (check_evaluation_support oracle (leaves.trace ready))
   obtain ⟨regs,pc,keep⟩ := packed_wide_parent_setup_ready out finished.pc finished.selector finished.heap finished.stride finished.stop
   have content : ParentContent parents heap salts 0 :=
-    packed_parent_content oracle 217396 46995 357 start heap salts (by decide) tree initialContent regs
+    packed_parent_content oracle 184804 46995 357 start heap salts (by decide) tree initialContent regs
   obtain ⟨endRegs,_,resultReg⟩ := packed_parent_phase_post start regs pc
-    (check_evaluation_support oracle (packedParentGroups 217396 46995 357 start))
+    (check_evaluation_support oracle (packedParentGroups 184804 46995 357 start))
   have x8 : parents.getReg .x8=4294971392 := resultReg.trans (keep.trans finished.output)
   exact packed_wide_serialized parents heap salts
     (packed_widePackedOutput leaves oracle initial packed) (packed_wide_packed_state leaves oracle initial packed)

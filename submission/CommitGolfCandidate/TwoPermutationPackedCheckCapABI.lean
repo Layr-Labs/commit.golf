@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationPackedCheckerBody
 import CommitGolfCandidate.TwoPermutationPackedCapComplete
 
@@ -130,6 +130,6 @@ theorem checker_cap_facts (oracle : Oracle) (input : CheckInput) (positive : inp
   · intro message salts canonical
     obtain ⟨data, root, ending⟩ := checker_honest_cap_data oracle input state rows table framed cursor
       positive message salts canonical
-    exact cap.honest (honestHeap oracle message salts) (canonical_cap_heap oracle (taglessFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)) data root ending
+    exact cap.honest (honestHeap oracle message salts) (canonical_cap_heap oracle (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)) data root ending
 
 end TwoPermutationPrototype.Packed.Checker

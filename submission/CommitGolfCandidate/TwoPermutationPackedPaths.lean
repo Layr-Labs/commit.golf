@@ -1,5 +1,5 @@
-import CommitGolfCandidate.TwoPermutationTaglessReplay
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TwoPermutationPinnedReplay
+import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.ProjectedCompression
 import CommitGolfCandidate.TwoPermutationCheckerReplay
 
@@ -78,22 +78,22 @@ structure ProjectedOpening (oracle : Oracle) (index : Index) (entry : Entry) (ro
     (rows : List PublicRow) where
   nonce : Words 2
   first : PublicRow.permutation
-    (firstRow oracle.permutation index nonce (entryWords entry)).1
-    (firstRow oracle.permutation index nonce (entryWords entry)).2 ∈ rows
+    (pinnedFirstRow oracle.permutation (entryWords entry)).1
+    (pinnedFirstRow oracle.permutation (entryWords entry)).2 ∈ rows
   second : PublicRow.permutation
-    (taglessSecondRow oracle.permutation (entryWords entry)
-      (firstRow oracle.permutation index nonce (entryWords entry)).2).1
-    (taglessSecondRow oracle.permutation (entryWords entry)
-      (firstRow oracle.permutation index nonce (entryWords entry)).2).2 ∈ rows
+    (pinnedSecondRow oracle.permutation index nonce
+      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).1
+    (pinnedSecondRow oracle.permutation index nonce
+      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).2 ∈ rows
   path : ProjectedPath rows (LENGTH + index.val) LOG_LENGTH
-    (outputDigest (taglessSecondRow oracle.permutation (entryWords entry)
-      (firstRow oracle.permutation index nonce (entryWords entry)).2).2) root
+    (outputDigest (pinnedSecondRow oracle.permutation index nonce
+      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).2) root
 
 theorem projected_openings_conflict (oracle : Oracle) (index : Index) (root : Commitment)
     (value₀ value₁ : Entry) (conflict : value₀ ≠ value₁)
     (rows₀ rows₁ : List PublicRow) (left : ProjectedOpening oracle index value₀ root rows₀)
     (right : ProjectedOpening oracle index value₁ root rows₁) :
-    TaglessReplayEvidence (rows₀ ++ rows₁) := by
+    PinnedReplayEvidence (rows₀ ++ rows₁) := by
   rcases (left.path.mono (fun _ h => List.mem_append_left _ h)).compare
     (right.path.mono (fun _ h => List.mem_append_right _ h)) with hash | sameLeaf
   · exact Or.inl hash
@@ -120,7 +120,7 @@ private theorem packed_limited_check (s : Submission) (oracle : Oracle) (input :
 
 theorem packed_replay_extracts (s : Submission) (refines : PackedAcceptedTrace s)
     (oracle : Oracle) (claim : Scheme.Claim) (breaks : s.scheme.Breaks oracle claim) :
-    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), TaglessReplayEvidence result.2 := by
+    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), PinnedReplayEvidence result.2 := by
   obtain ⟨⟨index, member₀, member₁, conflict⟩, accepted₀, accepted₁⟩ := breaks
   let x := leftCheck claim
   let y := rightCheck claim
@@ -153,11 +153,12 @@ theorem packed_replay_extracts (s : Submission) (refines : PackedAcceptedTrace s
     (path₀ ⟨index, member₀⟩).some (path₁ ⟨index, member₁⟩).some
 
 def packed_binding_replay (s : Submission) (specified : PackedAcceptedTrace s) :
-    BindingReplayEvidence s.scheme TaglessReplayEvidence :=
+    BindingReplayEvidence s.scheme PinnedReplayEvidence :=
   ⟨checkerReplay s, checker_replay_bounded s, packed_replay_extracts s specified⟩
 
-theorem binding_of_packed_trace (candidate : Submission) (trace : PackedAcceptedTrace candidate) :
-    candidate.scheme.Binding :=
-  scheme_binding_of_tagless_replay candidate.scheme (packed_binding_replay candidate trace)
+theorem binding_of_packed_trace (candidate : Submission) (trace : PackedAcceptedTrace candidate)
+    (bound : PinnedReplayBound) : candidate.scheme.Binding :=
+  scheme_binding_of_replay_with candidate.scheme (packed_binding_replay candidate trace)
+    (fun contained witness => witness.mono contained) bound
 
 end TwoPermutationPrototype.Packed

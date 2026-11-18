@@ -18,7 +18,7 @@ def group (g : Nat) : Nat → Nat → MachineState → OracleComp World MachineS
     let mid ← unitTrace s g u
     group g k (u+1) mid
 
-def progress (cost u : Nat) := cost*u+u/128+u/256
+def progress (cost u : Nat) := cost*u+u/64+u/128
 def span (cost u k : Nat) := progress cost (u+k)-progress cost u
 
 theorem span_step (cost u k : Nat) : span cost u (k+1) = cost + extra u + span cost (u+1) k := by
@@ -40,15 +40,15 @@ theorem raw_post (s : MachineState) (g : Nat) (u : Fin 4096) (bound : g<2^12) (r
   exact post_slot s g u bound r a b
 
 theorem unit_run (s : MachineState) (g u fuel : Nat) (bound : g<2^12) (hu : u<4096) (r : Regs s g u) :
-    execute packedWideCommitImage (13+extra u+fuel) s true =
+    execute packedWideCommitImage (11+extra u+fuel) s true =
       (do let next ← unitTrace s g u
           let result ← execute packedWideCommitImage fuel next true
-          return result.charge (27+extra u) 2) := by
+          return result.charge (25+extra u) 2) := by
   let slot := posSlot u
   have eq : slot.val=u := Nat.mod_eq_of_lt hu
   have ru : Regs s g slot.val := by rw [eq];exact r
   have ready := ready_slot s g slot bound ru
-  rw [show 13+extra u+fuel=13+(extra u+fuel) by omega,execute_two_permutation_leaf _ _ _ _ _ _ _ ready ru.pc]
+  rw [show 11+extra u+fuel=11+(extra u+fuel) by omega,execute_two_permutation_leaf _ _ _ _ _ _ _ ready ru.pc]
   simp only [unitTrace,bind_assoc,pure_bind]
   simp only [idx,eq]
   apply bind_congr_of_forall_mem_support
@@ -68,14 +68,14 @@ theorem unit_post (s : MachineState) (g u : Nat) (bound : g<2^12) (hu : u<4096) 
   simpa only [eq] using rebase_regs raw g (posSlot u) hold
 
 theorem group_run (s : MachineState) (g cnt u fuel : Nat) (bound : g<2^12) (inside : u+cnt≤4096) (r : Regs s g u) :
-    execute packedWideCommitImage (span 13 u cnt+fuel) s true =
+    execute packedWideCommitImage (span 11 u cnt+fuel) s true =
       (do let next ← group g cnt u s
           let result ← execute packedWideCommitImage fuel next true
-          return result.charge (span 27 u cnt) (2*cnt)) := by
+          return result.charge (span 25 u cnt) (2*cnt)) := by
   induction cnt generalizing s u with
   | zero => simp [group,span,Execution.charge]
   | succ k ih =>
-    rw [span_step 13,span_step 27,Nat.add_assoc (13+extra u),unit_run s g u _ bound (by omega) r]
+    rw [span_step 11,span_step 25,Nat.add_assoc (11+extra u),unit_run s g u _ bound (by omega) r]
     simp only [group,bind_assoc]
     apply bind_congr_of_forall_mem_support
     intro next reached
@@ -92,12 +92,12 @@ theorem group_post (s : MachineState) (g cnt u : Nat) (bound : g<2^12) (inside :
     rw [show u+(k+1)=u+1+k by omega]
     exact ih mid (u+1) (by omega) (unit_post s g u bound (by omega) r step) reach
 
-def SavedReg (reg : Reg) := reg ∈ [Reg.x5,.x8,.x9,.x19,.x21,.x28]
+def SavedReg (reg : Reg) := reg ∈ [Reg.x5,.x8,.x9,.x19,.x21]
 
 theorem rebased_saved (s : MachineState) (u : Nat) (reg : Reg) (safe : SavedReg reg) :
     (rebased s u).getReg reg=s.getReg reg := by
   simp only [SavedReg,List.mem_cons,List.not_mem_nil,or_false] at safe
-  rcases safe with rfl|rfl|rfl|rfl|rfl|rfl <;> unfold rebased <;> split <;> split <;> rfl
+  rcases safe with rfl|rfl|rfl|rfl|rfl <;> unfold rebased <;> split <;> split <;> rfl
 
 theorem unit_saved (s : MachineState) (g u : Nat) (reg : Reg) (safe : SavedReg reg)
     {next : MachineState} (hit : next ∈ support (unitTrace s g u)) : next.getReg reg=s.getReg reg := by
@@ -106,7 +106,7 @@ theorem unit_saved (s : MachineState) (g u : Nat) (reg : Reg) (safe : SavedReg r
   rw [rebased_saved _ _ _ safe]
   apply finished_reg_frame
   all_goals simp only [SavedReg,List.mem_cons,List.not_mem_nil,or_false] at safe
-  all_goals rcases safe with rfl|rfl|rfl|rfl|rfl|rfl <;> decide
+  all_goals rcases safe with rfl|rfl|rfl|rfl|rfl <;> decide
 
 theorem group_saved (s : MachineState) (g cnt u : Nat) (reg : Reg) (safe : SavedReg reg)
     {next : MachineState} (hit : next ∈ support (group g cnt u s)) : next.getReg reg=s.getReg reg := by

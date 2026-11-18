@@ -29,7 +29,7 @@ theorem buffer_byte_frame (before after : MachineState) (address count : Nat)
 
 theorem packed_input_address_after (input : CheckInput) (ordinal word : Nat)
     (used : RecordInputAddress input (ordinal+1) word) :
-    (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+25 ≤ word) ∧
+    (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) ∧
       1576 ≤ word := by
   have card := checker_positions_bound input
   rcases used with ⟨first, last⟩ | ⟨first, last⟩ | source

@@ -15,14 +15,14 @@ private def rootWords : List (BitVec 32) :=
   [0x0204bf83,0x01f43023,0x0284bf83,0x01f43423,0x0304bf83,0x01f43823,0x0384bf83,0x01f43c23,0x00100293,0x00000513,0x00000073]
 
 private def expectedWord (index : Nat) : BitVec 32 :=
-  if index<241305 then parentWord (index-53325)
-  else if index=241305 then 0x00960463
-  else if index=241306 then 0xecc4806f
-  else rootWords.getD (index-(241305+2)) 0
+  if index<233157 then parentWord (index-45177)
+  else if index=233157 then 0x00960463
+  else if index=233158 then 0xecc4806f
+  else rootWords.getD (index-(233157+2)) 0
 
 private def ParentRangeMatches {count : Nat} (packed : ArtifactEncoding.Packed count)
     (offset : Nat) : Prop :=
-  ∀ i : Fin count, 53325≤offset+i.val → offset+i.val<241318 →
+  ∀ i : Fin count, 45177≤offset+i.val → offset+i.val<233170 →
     packed.get 32 i=expectedWord (offset+i.val)
 
 private theorem parent_range_join {leftCount rightCount : Nat}
@@ -41,19 +41,19 @@ private theorem parent_range_join {leftCount rightCount : Nat}
     simpa only [position] using equal
 
 private theorem parent_periodic_window (packed : ArtifactEncoding.Packed 512)
-    (offset phase : Nat) (alignment : (offset-53325)%4=phase%4)
-    (inside : 53325≤offset) (ends : offset+512≤241305)
+    (offset phase : Nat) (alignment : (offset-45177)%4=phase%4)
+    (inside : 45177≤offset) (ends : offset+512≤233157)
     (decode : ∀ i : Fin 512, packed.get 32 i=parentWord (phase+i.val)) :
     ParentRangeMatches packed offset := by
   intro i _ _
   have before := i.isLt
   rw [expectedWord,if_pos (by omega),decode]
   simp only [parentWord]
-  have same : (phase+i.val)%4=(offset+i.val-53325)%4 := by omega
+  have same : (phase+i.val)%4=(offset+i.val-45177)%4 := by omega
   rw [same]
 
 private theorem parent_periodic_3 (i : Fin 512) :
-    Artifact.commitCode_0_105.get 32 i=parentWord (3+i.val) := by
+    Artifact.commitCode_0_89.get 32 i=parentWord (3+i.val) := by
   fin_cases i <;> rfl
 
 private theorem parent_window_0 : ParentRangeMatches Artifact.commitCode_0_0 0 := by
@@ -497,88 +497,56 @@ private theorem parent_window_87 : ParentRangeMatches Artifact.commitCode_0_87 4
   omega
 
 private theorem parent_window_88 : ParentRangeMatches Artifact.commitCode_0_88 45056 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_89 : ParentRangeMatches Artifact.commitCode_0_89 45568 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_90 : ParentRangeMatches Artifact.commitCode_0_90 46080 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_91 : ParentRangeMatches Artifact.commitCode_0_91 46592 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_92 : ParentRangeMatches Artifact.commitCode_0_92 47104 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_93 : ParentRangeMatches Artifact.commitCode_0_93 47616 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_94 : ParentRangeMatches Artifact.commitCode_0_94 48128 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_95 : ParentRangeMatches Artifact.commitCode_0_95 48640 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_96 : ParentRangeMatches Artifact.commitCode_0_96 49152 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_97 : ParentRangeMatches Artifact.commitCode_0_97 49664 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_98 : ParentRangeMatches Artifact.commitCode_0_98 50176 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_99 : ParentRangeMatches Artifact.commitCode_0_99 50688 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_100 : ParentRangeMatches Artifact.commitCode_0_100 51200 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_101 : ParentRangeMatches Artifact.commitCode_0_101 51712 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_102 : ParentRangeMatches Artifact.commitCode_0_102 52224 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_103 : ParentRangeMatches Artifact.commitCode_0_103 52736 := by
-  intro i lower upper
-  have inside := i.isLt
-  omega
-
-private theorem parent_window_104 : ParentRangeMatches Artifact.commitCode_0_104 53248 := by
   unfold ParentRangeMatches expectedWord parentWord rootWords
   decide +kernel
+
+private theorem parent_window_89 : ParentRangeMatches Artifact.commitCode_0_89 45568 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_90 : ParentRangeMatches Artifact.commitCode_0_90 46080 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_91 : ParentRangeMatches Artifact.commitCode_0_91 46592 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_92 : ParentRangeMatches Artifact.commitCode_0_92 47104 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_93 : ParentRangeMatches Artifact.commitCode_0_93 47616 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_94 : ParentRangeMatches Artifact.commitCode_0_94 48128 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_95 : ParentRangeMatches Artifact.commitCode_0_95 48640 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_96 : ParentRangeMatches Artifact.commitCode_0_96 49152 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_97 : ParentRangeMatches Artifact.commitCode_0_97 49664 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_98 : ParentRangeMatches Artifact.commitCode_0_98 50176 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_99 : ParentRangeMatches Artifact.commitCode_0_99 50688 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_100 : ParentRangeMatches Artifact.commitCode_0_100 51200 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_101 : ParentRangeMatches Artifact.commitCode_0_101 51712 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_102 : ParentRangeMatches Artifact.commitCode_0_102 52224 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_103 : ParentRangeMatches Artifact.commitCode_0_103 52736 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
+
+private theorem parent_window_104 : ParentRangeMatches Artifact.commitCode_0_104 53248 := by
+  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
 
 private theorem parent_window_105 : ParentRangeMatches Artifact.commitCode_0_105 53760 := by
   exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
@@ -1631,59 +1599,11 @@ private theorem parent_window_454 : ParentRangeMatches Artifact.commitCode_0_454
   exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
 
 private theorem parent_window_455 : ParentRangeMatches Artifact.commitCode_0_455 232960 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_456 : ParentRangeMatches Artifact.commitCode_0_456 233472 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_457 : ParentRangeMatches Artifact.commitCode_0_457 233984 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_458 : ParentRangeMatches Artifact.commitCode_0_458 234496 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_459 : ParentRangeMatches Artifact.commitCode_0_459 235008 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_460 : ParentRangeMatches Artifact.commitCode_0_460 235520 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_461 : ParentRangeMatches Artifact.commitCode_0_461 236032 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_462 : ParentRangeMatches Artifact.commitCode_0_462 236544 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_463 : ParentRangeMatches Artifact.commitCode_0_463 237056 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_464 : ParentRangeMatches Artifact.commitCode_0_464 237568 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_465 : ParentRangeMatches Artifact.commitCode_0_465 238080 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_466 : ParentRangeMatches Artifact.commitCode_0_466 238592 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_467 : ParentRangeMatches Artifact.commitCode_0_467 239104 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_468 : ParentRangeMatches Artifact.commitCode_0_468 239616 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_469 : ParentRangeMatches Artifact.commitCode_0_469 240128 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_470 : ParentRangeMatches Artifact.commitCode_0_470 240640 := by
-  exact parent_periodic_window _ _ 3 (by decide) (by decide) (by decide) parent_periodic_3
-
-private theorem parent_window_471 : ParentRangeMatches Artifact.commitCode_0_471 241152 := by
   unfold ParentRangeMatches expectedWord parentWord rootWords
   decide +kernel
 
 private theorem parent_packed_matches : ParentRangeMatches Artifact.commitCode 0 := by
-  exact (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_0 parent_window_1) (parent_range_join _ _ _ parent_window_2 parent_window_3)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_4 parent_window_5) (parent_range_join _ _ _ parent_window_6 parent_window_7))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_8 parent_window_9) (parent_range_join _ _ _ parent_window_10 parent_window_11)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_12 parent_window_13) (parent_range_join _ _ _ parent_window_14 parent_window_15)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_16 parent_window_17) (parent_range_join _ _ _ parent_window_18 parent_window_19)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_20 parent_window_21) (parent_range_join _ _ _ parent_window_22 parent_window_23))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_24 parent_window_25) (parent_range_join _ _ _ parent_window_26 parent_window_27)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_28 parent_window_29) (parent_range_join _ _ _ parent_window_30 parent_window_31))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_32 parent_window_33) (parent_range_join _ _ _ parent_window_34 parent_window_35)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_36 parent_window_37) (parent_range_join _ _ _ parent_window_38 parent_window_39))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_40 parent_window_41) (parent_range_join _ _ _ parent_window_42 parent_window_43)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_44 parent_window_45) (parent_range_join _ _ _ parent_window_46 parent_window_47)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_48 parent_window_49) (parent_range_join _ _ _ parent_window_50 parent_window_51)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_52 parent_window_53) (parent_range_join _ _ _ parent_window_54 parent_window_55))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_56 parent_window_57) (parent_range_join _ _ _ parent_window_58 parent_window_59)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_60 parent_window_61) (parent_range_join _ _ _ parent_window_62 parent_window_63)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_64 parent_window_65) (parent_range_join _ _ _ parent_window_66 parent_window_67)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_68 parent_window_69) (parent_range_join _ _ _ parent_window_70 parent_window_71))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_72 parent_window_73) (parent_range_join _ _ _ parent_window_74 parent_window_75)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_76 parent_window_77) (parent_range_join _ _ _ parent_window_78 parent_window_79)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_80 parent_window_81) (parent_range_join _ _ _ parent_window_82 parent_window_83)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_84 parent_window_85) (parent_range_join _ _ _ parent_window_86 parent_window_87))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_88 parent_window_89) (parent_range_join _ _ _ parent_window_90 parent_window_91)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_92 parent_window_93) (parent_range_join _ _ _ parent_window_94 parent_window_95))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_96 parent_window_97) (parent_range_join _ _ _ parent_window_98 parent_window_99)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_100 parent_window_101) (parent_range_join _ _ _ parent_window_102 parent_window_103))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_104 parent_window_105) (parent_range_join _ _ _ parent_window_106 parent_window_107)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_108 parent_window_109) (parent_range_join _ _ _ parent_window_110 parent_window_111)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_112 parent_window_113) (parent_range_join _ _ _ parent_window_114 parent_window_115)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_116 parent_window_117) (parent_range_join _ _ _ parent_window_118 parent_window_119))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_120 parent_window_121) (parent_range_join _ _ _ parent_window_122 parent_window_123)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_124 parent_window_125) (parent_range_join _ _ _ parent_window_126 parent_window_127))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_128 parent_window_129) (parent_range_join _ _ _ parent_window_130 parent_window_131)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_132 parent_window_133) (parent_range_join _ _ _ parent_window_134 parent_window_135))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_136 parent_window_137) (parent_range_join _ _ _ parent_window_138 parent_window_139)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_140 parent_window_141) (parent_range_join _ _ _ parent_window_142 parent_window_143)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_144 parent_window_145) (parent_range_join _ _ _ parent_window_146 parent_window_147)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_148 parent_window_149) (parent_range_join _ _ _ parent_window_150 parent_window_151))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_152 parent_window_153) (parent_range_join _ _ _ parent_window_154 parent_window_155)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_156 parent_window_157) (parent_range_join _ _ _ parent_window_158 parent_window_159))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_160 parent_window_161) (parent_range_join _ _ _ parent_window_162 parent_window_163)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_164 parent_window_165) (parent_range_join _ _ _ parent_window_166 parent_window_167))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_168 parent_window_169) (parent_range_join _ _ _ parent_window_170 parent_window_171)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_172 parent_window_173) (parent_range_join _ _ _ parent_window_174 parent_window_175)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_176 parent_window_177) (parent_range_join _ _ _ parent_window_178 parent_window_179)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_180 parent_window_181) (parent_range_join _ _ _ parent_window_182 parent_window_183))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_184 parent_window_185) (parent_range_join _ _ _ parent_window_186 parent_window_187)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_188 parent_window_189) (parent_range_join _ _ _ parent_window_190 parent_window_191)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_192 parent_window_193) (parent_range_join _ _ _ parent_window_194 parent_window_195)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_196 parent_window_197) (parent_range_join _ _ _ parent_window_198 parent_window_199))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_200 parent_window_201) (parent_range_join _ _ _ parent_window_202 parent_window_203)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_204 parent_window_205) (parent_range_join _ _ _ parent_window_206 parent_window_207)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_208 parent_window_209) (parent_range_join _ _ _ parent_window_210 parent_window_211)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_212 parent_window_213) (parent_range_join _ _ _ parent_window_214 parent_window_215))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_216 parent_window_217) (parent_range_join _ _ _ parent_window_218 parent_window_219)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_220 parent_window_221) (parent_range_join _ _ _ parent_window_222 parent_window_223))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_224 parent_window_225) (parent_range_join _ _ _ parent_window_226 parent_window_227)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_228 parent_window_229) (parent_range_join _ _ _ parent_window_230 parent_window_231))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_232 parent_window_233) (parent_range_join _ _ _ parent_window_234 parent_window_235)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_236 parent_window_237) (parent_range_join _ _ _ parent_window_238 parent_window_239)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_240 parent_window_241) (parent_range_join _ _ _ parent_window_242 parent_window_243)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_244 parent_window_245) (parent_range_join _ _ _ parent_window_246 parent_window_247))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_248 parent_window_249) (parent_range_join _ _ _ parent_window_250 parent_window_251)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_252 parent_window_253) (parent_range_join _ _ _ parent_window_254 parent_window_255)))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_256 parent_window_257) (parent_range_join _ _ _ parent_window_258 parent_window_259)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_260 parent_window_261) (parent_range_join _ _ _ parent_window_262 parent_window_263))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_264 parent_window_265) (parent_range_join _ _ _ parent_window_266 parent_window_267)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_268 parent_window_269) (parent_range_join _ _ _ parent_window_270 parent_window_271)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_272 parent_window_273) (parent_range_join _ _ _ parent_window_274 parent_window_275)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_276 parent_window_277) (parent_range_join _ _ _ parent_window_278 parent_window_279))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_280 parent_window_281) (parent_range_join _ _ _ parent_window_282 parent_window_283)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_284 parent_window_285) (parent_range_join _ _ _ parent_window_286 parent_window_287))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_288 parent_window_289) (parent_range_join _ _ _ parent_window_290 parent_window_291)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_292 parent_window_293) (parent_range_join _ _ _ parent_window_294 parent_window_295))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_296 parent_window_297) (parent_range_join _ _ _ parent_window_298 parent_window_299)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_300 parent_window_301) (parent_range_join _ _ _ parent_window_302 parent_window_303)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_304 parent_window_305) (parent_range_join _ _ _ parent_window_306 parent_window_307)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_308 parent_window_309) (parent_range_join _ _ _ parent_window_310 parent_window_311))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_312 parent_window_313) (parent_range_join _ _ _ parent_window_314 parent_window_315)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_316 parent_window_317) (parent_range_join _ _ _ parent_window_318 parent_window_319)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_320 parent_window_321) (parent_range_join _ _ _ parent_window_322 parent_window_323)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_324 parent_window_325) (parent_range_join _ _ _ parent_window_326 parent_window_327))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_328 parent_window_329) (parent_range_join _ _ _ parent_window_330 parent_window_331)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_332 parent_window_333) (parent_range_join _ _ _ parent_window_334 parent_window_335)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_336 parent_window_337) (parent_range_join _ _ _ parent_window_338 parent_window_339)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_340 parent_window_341) (parent_range_join _ _ _ parent_window_342 parent_window_343))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_344 parent_window_345) (parent_range_join _ _ _ parent_window_346 parent_window_347)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_348 parent_window_349) (parent_range_join _ _ _ parent_window_350 parent_window_351))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_352 parent_window_353) (parent_range_join _ _ _ parent_window_354 parent_window_355)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_356 parent_window_357) (parent_range_join _ _ _ parent_window_358 parent_window_359))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_360 parent_window_361) (parent_range_join _ _ _ parent_window_362 parent_window_363)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_364 parent_window_365) (parent_range_join _ _ _ parent_window_366 parent_window_367)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_368 parent_window_369) (parent_range_join _ _ _ parent_window_370 parent_window_371)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_372 parent_window_373) (parent_range_join _ _ _ parent_window_374 parent_window_375))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_376 parent_window_377) (parent_range_join _ _ _ parent_window_378 parent_window_379)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_380 parent_window_381) (parent_range_join _ _ _ parent_window_382 parent_window_383))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_384 parent_window_385) (parent_range_join _ _ _ parent_window_386 parent_window_387)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_388 parent_window_389) (parent_range_join _ _ _ parent_window_390 parent_window_391))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_392 parent_window_393) (parent_range_join _ _ _ parent_window_394 parent_window_395)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_396 parent_window_397) (parent_range_join _ _ _ parent_window_398 parent_window_399)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_400 parent_window_401) (parent_range_join _ _ _ parent_window_402 parent_window_403)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_404 parent_window_405) (parent_range_join _ _ _ parent_window_406 parent_window_407))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_408 parent_window_409) (parent_range_join _ _ _ parent_window_410 parent_window_411)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_412 parent_window_413) (parent_range_join _ _ _ parent_window_414 parent_window_415))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_416 parent_window_417) (parent_range_join _ _ _ parent_window_418 parent_window_419)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_420 parent_window_421) (parent_range_join _ _ _ parent_window_422 parent_window_423))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_424 parent_window_425) (parent_range_join _ _ _ parent_window_426 parent_window_427)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_428 parent_window_429) (parent_range_join _ _ _ parent_window_430 parent_window_431)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_432 parent_window_433) (parent_range_join _ _ _ parent_window_434 parent_window_435)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_436 parent_window_437) (parent_range_join _ _ _ parent_window_438 parent_window_439))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_440 parent_window_441) (parent_range_join _ _ _ parent_window_442 parent_window_443)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_444 parent_window_445) (parent_range_join _ _ _ parent_window_446 parent_window_447)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_448 parent_window_449) (parent_range_join _ _ _ parent_window_450 parent_window_451)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_452 parent_window_453) (parent_range_join _ _ _ parent_window_454 parent_window_455))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_456 parent_window_457) (parent_range_join _ _ _ parent_window_458 parent_window_459)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_460 parent_window_461) (parent_range_join _ _ _ parent_window_462 parent_window_463))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_464 parent_window_465) (parent_range_join _ _ _ parent_window_466 parent_window_467)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_468 parent_window_469) (parent_range_join _ _ _ parent_window_470 parent_window_471))))))))
+  exact (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_0 parent_window_1) (parent_range_join _ _ _ parent_window_2 parent_window_3)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_4 parent_window_5) (parent_range_join _ _ _ parent_window_6 parent_window_7))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_8 parent_window_9) (parent_range_join _ _ _ parent_window_10 parent_window_11)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_12 parent_window_13) (parent_range_join _ _ _ parent_window_14 parent_window_15)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_16 parent_window_17) (parent_range_join _ _ _ parent_window_18 parent_window_19)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_20 parent_window_21) (parent_range_join _ _ _ parent_window_22 parent_window_23))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_24 parent_window_25) (parent_range_join _ _ _ parent_window_26 parent_window_27)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_28 parent_window_29) (parent_range_join _ _ _ parent_window_30 parent_window_31))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_32 parent_window_33) (parent_range_join _ _ _ parent_window_34 parent_window_35)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_36 parent_window_37) (parent_range_join _ _ _ parent_window_38 parent_window_39))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_40 parent_window_41) (parent_range_join _ _ _ parent_window_42 parent_window_43)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_44 parent_window_45) (parent_range_join _ _ _ parent_window_46 parent_window_47)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_48 parent_window_49) (parent_range_join _ _ _ parent_window_50 parent_window_51)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_52 parent_window_53) (parent_range_join _ _ _ parent_window_54 parent_window_55))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_56 parent_window_57) (parent_range_join _ _ _ parent_window_58 parent_window_59)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_60 parent_window_61) (parent_range_join _ _ _ parent_window_62 parent_window_63)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_64 parent_window_65) (parent_range_join _ _ _ parent_window_66 parent_window_67)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_68 parent_window_69) (parent_range_join _ _ _ parent_window_70 parent_window_71))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_72 parent_window_73) (parent_range_join _ _ _ parent_window_74 parent_window_75)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_76 parent_window_77) (parent_range_join _ _ _ parent_window_78 parent_window_79)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_80 parent_window_81) (parent_range_join _ _ _ parent_window_82 parent_window_83)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_84 parent_window_85) (parent_range_join _ _ _ parent_window_86 parent_window_87))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_88 parent_window_89) (parent_range_join _ _ _ parent_window_90 parent_window_91)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_92 parent_window_93) (parent_range_join _ _ _ parent_window_94 parent_window_95))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_96 parent_window_97) (parent_range_join _ _ _ parent_window_98 parent_window_99)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_100 parent_window_101) (parent_range_join _ _ _ parent_window_102 parent_window_103))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_104 parent_window_105) (parent_range_join _ _ _ parent_window_106 parent_window_107)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_108 parent_window_109) (parent_range_join _ _ _ parent_window_110 parent_window_111)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_112 parent_window_113) (parent_range_join _ _ _ parent_window_114 parent_window_115)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_116 parent_window_117) (parent_range_join _ _ _ parent_window_118 parent_window_119))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_120 parent_window_121) (parent_range_join _ _ _ parent_window_122 parent_window_123)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_124 parent_window_125) (parent_range_join _ _ _ parent_window_126 parent_window_127))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_128 parent_window_129) (parent_range_join _ _ _ parent_window_130 parent_window_131)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_132 parent_window_133) (parent_range_join _ _ _ parent_window_134 parent_window_135))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_136 parent_window_137) (parent_range_join _ _ _ parent_window_138 parent_window_139)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_140 parent_window_141) (parent_range_join _ _ _ parent_window_142 parent_window_143)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_144 parent_window_145) (parent_range_join _ _ _ parent_window_146 parent_window_147)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_148 parent_window_149) (parent_range_join _ _ _ parent_window_150 parent_window_151))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_152 parent_window_153) (parent_range_join _ _ _ parent_window_154 parent_window_155)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_156 parent_window_157) (parent_range_join _ _ _ parent_window_158 parent_window_159))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_160 parent_window_161) (parent_range_join _ _ _ parent_window_162 parent_window_163)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_164 parent_window_165) (parent_range_join _ _ _ parent_window_166 parent_window_167))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_168 parent_window_169) (parent_range_join _ _ _ parent_window_170 parent_window_171)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_172 parent_window_173) (parent_range_join _ _ _ parent_window_174 parent_window_175)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_176 parent_window_177) (parent_range_join _ _ _ parent_window_178 parent_window_179)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_180 parent_window_181) (parent_range_join _ _ _ parent_window_182 parent_window_183))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_184 parent_window_185) (parent_range_join _ _ _ parent_window_186 parent_window_187)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_188 parent_window_189) (parent_range_join _ _ _ parent_window_190 parent_window_191)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_192 parent_window_193) (parent_range_join _ _ _ parent_window_194 parent_window_195)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_196 parent_window_197) (parent_range_join _ _ _ parent_window_198 parent_window_199))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_200 parent_window_201) (parent_range_join _ _ _ parent_window_202 parent_window_203)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_204 parent_window_205) (parent_range_join _ _ _ parent_window_206 parent_window_207)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_208 parent_window_209) (parent_range_join _ _ _ parent_window_210 parent_window_211)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_212 parent_window_213) (parent_range_join _ _ _ parent_window_214 parent_window_215))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_216 parent_window_217) (parent_range_join _ _ _ parent_window_218 parent_window_219)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_220 parent_window_221) (parent_range_join _ _ _ parent_window_222 parent_window_223))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_224 parent_window_225) (parent_range_join _ _ _ parent_window_226 parent_window_227)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_228 parent_window_229) (parent_range_join _ _ _ parent_window_230 parent_window_231))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_232 parent_window_233) (parent_range_join _ _ _ parent_window_234 parent_window_235)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_236 parent_window_237) (parent_range_join _ _ _ parent_window_238 parent_window_239)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_240 parent_window_241) (parent_range_join _ _ _ parent_window_242 parent_window_243)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_244 parent_window_245) (parent_range_join _ _ _ parent_window_246 parent_window_247))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_248 parent_window_249) (parent_range_join _ _ _ parent_window_250 parent_window_251)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_252 parent_window_253) (parent_range_join _ _ _ parent_window_254 parent_window_255)))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_256 parent_window_257) (parent_range_join _ _ _ parent_window_258 parent_window_259)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_260 parent_window_261) (parent_range_join _ _ _ parent_window_262 parent_window_263))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_264 parent_window_265) (parent_range_join _ _ _ parent_window_266 parent_window_267)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_268 parent_window_269) (parent_range_join _ _ _ parent_window_270 parent_window_271)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_272 parent_window_273) (parent_range_join _ _ _ parent_window_274 parent_window_275)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_276 parent_window_277) (parent_range_join _ _ _ parent_window_278 parent_window_279))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_280 parent_window_281) (parent_range_join _ _ _ parent_window_282 parent_window_283)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_284 parent_window_285) (parent_range_join _ _ _ parent_window_286 parent_window_287))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_288 parent_window_289) (parent_range_join _ _ _ parent_window_290 parent_window_291)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_292 parent_window_293) (parent_range_join _ _ _ parent_window_294 parent_window_295))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_296 parent_window_297) (parent_range_join _ _ _ parent_window_298 parent_window_299)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_300 parent_window_301) (parent_range_join _ _ _ parent_window_302 parent_window_303)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_304 parent_window_305) (parent_range_join _ _ _ parent_window_306 parent_window_307)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_308 parent_window_309) (parent_range_join _ _ _ parent_window_310 parent_window_311))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_312 parent_window_313) (parent_range_join _ _ _ parent_window_314 parent_window_315)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_316 parent_window_317) (parent_range_join _ _ _ parent_window_318 parent_window_319)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_320 parent_window_321) (parent_range_join _ _ _ parent_window_322 parent_window_323)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_324 parent_window_325) (parent_range_join _ _ _ parent_window_326 parent_window_327))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_328 parent_window_329) (parent_range_join _ _ _ parent_window_330 parent_window_331)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_332 parent_window_333) (parent_range_join _ _ _ parent_window_334 parent_window_335)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_336 parent_window_337) (parent_range_join _ _ _ parent_window_338 parent_window_339)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_340 parent_window_341) (parent_range_join _ _ _ parent_window_342 parent_window_343))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_344 parent_window_345) (parent_range_join _ _ _ parent_window_346 parent_window_347)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_348 parent_window_349) (parent_range_join _ _ _ parent_window_350 parent_window_351))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_352 parent_window_353) (parent_range_join _ _ _ parent_window_354 parent_window_355)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_356 parent_window_357) (parent_range_join _ _ _ parent_window_358 parent_window_359))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_360 parent_window_361) (parent_range_join _ _ _ parent_window_362 parent_window_363)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_364 parent_window_365) (parent_range_join _ _ _ parent_window_366 parent_window_367)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_368 parent_window_369) (parent_range_join _ _ _ parent_window_370 parent_window_371)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_372 parent_window_373) (parent_range_join _ _ _ parent_window_374 parent_window_375))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_376 parent_window_377) (parent_range_join _ _ _ parent_window_378 parent_window_379)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_380 parent_window_381) (parent_range_join _ _ _ parent_window_382 parent_window_383))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_384 parent_window_385) (parent_range_join _ _ _ parent_window_386 parent_window_387)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_388 parent_window_389) (parent_range_join _ _ _ parent_window_390 parent_window_391))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_392 parent_window_393) (parent_range_join _ _ _ parent_window_394 parent_window_395)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_396 parent_window_397) (parent_range_join _ _ _ parent_window_398 parent_window_399)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_400 parent_window_401) (parent_range_join _ _ _ parent_window_402 parent_window_403)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_404 parent_window_405) (parent_range_join _ _ _ parent_window_406 parent_window_407))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_408 parent_window_409) (parent_range_join _ _ _ parent_window_410 parent_window_411)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_412 parent_window_413) (parent_range_join _ _ _ parent_window_414 parent_window_415))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_416 parent_window_417) (parent_range_join _ _ _ parent_window_418 parent_window_419)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_420 parent_window_421) (parent_range_join _ _ _ parent_window_422 parent_window_423))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_424 parent_window_425) (parent_range_join _ _ _ parent_window_426 parent_window_427)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_428 parent_window_429) (parent_range_join _ _ _ parent_window_430 parent_window_431)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_432 parent_window_433) (parent_range_join _ _ _ parent_window_434 parent_window_435)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_436 parent_window_437) (parent_range_join _ _ _ parent_window_438 parent_window_439))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_440 parent_window_441) (parent_range_join _ _ _ parent_window_442 parent_window_443)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_444 parent_window_445) (parent_range_join _ _ _ parent_window_446 parent_window_447)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_448 parent_window_449) (parent_range_join _ _ _ parent_window_450 parent_window_451)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_452 parent_window_453) (parent_range_join _ _ _ parent_window_454 parent_window_455))))))
 
 attribute [local irreducible] ArtifactEncoding.decode
 
@@ -1699,11 +1619,11 @@ private theorem wide_commit_code :
 
 theorem packed_index_fetch (state : MachineState) (index : Nat)
     (point : state.pc=BitVec.ofNat 64 (4096+4*index))
-    (lower : (53325 : Nat) ≤ index) (upper : index < 241318) :
+    (lower : (45177 : Nat) ≤ index) (upper : index < 233170) :
     fetch packedWideCommitImage state=decodeInstruction (expectedWord index) := by
   have pc : state.pc.toNat=4096+4*index := by
     rw [point,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
-  have inPacked : index<241318 := by omega
+  have inPacked : index<233170 := by omega
   have packed := parent_packed_matches ⟨index,inPacked⟩
     (by simpa only [Nat.zero_add,Fin.val_mk] using lower)
     (by simpa only [Nat.zero_add,Fin.val_mk] using upper)
@@ -1721,25 +1641,25 @@ theorem packed_index_fetch (state : MachineState) (index : Nat)
 
 private theorem wide_parent_opcode (state : MachineState) (slot : Nat)
     (bounded : slot<46995) (part : Fin 4)
-    (pc : state.pc=packedParentPC 217396 slot+BitVec.ofNat 64 (4*part.val)) :
+    (pc : state.pc=packedParentPC 184804 slot+BitVec.ofNat 64 (4*part.val)) :
     fetch packedWideCommitImage state=decodeInstruction (parentWord part.val) := by
   have inside := part.isLt
-  have address : state.pc=BitVec.ofNat 64 (4096+4*(53325+4*slot+part.val)) := by
+  have address : state.pc=BitVec.ofNat 64 (4096+4*(45177+4*slot+part.val)) := by
     rw [pc,packedParentPC]
-    change BitVec.ofNat 64 217396+BitVec.ofNat 64 (16*slot)+BitVec.ofNat 64 (4*part.val)=_
+    change BitVec.ofNat 64 184804+BitVec.ofNat 64 (16*slot)+BitVec.ofNat 64 (4*part.val)=_
     rw [←BitVec.ofNat_add,←BitVec.ofNat_add]
     congr 1
     omega
-  have lower : 53325≤53325+4*slot+part.val := by omega
-  have upper : 53325+4*slot+part.val<241318 := by omega
-  rw [packed_index_fetch state (53325+4*slot+part.val) address lower upper]
+  have lower : 45177≤45177+4*slot+part.val := by omega
+  have upper : 45177+4*slot+part.val<233170 := by omega
+  rw [packed_index_fetch state (45177+4*slot+part.val) address lower upper]
   rw [expectedWord,if_pos (by omega)]
   simp only [parentWord]
-  have phase : ((53325+4*slot+part.val)-53325)%4=part.val%4 := by omega
+  have phase : ((45177+4*slot+part.val)-45177)%4=part.val%4 := by omega
   rw [phase]
 
 theorem packed_parent_words (slot : Nat) (bounded : slot<46995) :
-    PackedParentWordsAt packedWideCommitImage (packedParentPC 217396 slot) := by
+    PackedParentWordsAt packedWideCommitImage (packedParentPC 184804 slot) := by
   refine ⟨fun state pc => ?_,fun state pc => ?_,fun state pc => ?_,fun state pc => ?_⟩
   · have fetched := wide_parent_opcode state slot bounded 0 (by simpa using pc)
     exact fetched
@@ -1747,19 +1667,19 @@ theorem packed_parent_words (slot : Nat) (bounded : slot<46995) :
   · exact wide_parent_opcode state slot bounded 2 pc
   · exact wide_parent_opcode state slot bounded 3 pc
 
-def fixedWideParentControl : PackedParentControl packedWideCommitImage 217396 46995 where
+def fixedWideParentControl : PackedParentControl packedWideCommitImage 184804 46995 where
   backOffset := 1345228
   backTarget := by decide
-  branch state pc := packed_index_fetch state 241305 pc (by decide) (by decide)
-  jump state pc := packed_index_fetch state 241306 pc (by decide) (by decide)
+  branch state pc := packed_index_fetch state 233157 pc (by decide) (by decide)
+  jump state pc := packed_index_fetch state 233158 pc (by decide) (by decide)
 
 theorem packed_parent_phase (state : MachineState) (fuel : Nat)
-    (regs : ParentRegs state (2^24-1)) (pc : state.pc=217396) :
+    (regs : ParentRegs state (2^24-1)) (pc : state.pc=184804) :
     execute packedWideCommitImage (67109573+fuel) state true =
-      (do let out ← packedParentGroups 217396 46995 357 state
+      (do let out ← packedParentGroups 184804 46995 357 state
           let result ← execute packedWideCommitImage fuel out true
           return result.charge 184550078 16777215) :=
-  packed_group_execution packedWideCommitImage 217396 46995 packed_parent_words
+  packed_group_execution packedWideCommitImage 184804 46995 packed_parent_words
     fixedWideParentControl (by decide) 357 fuel state (by decide) regs (fun _ => pc)
 
 
@@ -1791,20 +1711,20 @@ private theorem wide_parent_full_register (base : Word) (span groups : Nat)
     exact later.trans (packed_sequence_keeps_output _ _ _ (out := body) path)
 
 theorem packed_parent_phase_post (state : MachineState)
-    (regs : ParentRegs state (2^24-1)) (pc : state.pc=217396) {out : MachineState}
-    (reached : out ∈ support (packedParentGroups 217396 46995 357 state)) :
-    ParentRegs out 0 ∧ out.pc=969324 ∧ out.getReg .x8=state.getReg .x8 := by
-  have step := packed_groups_post 217396 46995 357 state (by decide) (fun _ => pc) regs reached
+    (regs : ParentRegs state (2^24-1)) (pc : state.pc=184804) {out : MachineState}
+    (reached : out ∈ support (packedParentGroups 184804 46995 357 state)) :
+    ParentRegs out 0 ∧ out.pc=936732 ∧ out.getReg .x8=state.getReg .x8 := by
+  have step := packed_groups_post 184804 46995 357 state (by decide) (fun _ => pc) regs reached
   exact ⟨step.1,step.2 (by decide),wide_parent_full_register _ _ _ _ reached⟩
 
 private theorem wide_root_fetch (state : MachineState) (i : Nat) (inside : i < 11)
-    (pc : state.pc=BitVec.ofNat 64 (969324+4*i)) :
+    (pc : state.pc=BitVec.ofNat 64 (936732+4*i)) :
     fetch packedWideCommitImage state=some (.base ((rootOps[i]?).getD .ECALL)) := by
-  have address : state.pc=BitVec.ofNat 64 (4096+4*(241307+i)) := by
+  have address : state.pc=BitVec.ofNat 64 (4096+4*(233159+i)) := by
     rw [pc]
     congr 1
     omega
-  rw [packed_index_fetch state (241307+i) address (by omega) (by omega)]
+  rw [packed_index_fetch state (233159+i) address (by omega) (by omega)]
   interval_cases i <;> rfl
 
 attribute [local irreducible] execute
@@ -1824,11 +1744,11 @@ private theorem wide_root_access (state : MachineState) (heap : state.getReg .x9
   · rfl
   · rfl
 
-theorem execute_packed_root (state : MachineState) (pc : state.pc=969324)
+theorem execute_packed_root (state : MachineState) (pc : state.pc=936732)
     (heap : state.getReg .x9=4294971424) (out : state.getReg .x8=4294971392) (fuel : Nat) :
     execute packedWideCommitImage (11+fuel) state true = pure ⟨.success,rootPrefix state 10,11,0⟩ := by
   have prefixPC (i : Nat) (inside : i<11) :
-      (rootPrefix state i).pc=BitVec.ofNat 64 (969324+4*i) := by
+      (rootPrefix state i).pc=BitVec.ofNat 64 (936732+4*i) := by
     interval_cases i <;>
       simp only [rootPrefix,rootOps,List.take,List.foldl,execInstrBr,MachineState.setPC,pc] <;> rfl
   have run (left : Nat) :

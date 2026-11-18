@@ -133,13 +133,13 @@ theorem checker_complete_observation (record : Oracle → Nat → Index → Mach
     · intro message salts canonical
       exact (admitted (canonical.symm ▸ honest_input_admitted oracle message input.positions salts)).elim
 
-theorem checker_facts_of_observations
+theorem checker_facts_of_observations (bound : PinnedReplayBound)
     (checked : ∀ (oracle : Oracle) (input : CheckInput),
       CheckerObservationFacts oracle input (checkObservation PackedChecker.submission oracle input)) :
     PackedCertificate.CheckerFacts PackedChecker.submission := by
   refine ⟨fun oracle input => (checked oracle input).terminates,
     fun oracle input => (checked oracle input).queries.trans (by omega), ?_, ?_⟩
-  · apply binding_of_packed_trace
+  · apply binding_of_packed_trace _ ?_ bound
     intro oracle input
     dsimp only
     intro accepted

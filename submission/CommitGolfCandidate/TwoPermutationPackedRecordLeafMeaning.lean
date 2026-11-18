@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationTaglessTranscript
+import CommitGolfCandidate.TaggedPinnedModel
 import CommitGolfCandidate.TwoPermutationPackedRecordLeafPrelude
 import CommitGolfCandidate.TwoPermutationPackedRecordLeafCalls
 import CommitGolfCandidate.TwoPermutationPackedRecordComposition
@@ -63,9 +63,8 @@ theorem canonical_entry_value (oracle : Oracle) (input : CheckInput) (message : 
   exact transported
 
 theorem honest_row_digest (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) (index : Index) :
-    outputDigest (taglessSecondRow oracle.permutation (entryWords (message index))
-      (firstRow oracle.permutation index (saltWords (salts index)) (entryWords (message index))).2).2 =
-      taglessFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts index := by
+    pinnedLeafDigest oracle.permutation index (saltWords (salts index)) (entryWords (message index)) =
+      pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts index := by
   rfl
 
 end TwoPermutationPrototype.Packed.RecordLeaf
