@@ -22,6 +22,21 @@ theorem kind_cases (i : Index) :
     · exact Or.inr (Or.inl ⟨o,by simp [o]⟩)
     · exact Or.inr (Or.inr ⟨by omega,by simp [z,o]⟩)
 
+theorem rank_ne_zero (i : Index) (two : 2≤rank i.val) : BitVec.ofNat 64 (rank i.val)≠0#64 := by
+  have small : rank i.val<11 := by unfold rank;omega
+  intro h
+  have := congrArg BitVec.toNat h
+  rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega),BitVec.toNat_zero] at this
+  omega
+
+theorem rank_ne_one (i : Index) (two : 2≤rank i.val) : BitVec.ofNat 64 (rank i.val)≠1#64 := by
+  have small : rank i.val<11 := by unfold rank;omega
+  intro h
+  have := congrArg BitVec.toNat h
+  rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega),BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (by decide : (1:Nat)<2^64)] at this
+  omega
+
 theorem rank_ult (i : Index) (two : 2≤rank i.val) : BitVec.ult (1 : Word) (BitVec.ofNat 64 (rank i.val))=true := by
   have small : rank i.val<11 := by unfold rank;omega
   simp only [BitVec.ult,BitVec.toNat_ofNat,decide_eq_true_eq]
@@ -38,9 +53,9 @@ theorem choose_legal (s : MachineState) (i : Index) (pc : s.pc=address 796)
   · rw [r] at sub
     simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,sub,one,address,
       show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide] <;> decide
-  · have lt := rank_ult i r
-    rw [←sub,←one] at lt
-    simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,lt,address,
+  · have nz : BitVec.ofNat 64 (rank i.val)≠0#64 := rank_ne_zero i r
+    have no : BitVec.ofNat 64 (rank i.val)≠1#64 := rank_ne_one i r
+    simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,sub,one,nz,no,address,
       show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide] <;> decide
 
 def choose (s : MachineState) (i : Index) := walkRows s (selectRows (kindOf i))
@@ -93,20 +108,24 @@ theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
   have dst : BitVec.ofNat 64 i.val <<< (4:Nat)+9126809632#64=destAt i := salt_address i
   rcases kind_cases i with ⟨r,k⟩|⟨r,k⟩|⟨r,k⟩
   · rw [r] at sub
-    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,address,out,salts,
-      show signExtend12 0#12=0#64 by decide,show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,dst]
-    simpa only [readAt,offAt,if_pos r] using (show 0#64+1536#64=BitVec.ofNat 64 (1536+0) by decide)
+    have e : readAt i=1536#64 := by unfold readAt offAt;rw [if_pos r]
+    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,address,out,salts,e,dst,
+      show signExtend12 (-1 : BitVec 12)=(-1 : Word) by decide,
+      show signExtend12 16#12=16#64 by decide,show signExtend13 8#13=8#64 by decide,
+      show signExtend13 16#13=16#64 by decide]
+    decide
   · rw [r] at sub
     simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,address,out,salts,
+      show signExtend12 (-1 : BitVec 12)=(-1 : Word) by decide,
       show signExtend12 184#12=184#64 by decide,show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,dst]
     have e : readAt i=1720#64 := by unfold readAt offAt;rw [if_neg (by omega),if_pos r]
     simp only [e] <;> decide
-  · have lt := rank_ult i r
-    rw [←sub,←one] at lt
+  · have nz : BitVec.ofNat 64 (rank i.val)≠0#64 := rank_ne_zero i r
+    have no : BitVec.ofNat 64 (rank i.val)≠1#64 := rank_ne_one i r
     have src := output_address i r
     change ((BitVec.ofNat 64 (rank i.val)+signExtend12 4095#12) <<< (4:Nat))+1536#64=readAt i at src
     simp at src
-    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,lt,address,out,salts,
+    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,nz,no,address,out,salts,
       show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,dst]
     simpa [sub] using src
 

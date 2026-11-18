@@ -24,8 +24,8 @@ def lowerCost (ordinal level : Nat) : Nat → Nat
   | 0 => 0
   | left+1 => siblingCost ordinal level+lowerCost ordinal (level+1) left
 
-theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 99+levelCopies ordinal+recordCopyCost ordinal := by
-  simp [lowerCost, siblingCost, levelCopies]
+theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 429+recordCopyCost ordinal := by
+  simp [lowerCost, siblingCost, siblingWidth]
   omega
 
 theorem destination_mono (ordinal : Nat) : Monotone (siblingDestination ordinal) := by
