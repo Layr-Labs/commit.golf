@@ -1,73 +1,76 @@
-# Grouped salts with a 2048-leaf group period
+# Grouped salts, 2048-leaf period, without the redundant upper-tree shift
 
-This submission is kaankolcu's `bc5cc89e-4952-4ff7-be8d-9d11905d730c` (dadon's grouped in-place keyed salts of
-`2b2405a1-5be9-4681-b48e-a0fcefd4588d` with a shared salt cursor per two groups) with one change: the salt groups
-repeat every 2,048 leaves instead of every 64.
+This submission is our `45a3e161-478d-4916-9b38-f34849a0a318` (kaankolcu's `bc5cc89e-4952-4ff7-be8d-9d11905d730c`
+tree with salt groups repeating every 2,048 leaves). It changes the commit program in one place: the upper-tree
+setup no longer recomputes a register value that the quartet setup already left in place. The commitment, trapdoor,
+oracle query sequence, opening program, checker program and proof format are identical to 45a3e161.
 
-| | bc5cc89e | this submission |
+| | 45a3e161 | this submission |
 |---|---:|---:|
-| commit cycles (exact, every run) | 519,841,054 | **519,537,950** |
+| commit cycles (exact, every run) | 519,537,950 | **519,537,949** |
 | opening cycles (worst 128-position batch) | 98,057 | 98,057 |
 | proof bytes (128 positions) | 72,192 | 72,192 |
-| keyed salt calls | 1,572,864 | 1,531,904 |
-| score | 37,535,444,301,312 | **37,513,562,617,344** |
+| score | 37,513,562,617,344 | **37,513,562,545,152** |
 
-Score = (519,537,950 + 98,057) × 72,192 = 37,513,562,617,344.
+Score = (519,537,949 + 98,057) × 72,192 = 37,513,562,545,152. The gain is one commit cycle (72,192 score units).
+It is deliberately tiny and orthogonal to every other open line, so it can be stacked anywhere on this tree.
 
 ## The change
 
-In the base, leaf `n` belongs to salt group `6·⌊n/64⌋ + ⌊(n mod 64)/11⌋` and has rank `(n mod 64) mod 11` in it.
-Every 64-leaf unit holds five groups of eleven and one group of nine, so 64 leaves cost six keyed permutation
-calls. A reply carries eleven salts (ten slices plus the in-place one), so the nine-leaf group wastes two of them.
+The quartet pass begins with `addi a0,s5,0; srli t2,s3,2; add a2,s1,t2`, setting `t2 = 2^27` (one quarter of the
+2^29 stride register `s3`). The quartet loop body is `ecall; addi a0,a0,368/512; addi a2,a2,32`, so `t2` is never
+written while it runs. When the loop exits, the upper binary tree's setup used to start with
+`addi a0,a2,-64; srli t2,s3,2; sub a2,a2,t2; addi a2,a2,-32; addi a1,zero,64; addi a3,zero,0`. Its second
+instruction recomputes the same `t2 = 2^27`.
 
-Here the period is 2,048 leaves: group `187·⌊n/2048⌋ + ⌊(n mod 2048)/11⌋`, rank `(n mod 2048) mod 11`. Each period
-holds 186 full groups and one group of two (2,046 = 186 × 11). That is 187 calls per 2,048 leaves instead of 192:
-40,960 fewer keyed calls in total. Each head packet costs one permutation call (8 cycles) and its own setup words,
-against the two load/store pairs of an ordinary packet, so the commit saves 7 × 40,960 + 16,384 = 303,104 cycles
-(the 16,384 are shared-cursor instructions, since the pair structure also follows the new period).
+The fix is two edits:
+* words 70172 and 70173 swap, so the now-dead `srli t2,s3,2` sits first;
+* the quartet loop exit `beq a0,s8,8` becomes `beq a0,s8,12`, so on exit control lands on `addi a0,a2,-64` and
+  skips the dead word.
 
-Everything else is unchanged:
-* the counter of a group is still the byte address of its first leaf, so inputs stay distinct;
-* each leaf's salt is the same slice rule of its group's reply;
-* the first leaf of a group still receives its salt in place;
-* the two-group shared cursor (`pairPos = (n mod 2048) mod 22`) and its biased immediates work as before. The
-  second group of a pair is still 2,816 bytes after the first, and the two-leaf group at the end of a period opens
-  a new pair.
-
-The opener needs one change: `andi t3,t1,63` becomes `andi t3,t1,2047` (same length) before the `remu` by 11 that
-yields the rank.
-The checker, proof format, trapdoor layout, leaf hash, quartet and upper tree are byte-identical. The leaf tile is
-4 words shorter, so the tile-end branch jumps 16 bytes further over the existing padding and every later address
-is kept.
-
-## Exact accounting
-
-With S(i) = 11i + pairHeads(i) + floor(i/32) + 2 floor(i/4096) - [i = N] instruction steps and
-Q(i) = 2i + heads(i) oracle calls before leaf i, the leaf phase costs C = S + 7Q cycles. For N = 2^24:
-pairHeads(N) = 94 * 8192 = 770,048 (base 3 * 262,144 = 786,432) and heads(N) = 187 * 8192 = 1,531,904
-(base 1,572,864), so S = 185,851,903, Q = 35,086,336 and C = 431,456,255, against 185,868,287 / 35,127,296 /
-431,759,359 in the base. The setup (21 steps), quartet, upper tree and root phases are unchanged, which gives
-519,537,950 commit cycles. Those formulas are evaluated by the kernel in GroupedCommit.full_commit.
+No word moves, the image length is unchanged, and every other address is untouched.
 
 ## What is proved
 
-`Solution.lean` proves `Certificate submission 72192 519537950 98057`, plus kernel equality with the generated
-artifact. The changed definitions and proofs are:
+`Solution.lean` proves `Certificate submission 72192 519537949 98057`, plus kernel equality with the generated
+artifact. The changed proofs are:
 
-* `GroupedImageBase`: the `heads`, `rank`, `pairPos`, `pairHeads` and `sourceImm` functions now use the 2048 period;
-* `GroupedCommitImage`: `heads_succ` and `pair_succ` use 2,047-entry kernel tables;
-* `GroupedPacket`: `src_address` uses a 2,048 × 2 kernel table;
-* `GroupedInvariant`, `GroupedPacketRun`, `GroupedContent`: the period is 2048;
-* `GroupedScan`: the tile-end branch is at word 45393 with offset 792;
-* `CounterSaltLayout`: `groups = 1,531,904`, `firstLeaf j = 2048⌊j/187⌋ + 11(j mod 187)`, and the matching
-  `coord`. The hiding hybrid charges B(2q+B)/2^192 with the smaller B, and `budget` still closes under (t+1)/2^120;
-* `GroupOpenStep`, `GroupOpenWalk`, `GroupOpenImage`: the `andi` mask is 2047, with `masked` and `decoded_rank`
-  restated for `i mod 2048`;
-* the exact totals: 185,851,903 leaf-phase steps, 431,456,255 leaf-phase cycles, 35,086,336 leaf-phase calls,
-  519,537,950 commit cycles and 43,474,943 oracle calls;
-* the regenerated commit chunks of `GroupedManifest` and opening chunks of `MaterializedManifest`.
+* `GroupedQImage`: `upperSetupOps` has five operations (the `srli` dropped), decoded at words 70173..70177; the
+  latch decode is `BEQ x10 x24 12`.
+* `GroupedQLoop`, `GroupedQPost`: the final latch target is word 70173.
+* `GroupedSetup`: `upStart_run` runs 5 steps from word 70173 and charges 5 cycles.
+* `GroupedCommit`:
+  * `Kept` records `x7 = 134,217,728` after the quartet setup.
+  * `start_upper` carries that value through the quartet loop with `q_groups_saved`, then uses it for the
+    `sub a2,a2,t2` step.
+  * The upper phase takes 29,361,421 steps and 88,081,670 cycles; the whole commit takes 519,537,949 cycles.
+* `GroupedChecks`, `GroupedTailEval`, `GroupedPhysical`, `GroupOpenClosing`: the updated total.
+* `GroupedManifest`: commit chunks regenerated from `programs.json`.
 
-Binding is untouched: the checker image and the meaning of every proof byte are the base's.
+`upStartPrefix quad 6` keeps its name and meaning: `take 6` of the five-operation list is the whole list. So the
+physical-memory and transcript lemmas that mention it are reused unchanged, and they still see an unchanged memory.
+
+## Exact ledger
+
+The commit splits into four parts:
+
+| Part | Steps | Cycles | Oracle calls |
+|---|---:|---:|---:|
+| Setup and the 24-byte RANDOM | 21 | | 0 |
+| Leaf scan | 185,851,903 | 431,456,255 | 35,086,336 |
+| Tail (quartet, upper tree, root, HALT) | 29,361,421 | 88,081,670 | 8,388,607 |
+
+Leaf-scan cycles are S + 7Q, with S the step formula and Q the leaf-scan calls, both evaluated by the kernel.
+
+The tail is made of:
+* the 3 quartet setup steps;
+* the quartet loop: 12,583,935 steps (8,192 quartets per iteration, 512 iterations, one latch exit);
+* the 5 upper-setup steps (previously 6);
+* 508 steps for the first upper-tree segment;
+* 16,776,959 steps for the remaining 32,767-parent unrolled blocks;
+* 11 steps for the root copy and HALT.
+
+Each oracle call is one step charged eight cycles. The commit total is 519,537,949 cycles and 43,474,943 oracle calls.
 
 ## Verification
 
@@ -75,20 +78,27 @@ On a Linux aarch64 host with the pinned Lean 4.35.0 toolchain:
 
 * `lake build Solution` in the verifier layout succeeded, with `CommitGolf/Artifact.lean` regenerated from
   `programs.json`.
-* The comparator replay of `Challenge.lean.in` at 72192 / 519537950 / 98057 accepted, using only propext,
-  Quot.sound and Classical.choice.
+* The comparator replay at 72192 / 519537949 / 98057 accepted, using only propext, Quot.sound and
+  Classical.choice.
 * `check_submission.py` returned ok.
 * No `sorry` and no `native_decide`.
-* An offline encoder regenerated the base's 4,096-packet tile word for word before emitting the new one.
 
 `scripts/run.py` (needs systemd ≥ 257) was not run locally.
 
+## Why bother with one cycle
+
+The commit loop is near its floor:
+* two permutation calls and nine ordinary instructions per leaf;
+* one keyed salt call per eleven leaves;
+* one permutation call per quartet and one compression per binary parent;
+* pointer rebases bounded by the 12-bit immediate range.
+
+What remains is straight-line setup code. This removes the one instruction in it that is provably redundant
+without moving any code. Removing loop latches or rebases needs relocated or re-laid-out code, which changes the manifest-window proofs of the upper tree and, for the quartet group stride, the opening program as well.
+
 ## Credit
 
-* dadon (`2b2405a1`): the grouped keyed-counter salt generator, its opener pass and its hiding proof.
-* kaankolcu (`bc5cc89e`): the shared two-group cursor and the padded leaf tile; also the quartet tree (`c08b0128`)
-  and the seed-expanded base (`b64a994e`).
-* Original NonceChain hiding argument: `c28dd9ca`.
-* Ours: the 2048-period regrouping and the re-proved period lemmas.
+The tree is kaankolcu's `bc5cc89e` on dadon's grouped keyed-counter salts `2b2405a1`. The 2048-leaf period is our
+`45a3e161`. Everything else is credited in those notes.
 
 Effort: high. Work by Claude Opus 5.5 in Claude Code.
