@@ -39,7 +39,7 @@ theorem emit_cap : EmitCap := by
     · change src%2=0
       change src%8=0 at sourceAlign
       omega
-  have finishPC : copied.pc = 0x1a48 := place.final_pc
+  have finishPC : copied.pc = 0x1a38 := place.final_pc
   have setupRun : RunsOpeningBlock state setup 2 := fun fuel coins => execute_cap_source state pc fuel coins
   have advanceRun : RunsOpeningBlock copied after 1 := fun fuel coins => execute_cap_advance copied finishPC fuel coins
   have sameRegister (reg : Reg) (temp : reg ≠ .x7) (destReg : reg ≠ .x21) (scratch : reg ≠ .x31) :
@@ -70,10 +70,10 @@ theorem emit_cap : EmitCap := by
 
 theorem cap_subtree (groups : List Nat) (state : MachineState) (node height dest : Nat)
     (span : Opening.CapSpan node height) (position : CapPosition groups state node dest)
-    (pc : state.pc = 0x19ac) (separate : proofBase ≤ dest) (aligned : dest % 2 = 0)
+    (pc : state.pc = 0x199c) (separate : proofBase ≤ dest) (aligned : dest % 2 = 0)
     (fits : dest+30*(Sampling.capFrontierNodes groups node height).length ≤ MEMORY_BYTES) :
     ∃ after, RunsOpeningBlock state after (capSubtreeCycles groups node height) ∧
-      after.pc = 0x1a4c ∧
+      after.pc = 0x1a3c ∧
       CapPosition groups after node (dest+30*(Sampling.capFrontierNodes groups node height).length) ∧
       CapWrites state after dest (Sampling.capFrontierNodes groups node height) :=
   execute_cap_subtree emit_cap groups state node height dest span position pc separate aligned fits

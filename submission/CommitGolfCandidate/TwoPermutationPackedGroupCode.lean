@@ -83,7 +83,7 @@ theorem group_block_execute (block : GroupBlock) (s : MachineState)
     execute packedImage (block.words.length+fuel) s false = do
       let result ← execute packedImage fuel (block.done s) false
       return result.charge block.words.length 0 := by
-  have enough : block.start+block.words.length≤367 := by
+  have enough : block.start+block.words.length≤494 := by
     cases block <;> simp [GroupBlock.start,GroupBlock.words] <;> omega
   have final : block.done s=block.partialState s block.words.length := by simp [GroupBlock.done,GroupBlock.partialState]
   rw [final]

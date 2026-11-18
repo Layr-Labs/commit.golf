@@ -11,7 +11,7 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 @[local simp] theorem setup_zero (state : MachineState) : state.getReg .x0 = 0 := rfl
 
 def setupInstructions : List Instr :=
-  [.ADDI .x20 .x15 0, .ADDI .x21 .x15 0, .BEQ .x16 .x0 2660] ++
+  [.ADDI .x20 .x15 0, .ADDI .x21 .x15 0, .BEQ .x16 .x0 2644] ++
     Opening.setupInstructions.drop 3
 
 def setupPrefix (state : MachineState) (count : Nat) : MachineState :=
@@ -69,7 +69,7 @@ theorem execute_empty (state : MachineState) (pc : state.pc = 0x1000) (fuel : Na
       · interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
-  have branchPC : (setupPrefix state 3).pc = 0x1a6c := by
+  have branchPC : (setupPrefix state 3).pc = 0x1a5c := by
     simp [setupPrefix, setupInstructions, Opening.setupInstructions, execInstrBr, signExtend13, pc, beq_iff_eq, empty]
   rw [show 7 + fuel = 3 + (4 + fuel) by omega, ranSetup, execute_exit _ branchPC]
   simp [Execution.charge]

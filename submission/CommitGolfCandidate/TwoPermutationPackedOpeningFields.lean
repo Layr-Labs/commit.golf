@@ -63,24 +63,24 @@ theorem execute_nonce_advance (state : MachineState) (pc : state.pc = 0x1080) (f
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-theorem execute_cap_source (state : MachineState) (pc : state.pc = 0x19c8) (fuel : Nat) (coins : Bool) :
+theorem execute_cap_source (state : MachineState) (pc : state.pc = 0x19b8) (fuel : Nat) (coins : Bool) :
     execute openingImage (2+fuel) state coins =
       (do let result ← execute openingImage fuel (capSource state) coins
           return result.charge 2 0) := by
   apply execute_unit_steps (states := execPrefix capSourceCode state)
   intro i inside
   refine ⟨.base (capSourceCode[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply packed_fetch_base _ (626+i) _ (by omega)
+  · apply packed_fetch_base _ (622+i) _ (by omega)
     · interval_cases i <;> simp [execPrefix, capSourceCode, execInstrBr, pc]
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-theorem execute_cap_advance (state : MachineState) (pc : state.pc = 0x1a48) (fuel : Nat) (coins : Bool) :
+theorem execute_cap_advance (state : MachineState) (pc : state.pc = 0x1a38) (fuel : Nat) (coins : Bool) :
     execute openingImage (1+fuel) state coins =
       (do let result ← execute openingImage fuel (capAdvance state) coins
           return result.charge 1 0) := by
-  have fetched := packed_fetch_base state 658 (.ADDI .x21 .x21 30) (by decide) pc rfl
+  have fetched := packed_fetch_base state 654 (.ADDI .x21 .x21 30) (by decide) pc rfl
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched (show ordinaryStep state _ = _ from rfl)]
   rfl
 

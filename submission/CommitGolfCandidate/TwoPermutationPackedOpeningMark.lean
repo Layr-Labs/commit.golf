@@ -16,7 +16,7 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 @[local simp] private theorem zero_reg (state : MachineState) : state.getReg .x0 = 0#64 := rfl
 
 private theorem mark_decode (i : Fin 10) :
-    (openingImage.code[608 + i.val]?).bind Opening.decodeBase =
+    (openingImage.code[604 + i.val]?).bind Opening.decodeBase =
       some ((capMarkInstructions.drop 1)[i.val]?.getD .EBREAK) := by
   fin_cases i <;> rfl
 
@@ -35,7 +35,7 @@ private theorem mark_ordinary (state : MachineState) (i : Fin 10)
   fin_cases i <;> simp [capMarkInstructions] at valid ⊢ <;> exact ite_eq_left valid
 
 /-- One iteration of the actual descending cap-parent loop takes ten cycles. -/
-theorem execute_mark_parent (state : MachineState) (pc : state.pc = 0x1980) (fuel : Nat)
+theorem execute_mark_parent (state : MachineState) (pc : state.pc = 0x1970) (fuel : Nat)
     (allowCoins : Bool) (left : accessValid (childrenAddress state) 8 = true)
     (right : accessValid (childrenAddress state + 8#64) 8 = true)
     (parent : accessValid (parentAddress state) 8 = true) :
@@ -45,7 +45,7 @@ theorem execute_mark_parent (state : MachineState) (pc : state.pc = 0x1980) (fue
   apply execute_unit_steps (states := markParentPrefix state)
   intro i bounded
   refine ⟨.base ((capMarkInstructions.drop 1)[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply packed_fetch_base _ (608 + i) _ (by omega) _ (mark_decode ⟨i, bounded⟩)
+  · apply packed_fetch_base _ (604 + i) _ (by omega) _ (mark_decode ⟨i, bounded⟩)
     interval_cases i <;> simp [markParentPrefix, capMarkInstructions, execInstrBr, pc]
   · rw [mark_prefix_succ state i bounded]
     apply mark_ordinary _ ⟨i, bounded⟩
@@ -70,14 +70,14 @@ theorem execute_mark_parent (state : MachineState) (pc : state.pc = 0x1980) (fue
 
 /-- The parent instruction reads both children, ORs their marks, and changes only
 the parent word. Its latch visits the next parent or starts the cap walk. -/
-theorem mark_parent_post (state : MachineState) (pc : state.pc = 0x1980) :
+theorem mark_parent_post (state : MachineState) (pc : state.pc = 0x1970) :
     let after := markParentPrefix state 10
     let left := state.getMem (childrenAddress state)
     let right := state.getMem (childrenAddress state + 8#64)
     after.mem = (state.setMem (parentAddress state) (left ||| right)).mem ∧
     after.getReg .x26 = state.getReg .x26 ∧
     after.getReg .x6 = state.getReg .x6 - 1 ∧
-    after.pc = if state.getReg .x6 - 1 = 0#64 then 0x19a8 else 0x1980 := by
+    after.pc = if state.getReg .x6 - 1 = 0#64 then 0x1998 else 0x1970 := by
   by_cases done : state.getReg .x6 + 18446744073709551615#64 = 0#64 <;>
     simp [markParentPrefix, capMarkInstructions, execInstrBr, parentAddress, childrenAddress,
       signExtend12, signExtend13, BitVec.sub_eq_add_neg, pc, done]
@@ -86,9 +86,9 @@ attribute [local irreducible] execute markParentPrefix
 set_option maxRecDepth 4096
 
 theorem mark_sweep_pc (state : MachineState) (remaining : Nat) (within : remaining < 256)
-    (pc : state.pc = 0x1980)
+    (pc : state.pc = 0x1970)
     (count : state.getReg .x6 = BitVec.ofNat 64 (remaining + 1)) :
-    (markParentPrefix state 10).pc = (if remaining = 0 then 0x19a8 else 0x1980) ∧
+    (markParentPrefix state 10).pc = (if remaining = 0 then 0x1998 else 0x1970) ∧
       (markParentPrefix state 10).getReg .x6 = BitVec.ofNat 64 remaining := by
   have decrease : state.getReg .x6 - 1 = BitVec.ofNat 64 remaining := by
     rw [count]
@@ -115,7 +115,7 @@ private theorem mark_cell_access (node : Nat) (bounded : node < 512) :
 /-- Execute the actual entire descending sweep, accounting for every iteration. -/
 theorem execute_mark_sweep (state : MachineState) (remaining fuel : Nat) (allowCoins : Bool)
     (bounded : remaining < 256)
-    (pc : state.pc = if remaining = 0 then 0x19a8 else 0x1980)
+    (pc : state.pc = if remaining = 0 then 0x1998 else 0x1970)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase)
     (count : state.getReg .x6 = BitVec.ofNat 64 remaining) :
     execute openingImage (10 * remaining + fuel) state allowCoins =
@@ -124,7 +124,7 @@ theorem execute_mark_sweep (state : MachineState) (remaining fuel : Nat) (allowC
   induction remaining generalizing state with
   | zero => simp [Opening.markMachine, Execution.charge]
   | succ remaining ih =>
-    have headPC : state.pc = 0x1980 := by simpa using pc
+    have headPC : state.pc = 0x1970 := by simpa using pc
     have ⟨left, right, parent⟩ := mark_addresses state (remaining + 1) base count
     have leftValid : accessValid (childrenAddress state) 8 = true := by
       rw [left]

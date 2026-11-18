@@ -13,33 +13,22 @@ abbrev submission : Submission := Artifact.submission
 /-- The trusted loader writes buffer data and registers from the ABI. The
 packed and full-width checker layouts are equal and both data images are empty. -/
 theorem initial_state (input : CheckInput) :
-    submission.initialState .check input = Assembly.submission.initialState .check input := by
-  have inputs : submission.inputBuffers .check input = Assembly.submission.inputBuffers .check input := rfl
-  have packedData : (submission.image .check).data = [] := rfl
-  have referenceData : (Assembly.submission.image .check).data = [] := rfl
-  have base : dataBase (submission.image .check) = dataBase (Assembly.submission.image .check) := by
-    unfold dataBase
-    rw [packedData,referenceData]
-  unfold Submission.initialState
-  rw [inputs]
-  dsimp only
-  rw [base,packedData,referenceData]
-  rfl
+    submission.initialState .check input = QAssembly.submission.initialState .check input := rfl
 
 private theorem admitted_reference (input : CheckInput)
     (valid : input.proof.length ≤ submission.sizes.proof) :
-    input.proof.length ≤ Assembly.submission.sizes.proof := by
-  change input.proof.length ≤ 8422170112 at valid
-  change input.proof.length ≤ 8858378240
+    input.proof.length ≤ QAssembly.submission.sizes.proof := by
+  change input.proof.length ≤ 8959041024 at valid
+  change input.proof.length ≤ 8959041024
   omega
 
 theorem check_initial_registers (input : CheckInput) :
     let state := submission.initialState .check input
     state.pc = 4096 ∧
     state.getReg .x11 = 4294971392 ∧
-    state.getReg .x13 = 5905584160 ∧
-    state.getReg .x14 = 6039801952 ∧
-    state.getReg .x15 = 10334769248 ∧
+    state.getReg .x13 = 7247761440 ∧
+    state.getReg .x14 = 7381979232 ∧
+    state.getReg .x15 = 11676946528 ∧
     state.getReg .x16 = BitVec.ofNat 64 input.positions.card ∧
     state.getReg .x17 = BitVec.ofNat 64 input.proof.length := by
   rw [initial_state]

@@ -51,8 +51,8 @@ private theorem lower_record_bytes (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (state : MachineState)
     (ordinal : Nat) (present : ordinal < positions.card)
     (contents : CompletedRecords s trapdoor positions state (ordinal+1)) :
-    bytesAt state (recordBase ordinal) 502 =
-      mixedLowerRecord (trapdoorHeap (s := s) trapdoor) (sortedIndex positions ordinal present)
+    bytesAt state (recordBase ordinal) 498 =
+      lowerRecord true (trapdoorHeap (s := s) trapdoor) (sortedIndex positions ordinal present)
         (trapdoorSalt (s := s) trapdoor (sortedIndex positions ordinal present)) := by
   let initial := s.initialState .opening (trapdoor, positions)
   let index := sortedIndex positions ordinal present
@@ -72,14 +72,14 @@ private theorem lower_record_bytes (s : Submission) (layout : OpeningLayout s)
     bytes_at_serialized state (recordBase ordinal) 16 salt serialized
   have digest (level : Nat) (live : level < 16) :
       bytesAt state (siblingDestination ordinal level) (siblingWidth level) =
-      proofDigestBytes (decide (2 < level)) (hash (lowerNode index level ^^^ 1)) := by
+      proofDigestBytes (level != 0) (hash (lowerNode index level ^^^ 1)) := by
     have source : readBuffer initial (siblingAddress index level) 32 =
         hash (lowerNode index level ^^^ 1) :=
       Opening.input_digest s layout trapdoor positions _ (Opening.lower_swap_bound index level)
-    have width : (proofDigestBytes (decide (2 < level)) (hash (lowerNode index level ^^^ 1))).length =
+    have width : (proofDigestBytes (level != 0) (hash (lowerNode index level ^^^ 1))).length =
         siblingWidth level := by
       rw [proof_digest_length]
-      by_cases full : level ≤ 2 <;> simp [siblingWidth, full, show (2 < level) ↔ ¬ level ≤ 2 by omega]
+      by_cases first : level = 0 <;> simp [siblingWidth, first]
     apply List.ext_getElem
     · simp [bytesAt, width]
     · intro i inside outBound
@@ -87,43 +87,28 @@ private theorem lower_record_bytes (s : Submission) (layout : OpeningLayout s)
       have under : i < 32 := by unfold siblingWidth at bound; split at bound <;> omega
       simp only [bytesAt, List.getElem_map, List.getElem_range]
       rw [path level live i bound, ← read_buffer_byte initial (siblingAddress index level) 32 i under, source]
-      exact (proof_digest_byte (decide (2 < level)) _ i outBound).symm
-  have full : bytesAt state (recordBase ordinal+16) (32*(List.range 3).length) =
-      (List.range 3).flatMap (fun j => proofDigestBytes false (hash (lowerNode index j ^^^ 1))) := by
+      exact (proof_digest_byte (level != 0) _ i outBound).symm
+  have later : bytesAt state (recordBase ordinal+48) (30*(List.range 15).length) =
+      (List.range 15).flatMap (fun j => proofDigestBytes true (hash (lowerNode index (j+1) ^^^ 1))) := by
     apply bytes_at_chunks
     intro j inside
-    have bound : j < 3 := by simpa using inside
+    have bound : j < 15 := by simpa using inside
     rw [List.getElem_range]
-    have here := digest j (by omega)
-    simpa [siblingDestination, siblingOffset, siblingWidth, show j ≤ 2 by omega,
-      show j ≤ 3 by omega, show ¬ 2 < j by omega, Nat.add_assoc] using here
-  have later : bytesAt state (recordBase ordinal+112) (30*(List.range 13).length) =
-      (List.range 13).flatMap (fun j => proofDigestBytes true (hash (lowerNode index (j+3) ^^^ 1))) := by
-    apply bytes_at_chunks
-    intro j inside
-    have bound : j < 13 := by simpa using inside
-    rw [List.getElem_range]
-    have here := digest (j+3) (by omega)
-    have offset : siblingOffset (j+3) = 112+30*j := by
-      unfold siblingOffset
-      split_ifs <;> omega
-    simpa [siblingDestination, offset, siblingWidth, show ¬ j+3 ≤ 2 by omega,
-      show 2 < j+3 by omega, Nat.add_assoc] using here
-  change bytesAt state (recordBase ordinal) (16+(32*3+30*13)) = mixedLowerRecord hash index salt
+    have here := digest (j+1) (by omega)
+    simpa [siblingDestination, siblingOffset, siblingWidth, show j+1 ≠ 0 by omega, Nat.add_assoc] using here
+  change bytesAt state (recordBase ordinal) (16+(32+30*15)) = lowerRecord true hash index salt
   rw [bytes_at_append, nonceBytes]
-  change saltBytes salt ++ bytesAt state (recordBase ordinal+16) (32*3+30*13) = _
-  rw [bytes_at_append]
-  have full' : bytesAt state (recordBase ordinal+16) (32*3) =
-      (List.range 3).flatMap (fun j => proofDigestBytes false (hash (lowerNode index j ^^^ 1))) := full
-  have later' : bytesAt state (recordBase ordinal+16+32*3) (30*13) =
-      (List.range 13).flatMap (fun j => proofDigestBytes true (hash (lowerNode index (j+3) ^^^ 1))) := by
-    simpa only [List.length_range,
-      show recordBase ordinal+16+32*3=recordBase ordinal+112 by omega] using later
-  rw [full', later']
-  unfold mixedLowerRecord
-  rw [show List.range 16 = List.range 3 ++ (List.range 13).map (fun j => j+3) from by decide,
-    List.flatMap_append, List.flatMap_map]
-  congr 1
+  change saltBytes salt ++ bytesAt state (recordBase ordinal+16) (32+30*15) = _
+  rw [bytes_at_append, show recordBase ordinal+16 = siblingDestination ordinal 0 from rfl]
+  rw [show 32 = siblingWidth 0 from rfl, digest 0 (by decide)]
+  rw [show siblingDestination ordinal 0+siblingWidth 0 = recordBase ordinal+48 by
+    simp [siblingDestination, siblingOffset, siblingWidth, Nat.add_assoc]]
+  rw [show (15:Nat) = (List.range 15).length by decide, later]
+  unfold lowerRecord
+  rw [show List.range 16 = 0 :: (List.range 15).map (fun j => j+1) from by decide,
+    List.flatMap_cons, List.flatMap_map]
+  simp only [Bool.true_and, Nat.reduceBEq, Bool.not_true, lowerNode]
+  congr 2
 
 /-- The decoded ABI output is the exact lower records and canonical cap footer. -/
 theorem read_opening_proof (s : Submission) (abi : OpeningABI s)

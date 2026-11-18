@@ -9,12 +9,12 @@ set_option maxHeartbeats 800000
 attribute [local irreducible] execute readBuffer childCopied siblingState merge
 
 def prepare (s : MachineState) (node left : Nat) : MachineState :=
-  let leaf := decide (14≤left)
+  let leaf := decide (left=14)
   let even := decide (node%2=0)
   hashSetup (route (merge (dispatch s leaf even) leaf even) leaf even)
 
 def prepareCost (node left : Nat) : Nat :=
-  let leaf := decide (14≤left)
+  let leaf := decide (left=14)
   let even := decide (node%2=0)
   5+(8+siblingCost leaf)+routeCost leaf even+2
 
@@ -23,7 +23,7 @@ structure PrepareFacts (s h : MachineState) (node proof left : Nat) : Prop where
   pc : h.pc=5032
   src : h.getReg .x10=12544
   dst : h.getReg .x12=12288
-  widthReg : h.getReg .x30=BitVec.ofNat 64 (width (decide (14≤left)))
+  widthReg : h.getReg .x30=BitVec.ofNat 64 (width (decide (left=14)))
   reg : ∀ r, r≠.x10 → r≠.x12 → r≠.x31 → r≠.x7 → r≠.x30 → h.getReg r=s.getReg r
   frame : ∀ w<2^61, w<1568 ∨ 1576≤w → memoryView h w=memoryView s w
   input : readBuffer h 12576 32 ++ readBuffer h 12544 32=levelPair s node proof left
@@ -54,17 +54,15 @@ private theorem same_buffer {s t : MachineState} (mem : s.mem=t.mem) (base sz : 
 
 theorem prepare_facts (s : MachineState) (node proof left : Nat) (ready : LevelReady s node proof left) :
     PrepareFacts s (prepare s node left) node proof left := by
-  let leaf := decide (14≤left)
+  let leaf := decide (left=14)
   let even := decide (node%2=0)
   let d := dispatch s leaf even
   let m := merge d leaf even
   let r := route m leaf even
   let h := hashSetup r
-  have cnt : (leaf=true) ↔ (14 : Word) ≤ s.getReg .x29 := by
+  have cnt : (leaf=true) ↔ s.getReg .x29=14 := by
     have h := ready.leftBound
-    rw [ready.counter]
-    change (decide (14≤left)=true) ↔ 14≤(BitVec.ofNat 64 left).toNat
-    rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega : left<2^64)]
+    rw [ready.counter,←BitVec.toNat_inj,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega : left<2^64)]
     exact decide_eq_true_iff
   have par : (even=true) ↔ s.getReg .x6 &&& 1=0 := by
     rw [ready.nodeReg,←BitVec.toNat_inj,BitVec.toNat_and,BitVec.toNat_ofNat,Nat.mod_eq_of_lt ready.nodeBound]

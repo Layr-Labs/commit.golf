@@ -81,7 +81,7 @@ theorem execute_cap_hash {state : MachineState} {node : Nat} (ready : CapHashRea
       (control _ (by decide) (by decide) (by decide)).trans ready.size,
       (control _ (by decide) (by decide) (by decide)).trans ready.primitive⟩
   have memLimit : 32768 ≤ MEMORY_BYTES := by decide
-  have call := parent_hash_step .cap rfl (capParent state) input target pc src dst rfl select
+  have call := parent_hash_step .cap (capParent state) input target pc src dst rfl select
     (by dsimp [input]; omega) (by dsimp [target]; omega)
     (by dsimp [input]; omega) (by dsimp [target]; omega) (1+fuel)
   have halves :

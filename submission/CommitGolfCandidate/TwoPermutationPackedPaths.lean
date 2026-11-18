@@ -2,11 +2,10 @@ import CommitGolfCandidate.TwoPermutationPinnedReplay
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.ProjectedCompression
 import CommitGolfCandidate.TwoPermutationCheckerReplay
-import CommitGolfCandidate.TwoPermutationMixedTranscript
 
-/-! Paid binding for the mixed-width pinned two-permutation design. Each compression row
-retains the actual full reply. The node-dependent stored value preserves its low240
-bits, so the pinned replay certificate retains the same compression witness. -/
+/-! Paid binding for the packed two-permutation design. Each compression row
+retains the actual full reply while its child authentication step receives
+the same two-byte-zeroed digest as the projected checker. -/
 namespace TwoPermutationPrototype.Packed
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.ShortTree
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling TwoPermutationPrototype.Checker OracleComp
@@ -26,7 +25,7 @@ inductive ProjectedPath (rows : List PublicRow) : Nat → Nat → BitVec 256 →
   | done (node : Nat) (digest : BitVec 256) : ProjectedPath rows node 0 digest digest
   | step {node height : Nat} {child parent sibling root : BitVec 256}
       (call : PublicRow.compression (pathPair node child sibling) parent ∈ rows)
-      (next : ProjectedPath rows (node / 2) height (projectMixed (node / 2) parent) root) :
+      (next : ProjectedPath rows (node / 2) height (padLow parent) root) :
       ProjectedPath rows node (height + 1) child root
 
 theorem ProjectedPath.mono {first last : List PublicRow} {node height : Nat}
@@ -71,7 +70,7 @@ theorem ProjectedPath.compare {rows : List PublicRow} {node height : Nat}
         · exact Or.inl collision
         by_cases sameInput : pathPair node start₀ sibling₀ = pathPair node start₁ sibling₁
         · exact Or.inr (equal_path_pair sameInput)
-        · exact Or.inl ⟨_, _, _, _, call₀, call₁, sameInput, (low240_projectMixed (node / 2) parent₀).symm.trans ((congrArg low240 sameParent).trans (low240_projectMixed (node / 2) parent₁))⟩
+        · exact Or.inl ⟨_, _, _, _, call₀, call₁, sameInput, (low240_padLow parent₀).symm.trans ((congrArg low240 sameParent).trans (low240_padLow parent₁))⟩
 
 /-- The two forward permutation rows and the subsequent authenticated path for
 an opened index, all in a single genuine checker replay. -/

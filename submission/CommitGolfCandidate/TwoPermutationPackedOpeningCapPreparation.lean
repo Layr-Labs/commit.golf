@@ -31,7 +31,7 @@ private theorem observed_mark_update (before after : MachineState) (node other :
 
 /-- In physical memory, one mark iteration implements the corresponding array update. -/
 theorem machine_mark_parent (state : MachineState) (node other : Nat)
-    (bounded : node < 256) (otherBound : other < 512) (pc : state.pc = 0x1980)
+    (bounded : node < 256) (otherBound : other < 512) (pc : state.pc = 0x1970)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase)
     (count : state.getReg .x6 = BitVec.ofNat 64 node) :
     machineMarks (markParentPrefix state 10) other = markParent (machineMarks state) node other := by
@@ -43,7 +43,7 @@ theorem machine_mark_parent (state : MachineState) (node other : Nat)
 /-- Memory after the complete sweep contains the exact occupancy of every cap subtree. -/
 theorem machine_mark_sweep (state : MachineState) (groups : List Nat) (remaining : Nat)
     (bounded : remaining < 256)
-    (pc : state.pc = if remaining = 0 then 0x19a8 else 0x1980)
+    (pc : state.pc = if remaining = 0 then 0x1998 else 0x1970)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase)
     (count : state.getReg .x6 = BitVec.ofNat 64 remaining)
     (finished : ∀ node, remaining < node → node < 512 →
@@ -53,7 +53,7 @@ theorem machine_mark_sweep (state : MachineState) (groups : List Nat) (remaining
   induction remaining generalizing state with
   | zero => exact finished
   | succ remaining ih =>
-    have headPC : state.pc = 0x1980 := by simpa using pc
+    have headPC : state.pc = 0x1970 := by simpa using pc
     have ⟨nextPC, nextCount⟩ := mark_sweep_pc state remaining (by omega) headPC count
     have nextBase := (mark_parent_post state headPC).2.1.trans base
     apply ih _ (by omega) nextPC nextBase nextCount
@@ -70,18 +70,18 @@ theorem machine_mark_sweep (state : MachineState) (groups : List Nat) (remaining
     · rw [markParent, ite_eq_right same, finished _ (by omega) inside]
 
 def markSweepEntry (state : MachineState) : MachineState :=
-  (state.setReg .x6 255).setPC 0x1980
+  (state.setReg .x6 255).setPC 0x1970
 
 def cursorEntry (state : MachineState) : MachineState :=
-  (state.setReg .x6 1).setPC 0x19ac
+  (state.setReg .x6 1).setPC 0x199c
 
 /-- Enter the descending sweep at parent 255, immediately after the last record. -/
-theorem execute_mark_entry (state : MachineState) (pc : state.pc = 0x197c)
+theorem execute_mark_entry (state : MachineState) (pc : state.pc = 0x196c)
     (fuel : Nat) (allowCoins : Bool) :
     execute openingImage (1 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (markSweepEntry state) allowCoins
           return result.charge 1 0) := by
-  have fetched := packed_fetch_base state 607 (.ADDI .x6 .x0 255) (by decide) pc rfl
+  have fetched := packed_fetch_base state 603 (.ADDI .x6 .x0 255) (by decide) pc rfl
   have stepped : ordinaryStep state (.base (.ADDI .x6 .x0 255)) = some (markSweepEntry state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       markSweepEntry, pc, show state.getReg .x0 = 0#64 from rfl]
@@ -89,12 +89,12 @@ theorem execute_mark_entry (state : MachineState) (pc : state.pc = 0x197c)
   rfl
 
 /-- Start the cap cursor at the root after all parent marks are set. -/
-theorem execute_cursor_entry (state : MachineState) (pc : state.pc = 0x19a8)
+theorem execute_cursor_entry (state : MachineState) (pc : state.pc = 0x1998)
     (fuel : Nat) (allowCoins : Bool) :
     execute openingImage (1 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (cursorEntry state) allowCoins
           return result.charge 1 0) := by
-  have fetched := packed_fetch_base state 618 (.ADDI .x6 .x0 1) (by decide) pc rfl
+  have fetched := packed_fetch_base state 614 (.ADDI .x6 .x0 1) (by decide) pc rfl
   have stepped : ordinaryStep state (.base (.ADDI .x6 .x0 1)) = some (cursorEntry state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       cursorEntry, pc, show state.getReg .x0 = 0#64 from rfl]
@@ -125,13 +125,13 @@ private theorem mark_sweep_register (state : MachineState) (remaining : Nat) (re
 
 private theorem mark_sweep_finished (state : MachineState) (remaining : Nat)
     (bounded : remaining < 256)
-    (pc : state.pc = if remaining = 0 then 0x19a8 else 0x1980)
+    (pc : state.pc = if remaining = 0 then 0x1998 else 0x1970)
     (count : state.getReg .x6 = BitVec.ofNat 64 remaining) :
-    (markMachine state remaining).pc = 0x19a8 := by
+    (markMachine state remaining).pc = 0x1998 := by
   induction remaining generalizing state with
   | zero => simpa [markMachine] using pc
   | succ remaining ih =>
-    have incoming : state.pc = 0x1980 := by simpa using pc
+    have incoming : state.pc = 0x1970 := by simpa using pc
     have ⟨next, remainingWord⟩ := mark_sweep_pc state remaining (by omega) incoming count
     exact ih _ (by omega) next remainingWord
 
@@ -140,7 +140,7 @@ def capPreparation (state : MachineState) : MachineState :=
 
 /-- Starting one instruction after the final record, prepare all subtree marks
 and enter the real cursor at node one in 2,552 cycles. -/
-theorem execute_cap_preparation (state : MachineState) (pc : state.pc = 0x197c)
+theorem execute_cap_preparation (state : MachineState) (pc : state.pc = 0x196c)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase) (fuel : Nat) (allowCoins : Bool) :
     execute openingImage (2552 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (capPreparation state) allowCoins
@@ -165,7 +165,7 @@ theorem cap_preparation_context (state : MachineState) (groups : List Nat) (dest
     (pointer : state.getReg .x21 = BitVec.ofNat 64 dest)
     (marks : ∀ node, 255 < node → node < 512 → machineMarks state node = markWord groups node) :
     let after := capPreparation state
-    after.pc = 0x19ac ∧ CapPosition groups after 1 dest := by
+    after.pc = 0x199c ∧ CapPosition groups after 1 dest := by
   let first := markSweepEntry state
   have count : first.getReg .x6 = BitVec.ofNat 64 255 := rfl
   have baseAtSweep : first.getReg .x26 = BitVec.ofNat 64 markBase := markBaseReg

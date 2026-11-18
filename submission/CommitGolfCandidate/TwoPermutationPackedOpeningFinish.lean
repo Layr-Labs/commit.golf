@@ -18,7 +18,7 @@ attribute [local irreducible] markParentPrefix execute
 
 private theorem sweep_frame (state : MachineState) (remaining address : Nat) (bounded : remaining < 256)
     (above : trapdoorBase ≤ address) (fit : address < 2^64)
-    (pc : state.pc = if remaining = 0 then 0x19a8 else 0x1980)
+    (pc : state.pc = if remaining = 0 then 0x1998 else 0x1970)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase)
     (count : state.getReg .x6 = BitVec.ofNat 64 remaining) :
     (markMachine state remaining).getMem (BitVec.ofNat 64 address) =
@@ -26,7 +26,7 @@ private theorem sweep_frame (state : MachineState) (remaining address : Nat) (bo
   induction remaining generalizing state with
   | zero => rfl
   | succ remaining ih =>
-    have parentPC : state.pc = 0x1980 := by simpa using pc
+    have parentPC : state.pc = 0x1970 := by simpa using pc
     have ⟨_, _, parent⟩ := mark_addresses state (remaining+1) base count
     have mark := mark_parent_post state parentPC
     have different : BitVec.ofNat 64 address ≠ parentAddress state := by
@@ -56,13 +56,13 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 
 @[local simp] private theorem abi_zero (state : MachineState) : state.getReg .x0 = 0#64 := rfl
 
-theorem root_exit (state : MachineState) (pc : state.pc = 0x1a4c)
+theorem root_exit (state : MachineState) (pc : state.pc = 0x1a3c)
     (root : state.getReg .x6 = 1#64) (fuel : Nat) (allowCoins : Bool) :
     let result := exitPrefix (advancePrefix state 41 2) 3
     execute openingImage (6 + fuel) state allowCoins = pure ⟨.success, result, 6, 0⟩ ∧
     result.mem = state.mem ∧ result.getReg .x11 = state.getReg .x21 - state.getReg .x20 := by
   let checked := advancePrefix state 41 2
-  have ready : checked.pc = 0x1a6c := by rw [advance_root_target state pc, root]; simp
+  have ready : checked.pc = 0x1a5c := by rw [advance_root_target state pc, root]; simp
   have memory : checked.mem = state.mem := by
     simp [checked, advancePrefix, advanceCode, execInstrBr, signExtend12, root]
     rfl

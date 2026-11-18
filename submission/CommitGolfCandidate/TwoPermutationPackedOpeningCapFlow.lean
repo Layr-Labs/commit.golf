@@ -52,11 +52,11 @@ private theorem mark_word_zero (groups : List Nat) (node height : Nat)
 /-- The four-cycle lookup dispatches to exactly the branch in the pure frontier. -/
 theorem cap_lookup (state : MachineState) (groups : List Nat) (node height fuel : Nat)
     (allowCoins : Bool) (span : CapSpan node height) (context : CapContext groups state)
-    (pc : state.pc = 0x19ac) (nodeWord : state.getReg .x6 = BitVec.ofNat 64 node) :
+    (pc : state.pc = 0x199c) (nodeWord : state.getReg .x6 = BitVec.ofNat 64 node) :
     execute openingImage (4 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (cursorVisitPrefix state 4) allowCoins
           return result.charge 4 0) ∧
-    (cursorVisitPrefix state 4).pc = (if capIsMarked groups node height then 0x19bc else 0x19c8) ∧
+    (cursorVisitPrefix state 4).pc = (if capIsMarked groups node height then 0x19ac else 0x19b8) ∧
     (cursorVisitPrefix state 4).getReg .x6 = state.getReg .x6 ∧
     (cursorVisitPrefix state 4).getReg .x21 = state.getReg .x21 ∧
     (cursorVisitPrefix state 4).mem = state.mem ∧

@@ -6,9 +6,9 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
 set_option maxRecDepth 8192
 
-def checkIndexWord (ordinal : Nat) : Nat := 738198020+ordinal
-def checkSourceWord (ordinal : Nat) : Nat := 754975239+32*ordinal
-def checkNonceWord (ordinal : Nat) : Nat := 1291846156+66*ordinal
+def checkIndexWord (ordinal : Nat) : Nat := 905970180+ordinal
+def checkSourceWord (ordinal : Nat) : Nat := 922747399+32*ordinal
+def checkNonceWord (ordinal : Nat) : Nat := 1459618316+66*ordinal
 
 theorem checker_positions_bound (input : CheckInput) : input.positions.card ≤ 16777216 := by
   have card : input.positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ input.positions
@@ -19,18 +19,19 @@ theorem checker_cap_group (index : Index) : 256 ≤ capGroup index ∧ capGroup 
   change 256 ≤ (16777216+index.val)/65536 ∧ (16777216+index.val)/65536 < 512
   omega
 
-/-- Regions the remaining records or cap traversal can still read. -/
+/-- Regions the remaining records or cap traversal can still read; words 1664–1672 are the
+Quartet checker's 72-byte zero prefix at 13312, which must still be zero. -/
 def RecordInputAddress (input : CheckInput) (ordinal word : Nat) : Prop :=
-  (536871424 ≤ word ∧ word < 536871428) ∨
+  ((536871424 ≤ word ∧ word < 536871428) ∨ (1664 ≤ word ∧ word < 1673)) ∨
     (checkIndexWord 0 ≤ word ∧ word < checkIndexWord input.positions.card) ∨
     checkSourceWord ordinal ≤ word
 
 def RecordInputFrame (input : CheckInput) (ordinal : Nat) (state : MachineState) : Prop :=
   ∀ word < 2^33, RecordInputAddress input ordinal word →
-    memoryView state word = memoryView (Assembly.submission.initialState .check input) word
+    memoryView state word = memoryView (QAssembly.submission.initialState .check input) word
 
 theorem record_input_frame_initial (input : CheckInput) :
-    RecordInputFrame input 0 (Assembly.submission.initialState .check input) :=
+    RecordInputFrame input 0 (QAssembly.submission.initialState .check input) :=
   fun _ _ _ => rfl
 
 theorem record_input_address_mono (input : CheckInput) (first last word : Nat) (advanced : first ≤ last)
@@ -45,7 +46,7 @@ theorem record_input_address_after (input : CheckInput) (ordinal word : Nat)
     (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+25 ≤ word) ∧
       (word < 1536 ∨ 1576 ≤ word) := by
   have card := checker_positions_bound input
-  rcases used with ⟨first, last⟩ | ⟨first, last⟩ | source
+  rcases used with commitment | ⟨first, last⟩ | source
   · unfold checkSourceWord
     omega
   · unfold checkIndexWord at first last
@@ -70,10 +71,10 @@ theorem record_input_index (input : CheckInput) (ordinal : Nat) (present : ordin
   rw [framed _ (by unfold checkIndexWord; omega) (Or.inr (Or.inl (by
     unfold checkIndexWord
     omega)))]
-  have addr : 8*checkIndexWord ordinal = Assembly.submission.layout.indices+8*ordinal := by
-    change 8*(738198020+ordinal)=5905584160+8*ordinal
+  have addr : 8*checkIndexWord ordinal = QAssembly.submission.layout.indices+8*ordinal := by
+    change 8*(905970180+ordinal)=7247761440+8*ordinal
     omega
-  change (Assembly.submission.initialState .check input).getMem (BitVec.ofNat 64 (8*checkIndexWord ordinal)) = _
+  change (QAssembly.submission.initialState .check input).getMem (BitVec.ofNat 64 (8*checkIndexWord ordinal)) = _
   rw [addr]
   exact (check_input_position input ordinal present).trans (congrArg
     (fun index : Index => BitVec.ofNat 64 index.val) (check_input_value_index input ordinal present).symm)
@@ -82,20 +83,20 @@ theorem record_input_value (input : CheckInput) (ordinal : Nat) (present : ordin
     (state : MachineState) (framed : RecordInputFrame input ordinal state) :
     readBuffer state (8*(checkSourceWord ordinal+5)) 256 = input.values (honestIndex input.positions ordinal present) := by
   have card := checker_positions_bound input
-  have frame := aligned_buffer_frame (Assembly.submission.initialState .check input) state
+  have frame := aligned_buffer_frame (QAssembly.submission.initialState .check input) state
     (checkSourceWord ordinal+5) 32 (fun j inside => framed _ (by unfold checkSourceWord; omega)
       (Or.inr (Or.inr (by omega))))
   refine frame.trans ?_
-  have addr : 8*(checkSourceWord ordinal+5) = Assembly.submission.layout.values+256*ordinal := by
-    change 8*(754975239+32*ordinal+5)=6039801952+256*ordinal
+  have addr : 8*(checkSourceWord ordinal+5) = QAssembly.submission.layout.values+256*ordinal := by
+    change 8*(922747399+32*ordinal+5)=7381979232+256*ordinal
     omega
   rw [addr]
   exact check_input_value input ordinal present
 
 theorem record_input_root (input : CheckInput) (ordinal : Nat)
     (state : MachineState) (framed : RecordInputFrame input ordinal state) :
-    readBuffer state Assembly.submission.layout.commitment 32 = input.commitment := by
-  refine (aligned_digest_frame (Assembly.submission.initialState .check input) state 536871424 ?_).trans
+    readBuffer state QAssembly.submission.layout.commitment 32 = input.commitment := by
+  refine (aligned_digest_frame (QAssembly.submission.initialState .check input) state 536871424 ?_).trans
     (check_input_commitment input)
   intro j inside
   exact framed _ (by omega) (Or.inl (by omega))
@@ -110,7 +111,7 @@ structure RecordCursor (input : CheckInput) (ordinal : Nat) (state : MachineStat
   tag : state.getReg .x3 = 4056
   commitment : state.getReg .x9 = 4294971392
   challengeLength : state.getReg .x20 = BitVec.ofNat 64 LENGTH
-  proofEnd : state.getReg .x22 = BitVec.ofNat 64 (10334769248+input.proof.length)
+  proofEnd : state.getReg .x22 = BitVec.ofNat 64 (11676946528+input.proof.length)
   digest : state.getReg .x23 = wordAddress 1536
   pair : state.getReg .x24 = wordAddress 1568
   capRoots : state.getReg .x25 = wordAddress 2048
@@ -147,7 +148,7 @@ theorem record_honest_inputs (oracle : Oracle) (message : Message) (positions : 
       ∀ offset < 16, readBuffer state (8*(checkNonceWord ordinal+2+4*offset)) 32 =
         honestHeap oracle message salts (((LENGTH+index.val)/2^offset) ^^^ 1) := by
   let input := honestCheckInput oracle message positions salts
-  let initial := Assembly.submission.initialState .check input
+  let initial := QAssembly.submission.initialState .check input
   have cardinal : positions.card ≤ 16777216 := checker_positions_bound input
   have words (offset : Nat) (inside : offset < 66) :
       memoryView state (checkNonceWord ordinal+offset) =
@@ -157,8 +158,8 @@ theorem record_honest_inputs (oracle : Oracle) (message : Message) (positions : 
   refine ⟨?_, record_input_value input ordinal present state framed, ?_⟩
   · refine (aligned_buffer_frame initial state (checkNonceWord ordinal) 2
       (fun k hk => words k (by omega))).trans ?_
-    have addr : 8*checkNonceWord ordinal = Assembly.submission.layout.proof+528*ordinal := by
-      change 8*(1291846156+66*ordinal)=10334769248+528*ordinal
+    have addr : 8*checkNonceWord ordinal = QAssembly.submission.layout.proof+528*ordinal := by
+      change 8*(1459618316+66*ordinal)=11676946528+528*ordinal
       omega
     rw [addr]
     exact honest_input_nonce oracle message positions salts ordinal present
@@ -167,8 +168,8 @@ theorem record_honest_inputs (oracle : Oracle) (message : Message) (positions : 
     · intro k small
       simpa only [Nat.add_assoc] using words (2+4*offset+k) (by omega)
     · have addr : 8*(checkNonceWord ordinal+2+4*offset) =
-          Assembly.submission.layout.proof+(528*ordinal+16+32*offset) := by
-        change 8*(1291846156+66*ordinal+2+4*offset)=10334769248+(528*ordinal+16+32*offset)
+          QAssembly.submission.layout.proof+(528*ordinal+16+32*offset) := by
+        change 8*(1459618316+66*ordinal+2+4*offset)=11676946528+(528*ordinal+16+32*offset)
         omega
       rw [addr]
       exact honest_input_sibling oracle message positions salts ordinal offset present inside
@@ -180,7 +181,7 @@ theorem record_honest_frontier (oracle : Oracle) (message : Message) (positions 
     readBuffer state (8*(checkNonceWord positions.card+4*ordinal)) 32 =
       honestHeap oracle message salts (Opening.openingNodes positions)[ordinal] := by
   let input := honestCheckInput oracle message positions salts
-  let initial := Assembly.submission.initialState .check input
+  let initial := QAssembly.submission.initialState .check input
   have cardinal : positions.card ≤ 16777216 := checker_positions_bound input
   have maximum : (Opening.openingNodes positions).length ≤ 128 := Opening.opening_nodes_bound positions
   refine (aligned_digest_frame initial state _ ?_).trans ?_
@@ -189,8 +190,8 @@ theorem record_honest_frontier (oracle : Oracle) (message : Message) (positions 
       unfold checkSourceWord checkNonceWord
       omega)))
   · have addr : 8*(checkNonceWord positions.card+4*ordinal) =
-        Assembly.submission.layout.proof+(528*positions.card+32*ordinal) := by
-      change 8*(1291846156+66*positions.card+4*ordinal)=10334769248+(528*positions.card+32*ordinal)
+        QAssembly.submission.layout.proof+(528*positions.card+32*ordinal) := by
+      change 8*(1459618316+66*positions.card+4*ordinal)=11676946528+(528*positions.card+32*ordinal)
       omega
     rw [addr]
     exact honest_input_frontier oracle message positions salts ordinal present

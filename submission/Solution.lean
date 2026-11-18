@@ -1,8 +1,6 @@
-import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
-import CommitGolfCandidate.TwoPermutationPinnedFinalHiding
-import CommitGolfCandidate.TwoPermutationPackedAssembly
-import CommitGolfCandidate.TwoPermutationPackedLeafCertificate
+import CommitGolfCandidate.QuartetAssembly
 import CommitGolfCandidate.TwoPermutationPackedCheckerCertificate
+import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
 
 namespace CommitGolf.Challenge
 open TwoPermutationPrototype
@@ -10,16 +8,14 @@ open TwoPermutationPrototype
 set_option maxRecDepth 65536
 set_option exponentiation.threshold 2048
 
-def submission : CommitGolf.Submission := RV64.packedSubmission
+def submission : CommitGolf.Submission := CommitGolf.Artifact.submission
 
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
-theorem certificate : CommitGolf.Certificate submission 68096 607075918 88823 := by
-  let leaves := RV64.PackedLeaves.executableLeaves
-  let meaning := RV64.PackedLeaves.executableMeaning
-  let opening := PackedCertificate.packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)
-  have privacy := Sampling.scheme_hiding_of_chain submission.scheme Sampling.mixedTranscriptBuilder opening.refines
-  exact PackedCertificate.packed_certificate leaves meaning
-    (Packed.Checker.executable_checker_facts Sampling.pinned_replay_bound) privacy
+/-- Quartet: commit, opening and hiding from `QuartetAssembly`; the four check-program facts
+(termination, query budget, binding through `Quartet.quartet_scheme_binding`, honest acceptance)
+from the variant-B checker proof. -/
+theorem certificate : CommitGolf.Certificate submission 72192 541679900 93945 :=
+  QuartetAssembly.quartet_certificate (Packed.Checker.executable_checker_facts Sampling.pinned_replay_bound)
 
 end CommitGolf.Challenge

@@ -216,14 +216,9 @@ private theorem joined_parent_path {rows : List PublicRow} {node h leaf : Nat}
     {leafDigest childDigest sibling parent : BitVec 256}
     (child : ProjectedPath rows leaf h leafDigest childDigest)
     (branch : leaf/2^h = node)
-    (bounded : node < 512)
     (recorded : PublicRow.compression (pathPair node childDigest sibling) parent ∈ rows) :
     ProjectedPath rows leaf (h+1) leafDigest (padLow parent) := by
-  have projected : projectMixed (node/2) parent = padLow parent :=
-    projectMixed_projected _ _ (by omega)
-  have edge : ProjectedPath rows node 1 childDigest (padLow parent) := .step recorded (by
-    rw [projected]
-    exact .done (node/2) (padLow parent))
+  have edge : ProjectedPath rows node 1 childDigest (padLow parent) := .step recorded (.done (node/2) (padLow parent))
   exact child.append (by simpa only [branch] using edge)
 
 private theorem child_scope (leaf node height : Nat) (inside : leaf/2^(height+1) = node) :
@@ -355,15 +350,13 @@ theorem execute_cap_subtree (codec : FrontierKernel) (oracle : Oracle) (groups :
                 (Or.inl (by omega : 2*node < 2*node+1))
               rw [initial, ← acrossDigest, ← still] at recorded
               rw [parent.digest]
-              apply joined_parent_path recorded leftLeaf (Opening.cap_span_node _ _ leftSpan).2
-                (sibling := capRootAt right.state (2*node+1))
+              apply joined_parent_path recorded leftLeaf (sibling := capRootAt right.state (2*node+1))
               simpa [pathPair, show (2*node)%2 = 0 by omega] using row
             · have recorded := (right.authentic rightDone leaf group low high rightLeaf).mono rhs
               have beforeRight := leftFrame.join frameAcross (Nat.le_refl _) (Nat.le_refl _)
               rw [cap_retained_digest beforeRight leaf high (Or.inr ⟨group,low⟩)] at recorded
               rw [parent.digest]
-              apply joined_parent_path recorded rightLeaf (Opening.cap_span_node _ _ rightSpan).2
-                (sibling := capRootAt right.state (2*node))
+              apply joined_parent_path recorded rightLeaf (sibling := capRootAt right.state (2*node))
               simpa [pathPair, show (2*node+1)%2 ≠ 0 by omega] using row
           · intro _ heap model contents
             have leftIn (leaf : Nat) (under : leaf/2^height = 2*node) : leaf/2^(height+1) = node := by

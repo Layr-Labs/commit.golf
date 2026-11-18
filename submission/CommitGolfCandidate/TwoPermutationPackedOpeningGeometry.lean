@@ -36,7 +36,7 @@ theorem all_nonce_copies_fit (index : Index) (ordinal : Nat) (inside : ordinal <
 private theorem sibling_inside_record (level : Nat) (inside : level < 16) :
     siblingOffset level+siblingWidth level ≤ recordBytes := by
   unfold siblingOffset siblingWidth recordBytes
-  split_ifs <;> omega
+  split <;> omega
 
 theorem all_sibling_copies_fit (index : Index) (ordinal level : Nat)
     (inside : ordinal < LENGTH) (valid : level < 16) :
