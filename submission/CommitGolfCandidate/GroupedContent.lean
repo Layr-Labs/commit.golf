@@ -51,9 +51,9 @@ theorem plan_meaning (o : Oracle) (v : View) (i : Nat) (inputReg : v.regs .x10=w
 theorem coordinate_first (i : Index) : firstLeaf (coord i).1=i.val-rank i.val := by
   unfold firstLeaf coord rank
   dsimp only
-  have small : i.val%2048/11<187 := by omega
-  rw [show (187*(i.val/2048)+i.val%2048/11)/187=i.val/2048 by omega,
-    show (187*(i.val/2048)+i.val%2048/11)%187=i.val%2048/11 by omega]
+  have small : i.val%4096/11<373 := by omega
+  rw [show (373*(i.val/4096)+i.val%4096/11)/373=i.val/4096 by omega,
+    show (373*(i.val/4096)+i.val%4096/11)%373=i.val%4096/11 by omega]
   omega
 
 theorem reply_pack (v : BitVec 1600) : packBuffer (replyWords v)=v := by

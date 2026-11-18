@@ -103,7 +103,7 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     (s : MachineState) (n j fuel : Nat) (r : Ready td p key s j) (bound : j+n≤p.card) :
     execute openingImage (passSteps p n j+fuel) s true=(do
       let t ← passTrace p n j s;let z ← execute openingImage fuel t true
-      return z.charge (passSteps p n j+10*n) n) := by
+      return z.charge (passSteps p n j+13*n) n) := by
   induction n generalizing j s with
   | zero => simp [passSteps,passTrace,Execution.charge]
   | succ n ih =>

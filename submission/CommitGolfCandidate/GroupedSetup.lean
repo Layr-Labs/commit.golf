@@ -63,13 +63,13 @@ theorem qStart_run (s : MachineState) (pc : s.pc=wordPC 45591) (fuel : Nat) :
   · interval_cases i <;> rfl
 
 def upStartPrefix (s : MachineState) (i : Nat) := (upperSetupOps.take i).foldl execInstrBr s
-theorem upStart_run (s : MachineState) (pc : s.pc=wordPC 70173) (fuel : Nat) :
-    execute image (5+fuel) s true = (do
-      let e ← execute image fuel (upStartPrefix s 6) true; return e.charge 5 0) := by
+theorem upStart_run (s : MachineState) (pc : s.pc=wordPC 70172) (fuel : Nat) :
+    execute image (6+fuel) s true = (do
+      let e ← execute image fuel (upStartPrefix s 6) true; return e.charge 6 0) := by
   apply CommitGolfCandidate.execute_unit_steps (states := upStartPrefix s)
   intro i hi
   refine ⟨.base ((upperSetupOps[i]?).getD .EBREAK),?_,?_,?_⟩
-  · have here : (upStartPrefix s i).pc=wordPC (70173+i) := by
+  · have here : (upStartPrefix s i).pc=wordPC (70172+i) := by
       interval_cases i <;> simp only [upStartPrefix,upperSetupOps,List.drop,List.take,List.foldl,execInstrBr,MachineState.setPC,pc] <;> rfl
     have cell := fetch_upperSetup (upStartPrefix s i) ⟨0+i,by omega⟩ (by simpa only [Nat.zero_add,Nat.add_assoc] using here)
     interval_cases i <;> exact cell

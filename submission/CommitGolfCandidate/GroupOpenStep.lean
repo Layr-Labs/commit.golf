@@ -27,19 +27,18 @@ structure Registers (s : MachineState) (ord left : Nat) : Prop where
   base : s.getReg .x26=4096
   divReg : s.getReg .x29=11
 
-private theorem masked (i : Index) : (BitVec.ofNat 64 i.val &&& signExtend12 2047)=BitVec.ofNat 64 (i.val%2048) := by
+private theorem masked (i : Index) : rv64_remu (BitVec.ofNat 64 i.val) 4096#64=BitVec.ofNat 64 (i.val%4096) := by
+  unfold rv64_remu
   apply BitVec.eq_of_toNat_eq
   have h : i.val<16777216:=i.isLt
-  rw [BitVec.toNat_and,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
-  change i.val &&& (2^11-1)=(i.val%2048)%2^64
-  rw [Nat.and_two_pow_sub_one_eq_mod,Nat.mod_eq_of_lt (show i.val%2048<2^64 by omega)]
+  simp [BitVec.toNat_umod,BitVec.toNat_ofNat] <;> omega
 
-theorem decoded_rank (i : Index) : rv64_remu (BitVec.ofNat 64 (i.val%2048)) 11=BitVec.ofNat 64 (rank i.val) := by
+theorem decoded_rank (i : Index) : rv64_remu (BitVec.ofNat 64 (i.val%4096)) 11=BitVec.ofNat 64 (rank i.val) := by
   unfold rv64_remu rank
   change BitVec.ofNat 64 _ % 11#64=_
   apply BitVec.eq_of_toNat_eq
-  simp [BitVec.toNat_umod,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (show i.val%2048<2^64 by omega),
-    Nat.mod_eq_of_lt (show i.val%2048%11<2^64 by omega)] <;> omega
+  simp [BitVec.toNat_umod,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (show i.val%4096<2^64 by omega),
+    Nat.mod_eq_of_lt (show i.val%4096%11<2^64 by omega)] <;> omega
 
 theorem counter_address (i : Index) :
     ((BitVec.ofNat 64 i.val - BitVec.ofNat 64 (rank i.val)) <<< (8 : Nat))+4096 = ctrAt i := by
@@ -86,7 +85,7 @@ private theorem room_input (i : Index) (s : MachineState) (ord left : Nat) (r : 
 
 theorem pre_run (i : Index) (s : MachineState) (ord left fuel : Nat) (r : Input s i ord left) :
     execute openingImage (7+fuel) s true =
-      (do let z ← execute openingImage fuel (beforeCall s) true; return z.charge 10 0) :=
+      (do let z ← execute openingImage fuel (beforeCall s) true; return z.charge 13 0) :=
   walk_rows_run s preRows (room_input i s ord left r) pre_row_fetch fuel true
 
 theorem before_regs (s : MachineState) (i : Index) (ord left : Nat) (r : Input s i ord left) :
@@ -110,9 +109,9 @@ theorem before_regs (s : MachineState) (i : Index) (ord left : Nat) (r : Input s
     (simple _ (by decide) (by decide) (by decide)).trans r.divReg⟩,?_,?_,?_,?_⟩
   all_goals simp [beforeCall,walkRows,preRows,execInstrBr,r.pc,r.index,r.input,r.divReg,r.base,r.loaded,
     masked,decoded_rank,counter_address,address,show signExtend12 0=0#64 by decide,MachineState.getMem_setPC,MachineState.getMem_setReg]
-  all_goals simp only [show signExtend12 0#12=0#64 by decide,BitVec.add_zero,r.loaded,show signExtend12 2047#12=2047#64 by decide]
-  all_goals simp only [show BitVec.ofNat 64 i.val &&& 2047#64=BitVec.ofNat 64 (i.val%2048) from masked i,
-    show rv64_remu (BitVec.ofNat 64 (i.val%2048)) 11#64=BitVec.ofNat 64 (rank i.val) from decoded_rank i,
+  all_goals simp only [show signExtend12 0#12=0#64 by decide,BitVec.add_zero,r.loaded]
+  all_goals simp only [show rv64_remu (BitVec.ofNat 64 i.val) 4096#64=BitVec.ofNat 64 (i.val%4096) from masked i,
+    show rv64_remu (BitVec.ofNat 64 (i.val%4096)) 11#64=BitVec.ofNat 64 (rank i.val) from decoded_rank i,
     show ((BitVec.ofNat 64 i.val-BitVec.ofNat 64 (rank i.val)) <<< (8:Nat))+4096#64=ctrAt i from counter_address i]
 
 end TwoPermutationPrototype.GroupedOpening

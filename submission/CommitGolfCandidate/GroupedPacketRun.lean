@@ -42,20 +42,20 @@ theorem ops_pc (ops : List Action) (s t : MachineState) (hit : t∈support (runO
     rw [BitVec.ofNat_add,show BitVec.ofNat 64 (4*1)=4#64 from rfl,BitVec.add_comm (BitVec.ofNat 64 (4*rest.length)),BitVec.add_assoc];rfl
 
 theorem buffer_next (i : Nat) (more : rank (i+1)≠0) : groupBuffer (i+1)=groupBuffer i := by
-  have h63 : i%2048≠2047 := by
+  have h63 : i%4096≠4095 := by
     intro h;apply more
-    unfold rank;rw [show (i+1)%2048=0 by omega]
-  have rel : (i+1)%2048=i%2048+1 := by omega
+    unfold rank;rw [show (i+1)%4096=0 by omega]
+  have rel : (i+1)%4096=i%4096+1 := by omega
   unfold rank at more
   rw [rel] at more
-  have rk : (i%2048+1)%11=i%2048%11+1 := by omega
+  have rk : (i%4096+1)%11=i%4096%11+1 := by omega
   unfold groupBuffer rank;rw [rel,rk];simp
 
 theorem anchor_next (i : Nat) (more : pairPos (i+1)≠0) : saltAnchor (i+1)=saltAnchor i := by
-  have h : i%2048≠2047 := by intro h;apply more;unfold pairPos;rw [show (i+1)%2048=0 by omega]
-  have rel : (i+1)%2048=i%2048+1 := by omega
+  have h : i%4096≠4095 := by intro h;apply more;unfold pairPos;rw [show (i+1)%4096=0 by omega]
+  have rel : (i+1)%4096=i%4096+1 := by omega
   unfold pairPos at more;rw [rel] at more
-  have rk : (i%2048+1)%22=i%2048%22+1 := by omega
+  have rk : (i%4096+1)%22=i%4096%22+1 := by omega
   unfold saltAnchor pairBuffer pairPos;rw [rel,rk];simp
 
 theorem cursor_next (i : Nat) :

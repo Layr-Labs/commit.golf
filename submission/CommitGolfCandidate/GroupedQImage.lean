@@ -22,7 +22,7 @@ theorem fetch_quad (state : MachineState) (slot : Fin 8192) (part : Fin 3)
   exact fetch_decoded state _ (by have := slot.isLt;have := part.isLt;omega) atWord _ (quad_words slot part)
 
 def quadSetupOps : List Instr := [.ADDI .x10 .x21 0,.SRLI .x7 .x19 2,.ADD .x12 .x9 .x7]
-def upperSetupOps : List Instr := [.ADDI .x10 .x12 4032,.SUB .x12 .x12 .x7,.ADDI .x12 .x12 4064,.ADDI .x11 .x0 64,.ADDI .x13 .x0 0]
+def upperSetupOps : List Instr := [.ADDI .x10 .x12 4032,.SRLI .x7 .x19 2,.SUB .x12 .x12 .x7,.ADDI .x12 .x12 4064,.ADDI .x11 .x0 64,.ADDI .x13 .x0 0]
 
 private theorem quadSetup_decoded : ∀ i : Fin 3, Manifest.decodeBase (codeWord (45591+i.val)) =
     some ((quadSetupOps[i.val]?).getD .EBREAK) := by decide +kernel
@@ -30,14 +30,14 @@ theorem fetch_quadSetup (s : MachineState) (i : Fin 3) (pc : s.pc=wordPC (45591+
     fetch image s=some (.base ((quadSetupOps[i.val]?).getD .EBREAK)) :=
   fetch_decoded s _ (by have := i.isLt;omega) pc _ (quadSetup_decoded i)
 
-private theorem upperSetup_decoded : ∀ i : Fin 5, Manifest.decodeBase (codeWord (70173+i.val)) =
+private theorem upperSetup_decoded : ∀ i : Fin 6, Manifest.decodeBase (codeWord (70172+i.val)) =
     some ((upperSetupOps[i.val]?).getD .EBREAK) := by decide +kernel
-theorem fetch_upperSetup (s : MachineState) (i : Fin 5) (pc : s.pc=wordPC (70173+i.val)) :
+theorem fetch_upperSetup (s : MachineState) (i : Fin 6) (pc : s.pc=wordPC (70172+i.val)) :
     fetch image s=some (.base ((upperSetupOps[i.val]?).getD .EBREAK)) :=
   fetch_decoded s _ (by have := i.isLt;omega) pc _ (upperSetup_decoded i)
 
 theorem fetch_quad_branch (s : MachineState) (pc : s.pc=wordPC 70170) :
-    fetch image s=some (.base (.BEQ .x10 .x24 12)) := fetch_decoded s 70170 (by decide) pc _ (by decide +kernel)
+    fetch image s=some (.base (.BEQ .x10 .x24 8)) := fetch_decoded s 70170 (by decide) pc _ (by decide +kernel)
 
 theorem fetch_quad_jump (s : MachineState) (pc : s.pc=wordPC 70171) :
     fetch image s=some (.base (.JAL .x0 1998844)) := fetch_decoded s 70171 (by decide) pc _ (by decide +kernel)

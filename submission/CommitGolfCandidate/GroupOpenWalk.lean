@@ -43,7 +43,7 @@ theorem ord_iff (s : MachineState) (op : Instr) (yes : plain op=true) :
     ordinaryStep s (.base op)=some (execInstrBr s op) ↔ memoryArgumentsValid s op=true := by
   cases op <;> simp_all [plain,ordinaryStep] <;> split <;> simp_all
 
-def preRows : List Row := [(739,.LD .x6 .x14 0),(740,.ANDI .x28 .x6 2047),(741,.REMU .x28 .x28 .x29),
+def preRows : List Row := [(739,.LD .x6 .x14 0),(740,.REMU .x28 .x6 .x26),(741,.REMU .x28 .x28 .x29),
   (742,.SUB .x7 .x6 .x28),(743,.SLLI .x7 .x7 8),(744,.ADD .x7 .x7 .x26),(745,.SD .x10 .x7 0)]
 
 def postRows (direct last : Bool) : List Row :=
