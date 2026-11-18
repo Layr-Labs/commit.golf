@@ -36,7 +36,7 @@ theorem tv_le_of_events {α : Type} (mx my : ProbComp α) (ε : ℝ) (nonneg : 0
 
 theorem iid_nonce_marginal (f : (Index → Nonce) → ℝ) :
     mean f = mean (fun p : Fin blocks → Block => f (nonceAt p)) := by
-  have prod := mean_prod (fun r (_ : Fin 512 → Nonce) => f r)
+  have prod := mean_prod (fun r (_ : Fin 6 → Nonce) => f r)
   simp only [mean, avg_const Finset.univ_nonempty] at prod
   exact prod.symm.trans (mean_equiv projectTape (fun z => f z.1)).symm
 

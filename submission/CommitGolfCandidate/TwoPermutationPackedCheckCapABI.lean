@@ -7,7 +7,7 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.ShortTr
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.Checker (RecordInputFrame capRootAt checker_positions_bound record_input_root
   checker_honest_cap_nodes record_groups_length)
-open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
+open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
 open TwoPermutationPrototype.PackedHonest (honestHeap honest_proof_length honest_frontier_digest honest_projected_node)
 set_option maxHeartbeats 2200000
 set_option maxRecDepth 16384
@@ -91,25 +91,24 @@ theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : 
     have frame := record_proof_frame honest input.positions.card (30*i) 30 state reframed (by rfl) limit
     have raw := honest_frontier_digest oracle message input.positions salts i present
     rw [PackedChecker.initial_state] at raw
-    have addr : PackedChecker.submission.layout.proof+(498*input.positions.card+30*i) =
-        pointer+30*i := by change 10334769248+(498*input.positions.card+30*i) = _; unfold pointer checkProofByte; omega
+    have addr : PackedChecker.submission.layout.proof+(534*input.positions.card+30*i) =
+        pointer+30*i := by change 11676946528+(534*input.positions.card+30*i) = _; unfold pointer checkProofByte; omega
     rw [addr] at raw
     have index := List.getElem_of_eq nodes present
     rw [index] at raw
     rw [frame,raw]
     have member := List.getElem_mem (l := capFrontierNodes groups 1 8) bounded
     obtain ⟨positiveNode, capNode⟩ := frontier_node_bounds groups 1 8 Opening.cap_span_root _ member
-    have length : 512 ≤ LENGTH := by decide
-    exact honest_projected_node _ _ _ positiveNode (by omega)
+    exact honest_projected_node _ _ _ _ positiveNode (by omega)
   · have root := record_input_root input input.positions.card state framed
     exact root.trans (congrArg CheckInput.commitment canonical)
   · rw [cursor.proofEnd]
     have proofLen := congrArg (fun value : CheckInput => value.proof.length) canonical
-    change BitVec.ofNat 64 (10334769248+input.proof.length) =
+    change BitVec.ofNat 64 (11676946528+input.proof.length) =
       BitVec.ofNat 64 (pointer+30*(capFrontierNodes groups 1 8).length)
     rw [proofLen,honest_proof_length]
     apply congrArg (BitVec.ofNat 64)
-    dsimp only [pointer,checkProofByte,PackedOpening.proofLength,PackedOpening.recordBytes]
+    dsimp only [pointer,checkProofByte,QuartetOpening.proofLength]
     rw [nodes]
     omega
 
@@ -130,6 +129,11 @@ theorem checker_cap_facts (oracle : Oracle) (input : CheckInput) (positive : inp
   · intro message salts canonical
     obtain ⟨data, root, ending⟩ := checker_honest_cap_data oracle input state rows table framed cursor
       positive message salts canonical
-    exact cap.honest (honestHeap oracle message salts) (canonical_cap_heap oracle (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)) data root ending
+    have heapCorrect : CapHeapCorrect oracle (honestHeap oracle message salts) := by
+      intro node positiveNode below
+      unfold PackedHonest.honestHeap
+      rw [QuartetCheck.upper_heap_parent _ _ _ node positiveNode (by omega)]
+      rfl
+    exact cap.honest (honestHeap oracle message salts) heapCorrect data root ending
 
 end TwoPermutationPrototype.Packed.Checker

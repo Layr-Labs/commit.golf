@@ -4,7 +4,7 @@ namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.Checker (GroupAccepted RecordInputFrame honestIndex)
-open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
+open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1600000
 
@@ -58,8 +58,8 @@ theorem collect_records_observation (record : Oracle → Nat → Index → Machi
     let collected := collectRecords record oracle input left ordinal state
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel collected.state false))
     checkEvaluation oracle (recordRows (execute packedImage (collected.steps+fuel) state false)) =
-      ((tail.1.1.charge collected.cycles (18*collected.records), collected.rows++tail.1.2),
-        18*collected.records+tail.2) ∧
+      ((tail.1.1.charge collected.cycles (17*collected.records), collected.rows++tail.1.2),
+        17*collected.records+tail.2) ∧
       CollectionFacts oracle input left collected rows := by
   induction left generalizing ordinal state rows with
   | zero =>
