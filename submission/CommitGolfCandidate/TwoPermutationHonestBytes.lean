@@ -99,19 +99,19 @@ theorem honest_input_empty (oracle : Oracle) (message : Message) (positions : Po
   simp [Opening.openingLength, Opening.openingNodes, empty]
 
 theorem honest_input_admitted (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape) :
-    (honestCheckInput oracle message positions salts).proof.length ≤ QAssembly.submission.sizes.proof := by
+    (honestCheckInput oracle message positions salts).proof.length ≤ Assembly.submission.sizes.proof := by
   rw [honest_proof_length]
-  exact ((Opening.opening_length_bound positions).trans Assembly.opening_abi.capacity).trans (by decide)
+  exact (Opening.opening_length_bound positions).trans Assembly.opening_abi.capacity
 
 theorem honest_input_root (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape) :
-    readBuffer (QAssembly.submission.initialState .check (honestCheckInput oracle message positions salts))
-      QAssembly.submission.layout.commitment 32 = honestHeap oracle message salts 1 :=
+    readBuffer (Assembly.submission.initialState .check (honestCheckInput oracle message positions salts))
+      Assembly.submission.layout.commitment 32 = honestHeap oracle message salts 1 :=
   check_input_commitment (honestCheckInput oracle message positions salts)
 
 theorem honest_input_index (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape)
     (ordinal : Nat) (present : ordinal < positions.card) :
-    (QAssembly.submission.initialState .check (honestCheckInput oracle message positions salts)).getMem
-      (BitVec.ofNat 64 (QAssembly.submission.layout.indices+8*ordinal)) =
+    (Assembly.submission.initialState .check (honestCheckInput oracle message positions salts)).getMem
+      (BitVec.ofNat 64 (Assembly.submission.layout.indices+8*ordinal)) =
       BitVec.ofNat 64 (honestIndex positions ordinal present).val.val := by
   let input := honestCheckInput oracle message positions salts
   have ordered := check_input_value_index input ordinal present
@@ -120,8 +120,8 @@ theorem honest_input_index (oracle : Oracle) (message : Message) (positions : Po
 
 theorem honest_input_value (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape)
     (ordinal : Nat) (present : ordinal < positions.card) :
-    readBuffer (QAssembly.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (QAssembly.submission.layout.values+256*ordinal) 256 = message (honestIndex positions ordinal present) :=
+    readBuffer (Assembly.submission.initialState .check (honestCheckInput oracle message positions salts))
+      (Assembly.submission.layout.values+256*ordinal) 256 = message (honestIndex positions ordinal present) :=
   check_input_value (honestCheckInput oracle message positions salts) ordinal present
 
 private theorem honest_record_byte (oracle : Oracle) (message : Message) (positions : Positions)
@@ -172,11 +172,11 @@ private theorem sibling_byte (heap : Nat → Digest) (index : Index) (salt : Bit
 
 theorem honest_input_nonce (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape)
     (ordinal : Nat) (present : ordinal < positions.card) :
-    readBuffer (QAssembly.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (QAssembly.submission.layout.proof+528*ordinal) 16 = salts (honestIndex positions ordinal present) := by
+    readBuffer (Assembly.submission.initialState .check (honestCheckInput oracle message positions salts))
+      (Assembly.submission.layout.proof+528*ordinal) 16 = salts (honestIndex positions ordinal present) := by
   let input := honestCheckInput oracle message positions salts
-  have decoded := read_serialized_slice (QAssembly.submission.initialState .check input)
-    (salts (honestIndex positions ordinal present)) (QAssembly.submission.layout.proof+528*ordinal) 0 16 (by
+  have decoded := read_serialized_slice (Assembly.submission.initialState .check input)
+    (salts (honestIndex positions ordinal present)) (Assembly.submission.layout.proof+528*ordinal) 0 16 (by
       intro offset inside
       have bounded : 528*ordinal+offset < input.proof.length := by
         rw [honest_proof_length]
@@ -190,20 +190,20 @@ theorem honest_input_nonce (oracle : Oracle) (message : Message) (positions : Po
 
 theorem honest_input_sibling (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape)
     (ordinal level : Nat) (present : ordinal < positions.card) (levelBound : level < 16) :
-    readBuffer (QAssembly.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (QAssembly.submission.layout.proof+(528*ordinal+16+32*level)) 32 =
+    readBuffer (Assembly.submission.initialState .check (honestCheckInput oracle message positions salts))
+      (Assembly.submission.layout.proof+(528*ordinal+16+32*level)) 32 =
       honestHeap oracle message salts (((LENGTH+(honestIndex positions ordinal present).val.val)/2^level) ^^^ 1) := by
   let input := honestCheckInput oracle message positions salts
   let digest := honestHeap oracle message salts (((LENGTH+(honestIndex positions ordinal present).val.val)/2^level) ^^^ 1)
-  have decoded := read_serialized_slice (QAssembly.submission.initialState .check input) digest
-    (QAssembly.submission.layout.proof+(528*ordinal+16+32*level)) 0 32 (by
+  have decoded := read_serialized_slice (Assembly.submission.initialState .check input) digest
+    (Assembly.submission.layout.proof+(528*ordinal+16+32*level)) 0 32 (by
       intro offset inside
       have bounded : 528*ordinal+(16+32*level+offset) < input.proof.length := by
         rw [honest_proof_length]
         unfold Opening.openingLength
         omega
-      rw [show QAssembly.submission.layout.proof+(528*ordinal+16+32*level)+offset =
-        QAssembly.submission.layout.proof+(528*ordinal+(16+32*level+offset)) by omega,
+      rw [show Assembly.submission.layout.proof+(528*ordinal+16+32*level)+offset =
+        Assembly.submission.layout.proof+(528*ordinal+(16+32*level+offset)) by omega,
         check_input_proof_byte input (honest_input_admitted oracle message positions salts) _ bounded]
       have byte := honest_record_byte oracle message positions salts ordinal (16+32*level+offset) present (by omega)
       rw [sibling_byte _ _ _ level offset levelBound inside, List.getElem?_eq_getElem bounded, Option.some_inj] at byte
@@ -212,13 +212,13 @@ theorem honest_input_sibling (oracle : Oracle) (message : Message) (positions : 
 
 theorem honest_input_frontier (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape)
     (ordinal : Nat) (present : ordinal < (Opening.openingNodes positions).length) :
-    readBuffer (QAssembly.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (QAssembly.submission.layout.proof+(528*positions.card+32*ordinal)) 32 =
+    readBuffer (Assembly.submission.initialState .check (honestCheckInput oracle message positions salts))
+      (Assembly.submission.layout.proof+(528*positions.card+32*ordinal)) 32 =
       honestHeap oracle message salts (Opening.openingNodes positions)[ordinal] := by
   let input := honestCheckInput oracle message positions salts
   let digest := honestHeap oracle message salts (Opening.openingNodes positions)[ordinal]
-  have decoded := read_serialized_slice (QAssembly.submission.initialState .check input) digest
-    (QAssembly.submission.layout.proof+(528*positions.card+32*ordinal)) 0 32 (by
+  have decoded := read_serialized_slice (Assembly.submission.initialState .check input) digest
+    (Assembly.submission.layout.proof+(528*positions.card+32*ordinal)) 0 32 (by
       intro offset inside
       have bounded : 528*positions.card+32*ordinal+offset < input.proof.length := by
         rw [honest_proof_length]

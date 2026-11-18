@@ -32,6 +32,20 @@ theorem execute_record_setup (state : MachineState) (pc : state.pc = 0x1058) (fu
   · interval_cases i <;> rfl
 
 
+theorem execute_lower_setup (state : MachineState) (pc : state.pc = 0x10e8) (fuel : Nat) :
+    execute packedImage (5+fuel) state false =
+      (do let result ← execute packedImage fuel (beginLower state 5) false
+          return result.charge 5 0) := by
+  apply execute_unit_steps (states := beginLower state)
+  intro i bounded
+  refine ⟨.base (beginLowerCode[i]?.getD .EBREAK), ?_, ?_, ?_⟩
+  · apply fetch_at _ (58+i) _ (by omega)
+    · interval_cases i <;> simp [beginLower, beginLowerCode, execInstrBr, MachineState.setPC, pc]
+    · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+
+
 def staged (state : MachineState) : MachineState := copyField (fieldCode .nonce) (beginRecord state 6)
 
 theorem stage_ready (input : CheckInput) (ordinal : Nat) (h : ordinal < input.positions.card)

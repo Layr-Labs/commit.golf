@@ -3,8 +3,7 @@ import CommitGolf.Parameters
 import Mathlib.Data.Fintype.EquivFin
 import Mathlib.Data.FinEnum
 
-/-! (Adapted from submission c28dd9ca: 1,525,202 replies, 6 spare salts.)
-Eleven 128-bit nonces and a hidden 192-bit suffix fill one permutation reply.
+/-! Eleven 128-bit nonces and a hidden 192-bit suffix fill one permutation reply.
 Projection onto the first LENGTH nonce coordinates drops the unroll padding. -/
 namespace CommitGolfCandidate.Permutation.NonceChain
 open CommitGolf Finset
@@ -15,7 +14,7 @@ abbrev Word1600 := BitVec 1600
 abbrev Key := BitVec 192
 abbrev Nonce := BitVec 128
 abbrev Block := Fin 11 → Nonce
-abbrev blocks : Nat := 1525202
+abbrev blocks : Nat := 1525248
 def blockParts (w : Word1600) : Block × Key :=
   (fun j => w.extractLsb' (128*j.val) 128, w.extractLsb' 1408 192)
 
@@ -60,8 +59,8 @@ def nonceAt (p : Fin blocks → Block) (i : Fin LENGTH) : Nonce :=
 noncomputable def actualNonces (π : Equiv.Perm Word1600) (k : Key) :=
   nonceAt (fun i => (blockEquiv (orbit π (seedState k) (i.val+1))).1)
 
-/-- The rectangular tape is in bijection with the used array and its 6 spare coordinates. -/
-def projectTape : (Fin blocks → Block) ≃ (Fin LENGTH → Nonce) × (Fin 6 → Nonce) where
+/-- The rectangular tape is in bijection with the used array and its 512 spare coordinates. -/
+def projectTape : (Fin blocks → Block) ≃ (Fin LENGTH → Nonce) × (Fin 512 → Nonce) where
   toFun p := (nonceAt p, fun i =>
     p ⟨(LENGTH+i.val)/11,by have := i.isLt; dsimp [blocks,LENGTH,LOG_LENGTH];omega⟩
       ⟨(LENGTH+i.val)%11,Nat.mod_lt _ (by decide)⟩)
