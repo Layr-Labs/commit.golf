@@ -5,7 +5,8 @@ import CommitGolfCandidate.TwoPermutationRoot
 /-!
 # The decoded commit tail (odd-quartet image; from the generated cfad3d49 file, re-indexed by stack/oqc1/tools/gen_upper.py)
 
-Words 45662..45672: level-21 setup; 45673..94824: level-21 loop (16384 three-word parents per pass, 128 passes); 94825..94826: its latch;
+Words 45662..45665: the last four post-body words (run and proved in `GroupedSetup`); 45666..45672: level-21 setup (the
+short form of ffa6a198: `x10`, `x7` from `x24 = Q + 2^32`); 45673..94824: level-21 loop (16384 three-word parents per pass, 128 passes); 94825..94826: its latch;
 94827..94833: heap setup and band glue; 94834..160369: band A (16384 record parents per pass, 120 passes); 160370..160371: its latch;
 160372: `addi x7,x9,32`; 160373..212800: band B (8738 238-bit parents per pass, 15 passes); 212801..212802: its latch;
 212803..212806: the root parent; 212807..212817: root copy and halt.
@@ -19,8 +20,8 @@ set_option maxRecDepth 65536
 set_option maxHeartbeats 6000000
 
 /-- First word of the tail (the level-21 setup). -/
-def tailStart : Nat := 45662
-def l21SetupLen : Nat := 11
+def tailStart : Nat := 45666
+def l21SetupLen : Nat := 7
 def l21Span : Nat := 16384
 def l21Passes : Nat := 128
 def bandASpan : Nat := 16384
@@ -36,7 +37,7 @@ def rootParentPC : Word := 855308
 def rootPC : Word := 855324
 
 def l21SetupOps : List Instr :=
-  [.ADDI .x11 .x0 64,.ADDI .x13 .x0 0,.ADDI .x10 .x21 136,.ADDI .x7 .x10 2048,.ADDI .x31 .x0 1,.SLLI .x31 .x31 32,.ADD .x10 .x10 .x31,.ADDI .x10 .x10 2048,.LUI .x12 32768,.ADD .x12 .x12 .x9,.ADDI .x12 .x12 4064]
+  [.ADDI .x11 .x0 64,.ADDI .x13 .x0 0,.ADDI .x7 .x21 2184,.ADDI .x10 .x24 2184,.LUI .x12 32768,.ADD .x12 .x12 .x9,.ADDI .x12 .x12 4064]
 def heapSetupOps : List Instr :=
   [.SUB .x10 .x12 .x9,.ADD .x10 .x10 .x12,.LUI .x7 1024,.ADD .x7 .x7 .x9,.ADDI .x7 .x7 4064,.LUI .x6 4,.ADDI .x6 .x6 4095]
 
@@ -46,7 +47,7 @@ private def bandAWord (phase : Nat) : BitVec 32 :=
   if phase%4=0 then 0x00000073 else if phase%4=1 then 0x00061f23 else if phase%4=2 then 0xfc050513 else 0xfe060613
 private def bandBWord (phase : Nat) : BitVec 32 :=
   if phase%6=0 then 0x00000073 else if phase%6=1 then 0x01c65f83 else if phase%6=2 then 0x006fffb3 else if phase%6=3 then 0x01f62e23 else if phase%6=4 then 0xfc050513 else 0xfe060613
-private def lit0Words : List (BitVec 32) := [0x04000593,0x00000693,0x088a8513,0x80050393,0x00100f93,0x020f9f93,0x01f50533,0x80050513,0x08000637,0x00960633,0xfe060613]
+private def lit0Words : List (BitVec 32) := [0x020f9f93,0x41fc0ab3,0x20000fb7,0x41fa84b3,0x04000593,0x00000693,0x888a8393,0x888c0513,0x08000637,0x00960633,0xfe060613]
 private def lit1Words : List (BitVec 32) := [0x00750463,0xffdcf06f,0x40960533,0x00c50533,0x004003b7,0x009383b3,0xfe038393,0x00004337,0xfff30313]
 private def lit2Words : List (BitVec 32) := [0x00760463,0xffdbf06f,0x02048393]
 private def lit3Words : List (BitVec 32) := [0x00760463,0xccdcc06f,0x00000073,0x01c65f83,0x006fffb3,0x01f62e23,0x0204bf83,0x01f43023,0x0284bf83,0x01f43423,0x0304bf83,0x01f43823,0x0384bf83,0x01f43c23,0x00100293,0x00000513,0x00000073]
@@ -1102,7 +1103,7 @@ def bandBControl : BandControl packedWideCommitImage t238Kind bandBBase 8738 whe
   branch state pc := packed_index_fetch state 212801 pc (by decide) (by decide)
   jump state pc := packed_index_fetch state 212802 pc (by decide) (by decide)
 
-theorem fetch_l21_setup (s : MachineState) (i : Fin 11) (pc : s.pc=BitVec.ofNat 64 (4096+4*(45662+i.val))) :
+theorem fetch_l21_setup (s : MachineState) (i : Fin 7) (pc : s.pc=BitVec.ofNat 64 (4096+4*(45666+i.val))) :
     fetch packedWideCommitImage s=some (.base ((l21SetupOps[i.val]?).getD .EBREAK)) := by
   have hi := i.isLt
   rw [packed_index_fetch s _ pc (by omega) (by omega)]
@@ -1145,12 +1146,12 @@ def l21StartPrefix (s : MachineState) (i : Nat) := (l21SetupOps.take i).foldl ex
 def heapStartPrefix (s : MachineState) (i : Nat) := (heapSetupOps.take i).foldl execInstrBr s
 
 theorem l21Start_run (s : MachineState) (pc : s.pc=BitVec.ofNat 64 (4096+4*tailStart)) (fuel : Nat) :
-    execute packedWideCommitImage (11+fuel) s true = (do
-      let e ← execute packedWideCommitImage fuel (l21StartPrefix s l21SetupLen) true; return e.charge 11 0) := by
+    execute packedWideCommitImage (7+fuel) s true = (do
+      let e ← execute packedWideCommitImage fuel (l21StartPrefix s l21SetupLen) true; return e.charge 7 0) := by
   apply CommitGolfCandidate.execute_unit_steps (states := l21StartPrefix s)
   intro i hi
   refine ⟨.base ((l21SetupOps[i]?).getD .EBREAK),?_,?_,?_⟩
-  · have here : (l21StartPrefix s i).pc=BitVec.ofNat 64 (4096+4*(45662+i)) := by
+  · have here : (l21StartPrefix s i).pc=BitVec.ofNat 64 (4096+4*(45666+i)) := by
       interval_cases i <;> simp only [l21StartPrefix,l21SetupOps,List.take,List.foldl,execInstrBr,
         MachineState.setPC,pc,tailStart] <;> rfl
     have cell := fetch_l21_setup (l21StartPrefix s i) ⟨i,hi⟩ here

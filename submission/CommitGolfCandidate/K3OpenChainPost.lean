@@ -1,7 +1,8 @@
 import CommitGolfCandidate.K3OpenChainLink
 import CommitGolfCandidate.Counting
 
-/-! Opener chain block (rows 777..795), fixed oracle and memory views: `chain_fixed`. Owner: H (draft by S9-L2). -/
+/-! Opener chain block (rows 777..795 and the link groups at rows 4..14), fixed oracle and memory views:
+`chain_fixed`. Owner: H (draft by S9-L2; 4-unrolled links). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -19,14 +20,40 @@ attribute [local simp] chain_zero_reg
 theorem answer_forward (o : Oracle) (q : BitVec PERMUTATION_WIDTH) :
     o.answer (m:=Id) (.inr (.inl q))=o.permutation q := rfl
 
-theorem link_fixed (o : Oracle) : ∀ (c : Nat) (s : MachineState),
-    o.run (linkTrace c s)=pure (linkState o c s,c)
-  | 0,s => by rw [linkTrace,linkState_zero,oracle_run_pure]
-  | c+1,s => by
-    rw [linkTrace,oracle_run_public_bind]
+theorem linkGroupState_succ (o : Oracle) (q : Nat) (s : MachineState) :
+    linkGroupState o (q+1) s=linkGroupState o q (linkGroupStep o s) := Function.iterate_succ_apply _ _ _
+
+theorem restState_succ (o : Oracle) (r : Nat) (s : MachineState) :
+    restState o (r+1) s=restState o r (restStep o s) := Function.iterate_succ_apply _ _ _
+
+theorem group_fixed (o : Oracle) : ∀ (q : Nat) (s : MachineState),
+    o.run (linkGroupTrace q s)=pure (linkGroupState o q s,4*q)
+  | 0,s => by rw [linkGroupTrace,oracle_run_pure]; rfl
+  | q+1,s => by
+    rw [linkGroupTrace]
+    simp only [callTrace,bind_assoc,pure_bind]
+    rw [oracle_run_public_bind]
     simp only [answer_forward]
-    rw [link_fixed o c,linkState_succ]
-    simp only [pure_bind,linkStep,Nat.add_comm 1 c]
+    rw [oracle_run_public_bind]
+    simp only [answer_forward]
+    rw [oracle_run_public_bind]
+    simp only [answer_forward]
+    rw [oracle_run_public_bind]
+    simp only [answer_forward]
+    rw [group_fixed o q,linkGroupState_succ,show 4*(q+1)=1+(1+(1+(1+4*q))) by omega]
+    simp only [pure_bind]
+    rfl
+
+theorem rest_fixed (o : Oracle) : ∀ (r : Nat) (s : MachineState),
+    o.run (restTrace r s)=pure (restState o r s,r)
+  | 0,s => by rw [restTrace,oracle_run_pure]; rfl
+  | r+1,s => by
+    rw [restTrace]
+    simp only [callTrace,bind_assoc,pure_bind]
+    rw [oracle_run_public_bind]
+    simp only [answer_forward]
+    rw [rest_fixed o r,restState_succ]
+    simp only [pure_bind,Nat.add_comm 1 r]
     rfl
 
 theorem chain_fixed (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index) (e : ChainEntry h i)
@@ -39,7 +66,8 @@ theorem chain_fixed (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index)
   · simp only [if_pos zero,oracle_run_pure,pure_bind]
     rw [zero]
     rfl
-  · simp only [if_neg zero,oracle_run_bind,link_fixed,oracle_run_pure,pure_bind,Nat.add_zero]
+  · simp only [if_neg zero,oracle_run_bind,group_fixed,rest_fixed,oracle_run_pure,pure_bind,Nat.add_zero]
+    rw [show 1+chainLinks i=1+(4*(chainLinks i/4)+chainLinks i%4) by omega]
     rfl
 
 /-! ### Memory views -/
@@ -73,7 +101,7 @@ theorem before_view (h : MachineState) (i : Index) (e : ChainEntry h i) (w : Nat
   rw [chain_view_of_mem mem]
   exact memory_at_store (address:=128) (index:=w) (by decide) (by omega)
 
-/-- One `addi`, `beq` or `bne` row leaves memory unchanged (immediates kept abstract). -/
+/-- One `addi`, branch or `jal x0` row leaves memory unchanged (immediates kept abstract). -/
 theorem exec_mem_addi (s : MachineState) (rd rs : Reg) (imm : BitVec 12) :
     (execInstrBr s (.ADDI rd rs imm)).mem=s.mem :=
   (mem_of_set _ _).trans (mem_of_reg _ _ _)
@@ -88,18 +116,27 @@ theorem exec_mem_bne (s : MachineState) (a b : Reg) (off : BitVec 13) :
   show (if s.getReg a != s.getReg b then s.setPC _ else s.setPC _).mem=s.mem
   split <;> rfl
 
-/-- Two rows that each keep memory keep memory (rows kept abstract, so no immediate is reduced). -/
-theorem walk_two_mem (w : MachineState) (r q : Row) (hr : ∀ s, (execInstrBr s r.2).mem=s.mem)
-    (hq : ∀ s, (execInstrBr s q.2).mem=s.mem) : (walkRows w [r,q]).mem=w.mem :=
-  (hq _).trans (hr w)
+theorem exec_mem_blt (s : MachineState) (a b : Reg) (off : BitVec 13) :
+    (execInstrBr s (.BLT a b off)).mem=s.mem := by
+  show (if BitVec.slt (s.getReg a) (s.getReg b) then s.setPC _ else s.setPC _).mem=s.mem
+  split <;> rfl
 
-theorem link_rows_mem (w : MachineState) : (walkRows w chainLinkRows).mem=w.mem := by
-  apply walk_two_mem
-  · exact fun s => exec_mem_addi s _ _ _
-  · exact fun s => exec_mem_bne s _ _ _
+theorem exec_mem_jal (s : MachineState) (off : BitVec 21) : (execInstrBr s (.JAL .x0 off)).mem=s.mem := rfl
+
+theorem test_rows_mem (s : MachineState) : (walkRows s groupTestRows).mem=s.mem := by
+  rw [test_walk,exec_mem_blt,exec_mem_addi]
+
+theorem back_rows_mem (s : MachineState) : (walkRows s groupBackRows).mem=s.mem := by
+  rw [back_walk,exec_mem_jal]
+
+theorem out_rows_mem (s : MachineState) : (walkRows s groupOutRows).mem=s.mem := by
+  rw [out_walk,exec_mem_beq,exec_mem_addi,exec_mem_blt,exec_mem_addi]
+
+theorem rest_rows_mem (s : MachineState) : (walkRows s restRows).mem=s.mem := by
+  rw [rest_walk,exec_mem_bne,exec_mem_addi,exec_mem_jal]
 
 theorem enter_rows_mem (a : MachineState) : (walkRows a chainEnterRows).mem=a.mem := by
-  simp only [chainEnterRows,walkRows,List.foldl,exec_mem_addi,exec_mem_beq]
+  rw [enter_walk,exec_mem_jal,exec_mem_addi,exec_mem_beq]
 
 theorem skip_rows_mem (a : MachineState) : (walkRows a chainSkipRows).mem=a.mem := by
   simp only [chainSkipRows,walkRows,List.foldl,exec_mem_beq]

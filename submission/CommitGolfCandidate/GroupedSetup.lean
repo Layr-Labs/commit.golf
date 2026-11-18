@@ -192,26 +192,26 @@ theorem setup_run (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
   apply bind_congr;intro z;cases z;simp [Nat.add_assoc] <;> omega
 
 
-/-! ## The six words after the body (45,656..45,661)
+/-! ## The six words after the body (45,660..45,665; 45,656..45,659 are never executed)
 
 They rebuild the three values the upper stage reads: `x8` = commitment (`a0 - 56`), `x21` = `Q` (`s8 - 2^32`)
 and `x9` = trapdoor (`x21 - 2^29`). -/
 def tailPostOps : List Instr :=
   [.ADDI .x8 .x10 (-56),.ADDI .x31 .x0 1,.SLLI .x31 .x31 32,.SUB .x21 .x24 .x31,.LUI .x31 131072,.SUB .x9 .x21 .x31]
-private theorem tail_post_decoded : ∀ i : Fin 6, Manifest.decodeBase (codeWord (45656+i.val)) =
+private theorem tail_post_decoded : ∀ i : Fin 6, Manifest.decodeBase (codeWord (45660+i.val)) =
     some ((tailPostOps[i.val]?).getD .EBREAK) := by decide +kernel
-theorem fetch_tail_post (s : MachineState) (i : Fin 6) (pc : s.pc=wordPC (45656+i.val)) :
+theorem fetch_tail_post (s : MachineState) (i : Fin 6) (pc : s.pc=wordPC (45660+i.val)) :
     fetch image s=some (.base ((tailPostOps[i.val]?).getD .EBREAK)) :=
   fetch_decoded s _ (by have := i.isLt;omega) pc _ (tail_post_decoded i)
 
 def tailPostPrefix (s : MachineState) (i : Nat) := (tailPostOps.take i).foldl execInstrBr s
-theorem tail_post_run (s : MachineState) (pc : s.pc=wordPC 45656) (fuel : Nat) :
+theorem tail_post_run (s : MachineState) (pc : s.pc=wordPC 45660) (fuel : Nat) :
     execute image (6+fuel) s true = (do
       let e ← execute image fuel (tailPostPrefix s 6) true; return e.charge 6 0) := by
   apply CommitGolfCandidate.execute_unit_steps (states := tailPostPrefix s)
   intro i hi
   refine ⟨.base ((tailPostOps[i]?).getD .EBREAK),?_,?_,?_⟩
-  · have here : (tailPostPrefix s i).pc=wordPC (45656+i) := by
+  · have here : (tailPostPrefix s i).pc=wordPC (45660+i) := by
       interval_cases i <;> simp only [tailPostPrefix,tailPostOps,List.take,List.foldl,execInstrBr,MachineState.setPC,pc] <;> rfl
     have cell := fetch_tail_post (tailPostPrefix s i) ⟨i,hi⟩ here
     interval_cases i <;> exact cell
@@ -220,16 +220,16 @@ theorem tail_post_run (s : MachineState) (pc : s.pc=wordPC 45656) (fuel : Nat) :
 
 theorem tail_post_mem (s : MachineState) : memoryView (tailPostPrefix s 6)=memoryView s := rfl
 
-/-- What the six words leave for the upper stage (`TailEntry`, with `tailStart = 45,662`). -/
+/-- What the six words leave for the upper stage (`TailEntry`, with `tailStart = 45,666`). -/
 theorem tail_post_regs (s : MachineState) (r : Live s N) :
-    (tailPostPrefix s 6).pc=wordPC 45662 ∧ (tailPostPrefix s 6).getReg .x5=0 ∧
+    (tailPostPrefix s 6).pc=wordPC 45666 ∧ (tailPostPrefix s 6).getReg .x5=0 ∧
     (tailPostPrefix s 6).getReg .x8=4294971392 ∧ (tailPostPrefix s 6).getReg .x9=4294971424 ∧
-    (tailPostPrefix s 6).getReg .x21=wordAddress 603980292 := by
+    (tailPostPrefix s 6).getReg .x21=wordAddress 603980292 ∧ (tailPostPrefix s 6).getReg .x24=9126809632 := by
   have k10 : s.regs .x10=wordAddress (entryWord N) := r.msg
   have k24 : s.regs .x24=wordAddress (qSalt 0) := r.counter
   have k5 : s.regs .x5=0 := r.selector
-  have pc : s.pc=wordPC 45656 := by rw [r.pc];unfold startPC;rw [if_pos rfl]
-  refine ⟨?_,?_,?_,?_,?_⟩
+  have pc : s.pc=wordPC 45660 := by rw [r.pc];unfold startPC;rw [if_pos rfl]
+  refine ⟨?_,?_,?_,?_,?_,?_⟩
   all_goals dsimp only [tailPostPrefix,tailPostOps,List.take,List.foldl,execInstrBr,MachineState.setPC,
     MachineState.setReg,MachineState.getReg]
   all_goals simp (config := {decide := true}) only [k10,k24,k5,pc,↓reduceIte]
