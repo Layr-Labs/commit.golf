@@ -201,7 +201,7 @@ theorem before_regs (s : MachineState) (i : Index) (ord left : Nat) (r : Input s
   have c (k : Reg) (h : Clob k := by unfold Clob;decide) := keep k h
   exact ⟨(c .x10).trans r.input,(c .x12).trans r.output,(c .x5).trans r.selector,(c .x11).trans r.width,
     (c .x13).trans r.primitive,(c .x14).trans r.index,(c .x17).trans r.leftReg,(c .x22).trans r.salt,
-    (c .x26).trans r.base,(c .x29).trans r.divReg⟩
+    (c .x26).trans r.base,(c .x29).trans r.divReg,(c .x4).trans r.mult⟩
 
 theorem pre_run (i : Index) (s : MachineState) (ord left fuel : Nat) (r : Input s i ord left) :
     execute openingImage ((preFor i).length+fuel) s true =

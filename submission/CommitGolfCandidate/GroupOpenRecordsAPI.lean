@@ -8,7 +8,8 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (sortedIndex markBase
   RecordMarks groupsBefore machineMarks nat_address_injective)
 
-structure RecordBoundary (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
+/-- The boundary facts the setup words establish (no `x4` yet; see `RecordBoundary`). -/
+structure SetupBoundary (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (state : MachineState) (ordinal : Nat) : Prop where
   pc : state.pc = if ordinal = positions.card then 0x1a24 else 0x103c
   heap : state.getReg .x9 = BitVec.ofNat 64 trapdoorBase
@@ -25,14 +26,33 @@ structure RecordBoundary (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor
   capLeaves : state.getReg .x27 = 256#64
   proofBegin : state.getReg .x20 = BitVec.ofNat 64 proofBase
 
+structure RecordBoundary (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
+    (positions : Positions) (state : MachineState) (ordinal : Nat) : Prop where
+  pc : state.pc = if ordinal = positions.card then 0x1a24 else 0x103c
+  heap : state.getReg .x9 = BitVec.ofNat 64 trapdoorBase
+  index : state.getReg .x8 = BitVec.ofNat 64 (indicesBase+8*ordinal)
+  nonce : state.getReg .x22 = BitVec.ofNat 64 nonceBase
+  dest : state.getReg .x21 = BitVec.ofNat 64 (recordBase ordinal)
+  leaves : state.getReg .x19 = BitVec.ofNat 64 4194304
+  slots : state.getReg .x24=BitVec.ofNat 64 groupSlots
+  input : SameOpeningInput (s.initialState .opening (trapdoor, positions)) state
+  left : state.getReg .x18 = BitVec.ofNat 64 (positions.card-ordinal)
+  marks : state.getReg .x26 = BitVec.ofNat 64 markBase
+  one : state.getReg .x23 = 1#64
+  capHeap : state.getReg .x25 = BitVec.ofNat 64 trapdoorBase
+  capLeaves : state.getReg .x27 = 256#64
+  proofBegin : state.getReg .x20 = BitVec.ofNat 64 proofBase
+  mult : state.getReg .x4 = 368
+
 theorem RecordBoundary.start {s : Submission} {trapdoor : BitVec (8*s.sizes.trapdoor)}
     {positions : Positions} {state : MachineState} {ordinal : Nat}
     (boundary : RecordBoundary s trapdoor positions state ordinal)
     (present : ordinal < positions.card) : RecordStart s trapdoor positions state ordinal :=
   ⟨by simpa only [ite_eq_right (show ordinal ≠ positions.card by omega)] using boundary.pc,
-    boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.slots, boundary.input⟩
+    boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.slots, boundary.input,
+    boundary.mult⟩
 
-def recordCost (final : Bool) : Nat := if final then 633 else 634
+def recordCost (final : Bool) : Nat := if final then 636 else 637
 
 def afterLatch (marked : MachineState) (final : Bool) : MachineState :=
   if final then marked else marked.setPC 0x103c
@@ -43,7 +63,7 @@ def runRecord (state : MachineState) (final : Bool) : MachineState :=
 structure OneRecord (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (before after : MachineState) (ordinal : Nat)
     (present : ordinal < positions.card) : Prop where
-  run : RunsOpeningBlock before after (recordCost (decide (ordinal+1=positions.card)))
+  run : RunsOpeningSlack before after (recordCost (decide (ordinal+1=positions.card))) 3
   next : RecordBoundary s trapdoor positions after (ordinal+1)
   marks : ∀ node < 512, machineMarks after node =
     if node = Sampling.capGroup (sortedIndex positions ordinal present) then 1 else machineMarks before node
@@ -57,7 +77,7 @@ structure OneRecord (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
       before.getByte (BitVec.ofNat 64 (siblingAddress (sortedIndex positions ordinal present) level+byte))
 
 def recordsCost (size ordinal count : Nat) : Nat :=
-  if 0<count ∧ ordinal+count=size then 634*count-1 else 634*count
+  if 0<count ∧ ordinal+count=size then 637*count-1 else 637*count
 
 def runRecords (size ordinal : Nat) : Nat → MachineState → MachineState
   | 0, state => state
@@ -77,7 +97,7 @@ def CompletedRecords (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor)) (
 
 structure RecordsFinished (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (before after : MachineState) (ordinal count : Nat) : Prop where
-  run : RunsOpeningBlock before after (recordsCost positions.card ordinal count)
+  run : RunsOpeningSlack before after (recordsCost positions.card ordinal count) (3*count)
   boundary : RecordBoundary s trapdoor positions after (ordinal+count)
   marks : RecordMarks positions after (ordinal+count)
   bytes : CompletedRecords s trapdoor positions after (ordinal+count)

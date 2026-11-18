@@ -29,6 +29,7 @@ structure Registers (s : MachineState) (ord left : Nat) : Prop where
   salt : s.getReg .x22=6979325984
   base : s.getReg .x26=4096
   divReg : s.getReg .x29=11
+  mult : s.getReg .x4=368
 
 structure Input (s : MachineState) (i : Index) (ord left : Nat) extends Registers s ord left where
   pc : s.pc=address 739

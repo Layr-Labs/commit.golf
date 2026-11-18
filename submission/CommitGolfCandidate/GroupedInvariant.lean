@@ -109,8 +109,14 @@ theorem stateO_low (o : Oracle) (m : Memory) (P x : Nat) (hx : x<msgWord (2*P)-2
   have eO : msgWord (2*P+1)=msgWord (2*P)+32 := by unfold msgWord; omega
   rw [stateO_at,dif_neg (by omega),dif_neg (by omega)]
 
-theorem copy_state_at (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (nh : ¬pairHead (P%2048)) (w : Nat) :
-    copyState o m P w=
+/-- At a pair 11m+10 the prefetched registers a4..a7 hold the salts it stores (`PrefetchOK` gives this). -/
+def RegSalts (rg : Reg → Word) (m : Memory) (P : Nat) : Prop :=
+  fromRegs (P%2048) → rg .x14=m (srcWord (2*P)) ∧ rg .x15=m (srcWord (2*P)+1) ∧
+    rg .x16=m (srcWord (2*P+1)) ∧ rg .x17=m (srcWord (2*P+1)+1)
+
+theorem copy_state_at (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23) (nh : ¬pairHead (P%2048))
+    (pf : RegSalts rg m P) (w : Nat) :
+    copyState o rg m P w=
       if w=msgWord (2*P+1)+9 then m (srcWord (2*P+1)+1) else if w=msgWord (2*P+1)+8 then m (srcWord (2*P+1))
       else if w=msgWord (2*P+1)-14 then m (srcWord (2*P)+1) else if w=msgWord (2*P+1)-15 then m (srcWord (2*P))
       else stateO o m P w := by
@@ -123,7 +129,11 @@ theorem copy_state_at (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (nh :
   have v1 := stateO_low o m P (srcWord (2*P)+1) (by omega)
   have v2 := stateO_low o m P (srcWord (2*P+1)) (by omega)
   have v3 := stateO_low o m P (srcWord (2*P+1)+1) (by omega)
-  unfold copyState
+  unfold copyState; dsimp only
+  split
+  · rename_i t
+    obtain ⟨r0,r1,r2,r3⟩ := pf t
+    simp only [write_word_at,r0,r1,r2,r3]
   simp only [write_word_at,v0,v1,v2,v3,
     show srcWord (2*P)+1 ≠ msgWord (2*P+1)-15 by omega,
     show srcWord (2*P+1) ≠ msgWord (2*P+1)-15 by omega,show srcWord (2*P+1) ≠ msgWord (2*P+1)-14 by omega,
@@ -147,9 +157,9 @@ structure Good (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P : N
 attribute [local irreducible] packBuffer
 
 /-- The salt words a pair's second calls read are the leaves' counter-mode salts. -/
-theorem pair_salts (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
-    (good : Good o k msg m P) (par : Nat) (hp : par<2) :
-    (fun j : Fin 2 => saltedState o m P (msgWord (2*P+par)+(17-9*par)+j.val))=
+theorem pair_salts (o : Oracle) (rg : Reg → Word) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
+    (good : Good o k msg m P) (pf : RegSalts rg m P) (par : Nat) (hp : par<2) :
+    (fun j : Fin 2 => saltedState o rg m P (msgWord (2*P+par)+(17-9*par)+j.val))=
       saltWords (salts o.permutation k ⟨2*P+par,by change 2*P+par<16777216; omega⟩) := by
   let idx : Index := ⟨2*P+par,by change 2*P+par<16777216; omega⟩
   have eE : msgWord (2*P)=512+64*P := by unfold msgWord; omega
@@ -175,7 +185,7 @@ theorem pair_salts (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P
     have rdy := good.ready idx (by simp [idx]) nh' (by simp only [idx] at lt ⊢; omega)
     have w := congrFun rdy j
     simp only [window] at w
-    rw [← w,copy_state_at o m P limit nh]
+    rw [← w,copy_state_at o rg m P limit nh pf]
     rcases (show par=0 ∨ par=1 by omega) with rfl | rfl
     · rcases (show j.val=0 ∨ j.val=1 by omega) with h | h
       · rw [if_neg (by omega),if_neg (by omega),if_neg (by omega),if_pos (by omega)]; simp [idx,h]
@@ -186,31 +196,31 @@ theorem pair_salts (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P
 
 /-! ## Digests -/
 
-theorem even_salts (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
-    (good : Good o k msg m P) :
-    (fun j : Fin 2 => saltedState o m P (msgWord (2*P)+17+j.val))=
+theorem even_salts (o : Oracle) (rg : Reg → Word) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
+    (good : Good o k msg m P) (pf : RegSalts rg m P) :
+    (fun j : Fin 2 => saltedState o rg m P (msgWord (2*P)+17+j.val))=
       saltWords (salts o.permutation k ⟨2*P,by change 2*P<16777216; omega⟩) := by
-  have g := pair_salts o k msg m P limit good 0 (by decide)
+  have g := pair_salts o rg k msg m P limit good pf 0 (by decide)
   simpa using g
 
-theorem odd_salts (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
-    (good : Good o k msg m P) :
-    (fun j : Fin 2 => saltedState o m P (msgWord (2*P+1)+8+j.val))=
+theorem odd_salts (o : Oracle) (rg : Reg → Word) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
+    (good : Good o k msg m P) (pf : RegSalts rg m P) :
+    (fun j : Fin 2 => saltedState o rg m P (msgWord (2*P+1)+8+j.val))=
       saltWords (salts o.permutation k ⟨2*P+1,by change 2*P+1<16777216; omega⟩) := by
-  have g := pair_salts o k msg m P limit good 1 (by decide)
+  have g := pair_salts o rg k msg m P limit good pf 1 (by decide)
   simpa using g
 
-theorem even_digest (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
-    (good : Good o k msg m P) :
-    lowDigest (replyWords (digestE o m P))=digestWords (value o k msg ⟨2*P,by change 2*P<16777216; omega⟩) := by
+theorem even_digest (o : Oracle) (rg : Reg → Word) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
+    (good : Good o k msg m P) (pf : RegSalts rg m P) :
+    lowDigest (replyWords (digestE o rg m P))=digestWords (value o k msg ⟨2*P,by change 2*P<16777216; omega⟩) := by
   let idx : Index := ⟨2*P,by change 2*P<16777216; omega⟩
   have msgEq := good.messages idx (by simp [idx])
-  have win := even_window o m P limit (messageWords msg idx) msgEq
-  rw [even_salts o k msg m P limit good] at win
+  have win := even_window o rg m P limit (messageWords msg idx) msgEq
+  rw [even_salts o rg k msg m P limit good pf] at win
   have first : replyE o m P=(evenFirstRow o.permutation (messageWords msg idx)).2 := by
     unfold replyE evenFirstRow; apply congrArg o.permutation; apply congrArg packBuffer
     funext j; rw [← msgEq]; simp only [window,evenFirstInput,idx]; congr 1; omega
-  have reply : digestE o m P=(evenSecondRow o.permutation idx (saltWords (salts o.permutation k idx))
+  have reply : digestE o rg m P=(evenSecondRow o.permutation idx (saltWords (salts o.permutation k idx))
       (evenFirstRow o.permutation (messageWords msg idx)).2 (messageWords msg idx)).2 := by
     unfold digestE evenSecondRow; rw [win,first]
   have ev : idx.val%2=0 := by simp [idx]
@@ -219,19 +229,19 @@ theorem even_digest (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (
   unfold evenLeafDigest; rw [reply]
   funext j;exact low_digest_word _ j
 
-theorem odd_digest (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
-    (good : Good o k msg m P) :
-    lowDigest (replyWords (digestO o m P))=digestWords (value o k msg ⟨2*P+1,by change 2*P+1<16777216; omega⟩) := by
+theorem odd_digest (o : Oracle) (rg : Reg → Word) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
+    (good : Good o k msg m P) (pf : RegSalts rg m P) :
+    lowDigest (replyWords (digestO o rg m P))=digestWords (value o k msg ⟨2*P+1,by change 2*P+1<16777216; omega⟩) := by
   let idx : Index := ⟨2*P+1,by change 2*P+1<16777216; omega⟩
   have msgEq := good.messages idx (by simp [idx])
-  have win := odd_window o m P limit (messageWords msg idx) msgEq
-  rw [odd_salts o k msg m P limit good] at win
+  have win := odd_window o rg m P limit (messageWords msg idx) msgEq
+  rw [odd_salts o rg k msg m P limit good pf] at win
   have eE : msgWord (2*P+1)=msgWord (2*P)+32 := by unfold msgWord; omega
   have first : replyO o m P=(pinnedFirstRow o.permutation (messageWords msg idx)).2 := by
     unfold replyO pinnedFirstRow; apply congrArg o.permutation; apply congrArg packBuffer
     funext j; rw [← msgEq]; simp only [window,pinnedFirstInput,idx]
     unfold stateE; rw [write_window_at,dif_neg (by omega)]
-  have reply : digestO o m P=(pinnedSecondRow o.permutation idx (saltWords (salts o.permutation k idx))
+  have reply : digestO o rg m P=(pinnedSecondRow o.permutation idx (saltWords (salts o.permutation k idx))
       (pinnedFirstRow o.permutation (messageWords msg idx)).2 (messageWords msg idx)).2 := by
     unfold digestO pinnedSecondRow; rw [win]; try rw [first]
   have od : idx.val%2=1 := by simp only [idx]; omega
@@ -245,38 +255,40 @@ theorem odd_digest (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P
 private theorem pair_bounds (P : Nat) (limit : P<2^23) :
     msgWord (2*P+1)=msgWord (2*P)+32 ∧ 25 ≤ msgWord (2*P) ∧ msgWord (2*P+1)+32 ≤ qSource 0 ∧
     qSource 0 ≤ qLeaf (2*P) ∧ qLeaf (2*P+1)=qLeaf (2*P)+4 ∧ qLeaf (2*P+1)+25 ≤ qSalt 0 := by
-  unfold qLeaf; unfold msgWord qSource qSalt; refine ⟨by omega,by omega,by omega,by omega,by omega,by omega⟩
+  refine ⟨by unfold msgWord; omega,by unfold msgWord; omega,by unfold msgWord qSource; omega,
+    by unfold qLeaf qSource; omega,by unfold qLeaf; rw [show (2*P+1)/4=2*P/4 by omega]; omega,
+    QuartetCommit.qleaf_below_salts (2*P+1) (by omega)⟩
 
 /-- Words below the pair's message window are untouched. -/
-theorem pair_mem_low (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (w : Nat) (h : w<msgWord (2*P)-25) :
-    pairPacketMem o m P w=m w := by
+theorem pair_mem_low (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23) (w : Nat) (h : w<msgWord (2*P)-25) :
+    pairPacketMem o rg m P w=m w := by
   obtain ⟨eO,lo,hq,ql,qn,qs⟩ := pair_bounds P limit
   unfold pairPacketMem taggedO stateE2 taggedE
   rw [write_window_at,dif_neg (by omega),write_word_at,if_neg (by omega),write_window_at,dif_neg (by omega),
-    write_word_at,if_neg (by omega),salted_eq_stateO o m P w (Or.inl (by omega)) (by omega),stateO_low o m P w h]
+    write_word_at,if_neg (by omega),salted_eq_stateO o rg m P w (Or.inl (by omega)) (by omega),stateO_low o m P w h]
 
 /-- Message-region words above the pair's window are untouched. -/
-theorem pair_mem_high (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (w : Nat)
-    (lo : msgWord (2*P+1)+32 ≤ w) (hi : w<qSource 0) : pairPacketMem o m P w=m w := by
+theorem pair_mem_high (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23) (w : Nat)
+    (lo : msgWord (2*P+1)+32 ≤ w) (hi : w<qSource 0) : pairPacketMem o rg m P w=m w := by
   obtain ⟨eO,l25,hq,ql,qn,qs⟩ := pair_bounds P limit
   have hk : w ≠ qSalt 0 := by unfold qSource at hi; unfold qSalt; omega
   unfold pairPacketMem taggedO stateE2 taggedE
   rw [write_window_at,dif_neg (by omega),write_word_at,if_neg (by omega),write_window_at,dif_neg (by omega),
-    write_word_at,if_neg (by omega),salted_eq_stateO o m P w (Or.inr (by omega)) hk,stateO_at,
+    write_word_at,if_neg (by omega),salted_eq_stateO o rg m P w (Or.inr (by omega)) hk,stateO_at,
     dif_neg (by omega),dif_neg (by omega)]
 
 /-- Quartet-region words outside the pair's two digest windows (and not the counter word) are untouched. -/
-theorem pair_mem_quartet (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (w : Nat)
+theorem pair_mem_quartet (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23) (w : Nat)
     (lo : qSource 0 ≤ w) (out : w<qLeaf (2*P) ∨ qLeaf (2*P+1)+25 ≤ w) (hk : w ≠ qSalt 0) :
-    pairPacketMem o m P w=m w := by
+    pairPacketMem o rg m P w=m w := by
   obtain ⟨eO,l25,hq,ql,qn,qs⟩ := pair_bounds P limit
   unfold pairPacketMem taggedO stateE2 taggedE
   rw [write_window_at,dif_neg (by omega),write_word_at,if_neg (by omega),write_window_at,dif_neg (by omega),
-    write_word_at,if_neg (by omega),salted_eq_stateO o m P w (Or.inr (by omega)) hk,stateO_at,
+    write_word_at,if_neg (by omega),salted_eq_stateO o rg m P w (Or.inr (by omega)) hk,stateO_at,
     dif_neg (by omega),dif_neg (by omega)]
 
-theorem pair_window_even (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) :
-    (window (pairPacketMem o m P) (qLeaf (2*P)) : Words 4)=lowDigest (replyWords (digestE o m P)) := by
+theorem pair_window_even (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23) :
+    (window (pairPacketMem o rg m P) (qLeaf (2*P)) : Words 4)=lowDigest (replyWords (digestE o rg m P)) := by
   obtain ⟨eO,l25,hq,ql,qn,qs⟩ := pair_bounds P limit
   have far : msgWord (2*P+1)+7<qLeaf (2*P) := by omega
   funext j; have hj := j.isLt
@@ -284,8 +296,8 @@ theorem pair_window_even (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) :
   rw [write_window_at,dif_neg (by omega),write_word_at,if_neg (by omega),write_window_at,dif_pos (by omega)]
   unfold lowDigest; congr 1; apply Fin.ext; simp
 
-theorem pair_window_odd (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) :
-    (window (pairPacketMem o m P) (qLeaf (2*P+1)) : Words 4)=lowDigest (replyWords (digestO o m P)) := by
+theorem pair_window_odd (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23) :
+    (window (pairPacketMem o rg m P) (qLeaf (2*P+1)) : Words 4)=lowDigest (replyWords (digestO o rg m P)) := by
   funext j; have hj := j.isLt
   simp only [window,pairPacketMem]
   rw [write_window_at,dif_pos (by omega)]
@@ -310,9 +322,9 @@ theorem src_word_below (n : Nat) (hn : n<16777216) (nh : ¬pairHead ((n/2)%2048)
   have sb : sliceByte (coord ⟨n,hn⟩).2.val ≤ 160 := by rw [g2,f]; split <;> omega
   rw [sw]; unfold replyWord msgWord; refine ⟨by omega,by omega,by omega⟩
 
-theorem pair_mem_reply (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (head : pairHead (P%2048)) (w : Nat)
+theorem pair_mem_reply (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23) (head : pairHead (P%2048)) (w : Nat)
     (lo : replyWord P ≤ w) (hi : w<replyWord P+22) :
-    pairPacketMem o m P w=replyWords (generatedP o m P) ⟨w-replyWord P,by omega⟩ := by
+    pairPacketMem o rg m P w=replyWords (generatedP o m P) ⟨w-replyWord P,by omega⟩ := by
   obtain ⟨eO,l25,hq,ql,qn,qs⟩ := pair_bounds P limit
   have rw' : replyWord P=msgWord (2*P+1)-15 := rfl
   unfold pairPacketMem taggedO stateE2 taggedE
@@ -322,23 +334,17 @@ theorem pair_mem_reply (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (hea
   rfl
 
 private theorem qleaf_before (i P a : Nat) (h : i<2*P) (ha : a<4) : qLeaf i+a<qLeaf (2*P) := by
-  unfold qLeaf qSource
-  rcases Nat.lt_or_ge (i/4) (2*P/4) with q|q
-  · have : i%4<4 := Nat.mod_lt _ (by decide)
-    have : 64*(i/4)+64 ≤ 64*(2*P/4) := by omega
-    omega
-  · have e : i/4=2*P/4 := by omega
-    omega
+  have := QuartetCommit.qleaf_before i (2*P) h; omega
 
-theorem good_step (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
-    (good : Good o k msg m P) : Good o k msg (pairPacketMem o m P) (P+1) := by
+theorem good_step (o : Oracle) (rg : Reg → Word) (k : BitVec 192) (msg : Message) (m : Memory) (P : Nat) (limit : P<2^23)
+    (good : Good o k msg m P) (pf : RegSalts rg m P) : Good o k msg (pairPacketMem o rg m P) (P+1) := by
   obtain ⟨eO,l25,hq,ql,qn,qs⟩ := pair_bounds P limit
   constructor
   · intro i hi
     rw [← good.messages i (by omega)]; funext a
     have ha := a.isLt; have ix : i.val<16777216 := i.isLt
     simp only [window]
-    apply pair_mem_high o m P limit
+    apply pair_mem_high o rg m P limit
     · have : msgWord (2*P+2) ≤ msgWord i.val := by unfold msgWord; omega
       have : msgWord (2*P+2)=msgWord (2*P+1)+32 := by unfold msgWord; omega
       omega
@@ -347,35 +353,30 @@ theorem good_step (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P 
     dsimp only at hi
     by_cases e : n=2*P
     · subst e
-      show (window (pairPacketMem o m P) (qLeaf (2*P)) : Words 4)=_
-      rw [pair_window_even o m P limit,even_digest o k msg m P limit good]
+      show (window (pairPacketMem o rg m P) (qLeaf (2*P)) : Words 4)=_
+      rw [pair_window_even o rg m P limit,even_digest o rg k msg m P limit good pf]
     · by_cases e1 : n=2*P+1
       · subst e1
-        show (window (pairPacketMem o m P) (qLeaf (2*P+1)) : Words 4)=_
-        rw [pair_window_odd o m P limit,odd_digest o k msg m P limit good]
+        show (window (pairPacketMem o rg m P) (qLeaf (2*P+1)) : Words 4)=_
+        rw [pair_window_odd o rg m P limit,odd_digest o rg k msg m P limit good pf]
       · rw [← good.children ⟨n,hn⟩ (by show n<2*P; omega)]; funext a
         have ha := a.isLt
         simp only [window]
         have b := qleaf_before n P a.val (by omega) ha
-        apply pair_mem_quartet o m P limit _ _ (Or.inl b)
+        apply pair_mem_quartet o rg m P limit _ _ (Or.inl b)
         · have : qLeaf (2*P)<qSalt 0 := by omega
           omega
         · have : qSource 0 ≤ qLeaf n := by unfold qLeaf qSource; omega
           omega
   · intro g hg j hj
     rw [← good.padding g hg j hj]
-    apply pair_mem_quartet o m P limit _ (by unfold qSource; omega) _ (by unfold qSource qSalt; omega)
-    rw [qn]
-    unfold qLeaf qSource
-    rcases Nat.lt_or_ge (2*P/4) g with q|q
-    · right; have : 64*(2*P/4)+64 ≤ 64*g := by omega
-      have : 2*P%4<4 := Nat.mod_lt _ (by decide)
-      omega
-    · left; have : 64*g ≤ 64*(2*P/4) := by omega
-      omega
+    apply pair_mem_quartet o rg m P limit _ (by unfold qSource; omega) _ (by unfold qSource qSalt; omega)
+    have o0 := QuartetCommit.qpad_outside g j (2*P) hj
+    have o1 := QuartetCommit.qpad_outside g j (2*P+1) hj
+    omega
   · intro j lo up
     rw [← good.key j lo up]
-    exact pair_mem_quartet o m P limit _ (by unfold qSource qSalt; omega) (Or.inr (by omega)) (by omega)
+    exact pair_mem_quartet o rg m P limit _ (by unfold qSource qSalt; omega) (Or.inr (by omega)) (by omega)
   · rintro ⟨n,hn⟩ hi nh lt
     dsimp only at hi nh lt
     have sb := src_word_below n hn nh
@@ -383,7 +384,7 @@ theorem good_step (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P 
     · rw [← good.ready ⟨n,hn⟩ (by show 2*P ≤ n; omega) nh old]; funext a
       have ha := a.isLt
       simp only [window]
-      apply pair_mem_low o m P limit
+      apply pair_mem_low o rg m P limit
       have mono : msgWord (2*saltHead n+2) ≤ msgWord (2*P) := by unfold msgWord; omega
       omega
     · have eq : saltHead n=P := by omega
@@ -394,7 +395,7 @@ theorem good_step (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (P 
       have ha := a.isLt
       rw [slice_word]
       simp only [window]
-      rw [pair_mem_reply o m P limit head _ (by omega) (by omega),generated_eq o m P limit k good.key ⟨n,hn⟩ eq]
+      rw [pair_mem_reply o rg m P limit head _ (by omega) (by omega),generated_eq o m P limit k good.key ⟨n,hn⟩ eq]
       congr 2; omega
 
 theorem good_congr (o : Oracle) (k : BitVec 192) (msg : Message) (m m' : Memory) (P : Nat)
@@ -412,13 +413,130 @@ theorem good_congr (o : Oracle) (k : BitVec 192) (msg : Message) (m m' : Memory)
     have : saltHead i.val<2^23 := by omega
     apply eq;have := j.isLt;unfold msgWord at sb;omega
 
+/-! ## The prefetch registers -/
+
+/-- Between head 11m (m ≤ 185) and pair 11m+10, a6,a7 hold table salt 8 of head 11m's reply; between head 11m+5 and
+pair 11m+10, a4,a5 hold table salt 8 of head 11m+5's reply. -/
+def PrefetchOK (rg : Reg → Word) (m : Memory) (P : Nat) : Prop :=
+  (1 ≤ P%2048%11 ∧ P%2048<2046 →
+    rg .x16=m (replyWord (P-P%2048%11)+18) ∧ rg .x17=m (replyWord (P-P%2048%11)+19)) ∧
+  (6 ≤ P%2048%11 →
+    rg .x14=m (replyWord (P-P%2048%11+5)+18) ∧ rg .x15=m (replyWord (P-P%2048%11+5)+19))
+
+theorem reg_salts_of (rg : Reg → Word) (m : Memory) (P : Nat) (h : PrefetchOK rg m P) : RegSalts rg m P := by
+  intro t
+  unfold fromRegs at t
+  obtain ⟨a6,a7⟩ := h.1 ⟨by omega,by omega⟩
+  obtain ⟨a4,a5⟩ := h.2 (by omega)
+  have hk : groupK P=5 := by unfold groupK pairRank; rw [t]; rfl
+  have l1 : P%2048 ≤ P := Nat.mod_le _ _
+  have l2 : P%2048%11 ≤ P%2048 := Nat.mod_le _ _
+  have l3 : P%2048<2048 := Nat.mod_lt _ (by decide)
+  have p10 : 10 ≤ P := by omega
+  have m2 : (2*P)%4096=2*(P%2048) := Nat.mul_mod_mul_left 2 P 2048
+  have m3 : (2*P+1)%4096=2*(P%2048)+1 := by
+    rw [Nat.add_mod,m2,show 1%4096=1 by decide]; exact Nat.mod_eq_of_lt (by omega)
+  have s0 : srcWord (2*P)=replyWord (P-P%2048%11+5)+18 := by
+    have c8 : copyIndex ((2*P)%4096)=8 := by
+      unfold copyIndex; dsimp only
+      rw [m2,show 2*(P%2048)/2%11=P%2048%11 by omega,show 2*(P%2048)%2=0 by omega,t]; rfl
+    unfold srcWord; rw [c8,if_neg (by decide),show 2*P/2=P by omega]
+    unfold headPair; rw [hk,t,show P-10+5=P-5 by omega]
+  have s1 : srcWord (2*P+1)=replyWord (P-P%2048%11)+18 := by
+    have c9 : copyIndex ((2*P+1)%4096)=9 := by
+      unfold copyIndex; dsimp only
+      rw [m3,show (2*(P%2048)+1)/2%11=P%2048%11 by omega,show (2*(P%2048)+1)%2=1 by omega,t]; rfl
+    unfold srcWord; rw [c9,if_pos rfl,show (2*P+1)/2=P by omega]
+    unfold headPair; rw [hk,t,show P-5-5=P-10 by omega]
+  rw [s0,s1]
+  exact ⟨a4,a5,a6,a7⟩
+
+theorem prefetch_initial (rg : Reg → Word) (m : Memory) : PrefetchOK rg m 0 :=
+  ⟨fun h => absurd h.1 (by decide),fun h => absurd h (by decide)⟩
+
+theorem prefetch_congr (rg rg' : Reg → Word) (m m' : Memory) (P : Nat) (bound : P ≤ 2^23)
+    (er : ∀ r, rg' r=rg r) (em : ∀ w<2^33, m' w=m w) (h : PrefetchOK rg m P) : PrefetchOK rg' m' P := by
+  have b (h : Nat) (hh : h ≤ P) (j : Nat) (hj : j<20) : replyWord h+j<2^33 := by unfold replyWord msgWord; omega
+  refine ⟨fun c => ?_,fun c => ?_⟩
+  · obtain ⟨x,y⟩ := h.1 c
+    rw [er,er,em _ (b (P-P%2048%11) (by omega) 18 (by omega)),em _ (b (P-P%2048%11) (by omega) 19 (by omega))]
+    exact ⟨x,y⟩
+  · obtain ⟨x,y⟩ := h.2 c
+    have : P-P%2048%11+5 ≤ P := by omega
+    rw [er,er,em _ (b (P-P%2048%11+5) this 18 (by omega)),em _ (b (P-P%2048%11+5) this 19 (by omega))]
+    exact ⟨x,y⟩
+
+private theorem reply_low (P h j : Nat) (hh : h<P) (hj : j<20) : replyWord h+j<msgWord (2*P)-25 := by
+  unfold replyWord msgWord; omega
+
+private theorem head_reply_word (o : Oracle) (rg : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23)
+    (head : pairHead (P%2048)) (j : Nat) (lo : 18 ≤ j) (hj : j<20) :
+    pairPacketMem o rg m P (replyWord P+j)=headState o m P (msgWord (2*P+1)+(j-15)) := by
+  have big : 15 ≤ msgWord (2*P+1) := by unfold msgWord; omega
+  have rw' : replyWord P=msgWord (2*P+1)-15 := rfl
+  rw [pair_mem_reply o rg m P limit head _ (by omega) (by omega)]
+  unfold headState
+  rw [write_window_at,dif_pos (by omega)]
+  congr 1; apply Fin.ext; (try simp only [Fin.val_mk]); omega
+
+theorem prefetch_step (o : Oracle) (rg rg' : Reg → Word) (m : Memory) (P : Nat) (limit : P<2^23)
+    (h : PrefetchOK rg m P)
+    (r14 : rg' .x14=if P%2048%11=5 then headState o m P (msgWord (2*P+1)+3) else rg .x14)
+    (r15 : rg' .x15=if P%2048%11=5 then headState o m P (msgWord (2*P+1)+4) else rg .x15)
+    (r16 : rg' .x16=if prefetchA (P%2048) then headState o m P (msgWord (2*P+1)+3) else rg .x16)
+    (r17 : rg' .x17=if prefetchA (P%2048) then headState o m P (msgWord (2*P+1)+4) else rg .x17) :
+    PrefetchOK rg' (pairPacketMem o rg m P) (P+1) := by
+  have l1 : P%2048 ≤ P := Nat.mod_le _ _
+  have l2 : P%2048%11 ≤ P%2048 := Nat.mod_le _ _
+  have l3 : P%2048<2048 := Nat.mod_lt _ (by decide)
+  by_cases edge : P%2048=2047
+  · have e : (P+1)%2048=0 := by omega
+    refine ⟨fun c => ?_,fun c => ?_⟩ <;> rw [e] at c <;> simp at c
+  have e : (P+1)%2048=P%2048+1 := by omega
+  refine ⟨fun c => ?_,fun c => ?_⟩
+  · rw [e] at c ⊢
+    by_cases z : P%2048%11=0
+    · have a : prefetchA (P%2048) := by unfold prefetchA; exact ⟨z,by omega⟩
+      have head : pairHead (P%2048) := Or.inl z
+      have hb : P+1-(P%2048+1)%11=P := by omega
+      rw [hb,r16,r17,if_pos a,if_pos a,head_reply_word o rg m P limit head 18 (by omega) (by omega),
+        head_reply_word o rg m P limit head 19 (by omega) (by omega)]
+      exact ⟨rfl,rfl⟩
+    · have na : ¬prefetchA (P%2048) := by unfold prefetchA; exact fun a => z a.1
+      have r1 : 1 ≤ P%2048%11 := by omega
+      have r9 : P%2048%11 ≤ 9 := by omega
+      have hb : P+1-(P%2048+1)%11=P-P%2048%11 := by omega
+      obtain ⟨x,y⟩ := h.1 ⟨r1,by omega⟩
+      rw [hb,r16,r17,if_neg na,if_neg na,
+        pair_mem_low o rg m P limit _ (reply_low P (P-P%2048%11) 18 (by omega) (by omega)),
+        pair_mem_low o rg m P limit _ (reply_low P (P-P%2048%11) 19 (by omega) (by omega))]
+      exact ⟨x,y⟩
+  · rw [e] at c ⊢
+    by_cases f : P%2048%11=5
+    · have head : pairHead (P%2048) := Or.inr f
+      have hb : P+1-(P%2048+1)%11+5=P := by omega
+      rw [hb,r14,r15,if_pos f,if_pos f,head_reply_word o rg m P limit head 18 (by omega) (by omega),
+        head_reply_word o rg m P limit head 19 (by omega) (by omega)]
+      exact ⟨rfl,rfl⟩
+    · have r6 : 6 ≤ P%2048%11 := by omega
+      have hb : P+1-(P%2048+1)%11+5=P-P%2048%11+5 := by omega
+      obtain ⟨x,y⟩ := h.2 r6
+      rw [hb,r14,r15,if_neg f,if_neg f,
+        pair_mem_low o rg m P limit _ (reply_low P (P-P%2048%11+5) 18 (by omega) (by omega)),
+        pair_mem_low o rg m P limit _ (reply_low P (P-P%2048%11+5) 19 (by omega) (by omega))]
+      exact ⟨x,y⟩
+
 theorem fixed_pair_good (o : Oracle) (k : BitVec 192) (msg : Message) (s : MachineState) (P : Nat) (limit : P<2^23)
-    (r : PairRegs s P) (h : Good o k msg (memoryView s) P) :
-    Good o k msg (memoryView ((pairPlan P).foldl (fixedStep o) s)) (P+1) := by
+    (r : PairRegs s P) (h : Good o k msg (memoryView s) P) (pf : PrefetchOK s.getReg (memoryView s) P) :
+    Good o k msg (memoryView ((pairPlan P).foldl (fixedStep o) s)) (P+1) ∧
+      PrefetchOK ((pairPlan P).foldl (fixedStep o) s).getReg (memoryView ((pairPlan P).foldl (fixedStep o) s)) (P+1) := by
   let v : View := ⟨s.getReg,memoryView s⟩
   have mat := matches_ops o s v _ (walk_post _ _ _ (pair_walk s P limit r)).1 (matches_initial s)
   have eq := pair_plan_meaning o v P
+  have regs := pair_plan_regs o v P
   have mm := mat.2; rw [eq] at mm
-  exact good_congr o k msg _ _ _ mm (by omega) (good_step o k msg _ P limit h)
+  refine ⟨good_congr o k msg _ _ _ mm (by omega) (good_step o s.getReg k msg _ P limit h (reg_salts_of _ _ _ pf)),?_⟩
+  exact prefetch_congr _ _ _ _ _ (by omega) mat.1 mm
+    (prefetch_step o s.getReg _ (memoryView s) P limit pf regs.1 regs.2.1 regs.2.2.1 regs.2.2.2)
 
 end TwoPermutationPrototype.Grouped

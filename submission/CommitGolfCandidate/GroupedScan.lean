@@ -16,7 +16,11 @@ def startPC (P : Nat) := if P=NP then wordPC 45591 else wordPC (pairWord (P%2048
 def edgeCost (P : Nat) := if P%2048=2047 then 2 else 0
 /-- Head pairs among the first `P` pairs (373 per body). -/
 def headCount (P : Nat) := 373*(P/2048)+headsBefore (P%2048)
-def S (P : Nat) := 22*P-3*headCount P+P/16+2*(P/2048)
+/-- Words saved against 22 per pair by the first `p` pair packets of a body (`p ≤ 2048`). -/
+def savedBefore (p : Nat) := 2*headsBefore p+4*(p/11)+(if 2046<p then 2 else 0)
+/-- Words saved by the first `P` pair packets (1,492 per body). -/
+def saved (P : Nat) := 1492*(P/2048)+savedBefore (P%2048)
+def S (P : Nat) := 22*P+(92*(P/2048)+rb (2*(P%2048)))+2*(P/2048)-saved P
 def Q (P : Nat) := 4*P+headCount P
 def C (P : Nat) := S P+7*Q P
 
@@ -37,22 +41,50 @@ theorem head_count_le (P : Nat) : headCount P ≤ P := by
     have := heads_before_le (P%2048); unfold headsBefore; split_ifs <;> omega
   unfold headCount; omega
 
+theorem saved_succ (P : Nat) : saved (P+1)=saved P+pairSaving (P%2048) := by
+  unfold saved
+  by_cases e : P%2048=2047
+  · have h1 : (P+1)/2048=P/2048+1 := by omega
+    have h2 : (P+1)%2048=0 := by omega
+    rw [h1,h2,e,show savedBefore 0=0 by decide,show savedBefore 2047=1492 by decide,show pairSaving 2047=0 by decide]
+    omega
+  · have h1 : (P+1)/2048=P/2048 := by omega
+    have h2 : (P+1)%2048=P%2048+1 := by omega
+    rw [h1,h2]
+    unfold savedBefore pairSaving
+    rw [heads_before_succ]
+    split_ifs
+    all_goals (try unfold prefetchA at *)
+    all_goals (try unfold fromRegs at *)
+    all_goals (try unfold pairHead at *)
+    all_goals omega
+
+theorem saved_le (P : Nat) : saved P ≤ 4*P := by
+  have hb : savedBefore (P%2048) ≤ 4*(P%2048) := by
+    unfold savedBefore headsBefore; split_ifs <;> omega
+  unfold saved; omega
+
 theorem calls_plan (P : Nat) : opCalls (pairPlan P)=4+(if pairHead (P%2048) then 1 else 0) := by
-  by_cases h : pairHead (P%2048) <;> by_cases k : P%16=15 <;>
-    simp [pairPlan,opCalls,Action.calls,h,k]
+  by_cases h : pairHead (P%2048) <;> by_cases a : prefetchA (P%2048) <;> by_cases b : P%2048%11=5 <;>
+    by_cases t : fromRegs (P%2048) <;> by_cases r0 : rebase (2*(P%2048)) <;> by_cases r1 : rebase (2*(P%2048)+1) <;>
+    simp [pairPlan,opCalls,Action.calls,h,a,b,t,r0,r1]
 
 theorem length_plan (P : Nat) :
-    (pairPlan P).length=22-(if pairHead (P%2048) then 3 else 0)+(if P%16=15 then 1 else 0) := by
+    (pairPlan P).length=22-pairSaving (P%2048)+(if rebase (2*(P%2048)) then 1 else 0)+
+      (if rebase (2*(P%2048)+1) then 1 else 0) := by
   have len := congrArg List.length (pair_plan_words P)
   simp only [List.length_map] at len
-  rw [len,pair_packet_length,show P%2048%16=P%16 by omega]
+  rw [len,pair_packet_length]
 
 theorem cumul (P : Nat) (hP : P<NP) :
     S (P+1)=S P+(pairPlan P).length+edgeCost P ∧ Q (P+1)=Q P+opCalls (pairPlan P) := by
   rw [calls_plan,length_plan]; unfold S Q edgeCost
   have hc := head_count_le P
-  rw [head_count_succ]
-  split_ifs <;> constructor <;> omega
+  have sl := saved_le P
+  have ps := pair_saving_le (P%2048)
+  have rs := pair_rebases_succ P
+  rw [head_count_succ,saved_succ]
+  split_ifs at rs ⊢ <;> constructor <;> omega
 
 def stepTrace (s : MachineState) (P : Nat) : OracleComp World MachineState := do
   let t ← runOps (pairPlan P) s
@@ -66,24 +98,16 @@ structure Live (s : MachineState) (P : Nat) extends PairRegs s P where
   strideBase : s.getReg .x19=536870912
   quartet : s.getReg .x21=wordAddress (qSource 0)
 
-theorem anchor_next (P : Nat) (h : ¬pairHead ((P+1)%2048)) : anchorWord (P+1)=anchorWord P := by
-  unfold anchorWord replyWord headPair groupK pairRank msgWord
-  unfold pairHead at h
-  have e : (P+1)%2048=P%2048+1 := by omega
-  rw [e] at h ⊢
-  split_ifs <;> omega
-
 theorem step_live (s : MachineState) (P : Nat) (hP : P<NP) (r : Live s P)
     (u : MachineState) (reach : u∈support (stepTrace s P)) : Live u (P+1) := by
   simp only [stepTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reach
   obtain ⟨t,hit,rfl⟩ := reach
   have post := (walk_post _ _ _ (pair_walk s P hP r.toPairRegs)).2 t hit
-  obtain ⟨msg,hp,stride,ct,anc,sel,sz,pr,out,hbase,st,q,stop⟩ := post
-  refine ⟨⟨?_,?_,stride,ct,?_,sel,sz,pr⟩,rfl,stop.trans r.stop,out.trans r.out,
+  obtain ⟨msg,hp,stride,ct,sel,sz,pr,out,hbase,st,q,stop⟩ := post
+  refine ⟨⟨?_,?_,stride,ct,sel,sz,pr⟩,rfl,stop.trans r.stop,out.trans r.out,
     hbase.trans r.heapBase,st.trans r.strideBase,q.trans r.quartet⟩
   · simpa only [MachineState.getReg_setPC,show 2*(P+1)=2*P+2 by omega] using msg
   · simpa only [MachineState.getReg_setPC,show 2*(P+1)=2*P+2 by omega] using hp
-  · intro nh; simpa only [MachineState.getReg_setPC,anchor_next P nh] using anc
 
 theorem edge_run (s : MachineState) (P fuel : Nat) (hP : P<NP)
     (start : s.pc=wordPC (pairWord (P%2048)+(pairPlan P).length))
@@ -94,37 +118,40 @@ theorem edge_run (s : MachineState) (P fuel : Nat) (hP : P<NP)
       return z.charge (edgeCost P) 0) := by
   have len : (pairPlan P).length=(pairPacket (P%2048)).length := by
     have h := congrArg List.length (pair_plan_words P); simpa using h
-  rw [len,←pair_word_next] at start
+  rw [len,←pair_word_next _ (by omega)] at start
   by_cases edge : P%2048=2047
-  · have pc : s.pc=wordPC 44086 := by rw [start,edge,pair_word_latch]
+  · have pc : s.pc=wordPC 43677 := by rw [start,edge,pair_word_latch]
     have fetchB : fetch image s=some (.base (.BEQ .x20 .x25 8)) :=
-      fetch_decoded s 44086 (by decide) pc _ (by decide +kernel)
+      fetch_decoded s 43677 (by decide) pc _ (by decide +kernel)
+    have cur : wordAddress (cursor (2*P+2))=wordAddress (qSource (1024*((2*P+2)/4096)))+2048 := by
+      unfold cursor
+      rw [show (2*P+2)%4096=0 by omega,rb_zero,Nat.mul_zero,Nat.add_zero]
+      exact wordAddress_add ..
     have same : s.getReg .x20=s.getReg .x25 ↔ P+1=NP := by
-      rw [hp,stop,show wordAddress (cursor (2*P+2))=wordAddress (qSource (8*((2*P+2)/32)))+2048 from wordAddress_add ..,
-        BitVec.add_left_inj]
+      rw [hp,stop,cur,BitVec.add_left_inj]
       constructor
       · intro h
         have w := wordAddress_injective_of_bound (by unfold qSource; dsimp [NP] at hP; omega) (by decide) h
         unfold qSource at w; dsimp [NP]; omega
       · intro h
-        have : (2*P+2)/32=524288 := by dsimp [NP] at h; omega
+        have : (2*P+2)/4096=4096 := by dsimp [NP] at h; omega
         rw [this]
     by_cases last : P+1=NP
-    · let mid := s.setPC (wordPC 44088)
+    · let mid := s.setPC (wordPC 43679)
       have op : ordinaryStep s (.base (.BEQ .x20 .x25 8))=some mid := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,same.mpr last,mid,wordPC,signExtend13]
-      have fj : fetch image mid=some (.base (.JAL .x0 6012)) := fetch_decoded mid 44088 (by decide) rfl _ (by decide +kernel)
-      have jump : ordinaryStep mid (.base (.JAL .x0 6012))=some (s.setPC (wordPC 45591)) := by
+      have fj : fetch image mid=some (.base (.JAL .x0 7648)) := fetch_decoded mid 43679 (by decide) rfl _ (by decide +kernel)
+      have jump : ordinaryStep mid (.base (.JAL .x0 7648))=some (s.setPC (wordPC 45591)) := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,mid,MachineState.setPC,MachineState.setReg]; rfl
       rw [edgeCost,if_pos edge,startPC,if_pos last,show 2+fuel=(fuel+1)+1 by omega,
         execute_ordinary_step _ _ _ _ _ _ fetchB op,execute_ordinary_step _ _ _ _ _ _ fj jump]
       simp [Execution.charge,instructionCycles,←Nat.add_assoc]
-    · let mid := s.setPC (wordPC 44087)
+    · let mid := s.setPC (wordPC 43678)
       have next : (P+1)%2048=0 := by omega
       have op : ordinaryStep s (.base (.BEQ .x20 .x25 8))=some mid := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,mid,mt same.mp last]; rfl
-      have fj : fetch image mid=some (.base (.JAL .x0 1920888)) := fetch_decoded mid 44087 (by decide) rfl _ (by decide +kernel)
-      have jump : ordinaryStep mid (.base (.JAL .x0 1920888))=some (s.setPC (wordPC 21)) := by
+      have fj : fetch image mid=some (.base (.JAL .x0 1922524)) := fetch_decoded mid 43678 (by decide) rfl _ (by decide +kernel)
+      have jump : ordinaryStep mid (.base (.JAL .x0 1922524))=some (s.setPC (wordPC 21)) := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,mid,MachineState.setPC,MachineState.setReg]; rfl
       rw [edgeCost,if_pos edge,startPC,if_neg last,next,show pairWord 0=21 by decide,
         show 2+fuel=(fuel+1)+1 by omega,execute_ordinary_step _ _ _ _ _ _ fetchB op,
@@ -147,9 +174,9 @@ theorem packet_execute (s : MachineState) (P fuel : Nat) (hP : P<NP) (r : Live s
   have p := walkOK.2 t hit
   have pct : t.pc=wordPC (pairWord (P%2048)+(pairPlan P).length) := by
     have wb := pair_word_bound (P%2048) (by omega)
-    have lb : (pairPlan P).length ≤ 23 := by rw [length_plan]; split_ifs <;> omega
+    have lb : (pairPlan P).length ≤ 24 := by rw [length_plan]; have := pair_saving_le (P%2048); split_ifs <;> omega
     rw [ops_pc _ s t hit,pc]; unfold wordPC; rw [←BitVec.ofNat_add]; congr 1 <;> omega
-  rw [edge_run t P fuel hP pct p.2.1 (p.2.2.2.2.2.2.2.2.2.2.2.2.trans r.stop)]
+  rw [edge_run t P fuel hP pct p.2.1 (p.2.2.2.2.2.2.2.2.2.2.2.trans r.stop)]
   simp only [bind_assoc,pure_bind]
   apply bind_congr; intro z; apply congrArg pure
   cases z; simp [Execution.charge,Nat.add_assoc,Nat.add_left_comm,Nat.add_comm]
@@ -200,7 +227,7 @@ theorem run_scan (n P : Nat) (s : MachineState) (bound : P+n≤NP) (r : Live s P
     apply bind_congr; intro last; apply bind_congr; intro out; apply congrArg pure
     cases out; simp only [Execution.charge,Execution.mk.injEq,true_and]; constructor <;> omega
 
-theorem totals : S NP=180498432 ∧ Q NP=35082240 ∧ C NP=426074112 := by
-  unfold C S Q headCount headsBefore; decide
+theorem totals : S NP=178823168 ∧ Q NP=35082240 ∧ C NP=424398848 := by
+  unfold C S Q saved savedBefore headCount headsBefore; decide
 
 end TwoPermutationPrototype.Grouped

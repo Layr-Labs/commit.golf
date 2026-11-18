@@ -39,7 +39,7 @@ theorem finish_regs (s : MachineState) (i : Index) (ord left : Nat) (l : 0<left)
   have saved (k : Reg) (safe : Saved k :=by unfold Saved;decide) := finish_keep s i ord left r y k safe
   refine ⟨⟨(saved .x10).trans r.input,(saved .x12).trans r.output,(saved .x5).trans r.selector,
     (saved .x11).trans r.width,(saved .x13).trans r.primitive,post.2.2.1,post.2.2.2.1,
-    (saved .x22).trans r.salt,(saved .x26).trans r.base,(saved .x29).trans r.divReg⟩,post.2.1,?_⟩
+    (saved .x22).trans r.salt,(saved .x26).trans r.base,(saved .x29).trans r.divReg,(saved .x4).trans r.mult⟩,post.2.1,?_⟩
   exact post.2.2.2.2.trans ((copied_mem a i ar ad).trans (by
     change (installed (choose w) i).mem=(installed w i).mem
     simp only [installed,MachineState.setMem,MachineState.getMem,chosen_memory w]))

@@ -7,6 +7,10 @@ open PackedOpening (capSubtreeCycles)
 open QuartetOpening (proofLength scheduledCycles)
 open Opening (groupsBefore openingNodes capDigestAddress)
 
+/-- Opening cycles with 368-byte quartet blocks: the original record writer's schedule plus three cycles per
+record (the group-base multiply `mul t2,t2,tp` costs four cycles instead of the `andi`'s one). -/
+def openCycles (positions : Positions) : Nat := scheduledCycles positions + 3*positions.card
+
 structure OpeningABI (s : Submission) extends OpeningLayout s where
   image : s.image .opening = openingImage
   capacity : capacity ≤ s.sizes.proof
@@ -17,7 +21,7 @@ structure OpenPhysical (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
   success : result.exit = .success
   length : (result.state.getReg .x11).toNat = proofLength positions
   noCalls : result.oracleCalls = 0
-  cycles : result.cycles = scheduledCycles positions
+  cycles : result.cycles = openCycles positions
   lower : CompletedRecords s trapdoor positions result.state positions.card
   footer : ∀ i (inside : i < (openingNodes positions).length),
     readBuffer result.state (recordBase positions.card+30*i) 30 =
@@ -44,9 +48,9 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState) (positive : 0<positions.card)
     (ready : RecordBoundary s trapdoor positions begin 0) (marks : Opening.RecordMarks positions begin 0)
     (surplus : Nat) :
-    ∃ final, execute openingImage (scheduledCycles positions-15+surplus) begin true =
-        pure ⟨.success,final,scheduledCycles positions-15,0⟩ ∧
-      OpenPhysical s trapdoor positions ⟨.success,final,scheduledCycles positions,0⟩ := by
+    ∃ final, execute openingImage (openCycles positions-15+surplus) begin true =
+        pure ⟨.success,final,openCycles positions-15,0⟩ ∧
+      OpenPhysical s trapdoor positions ⟨.success,final,openCycles positions,0⟩ := by
     let initial := s.initialState .opening (trapdoor, positions)
     have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
     have allFit := (Nat.add_le_add_left (QuartetOpening.capacity_all positions) _).trans packed_proof_memory
@@ -80,17 +84,17 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     obtain ⟨after, ranCap, afterPC, endPosition, footerBytes⟩ :=
       cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC ((show Opening.proofBase≤proofBase by decide).trans above) aligned room
     let final := exitPrefix (advancePrefix after 41 2) 3
-    have charge : scheduledCycles positions = 15+(634*positions.card-1)+2552+capSubtreeCycles grouped 1 8+6 := by
-      rw [scheduledCycles, if_neg empty]
+    have charge : openCycles positions = 15+(637*positions.card-1)+2552+capSubtreeCycles grouped 1 8+6 := by
+      rw [openCycles, scheduledCycles, if_neg empty]
       dsimp only [grouped]
       omega
-    have ranRecords : RunsOpeningBlock begin lower (634*positions.card-1) := by
-      have charged : recordsCost positions.card 0 positions.card = 634*positions.card-1 := by
+    have ranRecords : RunsOpeningSlack begin lower (637*positions.card-1) (3*positions.card) := by
+      have charged : recordsCost positions.card 0 positions.card = 637*positions.card-1 := by
         simp [recordsCost, positive]
       exact charged ▸ assembled.run
     have ranPrep : RunsOpeningBlock lower prepared 2552 :=
       execute_cap_preparation lower (by simpa using atCap.pc) atCap.marks
-    have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord surplus true
+    have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord (3*positions.card+surplus) true
     have lowerFrame (address : Nat) (fromProof : proofBase ≤ address) (beforeCap : address < dest) :
         final.getByte (BitVec.ofNat 64 address) = lower.getByte (BitVec.ofNat 64 address) := by
       have byteFit : address < MEMORY_BYTES := by omega
@@ -103,9 +107,10 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
       have eq : final.mem = after.mem := finalMem
       simpa only [MachineState.getByte, MachineState.getMem, eq] using unchanged
     refine ⟨final,?_,⟨rfl,?_,rfl,rfl,?_,?_⟩⟩
-    · rw [show scheduledCycles positions-15+surplus=
-          (634*positions.card-1)+2552+capSubtreeCycles grouped 1 8+(6+surplus) by omega]
-      rw [((ranRecords.next ranPrep).next ranCap) (6+surplus) true,ranExit]
+    · rw [show openCycles positions-15+surplus=
+          (637*positions.card-1)+2552+capSubtreeCycles grouped 1 8+(6+surplus) by omega]
+      rw [((ranRecords.then ranPrep).then ranCap) (6+surplus) true,
+        show 3*positions.card+(6+surplus)=6+(3*positions.card+surplus) by omega,ranExit]
       simp [Execution.charge,final]
       omega
     · change (final.getReg .x11).toNat = _
@@ -177,8 +182,13 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 93945 ∧ (result.state.getReg .x11).toNat ≤ 72192 := by
+    result.cycles ≤ 94329 ∧ (result.state.getReg .x11).toNat ≤ 72192 := by
   rw [physical.cycles, physical.length]
-  exact QuartetOpening.scored_limits positions count
+  have h := QuartetOpening.scored_limits positions count
+  have k : positions.card = 128 := count
+  refine ⟨?_, h.2⟩
+  have h1 := h.1
+  unfold openCycles
+  omega
 
 end TwoPermutationPrototype.GroupedOpening

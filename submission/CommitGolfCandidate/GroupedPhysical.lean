@@ -1,7 +1,9 @@
 import CommitGolfCandidate.GroupedSeededLeaves
 import CommitGolfCandidate.GroupedSerial
 import CommitGolfCandidate.GroupedQMeaning
-import CommitGolfCandidate.QuartetPhysical
+import CommitGolfCandidate.QuartetPhysicalInputs
+import CommitGolfCandidate.QuartetRVModel
+import CommitGolfCandidate.TwoPermutationRootBytes
 import CommitGolfCandidate.MaterializedManifest
 
 namespace TwoPermutationPrototype.Grouped

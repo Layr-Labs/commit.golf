@@ -34,6 +34,37 @@ theorem RunsOpeningBlock.next {first middle last : MachineState} {a b : Nat}
   rw [Nat.add_assoc, head (b+fuel) coins, tail fuel coins]
   simp [Execution.charge, ← Nat.add_assoc]
 
+/-- A block of `cycles` cycles that executes only `cycles - slack` instructions (it contains multi-cycle
+instructions): the unused `slack` fuel is handed on. `RunsOpeningBlock` is the case `slack = 0`. -/
+def RunsOpeningSlack (before after : MachineState) (cycles slack : Nat) : Prop :=
+  ∀ fuel allowCoins, execute openingImage (cycles + fuel) before allowCoins =
+    (do let result ← execute openingImage (slack + fuel) after allowCoins
+        return result.charge cycles 0)
+
+theorem RunsOpeningBlock.toSlack {before after : MachineState} {cycles : Nat}
+    (run : RunsOpeningBlock before after cycles) : RunsOpeningSlack before after cycles 0 := by
+  intro fuel coins
+  rw [Nat.zero_add]
+  exact run fuel coins
+
+theorem RunsOpeningSlack.next {first middle last : MachineState} {a b e f : Nat}
+    (head : RunsOpeningSlack first middle a e) (tail : RunsOpeningSlack middle last b f) :
+    RunsOpeningSlack first last (a + b) (e + f) := by
+  intro fuel coins
+  rw [Nat.add_assoc, head (b+fuel) coins, show e+(b+fuel)=b+(e+fuel) by omega, tail (e+fuel) coins,
+    show f+(e+fuel)=(e+f)+fuel by omega]
+  simp [Execution.charge, ← Nat.add_assoc]
+
+theorem RunsOpeningSlack.then {first middle last : MachineState} {a b e : Nat}
+    (head : RunsOpeningSlack first middle a e) (tail : RunsOpeningBlock middle last b) :
+    RunsOpeningSlack first last (a + b) e := by
+  simpa only [Nat.add_zero] using head.next tail.toSlack
+
+theorem RunsOpeningBlock.thenSlack {first middle last : MachineState} {a b e : Nat}
+    (head : RunsOpeningBlock first middle a) (tail : RunsOpeningSlack middle last b e) :
+    RunsOpeningSlack first last (a + b) e := by
+  simpa only [Nat.zero_add] using head.toSlack.next tail
+
 structure CapPosition (groups : List Nat) (state : MachineState) (node dest : Nat) : Prop where
   context : CapContext groups state
   nodeWord : state.getReg .x6 = BitVec.ofNat 64 node

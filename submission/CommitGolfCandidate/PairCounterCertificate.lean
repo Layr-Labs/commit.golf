@@ -25,7 +25,7 @@ structure OpeningFacts (s : Submission) : Prop where
   runs : ∀ (trapdoor : s.scheme.Trapdoor) (positions : Positions) (result : Execution),
     result ∈ support (s.run .opening (trapdoor,positions)) →
     result.exit = .success ∧ s.openingSucceeded result = true ∧
-    (positions.card = BATCH → result.cycles ≤ 99593 ∧ (s.readProof result).length ≤ 72192) ∧
+    (positions.card = BATCH → result.cycles ≤ 99977 ∧ (s.readProof result).length ≤ 72192) ∧
     result.oracleCalls ≤ 100*positions.card
   refines : Sampling.Quartet.PairCounterRefines s.scheme
 
@@ -77,7 +77,7 @@ private theorem scheme_commit_budget (oracle : Oracle) (message : Message)
 private theorem opening_run (opens : OpeningFacts s) (trapdoor : s.scheme.Trapdoor) (positions : Positions)
     (opened : Execution) (reached : opened ∈ support (s.run .opening (trapdoor,positions))) :
     opened.exit = .success ∧ s.openingSucceeded opened = true ∧
-    (positions.card = BATCH → opened.cycles ≤ 99593 ∧ (s.readProof opened).length ≤ 72192) := by
+    (positions.card = BATCH → opened.cycles ≤ 99977 ∧ (s.readProof opened).length ≤ 72192) := by
   have r := opens.runs trapdoor positions opened reached
   exact ⟨r.1,r.2.1,r.2.2.1⟩
 
@@ -85,7 +85,7 @@ include commit in
 private theorem honest_machine_resources (opens : OpeningFacts s) (message : Message) (positions : Positions)
     (result : MachineResult) (reached : result ∈ support (s.honestMachine message positions)) :
     result.success = true ∧
-      (positions.card = BATCH → result.commitCycles ≤ commitCycles ∧ result.openingCycles ≤ 99593) := by
+      (positions.card = BATCH → result.commitCycles ≤ commitCycles ∧ result.openingCycles ≤ 99977) := by
   change result ∈ support (do
     let committed ← s.run .commit message
     let opened ← s.run .opening ((s.readCommit committed).2,positions)
@@ -109,7 +109,7 @@ theorem machine_success (opens : OpeningFacts s) : s.MachineSuccess := by
     (writer_support (oracle.world.withAddCost Oracle.callCost) _ result reached)).1
 
 include commit in
-theorem prover_cycles (opens : OpeningFacts s) : s.ProverCycles commitCycles 99593 := by
+theorem prover_cycles (opens : OpeningFacts s) : s.ProverCycles commitCycles 99977 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
@@ -205,7 +205,7 @@ theorem completeness (opens : OpeningFacts s) (checks : PairCheckerFacts s) : s.
 include commit in
 theorem certificate_of_facts (admitted : s.Admission) (opens : OpeningFacts s) (checks : PairCheckerFacts s)
     (privateView : s.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
-    Certificate s 72192 commitCycles 99593 where
+    Certificate s 72192 commitCycles 99977 where
   admission := admitted
   machineSuccess := machine_success commit opens
   termination := termination commit opens checks

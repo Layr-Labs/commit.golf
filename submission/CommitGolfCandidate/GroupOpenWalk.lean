@@ -90,6 +90,16 @@ theorem pre_row_fetch (b ip tw : Bool) : presentRows (preRows b ip tw) := by
   subst p
   exact row_fetch _ (raw b ip tw ⟨i,hi⟩).1 (raw b ip tw ⟨i,hi⟩).2
 
+/-- The record writer's group-base rows (368-byte quartet blocks: `x7 = x24 + (x6 >>> 2) * x4`). -/
+def writerRows : List Row := [(34,.ADDI .x21 .x21 16),(35,.SRLI .x7 .x6 2),(36,.MUL .x7 .x7 .x4),
+  (37,.ADD .x7 .x7 .x24),(38,.ANDI .x10 .x6 3)]
+
+theorem writer_row_fetch : presentRows writerRows := by
+  intro p hp
+  apply row_fetch
+  · simp only [writerRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h <;> subst p <;> decide
+  · simp only [writerRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h <;> subst p <;> decide +kernel
+
 theorem post_row_fetch (last : Bool) : presentRows (postRows last) := by
   have raw : ∀ l : Bool, ∀ i : Fin (postRows l).length, let row := (postRows l)[i];
       row.1<777 ∧ (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2 := by decide +kernel

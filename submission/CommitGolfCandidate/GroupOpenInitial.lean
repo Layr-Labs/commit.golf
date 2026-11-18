@@ -51,7 +51,7 @@ theorem opening_first_boundary (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8 * s.sizes.trapdoor)) (positions : Positions)
     (nonempty : 0 < positions.card) :
     let initial := s.initialState .opening (trapdoor, positions)
-    RecordBoundary s trapdoor positions (setupPrefix initial 15) 0 := by
+    SetupBoundary s trapdoor positions (setupPrefix initial 15) 0 := by
   let initial := s.initialState .opening (trapdoor, positions)
   have start : initial.pc = 0x1000 := rfl
   have trapPointer : initial.getReg .x12 = BitVec.ofNat 64 trapdoorBase :=

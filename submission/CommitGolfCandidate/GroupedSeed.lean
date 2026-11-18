@@ -108,18 +108,23 @@ theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n�
 
 attribute [local irreducible] pairPlan in
 theorem scan_content (o : Oracle) (k : Key) (msg : Message) (n i : Nat) (s : MachineState)
-    (bound : i+n≤NP) (r : Live s i) (good : Good o k msg (memoryView s) i) :
-    Good o k msg (memoryView (fixedScan o n i s)) (i+n) := by
+    (bound : i+n≤NP) (r : Live s i) (good : Good o k msg (memoryView s) i)
+    (pf : PrefetchOK s.getReg (memoryView s) i) :
+    Good o k msg (memoryView (fixedScan o n i s)) (i+n) ∧
+      PrefetchOK (fixedScan o n i s).getReg (memoryView (fixedScan o n i s)) (i+n) := by
   induction n generalizing i s with
-  | zero => exact good
+  | zero => exact ⟨good,pf⟩
   | succ n ih =>
     have hi : i<NP:=by omega
-    have next := fixed_pair_good o k msg s i hi r.toPairRegs good
+    have next := fixed_pair_good o k msg s i hi r.toPairRegs good pf
     have live := step_live s i hi r _ (fixed_leaf_supported o s i)
     have pcm : ∀ (t : MachineState) (p : Word), memoryView (t.setPC p)=memoryView t := fun t p => rfl
+    have rgm : ∀ (t : MachineState) (p : Word), (t.setPC p).getReg=t.getReg := fun t p => rfl
     have next' : Good o k msg (memoryView (fixedLeaf o s i)) (i+1) := by
-      unfold fixedLeaf; rw [pcm]; exact next
+      unfold fixedLeaf; rw [pcm]; exact next.1
+    have pf' : PrefetchOK (fixedLeaf o s i).getReg (memoryView (fixedLeaf o s i)) (i+1) := by
+      unfold fixedLeaf; rw [pcm,rgm]; exact next.2
     rw [show i+(n+1)=(i+1)+n by omega]
-    exact ih (i+1) _ (by omega) live next'
+    exact ih (i+1) _ (by omega) live next' pf'
 
 end TwoPermutationPrototype.Grouped

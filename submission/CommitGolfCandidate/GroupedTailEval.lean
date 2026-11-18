@@ -1,6 +1,8 @@
 import CommitGolfCandidate.GroupedPhysicalBase
 import CommitGolfCandidate.GroupedQMeaning
-import CommitGolfCandidate.QuartetPhysical
+import CommitGolfCandidate.QuartetPhysicalInputs
+import CommitGolfCandidate.QuartetRVModel
+import CommitGolfCandidate.TwoPermutationRootBytes
 import CommitGolfCandidate.MaterializedManifest
 
 namespace TwoPermutationPrototype.Grouped
@@ -11,7 +13,7 @@ set_option maxRecDepth 18000
 set_option maxHeartbeats 1000000
 attribute [local irreducible] readBuffer checkEvaluation qGroups qUnits scan fixedScan packedParentsTrace packedParentGroups rootPrefix pairHeap pairLeaf readyState
 def packedOutput (o : Oracle) (leaves : MachineState) : Execution :=
-  ⟨.success,(checkEvaluation o (tailBody leaves)).1,514155807,43470847⟩
+  ⟨.success,(checkEvaluation o (tailBody leaves)).1,512480543,43470847⟩
 
 private theorem eval_three (o : Oracle) (a : OracleComp World MachineState) (b c : MachineState → OracleComp World MachineState) (f : MachineState → MachineState) :
     (checkEvaluation o (do let x ← a; let y ← b x; let z ← c y; pure (f z))).1 =
@@ -19,10 +21,10 @@ private theorem eval_three (o : Oracle) (a : OracleComp World MachineState) (b c
   simp only [check_evaluation_bind,check_evaluation_pure]
 
 private theorem state_of_output (s : MachineState) :
-    (⟨.success,s,514155807,43470847⟩ : Execution).state=s := rfl
+    (⟨.success,s,512480543,43470847⟩ : Execution).state=s := rfl
 
 private theorem output_eq (o : Oracle) (leaves : MachineState) :
-    packedOutput o leaves=⟨.success,(checkEvaluation o (tailBody leaves)).1,514155807,43470847⟩ := rfl
+    packedOutput o leaves=⟨.success,(checkEvaluation o (tailBody leaves)).1,512480543,43470847⟩ := rfl
 
 attribute [local irreducible] packedOutput tailBody
 

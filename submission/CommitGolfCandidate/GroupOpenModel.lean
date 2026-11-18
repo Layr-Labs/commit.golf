@@ -13,7 +13,7 @@ def trapdoorSalt {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (index : Ind
   t.extractLsb' (8*(160*LENGTH+16*index.val)) 128
 
 def trapdoorLeaf {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (index : Nat) : BitVec 256 :=
-  t.extractLsb' (8*(32*LENGTH + 512*(index/4) + 72 + 32*(index%4))) 256
+  t.extractLsb' (8*(68*LENGTH + 368*(index/4) + 72 + 32*(index%4))) 256
 
 def physicalRecord (leaf heap : Nat → BitVec 256) (index : Index) (salt : BitVec 128) : Proof :=
   saltBytes salt ++ ([1,2,3] : List Nat).flatMap (fun j => digestBytes (leaf (index.val ^^^ j))) ++

@@ -1,6 +1,8 @@
 import CommitGolfCandidate.GroupedSeed
 import CommitGolfCandidate.GroupedQMeaning
-import CommitGolfCandidate.QuartetPhysical
+import CommitGolfCandidate.QuartetPhysicalInputs
+import CommitGolfCandidate.QuartetRVModel
+import CommitGolfCandidate.TwoPermutationRootBytes
 import CommitGolfCandidate.MaterializedManifest
 import CommitGolfCandidate.PairPhysicalHeap
 
