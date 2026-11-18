@@ -32,27 +32,24 @@ theorem packed_opening_facts (committed : PackedCommitTranscript) : OpeningFacts
     have limits := PackedOpening.opening_scored_limits packedSubmission trapdoor positions result physical batch
     have length := PackedOpening.opening_proof_size packedSubmission packed_opening_abi trapdoor positions result physical
     exact ⟨limits.1, length.trans_le limits.2⟩
-  refines := PackedOpening.chain_transcript packedSubmission packed_opening_abi committed
-
-attribute [local irreducible] RV64.Chain.expansion RV64.Chain.chainRun RV64.packed_wideCommitBody
+  refines := PackedOpening.transcript_refines packedSubmission packed_opening_abi
+    committed.trapdoor committed.distribution committed.nonce committed.heap
 
 theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Message)
     (result : Execution) (reachable : result ∈ support (packedSubmission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 619658240 ∧ result.oracleCalls = 51856895 := by
+    result.exit = .success ∧ result.cycles = 637936351 ∧ result.oracleCalls = 50331647 := by
   have entry : RV64.CommitEntry (packedSubmission.initialState .commit message) := ⟨rfl,rfl,rfl,rfl⟩
   erw [RV64.packed_submission_wide_commit_run leaves packedSubmission RV64.packed_manifest_image.symm
     (by decide) message entry] at reachable
   simp only [RV64.packed_wideCommitTrace, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
-  obtain ⟨key,_,last,_,state,_,rfl⟩ := reachable
+  obtain ⟨salts,_,state,_,rfl⟩ := reachable
   exact ⟨rfl,rfl,rfl⟩
 
 theorem packed_certificate (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (checks : CheckerFacts packedSubmission)
     (privateView : packedSubmission.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
-    Certificate packedSubmission 67584 619658240 88311 :=
-  certificate_of_facts (fun m result hit => by
-    obtain ⟨ex,cost,calls⟩ := packed_commit_resources leaves m result hit
-    exact ⟨ex,cost,calls.trans_le (by decide)⟩) packed_admitted
+    Certificate packedSubmission 67584 637936351 88311 :=
+  certificate_of_facts (packed_commit_resources leaves) packed_admitted
     (packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)) checks privateView
 
 end TwoPermutationPrototype.PackedCertificate

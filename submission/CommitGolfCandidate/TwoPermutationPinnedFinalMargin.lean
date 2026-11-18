@@ -8,7 +8,7 @@ set_option maxRecDepth 8192
 theorem pinned_final_hiding_margin (budget : Nat) :
     2 * ((3 * LENGTH : ℝ) * (((budget : ℝ) + 3 * LENGTH) / 2^1343)) +
       2 * ((budget : ℝ)/2^128 + (budget : ℝ)*(2/2^128 + 2^25/2^1344)) ≤
-      ((budget : ℝ) + 1) / 2^121 := by
+      ((budget : ℝ) + 1) / 2^120 := by
   have nonneg : 0 ≤ (budget : ℝ) := Nat.cast_nonneg _
   have compares : (LENGTH : ℝ) = 2 ^ 24 := by norm_num [LENGTH, LOG_LENGTH]
   rw [compares]

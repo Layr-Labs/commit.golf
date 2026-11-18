@@ -137,16 +137,17 @@ theorem entry_regs (s : MachineState) (entry : CommitEntry s) {bits : Nat} (coin
     (save .x11 (by decide)).trans base.size,(save .x13 (by decide)).trans base.primitive,pc⟩,
     (save .x21 (by decide)).trans stop⟩
 
-theorem chain_regs (s : MachineState) (r : Chain.BodyRegs s) : Regs s 0 0 :=
-  ⟨r.cursor,r.slots,r.salts,r.step,r.ready.1,r.ready.2.1,r.ready.2.2,r.pc⟩
-
 def executableLeaves : PackedLeafExecution where
   trace := groups (2^12) 0
-  executes s r fuel := groups_run _ (2^12) 0 fuel (by decide) (fun _ => chain_regs s r) r.stop
-  finished s r out hit := by
-    obtain ⟨pc,keep⟩ := groups_post s (2^12) 0 (by decide) (chain_regs s r) (by decide) hit
-    exact ⟨pc,(keep .x5 (by simp [SavedReg])).trans r.ready.1,(keep .x9 (by simp [SavedReg])).trans r.heap,
-      (keep .x19 (by simp [SavedReg])).trans r.stride,(keep .x21 (by simp [SavedReg])).trans r.stop,
-      (keep .x8 (by simp [SavedReg])).trans r.root⟩
+  executes s entry _ coins fuel := groups_run _ (2^12) 0 fuel (by decide) (fun _ => (entry_regs s entry coins).1)
+    (entry_regs s entry coins).2
+  finished s entry _ coins out hit := by
+    obtain ⟨pc,keep⟩ := groups_post _ (2^12) 0 (by decide) (entry_regs s entry coins).1 (by decide) hit
+    obtain ⟨g,stop,x8,x9,x19⟩ := post_random_regs s entry coins
+    have held (reg : Reg) (safe : SavedReg reg) (diff : reg ∉ [Reg.x7,.x10]) :=
+      (keep reg safe).trans (packed_wide_ready_state_register s coins reg diff)
+    exact ⟨pc,(held .x5 (by simp [SavedReg]) (by decide)).trans g.selector,
+      (held .x9 (by simp [SavedReg]) (by decide)).trans x9,(held .x19 (by simp [SavedReg]) (by decide)).trans x19,
+      (held .x21 (by simp [SavedReg]) (by decide)).trans stop,(held .x8 (by simp [SavedReg]) (by decide)).trans x8⟩
 
 end TwoPermutationPrototype.RV64.PackedLeaves

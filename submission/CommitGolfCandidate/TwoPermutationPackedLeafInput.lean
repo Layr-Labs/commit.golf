@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationInputWords
+import CommitGolfCandidate.TwoPermutationPackedMeaning
 
 namespace TwoPermutationPrototype.RV64.PackedLeaves
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype.Sampling
