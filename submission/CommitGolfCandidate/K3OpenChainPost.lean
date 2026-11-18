@@ -1,8 +1,7 @@
 import CommitGolfCandidate.K3OpenChainLink
 import CommitGolfCandidate.Counting
 
-/-! Opener chain block (rows 777..795 and the link calls at rows 896..929), fixed oracle and memory views:
-`chain_fixed`. Owner: H (draft by S9-L2; 33-call chain). -/
+/-! Opener chain block (rows 777..795 and the link block 896..929), fixed oracle and memory views: `chain_fixed`. Owner: H (draft by S9-L2). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -20,16 +19,14 @@ attribute [local simp] chain_zero_reg
 theorem answer_forward (o : Oracle) (q : BitVec PERMUTATION_WIDTH) :
     o.answer (m:=Id) (.inr (.inl q))=o.permutation q := rfl
 
-theorem calls_fixed (o : Oracle) : ∀ (c : Nat) (s : MachineState),
-    o.run (callsTrace c s)=pure ((callState o)^[c] s,c)
-  | 0,s => by rw [callsTrace,oracle_run_pure]; rfl
+theorem link_fixed (o : Oracle) : ∀ (c : Nat) (s : MachineState),
+    o.run (linkTrace c s)=pure (linkState o c s,c)
+  | 0,s => by rw [linkTrace,linkState_zero,oracle_run_pure]
   | c+1,s => by
-    rw [callsTrace]
-    simp only [callTrace,bind_assoc,pure_bind]
-    rw [oracle_run_public_bind]
+    rw [linkTrace,oracle_run_public_bind]
     simp only [answer_forward]
-    rw [calls_fixed o c]
-    simp only [pure_bind,Nat.add_comm 1 c]
+    rw [link_fixed o c,linkState_succ]
+    simp only [pure_bind,linkStep,Nat.add_comm 1 c]
     rfl
 
 theorem chain_fixed (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index) (e : ChainEntry h i)
@@ -38,7 +35,8 @@ theorem chain_fixed (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index)
   rw [chainTrace,oracle_run_public_bind]
   simp only [answer_forward]
   unfold chainState chainCalls
-  simp only [oracle_run_bind,calls_fixed,oracle_run_pure,pure_bind,Nat.add_zero]
+  simp only [oracle_run_bind,link_fixed,oracle_run_pure,pure_bind,Nat.add_zero]
+  rw [Nat.add_comm]
   rfl
 
 /-! ### Memory views -/
@@ -68,48 +66,19 @@ theorem reply_inside (s : MachineState) (z : BitVec PERMUTATION_WIDTH) (m : Fin 
 theorem before_view (h : MachineState) (i : Index) (e : ChainEntry h i) (w : Nat) (hw : w<2^33) :
     memoryView (chainBefore h) w=
       writeWord (memoryView h) 128 (Permutation.CounterSalt.ctr (K6Chain.restart (coord i).1)) w := by
-  obtain ⟨_,_,_,_,mem,_⟩ := chain_before h i e
+  obtain ⟨_,_,_,_,_,mem,_⟩ := chain_before h i e
   rw [chain_view_of_mem mem]
   exact memory_at_store (address:=128) (index:=w) (by decide) (by omega)
 
-/-- One `addi`, branch or `jal x0` row leaves memory unchanged (immediates kept abstract). -/
-theorem exec_mem_addi (s : MachineState) (rd rs : Reg) (imm : BitVec 12) :
-    (execInstrBr s (.ADDI rd rs imm)).mem=s.mem :=
-  (mem_of_set _ _).trans (mem_of_reg _ _ _)
-
-theorem exec_mem_beq (s : MachineState) (a b : Reg) (off : BitVec 13) :
-    (execInstrBr s (.BEQ a b off)).mem=s.mem := by
-  show (if s.getReg a == s.getReg b then s.setPC _ else s.setPC _).mem=s.mem
-  split <;> rfl
-
-theorem exec_mem_bne (s : MachineState) (a b : Reg) (off : BitVec 13) :
-    (execInstrBr s (.BNE a b off)).mem=s.mem := by
-  show (if s.getReg a != s.getReg b then s.setPC _ else s.setPC _).mem=s.mem
-  split <;> rfl
-
-theorem exec_mem_blt (s : MachineState) (a b : Reg) (off : BitVec 13) :
-    (execInstrBr s (.BLT a b off)).mem=s.mem := by
-  show (if BitVec.slt (s.getReg a) (s.getReg b) then s.setPC _ else s.setPC _).mem=s.mem
-  split <;> rfl
-
-theorem exec_mem_jal (s : MachineState) (off : BitVec 21) : (execInstrBr s (.JAL .x0 off)).mem=s.mem := rfl
-
-theorem exec_mem_slli (s : MachineState) (rd rs : Reg) (sh : BitVec 6) :
-    (execInstrBr s (.SLLI rd rs sh)).mem=s.mem := (mem_of_set _ _).trans (mem_of_reg _ _ _)
-
-theorem exec_mem_sub (s : MachineState) (rd a b : Reg) : (execInstrBr s (.SUB rd a b)).mem=s.mem :=
-  (mem_of_set _ _).trans (mem_of_reg _ _ _)
-
-theorem exec_mem_auipc (s : MachineState) (rd : Reg) (imm : BitVec 20) : (execInstrBr s (.AUIPC rd imm)).mem=s.mem :=
-  (mem_of_set _ _).trans (mem_of_reg _ _ _)
-
-theorem exec_mem_jalr (s : MachineState) (rd rs : Reg) (off : BitVec 12) :
-    (execInstrBr s (.JALR rd rs off)).mem=s.mem := (mem_of_set _ _).trans (mem_of_reg _ _ _)
-
 theorem enter_rows_mem (a : MachineState) : (walkRows a chainEnterRows).mem=a.mem := by
-  rw [enter_walk,exec_mem_jalr,exec_mem_sub,exec_mem_auipc,exec_mem_slli,exec_mem_addi]
+  simp only [chainEnterRows,walkRows,List.foldl,execInstrBr,mem_of_set,mem_of_reg]
 
-theorem out_rows_mem (b : MachineState) : (walkRows b chainOutRows).mem=b.mem := by
-  rw [out_walk,exec_mem_addi,exec_mem_jal]
+theorem exit_rows_mem (b : MachineState) : (walkRows b chainExitRows).mem=b.mem := by
+  have jm (s : MachineState) (offset : BitVec 21) : (execInstrBr s (.JAL .x0 offset)).mem=s.mem := by
+    simp [execInstrBr]
+  have am (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x10 .x0 imm)).mem=s.mem := by
+    simp [execInstrBr]
+  change (execInstrBr (execInstrBr b (.JAL .x0 2096616)) (.ADDI .x10 .x0 1024)).mem=b.mem
+  rw [am,jm]
 
 end TwoPermutationPrototype.GroupedOpening

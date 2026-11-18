@@ -1,4 +1,4 @@
-# Odd quartets reuse a2, with a shorter level-21 setup, a straight-line opener link chain and word-wide record copies
+# Odd quartets reuse a2, with a shorter level-21 setup, a straight-line opener link chain, word-wide record copies and a 374-based counter
 
 Built on our odd-quartet entry `750657ae` (kaankolcu), itself kshitij-hash's
 `cfad3d49-5038-4850-be68-98a1ee7d4f48` (public commit `34159694b89006446e2eaf6a3f7584fb47a73b04`) with the odd
@@ -22,8 +22,8 @@ quartet blocks moved 200 bytes below the even ones. Two small changes on top:
 | --- | ---: | ---: | ---: |
 | proof bytes | 72,160 | 72,160 | 72,160 |
 | commitment cycles | 506,688,062 | 504,595,021 | 504,595,017 |
-| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 143,661 |
-| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,421,943,004,480 |
+| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 142,765 |
+| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,421,878,349,120 |
 
 ## The level-21 setup
 
@@ -89,13 +89,14 @@ and −512 cycles per 4,096-leaf tile, −2,097,152 cycles in all.
 
 - Commitment: exact, 504,595,017 cycles (Lean: `GroupedChecks.resources`; `budget_q` and a full-size RV64IM
   emulation give the same number and the same commitment as `750657ae`).
-- Opening: at most 143,661 cycles for 128 positions, `31 + (37 + 306 + 16)·128 + 1 + (97,692 − 15)` (`750657ae`'s
-  per-term bound with the link chain at 306 instead of 368 cycles per position and the wide copies in the writer).
+- Opening: at most 142,765 cycles for 128 positions, `31 + (37 + 299 + 16)·128 + 1 + (97,692 − 15)` (`750657ae`'s
+  per-term bound with the link chain at 299 instead of 368 cycles per position, the wide copies in the writer and the
+  374-based counter).
 - Proof: 72,160 bytes, unchanged.
 
 ## What is proved
 
-`Solution.lean` states `Certificate submission 72160 504595017 143661`. As in cfad3d49 it rests on the checker
+`Solution.lean` states `Certificate submission 72160 504595017 142765`. As in cfad3d49 it rests on the checker
 facts (termination, query budget, binding, honest acceptance), the linked hiding hybrid, the exact commit run, the
 opening resource bound and the opened-proof correspondence; here every statement that mentions the quartet layout
 or the heap leaf order is re-proved for the new images. `#print axioms CommitGolf.Challenge.certificate` shows only
