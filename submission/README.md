@@ -1,8 +1,8 @@
-# Odd quartets reuse a2, with a shorter level-21 setup, a straight-line opener link chain, word-wide record copies and a 374-based counter
+# Odd quartets reuse a2, with a shorter level-21 setup, a straight-line opener link chain, a 374-based link counter and word-wide record copies (four 32-byte fields and writer levels 2..12)
 
 Built on our odd-quartet entry `750657ae` (kaankolcu), itself kshitij-hash's
 `cfad3d49-5038-4850-be68-98a1ee7d4f48` (public commit `34159694b89006446e2eaf6a3f7584fb47a73b04`) with the odd
-quartet blocks moved 200 bytes below the even ones. Two small changes on top:
+quartet blocks moved 200 bytes below the even ones. Three changes on top (our `804b758d`):
 
 - **Level-21 setup, 11 → 7 words** (the trim of patternrecognition9-del's `ffa6a198-899f-406b-818d-95dd3c9ea2b6`,
   public commit `10e21ee11e7e0b62972ab550d496b83f7444c080`, applied to this layout): the first level-21 input
@@ -13,17 +13,26 @@ quartet blocks moved 200 bytes below the even ones. Two small changes on top:
   public commit `40eb3d880edd79e4c2fea0241e790de5f8d28ed4`, withdrawn by its author before grading, on this tree): the `k = g mod 34` in-place generator links are a
   computed jump into 33 appended `ecall`s (opening rows 790–794 and 896–929). −7,936 on the certified worst set.
 - **Word-wide record copies.** The four 32-byte halfword copies of each opening record (three sibling digests and the
-  level-0 sibling, rows 43, 79, 115, 153) jump to stubs (rows 930–1061; 1,062 opening words) that copy with
+  level-0 sibling, rows 43, 79, 115, 153) jump to stubs (rows 930–1061) that copy with
   `ld/sd` or `lw/sw` when the destination allows it. −2,304 on the certified worst set.
+
+This entry (on our `804b758d`, the tree above) changes only the opener, in two places:
+
+- **374-based link counter** (pepedesigner's `ca54b35f-af11-4644-8031-a6d8b9e6fef6`, public commit
+  `9d9b1e75ed5a76bc9185efb3ea9826a621d1423e`, taken over unchanged, image words and Lean): the per-position counter
+  of the link chain uses three `mul/div` instead of five. −7 cycles per position, −896 on the certified worst set.
+- **30-byte wide copies.** The eleven 30-byte halfword copies of writer levels 2..12 (rows 225, 260, …, 575) jump to
+  one shared stub (rows 1062–1096; 1,097 opening words) that copies with `ld/sd`, `lw/sw` and a final `lhu/sh` when
+  the destination allows it. −4,928 on the certified worst set.
 
 ## Result
 
-| | `cfad3d49` | `750657ae` | This entry |
-| --- | ---: | ---: | ---: |
-| proof bytes | 72,160 | 72,160 | 72,160 |
-| commitment cycles | 506,688,062 | 504,595,021 | 504,595,017 |
-| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 142,765 |
-| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,421,878,349,120 |
+| | `cfad3d49` | `750657ae` | `804b758d` | This entry |
+| --- | ---: | ---: | ---: | ---: |
+| proof bytes | 72,160 | 72,160 | 72,160 | 72,160 |
+| commitment cycles | 506,688,062 | 504,595,021 | 504,595,017 | 504,595,017 |
+| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 143,661 | 137,837 |
+| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,421,943,004,480 | 36,421,522,744,640 |
 
 ## The level-21 setup
 
@@ -42,6 +51,14 @@ and row 929 jumps back to row 795: `addi, slli, auipc, sub, jalr` to row `929 �
 and comes in the same order, so calls, memory and proofs are unchanged. Per position the chain costs `42 + 8k`
 cycles for `k ≤ 33` links (306 at the worst case `k = 33`, against 368).
 
+## The 374-based link counter (opener)
+
+pepedesigner's change (`ca54b35f`), unchanged here. Rows 777–788 of `804b758d` computed the position's salt offset
+and its link count `k = (g mod 4096)/11 mod 34` with `remu, divu, remu, remu, mul` (20 cycles). Rows 777–793 now take
+`r = (g mod 4096) mod 374` (`slli/srli` by 52 and one `remu` by 374 = 34·11), then `k = r/11` and `g mod 11 = r mod 11`,
+and subtract `r` in one step; the jump into the call run is rebuilt at row 793 (row 794 is no longer reached). Per
+position the chain costs `35 + 8k` cycles (299 at `k = 33`, against 306).
+
 ## Word-wide record copies (opener)
 
 Each opening record copies four 32-byte fields with 16 `lhu/sh` pairs (32 cycles). The four sites now `jal x29` to a
@@ -49,6 +66,25 @@ Each opening record copies four 32-byte fields with 16 `lhu/sh` pairs (32 cycles
 4-aligned, eight `lw/sw` (22 cycles); 2-aligned, the first `lhu/sh` and a return into the site's own pairs 1..15 (38
 cycles). Record `o`'s destinations are `≡ 6o (mod 8)`, so a record costs `673 − 80, + 24, − 40, + 24` cycles for
 `o mod 4 = 0..3`; the writer term over 128 records goes from 99,996 to 97,692. Proof bytes are unchanged.
+
+## 30-byte wide copies (opener)
+
+Writer levels 2..12 copy a 30-byte heap node from `x7` (32-byte aligned) to `0(x21)` with 15 `lhu/sh` pairs (30
+cycles), followed by `addi x21,x21,30`. The first word of each of these eleven sites is now `jal x29,<1062>`, into one
+shared 35-word stub:
+
+```
+1062  andi t6,s5,3 ; beq t6,zero,+16      destination 2 mod 4:
+1064  lhu/sh 0 ; jalr zero,4(t4)          first halfword, back to the site's pairs 1..14       34 cycles
+1067  andi t6,s5,7 ; beq t6,zero,+72      destination 4 mod 8:
+1069  7 x lw/sw 0..24, lhu/sh 28, jalr zero,116(t4)   back to the site's addi            22 cycles
+1086  3 x ld/sd 0..16, lw/sw 24, lhu/sh 28, jalr zero,116(t4)   (destination 0 mod 8)   16 cycles
+```
+
+Level `l` of record `o` starts at `proofBase + 534o + 176 + 30(l−2) ≡ 6o + 6(l−2) (mod 8)`, so a record's eleven
+copies cost 284, 302, 284 and 296 cycles for `o mod 4 = 0..3`, against 330. `x29` and `x31` are dead at these sites
+(`x29` already carries the 32-byte stubs' return address; the counter's divisor in `x29` is set before the position
+pass and the writer runs after it). Proof bytes are unchanged.
 
 ## The odd-quartet layout (as in `750657ae`)
 
@@ -89,14 +125,18 @@ and −512 cycles per 4,096-leaf tile, −2,097,152 cycles in all.
 
 - Commitment: exact, 504,595,017 cycles (Lean: `GroupedChecks.resources`; `budget_q` and a full-size RV64IM
   emulation give the same number and the same commitment as `750657ae`).
-- Opening: at most 142,765 cycles for 128 positions, `31 + (37 + 299 + 16)·128 + 1 + (97,692 − 15)` (`750657ae`'s
-  per-term bound with the link chain at 299 instead of 368 cycles per position, the wide copies in the writer and the
-  374-based counter).
+- Opening: at most 137,837 cycles for 128 positions, `31 + (37 + 299 + 16)·128 + 1 + (92,764 − 15)` (`750657ae`'s
+  per-term bound with the link chain at 299 instead of 368 cycles per position and the 32- and 30-byte wide copies in
+  the writer: each record costs `215 + 4·c32(o) + c30(o)`; over 128 records 99,996 → 92,764).
+  A full-size RV64IM emulation against `804b758d`'s opener, on the certified worst set and on positions 0..127 for
+  1..9, 13, 64, 127 and 128 positions, gives exactly `−7 − 46, −7 − 28, −7 − 46, −7 − 34` cycles per record for
+  `o mod 4 = 0..3` (worst set, 128 positions: 143,661 → 137,837), byte-identical proofs, honest acceptance and every
+  tamper rejected.
 - Proof: 72,160 bytes, unchanged.
 
 ## What is proved
 
-`Solution.lean` states `Certificate submission 72160 504595017 142765`. As in cfad3d49 it rests on the checker
+`Solution.lean` states `Certificate submission 72160 504595017 137837`. As in cfad3d49 it rests on the checker
 facts (termination, query budget, binding, honest acceptance), the linked hiding hybrid, the exact commit run, the
 opening resource bound and the opened-proof correspondence; here every statement that mentions the quartet layout
 or the heap leaf order is re-proved for the new images. `#print axioms CommitGolf.Challenge.certificate` shows only
@@ -115,9 +155,27 @@ patternrecognition9-del's `ffa6a198-899f-406b-818d-95dd3c9ea2b6` (public commit
 `10e21ee11e7e0b62972ab550d496b83f7444c080`), re-derived for this layout; no file of it is used. The straight-line link chain
 is the opener of patternrecognition9-del's `42ccb0c2-770b-47da-89be-0c846a629cb2` (public commit
 `40eb3d880edd79e4c2fea0241e790de5f8d28ed4`; withdrawn before grading), re-proved on this tree; its proof modules here
-are ours. The word-wide copy stubs and their proofs are ours.
+are ours. The word-wide copy stubs and their proofs are ours (`804b758d`).
 
-Every file of `CommitGolfCandidate/` is byte-identical to cfad3d49's except these (two new, `K3OpenReply` and `GroupOpenWideCopy`):
+The 374-based link counter is pepedesigner's `ca54b35f-af11-4644-8031-a6d8b9e6fef6` (public commit
+`9d9b1e75ed5a76bc9185efb3ea9826a621d1423e`). Its opening words 777–793 and its Lean files `K3OpenChainRows`,
+`K3OpenChainLink`, `K3OpenChainRun`, `K3OpenChainPost`, `K3OpenChainExit`, `K3OpenChainReply` and `GroupOpenPass` are
+used here unchanged, and its `packed_fetch_base_any` lemma is kept in `GroupOpenImage` (stated as there, for rows
+below 1062). The 30-byte copy stub, its image builder and its proofs (`GroupOpenWideCopy30` and the cost plumbing) are
+ours.
+
+Relative to our `804b758d`, these files of `CommitGolfCandidate/` differ (one new, `GroupOpenWideCopy30`):
+
+- image and manifest: `K1Manifest` (re-rendered from `programs.json`), `GroupOpenImage` (1,097-word literal, the
+  `CopySite.wide30` sites, fetch bounds);
+- the counter (pepedesigner's files, unchanged): `K3OpenChainRows`, `K3OpenChainLink`, `K3OpenChainRun`,
+  `K3OpenChainPost`, `K3OpenChainExit`, `K3OpenChainReply`, `GroupOpenPass`;
+- the 30-byte copies: `GroupOpenWideCopy30` (new), `GroupOpenWideCopy` (fetch bounds raised to 1,097 words),
+  `GroupOpenCopy`, `GroupOpenSiblingRun`, `GroupOpenUpperRun`, `GroupOpenRecordData`, `GroupOpenRecordRun`,
+  `GroupOpenRecordsAPI`, `GroupOpenABI`;
+- the claim: `GroupOpenFull`, `GroupOpenClosing`.
+
+`804b758d` itself differs from cfad3d49 in these files (two new, `K3OpenReply` and `GroupOpenWideCopy`):
 
 - images and manifests: `K1Manifest`, `GroupedUpperImage`, `TwoPermutationPackedImage`;
 - commit body and setup: `GroupedImageBase`, `GroupedCommitImage`, `GroupedPacket`, `GroupedPacketRun`, `GroupedScan`,

@@ -5,11 +5,12 @@ namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 8192
 
-/-- The final opener (1062 words, no image data): K3-lite + L21 + chain + T238 + wide copies.
+/-- The final opener (1097 words, no image data): K3-lite + L21 + chain + T238 + wide copies.
 Words 0..712 are the record writer (records, cap frontier, size, halt); 713..812 the prefix pass;
 813..895 the T238 writer blocks (`a1Start`, `foldStart`, `wiStart`, `wkStart`, `wsStart`); 896..928 the 33 link
 calls of the salt chain and 929 its `jal` back to row 795; 930..1061 the four wide-copy stubs (`wideStub`) that
-the `jal x29` at rows 43, 79, 115 and 153 enter. -/
+the `jal x29` at rows 43, 79, 115 and 153 enter; 1062..1096 the shared 30-byte stub (`stub30`) that the `jal x29`
+at rows 225, 260, ..., 575 (writer levels 2..12) enter. -/
 def openingImage : Image := ⟨[
   0x00078a13, 0x00078a93, 0x300806e3, 0x3190006f, 0x00060493, 0x00080913, 0x004009b7, 0x20000337,
   0x00648c33, 0x00331313, 0x006c0b33, 0x00100b93, 0x00048c93, 0x00001d37, 0x10000d93, 0x00043303,
@@ -39,50 +40,50 @@ def openingImage : Image := ⟨[
   0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83, 0x01fa9823,
   0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23,
   0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x1450006f, 0x00135313, 0x00134393, 0x00539393,
-  0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83,
+  0x007483b3, 0x51500eef, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83,
   0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83,
   0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83,
   0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01ea8a93,
-  0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123,
+  0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x48900eef, 0x01fa9023, 0x0023df83, 0x01fa9123,
   0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523,
   0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923,
   0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23,
-  0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x0003df83,
+  0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x3fd00eef,
   0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323, 0x0083df83,
   0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83,
   0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83,
   0x01fa9c23, 0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393,
-  0x00539393, 0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223,
+  0x00539393, 0x007483b3, 0x37100eef, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223,
   0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623,
   0x00e3df83, 0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23,
   0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23,
-  0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83,
+  0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x2e500eef, 0x01fa9023, 0x0023df83,
   0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83,
   0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83,
   0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83,
   0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3,
-  0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323,
+  0x25900eef, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323,
   0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723,
   0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23,
   0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313,
-  0x00134393, 0x00539393, 0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83,
+  0x00134393, 0x00539393, 0x007483b3, 0x1cd00eef, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83,
   0x01fa9223, 0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83,
   0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83,
   0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23, 0x01c3df83,
-  0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x0003df83, 0x01fa9023,
+  0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x14100eef, 0x01fa9023,
   0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423,
   0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83, 0x01fa9823,
   0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23,
   0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393,
-  0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83,
+  0x007483b3, 0x0b500eef, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83,
   0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83,
   0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83,
   0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01ea8a93,
-  0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123,
+  0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x02900eef, 0x01fa9023, 0x0023df83, 0x01fa9123,
   0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523,
   0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923,
   0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23,
-  0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x0003df83,
+  0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00135313, 0x00134393, 0x00539393, 0x007483b3, 0x79c00eef,
   0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83, 0x01fa9323, 0x0083df83,
   0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83, 0x01fa9723, 0x0103df83,
   0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83,
@@ -143,11 +144,15 @@ def openingImage : Image := ⟨[
   0x020f8a63, 0x0003df83, 0x01fa9023, 0x004e8067, 0x0003bf83, 0x01fab023, 0x0083bf83, 0x01fab423,
   0x0103bf83, 0x01fab823, 0x0183bf83, 0x01fabc23, 0x07ce8067, 0x0003af83, 0x01faa023, 0x0043af83,
   0x01faa223, 0x0083af83, 0x01faa423, 0x00c3af83, 0x01faa623, 0x0103af83, 0x01faa823, 0x0143af83,
-  0x01faaa23, 0x0183af83, 0x01faac23, 0x01c3af83, 0x01faae23, 0x07ce8067,
-], []⟩
+  0x01faaa23, 0x0183af83, 0x01faac23, 0x01c3af83, 0x01faae23, 0x07ce8067, 0x003aff93, 0x000f8863,
+  0x0003df83, 0x01fa9023, 0x004e8067, 0x007aff93, 0x040f8463, 0x0003af83, 0x01faa023, 0x0043af83,
+  0x01faa223, 0x0083af83, 0x01faa423, 0x00c3af83, 0x01faa623, 0x0103af83, 0x01faa823, 0x0143af83,
+  0x01faaa23, 0x0183af83, 0x01faac23, 0x01c3df83, 0x01fa9e23, 0x074e8067, 0x0003bf83, 0x01fab023,
+  0x0083bf83, 0x01fab423, 0x0103bf83, 0x01fab823, 0x0183af83, 0x01faac23, 0x01c3df83, 0x01fa9e23,
+  0x074e8067], []⟩
 
 /-- Number of words in the opener image. -/
-abbrev openingWords : Nat := 1062
+abbrev openingWords : Nat := 1097
 
 /-! T238 writer blocks appended after the prefix pass (all writer code addresses live here). -/
 /-- A1: the 16th halfword of the level-1 sibling, then `addi x21,x21,32; jal <221>`. -/
@@ -206,9 +211,9 @@ theorem packed_fetch_ext (state : MachineState) (index : Nat) (instruction : Ins
       | word op rd rs₁ rs₂ => simp [dec] at decoded
       | sraiw rd rs sh => simp [dec] at decoded
 
-/-- `packed_fetch_base` for every row of the 1062-word image (the wide-copy stubs at 930..1061 included). -/
+/-- `packed_fetch_base` for every row of the 1097-word image (the wide-copy stubs at 930..1096 included). -/
 theorem packed_fetch_all (state : MachineState) (index : Nat) (instruction : Instr)
-    (bounded : index < 1062) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
+    (bounded : index < 1097) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
     (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
     fetch openingImage state = some (.base instruction) := by
   have current : state.pc.toNat = 4096+4*index := by
@@ -233,11 +238,11 @@ theorem packed_fetch_base_any (state : MachineState) (index : Nat) (instruction 
     (bounded : index < 1062) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
     (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
     fetch openingImage state = some (.base instruction) :=
-  packed_fetch_all state index instruction bounded pc decoded
+  packed_fetch_all state index instruction (by omega) pc decoded
 
 set_option maxHeartbeats 1600000 in
 /-- All decoded instruction literals and all data bytes match the submitted JSON image. -/
-private theorem image_word_match : ∀ k : Fin 1062,
+private theorem image_word_match : ∀ k : Fin 1097,
     (K1Artifact.submission.image .opening).code.getD k.val 0 = openingImage.code.getD k.val 0 := by
   intro k
   simp only [K1Artifact.submission]
@@ -293,6 +298,12 @@ def CopySite.wide : CopySite → Bool
   | .quartet _ | .firstSibling => true
   | _ => false
 
+/-- The eleven 30-byte sites of writer levels 2..12 (`sibling l`, `l = 1..11`, rows 225, 260, ..., 575), whose
+first word is a `jal x29` into the shared 30-byte stub at row 1062. Their halfword pairs `1..14` stay in place. -/
+@[simp] def CopySite.wide30 : CopySite → Bool
+  | .nonce | .quartet _ | .firstSibling | .cap => false
+  | .sibling level => 0 < level.val && level.val < 12
+
 def copyLoad (offset : Nat) : Instr := .LHU .x31 .x7 (BitVec.ofNat 12 (2*offset))
 def copyStore (offset : Nat) : Instr := .SH .x21 .x31 (BitVec.ofNat 12 (2*offset))
 
@@ -308,7 +319,7 @@ private instance (site : CopySite) (offset : Nat) : Decidable (PairDecodes site 
 
 set_option maxHeartbeats 2500000 in
 theorem copy_sites_decoded (site : CopySite) (offset : Fin site.halfwords)
-    (later : site.wide = false ∨ 0 < offset.val) :
+    (later : (site.wide || site.wide30) = false ∨ 0 < offset.val) :
     PairDecodes site offset.val := by
   cases site with
   | nonce => exact (show ∀ i : Fin 8, PairDecodes .nonce i.val by decide) offset
@@ -320,9 +331,14 @@ theorem copy_sites_decoded (site : CopySite) (offset : Fin site.halfwords)
       (by simpa [CopySite.wide] using later)
   | sibling level =>
     have all : ∀ j : Fin 13, ∀ i : Fin 15, i.val < (CopySite.sibling j).halfwords →
-        PairDecodes (.sibling j) i.val := by decide
+        (j.val = 0 ∨ j.val = 12 ∨ 0 < i.val) → PairDecodes (.sibling j) i.val := by decide
+    have pick : level.val = 0 ∨ level.val = 12 ∨ 0 < offset.val := by
+      rcases later with h | h
+      · simp only [CopySite.wide, CopySite.wide30, Bool.false_or, Bool.and_eq_false_iff, decide_eq_false_iff_not] at h
+        omega
+      · exact Or.inr (Or.inr h)
     exact all level ⟨offset.val, by have := offset.isLt; simp only [CopySite.halfwords] at this; split at this <;> omega⟩
-      offset.isLt
+      offset.isLt pick
   | cap => exact (show ∀ i : Fin 14, PairDecodes .cap i.val by decide) offset
 
 theorem copy_site_halfwords (site : CopySite) : site.halfwords ≤ 16 := by
@@ -344,14 +360,14 @@ theorem copy_site_inside (site : CopySite) (offset : Fin site.halfwords) :
   omega
 
 theorem fetch_copy_load (site : CopySite) (offset : Fin site.halfwords) (state : MachineState)
-    (later : site.wide = false ∨ 0 < offset.val)
+    (later : (site.wide || site.wide30) = false ∨ 0 < offset.val)
     (pc : state.pc = BitVec.ofNat 64 (4096+4*(site.start+2*offset.val))) :
     fetch openingImage state = some (.base (.LHU .x31 site.source (BitVec.ofNat 12 (2*offset.val)))) :=
   packed_fetch_base _ _ _ (by have := copy_site_inside site offset; omega) pc
     (copy_sites_decoded site offset later).1
 
 theorem fetch_copy_store (site : CopySite) (offset : Fin site.halfwords) (state : MachineState)
-    (later : site.wide = false ∨ 0 < offset.val)
+    (later : (site.wide || site.wide30) = false ∨ 0 < offset.val)
     (pc : state.pc = BitVec.ofNat 64 (4096+4*(site.start+2*offset.val+1))) :
     fetch openingImage state = some (.base (.SH .x21 .x31 (BitVec.ofNat 12 (site.destOffset+2*offset.val)))) :=
   packed_fetch_base _ _ _ (copy_site_inside site offset) pc

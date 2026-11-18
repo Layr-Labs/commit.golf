@@ -32,9 +32,9 @@ theorem RecordBoundary.start {s : Submission} {trapdoor : BitVec (8*s.sizes.trap
   ⟨by simpa only [ite_eq_right (show ordinal ≠ positions.card by omega)] using boundary.pc,
     boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.slots, boundary.input⟩
 
-/-- Cycles of record `ordinal` (the final record skips the loop jump): its four wide copies depend on its
-alignment. -/
-def recordCost (ordinal : Nat) (final : Bool) : Nat := (if final then 544 else 545)+4*recordCopyCost ordinal
+/-- Cycles of record `ordinal` (the final record skips the loop jump): its four 32-byte and eleven 30-byte wide
+copies depend on its alignment. -/
+def recordCost (ordinal : Nat) (final : Bool) : Nat := (if final then 214 else 215)+recordExtra ordinal
 
 def afterLatch (marked : MachineState) (final : Bool) : MachineState :=
   if final then marked else marked.setPC 0x103c
@@ -70,18 +70,18 @@ def recordsCost (size ordinal : Nat) : Nat → Nat
 /-- Wide-copy cycles of records `0..n-1`. -/
 def copySum : Nat → Nat
   | 0 => 0
-  | n+1 => copySum n+recordCopyCost n
+  | n+1 => copySum n+recordExtra n
 
 theorem records_cost_sum (size : Nat) : ∀ count ordinal, ordinal+count ≤ size →
-    recordsCost size ordinal count+4*copySum ordinal+(if 0<count ∧ ordinal+count=size then 1 else 0) =
-      545*count+4*copySum (ordinal+count) := by
+    recordsCost size ordinal count+copySum ordinal+(if 0<count ∧ ordinal+count=size then 1 else 0) =
+      215*count+copySum (ordinal+count) := by
   intro count
   induction count with
   | zero => intro ordinal _; simp [recordsCost]
   | succ count ih =>
     intro ordinal fit
     have rest := ih (ordinal+1) (by omega)
-    have step : copySum (ordinal+1) = copySum ordinal+recordCopyCost ordinal := rfl
+    have step : copySum (ordinal+1) = copySum ordinal+recordExtra ordinal := rfl
     rw [show ordinal+1+count = ordinal+(count+1) by omega] at rest
     simp only [recordsCost, recordCost]
     by_cases last : ordinal+1 = size
@@ -101,7 +101,7 @@ theorem records_cost_sum (size : Nat) : ∀ count ordinal, ordinal+count ≤ siz
         omega
 
 theorem records_total (size : Nat) (positive : 0 < size) :
-    recordsCost size 0 size = 545*size+4*copySum size-1 := by
+    recordsCost size 0 size = 215*size+copySum size-1 := by
   have h := records_cost_sum size size 0 (by omega)
   rw [if_pos ⟨positive, by omega⟩] at h
   simp only [copySum, Nat.zero_add, Nat.mul_zero, Nat.add_zero] at h

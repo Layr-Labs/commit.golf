@@ -78,7 +78,7 @@ private theorem latch_target (marked : MachineState) (last : Prop) [Decidable la
     rfl
 
 private theorem complete_record_cost (ordinal : Nat) (final : Bool) :
-    538+4*recordCopyCost ordinal+latchCost final = recordCost ordinal final := by
+    208+recordExtra ordinal+latchCost final = recordCost ordinal final := by
   cases final <;> simp [recordCost, latchCost] <;> omega
 
 private theorem execute_record_with_data (s : Submission)
