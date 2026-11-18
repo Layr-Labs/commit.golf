@@ -5,20 +5,17 @@ import CommitGolfCandidate.TwoPermutationSyscall
 import CommitGolfCandidate.K6Chain
 
 /-! Opener prefix, salt regeneration of one position on the linked (chain) schedule: rows
-`chainStart .. chainStart+18` and the link groups at rows 4..14. With `n = i % 4096`, `r = n % 11` (rank),
-`h = n / 11` (head in the tile), `j = h % 34` (links after the keyed restart):
+`chainStart .. chainStart+18`, the 33 link calls at rows 896..928 and the return at 929. With `n = i % 4096`,
+`r = n % 11` (rank), `h = n / 11` (head in the tile), `j = h % 34` (links after the keyed restart):
 ```
 777: remu x28,x6,x26 ; divu x30,x28,x29 ; remu x28,x28,x29 ; addi x31,x0,34 ; remu x30,x30,x31 ; mul x31,x30,x29 ;
      sub x7,x6,x28 ; sub x7,x7,x31 ; addi x7,x7,1 ; slli x7,x7,8 ; add x7,x7,x26 ; sd x7,0(x10) ; ecall ;
-790: beq x30,x0,796 ; addi x10,x12,0 ; jal x0,4
-  4: addi x30,x30,-4 ; blt x30,x0,11 ; ecall ; ecall ; ecall ; ecall ; jal x0,4
- 11: addi x30,x30,4 ; beq x30,x0,795 ; ecall ; jal x0,793
-793: addi x30,x30,-1 ; bne x30,x0,13 ; addi x10,x0,1024
+790: addi x10,x12,0 ; slli x31,x30,2 ; auipc x7,0 ; sub x7,x7,x31 ; jalr x0,548(x7)
+896: ecall ×33 ; 929: jal x0,795 ; 795: addi x10,x0,1024
 ```
 the keyed generator call of head `h - j` (counter = base of its C leaf, K1 input layout at word 128, reply at
-`[1536, 1736)`), then `j` in-place links on `[1536, 1736)`: `j / 4` groups of four calls (rows 4..10), then `j % 4`
-single calls (rows 13, 14, 793, 794). Rows 4..14 were the dead copy of the setup rows in the base image. The counter
-arithmetic and the reply of the restart-plus-links walk are S9-K6P's `K6Chain.restart_counter` /
+`[1536, 1736)`), then a computed jump to row `929 - j`, which runs exactly `j` in-place links on `[1536, 1736)`.
+The counter arithmetic and the reply of the restart-plus-links walk are S9-K6P's `K6Chain.restart_counter` /
 `K6Chain.opener_chain`. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
@@ -34,9 +31,8 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 abbrev chainStart : Nat := 777
 /-- Links of position `i`: its head is `chainLinks i` heads after the keyed restart. -/
 def chainLinks (i : Index) : Nat := ((i.val%4096)/11)%34
-/-- Steps: 14 rows and calls without links (`beq` taken); else 21, plus 7 per group of four links and 4 per
-remaining link. -/
-def chainSteps (i : Index) : Nat := if chainLinks i=0 then 14 else 21+7*(chainLinks i/4)+4*(chainLinks i%4)
+/-- Steps: 12 counter rows, the keyed call, 5 jump rows, one row per link, `jal` back and the exit row. -/
+def chainSteps (i : Index) : Nat := 20+chainLinks i
 def chainCalls (i : Index) : Nat := 1+chainLinks i
 /-- Three `remu`, one `divu`, one `mul` (4 cycles each) and 8 cycles per call. -/
 def chainCycles (i : Index) : Nat := chainSteps i+15+7*chainCalls i
@@ -67,53 +63,43 @@ def KeyWords (h : MachineState) (k : BitVec 192) : Prop :=
 def chainPreRows : List Row := [(777,.REMU .x28 .x6 .x26),(778,.DIVU .x30 .x28 .x29),(779,.REMU .x28 .x28 .x29),
   (780,.ADDI .x31 .x0 34),(781,.REMU .x30 .x30 .x31),(782,.MUL .x31 .x30 .x29),(783,.SUB .x7 .x6 .x28),
   (784,.SUB .x7 .x7 .x31),(785,.ADDI .x7 .x7 1),(786,.SLLI .x7 .x7 8),(787,.ADD .x7 .x7 .x26),(788,.SD .x10 .x7 0)]
-def chainSkipRows : List Row := [(790,.BEQ .x30 .x0 24)]
-def chainEnterRows : List Row := [(790,.BEQ .x30 .x0 24),(791,.ADDI .x10 .x12 0),(792,.JAL .x0 0x1ff3b0)]
-/-- Head of a group: `addi x30,x30,-4 ; blt x30,x0,11`. -/
-def groupTestRows : List Row := [(4,.ADDI .x30 .x30 0xffc),(5,.BLT .x30 .x0 0x18)]
-/-- End of a group: `jal x0,4`. -/
-def groupBackRows : List Row := [(10,.JAL .x0 0x1fffe8)]
-/-- Leaving the groups with `c < 4` links left: the group head (taken `blt`), `addi x30,x30,4 ; beq x30,x0,795`. -/
-def groupOutRows : List Row := [(4,.ADDI .x30 .x30 0xffc),(5,.BLT .x30 .x0 0x18),(11,.ADDI .x30 .x30 4),
-  (12,.BEQ .x30 .x0 0xc3c)]
-/-- After a single link call at row 13: `jal x0,793 ; addi x30,x30,-1 ; bne x30,x0,13`. -/
-def restRows : List Row := [(14,.JAL .x0 0xc2c),(793,.ADDI .x30 .x30 0xfff),(794,.BNE .x30 .x0 0x13cc)]
-def chainExitRows : List Row := [(795,.ADDI .x10 .x0 1024)]
+/-- `addi x10,x12,0 ; slli x31,x30,2 ; auipc x7,0 ; sub x7,x7,x31 ; jalr x0,548(x7)`: to row `929 - links`. -/
+def chainEnterRows : List Row := [(790,.ADDI .x10 .x12 0),(791,.SLLI .x31 .x30 2),(792,.AUIPC .x7 0),
+  (793,.SUB .x7 .x7 .x31),(794,.JALR .x0 .x7 0x224)]
+/-- `jal x0,795 ; addi x10,x0,1024`. -/
+def chainOutRows : List Row := [(929,.JAL .x0 0x1ffde8),(795,.ADDI .x10 .x0 1024)]
+
+/-- `rows_present` for rows anywhere in the 930-word image. -/
+theorem rows_present_ext (rows : List Row)
+    (raw : ∀ i : Fin rows.length, rows[i].1<930 ∧ (openingImage.code[rows[i].1]?).bind Opening.decodeBase=some rows[i].2) :
+    presentRows rows := by
+  intro p hp;obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp hp
+  subst p
+  exact fun st pc => packed_fetch_ext st _ _ (raw ⟨i,hi⟩).1 pc (raw ⟨i,hi⟩).2
 
 theorem chain_pre_fetch : presentRows chainPreRows := by apply rows_present; decide +kernel
-theorem chain_skip_fetch : presentRows chainSkipRows := by apply rows_present; decide +kernel
 theorem chain_enter_fetch : presentRows chainEnterRows := by apply rows_present; decide +kernel
-theorem group_test_fetch : presentRows groupTestRows := by apply rows_present; decide +kernel
-theorem group_back_fetch : presentRows groupBackRows := by apply rows_present; decide +kernel
-theorem group_out_fetch : presentRows groupOutRows := by apply rows_present; decide +kernel
-theorem rest_fetch : presentRows restRows := by apply rows_present; decide +kernel
-theorem chain_exit_fetch : presentRows chainExitRows := by apply rows_present; decide +kernel
+theorem chain_out_fetch : presentRows chainOutRows := by apply rows_present_ext; decide +kernel
 
 theorem keyed_fetch (s : MachineState) (pc : s.pc=address 789) : fetch openingImage s=some (.base .ECALL) :=
   packed_fetch_base _ 789 _ (by decide) pc (by decide +kernel)
 
-/-- The link calls: rows 6..9 (a group) and 13 (a single link). -/
-theorem call_fetch (s : MachineState) (n : Nat) (hn : n=6 ∨ n=7 ∨ n=8 ∨ n=9 ∨ n=13) (pc : s.pc=address n) :
+private theorem calls_decoded : ∀ j : Fin 33, (openingImage.code[896+j.val]?).bind Opening.decodeBase=some .ECALL := by
+  decide +kernel
+
+/-- The link calls: rows 896..928. -/
+theorem call_fetch (s : MachineState) (n : Nat) (lo : 896≤n) (hi : n<929) (pc : s.pc=address n) :
     fetch openingImage s=some (.base .ECALL) := by
-  rcases hn with rfl|rfl|rfl|rfl|rfl
-  all_goals exact packed_fetch_base _ _ _ (by decide) pc (by decide +kernel)
+  have e := calls_decoded ⟨n-896,by omega⟩
+  rw [show 896+(n-896)=n by omega] at e
+  exact packed_fetch_ext _ n _ (by omega) pc e
 
 theorem pre_len : chainPreRows.length=12 := rfl
 theorem pre_price : price chainPreRows=27 := by decide
-theorem skip_len : chainSkipRows.length=1 := rfl
-theorem skip_price : price chainSkipRows=1 := by decide
-theorem enter_len : chainEnterRows.length=3 := rfl
-theorem enter_price : price chainEnterRows=3 := by decide
-theorem test_len : groupTestRows.length=2 := rfl
-theorem test_price : price groupTestRows=2 := by decide
-theorem back_len : groupBackRows.length=1 := rfl
-theorem back_price : price groupBackRows=1 := by decide
-theorem out_len : groupOutRows.length=4 := rfl
-theorem out_price : price groupOutRows=4 := by decide
-theorem rest_len : restRows.length=3 := rfl
-theorem rest_price : price restRows=3 := by decide
-theorem exit_len : chainExitRows.length=1 := rfl
-theorem exit_price : price chainExitRows=1 := by decide
+theorem enter_len : chainEnterRows.length=5 := rfl
+theorem enter_price : price chainEnterRows=5 := by decide
+theorem out_len : chainOutRows.length=2 := rfl
+theorem out_price : price chainOutRows=2 := by decide
 
 /-! ### Arithmetic of the counter rows -/
 
@@ -174,39 +160,16 @@ def callTrace (s : MachineState) : OracleComp World MachineState := do
   let z ← World.query (.inr (.inr (.inl (linkQuery s))))
   return writeBits s (wordAddress 192) z
 
-/-- `q` groups of four calls from row 4 (each: group head, four calls, `jal` back to row 4). -/
-def linkGroupTrace : Nat → MachineState → OracleComp World MachineState
+/-- `c` consecutive link calls. -/
+def callsTrace : Nat → MachineState → OracleComp World MachineState
   | 0,s => pure s
-  | q+1,s => do
-      let a ← callTrace (walkRows s groupTestRows)
-      let b ← callTrace a
-      let c ← callTrace b
-      let d ← callTrace c
-      linkGroupTrace q (walkRows d groupBackRows)
-
-/-- `r` single calls from row 13 (each: the call, `jal; addi; bne`). -/
-def restTrace : Nat → MachineState → OracleComp World MachineState
-  | 0,s => pure s
-  | r+1,s => do
+  | c+1,s => do
       let a ← callTrace s
-      restTrace r (walkRows a restRows)
+      callsTrace c a
 
 /-- One link call with the oracle fixed. -/
 noncomputable def callState (o : Oracle) (s : MachineState) : MachineState :=
   writeBits s (wordAddress 192) (o.permutation (linkQuery s))
-
-/-- One group with the oracle fixed. -/
-noncomputable def linkGroupStep (o : Oracle) (s : MachineState) : MachineState :=
-  walkRows (callState o (callState o (callState o (callState o (walkRows s groupTestRows))))) groupBackRows
-
-/-- `q` groups with the oracle fixed (an iterate, so unfolding never reduces the reply writes). -/
-noncomputable def linkGroupState (o : Oracle) (q : Nat) (s : MachineState) : MachineState := (linkGroupStep o)^[q] s
-
-/-- One single link with the oracle fixed. -/
-noncomputable def restStep (o : Oracle) (s : MachineState) : MachineState := walkRows (callState o s) restRows
-
-/-- `r` single links with the oracle fixed. -/
-noncomputable def restState (o : Oracle) (r : Nat) (s : MachineState) : MachineState := (restStep o)^[r] s
 
 /-- Registers every link call relies on. -/
 structure CallRegs (s : MachineState) : Prop where
@@ -215,23 +178,6 @@ structure CallRegs (s : MachineState) : Prop where
   selector : s.getReg .x5=0
   width : s.getReg .x11=200
   primitive : s.getReg .x13=1
-
-theorem CallRegs.keep {s t : MachineState} (r : CallRegs s) (keep : ∀ x, x≠.x30 → t.getReg x=s.getReg x) :
-    CallRegs t :=
-  ⟨(keep _ (by decide)).trans r.input,(keep _ (by decide)).trans r.output,(keep _ (by decide)).trans r.selector,
-    (keep _ (by decide)).trans r.width,(keep _ (by decide)).trans r.primitive⟩
-
-/-- At the group head (row 4) with `c` links still to go. -/
-structure LinkGroupReady (s : MachineState) (c : Nat) : Prop where
-  pc : s.pc=address 4
-  count : s.getReg .x30=BitVec.ofNat 64 c
-  regs : CallRegs s
-
-/-- At a single link (row 13) with `c` links still to go, or at the exit row 795 when none is left. -/
-structure RestReady (s : MachineState) (c : Nat) : Prop where
-  pc : s.pc=(if c=0 then address 795 else address 13)
-  count : s.getReg .x30=BitVec.ofNat 64 c
-  regs : CallRegs s
 
 /-- A reply write moves the PC by one row and keeps every register. -/
 theorem write_pc {bits : Nat} (s : MachineState) (dst : Word) (z : BitVec bits) :
@@ -252,25 +198,18 @@ theorem small_ne (c : Nat) (hc : c<34) (nz : c≠0) : BitVec.ofNat 64 c≠0#64 :
 /-- The keyed generator query (counter word 128, key words 129..131, zeros). -/
 def keyedQuery (h : MachineState) := packBuffer (window (memoryView (chainBefore h)) 128)
 
-/-- The block's oracle trace: the keyed call, then `chainLinks i` in-place links (`/ 4` groups, `% 4` singles);
-returns the state at `chainStart+19`. -/
+/-- The block's oracle trace: the keyed call, the jump, `chainLinks i` in-place links, the return and the exit
+row; returns the state at `chainStart+19`. -/
 def chainTrace (h : MachineState) (i : Index) : OracleComp World MachineState := do
   let z ← World.query (.inr (.inr (.inl (keyedQuery h))))
-  if chainLinks i=0 then
-    return walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainSkipRows
-  else do
-    let g ← linkGroupTrace (chainLinks i/4) (walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainEnterRows)
-    let b ← restTrace (chainLinks i%4) (walkRows g groupOutRows)
-    return walkRows b chainExitRows
+  let t ← callsTrace (chainLinks i) (walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainEnterRows)
+  return walkRows t chainOutRows
 
 /-- The block's result when the oracle is fixed. -/
 noncomputable def chainState (o : Oracle) (h : MachineState) (i : Index) : MachineState :=
-  if chainLinks i=0 then
-    walkRows (writeBits (chainBefore h) (wordAddress 192) (o.permutation (keyedQuery h))) chainSkipRows
-  else
-    walkRows (restState o (chainLinks i%4) (walkRows (linkGroupState o (chainLinks i/4)
-      (walkRows (writeBits (chainBefore h) (wordAddress 192) (o.permutation (keyedQuery h))) chainEnterRows))
-      groupOutRows)) chainExitRows
+  walkRows ((callState o)^[chainLinks i]
+    (walkRows (writeBits (chainBefore h) (wordAddress 192) (o.permutation (keyedQuery h))) chainEnterRows))
+    chainOutRows
 
 theorem after_keyed {bits : Nat} (h : MachineState) (i : Index) (e : ChainEntry h i) (z : BitVec bits) :
     let a:=writeBits (chainBefore h) (wordAddress 192) z
@@ -282,208 +221,109 @@ theorem after_keyed {bits : Nat} (h : MachineState) (i : Index) (e : ChainEntry 
   refine ⟨?_,fun x a b c d => (regs x).trans (keep x a b c d),(regs _).trans r30,(regs _).trans r28⟩
   rw [write_pc,pc]; exact address_succ 789
 
-theorem skip_rows (a : MachineState) (pc : a.pc=address 790) (zero : a.getReg .x30=0#64) :
-    legal chainSkipRows a ∧ (walkRows a chainSkipRows).pc=address 796 ∧
-      (∀ x, (walkRows a chainSkipRows).getReg x=a.getReg x) ∧ (walkRows a chainSkipRows).mem=a.mem := by
-  refine ⟨?_,?_,?_,?_⟩
-  · simp [chainSkipRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc]
-  · simp [chainSkipRows,walkRows,execInstrBr,pc,zero,address]
-    decide
-  · intro x
-    simp only [chainSkipRows,walkRows,List.foldl,execInstrBr]
-    split <;> simp
-  · simp only [chainSkipRows,walkRows,List.foldl,execInstrBr]
-    split <;> simp
+/-! ### The jump rows -/
 
-/-! ### Row segments of the link loop (only the PC and `x30` move) -/
+/-- The jump target, case by case over the 34 link counts. -/
+theorem jump_arith (k : Nat) (hk : k<34) :
+    (address 790+4+4+(((0 : BitVec 20).zeroExtend 32 <<< 12).signExtend 64)-
+      (BitVec.ofNat 64 k <<< (2 : BitVec 6).toNat)+signExtend12 (0x224 : BitVec 12)) &&& ~~~1#64=
+      address (929-k) := by
+  interval_cases k <;> decide
 
-/-- `t` is `s` with only the PC and `x30` changed. -/
-structure Pt (s t : MachineState) (p v : Word) : Prop where
-  pc : t.pc=p
-  r30 : t.getReg .x30=v
-  keep : ∀ x, x≠.x30 → t.getReg x=s.getReg x
-  mem : t.mem=s.mem
+private theorem walk_five (w : MachineState) (a b c d e : Nat) (p q r u v : Instr) :
+    walkRows w [(a,p),(b,q),(c,r),(d,u),(e,v)]=
+      execInstrBr (execInstrBr (execInstrBr (execInstrBr (execInstrBr w p) q) r) u) v := rfl
 
-theorem pt_start (s : MachineState) (p v : Word) (hp : s.pc=p) (hv : s.getReg .x30=v) : Pt s s p v :=
-  ⟨hp,hv,fun _ _ => rfl,rfl⟩
-
-theorem Pt.congr {s t : MachineState} {p v p' v' : Word} (h : Pt s t p v) (hp : p=p') (hv : v=v') : Pt s t p' v' :=
-  hp ▸ hv ▸ h
-
-theorem pt_addi {s t : MachineState} {p v : Word} (h : Pt s t p v) (imm : BitVec 12) :
-    Pt s (execInstrBr t (.ADDI .x30 .x30 imm)) (p+4) (v+signExtend12 imm) := by
-  have form : execInstrBr t (.ADDI .x30 .x30 imm)=(t.setReg .x30 (t.getReg .x30+signExtend12 imm)).setPC (t.pc+4) :=
-    rfl
-  rw [form]
-  refine ⟨?_,?_,?_,?_⟩
-  · rw [pc_of_set,h.pc]
-  · rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_pos ⟨rfl,by decide⟩,h.r30]
-  · intro x hx
-    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_neg (fun e => hx e.1.symm)]
-    exact h.keep x hx
-  · rw [mem_of_set,mem_of_reg,h.mem]
-
-theorem pt_jal {s t : MachineState} {p v : Word} (h : Pt s t p v) (off : BitVec 21) :
-    Pt s (execInstrBr t (.JAL .x0 off)) (p+signExtend21 off) v := by
-  have form : execInstrBr t (.JAL .x0 off)=t.setPC (t.pc+signExtend21 off) := rfl
-  rw [form]
-  exact ⟨by rw [pc_of_set,h.pc],by rw [MachineState.getReg_setPC,h.r30],
-    fun x hx => by rw [MachineState.getReg_setPC]; exact h.keep x hx,by rw [mem_of_set,h.mem]⟩
-
-theorem pt_blt {s t : MachineState} {p v : Word} (h : Pt s t p v) (off : BitVec 13) :
-    Pt s (execInstrBr t (.BLT .x30 .x0 off)) (if BitVec.slt v 0#64 then p+signExtend13 off else p+4) v := by
-  have form : execInstrBr t (.BLT .x30 .x0 off)=
-      t.setPC (if BitVec.slt (t.getReg .x30) 0#64 then t.pc+signExtend13 off else t.pc+4) := by
-    rw [apply_ite (MachineState.setPC t)]; rfl
-  rw [form]
-  exact ⟨by rw [pc_of_set,h.pc,h.r30],by rw [MachineState.getReg_setPC,h.r30],
-    fun x hx => by rw [MachineState.getReg_setPC]; exact h.keep x hx,by rw [mem_of_set,h.mem]⟩
-
-theorem pt_beq {s t : MachineState} {p v : Word} (h : Pt s t p v) (off : BitVec 13) :
-    Pt s (execInstrBr t (.BEQ .x30 .x0 off)) (if (v == 0#64)=true then p+signExtend13 off else p+4) v := by
-  have form : execInstrBr t (.BEQ .x30 .x0 off)=
-      t.setPC (if (t.getReg .x30 == 0#64)=true then t.pc+signExtend13 off else t.pc+4) := by
-    rw [apply_ite (MachineState.setPC t)]; rfl
-  rw [form]
-  exact ⟨by rw [pc_of_set,h.pc,h.r30],by rw [MachineState.getReg_setPC,h.r30],
-    fun x hx => by rw [MachineState.getReg_setPC]; exact h.keep x hx,by rw [mem_of_set,h.mem]⟩
-
-theorem pt_bne {s t : MachineState} {p v : Word} (h : Pt s t p v) (off : BitVec 13) :
-    Pt s (execInstrBr t (.BNE .x30 .x0 off)) (if (v != 0#64)=true then p+signExtend13 off else p+4) v := by
-  have form : execInstrBr t (.BNE .x30 .x0 off)=
-      t.setPC (if (t.getReg .x30 != 0#64)=true then t.pc+signExtend13 off else t.pc+4) := by
-    rw [apply_ite (MachineState.setPC t)]; rfl
-  rw [form]
-  exact ⟨by rw [pc_of_set,h.pc,h.r30],by rw [MachineState.getReg_setPC,h.r30],
-    fun x hx => by rw [MachineState.getReg_setPC]; exact h.keep x hx,by rw [mem_of_set,h.mem]⟩
-
-/-- PC and counter arithmetic of the segments, case by case over the 34 link counts. -/
-theorem test_arith (c : Nat) (lo : 4≤c) (hc : c<34) :
-    BitVec.ofNat 64 c+signExtend12 (0xffc : BitVec 12)=BitVec.ofNat 64 (c-4) ∧
-      (if BitVec.slt (BitVec.ofNat 64 (c-4)) 0#64 then address 4+4+signExtend13 (0x18 : BitVec 13) else address 4+4+4)=
-        address 6 := by
-  interval_cases c <;> decide
-
-theorem out_arith (c : Nat) (hc : c<4) :
-    BitVec.slt (BitVec.ofNat 64 c+signExtend12 (0xffc : BitVec 12)) 0#64=true ∧
-      BitVec.ofNat 64 c+signExtend12 (0xffc : BitVec 12)+signExtend12 (4 : BitVec 12)=BitVec.ofNat 64 c ∧
-      (if (BitVec.ofNat 64 c == 0#64)=true then address 4+4+signExtend13 (0x18 : BitVec 13)+4+signExtend13 (0xc3c : BitVec 13)
-        else address 4+4+signExtend13 (0x18 : BitVec 13)+4+4)=(if c=0 then address 795 else address 13) := by
-  interval_cases c <;> decide
-
-theorem rest_arith (c : Nat) (hc : c+1<34) :
-    BitVec.ofNat 64 (c+1)+signExtend12 (0xfff : BitVec 12)=BitVec.ofNat 64 c ∧
-      (if (BitVec.ofNat 64 c != 0#64)=true then address 14+signExtend21 (0xc2c : BitVec 21)+4+signExtend13 (0x13cc : BitVec 13)
-        else address 14+signExtend21 (0xc2c : BitVec 21)+4+4)=(if c=0 then address 795 else address 13) := by
-  have small : c<33 := by omega
-  interval_cases c <;> decide
-
-theorem back_arith : address 10+signExtend21 (0x1fffe8 : BitVec 21)=address 4 := by decide
-
-theorem enter_arith : address 790+4+4+signExtend21 (0x1ff3b0 : BitVec 21)=address 4 := by decide
-
-/-- Row walks for abstract instructions (the kernel never evaluates the immediates). -/
-private theorem walk_one (w : MachineState) (a : Nat) (p : Instr) : walkRows w [(a,p)]=execInstrBr w p := rfl
 private theorem walk_two (w : MachineState) (a b : Nat) (p q : Instr) :
     walkRows w [(a,p),(b,q)]=execInstrBr (execInstrBr w p) q := rfl
-private theorem walk_three (w : MachineState) (a b c : Nat) (p q r : Instr) :
-    walkRows w [(a,p),(b,q),(c,r)]=execInstrBr (execInstrBr (execInstrBr w p) q) r := rfl
-private theorem walk_four (w : MachineState) (a b c d : Nat) (p q r u : Instr) :
-    walkRows w [(a,p),(b,q),(c,r),(d,u)]=execInstrBr (execInstrBr (execInstrBr (execInstrBr w p) q) r) u := rfl
 
-theorem test_walk (s : MachineState) : walkRows s groupTestRows=
-    execInstrBr (execInstrBr s (.ADDI .x30 .x30 0xffc)) (.BLT .x30 .x0 0x18) := by
-  unfold groupTestRows; exact walk_two s _ _ _ _
-theorem out_walk (s : MachineState) : walkRows s groupOutRows=
-    execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.ADDI .x30 .x30 0xffc)) (.BLT .x30 .x0 0x18))
-      (.ADDI .x30 .x30 4)) (.BEQ .x30 .x0 0xc3c) := by
-  unfold groupOutRows; exact walk_four s _ _ _ _ _ _ _ _
-theorem back_walk (s : MachineState) : walkRows s groupBackRows=execInstrBr s (.JAL .x0 0x1fffe8) := by
-  unfold groupBackRows; exact walk_one s _ _
-theorem rest_walk (s : MachineState) : walkRows s restRows=
-    execInstrBr (execInstrBr (execInstrBr s (.JAL .x0 0xc2c)) (.ADDI .x30 .x30 0xfff)) (.BNE .x30 .x0 0x13cc) := by
-  unfold restRows; exact walk_three s _ _ _ _ _ _
 theorem enter_walk (s : MachineState) : walkRows s chainEnterRows=
-    execInstrBr (execInstrBr (execInstrBr s (.BEQ .x30 .x0 24)) (.ADDI .x10 .x12 0)) (.JAL .x0 0x1ff3b0) := by
-  unfold chainEnterRows; exact walk_three s _ _ _ _ _ _
+    execInstrBr (execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.ADDI .x10 .x12 0)) (.SLLI .x31 .x30 2))
+      (.AUIPC .x7 0)) (.SUB .x7 .x7 .x31)) (.JALR .x0 .x7 0x224) := by
+  unfold chainEnterRows; exact walk_five s _ _ _ _ _ _ _ _ _ _
+
+theorem out_walk (s : MachineState) : walkRows s chainOutRows=
+    execInstrBr (execInstrBr s (.JAL .x0 0x1ffde8)) (.ADDI .x10 .x0 1024) := by
+  unfold chainOutRows; exact walk_two s _ _ _ _
 
 /-- Rows that touch neither memory nor an `ecall`. -/
 private theorem rows_plain (rows : List Row) (nm : rows.all (fun p => plain p.2 && noMemOp p.2)=true)
     (s : MachineState) (c : pcChain rows s) : legal rows s := legal_of_chain rows s nm c
 
-theorem test_rows (s : MachineState) (c : Nat) (lo : 4≤c) (hc : c<34) (pc : s.pc=address 4)
-    (cnt : s.getReg .x30=BitVec.ofNat 64 c) :
-    legal groupTestRows s ∧ Pt s (walkRows s groupTestRows) (address 6) (BitVec.ofNat 64 (c-4)) := by
-  obtain ⟨sub,goes⟩ := test_arith c lo hc
-  have p1 := pt_addi (pt_start s _ _ pc cnt) 0xffc
-  have p2 := pt_blt (p1.congr rfl sub) 0x18
-  refine ⟨rows_plain _ (by decide) s ⟨pc,p1.pc.trans (address_succ 4),trivial⟩,?_⟩
-  rw [test_walk]
-  exact p2.congr goes rfl
-
-theorem out_rows (s : MachineState) (c : Nat) (hc : c<4) (pc : s.pc=address 4)
-    (cnt : s.getReg .x30=BitVec.ofNat 64 c) :
-    legal groupOutRows s ∧
-      Pt s (walkRows s groupOutRows) (if c=0 then address 795 else address 13) (BitVec.ofNat 64 c) := by
-  obtain ⟨neg,back,goes⟩ := out_arith c hc
-  have p1 := pt_addi (pt_start s _ _ pc cnt) 0xffc
-  have p2 := pt_blt p1 0x18
-  rw [if_pos neg] at p2
-  have p3 := pt_addi p2 4
-  have p4 := pt_beq (p3.congr rfl back) 0xc3c
-  refine ⟨rows_plain _ (by decide) s ⟨pc,p1.pc.trans (address_succ 4),?_,?_,trivial⟩,?_⟩
-  rotate_left 2
-  · rw [out_walk]; exact p4.congr goes rfl
-  · rw [p2.pc]; decide
-  · rw [p3.pc]; decide
-
-theorem back_rows (s : MachineState) (pc : s.pc=address 10) :
-    legal groupBackRows s ∧ Pt s (walkRows s groupBackRows) (address 4) (s.getReg .x30) := by
-  have p1 := pt_jal (pt_start s _ _ pc rfl) 0x1fffe8
-  refine ⟨rows_plain _ (by decide) s ⟨pc,trivial⟩,?_⟩
-  rw [back_walk]; exact p1.congr back_arith rfl
-
-theorem rest_rows (s : MachineState) (c : Nat) (hc : c+1<34) (pc : s.pc=address 14)
-    (cnt : s.getReg .x30=BitVec.ofNat 64 (c+1)) :
-    legal restRows s ∧
-      Pt s (walkRows s restRows) (if c=0 then address 795 else address 13) (BitVec.ofNat 64 c) := by
-  obtain ⟨dec,goes⟩ := rest_arith c hc
-  have p1 := pt_jal (pt_start s _ _ pc cnt) 0xc2c
-  have p2 := pt_addi p1 0xfff
-  have p3 := pt_bne (p2.congr rfl dec) 0x13cc
-  refine ⟨rows_plain _ (by decide) s ⟨pc,?_,?_,trivial⟩,?_⟩
-  rotate_left 2
-  · rw [rest_walk]; exact p3.congr goes rfl
-  · rw [p1.pc]; decide
-  · rw [p2.pc]; decide
-
-theorem enter_rows (a : MachineState) (c : Nat) (pc : a.pc=address 790)
-    (cnt : a.getReg .x30=BitVec.ofNat 64 (c+1)) (hc : c+1<34) :
-    legal chainEnterRows a ∧ (walkRows a chainEnterRows).pc=address 4 ∧
+theorem enter_rows (a : MachineState) (k : Nat) (hk : k<34) (pc : a.pc=address 790)
+    (cnt : a.getReg .x30=BitVec.ofNat 64 k) :
+    legal chainEnterRows a ∧ (walkRows a chainEnterRows).pc=address (929-k) ∧
       (walkRows a chainEnterRows).getReg .x10=a.getReg .x12 ∧
-      (∀ x, x≠.x10 → (walkRows a chainEnterRows).getReg x=a.getReg x) ∧
+      (∀ x, x≠.x7 → x≠.x10 → x≠.x31 → (walkRows a chainEnterRows).getReg x=a.getReg x) ∧
       (walkRows a chainEnterRows).mem=a.mem := by
-  have ne := small_ne (c+1) hc (by omega)
-  have b0 : execInstrBr a (.BEQ .x30 .x0 24)=a.setPC (a.pc+4) := by
-    simp [execInstrBr,cnt,ne]
-  let b := a.setPC (a.pc+4)
-  have b1 : execInstrBr b (.ADDI .x10 .x12 0)=(b.setReg .x10 (b.getReg .x12+signExtend12 0)).setPC (b.pc+4) := rfl
-  let d := (b.setReg .x10 (b.getReg .x12+signExtend12 0)).setPC (b.pc+4)
-  have b2 : execInstrBr d (.JAL .x0 0x1ff3b0)=d.setPC (d.pc+signExtend21 0x1ff3b0) := rfl
-  have walk : walkRows a chainEnterRows=d.setPC (d.pc+signExtend21 0x1ff3b0) := by
-    rw [enter_walk,b0,b1,b2]
-  have dpc : d.pc=address 790+4+4 := by
-    show b.pc+4=_; rw [show b.pc=a.pc+4 from rfl,pc]
+  let b1 := execInstrBr a (.ADDI .x10 .x12 0)
+  let b2 := execInstrBr b1 (.SLLI .x31 .x30 2)
+  let b3 := execInstrBr b2 (.AUIPC .x7 0)
+  let b4 := execInstrBr b3 (.SUB .x7 .x7 .x31)
+  have p1 : b1.pc=address 790+4 := by show a.pc+4=_; rw [pc]
+  have p2 : b2.pc=address 790+4+4 := by show b1.pc+4=_; rw [p1]
+  have p3 : b3.pc=address 790+4+4+4 := by show b2.pc+4=_; rw [p2]
+  have p4 : b4.pc=address 790+4+4+4+4 := by show b3.pc+4=_; rw [p3]
+  have k1 (x : Reg) (hx : x≠.x10) : b1.getReg x=a.getReg x := by
+    show ((a.setReg .x10 _).setPC _).getReg x=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_neg (fun e => hx e.1.symm)]
+  have k2 (x : Reg) (hx : x≠.x31) : b2.getReg x=b1.getReg x := by
+    show ((b1.setReg .x31 _).setPC _).getReg x=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_neg (fun e => hx e.1.symm)]
+  have k3 (x : Reg) (hx : x≠.x7) : b3.getReg x=b2.getReg x := by
+    show ((b2.setReg .x7 _).setPC _).getReg x=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_neg (fun e => hx e.1.symm)]
+  have k4 (x : Reg) (hx : x≠.x7) : b4.getReg x=b3.getReg x := by
+    show ((b3.setReg .x7 _).setPC _).getReg x=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_neg (fun e => hx e.1.symm)]
+  have v31 : b2.getReg .x31=BitVec.ofNat 64 k <<< (2 : BitVec 6).toNat := by
+    show ((b1.setReg .x31 (b1.getReg .x30 <<< (2 : BitVec 6).toNat)).setPC _).getReg .x31=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_pos ⟨rfl,by decide⟩,k1 _ (by decide),cnt]
+  have v7 : b3.getReg .x7=b2.pc+(((0 : BitVec 20).zeroExtend 32 <<< 12).signExtend 64) := by
+    show ((b2.setReg .x7 _).setPC _).getReg .x7=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_pos ⟨rfl,by decide⟩]
+  have v7' : b4.getReg .x7=b2.pc+(((0 : BitVec 20).zeroExtend 32 <<< 12).signExtend 64)-
+      (BitVec.ofNat 64 k <<< (2 : BitVec 6).toNat) := by
+    show ((b3.setReg .x7 (b3.getReg .x7-b3.getReg .x31)).setPC _).getReg .x7=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_pos ⟨rfl,by decide⟩,v7,k3 _ (by decide),v31]
+  have jal : execInstrBr b4 (.JALR .x0 .x7 0x224)=
+      b4.setPC ((b4.getReg .x7+signExtend12 (0x224 : BitVec 12)) &&& ~~~1#64) := rfl
+  have walk : walkRows a chainEnterRows=b4.setPC ((b4.getReg .x7+signExtend12 (0x224 : BitVec 12)) &&& ~~~1#64) :=
+    (enter_walk a).trans jal
+  have m4 : b4.mem=a.mem := rfl
   refine ⟨?_,?_,?_,?_,?_⟩
-  · refine rows_plain _ (by decide) a ⟨pc,?_,?_,trivial⟩
-    · rw [b0,pc_of_set,pc]; exact address_succ 790
-    · rw [b0,b1,pc_of_set,pc_of_set,pc,address_succ 790]; exact address_succ 791
-  · rw [walk,pc_of_set,dpc]; exact enter_arith
-  · rw [walk]
-    simp [d,b,show signExtend12 0#12=0#64 by decide]
+  · refine rows_plain _ (by decide) a ⟨pc,?_,?_,?_,?_,trivial⟩
+    · rw [p1]; exact address_succ 790
+    · rw [p2,address_succ 790]; exact address_succ 791
+    · rw [p3,address_succ 790,address_succ 791]; exact address_succ 792
+    · rw [p4,address_succ 790,address_succ 791,address_succ 792]; exact address_succ 793
+  · rw [walk,pc_of_set,v7',p2]; exact jump_arith k hk
+  · rw [walk,MachineState.getReg_setPC,k4 _ (by decide),k3 _ (by decide),k2 _ (by decide)]
+    show ((a.setReg .x10 (a.getReg .x12+signExtend12 0)).setPC _).getReg .x10=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_pos ⟨rfl,by decide⟩,
+      show signExtend12 (0 : BitVec 12)=0#64 from by decide,BitVec.add_zero]
+  · intro x h7 h10 h31
+    rw [walk,MachineState.getReg_setPC,k4 _ h7,k3 _ h7,k2 _ h31,k1 _ h10]
+  · rw [walk,mem_of_set]; exact m4
+
+theorem out_rows (b : MachineState) (pc : b.pc=address 929) :
+    legal chainOutRows b ∧ (walkRows b chainOutRows).pc=address 796 ∧
+      (walkRows b chainOutRows).getReg .x10=1024 ∧
+      (∀ x, x≠.x10 → (walkRows b chainOutRows).getReg x=b.getReg x) ∧
+      (walkRows b chainOutRows).mem=b.mem := by
+  let j := execInstrBr b (.JAL .x0 0x1ffde8)
+  have jform : j=b.setPC (b.pc+signExtend21 0x1ffde8) := rfl
+  have jpc : j.pc=address 795 := by rw [jform,pc_of_set,pc]; decide
+  have walk := out_walk b
+  refine ⟨rows_plain _ (by decide) b ⟨pc,jpc,trivial⟩,?_,?_,?_,?_⟩
+  · rw [walk]; show j.pc+4=_; rw [jpc]; exact address_succ 795
+  · rw [walk]; show ((j.setReg .x10 (j.getReg .x0+signExtend12 1024)).setPC _).getReg .x10=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_pos ⟨rfl,by decide⟩,chain_zero_reg]; decide
   · intro x hx
-    rw [walk]
-    simp [d,b,Ne.symm hx]
-  · rw [walk]; simp [d,b]
+    rw [walk]; show ((j.setReg .x10 _).setPC _).getReg x=_
+    rw [MachineState.getReg_setPC,Opening.getReg_setReg,if_neg (fun e => hx e.1.symm),jform,
+      MachineState.getReg_setPC]
+  · rw [walk]; show ((j.setReg .x10 _).setPC _).mem=_
+    rw [mem_of_set,mem_of_reg,jform,mem_of_set]
 
 end TwoPermutationPrototype.GroupedOpening

@@ -5,12 +5,13 @@ namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 8192
 
-/-- The final opener (896 words, no image data): K3-lite + L21 + chain + T238 (programs-final-v2 opening).
+/-- The final opener (930 words, no image data): K3-lite + L21 + chain + T238 (programs-final-v2 opening).
 Words 0..712 are the record writer (records, cap frontier, size, halt); 713..812 the prefix pass;
-813..895 the T238 writer blocks (`a1Start`, `foldStart`, `wiStart`, `wkStart`, `wsStart`). -/
+813..895 the T238 writer blocks (`a1Start`, `foldStart`, `wiStart`, `wkStart`, `wsStart`); 896..928 the 33 link
+calls of the salt chain and 929 its `jal` back to row 795. -/
 def openingImage : Image := ⟨[
-  0x00078a13, 0x00078a93, 0x300806e3, 0x3190006f, 0xffcf0f13, 0x000f4c63, 0x00000073, 0x00000073,
-  0x00000073, 0x00000073, 0xfe9ff06f, 0x004f0f13, 0x420f0ee3, 0x00000073, 0x42d0006f, 0x00043303,
+  0x00078a13, 0x00078a93, 0x300806e3, 0x3190006f, 0x00060493, 0x00080913, 0x004009b7, 0x20000337,
+  0x00648c33, 0x00331313, 0x006c0b33, 0x00100b93, 0x00048c93, 0x00001d37, 0x10000d93, 0x00043303,
   0x00431393, 0x007b03b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223,
   0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623,
   0x00e3df83, 0x01fa9723, 0x010a8a93, 0x00831393, 0xc003f393, 0x018383b3, 0x00337513, 0x00154e13,
@@ -107,8 +108,8 @@ def openingImage : Image := ⟨[
   0x00200693, 0x00000073, 0x00100693, 0x60000613, 0x40000513, 0x001e4e13, 0x013e0e33, 0x005e1e13,
   0x009e0e33, 0x000f3f83, 0x01fe3023, 0x008f3f83, 0x01fe3423, 0x010f3f83, 0x01fe3823, 0x018f3f83,
   0x01fe3c23, 0x03a37e33, 0x03de5f33, 0x03de7e33, 0x02200f93, 0x03ff7f33, 0x03df0fb3, 0x41c303b3,
-  0x41f383b3, 0x00138393, 0x00839393, 0x01a383b3, 0x00753023, 0x00000073, 0x000f0c63, 0x00060513,
-  0xbb0ff06f, 0xffff0f13, 0xbc0f1663, 0x40000513, 0xfffe0393, 0x00439393, 0x01cbe863, 0x00000393,
+  0x41f383b3, 0x00138393, 0x00839393, 0x01a383b3, 0x00753023, 0x00000073, 0x00060513, 0x002f1f93,
+  0x00000397, 0x41f383b3, 0x22438067, 0x40000513, 0xfffe0393, 0x00439393, 0x01cbe863, 0x00000393,
   0x017e1463, 0x0b800393, 0x00c383b3, 0x00431f13, 0x016f0f33, 0x0003bf83, 0x01ff3023, 0x0083bf83,
   0x01ff3423, 0x00870713, 0xfff88893, 0xee0892e3, 0xb8cff06f, 0x01e3df83, 0x01fa9f23, 0x020a8a93,
   0xeb4ff06f, 0xf4aade03, 0x00ef9e93, 0x01de6e33, 0xf5ca9523, 0x002fdf93, 0xf68ade03, 0x00ef9e93,
@@ -120,10 +121,15 @@ def openingImage : Image := ⟨[
   0x002fdf93, 0xf68ade03, 0x00ef9e93, 0x01de6e33, 0xf7ca9423, 0x002fdf93, 0xf86ade03, 0x00ef9e93,
   0x01de6e33, 0xf9ca9323, 0x002fdf93, 0xfa4ade03, 0x00ef9e93, 0x01de6e33, 0xfbca9223, 0x002fdf93,
   0xfc2ade03, 0x00ef9e93, 0x01de6e33, 0xfdca9123, 0x002fdf93, 0xfe0ade03, 0x00ef9e93, 0x01de6e33,
-  0xffca9023, 0x002fdf93, 0xffeade03, 0x00ef9e93, 0x01de6e33, 0xffca9f23, 0xffea8a93, 0xcf5ff06f], []⟩
+  0xffca9023, 0x002fdf93, 0xffeade03, 0x00ef9e93, 0x01de6e33, 0xffca9f23, 0xffea8a93, 0xcf5ff06f,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
+  0x00000073, 0xde9ff06f], []⟩
 
 /-- Number of words in the opener image. -/
-abbrev openingWords : Nat := 896
+abbrev openingWords : Nat := 930
 
 /-! T238 writer blocks appended after the prefix pass (all writer code addresses live here). -/
 /-- A1: the 16th halfword of the level-1 sibling, then `addi x21,x21,32; jal <221>`. -/
@@ -159,9 +165,32 @@ theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : In
       | word op rd rs₁ rs₂ => simp [dec] at decoded
       | sraiw rd rs sh => simp [dec] at decoded
 
+/-- `packed_fetch_base` for every row of the 930-word image (the link calls at 896..929 included). -/
+theorem packed_fetch_ext (state : MachineState) (index : Nat) (instruction : Instr)
+    (bounded : index < 930) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
+    (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
+    fetch openingImage state = some (.base instruction) := by
+  have current : state.pc.toNat = 4096+4*index := by
+    rw [pc, BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+    omega
+  rw [fetch, current, ite_eq_left (by omega), show (4096+4*index-4096)/4=index by omega]
+  cases code : openingImage.code[index]? with
+  | none => simp [code] at decoded
+  | some word =>
+    simp [code, Opening.decodeBase] at decoded
+    cases dec : decodeInstruction word with
+    | none => simp [dec] at decoded
+    | some result =>
+      cases result with
+      | base inst =>
+        simp [dec] at decoded
+        simpa [decoded] using dec
+      | word op rd rs₁ rs₂ => simp [dec] at decoded
+      | sraiw rd rs sh => simp [dec] at decoded
+
 set_option maxHeartbeats 1600000 in
 /-- All decoded instruction literals and all data bytes match the submitted JSON image. -/
-private theorem image_word_match : ∀ k : Fin 896,
+private theorem image_word_match : ∀ k : Fin 930,
     (K1Artifact.submission.image .opening).code.getD k.val 0 = openingImage.code.getD k.val 0 := by
   intro k
   simp only [K1Artifact.submission]

@@ -195,17 +195,16 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     apply bind_congr;intro t;apply bind_congr;intro z;apply congrArg (fun x : Execution => (pure x : OracleComp World Execution))
     cases z;simp [Execution.charge,passCycles,passCalls] <;> omega
 
-theorem chain_cycles_le (i : Index) : chainCycles i≤334 := by
+theorem chain_cycles_le (i : Index) : chainCycles i≤306 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
-  unfold chainCycles chainSteps chainCalls; split <;> omega
+  unfold chainCycles chainSteps chainCalls; omega
 
 theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 387 cycles per position (new even quartet 37, chain link 33 = 8 groups + 1 single: 334, rank 1: 16) plus
-the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤387*n+1 := by
+/-- At most 359 cycles per position (new even quartet 37, chain link 33: 306, rank 1: 16) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤359*n+1 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

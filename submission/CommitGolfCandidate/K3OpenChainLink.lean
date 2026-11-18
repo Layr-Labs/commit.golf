@@ -1,7 +1,7 @@
 import CommitGolfCandidate.K3OpenChainRows
 
-/-! Opener chain block (rows 777..795 and the link groups at rows 4..14), the link loop: `Runs` segments
-`rows_then`, `call_then`, `keyed_then`, `group_then`, `rest_then`. Owner: O (draft by S9-L2; 4-unrolled links). -/
+/-! Opener chain block (rows 777..795 and the link calls at rows 896..929), the link phase: `Runs` segments
+`rows_then`, `call_then`, `keyed_then`, `calls_then`. Owner: O (draft by S9-L2; 33-call chain). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -48,16 +48,18 @@ theorem runs_rows (s : MachineState) (rows : List Row) (valid : legal rows s) (c
 
 theorem CallRegs.write {bits : Nat} {s : MachineState} (r : CallRegs s) (dst : Word) (z : BitVec bits) :
     CallRegs (writeBits s dst z) :=
-  r.keep (fun x _ => writeBits_register ..)
+  ⟨(writeBits_register ..).trans r.input,(writeBits_register ..).trans r.output,
+    (writeBits_register ..).trans r.selector,(writeBits_register ..).trans r.width,
+    (writeBits_register ..).trans r.primitive⟩
 
 /-- A link call at one of the call rows, then a segment from each written state. -/
-theorem call_then (s : MachineState) (n : Nat) (hn : n=6 ∨ n=7 ∨ n=8 ∨ n=9 ∨ n=13) (pc : s.pc=address n)
+theorem call_then (s : MachineState) (n : Nat) (lo : 896≤n) (hi : n<929) (pc : s.pc=address n)
     (regs : CallRegs s) {U : MachineState → OracleComp World MachineState} {m D L : Nat}
     (h : ∀ {bits : Nat} (z : BitVec bits), Runs m (writeBits s (wordAddress 192) z) (U (writeBits s (wordAddress 192) z)) D L) :
     Runs (1+m) s (callTrace s >>= U) (8+D) (1+L) := by
   intro fuel
   rw [show 1+m+fuel=(m+fuel)+1 by omega,execute_permutation_call openingImage (m+fuel) s true 192 192 (by decide)
-    (by decide) regs.input regs.output regs.selector regs.width regs.primitive (call_fetch s n hn pc)]
+    (by decide) regs.input regs.output regs.selector regs.width regs.primitive (call_fetch s n lo hi pc)]
   simp only [callTrace,bind_assoc,pure_bind]
   apply bind_congr; intro z
   rw [h z fuel]
@@ -101,78 +103,24 @@ theorem write_at {bits : Nat} (s : MachineState) (z : BitVec bits) (n : Nat) (pc
     (writeBits s (wordAddress 192) z).pc=address (n+1) := by
   rw [write_pc,pc]; exact address_succ n
 
-/-- `q` groups of four calls from the group head with `4q + c` links to go, then a segment from any state at the
-group head with `c` links to go. -/
-theorem group_then (q : Nat) : ∀ (c : Nat) (s : MachineState), LinkGroupReady s (4*q+c) → 4*q+c<34 →
+/-- `c` consecutive link calls from row `929 - c`, then a segment from any state at row 929. -/
+theorem calls_then (c : Nat) : ∀ (s : MachineState), s.pc=address (929-c) → c≤33 → CallRegs s →
     ∀ {U : MachineState → OracleComp World MachineState} {m D L : Nat},
-    (∀ g, LinkGroupReady g c → Runs m g (U g) D L) →
-    Runs (7*q+m) s (linkGroupTrace q s >>= U) (35*q+D) (4*q+L) := by
-  induction q with
+    (∀ b, b.pc=address 929 → CallRegs b → Runs m b (U b) D L) →
+    Runs (c+m) s (callsTrace c s >>= U) (8*c+D) (c+L) := by
+  induction c with
   | zero =>
-    intro c s r _ U m D L h
-    have r' : LinkGroupReady s c := by simpa using r
-    have e : linkGroupTrace 0 s >>= U=U s := pure_bind _ _
+    intro s pc _ regs U m D L h
+    have e : callsTrace 0 s >>= U=U s := pure_bind _ _
     rw [e]
-    exact (h s r').congr (by omega) (by omega) (by omega)
-  | succ q ih =>
-    intro c s r hc U m D L h
-    obtain ⟨tl,tp⟩ := test_rows s _ (by omega) hc r.pc r.count
-    have t30 : (walkRows s groupTestRows).getReg .x30=BitVec.ofNat 64 (4*q+c) := by
-      rw [tp.r30]; congr 1; omega
-    have regs1 : CallRegs (walkRows s groupTestRows) := r.regs.keep tp.keep
-    have e : linkGroupTrace (q+1) s >>= U=(callTrace (walkRows s groupTestRows) >>= fun a => callTrace a >>= fun b =>
-        callTrace b >>= fun c' => callTrace c' >>= fun d => linkGroupTrace q (walkRows d groupBackRows) >>= U) := by
-      simp only [linkGroupTrace,bind_assoc]
+    exact (h s pc regs).congr (by omega) (by omega) (by omega)
+  | succ c ih =>
+    intro s pc hc regs U m D L h
+    have e : callsTrace (c+1) s >>= U=(callTrace s >>= fun a => callsTrace c a >>= U) := by
+      simp only [callsTrace,bind_assoc]
     rw [e]
-    refine (rows_then s groupTestRows tl group_test_fetch
-      (call_then _ 6 (by decide) tp.pc regs1 (m:=1+(1+(1+(1+(7*q+m))))) (D:=8+(8+(8+(1+(35*q+D)))))
-        (L:=1+(1+(1+(4*q+L)))) fun z1 => ?_)).congr
-      (by rw [test_len]; omega) (by rw [test_price]; omega) (by omega)
-    let a := writeBits (walkRows s groupTestRows) (wordAddress 192) z1
-    refine call_then a 7 (by decide) (write_at _ _ 6 tp.pc) (regs1.write _ _) (m:=1+(1+(1+(7*q+m))))
-      (D:=8+(8+(1+(35*q+D)))) (L:=1+(1+(4*q+L))) fun z2 => ?_
-    let b := writeBits a (wordAddress 192) z2
-    refine call_then b 8 (by decide) (write_at _ _ 7 (write_at _ _ 6 tp.pc)) ((regs1.write _ _).write _ _)
-      (m:=1+(1+(7*q+m))) (D:=8+(1+(35*q+D))) (L:=1+(4*q+L)) fun z3 => ?_
-    let c3 := writeBits b (wordAddress 192) z3
-    refine call_then c3 9 (by decide) (write_at _ _ 8 (write_at _ _ 7 (write_at _ _ 6 tp.pc)))
-      (((regs1.write _ _).write _ _).write _ _) (m:=1+(7*q+m)) (D:=1+(35*q+D)) (L:=4*q+L) fun z4 => ?_
-    let d := writeBits c3 (wordAddress 192) z4
-    have dpc : d.pc=address 10 := write_at _ _ 9 (write_at _ _ 8 (write_at _ _ 7 (write_at _ _ 6 tp.pc)))
-    have dregs : CallRegs d := (((regs1.write _ _).write _ _).write _ _).write _ _
-    have d30 : d.getReg .x30=BitVec.ofNat 64 (4*q+c) := by
-      simp only [d,c3,b,a,write_regs]; exact t30
-    obtain ⟨bl,bp⟩ := back_rows d dpc
-    have ready : LinkGroupReady (walkRows d groupBackRows) (4*q+c) :=
-      ⟨bp.pc,bp.r30.trans d30,dregs.keep bp.keep⟩
-    exact (rows_then d groupBackRows bl group_back_fetch (ih c _ ready (by omega) h)).congr
-      (by rw [back_len]) (by rw [back_price]) (by omega)
-
-/-- `r` single links, then a segment from any state at the exit row. -/
-theorem rest_then (r : Nat) : ∀ (s : MachineState), RestReady s r → r<34 →
-    ∀ {U : MachineState → OracleComp World MachineState} {m D L : Nat},
-    (∀ b : MachineState, b.pc=address 795 → Runs m b (U b) D L) →
-    Runs (4*r+m) s (restTrace r s >>= U) (11*r+D) (r+L) := by
-  induction r with
-  | zero =>
-    intro s rr _ U m D L h
-    have e : restTrace 0 s >>= U=U s := pure_bind _ _
-    rw [e]
-    have pc : s.pc=address 795 := by simpa using rr.pc
-    exact (h s pc).congr (by omega) (by omega) (by omega)
-  | succ r ih =>
-    intro s rr hc U m D L h
-    have pc : s.pc=address 13 := by simpa using rr.pc
-    have e : restTrace (r+1) s >>= U=(callTrace s >>= fun a => restTrace r (walkRows a restRows) >>= U) := by
-      simp only [restTrace,bind_assoc]
-    rw [e]
-    refine (call_then s 13 (by decide) pc rr.regs (m:=3+(4*r+m)) (D:=3+(11*r+D)) (L:=r+L) fun z => ?_).congr
-      (by omega) (by omega) (by omega)
-    let a := writeBits s (wordAddress 192) z
-    have a30 : a.getReg .x30=BitVec.ofNat 64 (r+1) := (write_regs _ _ _).trans rr.count
-    obtain ⟨rl,rp⟩ := rest_rows a r hc (write_at _ _ 13 pc) a30
-    have ready : RestReady (walkRows a restRows) r := ⟨rp.pc,rp.r30,(rr.regs.write _ _).keep rp.keep⟩
-    exact (rows_then a restRows rl rest_fetch (ih _ ready (by omega) h)).congr
-      (by rw [rest_len]) (by rw [rest_price]) (by omega)
+    refine (call_then s (929-(c+1)) (by omega) (by omega) pc regs (m:=c+m) (D:=8*c+D) (L:=c+L)
+      fun z => ih _ ?_ (by omega) (regs.write _ _) h).congr (by omega) (by omega) (by omega)
+    rw [write_at _ _ _ pc]; congr 1; omega
 
 end TwoPermutationPrototype.GroupedOpening
