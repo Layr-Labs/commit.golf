@@ -1,6 +1,7 @@
 import CommitGolfCandidate.TwoPermutationPackedRecordLeafPrelude
 import CommitGolfCandidate.TwoPermutationPackedRecordLeafCalls
 import CommitGolfCandidate.TwoPermutationPackedRecordComposition
+import CommitGolfCandidate.QuartetCheckBlock
 
 namespace TwoPermutationPrototype.Packed.RecordLeaf
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
@@ -52,19 +53,20 @@ theorem leaf_ready (input : CheckInput) (ordinal : Nat) (h : ordinal < input.pos
 def rawLeaf (oracle : Oracle) (ordinal : Nat) (index : Index) (s : MachineState) : MachineState × List PublicRow :=
   (checkEvaluation oracle (recordRows (leafQueries (staged s) (checkSourceWord ordinal) index))).1
 
+/-- The leaf (record setup, nonce, two permutation calls) followed by the quartet block. -/
 def block (oracle : Oracle) (ordinal : Nat) (index : Index) (s : MachineState) : RecordBlock :=
   let raw := rawLeaf oracle ordinal index s
-  ⟨beginLower raw.1 5,41,55,raw.2⟩
+  let q := quartetBlock oracle raw.1
+  ⟨q.state,36+132,50+139,raw.2++q.rows⟩
 
-theorem block_digest_rows (oracle : Oracle) (ordinal : Nat) (index : Index) (s : MachineState) :
+theorem raw_digest_rows (oracle : Oracle) (ordinal : Nat) (index : Index) (s : MachineState) :
     let message := window (memoryView (staged s)) (checkSourceWord ordinal+5)
     let a := pinnedFirstRow oracle.permutation message
     let b := pinnedSecondRow oracle.permutation index (checkerNonce (staged s)) a.2 message
-    (block oracle ordinal index s).rows=[.permutation a.1 a.2,.permutation b.1 b.2] ∧
-      readBuffer (block oracle ordinal index s).state 12288 32 = outputDigest b.2 := by
-  simp only [block,rawLeaf,checker_leaf_rows]
-  refine ⟨True.intro,?_⟩
-  exact (read_buffer_memory_congr _ _ (lower_setup_mem _) _ _).trans (checker_leaf_digest _ _ _ _)
+    (rawLeaf oracle ordinal index s).2=[.permutation a.1 a.2,.permutation b.1 b.2] ∧
+      readBuffer (rawLeaf oracle ordinal index s).1 12288 32 = outputDigest b.2 := by
+  simp only [rawLeaf,checker_leaf_rows]
+  exact ⟨True.intro,checker_leaf_digest _ _ _ _⟩
 
 theorem raw_view (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (h : ordinal < input.positions.card)
     (s : MachineState) (fits : ProofWithin input) (cursor : RecordCursor input ordinal s)
@@ -88,5 +90,32 @@ theorem raw_view (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (h : ord
   · intro word bound src scratch
     rw [checker_leaf_frame ready _ _ word bound src (by omega)]
     exact staged_word_frame input ordinal h s fits cursor word bound (by omega)
+
+theorem raw_quartet_entry (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (h : ordinal < input.positions.card)
+    (s : MachineState) (fits : ProofWithin input) (cursor : RecordCursor input ordinal s)
+    (framed : RecordInputFrame input ordinal s) :
+    QuartetEntry ordinal (honestIndex input.positions ordinal h).val
+      (rawLeaf oracle ordinal (honestIndex input.positions ordinal h).val s).1 := by
+  obtain ⟨pc,position,kept,wordFrame⟩ := raw_view oracle input ordinal h s fits cursor framed
+  have card := checker_positions_bound input
+  have room := (packed_record_geometry input ordinal h fits).2.2.2.1
+  have r := record_setup_post s
+  have leafKeeps (reg : Reg) (a : reg ≠ .x10) (b : reg ≠ .x12) (c : reg ≠ .x31) :
+      (rawLeaf oracle ordinal (honestIndex input.positions ordinal h).val s).1.getReg reg = (staged s).getReg reg := by
+    simp only [rawLeaf,checker_leaf_rows]
+    exact checker_leaf_preserved_register _ _ _ _ reg a b c
+  refine ⟨pc,position,?_,?_,?_,?_,?_,?_,?_,?_,room⟩
+  · exact (kept .x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans cursor.proof
+  · exact (kept .x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans
+      cursor.challengeLength
+  · exact (kept .x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans cursor.digest
+  · exact (kept .x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans cursor.pair
+  · exact (kept .x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans cursor.selector
+  · exact (leafKeeps .x11 (by decide) (by decide) (by decide)).trans ((staged_reg s .x11 (by decide)).trans r.2.2.2.1)
+  · exact (leafKeeps .x13 (by decide) (by decide) (by decide)).trans ((staged_reg s .x13 (by decide)).trans r.2.2.2.2.1)
+  · intro w lo hi
+    rw [wordFrame w (by omega) (Or.inl (by unfold checkSourceWord; omega)) (Or.inr (by omega)),
+      framed w (by omega) (Or.inl (Or.inr ⟨lo, hi⟩))]
+    exact Checker.check_scratch_word_zero input (8*w) (by omega)
 
 end TwoPermutationPrototype.Packed.RecordLeaf

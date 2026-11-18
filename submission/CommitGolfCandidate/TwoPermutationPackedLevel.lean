@@ -96,7 +96,7 @@ theorem levelFacts (oracle : Oracle) (s : MachineState) (node proof left : Nat) 
   have proofReg : mid.getReg .x21=BitVec.ofNat 64 proof := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.proofReg
   have nodeReg : mid.getReg .x6=BitVec.ofNat 64 node := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.nodeReg
   have counter : mid.getReg .x29=BitVec.ofNat 64 left := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.counter
-  have wreg : mid.getReg .x30=BitVec.ofNat 64 (width (decide (left=16))) := (resume_register _ _ _ _ _).trans p.widthReg
+  have wreg : mid.getReg .x30=BitVec.ofNat 64 (width (decide (left=14))) := (resume_register _ _ _ _ _).trans p.widthReg
   have unchanged (r : Reg) (ok : r≠.x10 ∧ r≠.x12 ∧ r≠.x31 ∧ r≠.x7 ∧ r≠.x30 ∧ r≠.x6 ∧ r≠.x21 ∧ r≠.x29) :
       (latch mid).getReg r=s.getReg r := (latch_keeps mid r ok.2.2.2.2.2.1 ok.2.2.2.2.2.2.1 ok.2.2.2.2.2.2.2).trans
         (pre r ok.1 ok.2.1 ok.2.2.1 ok.2.2.2.1 ok.2.2.2.2.1)

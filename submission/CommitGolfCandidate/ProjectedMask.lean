@@ -1,5 +1,5 @@
 import CommitGolfCandidate.ProjectedCompression
-import CommitGolfCandidate.CapCompressionStep
+import CommitGolfCandidate.CapCompressionCore
 import CommitGolfCandidate.WriteMemory
 
 /-! A hardware SH of zero at offset 30 clears precisely the two high bytes
