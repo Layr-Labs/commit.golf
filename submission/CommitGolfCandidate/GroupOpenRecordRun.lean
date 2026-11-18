@@ -77,7 +77,7 @@ private theorem latch_target (marked : MachineState) (last : Prop) [Decidable la
   · rw [show decide last = false from decide_eq_false h, ite_eq_right h]
     rfl
 
-private theorem complete_record_cost (final : Bool) : 630+latchCost final = recordCost final := by
+private theorem complete_record_cost (final : Bool) : 666+latchCost final = recordCost final := by
   cases final <;> decide
 
 private theorem execute_record_with_data (s : Submission)
@@ -132,7 +132,7 @@ private theorem execute_record_with_data (s : Submission)
     (ordinal+1=positions.card) nextLeft nowZero
   have doneMem : done.mem = marked.mem := after_latch_memory marked _
   have doneReg (r : Reg) : done.getReg r = marked.getReg r := after_latch_register marked _ r
-  have saved (r : Reg) (free : r ∉ prefixScratch) (b : r ≠ .x7) (e : r ≠ .x8) (f : r ≠ .x18) : done.getReg r=state.getReg r :=
+  have saved (r : Reg) (free : r ∉ recordScratch) (b : r ≠ .x7) (e : r ≠ .x8) (f : r ≠ .x18) : done.getReg r=state.getReg r :=
     (doneReg r).trans ((tail_register prepared r b e f).trans (data.register r free))
   have one : prepared.getReg .x23 = 1#64 :=
     (data.register .x23 (by decide)).trans boundary.one
@@ -165,13 +165,12 @@ private theorem execute_record_with_data (s : Submission)
     (saved .x23 (by decide) (by decide) (by decide) (by decide)).trans boundary.one,
     (saved .x25 (by decide) (by decide) (by decide) (by decide)).trans boundary.capHeap,
     (saved .x27 (by decide) (by decide) (by decide) (by decide)).trans boundary.capLeaves,
-    (saved .x20 (by decide) (by decide) (by decide) (by decide)).trans boundary.proofBegin,
-    (saved .x4 (by decide) (by decide) (by decide) (by decide)).trans boundary.mult⟩,
-    ?_, ?_, ?_, ?_⟩
+    (saved .x20 (by decide) (by decide) (by decide) (by decide)).trans boundary.proofBegin⟩,
+    ?_, ?_, ?_, ?_, ?_⟩
   · have tail : RunsOpeningBlock prepared done (latchCost (decide (ordinal+1=positions.card))) :=
       run_latch prepared (ordinal+1=positions.card) markRun markPC
-    have whole := data.run.then tail
-    change RunsOpeningSlack state done (recordCost (decide (ordinal+1=positions.card))) 3
+    have whole := data.run.next tail
+    change RunsOpeningBlock state done (recordCost (decide (ordinal+1=positions.card)))
     rw [← complete_record_cost]
     exact whole
   · have pointer := (data.register .x8 (by decide)).trans boundary.index
@@ -217,9 +216,16 @@ private theorem execute_record_with_data (s : Submission)
     exact (stableByte _ (by omega) (by unfold recordBase; omega)).trans (data.nonce b inside)
   · intro l hl b inside
     have fits := (all_sibling_copies_fit index ordinal l (by omega) hl).2.2.2
+    have narrow := plain_width_le l
     have mem : MEMORY_BYTES+8 ≤ 2^64 := by decide
     have low : trapdoorBase ≤ proofBase := by decide
     exact (stableByte _ (by omega) (by unfold siblingDestination recordBase; omega)).trans (data.sibling l hl b inside)
+  · intro k hk b hb
+    have fits := (all_sibling_copies_fit index ordinal (6+k) (by omega) (by omega)).2.2.2
+    have width : siblingWidth (6+k) = 30 := by unfold siblingWidth; rw [if_neg (by omega), if_pos (by omega)]
+    have mem : MEMORY_BYTES+8 ≤ 2^64 := by decide
+    have low : trapdoorBase ≤ proofBase := by decide
+    exact (stableByte _ (by omega) (by unfold siblingDestination recordBase; omega)).trans (data.fold k hk b hb)
 
 theorem execute_record (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)

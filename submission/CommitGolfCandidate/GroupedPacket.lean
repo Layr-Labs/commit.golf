@@ -3,8 +3,24 @@ import CommitGolfCandidate.GroupedCommitImage
 import CommitGolfCandidate.QuartetCommitRanges
 import CommitGolfCandidate.QuartetCommitLeafOps
 
-/-! Pair-heads leaf body: the action plan of pair packet `P` (global pair index) with word-address witnesses.
-Layout notes: `stack/PH-DESIGN.md`. Even leaf `2P` has entry `E = msgWord (2P)`, odd leaf `2P+1` has `O = E + 32`. -/
+/-!
+# The K3-lite slot plans
+
+`plan i = bodyPlan i ++ tailPlan i` is the code of slot `i` (slot `i % 4096` of its tile) with the
+word address that every instruction computes.  Word indices: the message of leaf `i` is at
+`msgWord i = 512 + 32 i`, quartet block `g` at `qSource g` (record cell format, digest of leaf `i`
+at `qLeaf i`), the key block at `qSalt 0`.
+
+* A leaf (rank 0), `m = msgWord i`: first call `[m+7, m+32) → [m-25, m)`, the C first call
+  `[m+32, m+57) → [m+28, m+53)`, the counter `m+32` into the key block, the generator `→ [m+16, m+41)`,
+  the tag `m-7` at `m-5` and the second call `[m-7, m+18) → qLeaf i`.
+* C leaf (rank 1), entry `m+7`: tag `m+7` at `m+9`, second call `[m+7, m+32) → qLeaf i`.
+* Follower (rank ≥ 2): first call `[m, m+25) → [m-4, m+21)`, tag `m+7` at `m+9`, salt into
+  `m+7, m+8` (from the generator reply, or from x14..x17 for ranks 9 and 10), second call.
+* Tail: `x10 += trail` to the next entry, or after the fourth leaf of quartet `q = i/4` the quartet
+  call on `[qSource q, +25)` (even `q`: output `qLeaf i = qSource q + 21`, x12 reused; odd `q`:
+  output `qSource q - 82`) and the restore `x10 += x1 | x2` to the next entry.
+-/
 
 namespace TwoPermutationPrototype.Grouped
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
@@ -13,82 +29,231 @@ set_option maxRecDepth 16000
 set_option maxHeartbeats 1800000
 
 def msgWord (i : Nat) := 512+32*i
-def cursor (i : Nat) := qSource (1024*(i/4096))+512*rb (i%4096)+256
+/-- Word address held by x10 on entry to slot `i` (`L+56` for an A or C leaf, `L` for a follower). -/
+def entryWord (i : Nat) := if rank i≤1 then msgWord i+7 else msgWord i
+/-- Start of the second-call window: `B-56` for an A leaf, `L+56` otherwise. -/
+def secondWord (i : Nat) := if rank i=0 then msgWord i-7 else msgWord i+7
+/-- Word distance from a salt-first or C leaf's second-call input (`msgWord i + 7`) to its quartet slot. -/
+def slotGap (j : Nat) := 603979782-28*j
+/-- Word distance from an A leaf's second-call input (`msgWord i - 7`) to its quartet slot. -/
+def aGap (j : Nat) := 603979796-28*j
+/-- Word distance from the quartet block back to the next entry (negated restore register). -/
+def rGap (n : Nat) := 603979652-(if near n then 7 else 0)
+/-- First word of the generator reply of the group of `i` (byte `B+128` of its A leaf). -/
+def genWord (i : Nat) := msgWord (i-rank i)+16
+/-- Source of the salt of a follower of rank `2..8`: generator words `2 (rank-1)`. -/
+def sourceWord (i : Nat) := genWord i+2*(rank i-1)
+/-- Output of the quartet call of quartet `i/4` (`i % 4 = 3`): over the fourth digest (even) or
+`656` bytes below the block (odd). -/
+def groupOut (i : Nat) := if (i/4)%2=0 then qLeaf i else qSource (i/4)-82
 
-/-- Rank of pair `P` inside its body, modulo the 11-pair head period. -/
-def pairRank (P : Nat) := (P%2048)%11
-/-- Position of pair `P` inside its salt group (0 = the head pair). -/
-def groupK (P : Nat) := if pairRank P<5 then pairRank P else pairRank P-5
-/-- The head pair of pair `P`'s salt group (global index). -/
-def headPair (P : Nat) := P-groupK P
-/-- First word of the generator reply of head pair `h` (written at the odd entry − 120 bytes). -/
-def replyWord (h : Nat) := msgWord (2*h+1)-15
-/-- The salt cursor `t2` of pair `P`'s group: the head's reply − 400 bytes. -/
-def anchorWord (P : Nat) := replyWord (headPair P)-50
-/-- Word of leaf `n`'s copied salt (`n` global, in a non-head pair): table salt `c` of the group head's reply, or
-table salt 8 of the previous head's reply for the 12th leaf of a 12-leaf group. -/
-def srcWord (n : Nat) : Nat :=
-  if copyIndex (n%4096)=9 then replyWord (headPair (n/2)-5)+18 else replyWord (headPair (n/2))+2+2*copyIndex (n%4096)
+def saltPlan (i : Nat) : List Action :=
+  let m := msgWord i
+  if rank i≤8 then
+    [.load .x31 .x10 (saltImm (rank i)) (sourceWord i),.store .x10 .x31 0 (m+7),
+     .load .x31 .x10 (saltImm (rank i)+8) (sourceWord i+1),.store .x10 .x31 8 (m+8)] ++
+    (if rank i=8 then [.load .x14 .x10 (-1848) (genWord i+16),.load .x15 .x10 (-1840) (genWord i+17),
+      .load .x16 .x10 (-1832) (genWord i+18),.load .x17 .x10 (-1824) (genWord i+19)] else [])
+  else if rank i=9 then [.store .x10 .x14 0 (m+7),.store .x10 .x15 8 (m+8)]
+  else [.store .x10 .x16 0 (m+7),.store .x10 .x17 8 (m+8)]
 
-def pairPlan (P : Nat) : List Action :=
-  let p := P%2048
-  let E := msgWord (2*P)
-  let O := msgWord (2*P+1)
-  [.offset .x10 .x10 256 (E+7),.offset .x12 .x10 (-256) (E-25),.perm (E+7) (E-25),
-   .offset .x10 .x10 200 O,.offset .x12 .x10 (-32) (O-4),.perm O (O-4)] ++
-  (if pairHead p then
-    [.store .x24 .x10 0 (qSalt 0),.offset .x12 .x10 (-120) (O-15),.offset .x10 .x24 0 (qSalt 0),
-     .perm (qSalt 0) (O-15)] ++
-    (if prefetchA p then [.load .x16 .x12 144 (O+3),.load .x17 .x12 152 (O+4)]
-     else if p%11=5 then [.load .x14 .x12 144 (O+3),.load .x15 .x12 152 (O+4)] else []) ++
-    [.offset .x10 .x12 (-184) (E-6)]
-  else if fromRegs p then
-    [.store .x10 .x14 (-120) (O-15),.store .x10 .x15 (-112) (O-14),.store .x10 .x16 64 (O+8),
-     .store .x10 .x17 72 (O+9),.offset .x10 .x10 (-304) (E-6)]
+def bodyPlan (i : Nat) : List Action :=
+  let m := msgWord i
+  let n := i%4096
+  if rank i=0 then
+    [.offset .x12 .x10 (-256) (m-25),.perm (m+7) (m-25),.offset .x10 .x10 200 (m+32),
+     .offset .x12 .x10 (-32) (m+28),.perm (m+32) (m+28)] ++
+    (if keyed n then [.store .x24 .x10 0 (qSalt 0),.offset .x12 .x12 (-96) (m+16),.offset .x10 .x24 0 (qSalt 0),
+       .perm (qSalt 0) (m+16)]
+     else [.add .x10 .x12 .x3 (genWord (i-11)),.offset .x12 .x12 (-96) (m+16),.perm (genWord (i-11)) (m+16)]) ++
+    [.offset .x10 .x12 (-184) (m-7),.store .x10 .x10 16 (m-5),
+     .add .x12 .x10 (areg n) (qLeaf i),.perm (m-7) (qLeaf i)]
+  else if rank i=1 then
+    [.store .x10 .x10 16 (m+9),.add .x12 .x10 (sreg n) (qLeaf i),.perm (m+7) (qLeaf i)]
   else
-    [.load .x31 .x12 (srcImm (2*p)) (srcWord (2*P)),.store .x10 .x31 (-120) (O-15),
-     .load .x31 .x12 (srcImm (2*p)+8) (srcWord (2*P)+1),.store .x10 .x31 (-112) (O-14),
-     .load .x31 .x12 (srcImm (2*p+1)) (srcWord (2*P+1)),.store .x10 .x31 64 (O+8),
-     .load .x31 .x12 (srcImm (2*p+1)+8) (srcWord (2*P+1)+1),.store .x10 .x31 72 (O+9),
-     .offset .x10 .x10 (-304) (E-6)]) ++
-  [.store .x10 .x10 0 (E-6),.offset .x12 .x20 (heapImm (2*p)) (qLeaf (2*P)),.perm (E-6) (qLeaf (2*P))] ++
-  (if rebase (2*p) then [.add .x20 .x20 .x23 (cursor (2*P+1))] else []) ++
-  [.offset .x10 .x10 360 (O+7),.store .x10 .x10 0 (O+7),.offset .x12 .x20 (heapImm (2*p+1)) (qLeaf (2*P+1)),
-   .perm (O+7) (qLeaf (2*P+1))] ++
-  (if rebase (2*p+1) then [.add .x20 .x20 .x23 (cursor (2*P+2))] else [])
+    [.offset .x12 .x10 (-32) (m-4),.perm m (m-4),.offset .x10 .x10 56 (m+7),.store .x10 .x10 16 (m+9)] ++
+    saltPlan i ++
+    [.add .x12 .x10 (sreg n) (qLeaf i),.perm (m+7) (qLeaf i)]
 
-theorem pair_plan_words (P : Nat) : (pairPlan P).map Action.op=pairPacket (P%2048) := by
-  by_cases h : pairHead (P%2048) <;> by_cases a : prefetchA (P%2048) <;> by_cases b : P%2048%11=5 <;>
-    by_cases t : fromRegs (P%2048) <;> by_cases r : rebase (2*(P%2048)) <;> by_cases r' : rebase (2*(P%2048)+1) <;>
-    simp only [pairPlan,pairPacket,h,a,b,t,r,r',ite_true,ite_false,List.map_append,List.map_cons,List.map_nil,Action.op]
+def tailPlan (i : Nat) : List Action :=
+  let n := i%4096
+  if n%4=3 then
+    (if (n/4)%2=0 then [.offset .x10 .x12 (-168) (qSource (i/4)),.perm (qSource (i/4)) (qLeaf i)]
+     else [.offset .x10 .x12 (-168) (qSource (i/4)),.offset .x12 .x10 (-656) (qSource (i/4)-82),
+       .perm (qSource (i/4)) (qSource (i/4)-82)]) ++
+    [.add .x10 .x10 (rreg n) (entryWord (i+1))]
+  else [.offset .x10 .x10 (trail n) (entryWord (i+1))]
 
-theorem pair_plan_fetch (P : Nat) : fetchOps (pairWord (P%2048)) (pairPlan P) := by
+def plan (i : Nat) : List Action := bodyPlan i ++ tailPlan i
+
+theorem within_rank (i : Nat) : rank (i%4096)=rank i := by
+  unfold rank;rw [Nat.mod_mod]
+
+theorem plan_words (i : Nat) : (plan i).map Action.op=packet (i%4096) := by
+  unfold plan bodyPlan tailPlan packet saltPlan saltCode tailCode
+  rw [within_rank,List.map_append]
+  congr 1
+  · have h := rank_lt i
+    generalize rank i=r at *
+    by_cases kd : keyed (i%4096) <;> interval_cases r <;> simp [Action.op,kd]
+  · have m : i%4096%4=i%4 := by omega
+    by_cases t : i%4=3
+    · by_cases e : i%4096/4%2=0 <;> simp [t,m,e,Action.op]
+    · simp [t,m,Action.op]
+
+theorem plan_fetch (i : Nat) : fetchOps (firstWord (i%4096)) (plan i) := by
   intro j s pc
-  have len := congrArg List.length (pair_plan_words P)
+  have len := congrArg List.length (plan_words i)
   simp only [List.length_map] at len
-  have inside : j.val<(pairPacket (P%2048)).length := len ▸ j.isLt
-  have got := fetch_pair_packet ⟨P%2048,by omega⟩ j.val inside s pc
-  rw [←pair_plan_words,List.getElem?_eq_getElem (by simpa using j.isLt)] at got
-  change fetch image s=some (.base (pairPlan P)[j.val].op)
+  have inside : j.val<(packet (i%4096)).length := len ▸ j.isLt
+  have got := fetch_packet ⟨i%4096,by omega⟩ j.val inside s pc
+  rw [←plan_words,List.getElem?_eq_getElem (by simpa using j.isLt)] at got
+  change fetch image s=some (.base (plan i)[j.val].op)
   simpa only [List.getElem_map,Option.getD_some] using got
 
-theorem centered_imm : ∀ x : Fin 4096, signExtend12 (BitVec.ofNat 12 (2048+x.val))=-(2048:Word)+BitVec.ofNat 64 x.val := by
-  decide +kernel
+structure PacketRegs (s : MachineState) (i : Nat) : Prop where
+  msg : s.getReg .x10=wordAddress (entryWord i)
+  s0 : s.getReg .x20=wordAddress (slotGap 0)
+  s1 : s.getReg .x23=wordAddress (slotGap 1)
+  s2 : s.getReg .x25=wordAddress (slotGap 2)
+  s3 : s.getReg .x26=wordAddress (slotGap 3)
+  a0 : s.getReg .x27=wordAddress (aGap 0)
+  a1 : s.getReg .x28=wordAddress (aGap 1)
+  a2 : s.getReg .x29=wordAddress (aGap 2)
+  a3 : s.getReg .x30=wordAddress (aGap 3)
+  far : s.getReg .x1=-wordAddress 603979652
+  close : s.getReg .x2=-wordAddress 603979645
+  link : s.getReg .x3=-wordAddress 364
+  counter : s.getReg .x24=wordAddress (qSalt 0)
+  selector : s.getReg .x5=0
+  size : s.getReg .x11=200
+  primitive : s.getReg .x13=1
 
-theorem heap_address (i : Nat) : wordAddress (cursor i)+signExtend12 (heapImm (i%4096))=wordAddress (qLeaf i) := by
-  have low : 4096*rb (i%4096)≤slotOff (i%4096) := by unfold rb;omega
-  have bound : slotOff (i%4096)-4096*rb (i%4096)<4096 := by unfold rb;omega
-  have atSlot := centered_imm ⟨slotOff (i%4096)-4096*rb (i%4096),bound⟩
-  simp only [Fin.val_mk] at atSlot
-  unfold heapImm
-  rw [show 2048+slotOff (i%4096)-4096*rb (i%4096)=2048+(slotOff (i%4096)-4096*rb (i%4096)) by omega,atSlot]
-  unfold cursor
-  rw [wordAddress_add]
-  change (wordAddress _+2048)+(-2048+BitVec.ofNat 64 _)=_
-  refine (QuartetLeaves.centered_add (wordAddress (qSource (1024*(i/4096))+512*rb (i%4096)))
-    (slotOff (i%4096)-4096*rb (i%4096))).trans ?_
-  unfold wordAddress qLeaf qSource
-  rw [←BitVec.ofNat_add]
-  congr 1 <;> (try simp only [slotOff] at low ⊢) <;> omega
+theorem slot_address (i : Nat) : wordAddress (msgWord i+7)+wordAddress (slotGap (i%4))=wordAddress (qLeaf i) := by
+  rw [←wordAddress_add];congr 1
+  unfold msgWord slotGap qLeaf qSource;omega
+
+theorem a_slot_address (i : Nat) : wordAddress (msgWord i-7)+wordAddress (aGap (i%4))=wordAddress (qLeaf i) := by
+  rw [←wordAddress_add];congr 1
+  unfold msgWord aGap qLeaf qSource;omega
+
+/-- A positive displacement of `d` words. -/
+theorem addr_fwd (a d : Nat) (imm : BitVec 12) (h : signExtend12 imm=wordAddress d) :
+    wordAddress a+signExtend12 imm=wordAddress (a+d) := by rw [h,wordAddress_add]
+
+/-- A negative displacement of `d` words. -/
+theorem addr_back (a d : Nat) (imm : BitVec 12) (h : signExtend12 imm+wordAddress d=0) (hd : d≤a) :
+    wordAddress a+signExtend12 imm=wordAddress (a-d) := by
+  have e : wordAddress a=wordAddress (a-d)+wordAddress d := by rw [←wordAddress_add,Nat.sub_add_cancel hd]
+  rw [e,BitVec.add_assoc,BitVec.add_comm (wordAddress d),h];exact BitVec.add_zero _
+
+theorem salt_imm_value : ∀ r : Fin 11, 2≤r.val → r.val≤8 →
+    signExtend12 (saltImm r.val)+wordAddress (30*r.val-7)=0 ∧
+    signExtend12 (saltImm r.val+8)+wordAddress (30*r.val-8)=0 := by decide
+
+theorem rank_next (i : Nat) (h : rank (i+1)≠0) : rank (i+1)=rank i+1 := by
+  unfold rank at *
+  have : i%4096≠4095 := by intro e;apply h;rw [show (i+1)%4096=0 by omega]
+  rw [show (i+1)%4096=i%4096+1 by omega] at h ⊢
+  omega
+
+theorem rank_succ_within (i : Nat) : rank (i%4096+1)=rank (i+1) := by
+  unfold rank;rw [show (i%4096+1)%4096=(i+1)%4096 by omega]
+
+theorem head_pair (i : Nat) (h : rank i=0) : rank (i+1)=1 := by
+  unfold rank at *
+  have : i%4096≠4095 := by omega
+  rw [show (i+1)%4096=i%4096+1 by omega];omega
+
+theorem trail_within (i : Nat) :
+    trail (i%4096)=if rank i=0 then 368 else if rank (i+1)=0 then 256 else 200 := by
+  unfold trail;rw [within_rank,rank_succ_within]
+
+/-- The next entry, seen from leaf `i`. -/
+theorem entry_next (i : Nat) :
+    entryWord (i+1)=if rank i=0 then msgWord i+39 else if rank (i+1)=0 then msgWord i+39 else msgWord i+32 := by
+  unfold entryWord msgWord
+  by_cases h0 : rank i=0
+  · rw [if_pos h0,if_pos (by rw [head_pair i h0])];omega
+  · rw [if_neg h0]
+    by_cases z : rank (i+1)=0
+    · rw [if_pos z,if_pos (by omega)];omega
+    · have one : ¬ rank (i+1)≤1 := by have := rank_next i z;omega
+      rw [if_neg z,if_neg one];omega
+
+/-- x10 after the closing `addi x10,x10,trail` of a C leaf or a follower. -/
+theorem trail_address (i : Nat) (h : rank i≠0) :
+    wordAddress (msgWord i+7)+signExtend12 (trail (i%4096))=wordAddress (entryWord (i+1)) := by
+  rw [trail_within,if_neg h,entry_next,if_neg h]
+  by_cases z : rank (i+1)=0
+  · rw [if_pos z,if_pos z,addr_fwd _ 32 _ (by decide)];all_goals (congr 1;try omega)
+  · rw [if_neg z,if_neg z,addr_fwd _ 25 _ (by decide)];all_goals (congr 1;try omega)
+
+/-- x10 after the A leaf's closing `addi x10,x10,368` (to the C window). -/
+theorem trail_head (i : Nat) (h : rank i=0) :
+    wordAddress (msgWord i-7)+signExtend12 (trail (i%4096))=wordAddress (entryWord (i+1)) := by
+  have low : 512≤msgWord i := by unfold msgWord;omega
+  rw [trail_within,if_pos h,entry_next,if_pos h,addr_fwd _ 46 _ (by decide)];all_goals (congr 1;try omega)
+
+/-- The quartet call reads the block: `x10 = qLeaf i - 168` bytes. -/
+theorem group_input (i : Nat) (t : i%4=3) :
+    wordAddress (qLeaf i)+signExtend12 3928#12=wordAddress (qSource (i/4)) := by
+  have e : qLeaf i=qSource (i/4)+21 := by unfold qLeaf;omega
+  rw [e,addr_back (qSource (i/4)+21) 21 3928#12 (by decide) (by omega)];all_goals (congr 1;try omega)
+
+/-- Odd quartet: output `656` bytes below the block. -/
+theorem odd_output (i : Nat) :
+    wordAddress (qSource (i/4))+signExtend12 3440#12=wordAddress (qSource (i/4)-82) :=
+  addr_back _ 82 _ (by decide) (by unfold qSource;omega)
+
+theorem group_out_eq (i : Nat) : (qLeaf i=groupOut i ∨ qSource (i/4)-82=groupOut i) := by
+  unfold groupOut;split <;> simp
+
+/-- Adding a negated word address. -/
+theorem addr_neg (a d : Nat) (hd : d≤a) : wordAddress a+-wordAddress d=wordAddress (a-d) := by
+  have e : wordAddress a=wordAddress (a-d)+wordAddress d := by rw [←wordAddress_add,Nat.sub_add_cancel hd]
+  rw [e,BitVec.add_assoc,BitVec.add_right_neg];exact BitVec.add_zero _
+
+/-- x10 after the restore `add x10,x10,x1|x2` that follows a quartet call. -/
+theorem restore_address (i : Nat) (t : i%4=3) :
+    wordAddress (qSource (i/4))+-wordAddress (rGap (i%4096))=wordAddress (entryWord (i+1)) := by
+  have hn : near (i%4096)=true ↔ (rank i=0 ∨ rank (i+1)=0) := by
+    unfold near;rw [within_rank,rank_succ_within];simp
+  have big : rGap (i%4096)≤qSource (i/4) := by unfold rGap qSource;split <;> omega
+  rw [addr_neg _ _ big,entry_next]
+  congr 1
+  have i4 : i=4*(i/4)+3 := by omega
+  unfold rGap qSource msgWord
+  by_cases h0 : rank i=0
+  · rw [if_pos (hn.mpr (Or.inl h0)),if_pos h0];omega
+  · by_cases z : rank (i+1)=0
+    · rw [if_pos (hn.mpr (Or.inr z)),if_neg h0,if_pos z];omega
+    · rw [if_neg (show ¬near (i%4096)=true from fun e => by rcases hn.mp e with e|e <;> contradiction),
+        if_neg h0,if_neg z];omega
+
+/-- A chained head reads the previous head's generator reply: `x12 + x3 = (m+28) - 364`. -/
+theorem chain_source (i : Nat) (h0 : rank i=0) (kd : ¬keyed (i%4096)) :
+    wordAddress (msgWord i+28)+-wordAddress 364=wordAddress (genWord (i-11)) := by
+  have big : 11 ≤ i%4096 := by
+    by_contra l
+    apply kd
+    unfold keyed;rw [Nat.mod_mod];simp only [beq_iff_eq];omega
+  have r11 : rank (i-11)=0 := by
+    unfold rank at h0 ⊢
+    have e1 : (i-11)%4096=i%4096-11 := by
+      have d := Nat.div_add_mod i 4096
+      have e : i-11=(i%4096-11)+4096*(i/4096) := by omega
+      rw [e,Nat.add_mul_mod_self_left];exact Nat.mod_eq_of_lt (by omega)
+    rw [e1];omega
+  have i11 : 11 ≤ i := by omega
+  rw [addr_neg (msgWord i+28) 364 (by unfold msgWord;omega)]
+  unfold genWord msgWord;rw [r11];congr 1;omega
+
+theorem rreg_x10 (n : Nat) : (Reg.x10=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
+theorem rreg_x12 (n : Nat) : (Reg.x12=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
+
+theorem genWord_rank (i : Nat) (r : Nat) (h : rank i=r) : genWord i+32*r=msgWord i+16 := by
+  unfold genWord msgWord;have : r ≤ i := by rw [←h];unfold rank;omega
+  rw [h];omega
 
 end TwoPermutationPrototype.Grouped

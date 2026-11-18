@@ -3,95 +3,102 @@ namespace TwoPermutationPrototype.Grouped
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype.RV64
 set_option maxHeartbeats 6000000
 set_option maxRecDepth 16384
+theorem heads_succ (n : Nat) : heads (n+1)=heads n+(if rank n=0 then 1 else 0) := by
+  unfold heads rank
+  by_cases last : n%4096=4095
+  · rw [show (n+1)/4096=n/4096+1 by omega,show (n+1)%4096=0 by omega,last]
+    norm_num;omega
+  · rw [show (n+1)/4096=n/4096 by omega,show (n+1)%4096=n%4096+1 by omega]
+    have tab : (n%4096+1+10)/11=(n%4096+10)/11+(if n%4096%11=0 then 1 else 0) := by split <;> omega
+    rw [tab]; simp only [Nat.add_assoc]
 
-theorem heads_before_le (p : Nat) : headsBefore p ≤ p := by
-  unfold headsBefore; split_ifs <;> omega
+theorem rank_lt (n : Nat) : rank n<11 := by unfold rank;omega
 
-theorem heads_before_succ (p : Nat) : headsBefore (p+1)=headsBefore p+(if pairHead p then 1 else 0) := by
-  unfold headsBefore pairHead; split_ifs <;> omega
+/-- Code words of slot `n` of rank `r`, quartet calls excluded. -/
+def leafLen (r : Nat) := rankPrefix (r+1)-rankPrefix r
+/-- Extra words of a quartet call: two for an even quartet, three for an odd one. -/
+def extraLen (n : Nat) := if n%8=3 then 2 else if n%8=7 then 3 else 0
 
-theorem rb_succ (n : Nat) : rb (n+1)=rb n+(if rebase n then 1 else 0) := by
-  have step : rb n≤rb (n+1) ∧ rb (n+1)≤rb n+1 := by unfold rb slotOff;omega
-  by_cases h : rebase n
-  · rw [if_pos h];unfold rebase at h;omega
-  · rw [if_neg h];unfold rebase at h;omega
+/-- A chained head is one word shorter than a keyed one. -/
+def chainLen (n : Nat) := if rank n=0 ∧ ¬keyed n then 1 else 0
 
-theorem rb_le (n : Nat) (h : n<4096) : rb n≤91 := by unfold rb slotOff;omega
-theorem rb_zero : rb 0=0 := by decide
-theorem rb_last : rb 4095=91 := by decide
-theorem rebase_last : rebase 4095 := by decide
+theorem packet_length (n : Nat) :
+    (packet n).length+chainLen n=leafLen (rank n)+extraLen n := by
+  unfold packet leafLen tailCode extraLen chainLen
+  have h := rank_lt n
+  by_cases a : n%4=3
+  · by_cases b : (n/4)%2=0
+    · have e : n%8=3 := by omega
+      generalize rank n=r at *
+      by_cases kd : keyed n <;> interval_cases r <;> simp [a,b,e,kd,saltCode,rankPrefix]
+    · have e : n%8=7 := by omega
+      have e' : n%8≠3 := by omega
+      generalize rank n=r at *
+      by_cases kd : keyed n <;> interval_cases r <;> simp [a,b,e,e',kd,saltCode,rankPrefix]
+  · have e1 : n%8≠3 := by omega
+    have e2 : n%8≠7 := by omega
+    generalize rank n=r at *
+    by_cases kd : keyed n <;> interval_cases r <;> simp [a,e1,e2,kd,saltCode,rankPrefix]
 
-/-- Two leaves of a pair are never both followed by a rebase (blocks advance at most 304 bytes in two leaves). -/
-theorem no_double_rebase (p : Nat) : ¬(rebase (2*p) ∧ rebase (2*p+1)) := by
-  have two : rb (2*p+2) ≤ rb (2*p)+1 := by unfold rb slotOff; omega
-  rw [rb_succ,rb_succ] at two
-  intro ⟨a,b⟩; rw [if_pos a,if_pos b] at two; omega
+theorem leaf_len_le (r : Nat) (h : r<11) : leafLen r≤15 := by
+  unfold leafLen;interval_cases r <;> simp [rankPrefix]
 
-/-- Rebases over the whole vector: 92 per 4,096-leaf body plus `rb` inside the current body. -/
-theorem rebases_succ (i : Nat) :
-    92*((i+1)/4096)+rb ((i+1)%4096)=92*(i/4096)+rb (i%4096)+(if rebase (i%4096) then 1 else 0) := by
-  by_cases last : i%4096=4095
-  · rw [show (i+1)%4096=0 by omega,show (i+1)/4096=i/4096+1 by omega,last,if_pos rebase_last,rb_zero,rb_last]
-    omega
-  · rw [show (i+1)%4096=i%4096+1 by omega,show (i+1)/4096=i/4096 by omega,rb_succ]
-    by_cases h : rebase (i%4096)
-    · rw [if_pos h];omega
-    · rw [if_neg h];omega
+private theorem prefix_step (r : Nat) (h : r<10) : rankPrefix (r+1)=rankPrefix r+leafLen r := by
+  unfold leafLen;interval_cases r <;> simp [rankPrefix]
 
-/-- Rebases over the whole vector: 92 per 2,048-pair body plus `rb (2p)` inside the current body. -/
-theorem pair_rebases_succ (P : Nat) :
-    92*((P+1)/2048)+rb (2*((P+1)%2048))=
-      92*(P/2048)+rb (2*(P%2048))+(if rebase (2*(P%2048)) then 1 else 0)+(if rebase (2*(P%2048)+1) then 1 else 0) := by
-  by_cases last : P%2048=2047
-  · have n0 : ¬rebase (2*2047) := by decide
-    have n1 : rebase (2*2047+1) := by decide
-    rw [show (P+1)%2048=0 by omega,show (P+1)/2048=P/2048+1 by omega,last,show rb (2*0)=0 by decide,
-      show rb (2*2047)=91 by decide,if_neg n0,if_pos n1]
-    omega
-  · rw [show (P+1)%2048=P%2048+1 by omega,show (P+1)/2048=P/2048 by omega,
-      show 2*(P%2048+1)=2*(P%2048)+1+1 by omega,rb_succ,rb_succ]
-    omega
+private theorem prefix_last : rankPrefix 0+117=rankPrefix 10+leafLen 10 := by
+  simp [leafLen,rankPrefix]
 
-/-- Words a pair packet saves against 22 (before its rebase words). -/
-def pairSaving (p : Nat) : Nat :=
-  if pairHead p then (if prefetchA p ∨ p%11=5 then 2 else 4) else if fromRegs p then 4 else 0
+theorem rank_prefix_pos (r : Nat) (h : 1≤r) : 1≤rankPrefix r := by
+  unfold rankPrefix;split_ifs <;> omega
 
-theorem pair_packet_length (p : Nat) :
-    (pairPacket p).length=22-pairSaving p+(if rebase (2*p) then 1 else 0)+(if rebase (2*p+1) then 1 else 0) := by
-  unfold pairSaving
-  by_cases h : pairHead p <;> by_cases a : prefetchA p <;> by_cases b : p%11=5 <;> by_cases t : fromRegs p <;>
-    by_cases r : rebase (2*p) <;> by_cases r' : rebase (2*p+1) <;>
-    simp only [pairPacket,h,a,b,t,r,r',ite_true,ite_false,or_true,or_false,true_or,false_or] <;>
-    first | rfl | (exfalso; unfold pairHead prefetchA fromRegs at *; omega)
+theorem chained_step (n : Nat) :
+    chainedBefore (n+1)=chainedBefore n+(if n%11=0 ∧ ¬(n/11)%34=0 then 1 else 0) := by
+  unfold chainedBefore
+  split_ifs with c <;> omega
 
-theorem pair_saving_le (p : Nat) : pairSaving p ≤ 4 := by unfold pairSaving; split_ifs <;> omega
+theorem first_word_eq (n : Nat) :
+    firstWord n+chainedBefore n=21+117*(n/11)+rankPrefix (n%11)+2*((n+4)/8)+3*(n/8) := by
+  have cb : chainedBefore n≤117*(n/11)+rankPrefix (n%11) := by
+    by_cases z : n%11=0
+    · unfold chainedBefore;omega
+    · have := rank_prefix_pos (n%11) (by omega);unfold chainedBefore;omega
+  unfold firstWord;omega
 
-theorem pair_word_next (p : Nat) (hp : p<2048) : pairWord (p+1)=pairWord p+(pairPacket p).length := by
-  rw [pair_packet_length]; unfold pairWord pairSaving
-  rw [show 2*(p+1)=2*p+1+1 by omega,rb_succ,rb_succ,heads_before_succ]
-  have := heads_before_le p
-  split_ifs
-  all_goals (try unfold prefetchA at *)
-  all_goals (try unfold fromRegs at *)
-  all_goals (try unfold pairHead at *)
-  all_goals omega
+theorem packet_next (n : Nat) (hn : n<4096) : firstWord (n+1)=firstWord n+(packet n).length := by
+  have pl := packet_length n
+  simp only [extraLen,chainLen,keyed,rank,Nat.mod_eq_of_lt hn,beq_iff_eq] at pl
+  have f0 := first_word_eq n
+  have f1 := first_word_eq (n+1)
+  have cs := chained_step n
+  have e1 : (n+1+4)/8=(n+4)/8+(if n%8=3 then 1 else 0) := by split <;> omega
+  have e2 : (n+1)/8=n/8+(if n%8=7 then 1 else 0) := by split <;> omega
+  by_cases last : n%11=10
+  · rw [show (n+1)/11=n/11+1 by omega,show (n+1)%11=0 by omega] at f1
+    have := prefix_last
+    have l10 : leafLen (n%11)=leafLen 10 := by rw [last]
+    have r10 : rankPrefix (n%11)=rankPrefix 10 := by rw [last]
+    split_ifs at pl cs e1 e2 <;> omega
+  · rw [show (n+1)/11=n/11 by omega,show (n+1)%11=n%11+1 by omega] at f1
+    have := prefix_step (n%11) (by omega)
+    split_ifs at pl cs e1 e2 <;> omega
 
-theorem pair_word_bound (p : Nat) (hp : p<2048) : pairWord p+23 ≤ 201767 := by
-  have := heads_before_le p; have := rb_le (2*p) (by omega); unfold pairWord; split_ifs <;> omega
+theorem rank_prefix_le (r : Nat) : rankPrefix r≤117 := by
+  unfold rankPrefix;split_ifs <;> omega
 
-theorem pair_word_latch : pairWord 2048=43677 := by decide
+theorem first_word_le (n : Nat) (hn : n≤4096) : firstWord n≤46222 := by
+  have := rank_prefix_le (n%11);unfold firstWord;omega
 
-theorem fetch_pair_packet (p : Fin 2048) (i : Nat) (hi : i<(pairPacket p.val).length)
-    (state : MachineState) (pc : state.pc=wordPC (pairWord p.val+i)) :
-    fetch image state=some (.base ((pairPacket p.val)[i]?.getD .EBREAK)) := by
-  have hp := p.isLt
-  have len : (pairPacket p.val).length≤23 := by
-    rw [pair_packet_length]; have := pair_saving_le p.val; have nd := no_double_rebase p.val
-    split_ifs <;> simp_all <;> omega
-  have ix : 64*(p.val/64)+p.val%64=p.val := Nat.div_add_mod ..
-  have h := pair_tiles ⟨p.val/64,by omega⟩ ⟨p.val%64,by omega⟩ ⟨i,by omega⟩
+theorem fetch_packet (n : Fin 4096) (i : Nat) (hi : i<(packet n.val).length)
+    (state : MachineState) (pc : state.pc=wordPC (firstWord n.val+i)) :
+    fetch image state=some (.base ((packet n.val)[i]?.getD .EBREAK)) := by
+  have hn:=n.isLt
+  have len : (packet n.val).length≤18 := by
+    have pl := packet_length n.val;have := leaf_len_le _ (rank_lt n.val);unfold extraLen at pl;split_ifs at pl <;> omega
+  have ix : 64*(n.val/64)+n.val%64=n.val := Nat.div_add_mod ..
+  have h := packet_tiles ⟨n.val/64,by omega⟩ ⟨n.val%64,by omega⟩ ⟨i,by omega⟩
   simp only [Fin.val_mk,ix] at h
-  have bnd := pair_word_bound p.val hp
+  have bound := first_word_le n.val (by omega)
   exact fetch_decoded state _ (by omega) pc _ (h hi)
 
 end TwoPermutationPrototype.Grouped

@@ -1,73 +1,46 @@
-import CommitGolfCandidate.GroupOpenCopy
-import CommitGolfCandidate.TwoPermutationPackedOpeningCapEmit
+import CommitGolfCandidate.GroupOpenCapEmitPlain
+import CommitGolfCandidate.GroupOpenCapEmitFold
 import CommitGolfCandidate.GroupOpenCapSubtree
 
+/-! T238 cap emit block (opener rows 668..700 with WK 855 and WS 859): the plain node (GroupOpenCapEmitPlain) and
+the 8th node of a group (GroupOpenCapEmitFold) give the frozen `EmitCap238`; the root cap cursor on top of it. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
-open PackedOpening (ByteCopy CapWrites cap_writes_empty capSubtreeCycles)
-open Opening (capDigestAddress cap_digest_bounds proofBase markBase trapdoorBase)
 
-theorem emit_cap : EmitCap := by
-  intro groups state node dest bounded position pc separate aligned fits
-  let src := capDigestAddress node
-  let setup := capSource state
-  let copied := copyState .cap setup
-  let after := capAdvance copied
-  have initial := cap_source_post state
-  have final := cap_advance_post copied
-  have source : setup.getReg .x7 = BitVec.ofNat 64 src := by
-    rw [initial.2.2.1, position.context.heap, position.nodeWord, BitVec.shiftLeft_eq_mul_twoPow]
-    change BitVec.ofNat 64 trapdoorBase + BitVec.ofNat 64 node * BitVec.ofNat 64 32 = _
-    rw [← BitVec.ofNat_mul, Nat.mul_comm node, ← BitVec.ofNat_add]
-    rfl
-  have destination := (initial.2.2.2 .x21 (by decide)).trans position.destWord
-  have place : FieldInputs .cap setup src dest := by
-    have ⟨sourceAlign, beforeProof⟩ := cap_digest_bounds _ bounded
-    refine ⟨by rw [initial.1, pc]; rfl, source, by simpa [CopySite.destOffset] using destination, ?_, fits, ?_, aligned⟩
-    · have bound := beforeProof.trans separate
-      change src+30 ≤ dest
-      change src+32 ≤ dest at bound
-      omega
-    · change src%2=0
-      change src%8=0 at sourceAlign
-      omega
-  have finishPC : copied.pc = 0x1af0 := place.final_pc
-  have setupRun : RunsOpeningBlock state setup 2 := fun fuel coins => execute_cap_source state pc fuel coins
-  have advanceRun : RunsOpeningBlock copied after 1 := fun fuel coins => execute_cap_advance copied finishPC fuel coins
-  have sameRegister (reg : Reg) (temp : reg ≠ .x7) (destReg : reg ≠ .x21) (scratch : reg ≠ .x31) :
-      after.getReg reg = state.getReg reg :=
-    (final.2.2.2 reg destReg).trans
-      ((copy_register .cap setup reg scratch).trans (initial.2.2.2 reg temp))
-  have proofCopy : ByteCopy state after src dest 30 := place.bytes.move initial.2.1.symm final.2.1
-  refine ⟨after, (setupRun.next place.run).next advanceRun, ?_, ?_,
-    proofCopy.cap_writes (fits.trans (by decide))⟩
-  · rw [final.1, finishPC]
-    rfl
-  · refine ⟨?_, (sameRegister .x6 (by decide) (by decide) (by decide)).trans position.nodeWord, ?_⟩
-    · apply position.context.of_preserved
-      · intro reg member
-        simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-        rcases member with rfl | rfl | rfl | rfl <;> exact sameRegister _ (by decide) (by decide) (by decide)
-      · intro n _ inside
-        have before : markBase+8*n < proofBase := by
-          have small := Opening.marks_before_trapdoor
-          have heap : trapdoorBase ≤ proofBase := by decide
-          omega
-        have stable := place.words_before proofBase (markBase+8*n) before separate (by decide)
-        have saved : after.mem = copied.mem := final.2.1
-        have reads : setup.mem = state.mem := initial.2.1
-        simpa only [Opening.machineMarks, MachineState.getMem, saved, reads] using stable
-    · rw [final.2.2.1, copy_register .cap setup .x21 (by decide), destination]
-      exact (BitVec.ofNat_add (n := 64) dest 30).symm
+
+theorem emit_cap238 : EmitCap238 := by
+  intro groups state node dest count bounded position counter small pc separate aligned fits
+  by_cases zero : count = 0
+  · have sep : Opening.proofBase+210 ≤ dest := by rw [if_pos zero] at separate; exact separate
+    obtain ⟨after, r, p, pos, x30, bytes, fold, frame⟩ :=
+      emit_cap238_fold groups state node dest bounded position (by rw [counter, zero]) pc sep aligned fits
+    refine ⟨after, ?_, p, ?_, ?_, ?_, fun _ => fold, fun a h t => frame a h (zero ▸ t)⟩
+    · rw [if_pos zero]; exact r
+    · rw [if_pos zero]; exact pos
+    · rw [if_pos zero]; exact x30
+    · rw [if_pos zero]; exact bytes
+  · have sep : Opening.proofBase ≤ dest := by rw [if_neg zero] at separate; omega
+    obtain ⟨after, r, p, pos, x30, bytes, frame⟩ :=
+      emit_cap238_plain groups state node dest count bounded position counter (by omega) small pc sep aligned fits
+    refine ⟨after, ?_, p, ?_, ?_, ?_, fun h => absurd h zero, frame⟩
+    · rw [if_neg zero]; exact r
+    · rw [if_neg zero]; exact pos
+    · rw [if_neg zero]; exact x30
+    · rw [if_neg zero]; exact bytes
 
 theorem cap_subtree (groups : List Nat) (state : MachineState) (node height dest : Nat)
     (span : Opening.CapSpan node height) (position : CapPosition groups state node dest)
-    (pc : state.pc = 0x1a54) (separate : proofBase ≤ dest) (aligned : dest % 2 = 0)
-    (fits : dest+30*(Sampling.capFrontierNodes groups node height).length ≤ MEMORY_BYTES) :
-    ∃ after, RunsOpeningBlock state after (capSubtreeCycles groups node height) ∧
-      after.pc = 0x1af4 ∧
-      CapPosition groups after node (dest+30*(Sampling.capFrontierNodes groups node height).length) ∧
-      CapWrites state after dest (Sampling.capFrontierNodes groups node height) :=
-  execute_cap_subtree emit_cap groups state node height dest span position pc separate aligned fits
+    (pc : state.pc=0x1a54) (separate : Opening.proofBase ≤ dest) (aligned : dest%2=0)
+    (fits : dest+capOffset (Sampling.capFrontierNodes groups node height).length+2 ≤ MEMORY_BYTES)
+    (counter : state.getReg .x30=7#64) :
+    ∃ after, RunsOpeningBlock state after (PackedOpening.capSubtreeCycles groups node height+
+        4*(Sampling.capFrontierNodes groups node height).length+34*((Sampling.capFrontierNodes groups node height).length/8)) ∧
+      after.pc=0x1af4 ∧
+      CapPosition groups after node (dest+capOffset (Sampling.capFrontierNodes groups node height).length) ∧
+      (∀ address<2^64, address<dest ∨ dest+capOffset (Sampling.capFrontierNodes groups node height).length ≤ address →
+        after.getByte (BitVec.ofNat 64 address)=state.getByte (BitVec.ofNat 64 address)) ∧
+      bytesAt after dest (capOffset (Sampling.capFrontierNodes groups node height).length)=
+        foldNodes ((Sampling.capFrontierNodes groups node height).map (fun n => readBuffer state (Opening.capDigestAddress n) 32)) :=
+  cap_subtree_of_emit emit_cap238 groups state node height dest span position pc separate aligned fits counter
 
 end TwoPermutationPrototype.GroupedOpening

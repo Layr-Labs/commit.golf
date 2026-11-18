@@ -17,7 +17,7 @@ private theorem observed_store_outside (before after : MachineState) (dest value
 attribute [local irreducible] markParentPrefix execute
 
 private theorem sweep_frame (state : MachineState) (remaining address : Nat) (bounded : remaining < 256)
-    (above : trapdoorBase ≤ address) (fit : address < 2^64)
+    (above : Opening.trapdoorBase ≤ address) (fit : address < 2^64)
     (pc : state.pc = if remaining = 0 then 0x1a50 else 0x1a28)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase)
     (count : state.getReg .x6 = BitVec.ofNat 64 remaining) :
@@ -42,7 +42,7 @@ private theorem sweep_frame (state : MachineState) (remaining address : Nat) (bo
     change (markMachine (markParentPrefix state 10) remaining).getMem (BitVec.ofNat 64 address) = _
     exact (ih _ (by omega) nextPC nextBase nextCount).trans earlier
 
-theorem cap_preparation_frame (state : MachineState) (address : Nat) (above : trapdoorBase ≤ address)
+theorem cap_preparation_frame (state : MachineState) (address : Nat) (above : Opening.trapdoorBase ≤ address)
     (fit : address < 2^64) (base : state.getReg .x26 = BitVec.ofNat 64 markBase) :
     (capPreparation state).getMem (BitVec.ofNat 64 address) =
       state.getMem (BitVec.ofNat 64 address) := by

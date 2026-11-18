@@ -1,103 +1,99 @@
 import CommitGolfCandidate.GroupedPhysical
 import CommitGolfCandidate.GroupedChecks
 import CommitGolfCandidate.GroupOpenFull
-import CommitGolfCandidate.PairCounterCertificate
+import CommitGolfCandidate.QuartetCounterCertificate
+import CommitGolfCandidate.TwoPermutationPackedCheckerCertificate
+import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
+import CommitGolfCandidate.K3GRBridge
+import CommitGolfCandidate.K3OpenFacts
 
+/-! Closing assembly: the executable commitment is the honest Quartet view with linked generator
+salts (CU's commit facts and O's opener facts), which gives the certificate with the claimed
+proof size, commit cycles and worst opening cycles. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open Sampling
-open CommitGolfCandidate.Permutation.CounterSalt (salts)
 set_option maxRecDepth 20000
 set_option maxHeartbeats 1600000
 set_option exponentiation.threshold 2048
 local instance groupedFullSpace {α : Type} : MeasurableSpace α := ⊤
+
+/-- The claim: proof bytes, commit cycles and worst opening cycles. -/
+abbrev claimProofBytes : Nat := 72160
+abbrev claimCommitCycles : Nat := 506688062
+abbrev claimOpeningCycles : Nat := 154669
 
 noncomputable def committed (o : Oracle) (m : Message) (k : Grouped.Key) :=
   actual.readCommit (Grouped.packedOutput o (Grouped.seededLeaves o m k))
 noncomputable def stash (o : Oracle) (m : Message) (k : Grouped.Key) := (committed o m k).2
 
 theorem recovered_key (o : Oracle) (m : Message) (k : Grouped.Key) : keyOf (stash o m k)=k := by
-  have fixed := (Grouped.physical_results o m k).2.2.2
+  have fixed := (Grouped.physical_results o m k).2.2.2.2
   apply BitVec.eq_of_getLsbD_eq;intro bit hb
   let j : Fin 3:=⟨bit/64,by omega⟩
   have slim : (keyOf (stash o m k)).extractLsb' (64*j.val) 64=k.extractLsb' (64*j.val) 64 := by
     unfold keyOf
     rw [nested_slice _ (show 64*j.val+64≤192 by have:=j.isLt;omega)]
     have word:=fixed j
-    change (stash o m k).extractLsb' (8*(2684354568+8*j.val)) 64=_ at word
+    change (stash o m k).extractLsb' (8*(4831838216+8*j.val)) 64=_ at word
     simpa only [Nat.mul_add,←Nat.mul_assoc] using word
   have eq:=congrArg (fun w : Word => w.getLsbD (bit%64)) slim
   simpa only [BitVec.getLsbD_extractLsb',Nat.mod_lt bit (by decide : 0<64),decide_true,Bool.true_and,
     j,Fin.val_mk,Nat.div_add_mod] using eq
 
-theorem virtual_components (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) :
-    let t:=virtualFor o td p
-    (∀ n, n<8388608 → Opening.trapdoorHeap (s:=actual) t n=Opening.trapdoorHeap (s:=actual) td n) ∧
-    (∀ i : Index, trapdoorLeaf (s:=actual) t i.val=trapdoorLeaf (s:=actual) td i.val) ∧
-    (∀ i∈p, trapdoorSalt (s:=actual) t i=salts o.permutation (keyOf td) i) := by
-  by_cases empty : p.card=0
-  · rw [virtualFor,if_pos empty]
-    exact ⟨fun _ _=>rfl,fun _=>rfl,fun i h => (by simpa [Finset.card_eq_zero.mp empty] using h : False).elim⟩
-  · have nz : 0<p.card:=by omega
-    let key:=keyOf td
-    let init:=header (actual.initialState .opening (td,p))
-    let last:=fixedPass o p key p.card 0 init
-    have start:= (hc.ready td p nz)
-    have sampled:=pass_fixed o td p key init 0 p.card (by omega) start
-    have hit : last∈support (passTrace p p.card 0 init) := by
-      apply writer_support (o.world.withAddCost Oracle.callCost) _ (last,p.card)
-      change (_,_)∈support (o.run (passTrace p p.card 0 init));rw [sampled];simp [last]
-    have live : Ready td p key last p.card := by simpa only [Nat.zero_add] using pass_post td p key init last p.card 0 start (by omega) hit
-    have all : Seen o key p last p.card := by simpa only [Nat.zero_add] using seen_pass o td p key init 0 p.card (by omega) start (fun _ h => (Nat.not_lt_zero _ h).elim)
-    rw [virtualFor,if_neg empty]
-    have keep:=kept_tree td p key last live
-    exact ⟨keep.1,keep.2,selected_salt o key p last all⟩
-
 theorem commit_distribution (o : Oracle) (m : Message) :
     fixedOracleRun o (actual.scheme.commit m) =ᵈ (do
       let k ← $ᵗ Grouped.Key
-      Pure.pure (QuartetCommit.pairHeap o m (salts o.permutation k) 1,stash o m k)) := by
+      Pure.pure (QuartetCommit.physicalHeap o m (Grouped.chainSalts o k) 1,stash o m k)) := by
   change fixedOracleRun o (actual.readCommit <$> actual.run .commit m)=ᵈ _
   rw [fixed_oracle_run_map];unfold fixedOracleRun;rw [Grouped.counted_commit]
   simp only [map_bind,map_pure]
   apply EvalDistEq.bind_right;intro k
-  have eq : committed o m k=(QuartetCommit.pairHeap o m (salts o.permutation k) 1,stash o m k) :=
+  have eq : committed o m k=(QuartetCommit.physicalHeap o m (Grouped.chainSalts o k) 1,stash o m k) :=
     Prod.ext (Grouped.physical_results o m k).1 rfl
   change Pure.pure (committed o m k) =ᵈ _
   rw [eq];rfl
 
-theorem grouped_refines (hc : HeaderFacts) : Quartet.PairCounterRefines actual.scheme := by
-  intro o m p
-  unfold executableTranscript;rw [fixed_oracle_run_bind]
-  apply ((commit_distribution o m).bind_left _).trans
-  simp only [bind_assoc,pure_bind];apply EvalDistEq.bind_right;intro k
-  let td:=stash o m k
-  let virtual:=virtualFor o td p
-  let π:=BiPermutation.equiv Block o.permutation
-  let arr:=salts o.permutation k
-  let d:=pairFullLeafDigests π m arr
-  have ⟨nodes,children,opened⟩:=virtual_components hc o td p
-  have orig:=Grouped.physical_results o m k
-  rw [fixed_oracle_run_bind,fixed_open hc,pure_bind,fixed_oracle_run_pure]
-  have leaf (i : Index) : trapdoorLeaf (s:=actual) td i.val=d i := by
-    have v:=orig.2.2.1 i
-    change QuartetRV.trapdoorLeaf (s:=actual) td i.val=QuartetCommit.pairLeaf o m arr i.val at v
-    unfold QuartetCommit.pairLeaf Quartet.leafAt at v
+theorem honest_proof (hc : HeaderFacts) (o : Oracle) (m : Message) (k : Grouped.Key) (p : Positions) :
+    proofFromTrapdoor (s:=actual) (virtualFor o (stash o m k) p) p =
+      (Quartet.honestView Quartet.builder o.compression (BiPermutation.equiv Block o.permutation) m p
+        (Permutation.LinkedSalt.salts QuartetCounterCertificate.linkedSchedule o.permutation k)).2 := by
+  have orig := Grouped.physical_results o m k
+  let d := pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) m (Grouped.chainSalts o k)
+  have leaf (i : Index) (kept : ¬ ((i.val/4)%2=0 ∧ i.val%4=3)) : trapdoorLeaf (s:=actual) (stash o m k) i.val=d i := by
+    have v:=orig.2.2.1 i kept
+    change QuartetRV.trapdoorLeaf (s:=actual) (stash o m k) i.val=
+      QuartetCommit.originalLeaf o m (Grouped.chainSalts o k) i.val at v
+    unfold QuartetCommit.originalLeaf Quartet.leafAt at v
     rw [dif_pos i.isLt] at v
     exact v
-  have matchProof:=proof_from_trapdoor_matches actual virtual p (Quartet.quartetLookup π) o.compression d
-    (trapdoorSalt (s:=actual) virtual)
-    (fun n pos hi => (nodes n hi).trans (orig.2.1 n pos hi))
-    (fun i => (children i).trans (leaf i)) (fun _=>rfl)
-  have nonce : (fun i : {i // i∈p} => trapdoorSalt (s:=actual) virtual i.val)=(fun i => arr i.val) := by
-    funext i;exact (opened i.val i.property).trans (by rw [show keyOf td=k from recovered_key o m k])
-  rw [matchProof,nonce]
+  have proof := opened_proof hc o (stash o m k) p d (fun n pos hi => orig.2.1 n pos hi) leaf
+    (fun g hg => (group_reply_eq (stash o m k) g).symm.trans (orig.2.2.2.1 g hg))
+  rw [proof, recovered_key]
   rfl
 
-theorem grouped_certificate (hc : HeaderFacts) : Certificate actual 72192 512480543 99977 :=
-  PairCounterCertificate.certificate_of_facts
+theorem grouped_refines (hc : HeaderFacts) :
+    Quartet.LinkedQuartetRefines QuartetCounterCertificate.linkedSchedule actual.scheme :=
+  QuartetCounterCertificate.linked_refines_of_parts actual.scheme
+    (fun o m k => QuartetCommit.physicalHeap o m (Grouped.chainSalts o k) 1) stash
+    (fun o td p => proofFromTrapdoor (s:=actual) (virtualFor o td p) p)
+    commit_distribution (fun o td p => fixed_open hc o td p) (fun _ _ _ _ => rfl)
+    (fun o m k p => honest_proof hc o m k p)
+
+private theorem opening_runs (hc : HeaderFacts) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (z : Execution)
+    (hit : z∈support (actual.run .opening (td,p))) :
+    z.exit=.success ∧ actual.openingSucceeded z=true ∧
+      (p.card=BATCH → z.cycles≤claimOpeningCycles ∧ (actual.readProof z).length≤claimProofBytes) ∧
+      z.oracleCalls≤100*p.card := by
+  obtain ⟨exit, succeeded, bounds, calls⟩ := all_resources hc td p z hit
+  exact ⟨exit, succeeded, fun batch => ⟨(bounds batch).1.trans (by norm_num),
+    (bounds batch).2.trans (by norm_num)⟩, calls⟩
+
+theorem grouped_certificate (hc : HeaderFacts) :
+    Certificate actual claimProofBytes claimCommitCycles claimOpeningCycles :=
+  QuartetCounterCertificate.certificate_of_facts
     GroupedChecks.resources GroupedChecks.admitted
-    ⟨all_resources hc,grouped_refines hc⟩ GroupedChecks.checker_facts
-    (Quartet.scheme_hiding_of_pair_counter actual.scheme (grouped_refines hc))
+    ⟨opening_runs hc, grouped_refines hc⟩ GroupedChecks.checker_facts
+    (Quartet.scheme_hiding_of_linked QuartetCounterCertificate.linkedSchedule actual.scheme (grouped_refines hc))
 
 end TwoPermutationPrototype.GroupedOpening

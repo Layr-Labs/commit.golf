@@ -6,8 +6,8 @@ namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 
 def trapdoorBase : Nat := 4096 + 256 * LENGTH + 32
-def trapdoorBytes : Nat := 176 * LENGTH
-def nonceBase : Nat := trapdoorBase + 160 * LENGTH
+def trapdoorBytes : Nat := 304 * LENGTH
+def nonceBase : Nat := trapdoorBase + 288 * LENGTH
 def indicesBase : Nat := trapdoorBase + trapdoorBytes
 def proofBase : Nat := indicesBase + 8 * LENGTH + 64 + 256 * LENGTH
 def proofCapacity : Nat := 534 * LENGTH + 7680
@@ -17,10 +17,10 @@ theorem nonces_end_at_indices : nonceBase+16*LENGTH = indicesBase := by decide
 theorem indices_before_records : indicesBase+8*LENGTH ≤ proofBase := by decide
 theorem actual_proof_base : proofBase = quartetProofBase := rfl
 
-def groupSlots : Nat := trapdoorBase+68*LENGTH
+def groupSlots : Nat := trapdoorBase+32*LENGTH
 
 def leafAddress (i : Nat) : Nat :=
-  groupSlots + 368 * (i/4) + 72 + 32 * (i%4)
+  groupSlots + 1024 * (i/4) + 72 + 32 * (i%4)
 
 def upperNode (index : Index) (level : Nat) : Nat := Opening.lowerNode index (level+2)
 
@@ -130,7 +130,7 @@ theorem input_trapdoor_slice (s : Submission) (layout : OpeningLayout s)
 theorem input_nonce (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8 * s.sizes.trapdoor)) (positions : Positions) (index : Index) :
     readBuffer (s.initialState .opening (trapdoor, positions)) (nonceBase + 16 * index.val) 16 =
-      trapdoor.extractLsb' (8 * (160 * LENGTH + 16 * index.val)) 128 := by
+      trapdoor.extractLsb' (8 * (288 * LENGTH + 16 * index.val)) 128 := by
   rw [nonceBase, Nat.add_assoc]
   exact input_trapdoor_slice s layout trapdoor positions _ _ (by
     have bounded := index.isLt
@@ -150,7 +150,6 @@ theorem input_digest (s : Submission) (layout : OpeningLayout s)
 theorem leaf_address_inside (i : Nat) (valid : i < LENGTH) :
     leafAddress i % 8 = 0 ∧ trapdoorBase ≤ leafAddress i ∧ leafAddress i+32 ≤ nonceBase := by
   have hb : trapdoorBase % 8 = 0 := by decide
-  have hL : LENGTH = 16777216 := rfl
   unfold leafAddress groupSlots nonceBase
   omega
 
@@ -158,14 +157,12 @@ theorem input_leaf (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
     (i : Nat) (inside : i<LENGTH) :
     readBuffer (s.initialState .opening (trapdoor,positions)) (leafAddress i) 32 =
-      trapdoor.extractLsb' (8*(68*LENGTH + 368*(i/4) + 72 +32*(i%4))) 256 := by
-  let off := 68*LENGTH + 368*(i/4) + 72 +32*(i%4)
+      trapdoor.extractLsb' (8*(32*LENGTH + 1024*(i/4) + 72 +32*(i%4))) 256 := by
+  let off := 32*LENGTH + 1024*(i/4) + 72 +32*(i%4)
   have physical : leafAddress i = trapdoorBase+off := by unfold leafAddress groupSlots off; omega
   rw [physical]
   apply input_trapdoor_slice s layout trapdoor positions
   unfold off trapdoorBytes
   omega
-
-theorem manifest_layout : OpeningLayout QuartetArtifact.submission := ⟨rfl,rfl,rfl,rfl⟩
 
 end TwoPermutationPrototype.GroupedOpening

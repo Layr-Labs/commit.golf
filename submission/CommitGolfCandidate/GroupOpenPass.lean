@@ -1,4 +1,5 @@
 import CommitGolfCandidate.GroupOpenEffect
+import CommitGolfCandidate.GroupOpenLatch
 import CommitGolfCandidate.GroupOpenInitial
 import CommitGolfCandidate.GroupOpenRecordRun
 import CommitGolfCandidate.GroupOpenRecords
@@ -25,28 +26,100 @@ structure Base (s : MachineState) (p : Positions) : Prop where
   cap : s.getReg .x25=BitVec.ofNat 64 trapdoorBase
   capLeaves : s.getReg .x27=256
 
-def Preserved (u s : MachineState) :=
-  ∀ w<2^33, (w<128 ∨ 153≤w) → (w<192 ∨ 217≤w) →
-    (w<872415748 ∨ 905970180≤w) → memoryView s w=memoryView u w
+/-- The previous position's quartet (`x4`); none before the first position. -/
+def lastOf (p : Positions) (j : Nat) : Nat := if j=0 then 2^64-1 else (pos p (j-1)).val/4
+/-- Quartets below this one may have had their d3 written back (sorted positions). -/
+def topOf (p : Positions) (j : Nat) : Nat := if j=0 then 0 else (pos p (j-1)).val/4+1
 
-def StoredKey (s : MachineState) (k : BitVec 192) :=
-  ∀ j, 0<j → j<25 → memoryView s (128+j)=Grouped.keyBlock k j
+theorem pos_lt (p : Positions) (a b : Nat) (ab : a<b) (hb : b<p.card) : (pos p a).val<(pos p b).val := by
+  have ha : a<p.card := by omega
+  rw [pos_present p a ha,pos_present p b hb]
+  unfold sortedIndex
+  have s := (Finset.sortedLT_sort p).pairwise
+  have := List.pairwise_iff_getElem.mp s a b (by simpa using ha) (by simpa using hb) ab
+  exact this
 
-def passPC (p : Positions) (j : Nat) := if j=p.card then address 15 else address 739
+theorem top_succ (p : Positions) (j : Nat) : topOf p (j+1)=(pos p j).val/4+1 := by simp [topOf]
+
+theorem top_le (p : Positions) (j : Nat) : topOf p j≤4194304 := by
+  unfold topOf; split
+  · omega
+  · have := (pos p (j-1)).isLt; change _<16777216 at this; omega
+
+theorem top_mono (p : Positions) (j : Nat) (hj : j<p.card) : topOf p j≤topOf p (j+1) := by
+  rw [top_succ]
+  by_cases z : j=0
+  · simp [topOf,z]
+  · have e : topOf p j=(pos p (j-1)).val/4+1 := by simp [topOf,z]
+    have := pos_lt p (j-1) j (by omega) hj
+    have : (pos p (j-1)).val/4≤(pos p j).val/4 := Nat.div_le_div_right (by omega)
+    omega
+
+theorem last_lt_top (p : Positions) (j : Nat) (hj : j<p.card) (fresh : (pos p j).val/4≠lastOf p j) :
+    topOf p j≤(pos p j).val/4 := by
+  unfold topOf lastOf at *
+  by_cases z : j=0
+  · simp [z]
+  · simp only [z,ite_false] at fresh ⊢
+    have := pos_lt p (j-1) j (by omega) hj
+    have : (pos p (j-1)).val/4≤(pos p j).val/4 := Nat.div_le_div_right (by omega)
+    omega
+
+/-- Words the pass may have changed before ordinal `j`: the generator block, the reply scratch, the level-22
+heap slots, the salt table and the d3 words of the even quartets below `topOf p j`. -/
+def Touched (p : Positions) (j : Nat) (w : Nat) : Prop :=
+  (128≤w ∧ w<153) ∨ (192≤w ∧ w<217) ∨ (553648644≤w ∧ w<570425860) ∨ (1140851204≤w ∧ w<1174405636) ∨
+    (∃ q, q<topOf p j ∧ q%2=0 ∧ ∃ m<4, w=replyEWord q+m)
+
+def Preserved (p : Positions) (j : Nat) (u s : MachineState) :=
+  ∀ w<2^33, ¬Touched p j w → memoryView s w=memoryView u w
+
+theorem touched_mono (p : Positions) (j : Nat) (hj : j<p.card) (w : Nat) (t : Touched p j w) : Touched p (j+1) w := by
+  rcases t with h|h|h|h|⟨q,hq,e,m,hm,rfl⟩
+  · exact Or.inl h
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr (Or.inl h))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl h)))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨q,by have := top_mono p j hj;omega,e,m,hm,rfl⟩)))
+
+theorem writes_touched (p : Positions) (j : Nat) (hj : j<p.card) (w : Nat) (wr : Writes (pos p j) (lastOf p j) w) :
+    Touched p (j+1) w := by
+  have ix := (pos p j).isLt
+  have top : topOf p (j+1)=(pos p j).val/4+1 := by simp [topOf]
+  rcases wr with ⟨_,⟨m,hm,rfl⟩|⟨e,m,hm,rfl⟩⟩|h|h|h|h
+  · have x := xor_one_lt ((pos p j).val/4) 22 (by change _<16777216 at ix;omega) (by decide)
+    right;right;left;unfold heapWord;constructor <;> omega
+  · right;right;right;right;exact ⟨_,by omega,e,m,hm,rfl⟩
+  · left;omega
+  · right;left;exact h
+  · right;right;right;left;change _<16777216 at ix;omega
+  · right;right;right;left;change _<16777216 at ix;omega
+
+def passPC (p : Positions) (j : Nat) := if j=p.card then address 15 else address 740
 
 structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s : MachineState) (j : Nat) : Prop extends Registers s j (p.card-j), Base s p where
   pc : s.pc=passPC p j
-  frame : Preserved (actual.initialState .opening (td,p)) s
-  keyFrame : StoredKey s key
+  quartet : s.getReg .x4=BitVec.ofNat 64 (lastOf p j)
+  frame : Preserved p j (actual.initialState .opening (td,p)) s
+  keyFrame : KeyWords s key
+
+theorem last_small (p : Positions) (j : Nat) : lastOf p j<2^64 := by
+  unfold lastOf; split
+  · decide
+  · have := (pos p (j-1)).isLt; change _<16777216 at this; omega
 
 theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s : MachineState) (j : Nat) (r : Ready td p key s j) (hj : j<p.card) :
-    Input s (pos p j) j (p.card-j) := by
+    Input s (pos p j) j (p.card-j) (lastOf p j) := by
   have card : p.card≤16777216 := by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
-  have ea : indexAt j=wordAddress (905970180+j) := by unfold indexAt wordAddress;congr 1 <;> omega
-  refine ⟨r.toRegisters,by simpa [passPC,Nat.ne_of_lt hj] using r.pc,?_,?_⟩
-  · have same := r.frame (905970180+j) (by omega) (Or.inr (by omega)) (Or.inr (by omega)) (Or.inr (by omega))
+  have ea : indexAt j=wordAddress (1174405636+j) := by unfold indexAt wordAddress;congr 1 <;> omega
+  refine ⟨r.toRegisters,by simpa [passPC,Nat.ne_of_lt hj] using r.pc,r.mark,r.heap,r.leaves,r.slots,r.quartet,
+    last_small p j,?_,?_⟩
+  · have same := r.frame (1174405636+j) (by omega) (by
+      rintro (h|h|h|h|⟨q,hq,_,m,hm,e⟩)
+      all_goals (try omega)
+      unfold replyEWord blockWord at e; have := top_le p j; omega)
     have orig := input_index actual actual_layout td p j hj
     rw [pos_present p j hj]
     exact (show s.getMem (indexAt j)=(actual.initialState .opening (td,p)).getMem (indexAt j) by
@@ -56,38 +129,45 @@ theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (
     · change _≤2^36;omega
 
 theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
-    (s : MachineState) (j : Nat) (r : Ready td p key s j) (hj : j<p.card) (y : BitVec 1600) :
-    Ready td p key (finishOne s (pos p j) (p.card-j) y) (j+1) := by
+    (s t : MachineState) (j : Nat) (r : Ready td p key s j) (hj : j<p.card)
+    (hit : t∈support (perTrace s (pos p j) (p.card-j) (lastOf p j))) : Ready td p key t (j+1) := by
   let i:=pos p j
-  have ix : i.val<16777216:=i.isLt
   have card : p.card≤16777216:=by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
   have inp:=input_of_ready td p key s j r hj
-  have ⟨reg,pc,_⟩:=finish_regs s i j _ (by omega) (by omega) inp y
-  have keep (a : Reg) (safe : Saved a := by unfold Saved;decide) := finish_keep s i j (p.card-j) inp y a safe
-  have same := outside_writes s i j (p.card-j) (by omega) (by omega) inp y
+  obtain ⟨reg,pc,q4,keep,same⟩:=trace_post s i j _ _ (by omega) (by omega) inp t hit
+  have kp (a : Reg) (safe : Saved a := by unfold Saved;decide) := keep a safe
   refine ⟨by simpa only [show p.card-j-1=p.card-(j+1) by omega] using reg,
-    ⟨(keep .x8).trans r.indices,(keep .x9).trans r.heap,(keep .x18).trans r.count,
-     (keep .x19).trans r.leaves,(keep .x20).trans r.start,(keep .x21).trans r.dest,(keep .x23).trans r.mark,
-     (keep .x24).trans r.slots,(keep .x25).trans r.cap,(keep .x27).trans r.capLeaves⟩,?_,?_,?_⟩
+    ⟨(kp .x8).trans r.indices,(kp .x9).trans r.heap,(kp .x18).trans r.count,
+     (kp .x19).trans r.leaves,(kp .x20).trans r.start,(kp .x21).trans r.dest,(kp .x23).trans r.mark,
+     (kp .x24).trans r.slots,(kp .x25).trans r.cap,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_⟩
   · rw [pc];unfold finalPC passPC;split <;> rename_i h <;> simp [show j+1=p.card ↔ p.card-j=1 by omega,h]
-  · intro w fit one two three
-    exact (same w fit ⟨by omega,two⟩ ⟨by omega,by omega⟩).trans (r.frame _ fit one two three)
+  · rw [q4]; simp [lastOf,i]
+  · intro w fit away
+    exact (same w fit (fun h => away (writes_touched p j hj w h))).trans
+      (r.frame w fit (fun h => away (touched_mono p j hj w h)))
   · intro k lo hi
-    exact (same (128+k) (by omega) ⟨by omega,Or.inl (by omega)⟩ ⟨by omega,by omega⟩).trans (r.keyFrame _ lo hi)
+    have away : ¬Writes i (lastOf p j) (128+k) := by
+      rintro (⟨_,⟨m,hm,e⟩|⟨_,m,hm,e⟩⟩|h|h|h|h)
+      · unfold heapWord at e; omega
+      · unfold replyEWord blockWord at e; omega
+      all_goals omega
+    exact (same (128+k) (by omega) away).trans (r.keyFrame k lo hi)
 
 def passTrace (p : Positions) : Nat → Nat → MachineState → OracleComp World MachineState
   | 0,_,s => pure s
-  | n+1,j,s => do let t ← perTrace s (pos p j) (p.card-j);passTrace p n (j+1) t
+  | n+1,j,s => do let t ← perTrace s (pos p j) (p.card-j) (lastOf p j);passTrace p n (j+1) t
 
 def passSteps (p : Positions) : Nat → Nat → Nat
   | 0,_ => 0
-  | n+1,j => perSteps (pos p j) (p.card-j)+passSteps p n (j+1)
+  | n+1,j => perSteps (pos p j) (p.card-j) (lastOf p j)+passSteps p n (j+1)
 
-theorem step_support (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
-    (s t : MachineState) (j : Nat) (r : Ready td p key s j) (hj : j<p.card)
-    (hit : t∈support (perTrace s (pos p j) (p.card-j))) : Ready td p key t (j+1) := by
-  simp only [perTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
-  obtain ⟨y,_,rfl⟩:=hit;exact next_ready td p key s j r hj y
+def passCycles (p : Positions) : Nat → Nat → Nat
+  | 0,_ => 0
+  | n+1,j => perCycles (pos p j) (p.card-j) (lastOf p j)+passCycles p n (j+1)
+
+def passCalls (p : Positions) : Nat → Nat → Nat
+  | 0,_ => 0
+  | n+1,j => perCalls (pos p j) (lastOf p j)+passCalls p n (j+1)
 
 theorem pass_post (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s t : MachineState) (n j : Nat) (r : Ready td p key s j) (bound : j+n≤p.card)
@@ -96,35 +176,53 @@ theorem pass_post (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key :
   | zero => simp only [passTrace,support_pure,Set.mem_singleton_iff] at hit;subst t;exact r
   | succ n ih =>
     rw [passTrace,mem_support_bind_iff] at hit;obtain ⟨u,one,rest⟩:=hit
-    exact (show j+(n+1)=(j+1)+n by omega) ▸ ih _ _ (step_support _ _ _ _ _ _ r (by omega) one) (by omega) rest
+    exact (show j+(n+1)=(j+1)+n by omega) ▸ ih _ _ (next_ready _ _ _ _ _ _ r (by omega) one) (by omega) rest
 
 theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s : MachineState) (n j fuel : Nat) (r : Ready td p key s j) (bound : j+n≤p.card) :
     execute openingImage (passSteps p n j+fuel) s true=(do
       let t ← passTrace p n j s;let z ← execute openingImage fuel t true
-      return z.charge (passSteps p n j+10*n) n) := by
+      return z.charge (passCycles p n j) (passCalls p n j)) := by
   induction n generalizing j s with
-  | zero => simp [passSteps,passTrace,Execution.charge]
+  | zero => simp [passSteps,passTrace,passCycles,passCalls,Execution.charge]
   | succ n ih =>
     have card : p.card≤16777216 := by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
-    rw [passSteps,Nat.add_assoc,per_run s (pos p j) j _ _ (by omega) (by omega) (input_of_ready _ _ _ _ _ r (by omega))]
+    rw [passSteps,Nat.add_assoc,per_run s (pos p j) j _ _ _ (by omega) (by omega) (input_of_ready _ _ _ _ _ r (by omega))]
     simp only [passTrace,bind_assoc]
     apply bind_congr_of_forall_mem_support;intro u hit
-    rw [ih u (j+1) (step_support _ _ _ _ _ _ r (by omega) hit) (by omega)]
+    rw [ih u (j+1) (next_ready _ _ _ _ _ _ r (by omega) hit) (by omega)]
     simp only [bind_assoc,pure_bind]
     apply bind_congr;intro t;apply bind_congr;intro z;apply congrArg (fun x : Execution => (pure x : OracleComp World Execution))
-    cases z;simp [Execution.charge,passSteps,perCycles,Nat.mul_succ] <;> omega
+    cases z;simp [Execution.charge,passCycles,passCalls] <;> omega
 
-theorem pass_steps_bound (p : Positions) (n j : Nat) (bound : j+n ≤ p.card) : passSteps p n j ≤ 34*n+1 := by
+theorem chain_cycles_le (i : Index) : chainCycles i≤368 := by
+  have : chainLinks i<34 := by unfold chainLinks; omega
+  unfold chainCycles chainSteps chainCalls; split <;> omega
+
+theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
+  have : chainLinks i<34 := by unfold chainLinks; omega
+  unfold chainCalls; omega
+
+/-- At most 427 cycles per position (new even quartet, chain link 33, rank 1) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤427*n+1 := by
   induction n generalizing j with
-  | zero => simp [passSteps]
+  | zero => simp [passCycles]
   | succ n ih =>
-    rw [passSteps]
+    rw [passCycles]
     have h:=ih (j+1) (by omega)
-    have e:=per_steps_le (pos p j) (p.card-j)
+    have c:=chain_cycles_le (pos p j)
+    unfold perCycles headCycles postSteps
     by_cases last : p.card-j=1
     · have empty : n=0 := by omega
-      subst n;simp only [passSteps] at h ⊢;rw [if_pos last] at e;omega
-    · rw [if_neg last] at e;omega
+      subst n;simp only [last,passCycles];split_ifs <;> omega
+    · simp only [if_neg last];split_ifs <;> omega
+
+theorem pass_calls_bound (p : Positions) (n j : Nat) : passCalls p n j≤35*n := by
+  induction n generalizing j with
+  | zero => simp [passCalls]
+  | succ n ih =>
+    rw [passCalls]
+    have h:=ih (j+1); have c:=chain_calls_le (pos p j)
+    unfold perCalls; split <;> omega
 
 end TwoPermutationPrototype.GroupedOpening

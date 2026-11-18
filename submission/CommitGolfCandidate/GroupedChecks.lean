@@ -1,61 +1,29 @@
 import CommitGolfCandidate.MaterializedManifest
-import CommitGolfCandidate.PairCheckFacts
-import CommitGolfCandidate.PairBindingCertificate
+import CommitGolfCandidate.K1Manifest
+import CommitGolfCandidate.K1CheckFacts
+import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
 import CommitGolfCandidate.GroupedCommit
+
+/-! # Checker, admission and commit facts of the final submission
+
+`checker_facts` is C2's `K1Check.checker_facts` (the v2 check image), `admitted` checks the image sizes and
+layout of `K1Manifest`, and `resources` is the commit run at its claimed cycle count. -/
 
 namespace TwoPermutationPrototype.GroupedChecks
 open CommitGolf CommitGolf.Riscv OracleComp
-abbrev actual := MaterializedArtifact.submission
-abbrev prior := PairChecker.submission
+abbrev actual := K1Artifact.submission
 set_option maxRecDepth 16000
 set_option maxHeartbeats 700000
 
-private theorem image_eq : actual.image .check=prior.image .check := rfl
-private theorem sizes_eq : actual.sizes=prior.sizes := rfl
-private theorem layout_eq : actual.layout=prior.layout := rfl
-private theorem allowance_eq : actual.steps .check=prior.steps .check := rfl
-private theorem same_check (a b : Submission) (layout : a.layout=b.layout) (sizes : a.sizes=b.sizes)
-    (image : a.image .check=b.image .check) (steps : a.steps .check=b.steps .check) (i : CheckInput) :
-    a.run .check i=b.run .check i := by
-  cases a with | mk sz l im st =>
-    cases b with | mk sz' l' im' st' =>
-      change sz=sz' at sizes
-      change l=l' at layout
-      subst sz';subst l'
-      change im .check=im' .check at image
-      change st .check=st' .check at steps
-      simp only [Submission.run,Submission.initialState,Submission.inputBuffers,image,steps]
-
-theorem check_run (i : CheckInput) : actual.run .check i=prior.run .check i :=
-  same_check actual prior layout_eq sizes_eq image_eq allowance_eq i
-
-private theorem observe_eq (o : Oracle) (i : CheckInput) : Checker.checkObservation actual o i=Checker.checkObservation prior o i := by
-  unfold Checker.checkObservation;rw [check_run]
-
-private theorem check_eq : actual.scheme.check=prior.scheme.check := by
-  funext root positions values proof
-  simp only [Submission.scheme,check_run]
-
-private theorem binding_eq : actual.scheme.Binding ↔ prior.scheme.Binding := by
-  simp only [Scheme.Binding,Scheme.Breaks,check_eq]
-
-theorem checker_facts : PairCertificate.PairCheckerFacts actual := by
-  have h:=PairCertificate.pair_checker_facts Sampling.even_leaf_small_bound
-  constructor
-  · intro o i;rw [observe_eq o i];exact h.terminates o i
-  · intro o i;rw [observe_eq o i];exact h.queryBudget o i
-  · exact binding_eq.mpr h.binding
-  · intro o m p salt;rw [observe_eq];exact h.honestAccepted o m p salt
+theorem checker_facts : QuartetCertificate.CheckerFacts actual := K1Check.checker_facts
 
 theorem admitted : actual.Admission := by
-  intro p;cases p <;> simp only [actual,MaterializedArtifact.submission,Image.Valid,Image.byteSize,LayoutValid,dataBase,
+  intro p;cases p <;> simp only [actual,K1Artifact.submission,Image.Valid,Image.byteSize,LayoutValid,dataBase,
     ArtifactEncoding.length_decode] <;> decide
 
+/-- The commit facts at the claimed cycle count (P's frozen final programs). -/
 theorem resources (msg : Message) (z : Execution) (hit : z∈support (actual.run .commit msg)) :
-    z.exit=.success ∧ z.cycles=512480543 ∧ z.oracleCalls≤COMMIT_BUDGET := by
-  rw [Grouped.commit_of_image actual Grouped.exact_image.symm (by decide) msg ⟨rfl,rfl,rfl,rfl⟩] at hit
-  simp only [Grouped.commitTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
-  obtain ⟨_,_,_,_,_,_,rfl⟩:=hit
-  exact ⟨rfl,rfl,show 43470847≤COMMIT_BUDGET by decide⟩
+    z.exit=.success ∧ z.cycles=506688062 ∧ z.oracleCalls≤COMMIT_BUDGET :=
+  Grouped.commit_resources msg z hit
 
 end TwoPermutationPrototype.GroupedChecks

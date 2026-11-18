@@ -1,5 +1,6 @@
 import CommitGolfCandidate.QuartetRestricted
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
+import CommitGolfCandidate.K3GQModel
 
 namespace TwoPermutationPrototype.Sampling.Quartet
 open CommitGolf OracleComp CommitGolfCandidate
@@ -10,17 +11,19 @@ set_option exponentiation.threshold 2048
 local instance pinnedTransportDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 
 
-abbrev QuartetBuilder := (BitVec 1024 → BitVec 256) → TranscriptBuilder
+/-- The quartet lookup takes the group index: the node truncation depends on its parity. -/
+abbrev QuartetBuilder := (Nat → BitVec 1024 → BitVec 256) → TranscriptBuilder
 
-def quartetLookup (p : BiPermutation Block) (payload : BitVec 1024) : BitVec 256 :=
-  pinnedOutputDigest (p.forward (payload ++ (0 : BitVec 576)))
+/-- The node of quartet group `g` with payload `payload` (window `0^72 ‖ d0 d1 d2 d3`). -/
+def quartetLookup (p : BiPermutation Block) (group : Nat) (payload : BitVec 1024) : BitVec 256 :=
+  quartetNode group (p.forward (quartetEncode payload))
 
 theorem quartet_lookup_stable (p p' : BiPermutation Block)
     (same : ∀ x ∈ quartetDomain, p.forward x = p'.forward x) : quartetLookup p = quartetLookup p' := by
   classical
-  funext payload
+  funext group payload
   unfold quartetLookup
-  exact congrArg pinnedOutputDigest (same _ (List.mem_map.mpr ⟨payload, by simp, rfl⟩))
+  exact congrArg (quartetNode group) (same _ (List.mem_map.mpr ⟨payload, by simp, rfl⟩))
 
 def honestView (build : QuartetBuilder) (compress : Compression) (p : BiPermutation Block)
     (message : Message) (positions : Positions) (salts : CompleteSaltTape) : Commitment × Proof :=

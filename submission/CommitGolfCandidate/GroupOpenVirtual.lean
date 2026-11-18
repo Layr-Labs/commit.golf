@@ -1,5 +1,5 @@
 import CommitGolfCandidate.GroupOpenMemory
-import CommitGolfCandidate.MaterializedManifest
+import CommitGolfCandidate.K1Manifest
 import CommitGolfCandidate.TwoPermutationInputWords
 
 namespace TwoPermutationPrototype.GroupedOpening
@@ -7,7 +7,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate T
 set_option maxHeartbeats 1300000
 set_option maxRecDepth 18000
 
-abbrev actual := MaterializedArtifact.submission
+abbrev actual := K1Artifact.submission
 
 theorem actual_layout : OpeningLayout actual := ⟨rfl,rfl,rfl,rfl⟩
 

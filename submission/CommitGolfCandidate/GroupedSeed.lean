@@ -1,6 +1,6 @@
-import CommitGolfCandidate.MaterializedManifest
+import CommitGolfCandidate.K1Manifest
 import CommitGolfCandidate.GroupedInvariant
-import CommitGolfCandidate.GroupedCommit
+import CommitGolfCandidate.GroupedSetup
 import CommitGolfCandidate.QuartetCommitInput
 
 namespace TwoPermutationPrototype.Grouped
@@ -20,8 +20,8 @@ private theorem written_words {w : Nat} (s : MachineState) (a : Nat) (v : BitVec
     write_bits_byte s (BitVec.ofNat 64 a) v (off+j) (by omega) bound
 
 private theorem high_word_zero (msg : Message) (w : Nat) (lo : 4294971392≤8*w) (hi : w+1≤2^33) :
-    memoryView (MaterializedArtifact.submission.initialState .commit msg) w=0 := by
-  let s:=MaterializedArtifact.submission
+    memoryView (K1Artifact.submission.initialState .commit msg) w=0 := by
+  let s:=K1Artifact.submission
   change (s.initialState .commit msg).getMem (BitVec.ofNat 64 (8*w))=_
   rw [initial_input_word s .commit msg (8*w) (by omega)]
   have empty (j : Nat) (hj : j<8) : inputByte s .commit msg (8*w+j)=0 := by
@@ -41,16 +41,17 @@ theorem seed_memory (s : MachineState) (k : Key) : (readyState s k).mem=
   exact write_bits_memory_congr a s _ k rfl
 
 theorem initially_good (o : Oracle) (k : Key) (msg : Message) :
-    Good o k msg (memoryView (readyState (MaterializedArtifact.submission.initialState .commit msg) k)) 0 := by
-  let s:=MaterializedArtifact.submission.initialState .commit msg
+    Good o k msg (readyState (K1Artifact.submission.initialState .commit msg) k).getReg
+      (memoryView (readyState (K1Artifact.submission.initialState .commit msg) k)) 0 := by
+  let s:=K1Artifact.submission.initialState .commit msg
   let st:=readyState s k
   have same := seed_memory s k
   have outside (w : Nat) (hi : w+1≤2^33) (disjoint : w<qSalt 0+1 ∨ qSalt 0+4≤w) :
       memoryView st w=memoryView s w := by
     rw [←read_word,read_buffer_memory_congr _ _ same,write_bits_read_outside _ k _ _ _ (by decide)
       (by omega) (by dsimp [Key];rcases disjoint with h|h;left;omega;right;omega),read_word]
-  constructor
-  · intro i _;funext j
+  refine ⟨⟨?_,?_,?_,?_,?_,?_⟩,⟨?_,?_,?_⟩⟩
+  · intro i _ _;funext j
     have hi : i.val<16777216:=i.isLt
     have hj:=j.isLt
     rw [show window (memoryView st) (msgWord i.val) j=memoryView st (msgWord i.val+j.val) from rfl,
@@ -58,11 +59,8 @@ theorem initially_good (o : Oracle) (k : Key) (msg : Message) :
     have atByte (l : Nat) (hl : l<8) :
         s.getByte (BitVec.ofNat 64 (8*(msgWord i.val+j.val)+l))=(msg i).extractLsb' (8*(8*j.val+l)) 8 := by
       rw [show 8*(msgWord i.val+j.val)+l=4096+256*i.val+(8*j.val+l) by unfold msgWord;omega]
-      exact wide_message_byte MaterializedArtifact.submission rfl msg i _ (by omega)
+      exact wide_message_byte K1Artifact.submission rfl msg i _ (by omega)
     simpa only [messageWords,←Nat.mul_assoc] using read_serialized_slice s (msg i) (8*(msgWord i.val+j.val)) (8*j.val) 8 atByte
-  · intro _ h;omega
-  · intro g hg j hj;rw [outside _ (by unfold qSource;omega) (Or.inl (by unfold qSource qSalt;omega))]
-    exact high_word_zero msg _ (by unfold qSource;omega) (by unfold qSource;omega)
   · intro j lo hi
     by_cases inKey : j<4
     · rw [←read_word,read_buffer_memory_congr _ _ same,show 8*(qSalt 0+j)=(8*qSalt 0+8)+8*(j-1) by omega,
@@ -71,26 +69,33 @@ theorem initially_good (o : Oracle) (k : Key) (msg : Message) :
     · rw [outside _ (by unfold qSalt;omega) (Or.inr (by omega)),high_word_zero msg _ (by unfold qSalt;omega) (by unfold qSalt;omega)]
       apply BitVec.eq_of_getLsbD_eq;intro n hn
       simp [keyBlock,hn,show 192≤64*(j-1)+n by omega]
-  · intro i _ _ lt;exact absurd lt (Nat.not_lt_zero _)
+  · intro i _ nz;exact (nz rfl).elim
+  · intro i _ r;exact absurd r (by decide)
+  · intro i _ r;exact absurd r (by decide)
+  · intro _ _ _ step _ _;exact absurd step (by omega)
+  · intro _ h;exact absurd h (by omega)
+  · intro _ hg;exact absurd hg (by omega)
+  · intro g hg j hj;rw [outside _ (by unfold qSource;omega) (Or.inl (by unfold qSource qSalt;omega))]
+    exact high_word_zero msg _ (by unfold qSource;omega) (by unfold qSource;omega)
 
 def fixedLeaf (o : Oracle) (s : MachineState) (i : Nat) :=
-  ((pairPlan i).foldl (fixedStep o) s).setPC (startPC (i+1))
+  ((plan i).foldl (fixedStep o) s).setPC (startPC (i+1))
 
 def fixedScan (o : Oracle) : Nat → Nat → MachineState → MachineState
   | 0,_,s => s
   | n+1,i,s => fixedScan o n (i+1) (fixedLeaf o s i)
 
 theorem fixed_leaf_run (o : Oracle) (s : MachineState) (i : Nat) :
-    o.run (stepTrace s i)=pure (fixedLeaf o s i,opCalls (pairPlan i)) := by
+    o.run (stepTrace s i)=pure (fixedLeaf o s i,opCalls (plan i)) := by
   rw [stepTrace,oracle_run_bind,fixed_ops,pure_bind];simp [oracle_run_pure,fixedLeaf]
 
 theorem fixed_leaf_supported (o : Oracle) (s : MachineState) (i : Nat) :
     fixedLeaf o s i ∈ support (stepTrace s i) := by
-  apply writer_support (o.world.withAddCost Oracle.callCost) _ (fixedLeaf o s i,opCalls (pairPlan i))
+  apply writer_support (o.world.withAddCost Oracle.callCost) _ (fixedLeaf o s i,opCalls (plan i))
   change (_,_)∈support (o.run (stepTrace s i))
   rw [fixed_leaf_run];simp
 
-theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n≤NP) :
+theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n≤N) :
     o.run (scan n i s)=pure (fixedScan o n i s,Q (i+n)-Q i) := by
   induction n generalizing s i with
   | zero => simp [scan,fixedScan,oracle_run_pure]
@@ -103,28 +108,19 @@ theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n�
     simp only [fixedScan,pure_bind]
     apply congrArg pure
     apply congrArg (Prod.mk _)
-    change opCalls (pairPlan i)+(Q ((i+1)+n)-Q (i+1))=Q (i+(n+1))-Q i
+    change opCalls (plan i)+(Q ((i+1)+n)-Q (i+1))=Q (i+(n+1))-Q i
     rw [show i+(n+1)=(i+1)+n by omega];omega
 
-attribute [local irreducible] pairPlan in
 theorem scan_content (o : Oracle) (k : Key) (msg : Message) (n i : Nat) (s : MachineState)
-    (bound : i+n≤NP) (r : Live s i) (good : Good o k msg (memoryView s) i)
-    (pf : PrefetchOK s.getReg (memoryView s) i) :
-    Good o k msg (memoryView (fixedScan o n i s)) (i+n) ∧
-      PrefetchOK (fixedScan o n i s).getReg (memoryView (fixedScan o n i s)) (i+n) := by
+    (bound : i+n≤N) (r : Live s i) (good : Good o k msg s.getReg (memoryView s) i) :
+    Good o k msg (fixedScan o n i s).getReg (memoryView (fixedScan o n i s)) (i+n) := by
   induction n generalizing i s with
-  | zero => exact ⟨good,pf⟩
+  | zero => exact good
   | succ n ih =>
-    have hi : i<NP:=by omega
-    have next := fixed_pair_good o k msg s i hi r.toPairRegs good pf
+    have hi : i<N:=by omega
+    let idx : Index := ⟨i,hi⟩
+    have next := fixed_packet_good o k msg s idx r.toPacketRegs good
     have live := step_live s i hi r _ (fixed_leaf_supported o s i)
-    have pcm : ∀ (t : MachineState) (p : Word), memoryView (t.setPC p)=memoryView t := fun t p => rfl
-    have rgm : ∀ (t : MachineState) (p : Word), (t.setPC p).getReg=t.getReg := fun t p => rfl
-    have next' : Good o k msg (memoryView (fixedLeaf o s i)) (i+1) := by
-      unfold fixedLeaf; rw [pcm]; exact next.1
-    have pf' : PrefetchOK (fixedLeaf o s i).getReg (memoryView (fixedLeaf o s i)) (i+1) := by
-      unfold fixedLeaf; rw [pcm,rgm]; exact next.2
-    rw [show i+(n+1)=(i+1)+n by omega]
-    exact ih (i+1) _ (by omega) live next' pf'
+    exact (show i+(n+1)=(i+1)+n by omega) ▸ ih (i+1) _ (by omega) live next
 
 end TwoPermutationPrototype.Grouped

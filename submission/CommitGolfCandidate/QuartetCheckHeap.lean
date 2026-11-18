@@ -1,4 +1,5 @@
 import CommitGolfCandidate.QuartetConcrete
+import CommitGolfCandidate.K3GQModel
 import CommitGolfCandidate.TwoPermutationOpeningMarks
 import CommitGolfCandidate.TwoPermutationCheckerPaths
 import CommitGolfCandidate.ProjectedCompression
@@ -12,28 +13,26 @@ open TwoPermutationPrototype.Sampling.Quartet (upperHeap quartetPayload leafAt)
 
 set_option autoImplicit false
 
-theorem upper_heap_parent (lookup : BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
+theorem upper_heap_parent (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
     (node : Nat) (positive : 0 < node) (below : node < 4194304) :
     upperHeap lookup compress leaves node =
-      projectInternal true compress (upperHeap lookup compress leaves (2*node+1) ++ upperHeap lookup compress leaves (2*node)) := by
-  unfold upperHeap
-  exact reference_heap_parent _ _ _ _ positive below
+      nodeKeep node (compress (upperHeap lookup compress leaves (2*node+1) ++ upperHeap lookup compress leaves (2*node))) :=
+  Sampling.Quartet.upper_heap_parent lookup compress leaves node positive below
 
-theorem upper_heap_leaf (lookup : BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
+theorem upper_heap_leaf (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
     (group : Nat) (inside : group < 4194304) :
-    upperHeap lookup compress leaves (4194304+group) = lookup (quartetPayload leaves group) := by
-  unfold upperHeap
-  exact reference_heap_leaf _ _ _ _ inside
+    upperHeap lookup compress leaves (4194304+group) = lookup group (quartetPayload leaves group) :=
+  Sampling.Quartet.upper_heap_leaf lookup compress leaves group inside
 
-/-- One authenticated step of the honest upper heap, in the checker's projected form. -/
-theorem upper_heap_climb (lookup : BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
+/-- One authenticated step of the honest upper heap, in the checker's level-aware form. -/
+theorem upper_heap_climb (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
     (node : Nat) (positive : 2 ≤ node) (bounded : node < 8388608) :
     let heap := upperHeap lookup compress leaves
-    padLow (compress (pathPair node (heap node) (heap (node ^^^ 1)))) = heap (node/2) := by
+    nodeKeep (node/2) (compress (pathPair node (heap node) (heap (node ^^^ 1)))) = heap (node/2) := by
   let heap := upperHeap lookup compress leaves
-  change padLow (compress (pathPair node (heap node) (heap (node ^^^ 1)))) = heap (node/2)
+  change nodeKeep (node/2) (compress (pathPair node (heap node) (heap (node ^^^ 1)))) = heap (node/2)
   have parent := upper_heap_parent lookup compress leaves (node/2) (by omega) (by omega)
-  change heap (node/2) = padLow (compress (heap (2*(node/2)+1) ++ heap (2*(node/2)))) at parent
+  change heap (node/2) = nodeKeep (node/2) (compress (heap (2*(node/2)+1) ++ heap (2*(node/2)))) at parent
   rw [parent]
   by_cases even : node % 2 = 0
   · rw [pathPair, ite_eq_left even, Nat.xor_one_of_even (Nat.even_iff.mpr even)]
@@ -42,12 +41,35 @@ theorem upper_heap_climb (lookup : BitVec 1024 → BitVec 256) (compress : Compr
     rw [pathPair, ite_eq_right even, Nat.xor_one_of_odd odd]
     rw [show 2*(node/2)+1 = node by omega,show 2*(node/2) = node-1 by omega]
 
-/-- Internal digests are projected: their two top bytes are zero. -/
-theorem upper_heap_projected (lookup : BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
-    (node : Nat) (positive : 0 < node) (internal : node < 4194304) :
+/-- Internal digests below level 21 are projected (240 or 238 kept bits): their two top bytes are zero. -/
+theorem upper_heap_projected (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
+    (node : Nat) (positive : 0 < node) (internal : node < 2097152) :
     (0#16) ++ (upperHeap lookup compress leaves node).extractLsb' 0 240 = upperHeap lookup compress leaves node := by
-  rw [upper_heap_parent lookup compress leaves node positive internal]
-  simp [projectInternal]
+  rw [upper_heap_parent lookup compress leaves node positive (by omega)]
+  generalize compress (upperHeap lookup compress leaves (2*node+1) ++ upperHeap lookup compress leaves (2*node)) = x
+  by_cases t238 : node < 2^17
+  · rw [show nodeKeep node x = pad238 x from node_keep_238 t238 x]
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    simp only [pad238, BitVec.getLsbD_append, BitVec.getLsbD_extractLsb']
+    by_cases low : i < 238
+    · simp [low, show i < 240 by omega]
+    · by_cases mid : i < 240
+      · simp [low, mid]
+      · simp [low, mid]
+  · rw [show nodeKeep node x = padLow x from node_keep_240 (by omega) (by omega) x]
+    unfold padLow
+    rw [BitVec.extractLsb'_append_eq_right]
+    try rfl
+
+/-- Internal digests below level 17 keep 238 bits. -/
+theorem upper_heap_projected238 (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
+    (node : Nat) (positive : 0 < node) (internal : node < 2^17) :
+    pad238 (upperHeap lookup compress leaves node) = upperHeap lookup compress leaves node := by
+  rw [upper_heap_parent lookup compress leaves node positive (by omega)]
+  generalize compress (upperHeap lookup compress leaves (2*node+1) ++ upperHeap lookup compress leaves (2*node)) = x
+  rw [show nodeKeep node x = pad238 x from node_keep_238 internal x]
+  unfold pad238
   rw [BitVec.extractLsb'_append_eq_right]
 
 /-- Quartet's upper level `level` is cursor43's binary level `level+2`. -/

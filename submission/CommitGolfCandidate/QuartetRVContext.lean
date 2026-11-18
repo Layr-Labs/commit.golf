@@ -5,7 +5,7 @@ namespace TwoPermutationPrototype.QuartetRV
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (trapdoorBase markBase machineMarks markWord)
 
-def quartetProofBase : Nat := 11676946528
+def quartetProofBase : Nat := 13824430176
 
 structure CapContext (groups : List Nat) (state : MachineState) : Prop where
   heap : state.getReg .x25 = BitVec.ofNat 64 trapdoorBase

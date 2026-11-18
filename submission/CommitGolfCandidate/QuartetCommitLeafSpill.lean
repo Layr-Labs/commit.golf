@@ -28,15 +28,5 @@ structure PinnedLeafPrefix (oracle : Oracle) (before : Memory) (s : MachineState
 theorem empty_prefix (oracle : Oracle) (s : MachineState) (pad : ∀ g<4194304, ∀ k<9, memoryView s (qSource g+k)=0) :
     PinnedLeafPrefix oracle (memoryView s) s 0 := ⟨fun _ h => False.elim (by omega),fun _ _ _ => rfl,fun _ _ => rfl,pad⟩
 
-private theorem pinned_tag_matches (i : Index) : pinnedPositionTag i=secondTag i.val := by
-  unfold pinnedPositionTag secondTag firstTag
-  change BitVec.ofNat 64 (4152 + 256*i.val) = BitVec.ofNat 64 (4056+256*i.val)+BitVec.ofNat 64 96
-  rw [←BitVec.ofNat_add]
-  congr 1 <;> omega
-
-theorem pinned_typed_words (i : Index) (n : Words 2) (r : Words 25) (m : Words 32) :
-    pinnedSecondInput i n r m = pinnedWords (secondTag i.val) n r m := by
-  unfold pinnedSecondInput pinnedWords
-  rw [pinned_tag_matches]
 
 end TwoPermutationPrototype.RV64.QuartetLeaves

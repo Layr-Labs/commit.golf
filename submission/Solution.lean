@@ -8,10 +8,10 @@ def submission : CommitGolf.Submission := CommitGolf.Artifact.submission
 
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
-private theorem grouped_manifest : submission = MaterializedArtifact.submission := rfl
+private theorem k1_manifest : submission = K1Artifact.submission := rfl
 
-theorem certificate : Certificate submission 72192 512480543 99977 := by
-  rw [grouped_manifest]
+theorem certificate : Certificate submission 72160 506688062 154669 := by
+  rw [k1_manifest]
   exact TwoPermutationPrototype.GroupedOpening.grouped_certificate TwoPermutationPrototype.GroupedOpening.certifiedHeader
 
 end CommitGolf.Challenge

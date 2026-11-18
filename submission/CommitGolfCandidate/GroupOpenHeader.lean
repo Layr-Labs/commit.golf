@@ -13,7 +13,7 @@ private theorem key_outside (s : MachineState) (w : Word) (a : w≠1032) (b : w�
   exact (MachineState.getMem_setMem_ne c).trans ((MachineState.getMem_setMem_ne b).trans (MachineState.getMem_setMem_ne a))
 
 private theorem key_cell (s : MachineState) (j : Fin 3) : memoryView (keyCopy s) (129+j.val)=
-    s.getMem (BitVec.ofNat 64 (6979325992+8*j.val)) := by
+    s.getMem (BitVec.ofNat 64 (9126809640+8*j.val)) := by
   fin_cases j <;> unfold memoryView keyCopy <;> rfl
 
 theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) :
@@ -23,10 +23,12 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
   let t:=header init
   have nr : init.getReg .x16≠0#64 := nonempty_count p nz
   obtain ⟨b,salt,marks,mem0⟩:=original_base td p nz
-  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks ((setup_keeps_x5 init).trans rfl) mem0
-  refine ⟨valid,⟨regs.r,regs.b,?_,?_,?_⟩⟩
+  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks mem0
+  refine ⟨valid,⟨regs.r,regs.b,?_,by simpa [lastOf] using regs.quartet,?_,?_⟩⟩
   · simpa only [passPC,ite_eq_right (Nat.ne_of_lt nz)] using regs.pc
-  · intro w fit guard _ _
+  · intro w fit away
+    have guard : w<128 ∨ 153≤w := by
+      by_contra h; exact away (Or.inl (by omega))
     have neq (j : Nat) (hj : 129≤j ∧ j≤131) : wordAddress w≠wordAddress j :=
       fun h => (by have :=wordAddress_injective_of_bound (by omega) (by omega) h;omega : False)
     change t.mem _=_;rw [mem]
@@ -45,12 +47,12 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
       change memoryView init (128+j)=_
       rw [low_zero td p _ (by omega)]
       apply BitVec.eq_of_getLsbD_eq;intro b hb
-      simp [Grouped.keyBlock,hb,show 192≤64*(j-1)+b by omega]
+      simp [keyBlock,hb,show 192≤64*(j-1)+b by omega]
 
 theorem header_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) (fuel : Nat) :
     let s:=actual.initialState .opening (td,p)
-    execute openingImage (30+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 30 0) := by
-  simpa only [header,show headerRows.length=30 by decide,show price headerRows=30 by decide] using
+    execute openingImage (31+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 31 0) := by
+  simpa only [header,show headerRows.length=31 by decide,show price headerRows=31 by decide] using
     walk_rows_run _ headerRows (header_valid td p nz).1 header_fetch fuel true
 
 theorem certifiedHeader : HeaderFacts :=

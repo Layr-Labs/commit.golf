@@ -45,6 +45,22 @@ theorem same_input_byte {before after : MachineState} (unchanged : SameOpeningIn
   rw [stable]
   rfl
 
+theorem same_input_half {before after : MachineState} (unchanged : SameOpeningInput before after)
+    (address : Nat) (above : trapdoorBase ≤ address) (below : address+2 ≤ proofBase) :
+    after.getHalfword (BitVec.ofNat 64 address) = before.getHalfword (BitVec.ofNat 64 address) := by
+  let aligned := alignToDword (BitVec.ofNat 64 address)
+  have limit : proofBase+8 ≤ 2^64 := by decide
+  have upper : aligned.toNat ≤ address := by
+    unfold aligned alignToDword
+    rw [BitVec.toNat_and, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : address < 2^64)]
+    exact Nat.and_le_left
+  have lower : trapdoorBase ≤ aligned.toNat :=
+    aligned_dword_above trapdoorBase address (by decide) above (by omega)
+  have stable := unchanged aligned.toNat lower (by omega) (aligned_word_mod _)
+  rw [BitVec.ofNat_toNat, BitVec.setWidth_eq] at stable
+  change extractHalfword (after.getMem aligned) _ = extractHalfword (before.getMem aligned) _
+  rw [stable]
+
 private theorem collected_record (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (before after : MachineState) (ordinal : Nat)
     (present : ordinal < positions.card) (start : RecordBoundary s trapdoor positions before ordinal)
@@ -55,49 +71,73 @@ private theorem collected_record (s : Submission) (trapdoor : BitVec (8*s.sizes.
   let index := sortedIndex positions prior priorPresent
   have len : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
   have baseOrder : trapdoorBase ≤ proofBase := by decide
+  have heapSource (level byte : Nat) (hb : byte < 32) :
+      trapdoorBase ≤ siblingAddress index level+byte ∧ siblingAddress index level+byte+2 ≤ proofBase := by
+    have bound := upper_swap_bound index level
+    have heapEnd := heap_before_nonces
+    have tapeEnd := nonces_end_at_indices
+    have order := indices_before_records
+    unfold siblingAddress
+    omega
   by_cases current : prior = ordinal
   · subst prior
-    constructor
+    obtain rfl : priorPresent = present := rfl
+    refine ⟨?_, ?_, ?_⟩
     · intro byte hb
       have low := first_source_above index byte
       have high := first_source_before index byte hb
       exact (step.nonce byte hb).trans (same_input_byte start.input _ low high)
     · intro level hl byte hb
-      have low : trapdoorBase ≤ siblingAddress index level+byte := by unfold siblingAddress; omega
-      have high : siblingAddress index level+byte < proofBase := by
-        have bound := upper_swap_bound index level
-        have heapEnd := heap_before_nonces
-        have tapeEnd := nonces_end_at_indices
-        have order := indices_before_records
-        have widthBound : siblingWidth level ≤ 32 := by unfold siblingWidth; split <;> decide
-        unfold siblingAddress
-        omega
-      exact (step.sibling level hl byte hb).trans (same_input_byte start.input _ low high)
+      have narrow := plain_width_le level
+      have wide := sibling_width_le level
+      have ⟨low, high⟩ := heapSource level byte (by omega)
+      exact (step.sibling level hl byte hb).trans (same_input_byte start.input _ low
+        (Nat.lt_of_lt_of_le (Nat.lt_add_of_pos_right (by decide : 0 < 2)) high))
+    · intro k hk b hb
+      rw [step.fold k hk b hb]
+      have ⟨l1, h1⟩ := heapSource (6+k) 28 (by omega)
+      have ⟨l2, h2⟩ := heapSource 13 28 (by omega)
+      rw [same_input_half start.input _ l1 h1, same_input_half start.input _ l2 h2]
   · have older : prior < ordinal := by omega
-    obtain ⟨oldNonce, oldPath⟩ := earlier prior priorPresent older
-    constructor
+    obtain ⟨oldNonce, oldPath, oldFold⟩ := earlier prior priorPresent older
+    have limit := all_record_ends_fit ordinal (by omega)
+    have memory : recordBase ordinal ≤ MEMORY_BYTES := by
+      unfold recordBase recordBytes at *
+      omega
+    have earlierThan : recordBase (prior+1) ≤ recordBase ordinal := by
+      unfold recordBase recordBytes
+      omega
+    refine ⟨?_, ?_, ?_⟩
     · intro byte hb
-      have limit := all_record_ends_fit ordinal (by omega)
       have low : trapdoorBase ≤ recordBase prior+byte := by unfold recordBase; omega
       have high : recordBase prior+byte < recordBase ordinal := by unfold recordBase recordBytes; omega
-      have memory : recordBase ordinal ≤ MEMORY_BYTES := by
-        unfold recordBase recordBytes at *
-        omega
       exact (step.frame _ (by omega) low (Or.inl high)).trans (oldNonce byte hb)
     · intro level hl byte hb
       have fit := (all_sibling_copies_fit index prior level (by omega) hl).2.2.2
+      have narrow := plain_width_le level
       have inPrior : siblingDestination prior level+byte < recordBase (prior+1) := by
         have stepOrder := destination_mono prior (show level+1 ≤ 14 by omega)
         rw [record_end] at stepOrder
         have successor : siblingDestination prior (level+1) =
             siblingDestination prior level + siblingWidth level := by
-          simp only [siblingDestination, sibling_offset_next, Nat.add_assoc]
-        omega
-      have earlierThan : recordBase (prior+1) ≤ recordBase ordinal := by
-        unfold recordBase recordBytes
+          simp only [siblingDestination, sibling_offset_next level hl, Nat.add_assoc]
         omega
       exact (step.frame _ (by omega) (by unfold siblingDestination recordBase; omega)
         (Or.inl (by omega))).trans (oldPath level hl byte hb)
+    · intro k hk b hb
+      have inPrior : siblingDestination prior (6+k)+28+b < recordBase (prior+1) := by
+        have stepOrder := destination_mono prior (show 7+k ≤ 14 by omega)
+        rw [record_end] at stepOrder
+        have successor : siblingDestination prior (6+k+1) =
+            siblingDestination prior (6+k) + siblingWidth (6+k) := by
+          unfold siblingDestination
+          rw [sibling_offset_next (6+k) (by omega)]
+          omega
+        have width : siblingWidth (6+k) = 30 := by unfold siblingWidth; rw [if_neg (by omega), if_pos (by omega)]
+        rw [show 6+k+1 = 7+k by omega] at successor
+        omega
+      exact (step.frame _ (by omega) (by unfold siblingDestination recordBase; omega)
+        (Or.inl (by omega))).trans (oldFold k hk b hb)
 
 theorem execute_records_from_step (execute_record : RecordExecute) (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
@@ -128,7 +168,7 @@ theorem execute_records_from_step (execute_record : RecordExecute) (s : Submissi
     have rest := ih next (ordinal+1) (by omega) step.next withMark withBytes
     have shift : ordinal+(count+1)=ordinal+1+count := by omega
     refine ⟨?_, ?_, ?_, ?_⟩
-    · rw [records_cost_next _ _ _ limit, show 3*(count+1)=3+3*count by omega]
+    · rw [records_cost_next _ _ _ limit]
       exact step.run.next rest.run
     · rw [shift]
       exact rest.boundary

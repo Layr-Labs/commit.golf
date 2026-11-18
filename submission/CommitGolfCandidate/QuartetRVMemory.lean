@@ -5,8 +5,8 @@ namespace TwoPermutationPrototype.QuartetRV
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 
 def trapdoorBase : Nat := 4096 + 256 * LENGTH + 32
-def trapdoorBytes : Nat := 176 * LENGTH
-def nonceBase : Nat := trapdoorBase + 160 * LENGTH
+def trapdoorBytes : Nat := 304 * LENGTH
+def nonceBase : Nat := trapdoorBase + 288 * LENGTH
 def indicesBase : Nat := trapdoorBase + trapdoorBytes
 def proofBase : Nat := indicesBase + 8 * LENGTH + 64 + 256 * LENGTH
 def proofCapacity : Nat := 534 * LENGTH + 7680
@@ -122,7 +122,7 @@ theorem input_trapdoor_slice (s : Submission) (layout : OpeningLayout s)
 theorem input_nonce (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8 * s.sizes.trapdoor)) (positions : Positions) (index : Index) :
     readBuffer (s.initialState .opening (trapdoor, positions)) (nonceBase + 16 * index.val) 16 =
-      trapdoor.extractLsb' (8 * (160 * LENGTH + 16 * index.val)) 128 := by
+      trapdoor.extractLsb' (8 * (288 * LENGTH + 16 * index.val)) 128 := by
   rw [nonceBase, Nat.add_assoc]
   exact input_trapdoor_slice s layout trapdoor positions _ _ (by
     have bounded := index.isLt

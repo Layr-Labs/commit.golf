@@ -5,7 +5,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 open TwoPermutationPrototype.RV64
 open TwoPermutationPrototype.Checker (checkIndexWord checkSourceWord)
 
-def checkProofByte (ordinal : Nat) : Nat := 11676946528+534*ordinal
+def checkProofByte (ordinal : Nat) : Nat := 13824430176+534*ordinal
 
 /-- The packed checker cursor points to byte-aligned 534-byte records. -/
 structure RecordCursor (input : CheckInput) (ordinal : Nat) (state : MachineState) : Prop where
@@ -17,7 +17,7 @@ structure RecordCursor (input : CheckInput) (ordinal : Nat) (state : MachineStat
   tag : state.getReg .x3 = 4056
   commitment : state.getReg .x9 = 4294971392
   challengeLength : state.getReg .x20 = BitVec.ofNat 64 (LENGTH/4)
-  proofEnd : state.getReg .x22 = BitVec.ofNat 64 (11676946528+input.proof.length)
+  proofEnd : state.getReg .x22 = BitVec.ofNat 64 (13824430176+input.proof.length)
   digest : state.getReg .x23 = wordAddress 1536
   pair : state.getReg .x24 = wordAddress 1568
   capRoots : state.getReg .x25 = wordAddress 2048

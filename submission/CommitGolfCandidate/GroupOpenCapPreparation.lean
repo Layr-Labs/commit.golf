@@ -72,8 +72,10 @@ theorem machine_mark_sweep (state : MachineState) (groups : List Nat) (remaining
 def markSweepEntry (state : MachineState) : MachineState :=
   (state.setReg .x6 255).setPC 0x1a28
 
+/-- Word 660 jumps to the WI block (852 `addi x6,x0,1`, 853 `addi x30,x0,7`, 854 `jal` back to 661): the cursor
+starts at the root with the T238 group countdown `x30 = 7`. -/
 def cursorEntry (state : MachineState) : MachineState :=
-  (state.setReg .x6 1).setPC 0x1a54
+  ((state.setReg .x6 1).setReg .x30 7).setPC 0x1a54
 
 /-- Enter the descending sweep at parent 255, immediately after the last record. -/
 theorem execute_mark_entry (state : MachineState) (pc : state.pc = 0x1a24)
@@ -88,18 +90,62 @@ theorem execute_mark_entry (state : MachineState) (pc : state.pc = 0x1a24)
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   rfl
 
-/-- Start the cap cursor at the root after all parent marks are set. -/
+private theorem wi_pc852 : (0x1a50 : Word) + signExtend21 768 = BitVec.ofNat 64 (4096+4*852) := by decide
+private theorem wi_pc853 : BitVec.ofNat 64 (4096+4*852) + 4 = BitVec.ofNat 64 (4096+4*853) := by decide
+private theorem wi_pc854 : BitVec.ofNat 64 (4096+4*853) + 4 = BitVec.ofNat 64 (4096+4*854) := by decide
+private theorem wi_pc661 : BitVec.ofNat 64 (4096+4*854) + signExtend21 0x1ffcfc = 0x1a54 := by decide
+private theorem wi_one : (0 : Word) + signExtend12 1 = 1 := by decide
+private theorem wi_seven : (0 : Word) + signExtend12 7 = 7 := by decide
+
+private theorem wi_set_pc_set_reg (s : MachineState) (p : Word) (r : Reg) (v : Word) :
+    (s.setPC p).setReg r v = (s.setReg r v).setPC p := by cases r <;> rfl
+
+private theorem wi_step (s t : MachineState) (i : Instr) (fuel : Nat) (allowCoins : Bool)
+    (f : fetch openingImage s = some (.base i)) (step : ordinaryStep s (.base i) = some (execInstrBr s i))
+    (e : execInstrBr s i = t) (cost : instructionCycles (.base i) = 1) :
+    execute openingImage (1 + fuel) s allowCoins =
+      (do let result ← execute openingImage fuel t allowCoins; return result.charge 1 0) := by
+  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ f (e ▸ step), cost]
+
+/-- Start the cap cursor at the root after all parent marks are set: word 660 and the WI block 852–854. -/
 theorem execute_cursor_entry (state : MachineState) (pc : state.pc = 0x1a50)
     (fuel : Nat) (allowCoins : Bool) :
-    execute openingImage (1 + fuel) state allowCoins =
+    execute openingImage (4 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (cursorEntry state) allowCoins
-          return result.charge 1 0) := by
-  have fetched := packed_fetch_base state 660 (.ADDI .x6 .x0 1) (by decide) pc rfl
-  have stepped : ordinaryStep state (.base (.ADDI .x6 .x0 1)) = some (cursorEntry state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
-      cursorEntry, pc, show state.getReg .x0 = 0#64 from rfl]
-  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  rfl
+          return result.charge 4 0) := by
+  let s1 := state.setPC (BitVec.ofNat 64 (4096+4*852))
+  let s2 := (state.setReg .x6 1).setPC (BitVec.ofNat 64 (4096+4*853))
+  let s3 := ((state.setReg .x6 1).setReg .x30 7).setPC (BitVec.ofNat 64 (4096+4*854))
+  have j0 := wi_step state s1 (.JAL .x0 768) (3+fuel) allowCoins
+    (packed_fetch_base state 660 _ (by decide) pc rfl) rfl
+    (by rw [show execInstrBr state (.JAL .x0 768) = state.setPC (state.pc + signExtend21 768) from rfl, pc, wi_pc852])
+    rfl
+  have j1 := wi_step s1 s2 (.ADDI .x6 .x0 1) (2+fuel) allowCoins
+    (packed_fetch_base s1 852 _ (by decide) rfl rfl) rfl
+    (by
+      rw [show execInstrBr s1 (.ADDI .x6 .x0 1) =
+        (s1.setReg .x6 ((0 : Word) + signExtend12 1)).setPC (BitVec.ofNat 64 (4096+4*852) + 4) from rfl,
+        wi_one, wi_pc853, wi_set_pc_set_reg]
+      rfl)
+    rfl
+  have j2 := wi_step s2 s3 (.ADDI .x30 .x0 7) (1+fuel) allowCoins
+    (packed_fetch_base s2 853 _ (by decide) rfl rfl) rfl
+    (by
+      rw [show execInstrBr s2 (.ADDI .x30 .x0 7) =
+        (s2.setReg .x30 ((0 : Word) + signExtend12 7)).setPC (BitVec.ofNat 64 (4096+4*853) + 4) from rfl,
+        wi_seven, wi_pc854, wi_set_pc_set_reg]
+      rfl)
+    rfl
+  have j3 := wi_step s3 (cursorEntry state) (.JAL .x0 0x1ffcfc) fuel allowCoins
+    (packed_fetch_base s3 854 _ (by decide) rfl rfl) rfl
+    (by
+      rw [show execInstrBr s3 (.JAL .x0 0x1ffcfc) = s3.setPC (BitVec.ofNat 64 (4096+4*854) + signExtend21 0x1ffcfc)
+        from rfl, wi_pc661]
+      rfl)
+    rfl
+  rw [show 4 + fuel = 1 + (3 + fuel) by omega, j0, show 3 + fuel = 1 + (2 + fuel) by omega, j1,
+    show 2 + fuel = 1 + (1 + fuel) by omega, j2, j3]
+  simp [Execution.charge, ← Nat.add_assoc]
 
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 
@@ -139,21 +185,21 @@ def capPreparation (state : MachineState) : MachineState :=
   cursorEntry (markMachine (markSweepEntry state) 255)
 
 /-- Starting one instruction after the final record, prepare all subtree marks
-and enter the real cursor at node one in 2,552 cycles. -/
+and enter the real cursor at node one (countdown `x30 = 7`) in 2,555 cycles. -/
 theorem execute_cap_preparation (state : MachineState) (pc : state.pc = 0x1a24)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase) (fuel : Nat) (allowCoins : Bool) :
-    execute openingImage (2552 + fuel) state allowCoins =
+    execute openingImage (2555 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (capPreparation state) allowCoins
-          return result.charge 2552 0) := by
+          return result.charge 2555 0) := by
   let first := markSweepEntry state
   have baseAtSweep : first.getReg .x26 = BitVec.ofNat 64 markBase := base
   have count : first.getReg .x6 = BitVec.ofNat 64 255 := rfl
-  have markEntry := execute_mark_entry state pc (2551 + fuel) allowCoins
-  have sweep := execute_mark_sweep first 255 (1+fuel) allowCoins (by decide) rfl baseAtSweep count
+  have markEntry := execute_mark_entry state pc (2554 + fuel) allowCoins
+  have sweep := execute_mark_sweep first 255 (4+fuel) allowCoins (by decide) rfl baseAtSweep count
   have beforeCursor := mark_sweep_finished first 255 (by decide) rfl count
   have walkEntry := execute_cursor_entry _ beforeCursor fuel allowCoins
-  rw [show 2552 + fuel = 1 + (2551 + fuel) by omega, markEntry,
-    show 2551 + fuel = 10 * 255 + (1 + fuel) by omega, sweep, walkEntry]
+  rw [show 2555 + fuel = 1 + (2554 + fuel) by omega, markEntry,
+    show 2554 + fuel = 10 * 255 + (4 + fuel) by omega, sweep, walkEntry]
   simp [capPreparation, Execution.charge, ← Nat.add_assoc, first]
 
 /-- The packed cap enters the exact traversal with the same marks, heap and output cursor. -/
@@ -165,24 +211,33 @@ theorem cap_preparation_context (state : MachineState) (groups : List Nat) (dest
     (pointer : state.getReg .x21 = BitVec.ofNat 64 dest)
     (marks : ∀ node, 255 < node → node < 512 → machineMarks state node = markWord groups node) :
     let after := capPreparation state
-    after.pc = 0x1a54 ∧ CapPosition groups after 1 dest := by
+    after.pc = 0x1a54 ∧ CapPosition groups after 1 dest ∧ after.getReg .x30 = 7#64 := by
   let first := markSweepEntry state
   have count : first.getReg .x6 = BitVec.ofNat 64 255 := rfl
   have baseAtSweep : first.getReg .x26 = BitVec.ofNat 64 markBase := markBaseReg
-  have preserve (reg : Reg) (a : reg ≠ .x6) (b : reg ≠ .x7) (c : reg ≠ .x28) (d : reg ≠ .x29) :
+  have preserve (reg : Reg) (a : reg ≠ .x6) (b : reg ≠ .x7) (c : reg ≠ .x28) (d : reg ≠ .x29) (e : reg ≠ .x30) :
       (capPreparation state).getReg reg = state.getReg reg := by
     unfold capPreparation cursorEntry
-    simp only [MachineState.getReg_setPC, Opening.getReg_setReg, Ne.symm a, false_and, ite_false]
+    simp only [MachineState.getReg_setPC, Opening.getReg_setReg, Ne.symm a, Ne.symm e, false_and, ite_false]
     rw [mark_sweep_register _ _ reg a b c d]
     unfold markSweepEntry
     simp [Ne.symm a]
-  refine ⟨rfl, ⟨⟨(preserve .x25 (by decide) (by decide) (by decide) (by decide)).trans heap,
-      (preserve .x26 (by decide) (by decide) (by decide) (by decide)).trans markBaseReg,
-      (preserve .x27 (by decide) (by decide) (by decide) (by decide)).trans leaves,
-      (preserve .x20 (by decide) (by decide) (by decide) (by decide)).trans proofStart, ?_⟩, rfl,
-    (preserve .x21 (by decide) (by decide) (by decide) (by decide)).trans pointer⟩⟩
-  intro node positive inside
-  change machineMarks (markMachine first 255) node = markWord groups node
-  exact machine_mark_sweep first groups 255 (by decide) rfl baseAtSweep count marks node positive inside
+  refine ⟨rfl, ⟨⟨(preserve .x25 (by decide) (by decide) (by decide) (by decide) (by decide)).trans heap,
+      (preserve .x26 (by decide) (by decide) (by decide) (by decide) (by decide)).trans markBaseReg,
+      (preserve .x27 (by decide) (by decide) (by decide) (by decide) (by decide)).trans leaves,
+      (preserve .x20 (by decide) (by decide) (by decide) (by decide) (by decide)).trans proofStart, ?_⟩, ?_,
+    (preserve .x21 (by decide) (by decide) (by decide) (by decide) (by decide)).trans pointer⟩, ?_⟩
+  · intro node positive inside
+    change machineMarks (markMachine first 255) node = markWord groups node
+    exact machine_mark_sweep first groups 255 (by decide) rfl baseAtSweep count marks node positive inside
+  · show (capPreparation state).getReg .x6 = BitVec.ofNat 64 1
+    unfold capPreparation cursorEntry
+    rw [MachineState.getReg_setPC, MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x30 ≠ .x6),
+      MachineState.getReg_setReg_eq (by decide : Reg.x6 ≠ .x0)]
+    rfl
+  · show (capPreparation state).getReg .x30 = 7#64
+    unfold capPreparation cursorEntry
+    rw [MachineState.getReg_setPC, MachineState.getReg_setReg_eq (by decide : Reg.x30 ≠ .x0)]
+    rfl
 
 end TwoPermutationPrototype.GroupedOpening

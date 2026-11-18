@@ -49,12 +49,4 @@ structure BodyContent (s : MachineState) (msg : Message) (salts : CompleteSaltTa
   nonces : ∀ i : Index, window (memoryView s) (qSalt i.val) = saltWords (salts i)
   padding : ∀ g<4194304, ∀ k<9, memoryView s (qSource g+k) = 0
 
-theorem frame_leaf_reference (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (ready : MachineState)
-    (content : BodyContent ready msg salts) (i : Index) :
-    outputDigest (QuartetLeaves.pinnedFinalReply oracle (memoryView ready) i.val) =
-      pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts i := by
-  unfold QuartetLeaves.pinnedFinalReply
-  rw [content.messages i,content.nonces i]
-  simp only [pinnedFullLeafDigests,pinnedLeafDigest,pinnedFirstRow,pinnedSecondRow,QuartetLeaves.pinned_typed_words]
-  rfl
 end TwoPermutationPrototype.QuartetCommit

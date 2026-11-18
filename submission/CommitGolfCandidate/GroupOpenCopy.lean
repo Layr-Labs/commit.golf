@@ -19,7 +19,7 @@ def fieldCode (site : CopySite) : CopyCode where
   destOffset := site.destOffset
   sourceTemp := by cases site <;> simp [CopySite.source]
   destTemp := by decide
-  offsetBound := by cases site <;> simp [CopySite.halfwords, CopySite.destOffset] <;> omega
+  offsetBound := by cases site <;> simp only [CopySite.halfwords, CopySite.destOffset] <;> (try split) <;> omega
   load := fun offset inside state pc => fetch_copy_load site ⟨offset, inside⟩ state pc
   store := fun offset inside state pc => by
     exact fetch_copy_store site ⟨offset, inside⟩ state pc

@@ -33,11 +33,6 @@ theorem all_nonce_copies_fit (index : Index) (ordinal : Nat) (inside : ordinal <
   unfold nonceAddress recordBase recordBytes at *
   omega
 
-private theorem sibling_inside_record (level : Nat) (inside : level < 14) :
-    siblingOffset level+siblingWidth level ≤ recordBytes := by
-  unfold siblingOffset siblingWidth recordBytes
-  split <;> omega
-
 theorem all_sibling_copies_fit (index : Index) (ordinal level : Nat)
     (inside : ordinal < LENGTH) (valid : level < 14) :
     siblingAddress index level % 2 = 0 ∧ siblingDestination ordinal level % 2 = 0 ∧
@@ -50,7 +45,7 @@ theorem all_sibling_copies_fit (index : Index) (ordinal level : Nat)
   have indexEnd := indices_before_records
   have tapeEnd := nonces_end_at_indices
   have heapEven : trapdoorBase % 2 = 0 := by decide
-  have widthBound : siblingWidth level ≤ 32 := by unfold siblingWidth; split <;> decide
+  have widthBound : siblingWidth level ≤ 32 := sibling_width_le level
   refine ⟨?_, even_sibling_destination ordinal level, ?_, ?_⟩
   all_goals simp only [siblingAddress, siblingDestination, recordBase, recordBytes, Nat.mul_add] at * <;> omega
 
@@ -74,23 +69,32 @@ theorem physical_sibling_source (state : MachineState) (index : Index) (level : 
   rw [← BitVec.ofNat_mul, Nat.mul_comm _ 32, ← BitVec.ofNat_add]
   rfl
 
+theorem node_shift (index : Index) (level : Nat) :
+    BitVec.ofNat 64 (upperNode index level) >>> 1 = BitVec.ofNat 64 (upperNode index (level+1)) := by
+  rw [upper_node_next]
+  apply BitVec.eq_of_toNat_eq
+  have size := upper_node_bound index level
+  have length64 : 2*LENGTH < 2^64 := by decide
+  simp only [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow, BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (show upperNode index level < 2^64 by omega)]
+  rw [Nat.mod_eq_of_lt (by omega)]
+
 theorem physical_sibling_parent {state : MachineState} (index : Index) (level : Fin 14)
     (node : state.getReg .x6 = BitVec.ofNat 64 (upperNode index level.val)) :
     (tailPrefix state level 2).getReg .x6 = BitVec.ofNat 64 (upperNode index (level.val+1)) := by
-  rw [(sibling_tail_post state level).2.2.2.1, node, upper_node_next]
-  apply BitVec.eq_of_toNat_eq
-  have size := upper_node_bound index level.val
-  have length64 : 2*LENGTH < 2^64 := by decide
-  simp only [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow, BitVec.toNat_ofNat,
-    Nat.mod_eq_of_lt (show upperNode index level.val < 2^64 by omega)]
-  rw [Nat.mod_eq_of_lt (by omega)]
+  rw [(sibling_tail_post state level).2.2.2.1, node, node_shift]
+
+theorem destination_next (ordinal level : Nat) (inside : level < 14) :
+    BitVec.ofNat 64 (siblingDestination ordinal level) + BitVec.ofNat 64 (siblingWidth level) =
+      BitVec.ofNat 64 (siblingDestination ordinal (level+1)) := by
+  rw [← BitVec.ofNat_add]
+  congr 1
+  simp [siblingDestination, sibling_offset_next level inside, Nat.add_assoc]
 
 theorem physical_sibling_destination {state : MachineState} (ordinal : Nat) (level : Fin 14)
     (dest : state.getReg .x21 = BitVec.ofNat 64 (siblingDestination ordinal level.val)) :
     (tailPrefix state level 2).getReg .x21 =
       BitVec.ofNat 64 (siblingDestination ordinal (level.val+1)) := by
-  rw [(sibling_tail_post state level).2.2.1, dest, ← BitVec.ofNat_add]
-  congr 1
-  simp [siblingDestination, sibling_offset_next, Nat.add_assoc]
+  rw [(sibling_tail_post state level).2.2.1, dest, destination_next ordinal level.val level.isLt]
 
 end TwoPermutationPrototype.GroupedOpening

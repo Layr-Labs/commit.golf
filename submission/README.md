@@ -1,145 +1,245 @@
-# Quartet with pair heads, prefetched group salts and 368-byte quartet blocks
+# Paired in-place salts on the Quartet tree: one keyed reply salts two leaves
 
-This submission is our 606a7986 tree (A′: grouped in-place counter salts over 4,096-leaf windows, `remu` opener row)
-with the leaves processed in **pairs** that share their salt generator call, and with the table salts of each group
-read relative to the leaf pointer (no salt cursor), the far ones prefetched into registers by the heads, and with the
-quartet blocks of the trapdoor packed at a 368-byte stride (our b368 / 4dbc847a layout). The proof format, quartet tree, salt
-generator and opener record writer are A′'s; the leaf function of even positions changes shape, the commit leaf body,
-the opener salt loop and the checker leaf run change accordingly.
+Built on kaankolcu's `606a7986-afd0-4f91-84b4-6c11f779c9d1`: the Quartet tree with dadon's grouped in-place salts of
+`2b2405a1-5be9-4681-b48e-a0fcefd4588d`, re-tiled over 4,096-leaf bodies. This entry changes the following:
 
-## What changed against A′
+- **Paired salts.** The first two leaves of every salt group are laid out so that the group's keyed permutation
+  reply lands the salts of both in place. The first leaf (A) is mirrored and the second (C) puts its salt first. The
+  other nine copy their salts from the same reply, addressed from the leaf pointer. The salt cursor is gone.
+- **Leaf-relative quartet slots.** Every quartet block sits at a constant distance from its four leaves' message
+  bytes, so each leaf addresses its slot from the running message pointer. The quartet-pointer rebases are gone.
+- **Fused group calls.** Each quartet's permutation call runs right after its fourth leaf. Even quartets reuse that
+  leaf's output pointer, and the separate quartet pass is gone.
+- **Full-width level-21 nodes.** Parents at level 21 keep all 256 bits.
+- **238-bit nodes at levels 0..16.** Nodes from level 16 up to the root keep the low 238 bits of their compression
+  reply (levels 17..20 keep 240). The proof packs eight such nodes into 238 bytes, and records shrink from 536 to
+  534 bytes.
+- **Linked generator.** Within a run of 34 groups, each group's generator input is the previous group's whole reply,
+  read in place. The first group of every tile and every 34th group stay keyed.
 
-**Leaf function.** Leaves come in pairs (even position e = 2p, odd o = 2p+1, entries M and M′ = M + 256).
-- Odd leaves are A′'s pinned leaf unchanged: call 1 `P(v[0..200))`, call 2 `P(tag | salt | R1[112..200) | v[168..256))`
-  with `tag = M′ + 56` at word 0.
-- Even leaves use a mirrored shape so that both leaves' salt slots lie next to one generator reply: call 1
-  `P(v[56..256))`, call 2 `P(tag | R1[160..200) | v[0..136) | salt)` with `tag = M − 48` at word 0
-  (`PairLeafModel.evenLeafDigest`; even tags ≡ 208, odd tags ≡ 56 mod 256, so tags never collide).
+## Result
 
-**Commit.** The leaf body runs 2,048 pair packets per 4,096-leaf body. Pairs p with p mod 2048 mod 11 ∈ {0, 5} are
-heads (373 per body): the head writes the counter `M′` into the key block, calls the generator once and the reply lands
-so that its words 0-1 are the even leaf's salt slot and words 23-24 the odd leaf's (both in place) and words 2-19 a
-table of nine salts for the following four (or five) pairs of its group, which copy them with 8 loads/stores. A head
-packet is 19 words, a non-head packet 22, plus one quartet rebase per 16 pairs; the latch is
-`beq s4,s9,+8; jal zero,21; jal zero,45591` at words 44,086-44,088, and never-executed `nop`s keep every later word at
-A′'s address. Setup word 20 becomes `addi a0,s2,-200`. Calls are unchanged (43,470,847).
+| | `606a7986` | This entry |
+| --- | ---: | ---: |
+| proof bytes | 72,192 | 72,160 |
+| commitment cycles | 519,505,182 | 506,688,062 |
+| opening cycles (128 positions) | 98,441 | 154,669 |
+| score | 37,511,224,751,616 | 36,573,771,468,960 |
 
-**Prefetched group salts.** The pairs of a group load their table salts relative to `a2` (the odd leaf's entry − 32
-bytes, set by the odd leaf's first call), so the heads no longer write a salt cursor: the copy immediates are
-`−(512k + 72 − 16c)` for the pair k places after its head and table salt c. Only pair 11m+10 is out of 12-bit range
-(its even salt is table salt 8 of head 11m+5, its odd salt, the 12th leaf of the group, table salt 8 of head 11m):
-head 11m (m ≤ 185) loads that salt into `a6,a7` and head 11m+5 into `a4,a5` right after the generator call, and pair
-11m+10 stores the four registers instead of loading. Packets: prefetching heads 20 words, pairs 11m+10 and the last
-head of a body (2,046) 18, other pairs 22; the latch moves to words 43,713-43,715. Against plain pair heads this saves
-the 373 cursor writes per body.
+## Leaf layouts and salts
 
-**368-byte quartet blocks** (as in our b368, 4dbc847a). Each quartet block holds 72 zero bytes and four 32-byte leaf
-digests, and the fourth digest's 200-byte reply ends exactly at the next block, so blocks are 368 bytes instead of 512:
-a body's 1,024 blocks fill 92 windows of 4,096 bytes and the quartet pointer `s4` is rebased 92 times per body instead
-of 128. Leaf n of a body sits at `slotOff n = 368·(n/4) + 72 + 32·(n%4)`; its heap immediate is
-`2048 + slotOff n − 4096·rb n` with `rb n = slotOff n / 4096`, and leaf n is followed by `add s4,s4,s7` iff
-`rb (n+1) ≠ rb n` — 16 of the 92 rebases fall between the two leaves of a pair, right after the even leaf's second
-call. Setup words 4-7 place the blocks at trapdoor + 0x44000000 (ending at the unchanged key/salt block); the latch is
-at words 43,677-43,679. The opener's dead words 7-10 and prefix rows 717-720 set s8/s6 accordingly, row 729 sets
-`tp = 368`, and the record writer's group base is `srli t2,t1,2; mul t2,t2,tp` (+3 cycles per position).
-Commit cycles 512,480,543 (−7,024,639 against A′).
+Each leaf `i` has a 256-byte value `v` at message byte `L = 4096 + 256·i`. `P` is the 200-byte permutation. Each
+4,096-leaf tile holds 372 salt groups of eleven leaves and one group of four. Rank `r = (i mod 4096) mod 11`, and
+rank 0 is the A leaf.
 
-**Salt map.** `CounterSaltLayout.firstLeaf j = 4096·(j/373) + 2·hpl (j mod 373) + 1` with
-`hpl l = 11·(l/2) + 5·(l mod 2)` (the head pair's odd leaf, whose entry address is the generator counter);
-`localCoord` sends the head's two leaves to slots 0 (odd, byte 184) and 1 (even), table copy c to slot c+2, and the
-12th leaf of a 12-leaf group to slot 10 of the previous head. The generator, key and slicing are A′'s.
+```
+generator  R_g = P(ctr_g | k | 0^168)      k: 24 random bytes;  ctr_g = 4096 + 256·(h+1), h = the group's first leaf
+salts      r = 0: R_g[0..16)   r = 1: R_g[184..200)   r >= 2: R_g[16(r-1)..16r)     R_g[160..184) is never used
+SF leaf    (r != 0)  o1 = P(v[0..200))    W2 = salt | tag | o1[112..200) | v[168..256)            tag = L + 56
+A leaf     (r = 0)   o1 = P(v[56..256))   W2 = o1[144..160) | tag | o1[168..200) | v[0..128) | salt    tag = L - 56
+digest     d_i = P(W2)[0..32)
+```
 
-**Opening.** The per-position salt loop (words 739-776, 38 words instead of 23) recomputes the head pair and slot of
-position i (one `remu`, group A/B, in place/copy, 12th leaf) before the generator call: at most 44 cycles per position
-instead of 35: 9 cycles per position more than A′'s loop. With b368's record writer (+3 per position) the bound is
-98,441 + 9·128 + 3·128 = 99,977. Header rows and cap walk are A′'s.
+There are three differences from `606a7986`. Its ordinary leaf was `tag | salt | ...`, and the SF leaf swaps the two,
+so every second window has its tag in word 2. Ranks 0 and 1 swap reply slices. The counter is the base of the
+group's second leaf rather than its first. The unused reply bytes are the same 24 as in the base.
 
-**Check.** The leaf run of the checker evaluates the even shape for even positions (words 44-50 plus an appended even
-path, 543 words in all); quartet, cap and frontier code are A′'s.
+With the linked generator, group `g` of a tile uses `R_g = P(R_(g-1))` when `g mod 34 != 0`, else the keyed input
+above. Salt slices and the 24 unused bytes are as above.
 
-## Bounds
+## Commitment
 
-| | A′ (606a7986) | this submission |
-|---|---:|---:|
-| commit cycles (exact, every run) | 519,505,182 | **512,480,543** |
-| opening cycles, 128 positions (worst case) | 98,441 | **99,977** |
-| proof bytes, 128 positions (worst case) | 72,192 | **72,192** |
-| score | 37,511,224,751,616 | **37,004,212,899,840** |
+**Pair head.** A pair head starts with the pointer at `B + 56`, where `B` is the A leaf's base. It runs five calls in
+this order:
 
-`claim.json`: `{"commitCycles":512480543,"openingCycles":99977,"proofBytes":72192}`.
-Score = (512,480,543 + 99,977) × 72,192 = 37,004,212,899,840: 1.352 % below A′, 1.174 % below df0caa4c
-(37,443,874,885,632).
+```
+A call 1     input [B+56,  B+256)    reply [B-200, B)       over the previous leaf's consumed window
+C call 1     input [B+256, B+456)    reply [B+224, B+424)
+generator    input key block         reply [B+128, B+328)   A salt at [B+128, B+144), C salt at [B+312, B+328)
+A call 2     input [B-56,  B+144)    tag stored at B-40, digest to its quartet slot
+C call 2     input [B+312, B+512)    tag stored at B+328, digest to its quartet slot
+```
 
-## What is proved
+Every second window holds only its own leaf's bytes: its call-1 reply bytes, its tag, its own value bytes and its
+salt. The 24 unused reply bytes sit at `[B+288, B+312)`, between the two windows; no oracle input and no proof byte
+ever covers them. The followers of ranks 2..10 write their call-1 replies at `L - 32 >= B + 480`, so the generator
+reply stays intact until rank 10 has copied its salt with an `x10`-relative load. Rank 8 loads the salts of ranks 9
+and 10 early, into four registers.
 
-`Solution.lean` proves `CommitGolf.Challenge.certificate : Certificate submission 72192 512480543 99977`, with
-`submission := CommitGolf.Artifact.submission` and `submission_matches_artifact` by `rfl`.
+**Linked generator.** A linked head computes its input pointer as `add x10,x12,xK` with one constant register, in
+place of the counter store and the key pointer. The previous reply `[B_p+128, B_p+328)` is still intact at that
+point: the nearest subsequent writes are the C tag at `B_p+328`, follower replies from `B_p+480` and the next A reply from
+`B_p+2616`.
 
-- **Commit** (`Grouped.full_commit`, `Grouped.commit_resources`): every commit run succeeds in exactly 512,480,543
-  cycles (208,184,611 steps) with 43,470,847 calls. `GroupedPacketDecode` checks the 2,048 pair packets against the
-  image in 32 kernel tiles; `GroupedPacket.pairPlan` is the action list of one pair with its word addresses,
-  `GroupedPacketRun.pair_walk` its register walk, `GroupedContent.pair_plan_meaning` its memory effect
-  (`pairPacketMem`). `GroupedInvariant.good_step` carries the invariant `Good` over one pair: messages of later leaves
-  intact, the digests of all earlier leaves at their quartet slots (`even_digest`, `odd_digest` against
-  `pairFullLeafDigests`), padding and key intact, and `SaltsReady`: every copied salt whose head pair has run sits at
-  its source word (`salt_head_is_head`, `src_word_below`, `generated_eq`, `salt_slice`). The memory meaning takes the
-  register file (pairs 11m+10 store `a4..a7`); `PrefetchOK` (carried with `Good`) states that between head 11m and
-  pair 11m+10 `a6,a7` equal table salt 8 of head 11m's reply in memory, and `a4,a5` that of head 11m+5
-  (`pair_plan_regs`, `prefetch_step`, `reg_salts_of`). `GroupedPacketRun.src_address` checks the a2-relative copy
-  addresses (a 16-entry sign-extension table). `GroupedScan.run_scan` counts steps/calls/cycles over the 2^23 pairs
-  (`totals`: 178,823,168 / 35,082,240 / 424,398,848), `GroupedCommit` adds the setup and the unchanged quartet/upper
-  phases.
-- **Layout** (as in b368): `QuadCommitGeometry.quartetOffset g = 368·g`, `QuartetCommitRanges.qSource g =
-  679477764 + 46·g` with the block separation lemmas `qleaf_in_block`, `qleaf_before`, `qpad_outside`,
-  `qleaf_below_salts`; `GroupedPacket.cursor`, `heap_address` (a 4,096-entry sign-extension table), `cursor_next`;
-  `GroupedCommitImage.no_double_rebase`, `pair_rebases_succ` count the rebases per pair.
-- **Physical results** (`Grouped.physical_results`): the trapdoor holds `pairHeap` (the Quartet heap over
-  `pairFullLeafDigests`, `PairPhysicalHeap`), the leaf digests and the key.
-- **Opening** (`GroupedOpening.all_resources`, `fixed_open`, `selected_salt`, `certifiedHeader`): b368's record
-  writer (`RunsOpeningSlack` for the 4-cycle multiply, `tp = 368` threaded as `Registers.mult`, `openCycles p =
-  scheduledCycles p + 3·|p|`, trapdoor leaf digests at `68·LENGTH + 368·(i/4) + 72 + 32·(i%4)`) and the new salt loop
-  (`GroupOpenLoop` models words 739-764 and proves `loop_out = loopMap`, `GroupOpenSlot` the place/offset/12th-leaf/
-  counter segments); `GroupedSaltMap.loop_map_eq` (a `decide` over the 4,096 body slots) equates the loop's head and
-  byte offset with `saltHead` and the slot of `coord`, so each opened salt is `salts o.permutation k i`.
-- **Hiding** (`Quartet.scheme_hiding_of_pair_counter`, `PairCounterSecurity`): the counter-salt transcript is within
-  `counterError` of independent salts on each side; the middle term is `Quartet.pair_iid_hiding`
-  (`PairHidingCertificate`), the pair-leaf analog of `final_reference_hiding_sharp` with the same (t+1)/2^121: the
-  `PairH*` modules rerun the pinned proof with the pair leaf (an unopened leaf's second call carries a fresh salt and a
-  word-0 tag unique to the leaf).
-- **Binding and checker** (`PairCertificate.pair_checker_facts`, `PairCheck*`): termination, query budget, binding and
-  honest acceptance of the pair checker image; binding adds the even-leaf replay term `Sampling.even_leaf_small_bound`
-  (`PairBinding*`, Pr ≤ q/2^124) to A′'s terms, total 15q/2^124 ≤ q/2^120. `GroupedChecks.checker_facts` transfers them
-  to this submission by check-image equality (`PairCheckManifest` renders the same check image).
-- **Assembly** (`GroupOpenClosing.grouped_certificate`, `PairCounterCertificate.certificate_of_facts`): A′'s assembly
-  with the pair honest view (`PairCounterRefines`) and pair checker facts.
+**Quartet slots.** Quartet block `g` sits at trapdoor + 32·2^24 + 1024·g, one block per 1,024 message bytes. A
+leaf's slot minus its second-call input pointer `a0` therefore depends only on its kind and `i mod 4`:
 
-## Commands and results
+```
+Q = trapdoor + 2^29;  slot(i) = Q + 1024·⌊i/4⌋ + 72 + 32·(i mod 4)
+SF and C leaves (a0 = L + 56):  slot − a0 = Q − 4080 − 224·(i mod 4)       (s4, s7, s9, s10)
+A leaves        (a0 = L − 56):  the same + 112                              (s11, t3, t4, t5)
+```
 
-From the project root, pinned Lean 4.35.0 toolchain, candidate cache purged as `verify.py` does,
-`CommitGolf/Artifact.lean` regenerated from `programs.json` with `verifier/artifact.py`:
+The second call writes to `add a2,a0,S`, and no rebase is left. The tile latch tests `beq a0,t1`, with
+`t1` = commitment + 56. The key block moves to +288·2^24, and the opener's salt table extends to +304·2^24
+(5,100,273,664 bytes of trapdoor). Indices, values and proof buffers move up by 2^31. All three programs are
+relative to their initial `a0`–`a5`. The legacy modules that proved facts about the base's 512-stride commit image
+are dropped, as kaankolcu's `4dbc847a` did for its tree.
 
-- `lake build +Solution`: build completed successfully.
-- `lake env lean Audit.lean`: `certificate` depends on [propext, Classical.choice, Quot.sound];
-  `submission_matches_artifact` on [propext, Quot.sound].
-- `python3 verifier/check_submission.py <tree>`: ok.
-- `lake env leanchecker` replays every compiled candidate module, `CommitGolf.Artifact` and `Solution`.
-- The exact-cycle interpreter of the commit image (`budget_q.py`) gives 512,480,543 cycles and 43,470,847 calls.
-  A full-size RV64IM emulation (Keccak-f stand-in for the oracle) of the three images, two seeds: commit 512,480,543
-  cycles / 208,184,611 steps / 43,470,847 calls, with the same commitment as plain pair heads on the same message and
-  key; 2 × 40 batches of 128 positions (group edges and random): every opening succeeds, at most 97,795 cycles and
-  71,562 proof bytes; the check accepts every honest proof and rejects 8 tampers per batch.
-- The opener is pair heads' with b368's edits (words 7-9, 35-36, 717-719, 729); the check image is unchanged.
-- Commit image 807,068 bytes (< 1 MiB); opening 777 words; check 543 words.
+**Group calls.** The block layout is the base's: `0^72 | d0 | d1 | d2 | d3` at `Bq`.
+- Even quartet: after its fourth leaf (`a2 = Bq+168`), `addi a0,a2,-168; ecall` reuses `a2`. The reply lands at
+  `[Bq+168, Bq+368)` over the consumed `d3`. The node is reply bytes 168..200, at `Bq+336`.
+- Odd quartet (block `Bq+1024`): `addi a0,a2,-168; addi a2,a0,-656; ecall`. The reply lands at `[Bq+368, Bq+568)`,
+  in the even block's spare bytes. The node is reply bytes 0..32, at `Bq+368`.
+- The two nodes are adjacent, so the level-21 parent reads `[Bq+336, Bq+400)` in place (stride 2,048). The pointer
+  advance after a group becomes `add a0,a0,x_R`.
+- No subsequent write touches either reply or a zero prefix.
 
-## Provenance
+## Opening and check
 
-- 606a7986 / A′ (kaankolcu, our account) and bc5cc89e (kaankolcu): the whole tree; files adapted as listed in
-  DEPENDENCIES.md.
-- 2b2405a1 (dadon): the grouped in-place generator, its hiding proof, the grouped commit and opening proofs.
-- 20182e74 (dadon), b64a994e and c08b0128 (kaankolcu), c28dd9ca (dadon), 33bdbed6 (kaankolcu): the lineage
-  under 2b2405a1 (Quartet tree, opening record writer, checker, chain-salt modules).
-- df0caa4c (kaankolcu, our account; public commit 362137507f5f58c38d91fe5589e51f8cf585b634): the idea of reading group
-  salts relative to the leaf pointer and prefetching the out-of-range ones into registers; re-derived here for pair
-  heads. No file of df0caa4c is used.
-- 4dbc847a / b368 (kaankolcu, our account): the 368-byte quartet blocks and their proofs (layout, record writer).
-  The 368-byte block idea also appears in AdamGagol's 1a9bc5f4 (Quad lineage); no file of it is used here.
+**Opening.** The salt-materialising prefix computes the counter as `4096 + 256·(i − r + 1)` and maps the rank to the
+reply offset 0, 184 or `16(r−1)`. That adds three rows and at most 3 cycles per position.
+The record writer computes a block offset as `slli t2,t1,8; andi t2,t2,-1024`, and the key base row shifts by 3.
+Neither changes the instruction count.
+For the first opened position of each new even quartet, one inverse permutation call on the intact group reply
+recovers `d3`; any further position in the same quartet skips the rebuild, since positions are sorted. The level-22
+sibling node is copied into the heap slot the writer reads.
+The prefix regenerates a linked salt from the last keyed group: up to 34 generator calls per position (33 links),
+within the 100-call opening budget.
+A record is 534 bytes: salt 16, the three sibling leaf digests 96, the level-22 and level-21 siblings 32 each,
+levels 20..17 at 30 each, then the siblings at levels 16..9 as one 238-byte block. Slot `k < 7` of the block is
+the 30 little-endian bytes of node `k` with bits `224+2k, 225+2k` of node 7 in bits 238 and 239; the last 28
+bytes are node 7's low 224 bits. The writer copies plain slots with `lhu/sh` pairs (534 is not 8-aligned), then
+ORs two bits of node 7 into halfword 14 of each of the seven slots. The cap frontier (all nodes at levels 1..8)
+uses the same block per group of eight, with a countdown register marking each eighth node; a trailing partial
+group is plain 30-byte slots. The cap takes `30f − 2⌊f/8⌋` bytes for `f ≤ 128` frontier nodes, so the worst
+case is 128·534 + 3,808 = 72,160 bytes.
+
+**Check (unscored).** Word 22 jumps to a 6-word dispatcher that computes the rank with two `remu`. SF positions run
+the base routine, with three store offsets that swap salt and tag. A positions run a 67-word routine: first call
+into scratch, `v[0..128)` copied behind the kept reply bytes, salt and tag stored, second call.
+The quartet routine writes its output 168 bytes lower for even groups, so it keeps reply bytes 168..200 for even
+groups and 0..32 for odd ones.
+Recomputed nodes at levels 16..0 are masked to 238 bits before the comparison and the next compression. The
+checker reads records with halfword accesses and rebuilds the eighth node of each packed group from the 14 spare
+bits of the other seven.
+
+## Costs
+
+| Piece | Cycles |
+| --- | ---: |
+| pair head: 13 instructions + 5 calls (two ordinary leaves: 50) | 53 |
+| follower, ranks 2..10: 2 calls, 4 pointer, tag, 4 salt loads and stores | 25 |
+| per 4,096-leaf tile with the base's rebases (`606a7986`: 105,328) | 103,649 |
+| opening prefix, per position | +3 at most |
+| quartet-pointer rebases, 128 per tile | −524,288 |
+| setup tail for the A offsets and latch bound (once) | +7 |
+| quartet pass replaced by fused group calls (even 9, odd 10 cycles per group) | −2,097,915 |
+| inverse call and sibling copy: +42 per opened position at most, +1 once | +5,377 |
+| level-21 parents: no truncating store (2^21 parents); proof +256 B | −2,097,152 |
+| opening: level-21 sibling copied whole, −21 per position | −2,688 |
+| levels 1..16: `lhu; and; sw` in place of the 240-bit store (+2 per node, 131,070 nodes), root mask, glue and latches; proof −288 B | +262,161 |
+| opening: halfword writer and packed blocks (+60 per record, +4 per cap node, +38 per eighth cap node, +3 once) | +8,739 |
+| linked heads: `add x10,x12,xK` replaces two instructions (1,482,752 heads, +2 setup) | −1,482,750 |
+| opening: regeneration from the last keyed group, +347 per position at most | +44,416 |
+
+Commitment: 506,688,062 cycles, 202,392,130 steps and 43,470,847 oracle calls, the same count as the base.
+Over 128 positions the opening rows take the base's 98,441 to 154,669 (+384, +5,377, −2,688, +44,416, +8,739).
+
+## Security
+
+**Binding.** Both leaf kinds are instances of the base certificate's pinned two-call leaf. The SF leaf is the base
+leaf with salt and tag swapped. It chains 88 reply bytes, and the 32 bytes `v[168..200)` sit in both windows. In the
+A leaf, the first window is `v[56..256)`, the chaining value is 48 reply bytes (384 bits), the 72 bytes
+`v[56..128)` sit in both windows, and `v[0..56)` enters only the second. Tags are 56 or 200 modulo 256. So the
+second-call inputs of distinct positions never coincide, and none matches a quartet input, whose first 72 bytes
+are zero.
+A quartet node is still `P(0^72 | d0..d3)` cut to 32 bytes; only which 32 bytes are kept depends on the group's
+parity. For a fixed group index that choice is fixed, so a quartet collision still needs a 256-bit match or an
+inverse answer with 72 zero bytes. The certificate bounds the two parities separately.
+Level-21 nodes are compared at 256 bits. Agreement there implies agreement on the low 240 bits, so the base's tree
+term covers them.
+With 238-bit nodes, any tree collision is a collision of the low 238 bits of two compression replies. The
+certificate bounds that event with a product-form birthday bound, `1 − exp(−(N(N−1)/2^239 + N^3/(3·4^238)))` for
+N = q + 2^31 calls, which it shows is at most 255·q/2^128 for 1 ≤ q ≤ 2^120. It also bounds the leaf event by q/2^129
+(q/2^130 per kind) and the quartet event by q/2^129 (q/2^130 per parity). Those three terms sum to exactly q/2^120.
+
+**Hiding.** Every second window carries its own uniform 128-bit salt and a distinct tag, and ignores the first
+reply's bytes 0..32. The 24 unused reply bytes never leave the trapdoor.
+The keyed counter-mode hybrid of the base (dadon `2b2405a1`) is generalised to the linked schedule by the same
+path comparison as dadon's chain game (`c28dd9ca`). For each key, exactly one sequence of replies follows the
+schedule. A query reaches a keyed input only with the 192-bit key, and a linked input only with the 192 unused bits
+of the previous reply. Its error is n(3q+2n)/2^192 per side, with n = 1,527,808 generator calls and q = 2t + 2^25 +
+2^22 calls. That is about t·2^-167.9 + 2^-143.7, inside the slack of the base's (t+1)/2^121 term.
+Fused group calls move only trapdoor bytes. The opener's inverse call asks for the preimage of a reply that the
+commitment already produced. The proof is the same function of the committed values and salts.
+The hiding statement and its error, (t+1)/2^120, are the contract's.
+
+## Where it is
+
+- Leaf model and salts: `TaggedPinnedModel`, `TaggedPinnedBitLayout`, `TaggedPinnedObserver`, `CounterSaltLayout`.
+- Leaf binding: `K1HideLeafBinding` (`aPinCall`, `k1_peer_leaf_layout`), `TwoPermutationPinnedStoredLeaf`,
+  `TwoPermutationPinnedReplay`.
+- Commit body: `GroupedImageBase`, `GroupedPacket`, `GroupedPacketDecode`, `GroupedPacketRun`, `GroupedScan`,
+  `GroupedSetup`, `GroupedCommit`. Check: `K1CheckDispatch`, `K1CheckALeaf`, `K1CheckARun`, `K1CheckACopy`,
+  `K1CheckFacts`. Opening: `K1OpenSalt`, `GroupOpenStep`, `GroupOpenPass`, `GroupOpenFull`, `GroupOpenClosing`.
+- Slots and layout: `GroupedPacket` (`slotGap`, `slot_address`), `QuadCommitGeometry`, `QuartetCommitRanges`,
+  `GroupOpenMemory`, `GroupOpenModel.trapdoorLeaf`.
+- Group calls: `QuartetTransport` and `QuartetConcrete` (parity node), `QuadBinding` and `QuadReplay` (two
+  truncations), `K3GQModel` (parity node and node widths), `K3GRBridge` (group replies in the trapdoor),
+  `QuartetWordBridge` (commit heap), `QuartetCheckBlock` (checker parity block), `GroupOpenEffect` and
+  `GroupOpenLatch` (opener inverse and sibling copy).
+- 238-bit nodes: `K3T238Birthday`, `K3T238Leaf`, `K3T238Quad` and `K3T238Budget` (product-form birthday, sharp leaf
+  and quartet bounds, budget assembly), with `K3T238Witness`, `K3T238Replay` and `K3T238Margin`. Commit bands:
+  `K3CUMask`, `K3CUBands`. Check: `K3T238Arm`, `K3T238PackDecode`, `K3C4CapHonest`, `TwoPermutationPackedCapDecode`.
+  Opening: `K3OpenPack238`, `GroupOpenFoldRun`, `K3OpenCapBytes`, `K3OpenCapStep`, `GroupOpenCapEmit`.
+- Linked generator: `LinkedSaltSchedule`, `LinkedSaltBad`, `LinkedSaltGame`, `LinkedSaltLayout`, `LinkedSaltOracle`,
+  `QuartetLinkedSecurity`, `K6Chain` (the programs' schedule arithmetic), `K3OpenChain` (opener regeneration).
+
+## Reproduce
+
+```sh
+yukon clone eigenlabs/commit-golf/product commit-golf && cd commit-golf
+python3 verifier/check_submission.py submission
+bash scripts/setup.sh && python3 scripts/run.py --track product   # Linux, Landlock, systemd >= 257
+```
+
+## Measured results
+
+| Check | Result |
+| --- | --- |
+| Policy check on `submission/` | ok: 616 files, 14,188,333 bytes, artifact digest `33aaaee323fabdbb77a17ef986f1c5f633d617cdb8d3d345c8f8bcc16084f2b4` |
+| From-scratch `lake build Solution` (verifier layout) | green on Lean 4.35.0 (lake build Solution, 9854 jobs, rebuilt from scratch in the verifier layout: every CommitGolfCandidate, Solution, Challenge and Artifact output purged first; full threads) |
+| `#print axioms` on the certificate | CommitGolf.Challenge.certificate: propext, Classical.choice, Quot.sound; CommitGolf.Challenge.submission_matches_artifact: propext, Quot.sound |
+| Full-size RV64IM emulation of the three images (Keccak-f stand-in) | Commit 506,688,062 cycles, 202,392,130 steps, 43,470,847 calls. 29 position sets (128-position worst-case spreads included) and 35 cap-frontier sets (f = 1..20, 31..33, 63..65, 120..128): every honest proof accepted; value, proof and salt flips rejected. Worst opening 154,669 cycles, proof 72,160 bytes. On 70 cap-frontier runs (with and without the linked generator) the proof length equals 534n + 30f − 2⌊f/8⌋. |
+
+## Limitations
+
+- The emulator's oracles are stand-ins. The certificate, not the emulation, establishes the bounds, which hold in
+  the contract's ideal model.
+- The trapdoor grows to 5,100,273,664 bytes (unscored).
+- The opening makes more calls per position than the base (at most 35: one keyed generator call, up to 33 links
+  and one inverse call; at most 4,480 for 128 positions, against 1 per position in `606a7986`), within the
+  100-call budget.
+
+## Credits
+
+The whole tree is kaankolcu's `606a7986-afd0-4f91-84b4-6c11f779c9d1` and its lineage, reused as published:
+kaankolcu `bc5cc89e-4952-4ff7-be8d-9d11905d730c` (grouped commit proof, adapted here) and
+`c08b0128-14a7-48dd-a745-070c3a77d754` (Quartet tree, record writer and check program, extended here); dadon
+`2b2405a1-5be9-4681-b48e-a0fcefd4588d` (keyed in-place salts, opener regeneration, the counter-salt hiding hybrid);
+i34-9 `95bf06c1-0ec6-4bf5-b6cc-6b6315f204be` (recorded-query collision analysis of the pinned two-call leaf,
+instantiated again for the A leaf); and the lineage `606a7986` credits (dadon
+`20182e74-9879-4c56-a5d1-7a65b83f03aa`, `c28dd9ca-eec2-4c63-a1d2-3fe14c5e5492`; kaankolcu
+`b64a994e-6d0b-46e0-8c37-b6e642e3828a`, `33bdbed6-b605-43fc-b808-348ea3c87e3b`).
+The legacy-module pruning and three import-restructured files are kaankolcu's
+`4dbc847a-414f-41f2-854d-79e6c80f26fc`, reused as published.
+The linked-salt hybrid follows the path-comparison proof of dadon's chain game in `c28dd9ca`, and the
+reply-in-place generator family of dadon's `20182e74`.
+The rest is our own: the paired leaf layouts, slice map, commit body, checker A routine and opener prefix rows,
+the leaf-relative slots and trapdoor layout,
+the fused even/odd group calls and opener inverse,
+the node widths,
+the linked schedule and its hiding lemma,
+and their proofs. kaankolcu `d2087fdd-0885-428d-bbcf-455fff45eea8`, filed on this track while this entry was in preparation, also salts two
+adjacent leaves from one keyed reply; ours was developed independently, and no code from it is used.

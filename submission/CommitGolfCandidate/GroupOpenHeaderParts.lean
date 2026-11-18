@@ -7,7 +7,7 @@ set_option maxRecDepth 22000
 set_option maxHeartbeats 2000000
 
 theorem header_fetch : presentRows headerRows := by
-  have raw : ∀ i : Fin headerRows.length, let r:=headerRows[i]; r.1<777 ∧
+  have raw : ∀ i : Fin headerRows.length, let r:=headerRows[i]; r.1<896 ∧
     (openingImage.code[r.1]?).bind Opening.decodeBase=some r.2 := by decide +kernel
   intro p hp;obtain ⟨j,hj,eq⟩:=List.mem_iff_getElem.mp hp;subst p
   intro st pc;exact packed_fetch_base _ _ _ (raw ⟨j,hj⟩).1 pc (raw ⟨j,hj⟩).2
@@ -72,11 +72,11 @@ theorem config_ok (s : MachineState) (pc : s.pc=address 725) : legal configRows 
   simp [configRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
 
 theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
-    (b : Base s p) (salt : s.getReg .x22=6979325984) (base : s.getReg .x26=4096) (sel : s.getReg .x5=0) :
+    (b : Base s p) (salt : s.getReg .x22=9126809632) (base : s.getReg .x26=4096) :
     let t:=walkRows s configRows
     t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card := by
   let t:=walkRows s configRows
-  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x4,.x14,.x17,.x29] : List Reg)) : t.getReg k=s.getReg k := by
+  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x5,.x14,.x17,.x29] : List Reg)) : t.getReg k=s.getReg k := by
     simp only [List.mem_cons,List.not_mem_nil,or_false,not_or] at h
     simp [t,configRows,walkRows,execInstrBr,Ne.symm h.1,Ne.symm h.2.1,Ne.symm h.2.2.1,Ne.symm h.2.2.2.1,
       Ne.symm h.2.2.2.2.1,Ne.symm h.2.2.2.2.2.1,Ne.symm h.2.2.2.2.2.2.1,Ne.symm h.2.2.2.2.2.2.2]
@@ -87,10 +87,10 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
       (keep _ (by decide)).trans b.leaves,(keep _ (by decide)).trans b.start,(keep _ (by decide)).trans b.dest,
       (keep _ (by decide)).trans b.mark,(keep _ (by decide)).trans b.slots,(keep _ (by decide)).trans b.cap,
       (keep _ (by decide)).trans b.capLeaves⟩
-  · constructor <;> simp [walkRows,configRows,execInstrBr,b.indices,b.count,salt,base,sel,indexAt,countWord,indicesBase,
+  · constructor <;> simp [walkRows,configRows,execInstrBr,b.indices,b.count,salt,base,indexAt,countWord,indicesBase,
       trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12] <;> rfl
 
-def keyCopy (s : MachineState) := ((s.setMem 1032 (s.getMem 6979325992)).setMem 1040 (s.getMem 6979326000)).setMem 1048 (s.getMem 6979326008)
+def keyCopy (s : MachineState) := ((s.setMem 1032 (s.getMem 9126809640)).setMem 1040 (s.getMem 9126809648)).setMem 1048 (s.getMem 9126809656)
 
 theorem key_ok (s : MachineState) (p : Positions) (pc : s.pc=address 733) (r : Registers s 0 p.card) :
     legal keyRows s := by
@@ -102,10 +102,22 @@ theorem key_frame (s : MachineState) (p : Positions) (pc : s.pc=address 733) (r 
   refine ⟨?_,?_,?_⟩
   · simp [walkRows,keyRows,execInstrBr,pc,address]
   · simp [walkRows,keyRows,execInstrBr,mem_of_store,keyCopy,r.input,r.salt,signExtend12,
-      MachineState.getMem_setMem_ne (by decide : (6979326000#64)≠1032#64),
-      MachineState.getMem_setMem_ne (by decide : (6979326008#64)≠1032#64),
-      MachineState.getMem_setMem_ne (by decide : (6979326008#64)≠1040#64)]
+      MachineState.getMem_setMem_ne (by decide : (9126809648#64)≠1032#64),
+      MachineState.getMem_setMem_ne (by decide : (9126809656#64)≠1032#64),
+      MachineState.getMem_setMem_ne (by decide : (9126809656#64)≠1040#64)]
   · intro k ne;simp [walkRows,keyRows,execInstrBr,Ne.symm ne]
+
+theorem mark_ok (s : MachineState) (pc : s.pc=address 739) : legal markRows s := by
+  simp [markRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
+
+theorem mark_frame (s : MachineState) (pc : s.pc=address 739) :
+    let t:=walkRows s markRows
+    t.pc=address 740 ∧ t.mem=s.mem ∧ t.getReg .x4=BitVec.ofNat 64 (2^64-1) ∧ ∀ k, k≠.x4 → t.getReg k=s.getReg k := by
+  refine ⟨?_,?_,?_,?_⟩
+  · simp [walkRows,markRows,execInstrBr,pc,address]
+  · simp [walkRows,markRows,execInstrBr]
+  · simp [walkRows,markRows,execInstrBr]; decide
+  · intro k ne;simp [walkRows,markRows,execInstrBr,Ne.symm ne]
 
 theorem low_zero (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (w : Nat) (low : w<1024) :
     memoryView (actual.initialState .opening (td,p)) w=0 := by
@@ -113,17 +125,17 @@ theorem low_zero (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (w : Na
   rw [initial_input_word actual .opening (td,p) (8*w) (by omega)]
   have zero (j : Nat) (hj : j<8) : inputByte actual .opening (td,p) (8*w+j)=0 := by
     have lo : ¬actual.layout.trapdoor≤8*w+j := by change ¬4294971424≤_;omega
-    have ix : ¬actual.layout.indices≤8*w+j := by change ¬7247761440≤_;omega
+    have ix : ¬actual.layout.indices≤8*w+j := by change ¬9395245088≤_;omega
     have img : (actual.image .opening).data=[]:=rfl
     simp [inputByte,Submission.inputBuffers,fixedBuffer,positionsBuffer,lo,ix,img]
   rw [Finset.sum_eq_zero (fun j hj => by rw [zero _ (Finset.mem_range.mp hj)];simp)];rfl
 
 theorem key_words (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (j : Fin 3) :
-    (actual.initialState .opening (td,p)).getMem (BitVec.ofNat 64 (6979325992+8*j.val)) =
+    (actual.initialState .opening (td,p)).getMem (BitVec.ofNat 64 (9126809640+8*j.val)) =
       (keyOf td).extractLsb' (64*j.val) 64 := by
   have hj:=j.isLt
-  rw [←word_at _ _ (by omega),show 6979325992+8*j.val=trapdoorBase+(2684354568+8*j.val) by unfold trapdoorBase LENGTH LOG_LENGTH;omega,
-    input_trapdoor_slice actual actual_layout td p _ _ (by change _≤2952790016;omega)]
+  rw [←word_at _ _ (by omega),show 9126809640+8*j.val=trapdoorBase+(4831838216+8*j.val) by unfold trapdoorBase LENGTH LOG_LENGTH;omega,
+    input_trapdoor_slice actual actual_layout td p _ _ (by change _≤5100273664;omega)]
   unfold keyOf
   rw [nested_slice _ (by omega : 64*j.val+64≤192)]
   congr 1 <;> omega
@@ -131,7 +143,7 @@ theorem key_words (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (j : F
 
 theorem original_base (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) :
     let t := setupPrefix (actual.initialState .opening (td,p)) 15
-    Base t p ∧ t.getReg .x22=6979325984 ∧ t.getReg .x26=4096 ∧
+    Base t p ∧ t.getReg .x22=9126809632 ∧ t.getReg .x26=4096 ∧
       t.mem=(actual.initialState .opening (td,p)).mem := by
   have b:=opening_first_boundary actual actual_layout td p nz
   exact ⟨⟨b.index,b.heap,b.left,b.leaves,b.proofBegin,b.dest,b.one,b.slots,b.capHeap,b.capLeaves⟩,

@@ -43,26 +43,15 @@ theorem ord_iff (s : MachineState) (op : Instr) (yes : plain op=true) :
     ordinaryStep s (.base op)=some (execInstrBr s op) ↔ memoryArgumentsValid s op=true := by
   cases op <;> simp_all [plain,ordinaryStep] <;> split <;> simp_all
 
-/-! Pair-heads salt loop (opening words 739-776). The rows before the oracle call branch on the group (A/B),
-in place / copy, and the 12th leaf of a 12-leaf group; `preRows b ip tw` is the walk for one choice. -/
-def headRows : List Row := [(739,.LD .x6 .x14 0),(740,.SRLI .x28 .x6 1),(741,.ANDI .x7 .x28 2047),
-  (742,.REMU .x7 .x7 .x29),(743,.SUB .x28 .x28 .x7),(744,.ADDI .x30 .x0 5),(745,.BLTU .x7 .x30 12)]
-def groupRows (b : Bool) : List Row := if b then [(746,.ADDI .x7 .x7 (-5)),(747,.ADDI .x28 .x28 5)] else []
-def parityRows : List Row := [(748,.ANDI .x30 .x6 1),(749,.BNE .x7 .x0 16)]
-def placeRows : List Row := [(750,.SUB .x31 .x0 .x30),(751,.ANDI .x31 .x31 184),(752,.JAL .x0 36)]
-def offsetRows : List Row := [(753,.SLLI .x31 .x7 5),(754,.SLLI .x30 .x30 4),(755,.ADD .x31 .x31 .x30),
-  (756,.ADDI .x31 .x31 (-16)),(757,.ADDI .x30 .x0 160),(758,.BNE .x31 .x30 12)]
-def twelfthRows (tw : Bool) : List Row := if tw then [(759,.ADDI .x28 .x28 (-5)),(760,.ADDI .x31 .x0 144)] else []
-def slotRows (ip tw : Bool) : List Row := if ip then placeRows else offsetRows++twelfthRows tw
-def counterRows : List Row := [(761,.SLLI .x28 .x28 9),(762,.ADD .x28 .x28 .x26),(763,.ADDI .x28 .x28 256),
-  (764,.SD .x10 .x28 0)]
-def preRows (b ip tw : Bool) : List Row := headRows++groupRows b++parityRows++slotRows ip tw++counterRows
+theorem pc_of_set (s : MachineState) (p : Word) : (s.setPC p).pc=p := rfl
+theorem mem_of_set (s : MachineState) (p : Word) : (s.setPC p).mem=s.mem := rfl
+theorem mem_of_reg (s : MachineState) (r : Reg) (v : Word) : (s.setReg r v).mem=s.mem := by cases r <;> rfl
+theorem mem_of_store (s : MachineState) (a v : Word) : (s.setMem a v).mem=fun w => if w==a then v else s.mem w := rfl
+theorem open_zero (s : MachineState) : s.getReg .x0=0 := rfl
 
-def selectRows : List Row := [(766,.ADD .x31 .x31 .x12),(767,.SLLI .x30 .x6 4),(768,.ADD .x30 .x30 .x22)]
-def copyRows : List Row := [(769,.LD .x28 .x31 0),(770,.SD .x30 .x28 0),(771,.LD .x28 .x31 8),(772,.SD .x30 .x28 8)]
-def nextRows (last : Bool) : List Row := [(773,.ADDI .x14 .x14 8),(774,.ADDI .x17 .x17 (-1)),(775,.BNE .x17 .x0 8048)] ++
-  (if last then [(776,.JAL .x0 2094108)] else [])
-def postRows (last : Bool) : List Row := selectRows++copyRows++nextRows last
+theorem address_succ (n : Nat) : address n+4=address (n+1) := by
+  show BitVec.ofNat 64 (4096+4*n)+BitVec.ofNat 64 4=_
+  rw [← BitVec.ofNat_add]; unfold address; congr 1
 
 theorem walk_join (s : MachineState) (xs ys : List Row) :
     walkRows s (xs++ys)=walkRows (walkRows s xs) ys := by
@@ -77,37 +66,95 @@ theorem legal_append (s : MachineState) (a b : List Row) (head : legal a s) (tai
     exact ⟨head.1,head.2.1,ih _ head.2.2 tail⟩
 
 theorem price_append (a b : List Row) : price (a++b)=price a+price b := by
-  simp [price]
+  simp [price,List.map_append,List.sum_append]
 
-private theorem row_fetch (row : Row) (bounded : row.1<777) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
+/-- Instructions without a memory access. -/
+def noMemOp : Instr → Bool
+  | .LD .. | .SD .. | .LW .. | .LWU .. | .SW .. | .LH .. | .LHU .. | .SH .. | .LB .. | .LBU .. | .SB .. => false
+  | _ => true
+
+theorem no_mem_valid (st : MachineState) (op : Instr) (h : noMemOp op=true) : memoryArgumentsValid st op=true := by
+  cases op <;> simp_all [noMemOp,memoryArgumentsValid,memAccess]
+
+/-- The pc chain of a row list (the legality of rows without memory accesses). -/
+def pcChain : List Row → MachineState → Prop
+  | [],_ => True
+  | (i,op)::tail,s => s.pc=address i ∧ pcChain tail (execInstrBr s op)
+
+theorem legal_of_chain (rows : List Row) (s : MachineState)
+    (nm : rows.all (fun p => plain p.2 && noMemOp p.2)=true) (c : pcChain rows s) : legal rows s := by
+  induction rows generalizing s with
+  | nil => trivial
+  | cons p rest ih =>
+    rcases p with ⟨i,op⟩
+    simp only [List.all_cons,Bool.and_eq_true] at nm
+    exact ⟨c.1,(ord_iff s op nm.1.1).mpr (no_mem_valid s op nm.1.2),ih _ nm.2 c.2⟩
+
+theorem bne_reg' (u : MachineState) (a b : Reg) (imm : BitVec 13) (r : Reg) :
+    (execInstrBr u (.BNE a b imm)).getReg r=u.getReg r := by
+  simp only [execInstrBr];split <;> exact MachineState.getReg_setPC ..
+
+theorem bne_mem' (u : MachineState) (a b : Reg) (imm : BitVec 13) : (execInstrBr u (.BNE a b imm)).mem=u.mem := by
+  simp only [execInstrBr];split <;> rfl
+
+/-- Word-pair copies `ld x31, 8a(src); sd x31, 8b(dst)` for `(a, b)` in `pairs`, rows from `start`. -/
+def pairRows (start : Nat) (src dst : Reg) : List (Nat × Nat) → List Row
+  | [] => []
+  | (a,b)::rest => (start,.LD .x31 src (BitVec.ofNat 12 (8*a))) :: (start+1,.SD dst .x31 (BitVec.ofNat 12 (8*b))) ::
+      pairRows (start+2) src dst rest
+
+/-! K3-lite prefix, one position `i` (quartet `q = i >> 2`, even block `e = 2 (q >> 1)`), rows 740..801.
+Head paths (rows 740..776): `skip` when `q` equals the previous position's quartet (`x4`); otherwise `x4 := q`,
+for an even `q` the inverse of reply_E (call at 751) and d3 written back to `B_q + 168`, and for both parities the
+level-22 sibling copied to `heap[2^22 + (q ^ 1)]`. Then the chained salt generator (777..795, `K3OpenChain`) and the K1 salt rows (796..812). -/
+
+def headRows : List Row := [(740,.LD .x6 .x14 0),(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]
+def newRows : List Row := [(743,.ADDI .x4 .x28 0),(744,.SRLI .x7 .x6 3),(745,.SLLI .x7 .x7 11),(746,.ADD .x7 .x7 .x24),
+  (747,.ANDI .x30 .x6 4),(748,.BNE .x30 .x0 64)]
+def invRows : List Row := [(749,.ADDI .x10 .x7 168),(750,.ADDI .x13 .x0 2)]
+def d3Pairs : List (Nat × Nat) := [(21,21),(22,22),(23,23),(24,24)]
+def d3Rows : List Row := pairRows 752 .x12 .x7 d3Pairs ++
+  [(760,.ADDI .x10 .x0 1024),(761,.ADDI .x13 .x0 1),(762,.ADDI .x30 .x7 368),(763,.JAL .x0 8)]
+def oddRow : List Row := [(764,.ADDI .x30 .x7 336)]
+def sibPairs : List (Nat × Nat) := [(0,0),(1,1),(2,2),(3,3)]
+def sibRows : List Row :=
+  [(765,.XORI .x28 .x28 1),(766,.ADD .x28 .x28 .x19),(767,.SLLI .x28 .x28 5),(768,.ADD .x28 .x28 .x9)] ++
+  pairRows 769 .x30 .x28 sibPairs
+def oddPath : List Row := headRows ++ newRows ++ oddRow ++ sibRows
+def evenPre : List Row := headRows ++ newRows ++ invRows
+def evenPost : List Row := d3Rows ++ sibRows
+
+/-- Reply-offset rows by rank class `k` (0: rank 0, 1: rank 1, 2: rank ≥ 2), ending with the salt destination. -/
+def selectRows (k : Fin 3) : List Row :=
+  [(796,.ADDI .x7 .x28 (-1)),(797,.SLLI .x7 .x7 4),(798,.BLTU .x23 .x28 16)] ++
+  (if k.val ≤ 1 then [(799,.ADDI .x7 .x0 0),(800,.BNE .x28 .x23 8)] else []) ++
+  (if k.val = 1 then [(801,.ADDI .x7 .x0 184)] else []) ++
+  [(802,.ADD .x7 .x7 .x12),(803,.SLLI .x30 .x6 4),(804,.ADD .x30 .x30 .x22)]
+def copyRows : List Row := [(805,.LD .x31 .x7 0),(806,.SD .x30 .x31 0),(807,.LD .x31 .x7 8),(808,.SD .x30 .x31 8)]
+def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.ADDI .x17 .x17 (-1)),(811,.BNE .x17 .x0 7908)] ++
+  (if last then [(812,.JAL .x0 2093964)] else [])
+
+def postRows (k : Fin 3) (last : Bool) : List Row := selectRows k ++ copyRows ++ nextRows last
+
+private theorem row_fetch (row : Row) (bounded : row.1<813) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
     ∀ st : MachineState, st.pc=address row.1 → fetch openingImage st=some (.base row.2) :=
-  fun st pc => packed_fetch_base st _ _ bounded pc dec
+  fun st pc => packed_fetch_base st _ _ (by omega) pc dec
 
-theorem pre_row_fetch (b ip tw : Bool) : presentRows (preRows b ip tw) := by
-  have raw : ∀ b ip tw : Bool, ∀ i : Fin (preRows b ip tw).length, let row := (preRows b ip tw)[i];
-      row.1<777 ∧ (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2 := by decide +kernel
+theorem rows_present (rows : List Row)
+    (raw : ∀ i : Fin rows.length, rows[i].1<813 ∧ (openingImage.code[rows[i].1]?).bind Opening.decodeBase=some rows[i].2) :
+    presentRows rows := by
   intro p hp;obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp hp
   subst p
-  exact row_fetch _ (raw b ip tw ⟨i,hi⟩).1 (raw b ip tw ⟨i,hi⟩).2
+  exact row_fetch _ (raw ⟨i,hi⟩).1 (raw ⟨i,hi⟩).2
 
-/-- The record writer's group-base rows (368-byte quartet blocks: `x7 = x24 + (x6 >>> 2) * x4`). -/
-def writerRows : List Row := [(34,.ADDI .x21 .x21 16),(35,.SRLI .x7 .x6 2),(36,.MUL .x7 .x7 .x4),
-  (37,.ADD .x7 .x7 .x24),(38,.ANDI .x10 .x6 3)]
+theorem skip_row_fetch : presentRows headRows := by apply rows_present; decide +kernel
+theorem odd_row_fetch : presentRows oddPath := by apply rows_present; decide +kernel
+theorem even_pre_fetch : presentRows evenPre := by apply rows_present; decide +kernel
+theorem even_post_fetch : presentRows evenPost := by apply rows_present; decide +kernel
+theorem post_row_fetch (k : Fin 3) (last : Bool) : presentRows (postRows k last) := by
+  apply rows_present; revert k last; decide +kernel
 
-theorem writer_row_fetch : presentRows writerRows := by
-  intro p hp
-  apply row_fetch
-  · simp only [writerRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h <;> subst p <;> decide
-  · simp only [writerRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h <;> subst p <;> decide +kernel
-
-theorem post_row_fetch (last : Bool) : presentRows (postRows last) := by
-  have raw : ∀ l : Bool, ∀ i : Fin (postRows l).length, let row := (postRows l)[i];
-      row.1<777 ∧ (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2 := by decide +kernel
-  intro p hp;obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp hp
-  subst p
-  exact row_fetch _ (raw last ⟨i,hi⟩).1 (raw last ⟨i,hi⟩).2
-
-theorem ecall_fetch (st : MachineState) (pc : st.pc=address 765) : fetch openingImage st=some (.base .ECALL) :=
-  packed_fetch_base st 765 _ (by decide) pc (by decide +kernel)
+theorem inverse_fetch (s : MachineState) (pc : s.pc=address 751) : fetch openingImage s=some (.base .ECALL) :=
+  packed_fetch_base _ 751 _ (by decide) pc (by decide +kernel)
 
 end TwoPermutationPrototype.GroupedOpening

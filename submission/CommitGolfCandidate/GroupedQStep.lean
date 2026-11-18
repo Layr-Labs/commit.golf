@@ -1,97 +1,149 @@
-import CommitGolfCandidate.GroupedQImage
-import CommitGolfCandidate.QuartetCommitRanges
-import CommitGolfCandidate.TwoPermutationCommitSetup
-import CommitGolfCandidate.Execution
+import CommitGolfCandidate.K3CUUnits
+import CommitGolfCandidate.TwoPermutationPackedParentMask
+import CommitGolfCandidate.TwoPermutationPackedParentControl
+
+/-!
+# One level-21 parent
+
+A level-21 parent compresses the 64 bytes `[s_u, s_u + 64)` of unit `u` (its two group nodes)
+into heap node `2^21 + u` (all 32 bytes kept), then moves `x10` one unit down and `x12` one node
+down: `ecall; addi x10,x10,-8*unitStride; addi x12,x12,-32`.
+
+Positions count the parents still to run: at position `p` the next parent is unit `p - 1`, so the
+loop starts at position `2^21` and stops at position `0` (`x10` one unit below unit 0, the value
+kept in `x7`).
+-/
 
 namespace TwoPermutationPrototype.Grouped
-open TwoPermutationPrototype.QuartetCommit (qSource qUpper qLeaf PaddedLeaves quad_input_words quadWords)
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype.RV64
+open CommitGolfCandidate (writeBits_register)
 set_option maxRecDepth 8192
-set_option maxHeartbeats 850000
-attribute [local irreducible] execute writeBits image
+set_option maxHeartbeats 1500000
+attribute [local irreducible] execute
 
-structure QRegs (s : MachineState) (g : Nat) : Prop where
-  source : s.getReg .x10 = wordAddress (qSource g)
-  dest : s.getReg .x12 = wordAddress (qUpper g)
-  selector : s.getReg .x5=0
-  size : s.getReg .x11=200
-  primitive : s.getReg .x13=1
-  stop : s.getReg .x24=wordAddress (qSource 4194304)
+/-- Word held by `x10` at position `p`: the base of unit `p - 1`. -/
+def l21Source (p : Nat) : Nat := unitFirst - unitStride + unitStride*p
+/-- Heap node written at position `p` (by the parent of unit `p - 1`). -/
+def l21Node (p : Nat) : Nat := 2097151+p
+/-- The `x10` step `-8*unitStride` as a 12-bit immediate. -/
+def l21Imm : BitVec 12 := BitVec.ofNat 12 (4096-8*unitStride)
+/-- Address of parent slot `slot` of a level-21 pass starting at `base` (3 words per parent). -/
+def l21PC (base : Word) (slot : Nat) : Word := base+BitVec.ofNat 64 (12*slot)
 
-def quadArgument (s : MachineState) (g : Nat) : BitVec 1600 :=
-  packBuffer (window (memoryView s) (qSource g))
-def qMove (s : MachineState) := execInstrBr s (.ADDI .x10 .x10 368)
-def qMoves (s : MachineState) := execInstrBr (qMove s) (.ADDI .x12 .x12 32)
-def qAfter (s : MachineState) (g : Nat) (reply : BitVec 1600) :=
-  qMoves (writeBits s (wordAddress (qUpper g)) reply)
+theorem l21_source_unit (U : Nat) : l21Source (U+1) = unitBase U := by
+  unfold l21Source unitBase unitFirst cellFirst unitStride; omega
 
-theorem q_next_pc (slot : Nat) : quadPC slot + 12 = quadPC (slot+1) := by
-  change BitVec.ofNat 64 _+BitVec.ofNat 64 12=_
-  unfold quadPC wordPC;rw [←BitVec.ofNat_add];congr 1 <;> omega
+structure L21WordsAt (image : Image) (pc : Word) : Prop where
+  call : ∀ s : MachineState, s.pc=pc → fetch image s=some (.base .ECALL)
+  source : ∀ s : MachineState, s.pc=pc+4 → fetch image s=some (.base (.ADDI .x10 .x10 l21Imm))
+  target : ∀ s : MachineState, s.pc=pc+8 → fetch image s=some (.base (.ADDI .x12 .x12 4064))
 
-theorem q_post_pc (s : MachineState) (g : Nat) (reply : BitVec 1600) :
-    (qAfter s g reply).pc = s.pc+12 := by
-  change (writeBits s (wordAddress (qUpper g)) reply).pc+4+4=_
-  rw [written_pc,BitVec.add_assoc,BitVec.add_assoc];rfl
+structure L21Regs (s : MachineState) (p : Nat) : Prop where
+  source : s.getReg .x10 = wordAddress (l21Source p)
+  target : s.getReg .x12 = wordAddress (treeWord (l21Node p))
+  selector : s.getReg .x5 = 0
+  size : s.getReg .x11 = 64
+  primitive : s.getReg .x13 = 0
+  heap : s.getReg .x9 = wordAddress (treeWord 0)
+  stop : s.getReg .x7 = wordAddress (l21Source 0)
 
-theorem q_saved (s : MachineState) (g : Nat) (reply : BitVec 1600) (reg : Reg)
-    (src : reg≠.x10) (dst : reg≠.x12) :
-    (qAfter s g reply).getReg reg=s.getReg reg := by
-  simp only [qAfter,qMoves,qMove,execInstrBr,MachineState.getReg_setPC,
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm src), MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm dst),
-    CommitGolfCandidate.writeBits_register]
+def l21Input (s : MachineState) (p : Nat) : BitVec 512 := readBuffer s (8*l21Source p) 64
 
-theorem q_next_regs (s : MachineState) (g : Nat) (reply : BitVec 1600) (r : QRegs s g) :
-    QRegs (qAfter s g reply) (g+1) := by
-  refine ⟨?_,?_,(q_saved s g reply .x5 (by decide) (by decide)).trans r.selector,
-    (q_saved s g reply .x11 (by decide) (by decide)).trans r.size,
-    (q_saved s g reply .x13 (by decide) (by decide)).trans r.primitive,
-    (q_saved s g reply .x24 (by decide) (by decide)).trans r.stop⟩
-  · change (writeBits s _ reply).getReg .x10+368=_
-    rw [CommitGolfCandidate.writeBits_register,r.source]
-    change wordAddress (qSource g)+wordAddress 46=_
-    rw [←wordAddress_add];congr 1 <;> unfold qSource <;>omega
-  · change (writeBits s _ reply).getReg .x12+32=_
-    rw [CommitGolfCandidate.writeBits_register,r.dest]
-    change wordAddress (qUpper g)+wordAddress 4=_
-    rw [←wordAddress_add];congr 1 <;> unfold qUpper <;>omega
+def l21After (s : MachineState) (p : Nat) (answer : BitVec 256) :=
+  execInstrBr (execInstrBr (parentWritten s (l21Node p) answer) (.ADDI .x10 .x10 l21Imm)) (.ADDI .x12 .x12 4064)
 
-private theorem q_two_moves (s : MachineState) (slot : Fin 8192) (pc : s.pc=quadPC slot.val+4)
-    (fuel : Nat) :
-    execute image (2+fuel) s true =
-      (do let res ← execute image fuel (qMoves s) true; return res.charge 2 0) := by
-  have f1 : fetch image s=some (.base (.ADDI .x10 .x10 368)) := fetch_quad s slot 1 pc
-  have nextPC : (qMove s).pc=quadPC slot.val+8 := by
-    change s.pc+4=_;rw [pc,BitVec.add_assoc];rfl
-  have f2 : fetch image (qMove s)=some (.base (.ADDI .x12 .x12 32)) :=
-    fetch_quad (qMove s) slot 2 nextPC
-  rw [show 2+fuel=(fuel+1)+1 by omega,
-    CommitGolfCandidate.execute_ordinary_step image _ s (qMove s) _ true f1 rfl,
-    CommitGolfCandidate.execute_ordinary_step image _ (qMove s) (qMoves s) _ true f2 rfl]
-  simp [Execution.charge,instructionCycles,←Nat.add_assoc]
+theorem l21_after_pc (s : MachineState) (p : Nat) (answer : BitVec 256) :
+    (l21After s p answer).pc=s.pc+12 := by
+  change (parentWritten s (l21Node p) answer).pc+4+4=s.pc+12
+  rw [parentWritten,written_pc,BitVec.add_assoc,BitVec.add_assoc]
+  rfl
 
-theorem q_unit_run (s : MachineState) (g : Nat) (slot : Fin 8192) (fuel : Nat)
-    (hg : g<4194304) (r : QRegs s g) (pc : s.pc=quadPC slot.val) :
-    execute image (3+fuel) s true = (do
-      let reply ← World.query (.inr (.inr (.inl (quadArgument s g))))
-      let res ← execute image fuel (qAfter s g reply) true
-      return res.charge 10 1) := by
-  have fetched : fetch image s=some (.base .ECALL) :=
-    fetch_quad s slot 0 (by change s.pc=quadPC slot.val+0;simpa using pc)
-  have call := execute_permutation_call image (2+fuel) s true (qSource g) (qUpper g)
-    (by unfold qSource;omega) (by unfold qUpper;omega) r.source r.dest r.selector r.size r.primitive fetched
-  rw [show 3+fuel=(2+fuel)+1 by omega,call]
+theorem l21_pc_succ (base : Word) (slot : Nat) : l21PC base slot+12=l21PC base (slot+1) := by
+  change base+BitVec.ofNat 64 (12*slot)+BitVec.ofNat 64 12 = base+BitVec.ofNat 64 (12*(slot+1))
+  rw [BitVec.add_assoc,←BitVec.ofNat_add]
+  rw [show 12*slot+12=12*(slot+1) by omega]
+
+/-- Memory after a level-21 parent: the full reply at its heap node. -/
+theorem l21_after_memory (s : MachineState) (p : Nat) (answer : BitVec 256) :
+    (l21After s p answer).mem=(parentWritten s (l21Node p) answer).mem := rfl
+
+attribute [local irreducible] parentWritten
+
+theorem l21_keeps_register (s : MachineState) (p : Nat) (answer : BitVec 256) (reg : Reg)
+    (keptSource : .x10≠reg) (keptTarget : .x12≠reg) :
+    (l21After s p answer).getReg reg=s.getReg reg := by
+  simp only [l21After,execInstrBr,MachineState.getReg_setPC,
+    MachineState.getReg_setReg_ne _ _ _ _ keptSource,MachineState.getReg_setReg_ne _ _ _ _ keptTarget]
+  rw [parentWritten,writeBits_register]
+
+theorem l21_next_regs (s : MachineState) (p : Nat) (answer : BitVec 256)
+    (regs : L21Regs s (p+1)) : L21Regs (l21After s (p+1) answer) p := by
+  have holds (reg : Reg) : (parentWritten s (l21Node (p+1)) answer).getReg reg=s.getReg reg := by
+    rw [parentWritten,writeBits_register]
+  constructor
+  · change (parentWritten s (l21Node (p+1)) answer).getReg .x10 + signExtend12 l21Imm = _
+    rw [holds,regs.source]
+    have advance : l21Source (p+1)=l21Source p+unitStride := by unfold l21Source unitStride; omega
+    rw [advance,wordAddress_add,BitVec.add_assoc,
+      show wordAddress unitStride+signExtend12 l21Imm=0 by decide]
+    exact BitVec.add_zero _
+  · change (parentWritten s (l21Node (p+1)) answer).getReg .x12 + signExtend12 4064 = _
+    rw [holds,regs.target]
+    have advance : treeWord (l21Node (p+1))=treeWord (l21Node p)+4 := by unfold treeWord l21Node;omega
+    rw [advance,wordAddress_add,BitVec.add_assoc,
+      show wordAddress 4+signExtend12 4064=0 by decide]
+    exact BitVec.add_zero _
+  · exact (l21_keeps_register s _ answer .x5 (by decide) (by decide)).trans regs.selector
+  · exact (l21_keeps_register s _ answer .x11 (by decide) (by decide)).trans regs.size
+  · exact (l21_keeps_register s _ answer .x13 (by decide) (by decide)).trans regs.primitive
+  · exact (l21_keeps_register s _ answer .x9 (by decide) (by decide)).trans regs.heap
+  · exact (l21_keeps_register s _ answer .x7 (by decide) (by decide)).trans regs.stop
+
+private theorem l21_call_at (image : Image) (s : MachineState) (p fuel : Nat)
+    (bound : p ≤ 2097152) (regs : L21Regs s p)
+    (fetched : fetch image s=some (.base .ECALL)) :
+    execute image (fuel+1) s true =
+      (do let answer ← (liftM (World.query (.inr (.inl (l21Input s p)))) : OracleComp World (BitVec 256))
+          let result ← execute image fuel (parentWritten s (l21Node p) answer) true
+          return result.charge 8 1) := by
+  have source := word_address_value (word := l21Source p) (by unfold l21Source unitFirst cellFirst unitStride; omega)
+  have target := word_address_value (word := treeWord (l21Node p)) (by unfold treeWord l21Node; omega)
+  have inputRange : 8*l21Source p+64 ≤ MEMORY_BYTES := by
+    unfold l21Source unitFirst cellFirst unitStride MEMORY_BYTES; omega
+  have outputRange : 8*treeWord (l21Node p)+32 ≤ MEMORY_BYTES := by
+    unfold treeWord l21Node MEMORY_BYTES; omega
+  have query : oracleInput s=some (.inl (l21Input s p)) := by
+    have kind : (s.getReg .x13).toNat=0 := by rw [regs.primitive]; rfl
+    unfold oracleInput
+    dsimp only
+    rw [kind]
+    simp [regs.source,regs.target,regs.size,COMPRESSION_INPUT_LENGTH,COMPRESSION_OUTPUT_LENGTH,
+      rangeValid,source,target,inputRange,outputRange,l21Input]
+  simp [execute,fetched,regs.selector,query,writeOracleAnswer,regs.target,parentWritten,
+    oracleCycles,COMPRESSION_CYCLES]
+  rfl
+
+theorem l21_parent_step (image : Image) (s : MachineState) (p fuel : Nat) (pc : Word)
+    (here : s.pc=pc) (bound : p ≤ 2097152) (regs : L21Regs s p)
+    (fetched : L21WordsAt image pc) :
+    execute image (3+fuel) s true =
+      (do let answer ← (liftM (World.query (.inr (.inl (l21Input s p)))) : OracleComp World (BitVec 256))
+          let result ← execute image fuel (l21After s p answer) true
+          return result.charge 10 1) := by
+  rw [show 3+fuel=(fuel+2)+1 by omega,l21_call_at image s p _ bound regs (fetched.call s here)]
   apply bind_congr_of_forall_mem_support
-  intro reply _
-  have here : (writeBits s (wordAddress (qUpper g)) reply).pc=quadPC slot.val+4 := by
-    rw [written_pc,pc]
-  rw [q_two_moves _ slot here]
-  simp [qAfter,Execution.charge,←Nat.add_assoc] <;> rfl
-
-theorem q_unit_memory (s : MachineState) (g : Nat) (reply : BitVec 1600) (hg : g<4194304) (w : Nat) (hw : w<2^33) :
-    memoryView (qAfter s g reply) w =
-      writeWindow (memoryView s) (qUpper g) (replyWords reply) w := by
-  change memoryView (writeBits s (wordAddress (qUpper g)) reply) w=_
-  exact permutation_write_memory s _ w reply (by unfold qUpper;omega) hw
+  intro answer _
+  let first := parentWritten s (l21Node p) answer
+  let moved := execInstrBr first (.ADDI .x10 .x10 l21Imm)
+  have firstPC : first.pc=pc+4 := by simp only [first,parentWritten,written_pc,here]
+  have movedPC : moved.pc=pc+8 := by
+    change first.pc+4=_
+    rw [firstPC,BitVec.add_assoc]
+    rfl
+  rw [CommitGolfCandidate.execute_ordinary_step _ _ _ _ _ _ (fetched.source first firstPC)
+      (show ordinaryStep first _=some moved from rfl),
+    CommitGolfCandidate.execute_ordinary_step _ _ _ _ _ _ (fetched.target moved movedPC)
+      (show ordinaryStep moved _=some (l21After s p answer) from rfl)]
+  simp [instructionCycles,Execution.charge,←Nat.add_assoc]
 
 end TwoPermutationPrototype.Grouped

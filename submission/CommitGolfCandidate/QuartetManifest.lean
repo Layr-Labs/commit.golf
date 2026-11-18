@@ -9986,8 +9986,8 @@ def checkData : ArtifactEncoding.Packed 0 :=
 
 /-- Exact machine bytes and ABI decoded from submission/programs.json. -/
 def submission : CommitGolf.Submission where
-  sizes := ⟨2952790016, 8959041024⟩
-  layout := ⟨4096, 4294971392, 4294971424, 7247761440, 7381979232, 11676946528⟩
+  sizes := ⟨5100273664, 8959041024⟩
+  layout := ⟨4096, 4294971392, 4294971424, 9395245088, 9529462880, 13824430176⟩
   image
     | .commit => ⟨ArtifactEncoding.decode 32 commitCode, ArtifactEncoding.decode 8 commitData⟩
     | .opening => ⟨ArtifactEncoding.decode 32 openingCode, ArtifactEncoding.decode 8 openingData⟩

@@ -6,13 +6,38 @@ open CommitGolf CommitGolfCandidate OracleComp
 
 def PinnedLeafWitness (rows : List PublicRow) : Prop :=
   ∃ (perm : Block → Block) (index : Index) (nonce₀ nonce₁ : Words 2) (message₀ message₁ : Words 32),
-    let a₀ := pinnedFirstRow perm message₀
-    let a₁ := pinnedFirstRow perm message₁
+    let a₀ := pinnedFirstRow perm index message₀
+    let a₁ := pinnedFirstRow perm index message₁
     let b₀ := pinnedSecondRow perm index nonce₀ a₀.2 message₀
     let b₁ := pinnedSecondRow perm index nonce₁ a₁.2 message₁
     PublicRow.permutation a₀.1 a₀.2 ∈ rows ∧ PublicRow.permutation a₁.1 a₁.2 ∈ rows ∧
       PublicRow.permutation b₀.1 b₀.2 ∈ rows ∧ PublicRow.permutation b₁.1 b₁.2 ∈ rows ∧
       outputDigest b₀.2 = outputDigest b₁.2 ∧ message₀ ≠ message₁
+
+/-- A pinned leaf witness at an index of the given kind (`isAHead`), so each kind can be bound
+through its own two-call layout. -/
+def PinnedLeafWitnessOf (kind : Bool) (rows : List PublicRow) : Prop :=
+  ∃ (perm : Block → Block) (index : Index) (nonce₀ nonce₁ : Words 2) (message₀ message₁ : Words 32),
+    isAHead index = kind ∧
+    let a₀ := pinnedFirstRow perm index message₀
+    let a₁ := pinnedFirstRow perm index message₁
+    let b₀ := pinnedSecondRow perm index nonce₀ a₀.2 message₀
+    let b₁ := pinnedSecondRow perm index nonce₁ a₁.2 message₁
+    PublicRow.permutation a₀.1 a₀.2 ∈ rows ∧ PublicRow.permutation a₁.1 a₁.2 ∈ rows ∧
+      PublicRow.permutation b₀.1 b₀.2 ∈ rows ∧ PublicRow.permutation b₁.1 b₁.2 ∈ rows ∧
+      outputDigest b₀.2 = outputDigest b₁.2 ∧ message₀ ≠ message₁
+
+theorem pinned_leaf_witness_split {rows : List PublicRow} (hit : PinnedLeafWitness rows) :
+    PinnedLeafWitnessOf false rows ∨ PinnedLeafWitnessOf true rows := by
+  obtain ⟨perm, index, nonce₀, nonce₁, message₀, message₁, facts⟩ := hit
+  cases kind : isAHead index
+  · exact Or.inl ⟨perm, index, nonce₀, nonce₁, message₀, message₁, kind, facts⟩
+  · exact Or.inr ⟨perm, index, nonce₀, nonce₁, message₀, message₁, kind, facts⟩
+
+theorem PinnedLeafWitnessOf.witness {kind : Bool} {rows : List PublicRow}
+    (hit : PinnedLeafWitnessOf kind rows) : PinnedLeafWitness rows := by
+  obtain ⟨perm, index, nonce₀, nonce₁, message₀, message₁, _, facts⟩ := hit
+  exact ⟨perm, index, nonce₀, nonce₁, message₀, message₁, facts⟩
 
 def PinnedReplayEvidence (rows : List PublicRow) : Prop :=
   CompressionWitness rows ∨ PinnedLeafWitness rows
