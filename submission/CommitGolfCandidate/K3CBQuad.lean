@@ -16,7 +16,8 @@ set_option maxRecDepth 8192
 
 theorem reply_word_eq (g : Nat) : groupReplyWord g=replyWord g := by
   unfold groupReplyWord replyWord unitBase unitFirst unitStride cellFirst qSource
-  split <;> omega
+  have := Nat.div_add_mod g 2
+  split_ifs <;> omega
 
 /-- One word of the record window against the model's encoding. -/
 theorem quad_window_word (o : Oracle) (k : BitVec 192) (msg : Message) (g : Nat) (w : Fin 25) :

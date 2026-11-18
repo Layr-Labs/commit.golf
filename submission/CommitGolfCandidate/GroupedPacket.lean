@@ -37,21 +37,26 @@ def secondWord (i : Nat) := if rank i=0 then msgWord i-7 else msgWord i+7
 def slotGap (j : Nat) := 603979782-28*j
 /-- Word distance from an A leaf's second-call input (`msgWord i - 7`) to its quartet slot. -/
 def aGap (j : Nat) := 603979796-28*j
+/-- The same gaps for the leaves of an odd quartet, whose block sits 1,224 bytes (153 words) lower. -/
+def oddGap (j : Nat) := slotGap j-153
+def oddAGap (j : Nat) := aGap j-153
+/-- Gap of leaf `i` (by kind and quartet parity). -/
+def sgap (i : Nat) := if (i/4)%2=0 then slotGap (i%4) else oddGap (i%4)
+def agap (i : Nat) := if (i/4)%2=0 then aGap (i%4) else oddAGap (i%4)
 /-- Word distance from the quartet block back to the next entry (negated restore register). -/
-def rGap (n : Nat) := 603979652-(if near n then 7 else 0)
+def rGap (n : Nat) := 603979652-(if near n then 7 else 0)-(if (n/4)%2=1 then 153 else 0)
 /-- First word of the generator reply of the group of `i` (byte `B+128` of its A leaf). -/
 def genWord (i : Nat) := msgWord (i-rank i)+16
 /-- Source of the salt of a follower of rank `2..8`: generator words `2 (rank-1)`. -/
 def sourceWord (i : Nat) := genWord i+2*(rank i-1)
-/-- Output of the quartet call of quartet `i/4` (`i % 4 = 3`): over the fourth digest (even) or
-`656` bytes below the block (odd). -/
-def groupOut (i : Nat) := if (i/4)%2=0 then qLeaf i else qSource (i/4)-82
+/-- Output of the quartet call of quartet `i/4` (`i % 4 = 3`): over the fourth digest (both parities). -/
+def groupOut (i : Nat) := qLeaf i
 
 def saltPlan (i : Nat) : List Action :=
   let m := msgWord i
   if rank i≤8 then
-    [.load .x31 .x10 (saltImm (rank i)) (sourceWord i),.store .x10 .x31 0 (m+7),
-     .load .x31 .x10 (saltImm (rank i)+8) (sourceWord i+1),.store .x10 .x31 8 (m+8)] ++
+    [.load .x12 .x10 (saltImm (rank i)) (sourceWord i),.store .x10 .x12 0 (m+7),
+     .load .x12 .x10 (saltImm (rank i)+8) (sourceWord i+1),.store .x10 .x12 8 (m+8)] ++
     (if rank i=8 then [.load .x14 .x10 (-1848) (genWord i+16),.load .x15 .x10 (-1840) (genWord i+17),
       .load .x16 .x10 (-1832) (genWord i+18),.load .x17 .x10 (-1824) (genWord i+19)] else [])
   else if rank i=9 then [.store .x10 .x14 0 (m+7),.store .x10 .x15 8 (m+8)]
@@ -78,10 +83,8 @@ def bodyPlan (i : Nat) : List Action :=
 def tailPlan (i : Nat) : List Action :=
   let n := i%4096
   if n%4=3 then
-    (if (n/4)%2=0 then [.offset .x10 .x12 (-168) (qSource (i/4)),.perm (qSource (i/4)) (qLeaf i)]
-     else [.offset .x10 .x12 (-168) (qSource (i/4)),.offset .x12 .x10 (-656) (qSource (i/4)-82),
-       .perm (qSource (i/4)) (qSource (i/4)-82)]) ++
-    [.add .x10 .x10 (rreg n) (entryWord (i+1))]
+    [.offset .x10 .x12 (-168) (qSource (i/4)),.perm (qSource (i/4)) (qLeaf i),
+     .add .x10 .x10 (rreg n) (entryWord (i+1))]
   else [.offset .x10 .x10 (trail n) (entryWord (i+1))]
 
 def plan (i : Nat) : List Action := bodyPlan i ++ tailPlan i
@@ -121,21 +124,37 @@ structure PacketRegs (s : MachineState) (i : Nat) : Prop where
   a1 : s.getReg .x28=wordAddress (aGap 1)
   a2 : s.getReg .x29=wordAddress (aGap 2)
   a3 : s.getReg .x30=wordAddress (aGap 3)
+  o0 : s.getReg .x8=wordAddress (oddGap 0)
+  o1 : s.getReg .x9=wordAddress (oddGap 1)
+  o2 : s.getReg .x18=wordAddress (oddGap 2)
+  o3 : s.getReg .x19=wordAddress (oddGap 3)
+  b0 : s.getReg .x21=wordAddress (oddAGap 0)
+  b1 : s.getReg .x22=wordAddress (oddAGap 1)
+  b2 : s.getReg .x4=wordAddress (oddAGap 2)
+  b3 : s.getReg .x7=wordAddress (oddAGap 3)
   far : s.getReg .x1=-wordAddress 603979652
   close : s.getReg .x2=-wordAddress 603979645
+  farOdd : s.getReg .x31=-wordAddress 603979499
+  closeOdd : s.getReg .x6=-wordAddress 603979492
   link : s.getReg .x3=-wordAddress 364
   counter : s.getReg .x24=wordAddress (qSalt 0)
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
   primitive : s.getReg .x13=1
 
-theorem slot_address (i : Nat) : wordAddress (msgWord i+7)+wordAddress (slotGap (i%4))=wordAddress (qLeaf i) := by
+theorem slot_address (i : Nat) : wordAddress (msgWord i+7)+wordAddress (sgap i)=wordAddress (qLeaf i) := by
   rw [←wordAddress_add];congr 1
-  unfold msgWord slotGap qLeaf qSource;omega
+  have h4 : i=4*(i/4)+i%4 := (Nat.div_add_mod i 4).symm
+  have hm : i%4<4 := Nat.mod_lt _ (by decide)
+  unfold msgWord sgap oddGap slotGap qLeaf qSource
+  split_ifs <;> omega
 
-theorem a_slot_address (i : Nat) : wordAddress (msgWord i-7)+wordAddress (aGap (i%4))=wordAddress (qLeaf i) := by
+theorem a_slot_address (i : Nat) : wordAddress (msgWord i-7)+wordAddress (agap i)=wordAddress (qLeaf i) := by
   rw [←wordAddress_add];congr 1
-  unfold msgWord aGap qLeaf qSource;omega
+  have h4 : i=4*(i/4)+i%4 := (Nat.div_add_mod i 4).symm
+  have hm : i%4<4 := Nat.mod_lt _ (by decide)
+  unfold msgWord agap oddAGap aGap qLeaf qSource
+  split_ifs <;> omega
 
 /-- A positive displacement of `d` words. -/
 theorem addr_fwd (a d : Nat) (imm : BitVec 12) (h : signExtend12 imm=wordAddress d) :
@@ -201,13 +220,7 @@ theorem group_input (i : Nat) (t : i%4=3) :
   have e : qLeaf i=qSource (i/4)+21 := by unfold qLeaf;omega
   rw [e,addr_back (qSource (i/4)+21) 21 3928#12 (by decide) (by omega)];all_goals (congr 1;try omega)
 
-/-- Odd quartet: output `656` bytes below the block. -/
-theorem odd_output (i : Nat) :
-    wordAddress (qSource (i/4))+signExtend12 3440#12=wordAddress (qSource (i/4)-82) :=
-  addr_back _ 82 _ (by decide) (by unfold qSource;omega)
-
-theorem group_out_eq (i : Nat) : (qLeaf i=groupOut i ∨ qSource (i/4)-82=groupOut i) := by
-  unfold groupOut;split <;> simp
+theorem group_out_eq (i : Nat) : qLeaf i=groupOut i := rfl
 
 /-- Adding a negated word address. -/
 theorem addr_neg (a d : Nat) (hd : d≤a) : wordAddress a+-wordAddress d=wordAddress (a-d) := by
@@ -219,17 +232,20 @@ theorem restore_address (i : Nat) (t : i%4=3) :
     wordAddress (qSource (i/4))+-wordAddress (rGap (i%4096))=wordAddress (entryWord (i+1)) := by
   have hn : near (i%4096)=true ↔ (rank i=0 ∨ rank (i+1)=0) := by
     unfold near;rw [within_rank,rank_succ_within];simp
-  have big : rGap (i%4096)≤qSource (i/4) := by unfold rGap qSource;split <;> omega
+  have e2 : i%4096/4%2=i/4%2 := by omega
+  have big : rGap (i%4096)≤qSource (i/4) := by
+    unfold rGap qSource;rw [e2];split_ifs <;> omega
   rw [addr_neg _ _ big,entry_next]
   congr 1
   have i4 : i=4*(i/4)+3 := by omega
   unfold rGap qSource msgWord
+  rw [e2]
   by_cases h0 : rank i=0
-  · rw [if_pos (hn.mpr (Or.inl h0)),if_pos h0];omega
+  · rw [if_pos (hn.mpr (Or.inl h0)),if_pos h0];split_ifs <;> omega
   · by_cases z : rank (i+1)=0
-    · rw [if_pos (hn.mpr (Or.inr z)),if_neg h0,if_pos z];omega
+    · rw [if_pos (hn.mpr (Or.inr z)),if_neg h0,if_pos z];split_ifs <;> omega
     · rw [if_neg (show ¬near (i%4096)=true from fun e => by rcases hn.mp e with e|e <;> contradiction),
-        if_neg h0,if_neg z];omega
+        if_neg h0,if_neg z];split_ifs <;> omega
 
 /-- A chained head reads the previous head's generator reply: `x12 + x3 = (m+28) - 364`. -/
 theorem chain_source (i : Nat) (h0 : rank i=0) (kd : ¬keyed (i%4096)) :
@@ -249,8 +265,8 @@ theorem chain_source (i : Nat) (h0 : rank i=0) (kd : ¬keyed (i%4096)) :
   rw [addr_neg (msgWord i+28) 364 (by unfold msgWord;omega)]
   unfold genWord msgWord;rw [r11];congr 1;omega
 
-theorem rreg_x10 (n : Nat) : (Reg.x10=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
-theorem rreg_x12 (n : Nat) : (Reg.x12=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
+theorem rreg_x10 (n : Nat) : (Reg.x10=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
+theorem rreg_x12 (n : Nat) : (Reg.x12=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
 
 theorem genWord_rank (i : Nat) (r : Nat) (h : rank i=r) : genWord i+32*r=msgWord i+16 := by
   unfold genWord msgWord;have : r ≤ i := by rw [←h];unfold rank;omega

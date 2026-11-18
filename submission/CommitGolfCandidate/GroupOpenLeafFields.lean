@@ -18,7 +18,7 @@ def slotCode : List Instr :=
 
 def quartetHeadCode (j : Fin 3) : List Instr :=
   [.XORI .x28 .x10 (BitVec.ofNat 12 (j.val+1)), .SLLI .x28 .x28 5,
-   .ADD .x28 .x28 .x7, .ADDI .x28 .x28 72]
+   .ADD .x28 .x28 .x7, .ADDI .x28 .x28 584]
 
 def quartetExitCode : List Instr := [.ADDI .x21 .x21 96, .SRLI .x6 .x6 2, .ADD .x6 .x6 .x19]
 
@@ -81,7 +81,7 @@ theorem slot_post (s : MachineState) :
 theorem quartet_head_post (j : Fin 3) (s : MachineState) :
     let u := quartetHead j s
     u.pc=s.pc+16 ∧ u.mem=s.mem ∧
-    u.getReg .x28 = (((s.getReg .x10 ^^^ BitVec.ofNat 64 (j.val+1)) <<< 5) + s.getReg .x7) + 72 ∧
+    u.getReg .x28 = (((s.getReg .x10 ^^^ BitVec.ofNat 64 (j.val+1)) <<< 5) + s.getReg .x7) + 584 ∧
     ∀ r, r ≠ .x28 → u.getReg r = s.getReg r := by
   fin_cases j <;>
     simp [quartetHead,straightPrefix,quartetHeadCode,execInstrBr,signExtend12,BitVec.add_assoc] <;>
@@ -128,7 +128,7 @@ theorem quartet_physical_source (s : MachineState) (i : Index) (j : Fin 3)
     (quartetHead j s).getReg .x28 = BitVec.ofNat 64 (leafAddress (i.val ^^^ (j.val+1))) := by
   rw [(quartet_head_post j s).2.2.1, selector, group, ← BitVec.ofNat_xor, BitVec.shiftLeft_eq_mul_twoPow]
   change (BitVec.ofNat 64 (i.val%4 ^^^ (j.val+1)) * BitVec.ofNat 64 32 +
-      BitVec.ofNat 64 (groupSlots+1024*(i.val/4))) + BitVec.ofNat 64 72 = _
+      BitVec.ofNat 64 (groupSlots+1024*(i.val/4))) + BitVec.ofNat 64 584 = _
   rw [← BitVec.ofNat_mul, ← BitVec.ofNat_add, ← BitVec.ofNat_add]
   obtain ⟨g,p⟩ := xor_group i.val (j.val+1) (by omega)
   unfold leafAddress

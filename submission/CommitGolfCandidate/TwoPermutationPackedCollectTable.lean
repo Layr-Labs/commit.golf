@@ -33,7 +33,7 @@ structure RecordedLower (oracle : Oracle) (index : Index) (value : Entry) (group
     outputDigest (pinnedSecondRow oracle.permutation index nonce
       (pinnedFirstRow oracle.permutation index (entryWords value)).2 (entryWords value)).2
   parentRow : PublicRow.permutation (quartetEncode quartet) reply ∈ rows
-  path : ProjectedPath rows (LENGTH / 4 + index.val / 4) 14 (quartetNode (index.val / 4) reply) groupRoot
+  path : ProjectedPath rows (LENGTH / 4 + (index.val / 4 ^^^ 1)) 14 (quartetNode (index.val / 4) reply) groupRoot
 
 def RecordedLower.mono {oracle : Oracle} {index : Index} {value : Entry} {groupRoot : Digest}
     {before after : List PublicRow} (lower : RecordedLower oracle index value groupRoot before)
@@ -41,8 +41,11 @@ def RecordedLower.mono {oracle : Oracle} {index : Index} {value : Entry} {groupR
   ⟨lower.nonce, contains _ lower.first, contains _ lower.second, lower.quartet, lower.reply, lower.child,
     contains _ lower.parentRow, lower.path.mono contains⟩
 
-theorem quartet_node_cap_group (index : Index) : (LENGTH / 4 + index.val / 4) / 2 ^ 14 = capGroup index :=
-  QuartetOpening.group_index index
+theorem quartet_node_cap_group (index : Index) : (LENGTH / 4 + (index.val / 4 ^^^ 1)) / 2 ^ 14 = capGroup index := by
+  have shift := Sampling.Quartet.flip_start_shift (index.val / 4) 14 (by decide)
+  change (4194304 + (index.val / 4 ^^^ 1)) / 2 ^ 14 = capGroup index
+  rw [shift]
+  exact QuartetOpening.group_index index
 
 def RecordedLower.join {oracle : Oracle} {index : Index} {value : Entry} {groupRoot : Digest}
     {rows : List PublicRow} {root : Commitment} (lower : RecordedLower oracle index value groupRoot rows)

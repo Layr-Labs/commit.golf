@@ -54,7 +54,7 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (canonical : input = honestCheckInput oracle message input.positions salts) :
     let item := honestIndex input.positions ordinal present
     readBuffer (block oracle ordinal item.val state).state 12288 32 =
-      honestHeap oracle message salts (Opening.lowerNode item.val 2) := by
+      honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex item.val) 2) := by
   let item := honestIndex input.positions ordinal present
   let raw := (rawLeaf oracle ordinal item.val state).1
   let leaves := honestLeaves oracle message salts
@@ -93,9 +93,9 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
       (fun j lo hi => (siblingSlots j lo hi).trans (siblingDigest j lo hi))
   dsimp only
   change readBuffer (qFinal raw reply) 12288 32 = _
-  rw [final, QuartetCheck.lower_node_two]
+  rw [final, QuartetCheck.lower_node_two_flip]
   unfold PackedHonest.honestHeap
-  rw [QuartetCheck.upper_heap_leaf _ _ _ (item.val.val/4) (by omega)]
+  rw [QuartetCheck.upper_heap_leaf_flip _ _ _ (item.val.val/4) (by omega)]
   change quartetNode (item.val.val / 4) (oracle.permutation (qInput raw)) = _
   rw [q_input_enc qentry, honestQuartet]
   rfl

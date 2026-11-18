@@ -4,7 +4,7 @@ import CommitGolfCandidate.GroupedQMeaning
 /-!
 # The commit tail: level-21 loop, heap bands A and B, root parent, root copy and halt
 
-`tail_run`: from the first tail word, 14,942,749 steps cost 44,302,870 cycles and 4,194,303 public
+`tail_run`: from the first tail word, 14,942,753 steps cost 44,302,874 cycles and 4,194,303 public
 calls (2^21 level-21 parents, 2^21 - 2^17 band-A parents, 2^17 - 2 band-B parents, the root).
 `tail_content`: the final state holds every heap node below `2^22` (level 21 full, levels 17..20 at
 240 bits, levels 0..16 at 238 bits) and leaves everything from block `B_0` upwards untouched.
@@ -33,11 +33,11 @@ def tailBody (s : MachineState) : OracleComp World MachineState := do
   rootTrace b
 
 theorem tail_run (s : MachineState) (e : TailEntry s) (fuel : Nat) :
-    execute packedWideCommitImage (14942749+fuel) s true =
-      (do let t ← tailBody s; return ⟨.success,t,44302870,4194303⟩) := by
+    execute packedWideCommitImage (14942753+fuel) s true =
+      (do let t ← tailBody s; return ⟨.success,t,44302874,4194303⟩) := by
   have regs := l21_start_regs s e
   have startPC := l21_start_pc s e
-  rw [show 14942749+fuel=7+(6291711+(7+(7864559+(1+(786449+(4+(11+fuel))))))) by omega,l21Start_run s e.pc,
+  rw [show 14942753+fuel=11+(6291711+(7+(7864559+(1+(786449+(4+(11+fuel))))))) by omega,l21Start_run s e.pc,
     l21_loop_run _ _ regs startPC]
   unfold tailBody
   simp only [bind_assoc];apply bind_congr_of_forall_mem_support
@@ -68,8 +68,8 @@ theorem tail_run (s : MachineState) (e : TailEntry s) (fuel : Nat) :
   rw [GroupedUpper.execute_packed_root _ (root_parent_pc b answer bpc) heap out]
   simp only [bind_assoc,pure_bind,Execution.charge]
 
-/-- Cycles of the whole commit run (programs-final-v2). -/
-def commitCycles : Nat := 506688058
+/-- Cycles of the whole commit run (odd-quartet image, budget_q). -/
+def commitCycles : Nat := 504595021
 /-- Public oracle calls of the whole commit run. -/
 def commitCalls : Nat := 43470847
 

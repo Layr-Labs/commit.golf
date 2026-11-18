@@ -12,21 +12,24 @@ def setupOps : List Instr :=
    .ADDI .x20 .x21 2056,.ADDI .x20 .x20 2056,.ADDI .x23 .x20 3872,.ADDI .x25 .x20 3648,
    .ADDI .x5 .x0 2,.ADDI .x10 .x24 8,.ADDI .x11 .x0 24,.ECALL,
    .ADDI .x26 .x20 3424,.ADDI .x5 .x0 0,.ADDI .x11 .x0 200,
-   .ADDI .x13 .x0 1,.JAL .x0 183064]
-/-- Setup continued after the tile latch (words 45,786..45,797): the A-leaf slot offsets, the latch bound,
-the two restore registers (x1 = next leaf base - quartet block, x2 = x1 + 56) and the chain link x3 = -2912. -/
+   .ADDI .x13 .x0 1,.JAL .x0 181020]
+/-- Setup continued after the tile latch (words 45,275..45,295): the even A-leaf slot gaps, the two restore
+registers (x1 = next leaf base - quartet block, x2 = x1 + 56), the chain link x3 = -2912, the odd-quartet slot and
+A-slot gaps (x8, x9, x18, x19 = even - 1224; x21, x22, x4, x7 = those + 112) and the odd restores (x31, x6 = +1224). -/
 def extraOps : List Instr :=
   [.ADDI .x10 .x18 56,.ADDI .x27 .x20 112,.ADDI .x28 .x23 112,.ADDI .x29 .x25 112,.ADDI .x30 .x26 112,
-   .ADDI .x6 .x8 56,.SUB .x1 .x0 .x20,.ADDI .x2 .x1 1096,.ADDI .x1 .x1 1040,.ADDI .x3 .x0 (-2048),.ADDI .x3 .x3 (-864),
-   .JAL .x0 1914048]
+   .SUB .x1 .x0 .x20,.ADDI .x2 .x1 1096,.ADDI .x1 .x1 1040,.ADDI .x3 .x0 (-2048),.ADDI .x3 .x3 (-864),
+   .ADDI .x8 .x20 (-1224),.ADDI .x9 .x23 (-1224),.ADDI .x18 .x25 (-1224),.ADDI .x19 .x26 (-1224),
+   .ADDI .x21 .x8 112,.ADDI .x22 .x9 112,.ADDI .x4 .x18 112,.ADDI .x7 .x19 112,
+   .ADDI .x31 .x1 1224,.ADDI .x6 .x2 1224,.JAL .x0 1916056]
 private theorem setup_decoded : ∀ i : Fin 21, Manifest.decodeBase (codeWord (0+i.val)) =
     some ((setupOps[i.val]?).getD .EBREAK) := by decide +kernel
 theorem fetch_setup (s : MachineState) (i : Fin 21) (pc : s.pc=wordPC (0+i.val)) :
     fetch image s=some (.base ((setupOps[i.val]?).getD .EBREAK)) :=
   fetch_decoded s _ (by have := i.isLt;omega) pc _ (setup_decoded i)
-private theorem extra_decoded : ∀ i : Fin 12, Manifest.decodeBase (codeWord (45786+i.val)) =
+private theorem extra_decoded : ∀ i : Fin 21, Manifest.decodeBase (codeWord (45275+i.val)) =
     some ((extraOps[i.val]?).getD .EBREAK) := by decide +kernel
-theorem fetch_extra (s : MachineState) (i : Fin 12) (pc : s.pc=wordPC (45786+i.val)) :
+theorem fetch_extra (s : MachineState) (i : Fin 21) (pc : s.pc=wordPC (45275+i.val)) :
     fetch image s=some (.base ((extraOps[i.val]?).getD .EBREAK)) :=
   fetch_decoded s _ (by have := i.isLt;omega) pc _ (extra_decoded i)
 
@@ -45,11 +48,11 @@ theorem pre_run (s : MachineState) (pc : s.pc=wordPC 0) (fuel : Nat) :
   · interval_cases i <;> rfl
 
 def postOps : List Instr := setupOps.drop 16 ++ extraOps
-def postPC (i : Nat) : Nat := if i≤4 then 16+i else 45786+(i-5)
+def postPC (i : Nat) : Nat := if i≤4 then 16+i else 45275+(i-5)
 def postPrefix (s : MachineState) (i : Nat) := (postOps.take i).foldl execInstrBr s
 theorem post_run (s : MachineState) (pc : s.pc=wordPC 16) (fuel : Nat) :
-    execute image (17+fuel) s true = (do
-      let e ← execute image fuel (postPrefix s 17) true; return e.charge 17 0) := by
+    execute image (26+fuel) s true = (do
+      let e ← execute image fuel (postPrefix s 26) true; return e.charge 26 0) := by
   apply CommitGolfCandidate.execute_unit_steps (states := postPrefix s)
   intro i hi
   refine ⟨.base ((postOps[i]?).getD .EBREAK),?_,?_,?_⟩
@@ -136,48 +139,21 @@ theorem seed_registers (s : MachineState) (entry : CommitEntry s) : SeedRegs (pr
 abbrev Key := BitVec 192
 
 def readyState (s : MachineState) (key : Key) :=
-  postPrefix (writeBits (prePrefix s 15) (wordAddress (qSalt 0)+8) key) 17
+  postPrefix (writeBits (prePrefix s 15) (wordAddress (qSalt 0)+8) key) 26
 
 private theorem post_live_frame (w pre : MachineState) (r : SeedRegs pre)
     (pc : w.pc=wordPC 16) (keep : ∀ reg,w.getReg reg=pre.getReg reg) :
-    Live (postPrefix w 17) 0 := by
-  refine ⟨⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,rfl,rfl,rfl⟩,?_,?_,?_,?_,?_,?_⟩
-  · change w.getReg .x18+signExtend12 56=_
-    rw [keep,r.message];decide
-  · exact (keep .x20).trans r.slot0
-  · exact (keep .x23).trans r.slot1
-  · exact (keep .x25).trans r.slot2
-  · change w.getReg .x20+signExtend12 3424=_
-    rw [keep,r.slot0];rfl
-  · change w.getReg .x20+signExtend12 112=_
-    rw [keep,r.slot0];rfl
-  · change w.getReg .x23+signExtend12 112=_
-    rw [keep,r.slot1];rfl
-  · change w.getReg .x25+signExtend12 112=_
-    rw [keep,r.slot2];rfl
-  · change (w.getReg .x20+signExtend12 3424)+signExtend12 112=_
-    rw [keep,r.slot0];rfl
-  · change (w.getReg .x0-w.getReg .x20)+signExtend12 1040=_
-    rw [keep .x20,r.slot0]
-    show (0#64-wordAddress (slotGap 0))+signExtend12 1040#12=-wordAddress 603979652
-    decide
-  · change (w.getReg .x0-w.getReg .x20)+signExtend12 1096=_
-    rw [keep .x20,r.slot0]
-    show (0#64-wordAddress (slotGap 0))+signExtend12 1096#12=-wordAddress 603979645
-    decide
-  · show (0#64+signExtend12 2048#12)+signExtend12 3232#12=-wordAddress 364
-    decide
-  · exact (keep .x24).trans r.sentinel
-  · rw [show startPC 0=wordPC 21 from rfl]
-    simp only [postPrefix,postOps,setupOps,extraOps,List.drop,List.take,List.foldl,List.append,List.cons_append,
-      List.nil_append,execInstrBr,MachineState.setPC,pc]
-    rfl
-  · change w.getReg .x8+signExtend12 56=_
-    rw [keep,r.output];rfl
-  · exact (keep .x8).trans r.output
-  · exact (keep .x9).trans r.heap
-  · exact (keep .x19).trans r.stride
-  · exact (keep .x21).trans r.quartet
+    Live (postPrefix w 26) 0 := by
+  have k18 : w.regs .x18=4096 := (keep .x18).trans r.message
+  have k20 : w.regs .x20=wordAddress (slotGap 0) := (keep .x20).trans r.slot0
+  have k23 : w.regs .x23=wordAddress (slotGap 1) := (keep .x23).trans r.slot1
+  have k25 : w.regs .x25=wordAddress (slotGap 2) := (keep .x25).trans r.slot2
+  have k24 : w.regs .x24=wordAddress (qSource 4194304) := (keep .x24).trans r.sentinel
+  refine ⟨⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩,?_⟩
+  all_goals dsimp only [postPrefix,postOps,setupOps,extraOps,List.drop,List.take,List.foldl,List.append,
+    List.cons_append,List.nil_append,execInstrBr,MachineState.setPC,MachineState.setReg,MachineState.getReg,startPC]
+  all_goals simp (config := {decide := true}) only [k18,k20,k23,k25,k24,pc,↓reduceIte]
+  all_goals decide
 
 theorem ready_live (s : MachineState) (e : CommitEntry s) (k : Key) : Live (readyState s k) 0 := by
   let pre := prePrefix s 15
@@ -204,15 +180,59 @@ private theorem draw_run (pre : MachineState) (r : SeedRegs pre) (n : Nat) :
 attribute [local irreducible] prePrefix postPrefix
 
 theorem setup_run (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
-    execute image (33+fuel) s true = (do
+    execute image (42+fuel) s true = (do
       let key ← liftM ($ᵗ Key : ProbComp Key)
       let z ← execute image fuel (readyState s key) true
-      return z.charge 36 0) := by
+      return z.charge 45 0) := by
   have r:=seed_registers s e
-  rw [show 33+fuel=15+(1+(17+fuel)) by omega,pre_run s e.pc,draw_run _ r]
+  rw [show 42+fuel=15+(1+(26+fuel)) by omega,pre_run s e.pc,draw_run _ r]
   simp only [bind_assoc];apply bind_congr;intro k
   rw [post_run _ (by rw [written_pc,r.pc];rfl)]
   simp only [readyState,bind_assoc,pure_bind,Execution.charge]
   apply bind_congr;intro z;cases z;simp [Nat.add_assoc] <;> omega
+
+
+/-! ## The six words after the body (45,656..45,661)
+
+They rebuild the three values the upper stage reads: `x8` = commitment (`a0 - 56`), `x21` = `Q` (`s8 - 2^32`)
+and `x9` = trapdoor (`x21 - 2^29`). -/
+def tailPostOps : List Instr :=
+  [.ADDI .x8 .x10 (-56),.ADDI .x31 .x0 1,.SLLI .x31 .x31 32,.SUB .x21 .x24 .x31,.LUI .x31 131072,.SUB .x9 .x21 .x31]
+private theorem tail_post_decoded : ∀ i : Fin 6, Manifest.decodeBase (codeWord (45656+i.val)) =
+    some ((tailPostOps[i.val]?).getD .EBREAK) := by decide +kernel
+theorem fetch_tail_post (s : MachineState) (i : Fin 6) (pc : s.pc=wordPC (45656+i.val)) :
+    fetch image s=some (.base ((tailPostOps[i.val]?).getD .EBREAK)) :=
+  fetch_decoded s _ (by have := i.isLt;omega) pc _ (tail_post_decoded i)
+
+def tailPostPrefix (s : MachineState) (i : Nat) := (tailPostOps.take i).foldl execInstrBr s
+theorem tail_post_run (s : MachineState) (pc : s.pc=wordPC 45656) (fuel : Nat) :
+    execute image (6+fuel) s true = (do
+      let e ← execute image fuel (tailPostPrefix s 6) true; return e.charge 6 0) := by
+  apply CommitGolfCandidate.execute_unit_steps (states := tailPostPrefix s)
+  intro i hi
+  refine ⟨.base ((tailPostOps[i]?).getD .EBREAK),?_,?_,?_⟩
+  · have here : (tailPostPrefix s i).pc=wordPC (45656+i) := by
+      interval_cases i <;> simp only [tailPostPrefix,tailPostOps,List.take,List.foldl,execInstrBr,MachineState.setPC,pc] <;> rfl
+    have cell := fetch_tail_post (tailPostPrefix s i) ⟨i,hi⟩ here
+    interval_cases i <;> exact cell
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+
+theorem tail_post_mem (s : MachineState) : memoryView (tailPostPrefix s 6)=memoryView s := rfl
+
+/-- What the six words leave for the upper stage (`TailEntry`, with `tailStart = 45,662`). -/
+theorem tail_post_regs (s : MachineState) (r : Live s N) :
+    (tailPostPrefix s 6).pc=wordPC 45662 ∧ (tailPostPrefix s 6).getReg .x5=0 ∧
+    (tailPostPrefix s 6).getReg .x8=4294971392 ∧ (tailPostPrefix s 6).getReg .x9=4294971424 ∧
+    (tailPostPrefix s 6).getReg .x21=wordAddress 603980292 := by
+  have k10 : s.regs .x10=wordAddress (entryWord N) := r.msg
+  have k24 : s.regs .x24=wordAddress (qSalt 0) := r.counter
+  have k5 : s.regs .x5=0 := r.selector
+  have pc : s.pc=wordPC 45656 := by rw [r.pc];unfold startPC;rw [if_pos rfl]
+  refine ⟨?_,?_,?_,?_,?_⟩
+  all_goals dsimp only [tailPostPrefix,tailPostOps,List.take,List.foldl,execInstrBr,MachineState.setPC,
+    MachineState.setReg,MachineState.getReg]
+  all_goals simp (config := {decide := true}) only [k10,k24,k5,pc,↓reduceIte]
+  all_goals decide
 
 end TwoPermutationPrototype.Grouped

@@ -10,7 +10,7 @@ set_option exponentiation.threshold 2050
 set_option maxHeartbeats 1100000
 
 /-- The quartet call of group `g`: the record window `0^72 ‖ d0 d1 d2 d3`, truncated to the
-parity node (`quartetNode g`: reply bytes `168..200` for even `g`, `0..32` for odd `g`). -/
+parity node (`quartetNode g`: reply bytes `0..32` for even `g`, `168..200` for odd `g`). -/
 def quadNodeCall (group : Nat) : SingleCall S3State (BitVec 1024) (BitVec 256) where
   enc := quartetEncode
   enc_inj := quartet_encode_injective
@@ -72,20 +72,20 @@ private theorem low_node_trunc (s : Block) : s.extractLsb' 0 256 = s3PinCall.tru
 theorem quad_node_fiber (group : Nat) (d : BitVec 256) :
     (univ.filter fun s : S3State => (quadNodeCall group).trunc s = d).card ≤ 2^1344 := by
   by_cases even : group % 2 = 0
-  · refine (Finset.card_le_card ?_).trans (s3_pin_fiber d)
-    intro s hs
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hs ⊢
-    rw [← hs]
-    change s3PinCall.pin s = quartetNode group s
-    simp only [quartetNode, even, ite_true]
-    exact (high_node_pin s).symm
   · refine (Finset.card_le_card ?_).trans (s3_trunc_fiber d)
     intro s hs
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hs ⊢
     rw [← hs]
     change s3PinCall.trunc s = quartetNode group s
-    simp only [quartetNode, even, ite_false]
+    simp only [quartetNode, even, ite_true]
     exact (low_node_trunc s).symm
+  · refine (Finset.card_le_card ?_).trans (s3_pin_fiber d)
+    intro s hs
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hs ⊢
+    rw [← hs]
+    change s3PinCall.pin s = quartetNode group s
+    simp only [quartetNode, even, ite_false]
+    exact (high_node_pin s).symm
 
 theorem quad_bad_trace_bound {α : Type} (group : Nat) (st : Strat PermState α) (calls : Nat)
     (fits : calls < Fintype.card S3State) :

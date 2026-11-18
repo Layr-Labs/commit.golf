@@ -6,7 +6,8 @@ import CommitGolfCandidate.ProjectedCompression
 
 Quartet group `g` (leaves `4g .. 4g+3`) hashes the record window `0^72 ‖ d0 d1 d2 d3`: the payload
 (`d0` in its low bits) in bits `576..1600` and zeros in bits `0..576`. Its node is the call's reply
-bytes `168..200` for even `g` and bytes `0..32` for odd `g`.
+bytes `0..32` for even `g` and bytes `168..200` for odd `g` (the odd quartet's block sits 200 bytes below
+the even one and both calls reuse their output pointer, so the two nodes abut as `node_odd ‖ node_even`).
 
 Above the group nodes (heap nodes `2^22 + g`), the parent stored at heap node `n` keeps `nodeKeep n` of
 its compression output: all 256 bits at level 21, the low 240 bits at levels 17..20, the low 238 bits
@@ -28,9 +29,9 @@ theorem quartet_encode_injective : Function.Injective quartetEncode := by
   have slice := congrArg (fun input : BitVec 1600 => input.extractLsb' 576 1024) eq
   simpa only [quartetEncode, BitVec.extractLsb'_append_eq_left] using slice
 
-/-- The node of quartet group `g`: reply bytes `168..200` for even `g`, bytes `0..32` for odd `g`. -/
+/-- The node of quartet group `g`: reply bytes `0..32` for even `g`, bytes `168..200` for odd `g`. -/
 def quartetNode (group : Nat) (reply : Block) : BitVec 256 :=
-  if group % 2 = 0 then reply.extractLsb' 1344 256 else reply.extractLsb' 0 256
+  if group % 2 = 0 then reply.extractLsb' 0 256 else reply.extractLsb' 1344 256
 
 theorem quartet_node_parity (group : Nat) (reply : Block) :
     quartetNode (group % 2) reply = quartetNode group reply := by
@@ -38,16 +39,16 @@ theorem quartet_node_parity (group : Nat) (reply : Block) :
   rw [Nat.mod_mod]
 
 theorem quartet_node_even {group : Nat} (even : group % 2 = 0) (reply : Block) :
-    quartetNode group reply = reply.extractLsb' 1344 256 := by
+    quartetNode group reply = outputDigest reply := by
   unfold quartetNode
   rw [if_pos even]
+  try rfl
 
 theorem quartet_node_odd {group : Nat} (odd : group % 2 = 1) (reply : Block) :
-    quartetNode group reply = outputDigest reply := by
+    quartetNode group reply = reply.extractLsb' 1344 256 := by
   have notEven : ¬ group % 2 = 0 := by omega
   unfold quartetNode
   rw [if_neg notEven]
-  try rfl
 
 /-! ### Upper-tree node widths -/
 

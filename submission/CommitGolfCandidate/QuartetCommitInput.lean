@@ -28,10 +28,10 @@ theorem initial_padding (msg : Message) (g k : Nat) (hg : g<4194304) (hk : k<9) 
     memoryView (QuartetArtifact.submission.initialState .commit msg) (qSource g+k)=0 := by
   let atWord := 8*(qSource g+k)
   change (QuartetArtifact.submission.initialState .commit msg).getMem (BitVec.ofNat 64 atWord)=0
-  rw [initial_input_word QuartetArtifact.submission .commit msg atWord (by dsimp [atWord,qSource];omega)]
+  rw [initial_input_word QuartetArtifact.submission .commit msg atWord (by dsimp [atWord,qSource];split_ifs <;> omega)]
   have byte (j : Nat) (hj : j<8) : inputByte QuartetArtifact.submission .commit msg (atWord+j)=0 := by
     have gone : ¬(4096≤atWord+j ∧ atWord+j<4096+LENGTH*(LEAF_SIZE/8)) := by
-      change ¬(_ ∧ atWord+j<4096+16777216*256);dsimp [atWord,qSource];omega
+      change ¬(_ ∧ atWord+j<4096+16777216*256);dsimp [atWord,qSource];split_ifs <;> omega
     have base : QuartetArtifact.submission.layout.message=4096 := rfl
     have data : (QuartetArtifact.submission.image .commit).data=[] := rfl
     simp only [inputByte,Submission.inputBuffers,List.find?_cons,messageBuffer,base,gone,

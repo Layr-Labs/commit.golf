@@ -16,8 +16,8 @@ theorem rank_lt (n : Nat) : rank n<11 := by unfold rank;omega
 
 /-- Code words of slot `n` of rank `r`, quartet calls excluded. -/
 def leafLen (r : Nat) := rankPrefix (r+1)-rankPrefix r
-/-- Extra words of a quartet call: two for an even quartet, three for an odd one. -/
-def extraLen (n : Nat) := if n%8=3 then 2 else if n%8=7 then 3 else 0
+/-- Extra words of a quartet call: two for either parity (both reuse the fourth leaf's output pointer). -/
+def extraLen (n : Nat) := if n%8=3 then 2 else if n%8=7 then 2 else 0
 
 /-- A chained head is one word shorter than a keyed one. -/
 def chainLen (n : Nat) := if rank n=0 ∧ ¬keyed n then 1 else 0
@@ -58,7 +58,7 @@ theorem chained_step (n : Nat) :
   split_ifs with c <;> omega
 
 theorem first_word_eq (n : Nat) :
-    firstWord n+chainedBefore n=21+117*(n/11)+rankPrefix (n%11)+2*((n+4)/8)+3*(n/8) := by
+    firstWord n+chainedBefore n=21+117*(n/11)+rankPrefix (n%11)+2*((n+4)/8)+2*(n/8) := by
   have cb : chainedBefore n≤117*(n/11)+rankPrefix (n%11) := by
     by_cases z : n%11=0
     · unfold chainedBefore;omega
@@ -86,7 +86,7 @@ theorem packet_next (n : Nat) (hn : n<4096) : firstWord (n+1)=firstWord n+(packe
 theorem rank_prefix_le (r : Nat) : rankPrefix r≤117 := by
   unfold rankPrefix;split_ifs <;> omega
 
-theorem first_word_le (n : Nat) (hn : n≤4096) : firstWord n≤46222 := by
+theorem first_word_le (n : Nat) (hn : n≤4096) : firstWord n≤45710 := by
   have := rank_prefix_le (n%11);unfold firstWord;omega
 
 theorem fetch_packet (n : Fin 4096) (i : Nat) (hi : i<(packet n.val).length)

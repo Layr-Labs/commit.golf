@@ -61,27 +61,97 @@ theorem kept_heap_congr (keep : Nat → BitVec 256 → BitVec 256) (compress : C
 termination_by 2*leafCount - node
 decreasing_by all_goals omega
 
-/-- The upper tree over the 2^22 group nodes `quads` (heap nodes `2^22 + g`); the parent at heap node
-`0 < n < 2^22` keeps `nodeKeep n` of the compression of its children. -/
+/-! ### Group-index flips
+
+The two quartets of an octet store their nodes as `node_odd ‖ node_even` (odd node at the lower address), so
+the level-21 parent of groups `2k, 2k+1` is `compress (node(2k) ‖ node(2k+1))`: the even node in the high
+half. The heap encodes this by permuting its leaves: heap node `2^22 + g` holds group `g ^^^ 1`'s node. -/
+
+theorem xor_one_cases (g : Nat) : g ^^^ 1 = if g % 2 = 0 then g + 1 else g - 1 := by
+  split
+  · next even => exact Nat.xor_one_of_even (Nat.even_iff.mpr even)
+  · next odd => exact Nat.xor_one_of_odd (Nat.odd_iff.mpr (by omega))
+
+theorem xor_one_xor_one (g : Nat) : g ^^^ 1 ^^^ 1 = g := by
+  rw [Nat.xor_assoc, Nat.xor_self, Nat.xor_zero]
+
+theorem xor_one_lt {g : Nat} (h : g < 4194304) : g ^^^ 1 < 4194304 := by
+  rw [xor_one_cases]; split <;> omega
+
+/-- For `level ≥ 1` the flipped path start and the plain one have the same ancestors. -/
+theorem flip_start_shift (g level : Nat) (later : 0 < level) :
+    (4194304 + (g ^^^ 1)) / 2^level = (4194304 + g) / 2^level := by
+  obtain ⟨l, rfl⟩ : ∃ l, level = l + 1 := ⟨level - 1, by omega⟩
+  have two : (2:Nat)^(l+1) = 2 * 2^l := by rw [Nat.pow_succ, Nat.mul_comm]
+  have half : (4194304 + (g ^^^ 1)) / 2 = (4194304 + g) / 2 := by
+    rw [xor_one_cases]; split <;> omega
+  rw [two, ← Nat.div_div_eq_div_mul, ← Nat.div_div_eq_div_mul, half]
+
+theorem xor_four_cases (i : Nat) : i ^^^ 4 = if i / 4 % 2 = 0 then i + 4 else i - 4 := by
+  have high : (i ^^^ 4) / 8 = i / 8 := by
+    have shifted := Nat.xor_div_two_pow (a := i) (b := 4) (n := 3)
+    simpa using shifted
+  have low : (i ^^^ 4) % 8 = (i % 8) ^^^ 4 := by
+    have masked := Nat.xor_mod_two_pow (a := i) (b := 4) (n := 3)
+    simpa using masked
+  have whole := Nat.div_add_mod (i ^^^ 4) 8
+  rw [high, low] at whole
+  have small : i % 8 < 8 := Nat.mod_lt _ (by decide)
+  have cases : (i % 8) ^^^ 4 = if i % 8 < 4 then i % 8 + 4 else i % 8 - 4 := by
+    generalize i % 8 = r at small ⊢
+    interval_cases r <;> decide
+  rw [cases] at whole
+  split at whole <;> split <;> omega
+
+/-- The group of `i ^^^ 4` is the other group of `i`'s octet. -/
+theorem xor_four_div (i : Nat) : (i ^^^ 4) / 4 = i / 4 ^^^ 1 := by
+  rw [xor_four_cases, xor_one_cases]
+  split <;> omega
+
+/-- The upper tree over the 2^22 group nodes `quads`: heap node `2^22 + g` holds `quads (g ^^^ 1)`; the
+parent at heap node `0 < n < 2^22` keeps `nodeKeep n` of the compression of its children. -/
 def upperHeapFrom (quads : Nat → BitVec 256) (compress : Compression) : Nat → BitVec 256 :=
-  keptHeap nodeKeep compress 4194304 quads
+  keptHeap nodeKeep compress 4194304 (fun g => quads (g ^^^ 1))
 
 theorem upper_heap_from_parent (quads : Nat → BitVec 256) (compress : Compression) (node : Nat)
     (positive : 0 < node) (below : node < 4194304) :
     upperHeapFrom quads compress node =
       nodeKeep node (compress (upperHeapFrom quads compress (2*node+1) ++ upperHeapFrom quads compress (2*node))) :=
-  kept_heap_parent nodeKeep compress 4194304 quads node positive below
+  kept_heap_parent nodeKeep compress 4194304 _ node positive below
 
+/-- Heap node `2^22 + g` holds group `g ^^^ 1`'s node. -/
 theorem upper_heap_from_group (quads : Nat → BitVec 256) (compress : Compression) (group : Nat)
     (inside : group < 4194304) :
-    upperHeapFrom quads compress (4194304 + group) = quads group :=
-  kept_heap_leaf nodeKeep compress 4194304 quads group inside
+    upperHeapFrom quads compress (4194304 + group) = quads (group ^^^ 1) :=
+  kept_heap_leaf nodeKeep compress 4194304 (fun g => quads (g ^^^ 1)) group inside
+
+/-- Group `g`'s node sits at heap node `2^22 + (g ^^^ 1)`. -/
+theorem upper_heap_from_group_flip (quads : Nat → BitVec 256) (compress : Compression) (group : Nat)
+    (inside : group < 4194304) :
+    upperHeapFrom quads compress (4194304 + (group ^^^ 1)) = quads group := by
+  rw [upper_heap_from_group quads compress _ (xor_one_lt inside), xor_one_xor_one]
+
+/-- The level-21 parent of groups `2k, 2k+1` keeps the whole compression of `node(2k) ‖ node(2k+1)`. -/
+theorem upper_heap_from_level21 (quads : Nat → BitVec 256) (compress : Compression) (k : Nat)
+    (inside : k < 2097152) :
+    upperHeapFrom quads compress (2097152 + k) = compress (quads (2*k) ++ quads (2*k+1)) := by
+  have full : (2:Nat)^21 ≤ 2097152 + k := by norm_num
+  have right : (2*k+1) ^^^ 1 = 2*k := by rw [xor_one_cases]; split <;> omega
+  have left : (2*k) ^^^ 1 = 2*k+1 := by rw [xor_one_cases]; split <;> omega
+  have high : upperHeapFrom quads compress (2*(2097152+k)+1) = quads (2*k) := by
+    rw [show 2*(2097152+k)+1 = 4194304 + (2*k+1) by omega,
+      upper_heap_from_group quads compress (2*k+1) (by omega), right]
+  have low : upperHeapFrom quads compress (2*(2097152+k)) = quads (2*k+1) := by
+    rw [show 2*(2097152+k) = 4194304 + 2*k by omega, upper_heap_from_group quads compress (2*k) (by omega), left]
+  refine (upper_heap_from_parent quads compress (2097152 + k) (by omega) (by omega)).trans
+    ((node_keep_full full _).trans ?_)
+  rw [high, low]
 
 /-- The upper tree depends on the group nodes only below `2^22`. -/
 theorem upper_heap_from_congr (quads quads' : Nat → BitVec 256) (same : ∀ g < 4194304, quads g = quads' g)
     (compress : Compression) (node : Nat) :
     upperHeapFrom quads compress node = upperHeapFrom quads' compress node :=
-  kept_heap_congr nodeKeep compress 4194304 quads quads' same node
+  kept_heap_congr nodeKeep compress 4194304 _ _ (fun g inside => same _ (xor_one_lt inside)) node
 
 /-- The honest upper tree: group `g`'s node is `lookup g` of its payload. -/
 def upperHeap (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression)
@@ -94,10 +164,18 @@ theorem upper_heap_parent (lookup : Nat → BitVec 1024 → BitVec 256) (compres
       nodeKeep node (compress (upperHeap lookup compress leaves (2*node+1) ++ upperHeap lookup compress leaves (2*node))) :=
   upper_heap_from_parent _ compress node positive below
 
+/-- Heap node `2^22 + g` holds group `g ^^^ 1`'s node. -/
 theorem upper_heap_leaf (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression)
     (leaves : DigestTape) (group : Nat) (inside : group < 4194304) :
-    upperHeap lookup compress leaves (4194304 + group) = lookup group (quartetPayload leaves group) :=
+    upperHeap lookup compress leaves (4194304 + group) =
+      lookup (group ^^^ 1) (quartetPayload leaves (group ^^^ 1)) :=
   upper_heap_from_group _ compress group inside
+
+/-- Group `g`'s node sits at heap node `2^22 + (g ^^^ 1)`. -/
+theorem upper_heap_leaf_flip (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression)
+    (leaves : DigestTape) (group : Nat) (inside : group < 4194304) :
+    upperHeap lookup compress leaves (4194304 + (group ^^^ 1)) = lookup group (quartetPayload leaves group) :=
+  upper_heap_from_group_flip _ compress group inside
 
 /-! ### Proof bytes: 238-bit nodes packed eight to 238 bytes -/
 
@@ -150,12 +228,14 @@ decreasing_by simp only [List.length_drop]; omega
 
 /-- One opening record: the salt, the three sibling leaf digests, the path siblings at `l = 0, 1`
 (the sibling group node and the level-21 sibling, 32 bytes each), `l = 2..5` (30 bytes each), and the
-eight 238-bit siblings at `l = 6..13` packed in 238 bytes. -/
+eight 238-bit siblings at `l = 6..13` packed in 238 bytes. The path of position `i` starts at heap node
+`2^22 + (⌊i/4⌋ ^^^ 1)`, which holds its group's node; from level 1 on its ancestors are those of
+`2^22 + ⌊i/4⌋` (`flip_start_shift`), so the packed levels keep the plain start. -/
 def openingRecord (leaves : DigestTape) (heap : Nat → BitVec 256) (index : Index) (salt : BitVec 128) : Proof :=
   saltBytes salt ++
     ([1, 2, 3] : List Nat).flatMap (fun j => digestBytes (leafAt leaves (index.val ^^^ j))) ++
     (List.range 6).flatMap (fun level =>
-      proofDigestBytes (2 ≤ level) (heap ((((4194304 + index.val/4) / 2^level)) ^^^ 1))) ++
+      proofDigestBytes (2 ≤ level) (heap ((((4194304 + (index.val/4 ^^^ 1)) / 2^level)) ^^^ 1))) ++
     packEight ((List.range 8).map (fun k => heap ((((4194304 + index.val/4) / 2^(6+k))) ^^^ 1)))
 
 /-- The cap frontier (the record's depth-first order) as packed 238-bit nodes. -/

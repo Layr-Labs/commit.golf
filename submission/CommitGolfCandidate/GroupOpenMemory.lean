@@ -19,8 +19,10 @@ theorem actual_proof_base : proofBase = quartetProofBase := rfl
 
 def groupSlots : Nat := trapdoorBase+32*LENGTH
 
+/-- Leaf digest `i` as the writer reads it: from the block the prefix rebuilt (inverse group reply) at
+`groupSlots + 512 + 1024 ⌊i/4⌋`. -/
 def leafAddress (i : Nat) : Nat :=
-  groupSlots + 1024 * (i/4) + 72 + 32 * (i%4)
+  groupSlots + 512 + 1024 * (i/4) + 72 + 32 * (i%4)
 
 def upperNode (index : Index) (level : Nat) : Nat := Opening.lowerNode index (level+2)
 
@@ -151,18 +153,20 @@ theorem leaf_address_inside (i : Nat) (valid : i < LENGTH) :
     leafAddress i % 8 = 0 ∧ trapdoorBase ≤ leafAddress i ∧ leafAddress i+32 ≤ nonceBase := by
   have hb : trapdoorBase % 8 = 0 := by decide
   unfold leafAddress groupSlots nonceBase
+  unfold LENGTH LOG_LENGTH at *
   omega
 
 theorem input_leaf (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
     (i : Nat) (inside : i<LENGTH) :
     readBuffer (s.initialState .opening (trapdoor,positions)) (leafAddress i) 32 =
-      trapdoor.extractLsb' (8*(32*LENGTH + 1024*(i/4) + 72 +32*(i%4))) 256 := by
-  let off := 32*LENGTH + 1024*(i/4) + 72 +32*(i%4)
+      trapdoor.extractLsb' (8*(32*LENGTH + 512 + 1024*(i/4) + 72 +32*(i%4))) 256 := by
+  let off := 32*LENGTH + 512 + 1024*(i/4) + 72 +32*(i%4)
   have physical : leafAddress i = trapdoorBase+off := by unfold leafAddress groupSlots off; omega
   rw [physical]
   apply input_trapdoor_slice s layout trapdoor positions
   unfold off trapdoorBytes
+  unfold LENGTH LOG_LENGTH at *
   omega
 
 end TwoPermutationPrototype.GroupedOpening

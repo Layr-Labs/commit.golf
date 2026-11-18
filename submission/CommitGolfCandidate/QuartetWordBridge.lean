@@ -6,15 +6,16 @@ import CommitGolfCandidate.TwoPermutationPackedParentMask
 /-!
 # The honest heap of the commit
 
-`physicalHeap` is the transcript's upper heap: level-22 node `g` is the parity truncation of the
-group call on quartet `g`'s payload; an internal node `n` keeps `nodeKeep n` of the compression of its
-children: all 256 bits at level 21, the low 240 bits at levels 17..20, the low 238 bits at the root and
-levels 1..16.
+`physicalHeap` is the transcript's upper heap: level-22 node `2^22 + g` is the parity truncation of the
+group call on quartet `g ^^^ 1`'s payload (the odd-quartet layout stores `node_odd ‖ node_even`, so the leaves
+are permuted); an internal node `n` keeps `nodeKeep n` of the compression of its children: all 256 bits at
+level 21, the low 240 bits at levels 17..20, the low 238 bits at the root and levels 1..16.
 -/
 
 namespace TwoPermutationPrototype.QuartetCommit
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Sampling.Quartet (leafAt quartetPayload quartetLookup upperHeap upper_heap_parent upper_heap_leaf)
+open TwoPermutationPrototype.Sampling.Quartet (leafAt quartetPayload quartetLookup upperHeap upper_heap_parent upper_heap_leaf
+  upper_heap_leaf_flip)
 set_option maxHeartbeats 1500000
 set_option maxRecDepth 8192
 
@@ -55,12 +56,23 @@ theorem physical_heap_238 (oracle : Oracle) (msg : Message) (salts : CompleteSal
       (physicalHeap oracle msg salts (2*n+1) ++ physicalHeap oracle msg salts (2*n))) := by
   exact (physical_heap_parent oracle msg salts n pos (by omega)).trans (node_keep_238 (node := n) (by omega) _)
 
+/-- Heap leaf `2^22 + g` holds the node of group `g ^^^ 1` (the level-22 leaves are permuted). -/
 theorem physical_heap_leaf (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (g : Nat) (small : g<4194304) :
     physicalHeap oracle msg salts (4194304+g) =
+      quartetNode (g^^^1) (oracle.permutation (quartetEncode (quartetPayload
+        (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts) (g^^^1)))) := by
+  unfold physicalHeap
+  rw [upper_heap_leaf _ _ _ g small]
+  rfl
+
+/-- Group `g`'s node sits at heap leaf `2^22 + (g ^^^ 1)`. -/
+theorem physical_heap_leaf_flip (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (g : Nat)
+    (small : g<4194304) :
+    physicalHeap oracle msg salts (4194304+(g^^^1)) =
       quartetNode g (oracle.permutation (quartetEncode (quartetPayload
         (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts) g))) := by
   unfold physicalHeap
-  rw [upper_heap_leaf _ _ _ g small]
+  rw [upper_heap_leaf_flip _ _ _ g small]
   rfl
 
 end TwoPermutationPrototype.QuartetCommit

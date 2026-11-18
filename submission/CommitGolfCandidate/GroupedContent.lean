@@ -107,15 +107,10 @@ theorem tail_meaning (o : Oracle) (v : View) (i : Nat) :
     · right;exact t
   by_cases t : i%4=3
   · have ql : qLeaf i=qSource (i/4)+21 := by rcases q with q|q;exact q;exact absurd t q
-    by_cases ev : (i/4)%2=0
-    · refine ⟨?_,?_⟩
-      · simp [tailPlan,e,e2,t,ev,viewStep,View.reg,View.reply,callReply,replyWord,ql]
-      · intro r h10 h12
-        simp [tailPlan,e,e2,t,ev,viewStep,View.reg,View.reply,Ne.symm h10]
-    · refine ⟨?_,?_⟩
-      · simp [tailPlan,e,e2,t,ev,viewStep,View.reg,View.reply,callReply,replyWord]
-      · intro r h10 h12
-        simp [tailPlan,e,e2,t,ev,viewStep,View.reg,View.reply,Ne.symm h10,Ne.symm h12]
+    refine ⟨?_,?_⟩
+    · simp [tailPlan,e,t,viewStep,View.reg,View.reply,callReply,replyWord,ql]
+    · intro r h10 h12
+      simp [tailPlan,e,t,viewStep,View.reg,View.reply,Ne.symm h10]
   · refine ⟨?_,?_⟩
     · simp [tailPlan,e,t,viewStep,View.reg]
     · intro r h10 h12

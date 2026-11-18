@@ -54,7 +54,7 @@ theorem packed_record_first_sibling (oracle : Oracle) (message : Message) (posit
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) (state : MachineState)
     (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state) :
     readBuffer state (checkProofByte ordinal+112) 32 =
-      honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present).val 2 ^^^ 1) := by
+      honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) 2 ^^^ 1) := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
   have fit : checkProofByte ordinal+112+32 ≤ 2^36 := by
@@ -74,7 +74,7 @@ theorem packed_record_second_sibling (oracle : Oracle) (message : Message) (posi
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) (state : MachineState)
     (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state) :
     readBuffer state (checkProofByte ordinal+144) 32 =
-      honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present).val 3 ^^^ 1) := by
+      honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) 3 ^^^ 1) := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
   have fit : checkProofByte ordinal+144+32 ≤ 2^36 := by
@@ -96,7 +96,7 @@ theorem packed_record_mid_sibling (oracle : Oracle) (message : Message) (positio
     (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state)
     (slot : Nat) (valid : slot < 4) :
     readBuffer state (checkProofByte ordinal+176+30*slot) 30 =
-      (honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) (slot+4) ^^^ 1)).extractLsb' 0 240 := by
+      (honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (slot+4) ^^^ 1)).extractLsb' 0 240 := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
   have fit : checkProofByte ordinal+(176+30*slot)+30 ≤ 2^36 := by
@@ -121,7 +121,7 @@ theorem packed_record_block_byte (oracle : Oracle) (message : Message) (position
     (offset : Nat) (inside : offset < 238) :
     state.getByte (BitVec.ofNat 64 (checkProofByte ordinal+296+offset)) =
       (packEight ((List.range 8).map (fun k =>
-        honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) (k+8) ^^^ 1))))[offset]! := by
+        honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (k+8) ^^^ 1))))[offset]! := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
   have fit : checkProofByte ordinal+296+238 ≤ 2^36 := by

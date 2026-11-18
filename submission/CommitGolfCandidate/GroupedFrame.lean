@@ -31,7 +31,7 @@ private theorem far_key (i : Nat) (hi : i<16777216) : msgWord i+64<qSalt 0 := by
   unfold msgWord qSalt;omega
 
 private theorem far_heap (i j : Nat) (hi : i<16777216) : msgWord i+64<qLeaf j := by
-  unfold msgWord qLeaf qSource;omega
+  unfold msgWord qLeaf qSource;split_ifs <;> omega
 
 theorem window_outside {n : Nat} (m : Memory) (a : Nat) (ws : Words n) (w : Nat)
     (h : w<a ∨ a+n≤w) : writeWindow m a ws w=m w := by unfold writeWindow;apply dif_neg;omega

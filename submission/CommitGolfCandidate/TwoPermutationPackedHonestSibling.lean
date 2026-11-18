@@ -10,14 +10,14 @@ open TwoPermutationPrototype.PackedHonest (honestHeap honest_projected_node hone
 set_option maxRecDepth 8192
 
 /-- The proof's upper sibling at loop level `level` is the honest heap node beside
-`lowerNode index (level+2)`. -/
+`lowerNode (flipIndex index) (level+2)`, the checker's path. -/
 theorem canonical_lower_wire_sibling (oracle : Oracle) (message : Message)
     (positions : Positions) (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card)
     (state : MachineState) (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state)
     (level : Nat) (within : level < 14) :
     lowerWireSibling state ordinal level =
-      honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) (level+2) ^^^ 1) := by
-  have range := lower_sibling_range (honestIndex positions ordinal present).val level within
+      honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (level+2) ^^^ 1) := by
+  have range := lower_sibling_range (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) level within
   unfold lowerWireSibling
   by_cases small : level ≤ 1
   · rw [if_pos small]
@@ -45,7 +45,7 @@ theorem canonical_lower_wire_sibling (oracle : Oracle) (message : Message)
       exact honest_projected_node _ _ _ _ (by omega) (by omega)
     · rw [if_neg mid]
       let nodes := (List.range 8).map (fun k =>
-        honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) (k+8) ^^^ 1))
+        honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (k+8) ^^^ 1))
       have six : lowerProofByte ordinal 6 = checkProofByte ordinal+296 := by
         unfold lowerProofByte
         rw [if_neg (show ¬ (6 ≤ 1) by decide), if_pos (show 6 ≤ 13 by decide)]
@@ -55,7 +55,7 @@ theorem canonical_lower_wire_sibling (oracle : Oracle) (message : Message)
           exact packed_record_block_byte oracle message positions salts ordinal present state framed j inside)
         level (by omega) within]
       have entry : nodes[level-6]! =
-          honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) (level+2) ^^^ 1) := by
+          honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (level+2) ^^^ 1) := by
         rw [getElem!_pos nodes (level-6) (by simp [nodes]; omega)]
         simp only [nodes, List.getElem_map, List.getElem_range]
         rw [show level-6+8 = level+2 by omega]

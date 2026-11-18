@@ -32,12 +32,12 @@ structure PackedLeafTrace (oracle : Oracle) (index : Index) (entry : Entry) (dig
 
 structure LeafBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (before : MachineState) (block : RecordBlock) : Prop where
-  steps : block.steps ≤ 208
+  steps : block.steps ≤ 209
   run : ∀ fuel,
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel block.state false))
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+fuel) before false)) =
       ((tail.1.1.charge block.cycles 3,block.rows++tail.1.2),3+tail.2)
-  cursor : LowerCursor ordinal (honestIndex input.positions ordinal present).val 0 block.state
+  cursor : LowerCursor ordinal (QuartetCheck.flipIndex (honestIndex input.positions ordinal present).val) 0 block.state
   saved : LowerSaved before block.state
   frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) →
     (word < 1152 ∨ 1576 ≤ word) → (word < 1673 ∨ 1690 ≤ word) → memoryView block.state word=memoryView before word
@@ -46,7 +46,8 @@ structure LeafBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     Nonempty (PackedLeafTrace oracle index.val (input.values index) (readBuffer block.state 12288 32) block.rows)
   honest : ∀ message salts, input=honestCheckInput oracle message input.positions salts →
     readBuffer block.state 12288 32 =
-      honestHeap oracle message salts (Opening.lowerNode (honestIndex input.positions ordinal present).val 2)
+      honestHeap oracle message salts
+        (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex input.positions ordinal present).val) 2)
 
 def LeafBlockRefines (leaf : Oracle → Nat → Index → MachineState → RecordBlock) : Prop :=
   ∀ (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (present : ordinal < input.positions.card)
@@ -54,11 +55,13 @@ def LeafBlockRefines (leaf : Oracle → Nat → Index → MachineState → Recor
       LeafBlockFacts oracle input ordinal present state
         (leaf oracle ordinal (honestIndex input.positions ordinal present).val state)
 
+/-- The leaf and quartet block of position `index`, then the lower loop on the checker's path
+(`flipIndex index`: the image flips bit 2 of the index before the quartet's heap index). -/
 def joinedRecord (leaf : Oracle → Nat → Index → MachineState → RecordBlock)
     (step : Oracle → Nat → Index → Nat → MachineState → RecordBlock)
     (oracle : Oracle) (ordinal : Nat) (index : Index) (state : MachineState) : RecordBlock :=
   let early := leaf oracle ordinal index state
-  let later := runLower step oracle ordinal index 14 0 early.state
+  let later := runLower step oracle ordinal (QuartetCheck.flipIndex index) 14 0 early.state
   ⟨later.state,early.steps+later.steps,early.cycles+later.cycles,early.rows++later.rows⟩
 
 private theorem leaf_sibling_frame (before after : MachineState) (input : CheckInput) (ordinal level : Nat)
@@ -81,13 +84,14 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
   intro oracle input ordinal present before fits cursor framed
   let item := honestIndex input.positions ordinal present
   let early := leaf oracle ordinal item.val before
-  let later := runLower step oracle ordinal item.val 14 0 early.state
+  let later := runLower step oracle ordinal (QuartetCheck.flipIndex item.val) 14 0 early.state
   have entry : LeafBlockFacts oracle input ordinal present before early :=
     leafKernel oracle input ordinal present before fits cursor framed
   have room := packed_record_room input ordinal present fits
-  have tail := run_lower_facts step lowerKernel oracle ordinal item.val 14 0 (by decide) room early.state entry.cursor
+  have tail := run_lower_facts step lowerKernel oracle ordinal (QuartetCheck.flipIndex item.val) 14 0 (by decide)
+    room early.state entry.cursor
   refine ⟨?_,?_,tail.cursor.pc.trans (ite_eq_left rfl),?_,?_,?_,?_,?_,?_⟩
-  · have leafCost : early.steps ≤ 208 := entry.steps
+  · have leafCost : early.steps ≤ 209 := entry.steps
     have lowerCost : later.steps ≤ 116*14 := tail.steps
     change early.steps+later.steps ≤ 2025
     omega
@@ -98,7 +102,8 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
       entry.run, tail.exact_run]
     simp only [Execution.charge,List.append_assoc,← Nat.add_assoc,show (3:Nat)+14=17 by decide]
     rfl
-  · exact tail.cursor.node.trans (congrArg (BitVec.ofNat 64) (Opening.lower_node_cap_group item.val))
+  · exact tail.cursor.node.trans (congrArg (BitVec.ofNat 64)
+      ((Opening.lower_node_cap_group (QuartetCheck.flipIndex item.val)).trans (QuartetCheck.cap_group_flip item.val)))
   · exact tail.cursor.proof.trans (congrArg (BitVec.ofNat 64) (lower_proof_byte_end ordinal))
   · intro r saved
     exact (tail.saved _ saved).trans (entry.saved _ saved)
@@ -109,7 +114,8 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
   · obtain ⟨leafTrace⟩ := entry.trace
     have witness := tail.path.mono (fun _ found => List.mem_append_right early.rows found)
     rw [← leafTrace.output] at witness
-    have node : Opening.lowerNode item.val (0+2) = LENGTH / 4 + item.val.val / 4 := QuartetCheck.lower_node_two item.val
+    have node : Opening.lowerNode (QuartetCheck.flipIndex item.val) (0+2) = LENGTH / 4 + (item.val.val / 4 ^^^ 1) :=
+      QuartetCheck.lower_node_two_flip item.val
     rw [node] at witness
     exact ⟨⟨leafTrace.nonce, List.mem_append_left later.rows leafTrace.first,
       List.mem_append_left later.rows leafTrace.second, leafTrace.quartet, leafTrace.reply, leafTrace.child,
@@ -118,6 +124,7 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
     have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
       Eq.mp (congrArg (fun data => RecordInputFrame data ordinal before) canonical) framed
     change readBuffer later.state 12288 32 = honestHeap oracle message salts (capGroup item.val)
+    rw [← QuartetCheck.cap_group_flip item.val]
     apply tail.honest _ (honestLeaves oracle message salts)
     · exact entry.honest message salts canonical
     · intro level _ within

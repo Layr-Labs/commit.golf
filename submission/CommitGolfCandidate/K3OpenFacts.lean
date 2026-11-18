@@ -1,8 +1,8 @@
 import CommitGolfCandidate.GroupOpenResume
 import CommitGolfCandidate.GroupOpenHeaderSpec
-import CommitGolfCandidate.K3GRBridge
+import CommitGolfCandidate.K3OpenReply
 
-/-! K3-lite opener facts: what the virtual trapdoor (the memory after the prefix pass) holds. -/
+/-! K3-lite opener facts: what the virtual trapdoor (the memory after the prefix pass) holds, and the opened proof. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open TwoPermutationPrototype.Sampling
@@ -23,20 +23,19 @@ theorem pass_end_facts (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.si
   rw [Nat.zero_add] at r seen
   exact ⟨r,seen⟩
 
-/-- The virtual trapdoor of a nonempty opening: heap below level 22 and every non-d3 leaf kept; the opened quartets'
-level-22 siblings and even d3s rebuilt from the group replies; the opened salts are the linked salts. -/
+/-- The virtual trapdoor of a nonempty opening: heap below level 22 kept; the opened quartets' level-22 siblings
+copied from the group nodes; their rebuilt blocks (`32 L + 512 + 1024 g`) hold the inverses of their group
+replies; the opened salts are the linked salts. -/
 theorem end_components (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
     (nz : 0<p.card) :
     let t:=virtualTd (passEnd o td p)
     (∀ n, n<4194304 → Opening.trapdoorHeap (s:=actual) t n=Opening.trapdoorHeap (s:=actual) td n) ∧
-    (∀ i : Index, ¬(i.val/4%2=0 ∧ i.val%4=3) → trapdoorLeaf (s:=actual) t i.val=trapdoorLeaf (s:=actual) td i.val) ∧
     (∀ i∈p, Opening.trapdoorHeap (s:=actual) t (4194304+(i.val/4^^^1))=
       td.extractLsb' (8*(8*nodeWordOf (i.val/4^^^1)-trapdoorBase)) 256) ∧
-    (∀ i∈p, i.val/4%2=0 → trapdoorLeaf (s:=actual) t (4*(i.val/4)+3)=
-      (o.permutation.symm (td.extractLsb' (8*(32*LENGTH+1024*(i.val/4)+168)) 1600)).extractLsb' 1344 256) ∧
+    (∀ i∈p, t.extractLsb' (8*(32*LENGTH+512+1024*(i.val/4))) 1600=o.permutation.symm (groupReply td (i.val/4))) ∧
     (∀ i∈p, trapdoorSalt (s:=actual) t i=linkedSalts o (keyOf td) i) := by
   obtain ⟨r,seen⟩ := pass_end_facts hc o td p nz
-  exact ⟨kept_heap td p _ _ r,kept_leaf td p _ _ r,placed_sibling o td p _ _ seen,placed_d3 o td p _ _ seen,
+  exact ⟨kept_heap td p _ _ r,placed_sibling o td p _ _ seen,placed_block o td p _ _ seen,
     selected_salt o _ td p _ seen⟩
 
 /-- The opener's virtual trapdoor (the memory after the prefix pass; `td` itself for an empty opening). -/
@@ -56,31 +55,38 @@ theorem node_slice (td : BitVec (8*actual.sizes.trapdoor)) (h : Nat) (hh : h<419
   unfold quartetNode groupReply groupReplyOffset nodeWordOf blockWord
   by_cases ev : h%2=0
   · simp only [ev,ite_true]
-    rw [wide, nested_slice _ (by omega : 1344+256≤1600)]
-    refine congrArg (fun k => BitVec.extractLsb' k 256 td) ?_
-    rw [tb]; unfold LENGTH LOG_LENGTH; omega
-  · simp only [ev,ite_false]
     rw [wide, nested_slice _ (by omega : 0+256≤1600)]
     refine congrArg (fun k => BitVec.extractLsb' k 256 td) ?_
     rw [tb]; unfold LENGTH LOG_LENGTH; omega
+  · simp only [ev,ite_false]
+    rw [wide, nested_slice _ (by omega : 1344+256≤1600)]
+    refine congrArg (fun k => BitVec.extractLsb' k 256 td) ?_
+    rw [tb]; unfold LENGTH LOG_LENGTH; omega
 
-theorem payload_top (leaves : DigestTape) (g : Nat) :
-    (quartetEncode (Quartet.quartetPayload leaves g)).extractLsb' 1344 256=Quartet.leafAt leaves (4*g+3) := by
+/-- Leaf `j` of a quartet payload sits at bits `576 + 256 j` of its encoding (`0^72 ‖ d0 d1 d2 d3`). -/
+theorem payload_leaf (leaves : DigestTape) (g j : Nat) (hj : j<4) :
+    (quartetEncode (Quartet.quartetPayload leaves g)).extractLsb' (576+256*j) 256=Quartet.leafAt leaves (4*g+j) := by
   unfold quartetEncode Quartet.quartetPayload
   apply BitVec.eq_of_getLsbD_eq; intro b hb
-  change (@BitVec.extractLsb' 1600 1344 256 _).getLsbD b = _
+  change (@BitVec.extractLsb' 1600 (576+256*j) 256 _).getLsbD b = _
   simp only [BitVec.getLsbD_extractLsb', BitVec.getLsbD_append, hb, decide_true, Bool.true_and]
-  have h1 : ¬ (1344+b < 576) := by omega
-  have h2 : ¬ (1344+b-576 < 256) := by omega
-  have h3 : ¬ (1344+b-576-256 < 256) := by omega
-  have h4 : ¬ (1344+b-576-256-256 < 256) := by omega
-  simp only [h1, h2, h3, h4, ite_false, show 1344+b-576-256-256-256 = b by omega]
+  have h0 : ¬ (576+256*j+b < 576) := by omega
+  simp only [h0, ite_false]
+  rcases (show j=0 ∨ j=1 ∨ j=2 ∨ j=3 by omega) with rfl|rfl|rfl|rfl
+  · simp only [show 576+256*0+b-576 = b by omega, Nat.mul_zero, Nat.add_zero, hb, ite_true]
+  · simp only [show ¬ (576+256*1+b-576 < 256) by omega, ite_false, show 576+256*1+b-576-256 < 256 by omega, ite_true,
+      show 576+256*1+b-576-256 = b by omega, hb]
+  · simp only [show ¬ (576+256*2+b-576 < 256) by omega, show ¬ (576+256*2+b-576-256 < 256) by omega, ite_false,
+      show 576+256*2+b-576-256-256 < 256 by omega, ite_true, show 576+256*2+b-576-256-256 = b by omega, hb]
+  · simp only [show ¬ (576+256*3+b-576 < 256) by omega, show ¬ (576+256*3+b-576-256 < 256) by omega,
+      show ¬ (576+256*3+b-576-256-256 < 256) by omega, ite_false, show 576+256*3+b-576-256-256-256 = b by omega]
 
+/-- The opener's proof from the commit's trapdoor is the builder's proof. The writer reads every leaf digest of
+an opened quartet from its rebuilt block, so no hypothesis on the trapdoor's original leaf slots is needed. -/
 theorem opened_proof (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
     (leaves : DigestTape)
     (heap : ∀ n, 0<n → n<4194304 → Opening.trapdoorHeap (s:=actual) td n =
       Quartet.upperHeap (Quartet.quartetLookup (BiPermutation.equiv Block o.permutation)) o.compression leaves n)
-    (stored : ∀ i : Index, ¬ ((i.val/4)%2=0 ∧ i.val%4=3) → trapdoorLeaf (s:=actual) td i.val=leaves i)
     (replies : ∀ g<4194304, groupReply td g=o.permutation (quartetEncode (Quartet.quartetPayload leaves g))) :
     proofFromTrapdoor (s:=actual) (virtualFor o td p) p =
       (Quartet.builder (Quartet.quartetLookup (BiPermutation.equiv Block o.permutation)) o.compression p
@@ -96,31 +102,22 @@ theorem opened_proof (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.size
     have nz : 0<p.card := Finset.card_pos.mpr ⟨i,member⟩
     have ix := i.isLt; change _<16777216 at ix
     have hx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
-    rw [virtual_end o td p nz,(end_components hc o td p nz).2.2.1 i member,node_slice td _ hx,
-      Quartet.upper_heap_leaf _ _ _ _ hx,replies _ hx]
+    rw [virtual_end o td p nz,(end_components hc o td p nz).2.1 i member,node_slice td _ hx,
+      Quartet.upper_heap_leaf _ _ _ _ (by omega : i.val/4<4194304),replies _ hx]
     rfl
   · intro i member j hj
     have nz : 0<p.card := Finset.card_pos.mpr ⟨i,member⟩
     have ix := i.isLt; change _<16777216 at ix
-    have comps := end_components hc o td p nz
+    have block := (end_components hc o td p nz).2.2.1 i member
     rw [virtual_end o td p nz]
-    by_cases d3 : i.val/4%2=0 ∧ j=3
-    · obtain ⟨ev,rfl⟩ := d3
-      rw [comps.2.2.2.1 i member ev,
-        show td.extractLsb' (8*(32*LENGTH+1024*(i.val/4)+168)) 1600=groupReply td (i.val/4) by
-          unfold groupReply groupReplyOffset; simp [ev],
-        replies _ (by omega)]
-      simp only [Equiv.symm_apply_apply]
-      exact payload_top leaves (i.val/4)
-    · let x : Index := ⟨4*(i.val/4)+j,by change _<16777216; omega⟩
-      have keep : ¬(x.val/4%2=0 ∧ x.val%4=3) := by
-        simp only [x]; intro h; apply d3; constructor <;> omega
-      have kl := comps.2.1 x keep
-      simp only [x] at kl
-      rw [kl,stored x keep]
-      unfold Quartet.leafAt; rw [dif_pos (by change _<16777216; omega)]
+    unfold trapdoorLeaf
+    rw [show 8*(32*LENGTH+512+1024*((4*(i.val/4)+j)/4)+72+32*((4*(i.val/4)+j)%4))=
+        8*(32*LENGTH+512+1024*(i.val/4))+(576+256*j) by unfold LENGTH LOG_LENGTH; omega,
+      ← nested_slice (width := 1600) _ (show 576+256*j+256≤1600 by omega), block, replies _ (by omega)]
+    simp only [Equiv.symm_apply_apply]
+    exact payload_leaf leaves (i.val/4) j hj
   · intro i member
     have nz : 0<p.card := Finset.card_pos.mpr ⟨i,member⟩
-    rw [virtual_end o td p nz]; exact (end_components hc o td p nz).2.2.2.2 i member
+    rw [virtual_end o td p nz]; exact (end_components hc o td p nz).2.2.2 i member
 
 end TwoPermutationPrototype.GroupedOpening

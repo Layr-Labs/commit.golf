@@ -49,7 +49,9 @@ def finish (s t : MachineState) (i : Nat) : Prop :=
   t.getReg .x19=s.getReg .x19 ∧ t.getReg .x21=s.getReg .x21 ∧ t.getReg .x25=s.getReg .x25 ∧
   t.getReg .x26=s.getReg .x26 ∧ t.getReg .x27=s.getReg .x27 ∧ t.getReg .x28=s.getReg .x28 ∧
   t.getReg .x29=s.getReg .x29 ∧ t.getReg .x30=s.getReg .x30 ∧ t.getReg .x6=s.getReg .x6 ∧
-  t.getReg .x1=s.getReg .x1 ∧ t.getReg .x2=s.getReg .x2 ∧ t.getReg .x3=s.getReg .x3
+  t.getReg .x1=s.getReg .x1 ∧ t.getReg .x2=s.getReg .x2 ∧ t.getReg .x3=s.getReg .x3 ∧
+  t.getReg .x18=s.getReg .x18 ∧ t.getReg .x22=s.getReg .x22 ∧ t.getReg .x4=s.getReg .x4 ∧
+  t.getReg .x7=s.getReg .x7 ∧ t.getReg .x31=s.getReg .x31
 
 theorem word_getReg (s : MachineState) (addr : Nat) (v : Word) (reg : Reg) :
     (putWord s addr v).getReg reg = s.getReg reg := by cases reg <;> rfl
@@ -100,18 +102,48 @@ theorem prefetch_addresses (i : Nat) (h : rank i=8) :
     (addr_back _ 229 _ imm_facts.2.2.2.2.2.2.2.2.2.2.2.1 (by omega)).trans ?_,(addr_back _ 228 _ imm_facts.2.2.2.2.2.2.2.2.2.2.2.2 (by omega)).trans ?_⟩
   all_goals congr 1;omega
 
-theorem rreg_x14 (n : Nat) : (Reg.x14=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
-theorem rreg_x15 (n : Nat) : (Reg.x15=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
-theorem rreg_x16 (n : Nat) : (Reg.x16=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
-theorem rreg_x17 (n : Nat) : (Reg.x17=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
-theorem rreg_x31 (n : Nat) : (Reg.x31=rreg n)=False := eq_false (by unfold rreg;split <;> decide)
+theorem rreg_x14 (n : Nat) : (Reg.x14=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
+theorem rreg_x15 (n : Nat) : (Reg.x15=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
+theorem rreg_x16 (n : Nat) : (Reg.x16=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
+theorem rreg_x17 (n : Nat) : (Reg.x17=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
 
 theorem tail_facts (i : Nat) (limit : i<16777216) :
     qSource (i/4)+25≤2^33 ∧ qLeaf i+25≤2^33 ∧ 82≤qSource (i/4) := by
-  unfold qLeaf qSource;omega
+  unfold qLeaf qSource;split_ifs <;> omega
 
-attribute [local irreducible] wordAddress msgWord slotGap aGap genWord sourceWord entryWord qSalt qLeaf qSource writeBits
-  saltImm trail rGap
+theorem sreg_x10 (n : Nat) : (Reg.x10=sreg n)=False := eq_false (by unfold sreg;split_ifs <;> decide)
+theorem sreg_x12 (n : Nat) : (Reg.x12=sreg n)=False := eq_false (by unfold sreg;split_ifs <;> decide)
+theorem sreg_x14 (n : Nat) : (Reg.x14=sreg n)=False := eq_false (by unfold sreg;split_ifs <;> decide)
+theorem sreg_x15 (n : Nat) : (Reg.x15=sreg n)=False := eq_false (by unfold sreg;split_ifs <;> decide)
+theorem sreg_x16 (n : Nat) : (Reg.x16=sreg n)=False := eq_false (by unfold sreg;split_ifs <;> decide)
+theorem sreg_x17 (n : Nat) : (Reg.x17=sreg n)=False := eq_false (by unfold sreg;split_ifs <;> decide)
+theorem areg_x10 (n : Nat) : (Reg.x10=areg n)=False := eq_false (by unfold areg;split_ifs <;> decide)
+theorem areg_x12 (n : Nat) : (Reg.x12=areg n)=False := eq_false (by unfold areg;split_ifs <;> decide)
+theorem areg_x14 (n : Nat) : (Reg.x14=areg n)=False := eq_false (by unfold areg;split_ifs <;> decide)
+theorem areg_x15 (n : Nat) : (Reg.x15=areg n)=False := eq_false (by unfold areg;split_ifs <;> decide)
+theorem areg_x16 (n : Nat) : (Reg.x16=areg n)=False := eq_false (by unfold areg;split_ifs <;> decide)
+theorem areg_x17 (n : Nat) : (Reg.x17=areg n)=False := eq_false (by unfold areg;split_ifs <;> decide)
+
+/-- The slot register of leaf `i` holds its gap (even or odd quartet). -/
+theorem sreg_val (s : MachineState) (i : Nat) (r : PacketRegs s i) : s.getReg (sreg (i%4096))=wordAddress (sgap i) := by
+  have e : i%4096/4%2=i/4%2 := by omega
+  have m : i%4096%4=i%4 := by omega
+  unfold sreg sgap; rw [e,m]
+  have q : i%4=0 ∨ i%4=1 ∨ i%4=2 ∨ i%4=3 := by omega
+  have p : i/4%2=0 ∨ i/4%2=1 := by omega
+  rcases p with p|p <;> rcases q with q|q|q|q <;> simp [p,q,r.s0,r.s1,r.s2,r.s3,r.o0,r.o1,r.o2,r.o3]
+
+/-- The A-slot register of leaf `i` holds its gap (even or odd quartet). -/
+theorem areg_val (s : MachineState) (i : Nat) (r : PacketRegs s i) : s.getReg (areg (i%4096))=wordAddress (agap i) := by
+  have e : i%4096/4%2=i/4%2 := by omega
+  have m : i%4096%4=i%4 := by omega
+  unfold areg agap; rw [e,m]
+  have q : i%4=0 ∨ i%4=1 ∨ i%4=2 ∨ i%4=3 := by omega
+  have p : i/4%2=0 ∨ i/4%2=1 := by omega
+  rcases p with p|p <;> rcases q with q|q|q|q <;> simp [p,q,r.a0,r.a1,r.a2,r.a3,r.b0,r.b1,r.b2,r.b3]
+
+attribute [local irreducible] wordAddress msgWord slotGap aGap oddGap oddAGap sgap agap genWord sourceWord entryWord qSalt
+  qLeaf qSource writeBits saltImm trail rGap
 
 /-- Restore facts in both the `+ -x` and the `- x` forms `simp` may produce. -/
 theorem restore_forms (i : Nat) (t : i%4=3) (s : MachineState) (r : PacketRegs s i) :
@@ -119,9 +151,8 @@ theorem restore_forms (i : Nat) (t : i%4=3) (s : MachineState) (r : PacketRegs s
   have e := restore_address i t
   have g : s.getReg (rreg (i%4096))=-wordAddress (rGap (i%4096)) := by
     unfold rreg rGap
-    cases near (i%4096)
-    · simp [r.far]
-    · simp [r.close]
+    have p : i%4096/4%2=0 ∨ i%4096/4%2=1 := by omega
+    rcases p with p|p <;> cases near (i%4096) <;> simp [p,r.far,r.close,r.farOdd,r.closeOdd]
   rw [g];exact e
 
 theorem walk_head (s : MachineState) (i : Nat) (limit : i<16777216) (r : PacketRegs s i) (h : rank i=0) :
@@ -129,7 +160,7 @@ theorem walk_head (s : MachineState) (i : Nat) (limit : i<16777216) (r : PacketR
   have x10 : s.getReg .x10=wordAddress (msgWord i+7) := by rw [r.msg,entry_head i (by omega)]
   have low : 512≤msgWord i := by unfold msgWord;omega
   have boundM : msgWord i+64≤2^33 := by unfold msgWord;omega
-  have boundQ : qLeaf i+25≤2^33 := by unfold qLeaf qSource;omega
+  have boundQ : qLeaf i+25≤2^33 := by unfold qLeaf qSource;split_ifs <;> omega
   have ctrRoom : qSalt 0+25≤2^33 := by unfold qSalt;decide
   have tf := tail_facts i limit
   have h0 := a_slot_address i
@@ -149,7 +180,6 @@ theorem walk_head (s : MachineState) (i : Nat) (limit : i<16777216) (r : PacketR
   rw [show msgWord i-7+2=msgWord i-5 by omega] at a6
   have z : signExtend12 0#12=0#64 := rfl
   have th := trail_head i h
-  have oo := odd_output i
   have nz : rank i≠1 := by omega
   have cs : ¬keyed (i%4096) → wordAddress (msgWord i+28)+-wordAddress 364=wordAddress (genWord (i-11)) :=
     chain_source i h
@@ -160,15 +190,13 @@ theorem walk_head (s : MachineState) (i : Nat) (limit : i<16777216) (r : PacketR
   all_goals first
     | (have gi := group_input i q
        have rs := restore_forms i q s r
-       rw [q] at h0
        by_cases e : i%4096/4%2=0
        all_goals simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,kd,e,walk,finish,Action.valid,offset_getReg,
-         word_getReg,writeBits_register,x10,r.counter,r.a0,r.a1,r.a2,r.a3,r.link,areg,m4,q,r.selector,r.size,r.primitive,
-         h0,a1,a2,a3,a4,a5,a6,z,cs,cs',gi,oo,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17,rreg_x31]
+         word_getReg,writeBits_register,x10,r.counter,areg_val s i r,areg_x10,areg_x12,areg_x14,areg_x15,areg_x16,areg_x17,r.link,m4,q,r.selector,r.size,r.primitive,
+         h0,a1,a2,a3,a4,a5,a6,z,cs,cs',gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
        all_goals omega)
-    | (rw [q] at h0
-       simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,kd,walk,finish,Action.valid,offset_getReg,word_getReg,
-         writeBits_register,x10,r.counter,r.a0,r.a1,r.a2,r.a3,r.link,areg,m4,q,r.selector,r.size,r.primitive,
+    | (simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,kd,walk,finish,Action.valid,offset_getReg,word_getReg,
+         writeBits_register,x10,r.counter,areg_val s i r,areg_x10,areg_x12,areg_x14,areg_x15,areg_x16,areg_x17,r.link,m4,q,r.selector,r.size,r.primitive,
          h0,a1,a2,a3,a4,a5,a6,z,cs,cs',th]
        all_goals omega)
 
@@ -177,37 +205,32 @@ theorem walk_c (s : MachineState) (i : Nat) (limit : i<16777216) (r : PacketRegs
   have x10 : s.getReg .x10=wordAddress (msgWord i+7) := by rw [r.msg,entry_head i (by omega)]
   have low : 512≤msgWord i := by unfold msgWord;omega
   have boundM : msgWord i+64≤2^33 := by unfold msgWord;omega
-  have boundQ : qLeaf i+25≤2^33 := by unfold qLeaf qSource;omega
+  have boundQ : qLeaf i+25≤2^33 := by unfold qLeaf qSource;split_ifs <;> omega
   have tf := tail_facts i limit
   have h0 := slot_address i
   have m4 : i%4096%4=i%4 := by omega
   have q : i%4=0 ∨ i%4=1 ∨ i%4=2 ∨ i%4=3 := by omega
   have c2 := addr_fwd (msgWord i+7) 2 16#12 imm_facts.2.2.2.2.2.1
   have tr := trail_address i (by omega)
-  have oo := odd_output i
   have nz : rank i≠0 := by omega
   rcases q with q|q|q|q
-  · rw [q] at h0
-    simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,walk,finish,Action.valid,offset_getReg,word_getReg,
-      writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,r.selector,r.size,r.primitive,h0,c2,tr]
+  · simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,walk,finish,Action.valid,offset_getReg,word_getReg,
+      writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,r.selector,r.size,r.primitive,h0,c2,tr]
     all_goals omega
-  · rw [q] at h0
-    simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,walk,finish,Action.valid,offset_getReg,word_getReg,
-      writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,r.selector,r.size,r.primitive,h0,c2,tr]
+  · simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,walk,finish,Action.valid,offset_getReg,word_getReg,
+      writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,r.selector,r.size,r.primitive,h0,c2,tr]
     all_goals omega
-  · rw [q] at h0
-    simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,walk,finish,Action.valid,offset_getReg,word_getReg,
-      writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,r.selector,r.size,r.primitive,h0,c2,tr]
+  · simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,walk,finish,Action.valid,offset_getReg,word_getReg,
+      writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,r.selector,r.size,r.primitive,h0,c2,tr]
     all_goals omega
   · have gi := group_input i q
     have rs := restore_forms i q s r
-    rw [q] at h0
     by_cases e : i%4096/4%2=0
     · simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,eq_true e,walk,finish,Action.valid,offset_getReg,word_getReg,
-        writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,r.selector,r.size,r.primitive,h0,c2,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17,rreg_x31]
+        writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,r.selector,r.size,r.primitive,h0,c2,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
       all_goals omega
     · simp [plan,bodyPlan,tailPlan,eq_true h,eq_false nz,eq_false e,walk,finish,Action.valid,offset_getReg,word_getReg,
-        writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,r.selector,r.size,r.primitive,h0,c2,gi,oo,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17,rreg_x31]
+        writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,r.selector,r.size,r.primitive,h0,c2,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
       all_goals omega
 
 /-- The follower body under its salt variant; `extra` are the salt-plan address facts. -/
@@ -216,7 +239,7 @@ theorem walk_follower (s : MachineState) (i : Nat) (limit : i<16777216) (r : Pac
   have x10 : s.getReg .x10=wordAddress (msgWord i) := by rw [r.msg,entry_follower i h0 h1]
   have low : 512≤msgWord i := by unfold msgWord;omega
   have boundM : msgWord i+64≤2^33 := by unfold msgWord;omega
-  have boundQ : qLeaf i+25≤2^33 := by unfold qLeaf qSource;omega
+  have boundQ : qLeaf i+25≤2^33 := by unfold qLeaf qSource;split_ifs <;> omega
   have tf := tail_facts i limit
   have sb := source_bounds i limit
   have h0' := slot_address i
@@ -229,7 +252,6 @@ theorem walk_follower (s : MachineState) (i : Nat) (limit : i<16777216) (r : Pac
   rw [show msgWord i+7+1=msgWord i+8 by omega] at f8
   have z : signExtend12 0#12=0#64 := rfl
   have tr := trail_address i h0
-  have oo := odd_output i
   have hr := rank_lt i
   have salt : (rank i≤8 → wordAddress (msgWord i+7)+signExtend12 (saltImm (rank i))=wordAddress (sourceWord i) ∧
       wordAddress (msgWord i+7)+signExtend12 (saltImm (rank i)+8#12)=wordAddress (sourceWord i+1)) :=
@@ -244,101 +266,97 @@ theorem walk_follower (s : MachineState) (i : Nat) (limit : i<16777216) (r : Pac
     by_cases e8 : rank i=8
     · obtain ⟨p1,p2,p3,p4⟩ := pre e8
       rcases q with q|q|q|q
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_true e8,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,p1,p2,p3,p4,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_true e8,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,p1,p2,p3,p4,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_true e8,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,p1,p2,p3,p4,tr]
         all_goals omega
       · have gi := group_input i q
         have rs := restore_forms i q s r
-        rw [q] at h0'
         by_cases e : i%4096/4%2=0
         all_goals simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_true e8,e,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
-          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,p1,p2,p3,p4,gi,oo,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17,rreg_x31]
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
+          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,p1,p2,p3,p4,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
         all_goals omega
     · rcases q with q|q|q|q
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_false e8,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_false e8,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_false e8,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,tr]
         all_goals omega
       · have gi := group_input i q
         have rs := restore_forms i q s r
-        rw [q] at h0'
         by_cases e : i%4096/4%2=0
         all_goals simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_true r8,eq_false e8,e,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
-          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,gi,oo,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17,rreg_x31]
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
+          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
         all_goals omega
   · by_cases e9 : rank i=9
     · rcases q with q|q|q|q
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
       · have gi := group_input i q
         have rs := restore_forms i q s r
-        rw [q] at h0'
         by_cases e : i%4096/4%2=0
         all_goals simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,e,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
-          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,gi,oo,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17,rreg_x31]
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
+          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
         all_goals omega
     · rcases q with q|q|q|q
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_false e9,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_false e9,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
-      · rw [q] at h0'
+      · skip
         simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_false e9,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
       · have gi := group_input i q
         have rs := restore_forms i q s r
-        rw [q] at h0'
         by_cases e : i%4096/4%2=0
         all_goals simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_false e9,e,walk,finish,
-          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,r.s0,r.s1,r.s2,r.s3,sreg,m4,q,
-          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,gi,oo,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17,rreg_x31]
+          Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
+          r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
         all_goals omega
 
 theorem packet_walk (s : MachineState) (i : Nat) (limit : i<16777216) (r : PacketRegs s i) :

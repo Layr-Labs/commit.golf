@@ -9,9 +9,9 @@ import CommitGolfCandidate.TwoPermutationBindingLeaf
 # Reading the final trapdoor
 
 `unit_pairs`: from the body's hand-over (`TailReady`), every unit's words `[s_u, s_u+64)` hold the two
-group nodes of `physicalHeap`. `k3_serialize`: after the tail and the root copy, the commitment is heap
-node 1 and the trapdoor holds the heap nodes below `2^22`, the surviving leaf digests, every group reply
-and the key words.
+heap leaves `2^22 + 2U` (low: the node of group `2U+1`, odd reply bytes `168..200`) and `2^22 + 2U + 1` (high: the
+node of group `2U`, even reply bytes `0..32`). `k3_serialize`: after the tail and the root copy, the commitment is
+heap node 1 and the trapdoor holds the heap nodes below `2^22`, every group reply and the key words.
 -/
 
 namespace TwoPermutationPrototype.Grouped
@@ -52,34 +52,36 @@ private theorem reply_pack (v : BitVec 1600) : packBuffer (replyWords v)=v := by
   unfold replyWords
   simpa only [BitVec.getLsbD_extractLsb',b,decide_true,Bool.true_and,Nat.div_add_mod] using h
 
-/-- The level-21 inputs in place: unit `u`'s words hold the two group nodes, odd above even. -/
+/-- The level-21 inputs in place: unit `u`'s words hold `node_odd ‖ node_even` (heap leaves `2^22+2U`, `2^22+2U+1`). -/
 theorem unit_pairs (o : Oracle) (msg : Message) (r : CompleteSaltTape) (key : BitVec 192) (m : Memory)
     (ready : TailReady o (pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) msg r) key m) :
     UnitPairs m (physicalHeap o msg r) := by
   intro U hU k hk
-  rw [physical_heap_leaf o msg r (2*U+1) (by omega),physical_heap_leaf o msg r (2*U) (by omega)]
+  have x0 : (2*U)^^^1=2*U+1 := by rw [Quartet.xor_one_cases];split <;> omega
+  have x1 : (2*U+1)^^^1=2*U := by rw [Quartet.xor_one_cases];split <;> omega
+  rw [physical_heap_leaf o msg r (2*U+1) (by omega),physical_heap_leaf o msg r (2*U) (by omega),x0,x1]
   generalize pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) msg r = d at ready ⊢
-  have w0 : groupReplyWord (2*U)=unitBase U-21 := by
+  have w0 : groupReplyWord (2*U)=unitBase U+4 := by
     unfold groupReplyWord;rw [if_pos (by omega),show 2*U/2=U by omega]
-  have w1 : groupReplyWord (2*U+1)=unitBase U+4 := by
+  have w1 : groupReplyWord (2*U+1)=unitBase U-21 := by
     unfold groupReplyWord;rw [if_neg (by omega),show (2*U+1)/2=U by omega]
   rw [quartet_node_even (show (2*U)%2=0 by omega),quartet_node_odd (show (2*U+1)%2=1 by omega)]
   by_cases low : k<4
   · rw [low_of_pair _ _ k low,slice_of_slice _ _ k low]
-    have word : m (unitBase U+k)=(o.permutation (quartetEncode (Quartet.quartetPayload d (2*U)))).extractLsb'
+    have word : m (unitBase U+k)=(o.permutation (quartetEncode (Quartet.quartetPayload d (2*U+1)))).extractLsb'
         (64*(21+k)) 64 := by
-      have h := congrFun (ready.replies (2*U) (by omega)) ⟨21+k,by omega⟩
-      have addr : unitBase U+k=groupReplyWord (2*U)+(21+k) := by
-        rw [w0];unfold unitBase unitFirst cellFirst;omega
+      have h := congrFun (ready.replies (2*U+1) (by omega)) ⟨21+k,by omega⟩
+      have addr : unitBase U+k=groupReplyWord (2*U+1)+(21+k) := by
+        rw [w1];unfold unitBase unitFirst cellFirst;omega
       rw [addr];exact h
     rw [word];congr 1;omega
   · rw [high_of_pair _ _ k (by omega) hk]
     unfold outputDigest
     rw [slice_of_slice _ _ (k-4) (by omega)]
-    have word : m (unitBase U+k)=(o.permutation (quartetEncode (Quartet.quartetPayload d (2*U+1)))).extractLsb'
+    have word : m (unitBase U+k)=(o.permutation (quartetEncode (Quartet.quartetPayload d (2*U)))).extractLsb'
         (64*(k-4)) 64 := by
-      have h := congrFun (ready.replies (2*U+1) (by omega)) ⟨k-4,by omega⟩
-      have addr : unitBase U+k=groupReplyWord (2*U+1)+(k-4) := by rw [w1];omega
+      have h := congrFun (ready.replies (2*U) (by omega)) ⟨k-4,by omega⟩
+      have addr : unitBase U+k=groupReplyWord (2*U)+(k-4) := by rw [w0];omega
       rw [addr];exact h
     rw [word];congr 1;omega
 
@@ -92,31 +94,19 @@ theorem k3_serialize (parents : MachineState) (heap : Nat → BitVec 256) (befor
     let output := actual.readCommit res
     output.1=heap 1 ∧
       (∀ n, 0<n → n<4194304 → Opening.trapdoorHeap (s:=actual) output.2 n=heap n) ∧
-      (∀ i : Index, ¬ overwritten i.val → QuartetRV.trapdoorLeaf (s:=actual) output.2 i.val=Quartet.leafAt d i.val) ∧
       (∀ g, g<4194304 → trapdoorGroupReply output.2 g=o.permutation (quartetEncode (Quartet.quartetPayload d g))) ∧
       (∀ j : Fin 3, savedKey output.2 j=key.extractLsb' (64*j.val) 64) := by
   have out : actual.layout.commitment=4294971392:=rfl
   have td : actual.layout.trapdoor=4294971424:=rfl
   have size : actual.sizes.trapdoor=5100273664:=rfl
-  simp only [Opening.trapdoorHeap,QuartetRV.trapdoorLeaf,trapdoorGroupReply,Submission.readCommit,state,out,td]
-  refine ⟨(root_copy_output parents heapReg outReg).trans (content.nodes 1 (by decide) (by decide)),?_,?_,?_,?_⟩
+  simp only [Opening.trapdoorHeap,trapdoorGroupReply,Submission.readCommit,state,out,td]
+  refine ⟨(root_copy_output parents heapReg outReg).trans (content.nodes 1 (by decide) (by decide)),?_,?_,?_⟩
   · intro n pos small
     have slice := read_buffer_slice (rootPrefix parents 10) 4294971424 actual.sizes.trapdoor (32*n) 32 (by rw [size];omega)
     rw [show 8*(32*n)=256*n by omega,show 4294971424+32*n=8*treeWord n by unfold treeWord;omega] at slice
     apply slice.trans
     rw [root_preserves_heap_buffer parents outReg _ 32 (by unfold treeWord;omega) (by unfold treeWord;omega) (by decide)]
     exact content.nodes n pos small
-  · intro i kept;have hi : i.val<16777216 := i.isLt
-    let off := 32*LENGTH+1024*(i.val/4)+72+32*(i.val%4)
-    have slice := read_buffer_slice (rootPrefix parents 10) 4294971424 actual.sizes.trapdoor off 32
-      (by rw [size];dsimp [off,LENGTH,LOG_LENGTH];omega)
-    rw [show 4294971424+off=8*leafWord i.val by dsimp [off,leafWord,cellFirst,LENGTH,LOG_LENGTH];omega] at slice
-    apply slice.trans
-    rw [root_preserves_heap_buffer parents outReg _ 32 (by unfold leafWord cellFirst;omega)
-      (by unfold leafWord cellFirst;omega) (by decide)]
-    apply aligned_buffer_eq _ _ _ (by decide);intro k hk
-    exact (content.high _ (by unfold leafWord unitFloor cellFirst;omega) (by unfold leafWord cellFirst;omega)).trans
-      (ready.leaves i.val hi kept k hk)
   · intro g hg
     have bound : 8*groupReplyWord g-4294971424+200 ≤ actual.sizes.trapdoor := by
       rw [size];unfold groupReplyWord unitBase unitFirst cellFirst unitStride;split <;> omega

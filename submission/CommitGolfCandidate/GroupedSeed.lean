@@ -73,13 +73,27 @@ theorem initially_good (o : Oracle) (k : Key) (msg : Message) :
   · intro i _ r;exact absurd r (by decide)
   · intro i _ r;exact absurd r (by decide)
   · intro _ _ _ step _ _;exact absurd step (by omega)
-  · intro _ h;exact absurd h (by omega)
+  · intro _ _ h;exact absurd h (by omega)
   · intro _ hg;exact absurd hg (by omega)
-  · intro g hg j hj;rw [outside _ (by unfold qSource;omega) (Or.inl (by unfold qSource qSalt;omega))]
-    exact high_word_zero msg _ (by unfold qSource;omega) (by unfold qSource;omega)
+  · intro g hg _ j hj;rw [outside _ (by unfold qSource;split_ifs <;> omega) (Or.inl (by unfold qSource qSalt;split_ifs <;> omega))]
+    exact high_word_zero msg _ (by unfold qSource;split_ifs <;> omega) (by unfold qSource;split_ifs <;> omega)
 
 def fixedLeaf (o : Oracle) (s : MachineState) (i : Nat) :=
-  ((plan i).foldl (fixedStep o) s).setPC (startPC (i+1))
+  (latchReg ((plan i).foldl (fixedStep o) s) i).setPC (startPC (i+1))
+
+/-- The tile latch only writes `x12`, which `Good` does not read. -/
+theorem latch_good (o : Oracle) (k : Key) (msg : Message) (t : MachineState) (i : Nat) (pc : Word) (n : Nat)
+    (h : Good o k msg t.getReg (memoryView t) n) :
+    Good o k msg ((latchReg t i).setPC pc).getReg (memoryView ((latchReg t i).setPC pc)) n := by
+  have mem : memoryView ((latchReg t i).setPC pc)=memoryView t := by unfold latchReg;split <;> rfl
+  have r (reg : Reg) (hr : reg≠.x12) : ((latchReg t i).setPC pc).getReg reg=t.getReg reg :=
+    MachineState.getReg_setPC.trans (latch_getReg t i reg hr)
+  rw [mem]
+  exact ⟨⟨h.msgs.messages,h.msgs.key,h.msgs.group,h.msgs.pending,
+    fun j hj hr => by
+      rw [r .x14 (by decide),r .x15 (by decide),r .x16 (by decide),r .x17 (by decide)]
+      exact h.msgs.prefetched j hj hr,
+    h.msgs.previous⟩,h.cells⟩
 
 def fixedScan (o : Oracle) : Nat → Nat → MachineState → MachineState
   | 0,_,s => s
@@ -119,7 +133,7 @@ theorem scan_content (o : Oracle) (k : Key) (msg : Message) (n i : Nat) (s : Mac
   | succ n ih =>
     have hi : i<N:=by omega
     let idx : Index := ⟨i,hi⟩
-    have next := fixed_packet_good o k msg s idx r.toPacketRegs good
+    have next := latch_good o k msg _ i (startPC (i+1)) _ (fixed_packet_good o k msg s idx r.toPacketRegs good)
     have live := step_live s i hi r _ (fixed_leaf_supported o s i)
     exact (show i+(n+1)=(i+1)+n by omega) ▸ ih (i+1) _ (by omega) live next
 

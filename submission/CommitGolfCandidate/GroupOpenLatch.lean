@@ -120,20 +120,19 @@ theorem next_keeps (s : MachineState) (left : Nat) (r : Reg) (a : r≠.x14) (b :
     all_goals first | exact bne_reg .. | exact jump_reg u r _ |
       simp [execInstrBr,Ne.symm a,Ne.symm b]
 
-/-- A new even quartet: its reply_E is inverted (the only head path with a call). -/
-def inverts (i : Index) (last : Nat) : Bool := decide (i.val/4≠last) && decide (i.val/4%2=0)
+/-- A new quartet (either parity): its reply is inverted into its rebuilt block. -/
+def inverts (i : Index) (last : Nat) : Bool := decide (i.val/4≠last)
 
 /-- The head's exit state (row 777); `y` is the inverse reply, used only when `inverts i last`. -/
 def headed (s : MachineState) (i : Index) (last : Nat) (y : BitVec 1600) : MachineState :=
   if i.val/4=last then walkRows s headRows
-  else if i.val/4%2=1 then walkRows s oddPath
-  else walkRows (writeBits (walkRows s evenPre) (wordAddress 192) y) evenPost
+  else walkRows (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) headPost
 
 /-- The salt rows after the chain (796..812). -/
 def finishOne (t : MachineState) (i : Index) (left : Nat) := advanced (copied (choose t i)) left
 
 def inverseQuery (s : MachineState) (i : Index) :=
-  packBuffer (window (memoryView (walkRows s evenPre)) (replyEWord (i.val/4)))
+  packBuffer (window (memoryView (walkRows s (preRows (oddOf i)))) (replyWord (i.val/4)))
 
 def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World MachineState :=
   if inverts i last then do
@@ -144,8 +143,8 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
     let t ← chainTrace (headed s i last 0) i
     return finishOne t i left
 
-def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 22 else 36
-def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 22 else 43
+def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 29 else 30
+def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 36 else 37
 def postSteps (i : Index) (left : Nat) := 13+(if kindOf i=0 then 2 else if kindOf i=1 then 3 else 0)+(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
@@ -221,30 +220,25 @@ theorem head_exit (s : MachineState) (i : Index) (ord left last : Nat) (r : Inpu
     exact exit_of s _ i ord left last r hpc h6 ((hkeep _ (by decide) (by decide)).trans r.input)
       ((hkeep _ (by decide) (by decide)).trans r.primitive) ((hkeep _ (by decide) (by decide)).trans (by rw [r.quartet, same]))
       (fun k _ h6 _ _ _ h28 _ _ => hkeep k h6 h28)
-  · by_cases odd : i.val/4%2=1
-    · obtain ⟨_,hpc,h6,h4,hkeep,_⟩ := head_odd s i ord left last r same odd
-      have hd : headed s i last y=walkRows s oddPath := by simp [headed,same,odd]
-      rw [hd]
-      exact exit_of s _ i ord left last r hpc h6
-        ((hkeep _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans r.input)
-        ((hkeep _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans r.primitive) h4
-        (fun k h4 h6 h7 _ _ h28 h30 h31 => hkeep k h4 h6 h7 h28 h30 h31)
-    · have even : i.val/4%2=0 := by omega
-      obtain ⟨_,apc,_,_,_,a6,a28,a4,a7,akeep⟩ := head_even_pre s i ord left last r same even
-      let a1:=writeBits (walkRows s evenPre) (wordAddress 192) y
-      have reg1 (x : Reg) : a1.getReg x=(walkRows s evenPre).getReg x := writeBits_register ..
-      have a1pc : a1.pc=address 752 := by rw [show a1.pc=(walkRows s evenPre).pc+4 from reply_pc ..,apc]; rfl
-      have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
-          (h10 : x≠.x10 := by decide) (h13 : x≠.x13 := by decide) (h28 : x≠.x28 := by decide)
-          (h30 : x≠.x30 := by decide) : a1.getReg x=s.getReg x := (reg1 x).trans (akeep x h4 h6 h7 h10 h13 h28 h30)
-      obtain ⟨_,ppc,p10,p13,pkeep,_⟩ := head_even_post a1 i a1pc even ((k .x12).trans r.output)
-        ((reg1 _).trans a28) ((reg1 _).trans a7) ((k .x19).trans r.leaves) ((k .x9).trans r.heap)
-      have hd : headed s i last y=walkRows a1 evenPost := by simp [headed,same,odd,a1]
-      rw [hd]
-      exact exit_of s _ i ord left last r ppc
-        ((pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ((reg1 _).trans a6)) p10 p13
-        ((pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ((reg1 _).trans a4))
-        (fun x h4 h6 h7 h10 h13 h28 h30 h31 => (pkeep x h10 h13 h28 h30 h31).trans (k x h4 h6 h7 h10 h13 h28 h30))
+  · obtain ⟨_,apc,_,_,_,_,a30,a6,a28,a4,akeep⟩ := head_pre s i ord left last r same
+    let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
+    have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
+    have a1pc : a1.pc=address 762 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+    have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
+        (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
+        (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) : a1.getReg x=s.getReg x :=
+      (reg1 x).trans (akeep x h4 h6 h7 h10 h12 h13 h28 h30)
+    obtain ⟨_,ppc,p10,p12,p13,pkeep,_⟩ := head_post a1 i a1pc ((reg1 _).trans a28) ((k .x19).trans r.leaves)
+      ((k .x9).trans r.heap) ((reg1 _).trans a30)
+    have hd : headed s i last y=walkRows a1 headPost := by simp [headed,same,a1]
+    rw [hd]
+    exact exit_of s _ i ord left last r ppc
+      ((pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ((reg1 _).trans a6)) p10 p13
+      ((pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ((reg1 _).trans a4))
+      (fun x h4 h6 h7 h10 h13 h28 h30 h31 => by
+        by_cases h12 : x=.x12
+        · subst h12; rw [p12]; exact r.output.symm
+        · exact (pkeep x h10 h12 h13 h28 h31).trans (k x h4 h6 h7 h10 h12 h13 h28 h30))
 
 private theorem charge_comm (e : Execution) (a b c d : Nat) :
     (e.charge a c).charge b d=e.charge (b+a) (d+c) := by
@@ -287,51 +281,38 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     rw [charge_comm]; congr 1
     · simp [perCycles,headCycles,same,show price headRows=3 from rfl] <;> omega
     · simp [perCalls,inv]
-  · by_cases odd : i.val/4%2=1
-    · obtain ⟨l1,_,_,_,_,_⟩ := head_odd s i ord left last r same odd
-      have inv : inverts i last=false := by simp [inverts,same]; omega
-      have hs : headSteps i last=oddPath.length := by simp [headSteps,same,odd]; rfl
-      rw [hs, show oddPath.length+(chainSteps i+postSteps i left)+fuel=oddPath.length+(chainSteps i+(postSteps i left+fuel)) by omega,
-        walk_rows_run s oddPath l1 odd_row_fetch _ true,
-        tail (walkRows s oddPath) 0 (by simp [headed,same,odd])]
-      simp only [inv,Bool.false_eq_true,ite_false,bind_assoc,pure_bind]
-      have hd : headed s i last 0=walkRows s oddPath := by simp [headed,same,odd]
-      rw [hd]
-      apply bind_congr; intro t; apply bind_congr; intro e; apply congrArg pure
-      rw [charge_comm]; congr 1
-      · simp [perCycles,headCycles,same,odd,show price oddPath=22 from rfl] <;> omega
-      · simp [perCalls,inv]
-    · have even : i.val/4%2=0 := by omega
-      obtain ⟨l1,apc,_,a10,a13,_,_,_,_,akeep⟩ := head_even_pre s i ord left last r same even
-      have inv : inverts i last=true := by simp [inverts,same,even]
-      have hs : headSteps i last=evenPre.length+(evenPost.length+1) := by simp [headSteps,same,odd]; rfl
-      have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
-          (h10 : x≠.x10 := by decide) (h13 : x≠.x13 := by decide) (h28 : x≠.x28 := by decide)
-          (h30 : x≠.x30 := by decide) := akeep x h4 h6 h7 h10 h13 h28 h30
-      have hi4 : replyEWord (i.val/4)+25≤2^33 := by have : i.val<16777216 := i.isLt; unfold replyEWord blockWord; omega
-      rw [hs, show evenPre.length+(evenPost.length+1)+(chainSteps i+postSteps i left)+fuel=
-        evenPre.length+((evenPost.length+(chainSteps i+(postSteps i left+fuel)))+1) by omega,
-        walk_rows_run s evenPre l1 even_pre_fetch _ true,
-        execute_inverse_call openingImage _ (walkRows s evenPre) true (replyEWord (i.val/4)) 192 hi4 (by decide) a10
-          ((k .x12).trans r.output) ((k .x5).trans r.selector) ((k .x11).trans r.width) a13 (inverse_fetch _ apc)]
-      simp only [inv,ite_true,bind_assoc,pure_bind]
-      apply bind_congr; intro y
-      obtain ⟨al,_⟩ : legal evenPost (writeBits (walkRows s evenPre) (wordAddress 192) y) ∧ True := by
-        obtain ⟨_,apc',_,_,_,a6,a28,_,a7,akeep'⟩ := head_even_pre s i ord left last r same even
-        let a1:=writeBits (walkRows s evenPre) (wordAddress 192) y
-        have reg1 (x : Reg) : a1.getReg x=(walkRows s evenPre).getReg x := writeBits_register ..
-        have a1pc : a1.pc=address 752 := by rw [show a1.pc=(walkRows s evenPre).pc+4 from reply_pc ..,apc']; rfl
-        exact ⟨(head_even_post a1 i a1pc even ((reg1 _).trans ((k .x12).trans r.output)) ((reg1 _).trans a28)
-          ((reg1 _).trans a7) ((reg1 _).trans ((k .x19).trans r.leaves)) ((reg1 _).trans ((k .x9).trans r.heap))).1,trivial⟩
-      rw [walk_rows_run _ evenPost al even_post_fetch _ true,
-        tail (walkRows (writeBits (walkRows s evenPre) (wordAddress 192) y) evenPost) y (by simp only [headed,if_neg same,if_neg odd] <;> rfl)]
-      simp only [bind_assoc,pure_bind]
-      have hd : headed s i last y=walkRows (writeBits (walkRows s evenPre) (wordAddress 192) y) evenPost := by
-        simp only [headed,if_neg same,if_neg odd] <;> rfl
-      rw [hd]
-      apply bind_congr; intro t; apply bind_congr; intro e; apply congrArg pure
-      rw [charge_comm, charge_comm, charge_comm]; congr 1
-      · simp [perCycles,headCycles,same,odd,show price evenPre=11 from rfl,show price evenPost=24 from rfl] <;> omega
-      · simp [perCalls,inv] <;> omega
+  · have inv : inverts i last=true := by simp [inverts,same]
+    obtain ⟨l1,apc,_,a10,a12,a13,a30,_,a28,_,akeep⟩ := head_pre s i ord left last r same
+    have hs : headSteps i last=(preRows (oddOf i)).length+(headPost.length+1) := by
+      rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h <;> simp [headSteps,oddOf,same,h] <;> rfl
+    have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
+        (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
+        (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) := akeep x h4 h6 h7 h10 h12 h13 h28 h30
+    have hix : i.val<16777216 := i.isLt
+    have src : replyWord (i.val/4)+25≤2^33 := by unfold replyWord blockWord; omega
+    have dst : rebuiltWord (i.val/4)+25≤2^33 := by unfold rebuiltWord blockWord; omega
+    rw [hs, show (preRows (oddOf i)).length+(headPost.length+1)+(chainSteps i+postSteps i left)+fuel=
+      (preRows (oddOf i)).length+((headPost.length+(chainSteps i+(postSteps i left+fuel)))+1) by omega,
+      walk_rows_run s _ l1 (pre_row_fetch _) _ true,
+      execute_inverse_call openingImage _ (walkRows s (preRows (oddOf i))) true (replyWord (i.val/4))
+        (rebuiltWord (i.val/4)) src dst a10 a12 ((k .x5).trans r.selector) ((k .x11).trans r.width) a13
+        (inverse_fetch _ apc)]
+    simp only [inv,ite_true,bind_assoc,pure_bind]
+    apply bind_congr; intro y
+    let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
+    have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
+    have a1pc : a1.pc=address 762 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+    have al : legal headPost a1 := (head_post a1 i a1pc ((reg1 _).trans a28) ((reg1 _).trans ((k .x19).trans r.leaves))
+      ((reg1 _).trans ((k .x9).trans r.heap)) ((reg1 _).trans a30)).1
+    have hd : headed s i last y=walkRows a1 headPost := by simp only [headed,if_neg same]; rfl
+    rw [walk_rows_run _ headPost al head_post_fetch _ true, tail (walkRows a1 headPost) y hd.symm]
+    simp only [bind_assoc,pure_bind]
+    rw [hd]
+    apply bind_congr; intro t; apply bind_congr; intro e; apply congrArg pure
+    rw [charge_comm, charge_comm, charge_comm]; congr 1
+    · rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h <;>
+        simp [perCycles,headCycles,oddOf,same,h,show price (preRows true)=13 from rfl,
+          show price (preRows false)=14 from rfl,show price headPost=15 from rfl] <;> omega
+    · simp [perCalls,inv] <;> omega
 
 end TwoPermutationPrototype.GroupedOpening

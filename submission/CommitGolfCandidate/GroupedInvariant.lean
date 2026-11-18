@@ -30,6 +30,9 @@ open CommitGolfCandidate.Permutation.CounterSalt (coord input parts)
 set_option maxHeartbeats 2200000
 set_option maxRecDepth 18000
 
+private theorem qsrc (g : Nat) : qSource g=603980292+128*g-153*(g%2) := by
+  unfold qSource;split_ifs <;> omega
+
 structure MsgGood (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg → Word) (m : Memory) (n : Nat) : Prop where
   messages : ∀ i : Index, n ≤ i.val → (rank n=1 → n≠i.val) → window m (msgWord i.val)=messageWords msg i
   key : KeyIntact m k
@@ -44,9 +47,9 @@ structure MsgGood (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg → 
     window m (genWord (n-11))=replyWords (groupReply o k j)
 
 structure CellGood (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory) (n : Nat) : Prop where
-  children : ∀ i : Index, i.val<n → ¬(i.val%4=3 ∧ i.val/4%2=0) → window m (qLeaf i.val)=digestOf (value o k msg i)
+  children : ∀ i : Index, 4*(n/4) ≤ i.val → i.val<n → window m (qLeaf i.val)=digestOf (value o k msg i)
   replies : ∀ g, 4*g+4≤n → window m (replyWord g)=replyWords (quartetReply o k msg g)
-  padding : ∀ g<4194304, ∀ j<9, m (qSource g+j)=0
+  padding : ∀ g<4194304, n/4≤g → ∀ j<9, m (qSource g+j)=0
 
 structure Good (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg → Word) (m : Memory) (n : Nat) : Prop where
   msgs : MsgGood o k msg regs m n
@@ -125,7 +128,7 @@ theorem first_window (o : Oracle) (msg : Message) (m : Memory) (i : Index)
 
 private theorem bounds (i : Nat) (hi : i<16777216) :
     512≤msgWord i ∧ msgWord i+64<qSalt 0 ∧ msgWord i+64<qSource 0 := by
-  unfold msgWord qSalt qSource;omega
+  unfold msgWord qSalt;simp only [qsrc];omega
 
 /-- The generator reply a head computes: keyed (key block with its counter) or linked (the previous
 head's reply read in place); both equal the schedule's reply for the group. -/
@@ -154,7 +157,7 @@ theorem key_step (o : Oracle) (k : BitVec 192) (regs : Reg → Word) (m : Memory
   obtain ⟨b1,b2,b3⟩ := bounds i.val hi
   intro j lo up
   apply Eq.trans _ (key j lo up)
-  apply packet_frame o regs m i.val _ hi <;> simp only [qSalt,qLeaf,qSource] at * <;> omega
+  apply packet_frame o regs m i.val _ hi <;> simp only [qSalt,qLeaf,qsrc] at * <;> omega
 
 theorem msg_head (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i : Index)
     (h : MsgGood o k msg v.regs v.mem i.val) (r0 : rank i.val=0) :
@@ -189,7 +192,7 @@ theorem msg_head (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i : I
       · omega
     apply Eq.trans _ (h.messages j (by omega) (by omega));funext a
     have t:=a.isLt;have ix : j.val<16777216:=j.isLt
-    apply packet_frame _ _ _ _ _ hi <;> simp only [msgWord,qSalt,qLeaf,qSource] at * <;> omega
+    apply packet_frame _ _ _ _ _ hi <;> simp only [msgWord,qSalt,qLeaf,qsrc] at * <;> omega
   · exact key_step o k v.regs v.mem i h.key
   · intro j eq _
     have ej : j=c := Fin.ext (by omega)
@@ -248,7 +251,7 @@ theorem msg_c (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i : Inde
   · intro j lo _
     apply Eq.trans _ (h.messages j (by omega) (by intro _ e;rw [←e] at lo;omega));funext a
     have t:=a.isLt;have ix : j.val<16777216:=j.isLt
-    apply c_frame _ _ _ _ _ r1 <;> simp only [msgWord,qSalt,qLeaf,qSource] at * <;> omega
+    apply c_frame _ _ _ _ _ r1 <;> simp only [msgWord,qSalt,qLeaf,qsrc] at * <;> omega
   · exact key_step o k v.regs v.mem i h.key
   · intro j eq _
     have gn := next_genWord i.val (by omega)
@@ -259,7 +262,7 @@ theorem msg_c (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i : Inde
     have t:=a.isLt
     apply c_frame _ _ _ _ _ r1
     · omega
-    · unfold qLeaf qSource;unfold msgWord at g1;omega
+    · unfold qLeaf;simp only [qsrc];unfold msgWord at g1;omega
   · intro j eq rk;omega
   · intro j eq rk;omega
   · intro _ _ _ _ rk;omega
@@ -301,13 +304,13 @@ theorem msg_follower (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i
     rw [follower_second_window o v.regs v.mem i r0 r1,saltEq,fst,msgI]
   refine ⟨dig,?_⟩
   have keepLow (a : Nat) (ha : a<msgWord i.val-4) : c2Mem o v.regs v.mem i.val a=v.mem a :=
-    follower_frame _ _ _ _ _ hi r0 (Or.inl ha) (Or.inl (by simp only [qLeaf,qSource] at b3 ⊢;omega))
+    follower_frame _ _ _ _ _ hi r0 (Or.inl ha) (Or.inl (by simp only [qLeaf,qsrc] at b3 ⊢;rcases Nat.mod_two_eq_zero_or_one (i.val/4) with p|p <;> omega))
   have pf := plan_prefetch o v i.val
   constructor
   · intro j lo _
     apply Eq.trans _ (h.messages j (by omega) (by omega));funext a
     have t:=a.isLt;have ix : j.val<16777216:=j.isLt
-    apply follower_frame _ _ _ _ _ hi r0 <;> simp only [msgWord,qSalt,qLeaf,qSource] at * <;> omega
+    apply follower_frame _ _ _ _ _ hi r0 <;> simp only [msgWord,qSalt,qLeaf,qsrc] at * <;> omega
   · exact key_step o k v.regs v.mem i h.key
   · intro j eq act
     have gn := next_genWord i.val (by omega)
@@ -332,7 +335,7 @@ theorem msg_follower (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i
           replyWords (groupReply o k i) ⟨16+t,by omega⟩ := by
         have gs : genWord i.val+25≤msgWord i.val := by omega
         rw [pre_packet o v.regs v.mem i.val (genWord i.val+16+t)
-            (Or.inl (by simp only [qLeaf,qSource] at b3 ⊢;omega)),
+            (Or.inl (by simp only [qLeaf,qsrc] at b3 ⊢;omega)),
           keepLow (genWord i.val+16+t) (by omega),Nat.add_assoc,gen (16+t) (by omega)]
       refine ⟨p14.trans (at16 0 (by decide)),p15.trans ?_,p16.trans ?_,p17.trans ?_⟩
       · exact at16 1 (by decide)
@@ -366,33 +369,37 @@ theorem msg_follower (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i
 /-! ## The quartet blocks -/
 
 theorem tail_frame (o : Oracle) (regs : Reg → Word) (m : Memory) (i a : Nat) (hi : i<16777216)
-    (out : a<qSource 0 ∨ qSalt 0≤a) : packetMem o regs m i a=c2Mem o regs m i a := by
+    (out : a<qSource 1 ∨ qSalt 0≤a) : packetMem o regs m i a=c2Mem o regs m i a := by
   unfold packetMem;split
   · apply window_outside
-    unfold replyWord;split <;> (unfold qSource qSalt at *;omega)
+    simp only [replyWord,qsrc,qSalt] at *;rcases Nat.mod_two_eq_zero_or_one (i/4) with p|p <;> omega
   · rfl
 
 /-- The message-area facts only read words outside the quartet blocks. -/
 theorem msg_congr (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg → Word) (m m' : Memory) (n : Nat)
-    (eq : ∀ w, (w<qSource 0 ∨ qSalt 0≤w) → w<2^33 → m' w=m w) (bound : n≤16777216) (h : MsgGood o k msg regs m n) :
+    (eq : ∀ w, (w<qSource 1 ∨ qSalt 0≤w) → w<2^33 → m' w=m w) (bound : n≤16777216) (h : MsgGood o k msg regs m n) :
     MsgGood o k msg regs m' n := by
   constructor
   · intro i hi ex;apply Eq.trans _ (h.messages i hi ex);funext j
-    apply eq <;> (have := j.isLt;have ix : i.val<16777216:=i.isLt;unfold msgWord;(try unfold qSource);omega)
+    apply eq <;> (have := j.isLt;have ix : i.val<16777216:=i.isLt;unfold msgWord;(try simp only [qsrc]);omega)
   · intro j hj hi;exact (eq _ (by right;unfold qSalt;omega) (by unfold qSalt;omega)).trans (h.key j hj hi)
   · intro i hi a;apply Eq.trans _ (h.group i hi a);funext v
-    apply eq <;> (have:=v.isLt;have ix : i.val<16777216:=i.isLt;unfold genWord msgWord;(try unfold qSource);omega)
+    apply eq <;> (have:=v.isLt;have ix : i.val<16777216:=i.isLt;unfold genWord msgWord;(try simp only [qsrc]);omega)
   · intro i hi a
     obtain ⟨p1,p2⟩ := h.pending i hi a
     have ix : i.val<16777216:=i.isLt
-    exact ⟨fun j => (eq _ (by left;have:=j.isLt;unfold msgWord qSource;omega) (by have:=j.isLt;unfold msgWord;omega)).trans (p1 j),
-      fun j => (eq _ (by left;have:=j.isLt;unfold msgWord qSource;omega) (by have:=j.isLt;unfold msgWord;omega)).trans (p2 j)⟩
+    exact ⟨fun j => (eq _ (by left;have:=j.isLt;unfold msgWord;simp only [qsrc];omega) (by have:=j.isLt;unfold msgWord;omega)).trans (p1 j),
+      fun j => (eq _ (by left;have:=j.isLt;unfold msgWord;simp only [qsrc];omega) (by have:=j.isLt;unfold msgWord;omega)).trans (p2 j)⟩
   · exact h.prefetched
   · intro i j hi hj r l;apply Eq.trans _ (h.previous i j hi hj r l);funext v
-    apply eq <;> (have:=v.isLt;have ix : i.val<16777216:=i.isLt;unfold genWord msgWord;(try unfold qSource);omega)
+    apply eq <;> (have:=v.isLt;have ix : i.val<16777216:=i.isLt;unfold genWord msgWord;(try simp only [qsrc]);omega)
 
 theorem leaf_val (o : Oracle) (k : BitVec 192) (msg : Message) (j : Index) : leafVal o k msg j.val=value o k msg j := by
   unfold leafVal;rw [dif_pos j.isLt]
+
+/-- Quartet blocks in octet form: block `g` starts `256·(g/2)` words up, odd blocks 25 words lower. -/
+theorem q_block (g : Nat) : qSource g+25*(g%2)=603980292+256*(g/2) := by
+  unfold qSource;split_ifs <;> omega
 
 /-- The cell part of a slot: the new digest, the group call of a fourth quartet leaf, and nothing else. -/
 theorem cells_step (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg → Word) (m : Memory) (i : Index)
@@ -400,53 +407,56 @@ theorem cells_step (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg →
     (dig : lowDigest (replyWords (digestReply o regs m i.val))=digestOf (value o k msg i)) :
     CellGood o k msg (packetMem o regs m i.val) (i.val+1) := by
   have hi : i.val<16777216 := i.isLt
-  have keep (a : Nat) (lo : qSource 0≤a) (up : a<qSalt 0) (dst : a<qLeaf i.val ∨ qLeaf i.val+25≤a) :
+  have keep (a : Nat) (lo : 603980267≤a) (up : a<qSalt 0) (dst : a<qLeaf i.val ∨ qLeaf i.val+25≤a) :
       c2Mem o regs m i.val a=m a :=
     packet_frame o regs m i.val a hi (by unfold qSalt at up ⊢;omega)
-      (Or.inr (by unfold qSource at lo;unfold msgWord;omega)) dst
+      (Or.inr (by unfold msgWord;omega)) dst
   have newd : window (c2Mem o regs m i.val) (qLeaf i.val)=digestOf (value o k msg i) := (new_digest ..).trans dig
   have tailKeep (a : Nat) (c : i.val%4≠3 ∨ a<replyWord (i.val/4) ∨ replyWord (i.val/4)+25≤a) :
       packetMem o regs m i.val a=c2Mem o regs m i.val a := by
     unfold packetMem;split
     · rename_i t;apply window_outside;omega
     · rfl
+  have qi := q_block (i.val/4)
   have ql : qLeaf i.val=qSource (i.val/4)+9+4*(i.val%4) := rfl
+  have rw' (g : Nat) : replyWord g=qSource g+21 := rfl
+  have qsalt : qSalt 0=1140851204 := rfl
   refine ⟨?_,?_,?_⟩
-  · intro j lo ex
+  · intro j lo hj'
     have hj := j.isLt
+    by_cases t3 : i.val%4=3
+    · exfalso;omega
     funext t;have ht := t.isLt
     show packetMem o regs m i.val (qLeaf j.val+t.val)=_
+    rw [tailKeep _ (Or.inl t3)]
     by_cases e : j.val=i.val
     · have ji : j=i := Fin.ext e
-      subst ji
-      rw [tailKeep _ ?_]
-      · exact congrFun newd t
-      · by_cases t3 : j.val%4=3
-        · have od : j.val/4%2=1 := by omega
-          right;right;unfold replyWord;rw [if_neg (by omega)];unfold qLeaf qSource;omega
-        · left;exact t3
+      subst ji;exact congrFun newd t
     · have jl : j.val < i.val := by omega
-      have jq : qLeaf j.val+4≤qLeaf i.val := by unfold qLeaf qSource;omega
-      rw [tailKeep _ ?_,keep _ (by unfold qLeaf qSource;omega) (by unfold qLeaf qSource qSalt;omega) (Or.inl (by omega))]
-      · exact congrFun (h.children j jl ex) t
-      · by_cases t3 : i.val%4=3
-        · right
-          unfold replyWord;split
-          · left;rw [show qSource (i.val/4)+21=qLeaf i.val by rw [ql,t3]];omega
-          · unfold qLeaf qSource at *;omega
-        · left;exact t3
+      have same : j.val/4=i.val/4 := by omega
+      have jq : qLeaf j.val+4≤qLeaf i.val := by unfold qLeaf;rw [same];omega
+      have qj : 603980267≤qLeaf j.val := by unfold qLeaf;rw [same];omega
+      rw [keep _ (by omega) (by rw [qsalt];unfold qLeaf;rw [same];omega) (Or.inl (by omega))]
+      exact congrFun (h.children j (by omega) jl) t
   · intro g hg
+    have qg := q_block g
     by_cases old : 4*g+4 ≤ i.val
     · funext t;have ht := t.isLt
       show packetMem o regs m i.val (replyWord g+t.val)=_
-      have far : replyWord g+25≤qLeaf i.val := by
-        unfold replyWord qLeaf qSource;split <;> omega
-      rw [tailKeep _ ?_,keep _ (by unfold replyWord qSource;split <;> omega) (by unfold replyWord qSource qSalt;split <;> omega)
-        (Or.inl (by omega))]
+      have gl : g < i.val/4 := by omega
+      have dst : replyWord g+t.val<qLeaf i.val ∨ qLeaf i.val+25≤replyWord g+t.val := by
+        rw [rw',ql]
+        by_cases so : g/2=i.val/4/2
+        · right;omega
+        · left;omega
+      rw [tailKeep _ ?_,keep _ (by rw [rw'];omega) (by rw [rw',qsalt];omega) dst]
       · exact congrFun (h.replies g old) t
       · by_cases t3 : i.val%4=3
         · right
-          unfold replyWord;split <;> split <;> (unfold qSource;omega)
+          rw [rw',rw']
+          by_cases so : g/2=i.val/4/2
+          · right;omega
+          · left;omega
         · left;exact t3
     · have t3 : i.val%4=3 := by omega
       have eg : g=i.val/4 := by omega
@@ -457,8 +467,8 @@ theorem cells_step (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg →
         show c2Mem o regs m i.val (qSource (i.val/4)+w.val)=_
         unfold quartetWindow
         by_cases z : w.val<9
-        · rw [if_pos z,keep _ (by unfold qSource;omega) (by unfold qSource qSalt;omega) (Or.inl (by rw [ql];omega))]
-          exact h.padding _ (by omega) _ z
+        · rw [if_pos z,keep _ (by omega) (by rw [qsalt];omega) (Or.inl (by rw [ql];omega))]
+          exact h.padding _ (by omega) (by omega) _ z
         · rw [if_neg z]
           have kk : (w.val-9)/4<4 := by omega
           have jb : 4*(i.val/4)+(w.val-9)/4<16777216 := by omega
@@ -471,21 +481,42 @@ theorem cells_step (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg →
           · have ji : j=i := Fin.ext (by simp only [j];omega)
             rw [ji];exact congrFun newd ⟨(w.val-9)%4,by omega⟩
           · have jl : j.val < i.val := by simp only [j];omega
-            rw [keep _ (by unfold qLeaf qSource;omega) (by unfold qLeaf qSource qSalt;omega)
-              (Or.inl (by unfold qLeaf qSource;simp only [j];omega))]
-            exact congrFun (h.children j jl (by simp only [j];omega)) ⟨(w.val-9)%4,by omega⟩
+            have jq : qLeaf j.val=qSource (i.val/4)+9+4*((w.val-9)/4) := by
+              simp only [j];unfold qLeaf;rw [show (4*(i.val/4)+(w.val-9)/4)/4=i.val/4 by omega,
+                show (4*(i.val/4)+(w.val-9)/4)%4=(w.val-9)/4 by omega]
+            rw [keep _ (by rw [jq];omega) (by rw [jq,qsalt];omega) (Or.inl (by rw [jq,ql];omega))]
+            exact congrFun (h.children j (by simp only [j];omega) jl) ⟨(w.val-9)%4,by omega⟩
       have tr : tailReply o regs m i.val=quartetReply o k msg (i.val/4) := by
         unfold tailReply callReply quartetReply;rw [win]
       funext t;have ht := t.isLt
       show packetMem o regs m i.val (replyWord (i.val/4)+t.val)=_
       unfold packetMem;rw [if_pos t3,ww_in _ _ _ _ (by omega) (by omega),tr]
       congr 1;apply Fin.ext;simp only [Fin.val_mk];omega
-  · intro g hg j hj
-    rw [tailKeep _ ?_,keep _ (by unfold qSource;omega) (by unfold qSource qSalt;omega)
-      (by rw [ql];unfold qSource;omega)]
-    · exact h.padding g hg j hj
+  · intro g hg ge j hj
+    have qg := q_block g
+    have gi : i.val/4≤g := by omega
+    have dst : qSource g+j<qLeaf i.val ∨ qLeaf i.val+25≤qSource g+j := by
+      rw [ql]
+      by_cases e : g=i.val/4
+      · left;subst e;omega
+      · by_cases so : g/2=i.val/4/2
+        · left;omega
+        · right;omega
+    rw [tailKeep _ ?_,keep _ (by omega) (by rw [qsalt];omega) dst]
+    · exact h.padding g hg (by omega) j hj
     · by_cases t3 : i.val%4=3
-      · right;unfold replyWord;split <;> (unfold qSource;omega)
+      · rw [rw']
+        by_cases e : g=i.val/4
+        · exfalso;omega
+        · by_cases so : g/2=i.val/4/2
+          · right
+            have e1 : (i.val+1)/4=i.val/4+1 := by omega
+            have hg1 : g=i.val/4+1 := by omega
+            have pq : (i.val/4)%2=0 := by omega
+            have s1 : qSource g+25=qSource (i.val/4) := by rw [hg1];simp only [qsrc];omega
+            omega
+          · right;rcases Nat.mod_two_eq_zero_or_one g with pg|pg <;>
+              rcases Nat.mod_two_eq_zero_or_one (i.val/4) with pq|pq <;> omega
       · left;exact t3
 
 theorem good_step (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i : Index)
@@ -512,11 +543,11 @@ theorem good_congr (o : Oracle) (k : BitVec 192) (msg : Message) (regs regs' : R
   · intro i hi a
     obtain ⟨p1,p2,p3,p4⟩ := h.msgs.prefetched i hi a
     exact ⟨(er _).trans p1,(er _).trans p2,(er _).trans p3,(er _).trans p4⟩
-  · intro i hi ex;apply Eq.trans _ (h.cells.children i hi ex);funext j
-    apply eq;have := j.isLt;unfold qLeaf qSource;omega
+  · intro i lo hi;apply Eq.trans _ (h.cells.children i lo hi);funext j
+    apply eq;have := j.isLt;have ix : i.val<16777216:=i.isLt;unfold qLeaf qSource;split_ifs <;> omega
   · intro g hg;apply Eq.trans _ (h.cells.replies g hg);funext j
-    apply eq;have := j.isLt;unfold replyWord qSource;split <;> omega
-  · intro g hg j hj;exact (eq _ (by unfold qSource;omega)).trans (h.cells.padding g hg j hj)
+    apply eq;have := j.isLt;unfold replyWord qSource;split_ifs <;> omega
+  · intro g hg ge j hj;exact (eq _ (by unfold qSource;split_ifs <;> omega)).trans (h.cells.padding g hg ge j hj)
 
 theorem fixed_packet_good (o : Oracle) (k : BitVec 192) (msg : Message) (s : MachineState)
     (i : Index) (r : PacketRegs s i.val) (h : Good o k msg s.getReg (memoryView s) i.val) :

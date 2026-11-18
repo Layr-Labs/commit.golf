@@ -28,7 +28,7 @@ structure Base (s : MachineState) (p : Positions) : Prop where
 
 /-- The previous position's quartet (`x4`); none before the first position. -/
 def lastOf (p : Positions) (j : Nat) : Nat := if j=0 then 2^64-1 else (pos p (j-1)).val/4
-/-- Quartets below this one may have had their d3 written back (sorted positions). -/
+/-- Quartets below this one may have had their blocks rebuilt (sorted positions). -/
 def topOf (p : Positions) (j : Nat) : Nat := if j=0 then 0 else (pos p (j-1)).val/4+1
 
 theorem pos_lt (p : Positions) (a b : Nat) (ab : a<b) (hb : b<p.card) : (pos p a).val<(pos p b).val := by
@@ -66,30 +66,30 @@ theorem last_lt_top (p : Positions) (j : Nat) (hj : j<p.card) (fresh : (pos p j)
     omega
 
 /-- Words the pass may have changed before ordinal `j`: the generator block, the reply scratch, the level-22
-heap slots, the salt table and the d3 words of the even quartets below `topOf p j`. -/
+heap slots, the salt table and the rebuilt blocks of the quartets below `topOf p j`. -/
 def Touched (p : Positions) (j : Nat) (w : Nat) : Prop :=
   (128≤w ∧ w<153) ∨ (192≤w ∧ w<217) ∨ (553648644≤w ∧ w<570425860) ∨ (1140851204≤w ∧ w<1174405636) ∨
-    (∃ q, q<topOf p j ∧ q%2=0 ∧ ∃ m<4, w=replyEWord q+m)
+    (∃ q, q<topOf p j ∧ ∃ m<25, w=rebuiltWord q+m)
 
 def Preserved (p : Positions) (j : Nat) (u s : MachineState) :=
   ∀ w<2^33, ¬Touched p j w → memoryView s w=memoryView u w
 
 theorem touched_mono (p : Positions) (j : Nat) (hj : j<p.card) (w : Nat) (t : Touched p j w) : Touched p (j+1) w := by
-  rcases t with h|h|h|h|⟨q,hq,e,m,hm,rfl⟩
+  rcases t with h|h|h|h|⟨q,hq,m,hm,rfl⟩
   · exact Or.inl h
   · exact Or.inr (Or.inl h)
   · exact Or.inr (Or.inr (Or.inl h))
   · exact Or.inr (Or.inr (Or.inr (Or.inl h)))
-  · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨q,by have := top_mono p j hj;omega,e,m,hm,rfl⟩)))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨q,by have := top_mono p j hj;omega,m,hm,rfl⟩)))
 
 theorem writes_touched (p : Positions) (j : Nat) (hj : j<p.card) (w : Nat) (wr : Writes (pos p j) (lastOf p j) w) :
     Touched p (j+1) w := by
   have ix := (pos p j).isLt
   have top : topOf p (j+1)=(pos p j).val/4+1 := by simp [topOf]
-  rcases wr with ⟨_,⟨m,hm,rfl⟩|⟨e,m,hm,rfl⟩⟩|h|h|h|h
+  rcases wr with ⟨_,⟨m,hm,rfl⟩|⟨m,hm,rfl⟩⟩|h|h|h|h
   · have x := xor_one_lt ((pos p j).val/4) 22 (by change _<16777216 at ix;omega) (by decide)
     right;right;left;unfold heapWord;constructor <;> omega
-  · right;right;right;right;exact ⟨_,by omega,e,m,hm,rfl⟩
+  · right;right;right;right;exact ⟨_,by omega,m,hm,rfl⟩
   · left;omega
   · right;left;exact h
   · right;right;right;left;change _<16777216 at ix;omega
@@ -117,9 +117,9 @@ theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (
   refine ⟨r.toRegisters,by simpa [passPC,Nat.ne_of_lt hj] using r.pc,r.mark,r.heap,r.leaves,r.slots,r.quartet,
     last_small p j,?_,?_⟩
   · have same := r.frame (1174405636+j) (by omega) (by
-      rintro (h|h|h|h|⟨q,hq,_,m,hm,e⟩)
+      rintro (h|h|h|h|⟨q,hq,m,hm,e⟩)
       all_goals (try omega)
-      unfold replyEWord blockWord at e; have := top_le p j; omega)
+      unfold rebuiltWord blockWord at e; have := top_le p j; omega)
     have orig := input_index actual actual_layout td p j hj
     rw [pos_present p j hj]
     exact (show s.getMem (indexAt j)=(actual.initialState .opening (td,p)).getMem (indexAt j) by
@@ -147,9 +147,9 @@ theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key 
       (r.frame w fit (fun h => away (touched_mono p j hj w h)))
   · intro k lo hi
     have away : ¬Writes i (lastOf p j) (128+k) := by
-      rintro (⟨_,⟨m,hm,e⟩|⟨_,m,hm,e⟩⟩|h|h|h|h)
+      rintro (⟨_,⟨m,hm,e⟩|⟨m,hm,e⟩⟩|h|h|h|h)
       · unfold heapWord at e; omega
-      · unfold replyEWord blockWord at e; omega
+      · unfold rebuiltWord blockWord at e; omega
       all_goals omega
     exact (same (128+k) (by omega) away).trans (r.keyFrame k lo hi)
 
@@ -203,8 +203,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 427 cycles per position (new even quartet, chain link 33, rank 1) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤427*n+1 := by
+/-- At most 421 cycles per position (new even quartet 37, chain link 33: 368, rank 1: 16) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤421*n+1 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

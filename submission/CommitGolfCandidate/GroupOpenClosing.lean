@@ -20,15 +20,15 @@ local instance groupedFullSpace {α : Type} : MeasurableSpace α := ⊤
 
 /-- The claim: proof bytes, commit cycles and worst opening cycles. -/
 abbrev claimProofBytes : Nat := 72160
-abbrev claimCommitCycles : Nat := 506688058
-abbrev claimOpeningCycles : Nat := 154669
+abbrev claimCommitCycles : Nat := 504595021
+abbrev claimOpeningCycles : Nat := 153901
 
 noncomputable def committed (o : Oracle) (m : Message) (k : Grouped.Key) :=
   actual.readCommit (Grouped.packedOutput o (Grouped.seededLeaves o m k))
 noncomputable def stash (o : Oracle) (m : Message) (k : Grouped.Key) := (committed o m k).2
 
 theorem recovered_key (o : Oracle) (m : Message) (k : Grouped.Key) : keyOf (stash o m k)=k := by
-  have fixed := (Grouped.physical_results o m k).2.2.2.2
+  have fixed := (Grouped.physical_results o m k).2.2.2
   apply BitVec.eq_of_getLsbD_eq;intro bit hb
   let j : Fin 3:=⟨bit/64,by omega⟩
   have slim : (keyOf (stash o m k)).extractLsb' (64*j.val) 64=k.extractLsb' (64*j.val) 64 := by
@@ -60,15 +60,8 @@ theorem honest_proof (hc : HeaderFacts) (o : Oracle) (m : Message) (k : Grouped.
         (Permutation.LinkedSalt.salts QuartetCounterCertificate.linkedSchedule o.permutation k)).2 := by
   have orig := Grouped.physical_results o m k
   let d := pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) m (Grouped.chainSalts o k)
-  have leaf (i : Index) (kept : ¬ ((i.val/4)%2=0 ∧ i.val%4=3)) : trapdoorLeaf (s:=actual) (stash o m k) i.val=d i := by
-    have v:=orig.2.2.1 i kept
-    change QuartetRV.trapdoorLeaf (s:=actual) (stash o m k) i.val=
-      QuartetCommit.originalLeaf o m (Grouped.chainSalts o k) i.val at v
-    unfold QuartetCommit.originalLeaf Quartet.leafAt at v
-    rw [dif_pos i.isLt] at v
-    exact v
-  have proof := opened_proof hc o (stash o m k) p d (fun n pos hi => orig.2.1 n pos hi) leaf
-    (fun g hg => (group_reply_eq (stash o m k) g).symm.trans (orig.2.2.2.1 g hg))
+  have proof := opened_proof hc o (stash o m k) p d (fun n pos hi => orig.2.1 n pos hi)
+    (fun g hg => (group_reply_eq (stash o m k) g).symm.trans (orig.2.2.1 g hg))
   rw [proof, recovered_key]
   rfl
 

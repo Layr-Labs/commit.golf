@@ -1,7 +1,5 @@
 import CommitGolfCandidate.QuartetManifest
 import CommitGolfCandidate.QuartetWordBridge
-import CommitGolfCandidate.QuartetCommitInput
-import CommitGolfCandidate.QuartetCommitUpperMeaning
 import CommitGolfCandidate.Execution
 import CommitGolfCandidate.QuartetCommitJoinRegs
 import CommitGolfCandidate.QuartetCommitLeafOps

@@ -10,7 +10,8 @@ set_option maxRecDepth 8192
 
 /-- What an accepting check records for one opened position: both leaf calls, the quartet call of
 the position's group (the leaf digest in slot `index % 4` of the window `0^72 ‖ d0 d1 d2 d3`), and a
-projected path from the group node (`quartetNode (index / 4)`) to the root. -/
+projected path from the group node (`quartetNode (index / 4)`, at heap node `2^22 + (⌊index/4⌋ ^^^ 1)`) to
+the root. -/
 structure RecordedQuartetOpening (oracle : Oracle) (index : Index) (entry : Entry) (root : Commitment)
     (rows : List PublicRow) where
   nonce : Words 2
@@ -28,7 +29,7 @@ structure RecordedQuartetOpening (oracle : Oracle) (index : Index) (entry : Entr
     outputDigest (pinnedSecondRow oracle.permutation index nonce
       (pinnedFirstRow oracle.permutation index (entryWords entry)).2 (entryWords entry)).2
   parentRow : PublicRow.permutation (quartetEncode quartet) reply ∈ rows
-  upper : ProjectedPath rows (LENGTH / 4 + index.val / 4) (LOG_LENGTH - 2) (quartetNode (index.val / 4) reply) root
+  upper : ProjectedPath rows (LENGTH / 4 + (index.val / 4 ^^^ 1)) (LOG_LENGTH - 2) (quartetNode (index.val / 4) reply) root
 
 theorem quartet_recorded_conflict (oracle : Oracle) (index : Index) (root : Commitment)
     (v w : Entry) (different : v ≠ w) (rows₀ rows₁ : List PublicRow)

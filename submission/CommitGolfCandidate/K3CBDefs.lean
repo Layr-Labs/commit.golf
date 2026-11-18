@@ -18,8 +18,8 @@ open TwoPermutationPrototype.Sampling
 open CommitGolfCandidate.Permutation.CounterSalt (coord input)
 open TwoPermutationPrototype.QuartetCommit (qSource)
 
-/-- Where the group call of quartet `g` writes its reply: `B_g + 168` (even), `B_{g-1} + 368` (odd). -/
-def replyWord (g : Nat) := if g%2=0 then qSource g+21 else qSource g-82
+/-- Where the group call of quartet `g` writes its reply: over its fourth digest, `B_g + 168` (both parities). -/
+def replyWord (g : Nat) := qSource g+21
 
 /-- The final salt schedule: a keyed restart every 34 heads of a tile, every other head linked. -/
 abbrev chain := CommitGolfCandidate.Permutation.LinkedSalt.schedule CommitGolfCandidate.Permutation.LinkedSalt.period

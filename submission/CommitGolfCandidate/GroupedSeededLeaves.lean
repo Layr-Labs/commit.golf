@@ -7,8 +7,13 @@ open TwoPermutationPrototype.QuartetCommit (qSource qSalt qLeaf)
 set_option maxRecDepth 18000
 set_option maxHeartbeats 1000000
 attribute [local irreducible] readBuffer scan fixedScan readyState
-def seededLeaves (o : Oracle) (m : Message) (k : Key) :=
+/-- The machine after the 2^24 leaf slots. -/
+def bodyLeaves (o : Oracle) (m : Message) (k : Key) :=
   fixedScan o N 0 (readyState (K1Artifact.submission.initialState .commit m) k)
+/-- The machine the upper stage starts from: the body, then the six post words. -/
+def seededLeaves (o : Oracle) (m : Message) (k : Key) := tailPostPrefix (bodyLeaves o m k) 6
+
+theorem seeded_eq (o : Oracle) (m : Message) (k : Key) : seededLeaves o m k=tailPostPrefix (bodyLeaves o m k) 6 := rfl
 
 private theorem fixed_supported (o : Oracle) (s : MachineState) (n j : Nat) (b : j+n≤N) :
     fixedScan o n j s∈support (scan n j s) := by
@@ -26,8 +31,8 @@ private theorem seeded_summary (o : Oracle) (m : Message) (k : Key) (s : Machine
   simpa only [Nat.zero_add] using And.intro live endGood
 
 theorem seeded_content (o : Oracle) (m : Message) (k : Key) :
-    Live (seededLeaves o m k) N ∧ Good o k m (seededLeaves o m k).getReg (memoryView (seededLeaves o m k)) N := by
-  unfold seededLeaves
+    Live (bodyLeaves o m k) N ∧ Good o k m (bodyLeaves o m k).getReg (memoryView (bodyLeaves o m k)) N := by
+  unfold bodyLeaves
   exact seeded_summary o m k _ N le_rfl (ready_live _ ⟨rfl,rfl,rfl,rfl⟩ k) (initially_good o k m)
 
 attribute [local semireducible] readyState
@@ -37,14 +42,10 @@ theorem seeded_tail_ready (o : Oracle) (m : Message) (k : Key) :
     TailReady o (pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) m (chainSalts o k)) k
       (memoryView (seededLeaves o m k)) := by
   have good := (seeded_content o m k).2
+  rw [seeded_eq,tail_post_mem]
   constructor
   · intro g hg
     rw [reply_word_eq,good.cells.replies g (by show 4*g+4≤16777216;omega),quartet_reply_model]
-  · intro i hi ov t ht
-    have c := congrFun (good.cells.children ⟨i,hi⟩ hi (by unfold overwritten at ov;show ¬(i%4=3 ∧ i/4%2=0);omega)) ⟨t,ht⟩
-    have a : leafWord i=qLeaf i := by unfold leafWord cellFirst qLeaf qSource;omega
-    rw [a];simp only [window] at c;rw [c]
-    unfold digestOf value Quartet.leafAt;rw [dif_pos (show i<LENGTH from hi)]
   · intro j
     have kk := good.msgs.key (1+j.val) (by omega) (by have := j.isLt;omega)
     unfold keyWord;unfold qSalt at kk

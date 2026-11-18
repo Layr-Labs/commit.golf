@@ -1,8 +1,8 @@
 import CommitGolfCandidate.GroupOpenPass
 import CommitGolfCandidate.GroupOpenModel
 
-/-! K3-lite: the prefix pass under a fixed oracle, and what it leaves in memory (salts, level-22 siblings, d3 of the
-opened even quartets). -/
+/-! K3-lite: the prefix pass under a fixed oracle, and what it leaves in memory (salts, level-22 siblings, the
+rebuilt blocks of the opened quartets). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -91,24 +91,27 @@ theorem salt_word_view (s : MachineState) (i : Index) (j : Fin 2) :
 
 -- ---------------------------------------------------------------- what the pass leaves behind
 /-- After the first `n` positions: their salts are the linked salts, their quartets' level-22 siblings sit in the heap
-slots, and their even quartets' d3 sits in the record cell. -/
+slots, and their quartets' rebuilt blocks hold the inverses of their replies. -/
 structure Seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
     (s : MachineState) (n : Nat) : Prop where
   salt : ∀ a<n, ∀ j : Fin 2, s.getMem (destAt (pos p a)+BitVec.ofNat 64 (8*j.val))=saltWords (linkedSalts o k (pos p a)) j
   sibling : ∀ a<n, ∀ m<4, memoryView s (heapWord (4194304+((pos p a).val/4^^^1))+m)=
     memoryView (actual.initialState .opening (td,p)) (nodeWordOf ((pos p a).val/4^^^1)+m)
-  d3 : ∀ a<n, (pos p a).val/4%2=0 → ∀ m (hm : m<4), memoryView s (replyEWord ((pos p a).val/4)+m)=
+  block : ∀ a<n, ∀ m (hm : m<25), memoryView s (rebuiltWord ((pos p a).val/4)+m)=
     replyWords (o.permutation.symm (packBuffer (window (memoryView (actual.initialState .opening (td,p)))
-      (replyEWord ((pos p a).val/4))))) ⟨21+m,by omega⟩
+      (replyWord ((pos p a).val/4))))) ⟨m,hm⟩
 
 theorem node_untouched (p : Positions) (j h m : Nat) (hh : h<4194304) (hm : m<4) : ¬Touched p j (nodeWordOf h+m) := by
   have t := top_le p j
-  rintro (x|x|x|x|⟨q,hq,_,m',hm',e⟩) <;> unfold nodeWordOf blockWord at * <;> (try unfold replyEWord blockWord at e) <;> omega
+  rintro (x|x|x|x|⟨q,hq,m',hm',e⟩) <;> unfold nodeWordOf blockWord at * <;> (try unfold rebuiltWord blockWord at e) <;> omega
 
-theorem reply_untouched (p : Positions) (j q m : Nat) (hq : topOf p j≤q) (small : q<4194304) (hm : m<25) :
-    ¬Touched p j (replyEWord q+m) := by
+/-- No rebuilt block overlaps a reply window (they sit at different offsets within every 1024-byte block). -/
+theorem reply_untouched (p : Positions) (j q m : Nat) (small : q<4194304) (hm : m<25) :
+    ¬Touched p j (replyWord q+m) := by
   have t := top_le p j
-  rintro (x|x|x|x|⟨q',hq',_,m',hm',e⟩) <;> unfold replyEWord blockWord at * <;> omega
+  rintro (x|x|x|x|⟨q',hq',m',hm',e⟩) <;> unfold replyWord blockWord at * <;> (try unfold rebuiltWord blockWord at e)
+  all_goals (try omega)
+  rcases Nat.mod_two_eq_zero_or_one q with h|h <;> rcases Nat.lt_or_ge q' (2*(q/2)) with h'|h' <;> omega
 
 set_option maxHeartbeats 4000000 in
 theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
@@ -133,10 +136,10 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
       rw [salt_word_view]
       change _<16777216 at av
       rw [view _ (by omega) (by
-        rintro (⟨_,⟨m,hm,e⟩|⟨_,m,hm,e⟩⟩|h|h|h|h)
+        rintro (⟨_,⟨m,hm,e⟩|⟨m,hm,e⟩⟩|h|h|h|h)
         · have x := xor_one_lt (i.val/4) 22 qlt (by decide)
           unfold heapWord at e; omega
-        · unfold replyEWord blockWord at e; omega
+        · unfold rebuiltWord blockWord at e; omega
         all_goals omega)]
       have := old.salt a lt jj; rwa [salt_word_view] at this
   · -- level-22 siblings
@@ -165,50 +168,49 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
         rwa [prev] at k'
     · have lt : a<j := by omega
       apply keep a lt
-      rintro ⟨fresh,⟨m',hm',e⟩|⟨_,m',hm',e⟩⟩
+      rintro ⟨fresh,⟨m',hm',e⟩|⟨m',hm',e⟩⟩
       · have up := fresh_above p j hj fresh a lt
         unfold heapWord at e
         have : (pos p a).val/4^^^1=i.val/4^^^1 := by omega
         exact absurd (xor_inj _ _ this) (by omega)
       · have xa := xor_one_lt ((pos p a).val/4) 22 (by have := (pos p a).isLt; change _<16777216 at this; omega) (by decide)
-        unfold heapWord replyEWord blockWord at e; omega
-  · -- d3 of even quartets
-    intro a ha ev m hm
-    have keep (b : Nat) (hb : b<j) (evb : (pos p b).val/4%2=0)
-        (stay : ¬HeadWrites i (lastOf p j) (replyEWord ((pos p b).val/4)+m)) :
-        memoryView (fixedOne o s i (p.card-j) (lastOf p j)) (replyEWord ((pos p b).val/4)+m)=
+        unfold heapWord rebuiltWord blockWord at e; omega
+  · -- rebuilt blocks
+    intro a ha m hm
+    have keep (b : Nat) (hb : b<j)
+        (stay : ¬HeadWrites i (lastOf p j) (rebuiltWord ((pos p b).val/4)+m)) :
+        memoryView (fixedOne o s i (p.card-j) (lastOf p j)) (rebuiltWord ((pos p b).val/4)+m)=
           replyWords (o.permutation.symm (packBuffer (window (memoryView (actual.initialState .opening (td,p)))
-            (replyEWord ((pos p b).val/4))))) ⟨21+m,by omega⟩ := by
+            (replyWord ((pos p b).val/4))))) ⟨m,hm⟩ := by
       have bv := (pos p b).isLt
       change _<16777216 at bv
-      rw [view _ (by unfold replyEWord blockWord;omega) (by
+      rw [view _ (by unfold rebuiltWord blockWord;omega) (by
         rintro (h|h|h|h|h)
         · exact stay h
-        all_goals (unfold replyEWord blockWord at h; omega))]
-      exact old.d3 b hb evb m hm
+        all_goals (unfold rebuiltWord blockWord at h; omega))]
+      exact old.block b hb m hm
     by_cases eq : a=j
     · subst eq
       by_cases fresh : i.val/4≠lastOf p a
-      · rw [fixed_d3 o k s i a (p.card-a) (lastOf p a) (by omega) (by omega) inp r.keyFrame fresh ev m hm]
-        have top := last_lt_top p a hj fresh
-        have hw : (window (memoryView s) (replyEWord (i.val/4)) : Words 25)=
-            window (memoryView (actual.initialState .opening (td,p))) (replyEWord (i.val/4)) := by
+      · rw [fixed_block o k s i a (p.card-a) (lastOf p a) (by omega) (by omega) inp r.keyFrame fresh m hm]
+        have hw : (window (memoryView s) (replyWord (i.val/4)) : Words 25)=
+            window (memoryView (actual.initialState .opening (td,p))) (replyWord (i.val/4)) := by
           funext w; unfold window
-          exact r.frame _ (by unfold replyEWord blockWord;omega) (reply_untouched p a _ w.val top qlt w.isLt)
+          exact r.frame _ (by unfold replyWord blockWord;omega) (reply_untouched p a _ w.val qlt w.isLt)
         rw [hw]
       · have same : i.val/4=lastOf p a := by omega
         obtain ⟨pos0,prev⟩ := stale_prev p a hj same
-        have k' := keep (a-1) (by omega) (by rwa [prev]) (by rintro ⟨f,_⟩; exact f same)
+        have k' := keep (a-1) (by omega) (by rintro ⟨f,_⟩; exact f same)
         rwa [prev] at k'
     · have lt : a<j := by omega
-      apply keep a lt ev
-      rintro ⟨fresh,⟨m',hm',e⟩|⟨_,m',hm',e⟩⟩
+      apply keep a lt
+      rintro ⟨fresh,⟨m',hm',e⟩|⟨m',hm',e⟩⟩
       · have xa := xor_one_lt (i.val/4) 22 qlt (by decide)
         have av := (pos p a).isLt; change _<16777216 at av
-        unfold heapWord replyEWord blockWord at e; omega
+        unfold heapWord rebuiltWord blockWord at e; omega
       · have up := fresh_above p j hj fresh a lt
         have av := (pos p a).isLt; change _<16777216 at av
-        unfold replyEWord blockWord at e; omega
+        unfold rebuiltWord blockWord at e; omega
 
 theorem seen_pass (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (k : BitVec 192)
     (s : MachineState) (j n : Nat) (b : j+n≤p.card) (r : Ready td p k s j) (seen : Seen o k td p s j) :

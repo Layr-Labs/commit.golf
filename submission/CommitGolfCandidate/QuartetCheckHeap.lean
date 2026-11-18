@@ -21,8 +21,14 @@ theorem upper_heap_parent (lookup : Nat → BitVec 1024 → BitVec 256) (compres
 
 theorem upper_heap_leaf (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
     (group : Nat) (inside : group < 4194304) :
-    upperHeap lookup compress leaves (4194304+group) = lookup group (quartetPayload leaves group) :=
+    upperHeap lookup compress leaves (4194304+group) = lookup (group ^^^ 1) (quartetPayload leaves (group ^^^ 1)) :=
   Sampling.Quartet.upper_heap_leaf lookup compress leaves group inside
+
+/-- Group `g`'s node sits at heap node `2^22 + (g ^^^ 1)`. -/
+theorem upper_heap_leaf_flip (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression)
+    (leaves : DigestTape) (group : Nat) (inside : group < 4194304) :
+    upperHeap lookup compress leaves (4194304 + (group ^^^ 1)) = lookup group (quartetPayload leaves group) :=
+  Sampling.Quartet.upper_heap_leaf_flip lookup compress leaves group inside
 
 /-- One authenticated step of the honest upper heap, in the checker's level-aware form. -/
 theorem upper_heap_climb (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
@@ -116,5 +122,60 @@ theorem lower_node_sibling_internal (index : Index) (level : Nat) (later : 0 < l
     omega
   · rw [Nat.xor_one_of_odd (Nat.odd_iff.mpr (by omega))]
     omega
+
+/-! ### The checker's path index
+
+The check image flips bit 2 of the index (`xori x6,x6,4`) before the quartet's parity test and heap index, so
+its lower loop runs at `flipIndex i = i ^^^ 4`: heap node `2^22 + (⌊i/4⌋ ^^^ 1)` at loop level 0, and the
+same ancestors as `i` from loop level 1 on. -/
+
+/-- The index whose loop path the checker walks for position `index`. -/
+def flipIndex (index : Index) : Index :=
+  ⟨index.val ^^^ 4, by
+    have bound : index.val < 2^24 := index.isLt
+    exact Nat.xor_lt_two_pow bound (by decide)⟩
+
+theorem flip_index_val (index : Index) : (flipIndex index).val = index.val ^^^ 4 := rfl
+
+theorem flip_index_cases (index : Index) :
+    (flipIndex index).val = if index.val / 4 % 2 = 0 then index.val + 4 else index.val - 4 :=
+  Sampling.Quartet.xor_four_cases index.val
+
+theorem flip_index_group (index : Index) : (flipIndex index).val / 4 = index.val / 4 ^^^ 1 :=
+  Sampling.Quartet.xor_four_div index.val
+
+theorem flip_index_mod (index : Index) : (flipIndex index).val % 4 = index.val % 4 := by
+  rw [flip_index_cases]; split <;> omega
+
+theorem lower_node_two_flip (index : Index) :
+    Opening.lowerNode (flipIndex index) 2 = 4194304 + (index.val/4 ^^^ 1) := by
+  rw [lower_node_two, flip_index_group]
+
+/-- From loop level 1 on (binary level 3) the flipped path and the plain one coincide. -/
+theorem lower_node_flip (index : Index) (level : Nat) (later : 3 ≤ level) :
+    Opening.lowerNode (flipIndex index) level = Opening.lowerNode index level := by
+  obtain ⟨l, rfl⟩ : ∃ l, level = l + 3 := ⟨level - 3, by omega⟩
+  unfold Opening.lowerNode
+  have eight : (2:Nat)^(l+3) = 8 * 2^l := by rw [Nat.pow_add, Nat.mul_comm] <;> norm_num
+  have octet : (LENGTH + (flipIndex index).val) / 8 = (LENGTH + index.val) / 8 := by
+    rw [flip_index_cases]
+    change (16777216 + _) / 8 = (16777216 + index.val) / 8
+    split <;> omega
+  rw [eight, ← Nat.div_div_eq_div_mul, ← Nat.div_div_eq_div_mul, octet]
+
+theorem lower_node_shift_flip (index : Index) (level : Nat) :
+    Opening.lowerNode (flipIndex index) (level+2) = (4194304 + (index.val/4 ^^^ 1)) / 2^level := by
+  rw [lower_node_shift, flip_index_group]
+
+theorem cap_group_flip (index : Index) : Sampling.capGroup (flipIndex index) = Sampling.capGroup index := by
+  unfold Sampling.capGroup
+  rw [flip_index_cases]
+  change (16777216 + _) / 65536 = (16777216 + index.val) / 65536
+  split <;> omega
+
+theorem flip_flip_index (index : Index) : flipIndex (flipIndex index) = index := by
+  apply Fin.ext
+  change index.val ^^^ 4 ^^^ 4 = index.val
+  rw [Nat.xor_assoc, Nat.xor_self, Nat.xor_zero]
 
 end TwoPermutationPrototype.QuartetCheck

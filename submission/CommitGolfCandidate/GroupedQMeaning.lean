@@ -21,7 +21,7 @@ set_option maxHeartbeats 1400000
 attribute [local irreducible] readBuffer writeBits checkEvaluation
 
 /-- First word the tail must keep: block `B_0` (everything the tail writes lies below, in the heap). -/
-def unitFloor : Nat := cellFirst
+def unitFloor : Nat := cellFirst - 25
 
 structure TailContent (s : MachineState) (heap : Nat → BitVec 256) (before : Memory) (remaining : Nat) : Prop where
   nodes : ∀ n, remaining<n → n<4194304 → nodeDigest s n=heap n

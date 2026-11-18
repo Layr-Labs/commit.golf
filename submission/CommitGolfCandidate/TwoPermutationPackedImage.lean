@@ -2,8 +2,8 @@ import CommitGolfCandidate.TwoPermutationPackedFetchBase
 
 /-! Exact 705-word checker: the record's 494-word Quartet (variant B) checker with word 22 jumping to the rank
 dispatcher at 494–499, the salt-first store offsets at words 51, 53 and 55 and the A-leaf routine at 500–566 (K1); word
-489 jumping to the parity block at 567–572 (call output `x23-168` for an even group, `x23` for an odd group, return to
-491); the 32-byte sibling path for `x29 ≥ 13` (words 63–64) and word 235 jumping to 573–576, which skip the node
+489 flipping bit 2 of the index (`xori x6,x6,4`) and word 490 jumping to the parity block at 567–572 (call output
+`x23` for an even group, `x23-168` for an odd group, return to 491); the 32-byte sibling path for `x29 ≥ 13` (words 63–64) and word 235 jumping to 573–576, which skip the node
 truncation for `x29 = 14` (L21); word 232 jumping to 577, which sends `x29 ≥ 10` back to 233 and the lower levels
 to the 238-bit sibling decode and mask, the 238-bit cap blocks (words 284, 296, 328, 340 and 577–704) and 534-byte
 records (word 0). -/
@@ -73,7 +73,7 @@ def packedImage : Image := ⟨[
   0x008adf83, 0x05fe1823, 0x00aadf83, 0x05fe1923, 0x00cadf83, 0x05fe1a23, 0x00eadf83, 0x05fe1b23,
   0x010adf83, 0x05fe1c23, 0x012adf83, 0x05fe1d23, 0x014adf83, 0x05fe1e23, 0x016adf83, 0x05fe1f23,
   0x018adf83, 0x07fe1023, 0x01aadf83, 0x07fe1123, 0x01cadf83, 0x07fe1223, 0x01eadf83, 0x07fe1323,
-  0x020a8a93, 0x1380006f, 0x00000073, 0x00235313, 0x01430333, 0x93dff06f, 0x00043303, 0x03a373b3,
+  0x020a8a93, 0x00434313, 0x1340006f, 0x00235313, 0x01430333, 0x93dff06f, 0x00043303, 0x03a373b3,
   0x00b00e93, 0x03d3f3b3, 0x00038463, 0x891ff06f, 0x00831e13, 0x01c18e33, 0x06098513, 0x0c800593,
   0x00100693, 0x000adf83, 0x01f21023, 0x002adf83, 0x01f21123, 0x004adf83, 0x01f21223, 0x006adf83,
   0x01f21323, 0x008adf83, 0x01f21423, 0x00aadf83, 0x01f21523, 0x00cadf83, 0x01f21623, 0x00eadf83,

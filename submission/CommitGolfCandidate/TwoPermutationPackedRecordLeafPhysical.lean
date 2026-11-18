@@ -16,7 +16,7 @@ structure PhysicalFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (befor
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel out.state false))
     checkEvaluation oracle (recordRows (execute packedImage (out.steps+fuel) before false)) =
       ((tail.1.1.charge out.cycles 3,out.rows++tail.1.2),3+tail.2)
-  cursor : LowerCursor ordinal index 0 out.state
+  cursor : LowerCursor ordinal (QuartetCheck.flipIndex index) 0 out.state
   saved : LowerSaved before out.state
   frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) →
     (word < 1152 ∨ 1576 ≤ word) → (word < 1673 ∨ 1690 ≤ word) → memoryView out.state word=memoryView before word
