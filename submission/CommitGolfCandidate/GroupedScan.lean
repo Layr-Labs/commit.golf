@@ -8,7 +8,7 @@ set_option maxRecDepth 18000
 set_option maxHeartbeats 2000000
 
 abbrev N : Nat := 16777216
-def startPC (i : Nat) := if i=N then wordPC 46158 else wordPC (firstWord (i%4096))
+def startPC (i : Nat) := if i=N then wordPC 46162 else wordPC (firstWord (i%4096))
 /-- The latch after slot 4095: `beq x10,x6,+8` and one of the two jumps. -/
 def edgeCost (i : Nat) := if i%4096=4095 then 2 else 0
 /-- Instructions (steps) before slot `i`: 45,764 per tile. -/
@@ -126,8 +126,8 @@ theorem edge_run (s : MachineState) (i fuel : Nat) (hi : i<N)
     · let mid := s.setPC (wordPC 45785)
       have op : ordinaryStep s (.base (.BEQ .x10 .x6 8))=some mid := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,same.mpr last,wordPC,signExtend13,mid]
-      have fj : fetch image mid=some (.base (.JAL .x0 1492)) := fetch_decoded mid 45785 (by decide) rfl _ (by decide +kernel)
-      have jump : ordinaryStep mid (.base (.JAL .x0 1492))=some (s.setPC (wordPC 46158)) := by
+      have fj : fetch image mid=some (.base (.JAL .x0 1508)) := fetch_decoded mid 45785 (by decide) rfl _ (by decide +kernel)
+      have jump : ordinaryStep mid (.base (.JAL .x0 1508))=some (s.setPC (wordPC 46162)) := by
         simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,mid,MachineState.setPC,MachineState.setReg];rfl
       rw [edgeCost,if_pos edge,startPC,if_pos last,
         show 2+fuel=(fuel+1)+1 by omega,execute_ordinary_step _ _ _ _ _ _ fetchB op,
