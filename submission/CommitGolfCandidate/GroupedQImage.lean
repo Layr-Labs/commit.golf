@@ -5,7 +5,7 @@ set_option maxHeartbeats 6000000
 set_option maxRecDepth 65536
 def quadPC (slot : Nat) : Word := wordPC (45594+3*slot)
 def quadOp (part : Fin 3) : Instr :=
-  if part.val=0 then .ECALL else if part.val=1 then .ADDI .x10 .x10 512 else .ADDI .x12 .x12 32
+  if part.val=0 then .ECALL else if part.val=1 then .ADDI .x10 .x10 368 else .ADDI .x12 .x12 32
 private def QDecode (t : Nat) : Prop := ∀ u : Fin 256, ∀ p : Fin 3,
   Manifest.decodeBase (codeWord (45594+3*(256*t+u.val)+p.val))=some (quadOp p)
 private theorem qdec : ∀ t : Fin 32,QDecode t.val := by intro t;unfold QDecode;fin_cases t <;> decide +kernel

@@ -76,17 +76,17 @@ def commitTrace (s : MachineState) : OracleComp World Execution := do
   let key ← liftM ($ᵗ Key : ProbComp Key)
   let leaves ← scan N 0 (readyState s key)
   let out ← tailBody leaves
-  return ⟨.success,out,519505182,43470847⟩
+  return ⟨.success,out,519357726,43470847⟩
 
 attribute [local irreducible] tailBody readyState
 
 theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
-    execute image (215209250+fuel) s true = commitTrace s := by
-  rw [show 215209250+fuel=21+(185847807+(29361422+fuel)) by omega,setup_run s e]
+    execute image (215061794+fuel) s true = commitTrace s := by
+  rw [show 215061794+fuel=21+(185700351+(29361422+fuel)) by omega,setup_run s e]
   simp only [commitTrace,bind_assoc,pure_bind];apply bind_congr;intro key
   have read := ready_live s e key
   have run := run_scan N 0 _ (by decide) read (29361422+fuel)
-  rw [show S (0+N)-S 0=185847807 by decide,show C (0+N)-C 0=431423487 by decide,
+  rw [show S (0+N)-S 0=185700351 by decide,show C (0+N)-C 0=431276031 by decide,
     show Q (0+N)-Q 0=35082240 by decide] at run
   rw [run];simp only [bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support;intro leaves hit
@@ -95,10 +95,10 @@ theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
   simp only [bind_assoc,pure_bind,Execution.charge]
 
 theorem commit_of_image (program : Submission) (im : program.image .commit=image)
-    (allowance : 215209250≤program.steps .commit) (m : Message) (e : CommitEntry (program.initialState .commit m)) :
+    (allowance : 215061794≤program.steps .commit) (m : Message) (e : CommitEntry (program.initialState .commit m)) :
     program.run .commit m = commitTrace (program.initialState .commit m) := by
   change execute (program.image .commit) (program.steps .commit) _ true=_
-  rw [im, show program.steps .commit=215209250+(program.steps .commit-215209250) by omega]
+  rw [im, show program.steps .commit=215061794+(program.steps .commit-215061794) by omega]
   exact full_commit _ e _
 
 theorem actual_commit (m : Message) : GroupedArtifact.submission.run .commit m =
@@ -106,7 +106,7 @@ theorem actual_commit (m : Message) : GroupedArtifact.submission.run .commit m =
   commit_of_image _ exact_image.symm (by decide) m ⟨rfl,rfl,rfl,rfl⟩
 
 theorem commit_resources (m : Message) (z : Execution) (reachable : z∈support (GroupedArtifact.submission.run .commit m)) :
-    z.exit=.success ∧ z.cycles=519505182 ∧ z.oracleCalls≤COMMIT_BUDGET := by
+    z.exit=.success ∧ z.cycles=519357726 ∧ z.oracleCalls≤COMMIT_BUDGET := by
   rw [actual_commit] at reachable
   simp only [commitTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reachable
   obtain ⟨_,_,_,_,_,_,rfl⟩:=reachable

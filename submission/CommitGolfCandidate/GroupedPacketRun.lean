@@ -59,15 +59,18 @@ theorem anchor_next (i : Nat) (more : pairPos (i+1)≠0) : saltAnchor (i+1)=salt
   unfold saltAnchor pairBuffer pairPos;rw [rel,rk];simp
 
 theorem cursor_next (i : Nat) :
-    (i%4096%32=31 → wordAddress (cursor i)+4096=wordAddress (cursor (i+1))) ∧
-    (i%4096%32≠31 → cursor (i+1)=cursor i) := by
+    (rebase (i%4096) → wordAddress (cursor i)+4096=wordAddress (cursor (i+1))) ∧
+    (¬rebase (i%4096) → cursor (i+1)=cursor i) := by
+  have succ := rebases_succ i
   unfold cursor qSource
-  have sl : i%4096%32=i%32 := by omega
   constructor
   · intro h
+    rw [if_pos h] at succ
     change wordAddress _+wordAddress 512=_
-    rw [←wordAddress_add];congr 1 <;> omega
-  · intro h;congr 1 <;> omega
+    rw [←wordAddress_add];congr 1;omega
+  · intro h
+    rw [if_neg h] at succ
+    omega
 
 def finish (s t : MachineState) (i : Nat) : Prop :=
   t.getReg .x10=wordAddress (msgWord (i+1)) ∧ t.getReg .x20=wordAddress (cursor (i+1)) ∧
@@ -98,7 +101,6 @@ theorem packet_walk (s : MachineState) (i : Nat) (limit : i<16777216) (r : Packe
     simpa using src_address i 0
   have src1 : wordAddress (saltAnchor i)+signExtend12 (sourceImm (i%4096)+8)=wordAddress (sourceWord i+1) := src_address i 1
   have c := cursor_next i
-  simp only [show i%4096%32=i%32 by omega] at c
   have ctrRoom : qSalt 0+25≤2^33 := by unfold qSalt;decide
   have z : signExtend12 0#12=0#64 := rfl
   change wordAddress (msgWord i)+signExtend12 4064#12=_ at a0
@@ -117,14 +119,14 @@ theorem packet_walk (s : MachineState) (i : Nat) (limit : i<16777216) (r : Packe
     · have here : wordAddress (msgWord i-15)+signExtend12 1536=wordAddress (saltAnchor i) := by
         have disp : signExtend12 (1536 : BitVec 12)=wordAddress 192 := by unfold wordAddress;rfl
         rw [disp,←wordAddress_add];unfold saltAnchor pairBuffer;rw [reset,Nat.sub_zero]
-      by_cases shift : i%32=31
+      by_cases shift : rebase (i%4096)
       all_goals simp [plan,dr,within_pair,reset,shift,walk,finish,Action.valid,offset_getReg,word_getReg,writeBits_register,
         r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2]
       all_goals simp only [a0,a1,a2,a3,a4,a5,a6,here,z,true_and,and_true]
       all_goals try rw [show wordAddress (cursor i)+4096#64=wordAddress (cursor (i+1)) from c.1 shift]
       all_goals repeat' apply And.intro
       all_goals first | omega | exact retained | rfl
-    · by_cases shift : i%32=31
+    · by_cases shift : rebase (i%4096)
       all_goals simp [plan,dr,within_pair,reset,shift,walk,finish,Action.valid,offset_getReg,word_getReg,writeBits_register,
         r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2,r.buf reset]
       all_goals simp only [a0,a1,a2,a3,a4,a5,a6,z,true_and,and_true]
@@ -133,7 +135,7 @@ theorem packet_walk (s : MachineState) (i : Nat) (limit : i<16777216) (r : Packe
       all_goals first | omega | exact retained | rfl
   · have dr : rank (i%4096)≠0 := by rwa [within_rank]
     have active : pairPos i≠0 := fun h => direct (pair_head i h)
-    by_cases shift : i%32=31
+    by_cases shift : rebase (i%4096)
     all_goals simp [plan,dr,shift,walk,finish,Action.valid,offset_getReg,word_getReg,writeBits_register,
       r.msg,r.heap,r.counter,r.stride,r.selector,r.size,r.primitive,h0,c.2,r.buf active]
     all_goals simp only [a0,a1,a2,a3,a4,a5,a6,src0,src1,z,true_and,and_true]

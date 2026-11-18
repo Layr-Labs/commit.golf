@@ -2,7 +2,9 @@ import CommitGolfCandidate.GroupedStores
 import CommitGolfCandidate.GroupedTailEval
 import CommitGolfCandidate.GroupedPhysicalBase
 import CommitGolfCandidate.GroupedQMeaning
-import CommitGolfCandidate.QuartetPhysical
+import CommitGolfCandidate.QuartetPhysicalInputs
+import CommitGolfCandidate.QuartetRVModel
+import CommitGolfCandidate.TwoPermutationRootBytes
 import CommitGolfCandidate.MaterializedManifest
 
 namespace TwoPermutationPrototype.Grouped
@@ -33,7 +35,7 @@ theorem serialize (parents : MachineState) (heap raw : Nat → BitVec 256) (key 
     rw [root_preserves_heap_buffer parents outReg _ 32 (by unfold treeWord;omega) (by unfold treeWord;omega) (by decide)]
     exact stores.nodes n pos small
   · intro i;have hi : i.val<16777216 := i.isLt
-    let off := 32*LENGTH+512*(i.val/4)+72+32*(i.val%4)
+    let off := 68*LENGTH+368*(i.val/4)+72+32*(i.val%4)
     have slice := read_buffer_slice (rootPrefix parents 10) 4294971424 actual.sizes.trapdoor off 32
       (by rw [size];dsimp [off,LENGTH,LOG_LENGTH];omega)
     rw [show 4294971424+off=8*qLeaf i.val by dsimp [off,qLeaf,qSource,LENGTH,LOG_LENGTH];omega] at slice

@@ -13,7 +13,7 @@ def msgWord (i : Nat) := 512+32*i
 def groupBuffer (i : Nat) := msgWord (i-rank i)-15
 def pairBuffer (i : Nat) := msgWord (i-pairPos i)-15
 def saltAnchor (i : Nat) := pairBuffer i+192
-def cursor (i : Nat) := qSource (8*(i/32))+256
+def cursor (i : Nat) := qSource (1024*(i/4096))+512*rb (i%4096)+256
 def sourceWord (i : Nat) := groupBuffer i+2*(rank i-1)
 
 def plan (i : Nat) : List Action :=
@@ -30,10 +30,10 @@ def plan (i : Nat) : List Action :=
      .load .x31 .x7 (sourceImm n+8) (sourceWord i+1),.store .x10 .x31 16 (m+9)]) ++
   [.offset .x12 .x20 (heapImm n) (qLeaf i),.perm (m+7) (qLeaf i),
    .offset .x10 .x10 200 (msgWord (i+1))] ++
-  (if n%32=31 then [.add .x20 .x20 .x23 (cursor (i+1))] else [])
+  (if rebase n then [.add .x20 .x20 .x23 (cursor (i+1))] else [])
 
 theorem plan_words (i : Nat) : (plan i).map Action.op=packet (i%4096) := by
-  by_cases h : rank (i%4096)=0 <;> by_cases p : pairPos (i%4096)=0 <;> by_cases k : i%32=31 <;>
+  by_cases h : rank (i%4096)=0 <;> by_cases p : pairPos (i%4096)=0 <;> by_cases k : rebase (i%4096) <;>
     simp [plan,packet,h,k,Action.op,p]
 
 theorem plan_fetch (i : Nat) : fetchOps (firstWord (i%4096)) (plan i) := by
@@ -62,20 +62,24 @@ theorem within_rank (i : Nat) : rank (i%4096)=rank i := by
 theorem within_pair (i : Nat) : pairPos (i%4096)=pairPos i := by
   unfold pairPos;rw [Nat.mod_mod]
 
+theorem centered_imm : ∀ x : Fin 4096, signExtend12 (BitVec.ofNat 12 (2048+x.val))=-(2048:Word)+BitVec.ofNat 64 x.val := by
+  decide +kernel
+
 theorem heap_address (i : Nat) : wordAddress (cursor i)+signExtend12 (heapImm (i%4096))=wordAddress (qLeaf i) := by
-  have off : ∀ k : Fin 32, signExtend12 (BitVec.ofNat 12 (2048+512*(k.val/4)+72+32*(k.val%4)))=
-      -(2048:Word)+BitVec.ofNat 64 (512*(k.val/4)+72+32*(k.val%4)) := by decide
-  have atSlot := off ⟨i%32,by omega⟩
+  have low : 4096*rb (i%4096)≤slotOff (i%4096) := by unfold rb;omega
+  have bound : slotOff (i%4096)-4096*rb (i%4096)<4096 := by unfold rb;omega
+  have atSlot := centered_imm ⟨slotOff (i%4096)-4096*rb (i%4096),bound⟩
   simp only [Fin.val_mk] at atSlot
   unfold heapImm
-  rw [show (i%4096/4)%8=i%32/4 by omega,show i%4096%4=i%32%4 by omega,atSlot]
+  rw [show 2048+slotOff (i%4096)-4096*rb (i%4096)=2048+(slotOff (i%4096)-4096*rb (i%4096)) by omega,atSlot]
   unfold cursor
   rw [wordAddress_add]
   change (wordAddress _+2048)+(-2048+BitVec.ofNat 64 _)=_
-  refine (QuartetLeaves.centered_add (wordAddress (qSource (8*(i/32)))) (512*(i%32/4)+72+32*(i%32%4))).trans ?_
+  refine (QuartetLeaves.centered_add (wordAddress (qSource (1024*(i/4096))+512*rb (i%4096)))
+    (slotOff (i%4096)-4096*rb (i%4096))).trans ?_
   unfold wordAddress qLeaf qSource
   rw [←BitVec.ofNat_add]
-  congr 1 <;> omega
+  congr 1 <;> (try simp only [slotOff] at low ⊢) <;> omega
 
 theorem src_address (i : Nat) (d : Fin 2) :
     wordAddress (saltAnchor i)+signExtend12 (sourceImm (i%4096)+BitVec.ofNat 12 (8*d.val))=

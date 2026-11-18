@@ -26,6 +26,7 @@ structure Registers (s : MachineState) (ord left : Nat) : Prop where
   salt : s.getReg .x22=6979325984
   base : s.getReg .x26=4096
   divReg : s.getReg .x29=11
+  mult : s.getReg .x4=368
 
 private theorem masked (i : Index) : rv64_remu (BitVec.ofNat 64 i.val) 4096#64=BitVec.ofNat 64 (i.val%4096) := by
   unfold rv64_remu
@@ -106,7 +107,8 @@ theorem before_regs (s : MachineState) (i : Index) (ord left : Nat) (r : Input s
     (simple _ (by decide) (by decide) (by decide)).trans r.leftReg,
     (simple _ (by decide) (by decide) (by decide)).trans r.salt,
     (simple _ (by decide) (by decide) (by decide)).trans r.base,
-    (simple _ (by decide) (by decide) (by decide)).trans r.divReg⟩,?_,?_,?_,?_⟩
+    (simple _ (by decide) (by decide) (by decide)).trans r.divReg,
+    (simple _ (by decide) (by decide) (by decide)).trans r.mult⟩,?_,?_,?_,?_⟩
   all_goals simp [beforeCall,walkRows,preRows,execInstrBr,r.pc,r.index,r.input,r.divReg,r.base,r.loaded,
     masked,decoded_rank,counter_address,address,show signExtend12 0=0#64 by decide,MachineState.getMem_setPC,MachineState.getMem_setReg]
   all_goals simp only [show signExtend12 0#12=0#64 by decide,BitVec.add_zero,r.loaded]

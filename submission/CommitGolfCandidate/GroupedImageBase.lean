@@ -43,8 +43,15 @@ def heads (n : Nat) := 373*(n/4096)+((n%4096+10)/11)
 def rank (n : Nat) := (n%4096)%11
 def pairPos (n : Nat) := (n%4096)%22
 def pairHeads (n : Nat) := 187*(n/4096)+(n%4096+21)/22
-def firstWord (n : Nat) := 21+11*n+pairHeads n+n/32
-def heapImm (n : Nat) := BitVec.ofNat 12 (2048+512*((n/4)%8)+72+32*(n%4))
+/-- Byte offset of leaf slot n inside the quartet blocks of one body (368-byte blocks). -/
+def slotOff (n : Nat) := 368*(n/4)+72+32*(n%4)
+/-- Number of quartet-pointer rebases (4,096-byte windows) before leaf slot n of a body. -/
+def rb (n : Nat) := slotOff n/4096
+/-- Leaf slot n is followed by a rebase of the quartet pointer. -/
+def rebase (n : Nat) : Prop := rb (n+1) ≠ rb n
+instance (n : Nat) : Decidable (rebase n) := inferInstanceAs (Decidable (_ ≠ _))
+def firstWord (n : Nat) := 21+11*n+pairHeads n+rb n
+def heapImm (n : Nat) := BitVec.ofNat 12 (2048+slotOff n-4096*rb n)
 def sourceImm (n : Nat) := BitVec.ofNat 12 (2560+2816*((n%4096/11)%2)+16*(rank n-1))
 
 def packet (n : Nat) : List Instr :=
@@ -55,6 +62,6 @@ def packet (n : Nat) : List Instr :=
   else [.ADDI .x10 .x10 56,.SD .x10 .x10 0,.LD .x31 .x7 (sourceImm n),
     .SD .x10 .x31 8,.LD .x31 .x7 (sourceImm n+8),.SD .x10 .x31 16]) ++
   [.ADDI .x12 .x20 (heapImm n),.ECALL,.ADDI .x10 .x10 200] ++
-  (if n%32=31 then [.ADD .x20 .x20 .x23] else [])
+  (if rebase n then [.ADD .x20 .x20 .x23] else [])
 
 end TwoPermutationPrototype.Grouped

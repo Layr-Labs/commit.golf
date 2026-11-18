@@ -75,13 +75,16 @@ theorem good_step (o : Oracle) (k : BitVec 192) (msg : Message) (m : Memory)
     · have ne : j.val≠i.val := fun hh => eq (Fin.ext hh)
       apply Eq.trans _ (h.children j (by omega));funext a
       have t:=a.isLt;have ix : j.val<16777216:=j.isLt
-      apply same _ hi <;> simp only [msgWord,qSalt,qLeaf,qSource] <;> omega
+      have sep := QuartetCommit.qleaf_before j.val i.val (by omega)
+      apply same _ hi <;> simp only [msgWord,qSalt,qLeaf,qSource] at sep ⊢ <;> omega
   · intro g hg j hj
     apply Eq.trans _ (h.padding g hg j hj)
-    apply same _ hi <;> simp only [msgWord,qSalt,qLeaf,qSource] <;> omega
+    have sep := QuartetCommit.qpad_outside g j i.val hj
+    apply same _ hi <;> simp only [msgWord,qSalt,qLeaf,qSource] at sep ⊢ <;> omega
   · intro j lo up
     apply Eq.trans _ (h.key j lo up)
-    apply same _ hi <;> simp only [msgWord,qSalt,qLeaf,qSource] <;> omega
+    have sep := QuartetCommit.qleaf_below_salts i.val hi
+    apply same _ hi <;> simp only [msgWord,qSalt,qLeaf,qSource] at sep ⊢ <;> omega
   · intro next eq active j nz
     have ix : next.val=i.val+1 := eq.symm
     have nbuf := buffer_next i.val active

@@ -64,6 +64,16 @@ theorem pre_row_fetch : presentRows preRows := by
   · simp only [preRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h|h|h <;> subst p <;> decide
   · simp only [preRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h|h|h <;> subst p <;> decide +kernel
 
+/-- The record writer's group-base rows (368-byte quartet blocks: `x7 = x24 + (x6 >>> 2) * x4`). -/
+def slotRows : List Row := [(34,.ADDI .x21 .x21 16),(35,.SRLI .x7 .x6 2),(36,.MUL .x7 .x7 .x4),
+  (37,.ADD .x7 .x7 .x24),(38,.ANDI .x10 .x6 3)]
+
+theorem slot_row_fetch : presentRows slotRows := by
+  intro p hp
+  apply row_fetch
+  · simp only [slotRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h <;> subst p <;> decide
+  · simp only [slotRows,List.mem_cons,List.not_mem_nil,or_false] at hp;rcases hp with h|h|h|h|h <;> subst p <;> decide +kernel
+
 theorem post_row_fetch (direct last : Bool) : presentRows (postRows direct last) := by
   have raw : ∀ d l : Bool, ∀ i : Fin (postRows d l).length, let row := (postRows d l)[i];
       row.1<762 ∧ (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2 := by decide +kernel
