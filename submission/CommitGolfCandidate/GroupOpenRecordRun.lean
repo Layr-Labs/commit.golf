@@ -77,8 +77,9 @@ private theorem latch_target (marked : MachineState) (last : Prop) [Decidable la
   · rw [show decide last = false from decide_eq_false h, ite_eq_right h]
     rfl
 
-private theorem complete_record_cost (final : Bool) : 666+latchCost final = recordCost final := by
-  cases final <;> decide
+private theorem complete_record_cost (ordinal : Nat) (final : Bool) :
+    538+4*recordCopyCost ordinal+latchCost final = recordCost ordinal final := by
+  cases final <;> simp [recordCost, latchCost] <;> omega
 
 private theorem execute_record_with_data (s : Submission)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
@@ -170,7 +171,7 @@ private theorem execute_record_with_data (s : Submission)
   · have tail : RunsOpeningBlock prepared done (latchCost (decide (ordinal+1=positions.card))) :=
       run_latch prepared (ordinal+1=positions.card) markRun markPC
     have whole := data.run.next tail
-    change RunsOpeningBlock state done (recordCost (decide (ordinal+1=positions.card)))
+    change RunsOpeningBlock state done (recordCost ordinal (decide (ordinal+1=positions.card)))
     rw [← complete_record_cost]
     exact whole
   · have pointer := (data.register .x8 (by decide)).trans boundary.index

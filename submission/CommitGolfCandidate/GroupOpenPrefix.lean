@@ -91,7 +91,7 @@ theorem PrefixWrites.move {s u s' u' : MachineState} {i : Index} {o a b : Nat}
   · intro j below
     simpa only [MachineState.getMem,initial,final] using writes.input j below
 
-def prefixScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x31]
+def prefixScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
 
 def Keeps (s u : MachineState) : Prop := ∀ r, r ∉ prefixScratch → u.getReg r=s.getReg r
 
@@ -130,17 +130,17 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
   have field : FieldInputs .nonce t (nonceAddress i) (recordBase o) :=
     ⟨by rw [h.1,start.pc]; rfl,physical_nonce_source s i start.nonce start.index,
       by simpa [CopySite.destOffset] using (h.2.2.2.2 .x21 (by decide) (by decide)).trans start.output,
-      sep,room,srcEven,dstEven⟩
+      sep,room,srcEven,dstEven,fun w => by simp [CopySite.wide] at w⟩
   have fieldPC : v.pc = 4232 := field.final_pc
   have rd : v.getReg .x6 = BitVec.ofNat 64 i.val :=
-    (copy_register .nonce t _ (by decide)).trans (h.2.2.2.1.trans start.index)
+    (copy_register .nonce t _ (by decide) (.inl rfl)).trans (h.2.2.2.1.trans start.index)
   have fixed (r : Reg) (a : r≠.x31) (b : r≠.x6) (c : r≠.x7) :
-      v.getReg r = s.getReg r := (copy_register .nonce t r a).trans (h.2.2.2.2 r b c)
+      v.getReg r = s.getReg r := (copy_register .nonce t r a (.inl rfl)).trans (h.2.2.2.2 r b c)
   have stable : Keeps s (slotStart v) := by
     intro r free
     simp only [prefixScratch,List.mem_cons,List.not_mem_nil,or_false,not_or] at free
     exact (z.2.2.2.2.2 r free.2.2.2.1 free.2.1 free.2.2.1).trans
-      (fixed r free.2.2.2.2.2 free.1 free.2.1)
+      (fixed r free.2.2.2.2.2.2 free.1 free.2.1)
   have gate : RunsOpeningBlock s t 3 := fun fuel coins => execute_nonce_setup s start.pc start.readable fuel coins
   have sourceBytes : PrefixWrites t v i o 0 16 := by
     apply PrefixWrites.of_copy (src:=nonceAddress i) (count:=16)
@@ -150,7 +150,8 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
     · intro b hb; simp [firstSource,hb]
     · intro a ha
       exact field.words_before proofBase a ha (by unfold recordBase; omega) (by decide)
-  refine ⟨(gate.next field.run).next (run_slot v fieldPC), ⟨?_,?_,?_,?_,?_,?_,?_⟩,
+  have nonceRun : RunsOpeningBlock t v 16 := field.run
+  refine ⟨(gate.next nonceRun).next (run_slot v fieldPC), ⟨?_,?_,?_,?_,?_,?_,?_⟩,
     sourceBytes.move h.2.1.symm z.2.1, stable⟩
   · change (slotStart v).pc = _
     rw [z.1,fieldPC]; rfl
@@ -171,7 +172,7 @@ def groupStep (j : Fin 3) (s : MachineState) : MachineState := copyState (.quart
 theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit : o<LENGTH)
     (start : GroupCursor s i o j.val) :
     let u := groupStep j s
-    RunsOpeningBlock s u 36 ∧ GroupCursor u i o (j.val+1) ∧
+    RunsOpeningBlock s u (4+recordCopyCost o) ∧ GroupCursor u i o (j.val+1) ∧
     PrefixWrites s u i o (16+32*j.val) (16+32*j.val+32) ∧ Keeps s u := by
   let t := quartetHead j s
   let src := leafAddress (i.val ^^^ (j.val+1))
@@ -187,7 +188,8 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
   have endIx := indices_before_records
   have endSalt := nonces_end_at_indices
   have field : FieldInputs (.quartet j) t src dest := by
-    refine ⟨?_,quartet_physical_source s i j start.group start.low,?_,?_,actualRoom,by change src%2=0; omega,?_⟩
+    refine ⟨?_,quartet_physical_source s i j start.group start.low,?_,?_,actualRoom,by change src%2=0; omega,?_,
+      fun _ => srcA⟩
     · rw [head.1,start.pc]
       change BitVec.ofNat 64 _ + BitVec.ofNat 64 16 = _
       rw [← BitVec.ofNat_add]
@@ -200,17 +202,25 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
     · change src+32 ≤ dest
       unfold dest recordBase; omega
     · unfold dest recordBase recordBytes; omega
-  have step (r : Reg) (a : r≠.x31) (b : r≠.x28) :
+  have step (r : Reg) (a : r≠.x31) (b : r≠.x28) (c : r≠.x29) :
       (groupStep j s).getReg r = s.getReg r :=
-    (copy_register (.quartet j) t r a).trans (head.2.2.2 r b)
+    (copy_register (.quartet j) t r a (.inr c)).trans (head.2.2.2 r b)
+  have cost : copyCost (.quartet j) dest = recordCopyCost o := by
+    simp only [copyCost, CopySite.wide, ite_true, recordCopyCost, dest]
+    rw [show recordBase o+(16+32*j.val) = recordBase o+8*(2+4*j.val) by omega, wide_cost_shift]
+  have copyRun : RunsOpeningBlock t (groupStep j s) (recordCopyCost o) := by
+    rw [← cost]; exact field.run
   have writes : PrefixWrites t (groupStep j s) i o (16+32*j.val) (16+32*j.val+32) := by
     apply PrefixWrites.of_copy (src:=src) (count:=32) field.bytes actualRoom (source_quartet i j)
     intro a ha
     exact field.words_before proofBase a ha (by unfold dest recordBase; omega) (by decide)
-  refine ⟨(run_quartet_head j s start.pc).next field.run, ⟨?_,
-    (step _ (by decide) (by decide)).trans start.heap, (step _ (by decide) (by decide)).trans start.groups,
-    (step _ (by decide) (by decide)).trans start.group, (step _ (by decide) (by decide)).trans start.low,
-    (step _ (by decide) (by decide)).trans start.index, (step _ (by decide) (by decide)).trans start.output⟩,
+  refine ⟨(run_quartet_head j s start.pc).next copyRun, ⟨?_,
+    (step _ (by decide) (by decide) (by decide)).trans start.heap,
+    (step _ (by decide) (by decide) (by decide)).trans start.groups,
+    (step _ (by decide) (by decide) (by decide)).trans start.group,
+    (step _ (by decide) (by decide) (by decide)).trans start.low,
+    (step _ (by decide) (by decide) (by decide)).trans start.index,
+    (step _ (by decide) (by decide) (by decide)).trans start.output⟩,
     writes.move head.2.1.symm rfl, ?_⟩
   · change (copyState (.quartet j) t).pc = _
     rw [field.final_pc]
@@ -219,13 +229,14 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
     omega
   · intro r free
     simp only [prefixScratch,List.mem_cons,List.not_mem_nil,or_false,not_or] at free
-    exact step r free.2.2.2.2.2 free.2.2.2.2.1
+    exact step r free.2.2.2.2.2.2 free.2.2.2.2.1 free.2.2.2.2.2.1
 
 def recordPrefix (s : MachineState) := quartetExit (groupStep 2 (groupStep 1 (groupStep 0 (saltStart s))))
 
 theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := recordPrefix s
-    RunsOpeningBlock s u 135 ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧ Keeps s u := by
+    RunsOpeningBlock s u (39+3*recordCopyCost o) ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧
+      Keeps s u := by
   have ⟨salt,g0,w0,k0⟩ := run_salt_start s i o fit start
   have ⟨s0,g1,w1,k1⟩ := run_group_step _ i o 0 fit g0
   have ⟨s1,g2,w2,k2⟩ := run_group_step _ i o 1 fit g1
@@ -238,7 +249,10 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
     simp only [prefixScratch,List.mem_cons,List.not_mem_nil,or_false,not_or] at free
     exact e.2.2.2.2 r free.2.2.2.1 free.1
   have writes : PrefixWrites s last i o 0 112 := (((w0.join w1 (by decide) fit).join w2 (by decide) fit).join w3 (by decide) fit)
-  refine ⟨(((salt.next s0).next s1).next s2).next (run_quartet_exit _ g3.pc), ⟨?_,?_,?_,?_⟩,
+  have total := (((salt.next s0).next s1).next s2).next (run_quartet_exit _ g3.pc)
+  rw [show 24+(4+recordCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+3 = 39+3*recordCopyCost o by omega]
+    at total
+  refine ⟨total, ⟨?_,?_,?_,?_⟩,
     writes.move rfl e.2.1,past.next kept⟩
   · change (quartetExit last).pc = _
     rw [e.1,show last.pc = _ from g3.pc]; rfl

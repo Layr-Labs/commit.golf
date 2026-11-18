@@ -20,11 +20,13 @@ def lowerRun (level : Nat) : Nat → MachineState → MachineState
   | left+1, state =>
     if live : level < 14 then lowerRun (level+1) left (siblingBlock ⟨level,live⟩ state) else state
 
-def lowerCost (level : Nat) : Nat → Nat
+def lowerCost (ordinal level : Nat) : Nat → Nat
   | 0 => 0
-  | left+1 => siblingCost level+lowerCost (level+1) left
+  | left+1 => siblingCost ordinal level+lowerCost ordinal (level+1) left
 
-theorem lower_total_cost : lowerCost 0 13 = 461 := rfl
+theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 429+recordCopyCost ordinal := by
+  simp [lowerCost, siblingCost, siblingWidth]
+  omega
 
 theorem destination_mono (ordinal : Nat) : Monotone (siblingDestination ordinal) := by
   intro a b le
@@ -43,9 +45,9 @@ theorem field_outside {before after : MachineState} {source dest size : Nat}
   omega
 
 structure LowerTrace (before after : MachineState) (index : Index) (ordinal first count : Nat) : Prop where
-  run : RunsOpeningBlock before after (lowerCost first count)
+  run : RunsOpeningBlock before after (lowerCost ordinal first count)
   next : LowerCursor after index ordinal (first+count)
-  register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x31 →
+  register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x31 → reg ≠ .x29 →
     after.getReg reg = before.getReg reg
   input : ∀ address < proofBase,
     after.getMem (BitVec.ofNat 64 address) = before.getMem (BitVec.ofNat 64 address)
@@ -94,9 +96,9 @@ theorem execute_lower (state : MachineState) (index : Index) (ordinal first coun
         (siblingWidth first) := step.bytes
     simp only [lowerRun, dite_eq_left live]
     refine ⟨?_, by rw [total]; exact rest.next,
-      fun reg a b c d => (rest.register reg a b c d).trans (step.register reg a b c d),
+      fun reg a b c d e => (rest.register reg a b c d e).trans (step.register reg a b c d e),
       fun address below => (rest.input address below).trans (step.input address below), ?_, ?_⟩
-    · have cost : lowerCost first (count+1) = siblingCost first+lowerCost (first+1) count := rfl
+    · have cost : lowerCost ordinal first (count+1) = siblingCost ordinal first+lowerCost ordinal (first+1) count := rfl
       rw [cost]
       exact step.run.next rest.run
     · intro address fit outside
@@ -244,15 +246,17 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
     (head.2.2.2 .x21 (by decide)).trans cursor.dest
   have width13 : siblingWidth 13 = 28 := rfl
   have field : FieldInputs site prepared src dst := by
-    refine ⟨before, by simpa [site] using srcReg, by simpa [site] using dstReg, ?_, ?_, ordinalFit.1, ordinalFit.2.1⟩
+    refine ⟨before, by simpa [site] using srcReg, by simpa [site] using dstReg, ?_, ?_, ordinalFit.1, ordinalFit.2.1,
+      fun w => absurd w (by decide)⟩
     · have := ordinalFit.2.2.1; rw [width13] at this; rw [halves]; exact this
     · have := ordinalFit.2.2.2; rw [width13] at this; rw [halves]; exact this
   have copyPC : copied.pc = BitVec.ofNat 64 (4096+4*638) := field.final_pc
   have keptCopy (reg : Reg) (d : reg ≠ .x31) (b : reg ≠ .x7) : copied.getReg reg = state.getReg reg :=
-    (copy_register site prepared reg d).trans (head.2.2.2 reg b)
-  have srcCopied : copied.getReg .x7 = BitVec.ofNat 64 src := (copy_register site prepared .x7 (by decide)).trans srcReg
+    (copy_register site prepared reg d (.inl (by decide))).trans (head.2.2.2 reg b)
+  have srcCopied : copied.getReg .x7 = BitVec.ofNat 64 src :=
+    (copy_register site prepared .x7 (by decide) (.inl (by decide))).trans srcReg
   have dstCopied : copied.getReg .x21 = BitVec.ofNat 64 dst :=
-    (copy_register site prepared .x21 (by decide)).trans dstReg
+    (copy_register site prepared .x21 (by decide) (.inl (by decide))).trans dstReg
   -- the head rows: lhu x31,28(x7); jal F
   have headStart : ∀ h : 0 < lastHead.length, copied.pc = BitVec.ofNat 64 (4096+4*lastHead[0].1) := fun _ => copyPC
   have srcHalfFit : src+28+2 ≤ MEMORY_BYTES := by have := ordinalFit.2.2.1; have := ordinalFit.2.2.2; omega
@@ -364,7 +368,8 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
   · have total := ((((show RunsOpeningBlock state prepared 3 from
       fun fuel coins => execute_sibling_head state level start fuel coins).next field.run).next ranLoad).next
       ranFold).next ranTail
-    rw [halves] at total
+    have c13 : copyCost site dst = 28 := by unfold copyCost; rw [if_neg (by decide)]; rfl
+    rw [c13] at total
     exact total
   · exact tailPC
   · rw [tailReg .x9 (by decide) (by decide), foldKeep' .x9 (by decide) (by decide) (by decide),

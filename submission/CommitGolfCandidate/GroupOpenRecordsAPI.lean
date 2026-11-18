@@ -32,7 +32,9 @@ theorem RecordBoundary.start {s : Submission} {trapdoor : BitVec (8*s.sizes.trap
   ⟨by simpa only [ite_eq_right (show ordinal ≠ positions.card by omega)] using boundary.pc,
     boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.slots, boundary.input⟩
 
-def recordCost (final : Bool) : Nat := if final then 672 else 673
+/-- Cycles of record `ordinal` (the final record skips the loop jump): its four wide copies depend on its
+alignment. -/
+def recordCost (ordinal : Nat) (final : Bool) : Nat := (if final then 544 else 545)+4*recordCopyCost ordinal
 
 def afterLatch (marked : MachineState) (final : Bool) : MachineState :=
   if final then marked else marked.setPC 0x103c
@@ -43,7 +45,7 @@ def runRecord (state : MachineState) (final : Bool) : MachineState :=
 structure OneRecord (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (before after : MachineState) (ordinal : Nat)
     (present : ordinal < positions.card) : Prop where
-  run : RunsOpeningBlock before after (recordCost (decide (ordinal+1=positions.card)))
+  run : RunsOpeningBlock before after (recordCost ordinal (decide (ordinal+1=positions.card)))
   next : RecordBoundary s trapdoor positions after (ordinal+1)
   marks : ∀ node < 512, machineMarks after node =
     if node = Sampling.capGroup (sortedIndex positions ordinal present) then 1 else machineMarks before node
@@ -61,8 +63,49 @@ structure OneRecord (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
         ((before.getHalfword (BitVec.ofNat 64 (siblingAddress (sortedIndex positions ordinal present) 13+28))).zeroExtend 64
           >>> (2*k))).extractLsb' (8*b) 8
 
-def recordsCost (size ordinal count : Nat) : Nat :=
-  if 0<count ∧ ordinal+count=size then 673*count-1 else 673*count
+def recordsCost (size ordinal : Nat) : Nat → Nat
+  | 0 => 0
+  | count+1 => recordCost ordinal (decide (ordinal+1=size))+recordsCost size (ordinal+1) count
+
+/-- Wide-copy cycles of records `0..n-1`. -/
+def copySum : Nat → Nat
+  | 0 => 0
+  | n+1 => copySum n+recordCopyCost n
+
+theorem records_cost_sum (size : Nat) : ∀ count ordinal, ordinal+count ≤ size →
+    recordsCost size ordinal count+4*copySum ordinal+(if 0<count ∧ ordinal+count=size then 1 else 0) =
+      545*count+4*copySum (ordinal+count) := by
+  intro count
+  induction count with
+  | zero => intro ordinal _; simp [recordsCost]
+  | succ count ih =>
+    intro ordinal fit
+    have rest := ih (ordinal+1) (by omega)
+    have step : copySum (ordinal+1) = copySum ordinal+recordCopyCost ordinal := rfl
+    rw [show ordinal+1+count = ordinal+(count+1) by omega] at rest
+    simp only [recordsCost, recordCost]
+    by_cases last : ordinal+1 = size
+    · have empty : count = 0 := by omega
+      subst empty
+      subst last
+      simp [recordsCost, copySum]
+      omega
+    · simp only [last, decide_false, Bool.false_eq_true, ite_false] at rest ⊢
+      by_cases done : ordinal+(count+1) = size
+      · have pos : 0 < count := by omega
+        rw [if_pos ⟨pos, done⟩] at rest
+        rw [if_pos ⟨by omega, done⟩]
+        omega
+      · rw [if_neg (fun h => done h.2)] at rest
+        rw [if_neg (fun h => done h.2)]
+        omega
+
+theorem records_total (size : Nat) (positive : 0 < size) :
+    recordsCost size 0 size = 545*size+4*copySum size-1 := by
+  have h := records_cost_sum size size 0 (by omega)
+  rw [if_pos ⟨positive, by omega⟩] at h
+  simp only [copySum, Nat.zero_add, Nat.mul_zero, Nat.add_zero] at h
+  omega
 
 def runRecords (size ordinal : Nat) : Nat → MachineState → MachineState
   | 0, state => state

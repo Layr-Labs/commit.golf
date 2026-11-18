@@ -23,7 +23,7 @@ def recordScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
 def recordData (s : MachineState) := lastLevel (lowerRun 0 13 (recordPrefix s))
 
 structure RecordData (s u : MachineState) (i : Index) (o : Nat) : Prop where
-  run : RunsOpeningBlock s u 666
+  run : RunsOpeningBlock s u (538+4*recordCopyCost o)
   cursor : LowerCursor u i o 14
   register : ∀ r, r ∉ recordScratch → u.getReg r = s.getReg r
   input : ∀ a<proofBase, u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a)
@@ -126,15 +126,16 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
   show RecordData st (lastLevel lowEnd) i o
   refine ⟨?_, last.next, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have total := (run0.next low.run).next last.run
-    rw [lower_total_cost] at total
+    rw [lower_total_cost, show 39+3*recordCopyCost o+(429+recordCopyCost o)+70 = 538+4*recordCopyCost o by omega]
+      at total
     exact total
   · intro r free
     simp only [recordScratch, List.mem_cons, List.not_mem_nil, or_false, not_or] at free
     have keptFree : r ∉ prefixScratch := by
       simp only [prefixScratch, List.mem_cons, List.not_mem_nil, or_false, not_or]
-      exact ⟨free.1, free.2.1, free.2.2.1, free.2.2.2.1, free.2.2.2.2.1, free.2.2.2.2.2.2⟩
+      exact ⟨free.1, free.2.1, free.2.2.1, free.2.2.2.1, free.2.2.2.2.1, free.2.2.2.2.2.1, free.2.2.2.2.2.2⟩
     exact (last.register r free.1 free.2.1 free.2.2.2.1 free.2.2.2.2.1 free.2.2.2.2.2.1 free.2.2.2.2.2.2).trans
-      ((low.register r free.1 free.2.1 free.2.2.2.1 free.2.2.2.2.2.2).trans (kept r keptFree))
+      ((low.register r free.1 free.2.1 free.2.2.2.1 free.2.2.2.2.2.2 free.2.2.2.2.2.1).trans (kept r keptFree))
   · intro a ha
     exact (last.input a ha).trans ((low.input a ha).trans (written.input a ha))
   · intro a fit outside

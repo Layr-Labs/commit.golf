@@ -132,8 +132,29 @@ def siblingBlock (level : Fin 14) (state : MachineState) : MachineState :=
   if level.val = 1 then a1Block (copyState (siblingSite level) (headPrefix state 3))
   else tailPrefix (copyState (siblingSite level) (headPrefix state 3)) level 2
 
-/-- Cycles of the block of level `level < 13`. -/
-def siblingCost (level : Nat) : Nat := if level = 1 then 39 else 5+siblingWidth level
+/-- Cycles of one 32-byte wide copy into record `ordinal` (all four wide sites of a record share its
+alignment, since the site offsets 16, 48, 80 and 112 are multiples of 8). -/
+def recordCopyCost (ordinal : Nat) : Nat := wideCost (recordBase ordinal)
+
+theorem wide_cost_shift (a k : Nat) : wideCost (a+8*k) = wideCost a := by
+  unfold wideCost
+  rw [Nat.add_mul_mod_self_left]
+
+/-- Cycles of the block of level `level < 13` of record `ordinal`: level 0 is a wide copy. -/
+def siblingCost (ordinal level : Nat) : Nat :=
+  if level = 0 then 5+recordCopyCost ordinal else if level = 1 then 39 else 5+siblingWidth level
+
+theorem sibling_copy_cost (level : Fin 14) (ordinal : Nat) :
+    copyCost (siblingSite level) (siblingDestination ordinal level.val) =
+      if level.val = 0 then recordCopyCost ordinal else 2*(siblingSite level).halfwords := by
+  unfold siblingSite
+  split
+  · rename_i zero
+    simp only [copyCost, CopySite.wide, ite_true, recordCopyCost, siblingDestination, zero, siblingOffset]
+    rw [show recordBase ordinal + (if 0 < 2 then 112 + 32 * 0 else if 0 < 14 then 176 + 30 * (0 - 2) else 534) =
+      recordBase ordinal + 8*14 by simp, wide_cost_shift]
+  · rename_i nonzero
+    simp [copyCost, CopySite.wide, nonzero]
 
 theorem lower_pc_next (level : Fin 14) (inner : level.val < 13) :
     BitVec.ofNat 64 (4096+4*(siblingEnd level+2)) = lowerPC (level.val+1) := by
@@ -229,11 +250,11 @@ theorem a1_block_bytes (state : MachineState) (source target : Nat)
   rw [a1_block_memory, src, dst, signed_thirty, ← BitVec.ofNat_add, ← BitVec.ofNat_add]
 
 structure SiblingTrace (state after : MachineState) (index : Index) (ordinal : Nat) (level : Fin 14) : Prop where
-  run : RunsOpeningBlock state after (siblingCost level.val)
+  run : RunsOpeningBlock state after (siblingCost ordinal level.val)
   next : LowerCursor after index ordinal (level.val+1)
   bytes : ByteCopy state after (siblingAddress index level.val)
     (siblingDestination ordinal level.val) (siblingWidth level.val)
-  register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x31 →
+  register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x31 → reg ≠ .x29 →
     after.getReg reg = state.getReg reg
   input : ∀ address < proofBase,
     after.getMem (BitVec.ofNat 64 address) = state.getMem (BitVec.ofNat 64 address)
@@ -278,14 +299,19 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
     (head.2.2.2 .x21 (by decide)).trans cursor.dest
   have field : FieldInputs site prepared (siblingAddress index level.val)
       (siblingDestination ordinal level.val) := by
-    refine ⟨before, by simpa [site] using srcReg, by simpa [site] using dstReg, ?_, ?_, ordinalFit.1, ordinalFit.2.1⟩
+    refine ⟨before, by simpa [site] using srcReg, by simpa [site] using dstReg, ?_, ?_, ordinalFit.1, ordinalFit.2.1,
+      fun _ => ?_⟩
     · have := ordinalFit.2.2.1; omega
     · have := ordinalFit.2.2.2; omega
+    · have base : trapdoorBase % 8 = 0 := by decide
+      unfold siblingAddress; omega
   have tailPC : copied.pc = BitVec.ofNat 64 (4096+4*siblingEnd level) := field.final_pc
   have ranHead : RunsOpeningBlock state prepared 3 :=
     fun fuel coins => execute_sibling_head state level start fuel coins
-  have keptCopy (reg : Reg) (d : reg ≠ .x31) (b : reg ≠ .x7) : copied.getReg reg = state.getReg reg :=
-    (copy_register site prepared reg d).trans (head.2.2.2 reg b)
+  have keptCopy (reg : Reg) (d : reg ≠ .x31) (b : reg ≠ .x7) (e : reg ≠ .x29) :
+      copied.getReg reg = state.getReg reg :=
+    (copy_register site prepared reg d (.inr e)).trans (head.2.2.2 reg b)
+  have fieldCost := sibling_copy_cost level ordinal
   have copiedBytes : ByteCopy state copied (siblingAddress index level.val)
       (siblingDestination ordinal level.val) (2*site.halfwords) :=
     field.bytes.move head.2.1.symm rfl
@@ -300,9 +326,9 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
   by_cases one : level.val = 1
   · have blockEq : siblingBlock level state = a1Block copied := by unfold siblingBlock; rw [if_pos one]
     have srcCopied : copied.getReg .x7 = BitVec.ofNat 64 (siblingAddress index level.val) :=
-      (copy_register site prepared .x7 (by decide)).trans srcReg
+      (copy_register site prepared .x7 (by decide) (.inr (by decide))).trans srcReg
     have dstCopied : copied.getReg .x21 = BitVec.ofNat 64 (siblingDestination ordinal level.val) :=
-      (copy_register site prepared .x21 (by decide)).trans dstReg
+      (copy_register site prepared .x21 (by decide) (.inr (by decide))).trans dstReg
     have width : siblingWidth level.val = 32 := by rw [one]; rfl
     have halves : 2*site.halfwords = 30 := by change 2*(siblingSite level).halfwords = 30; rw [exact, if_pos one]
     have srcFit : siblingAddress index level.val+32 ≤ MEMORY_BYTES := by
@@ -318,15 +344,15 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
     rw [blockEq]
     refine ⟨?_, ⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩
     · have total := (ranHead.next field.run).next ranA1
-      rw [halves] at total
-      have cost : siblingCost level.val = 3+30+6 := by simp [siblingCost, one]
+      rw [fieldCost, if_neg (by omega), halves] at total
+      have cost : siblingCost ordinal level.val = 3+30+6 := by simp [siblingCost, one]
       rw [cost]
       exact total
     · rw [a1PC, one]
       rfl
-    · rw [rKept .x9 (by decide) (by decide) (by decide), keptCopy .x9 (by decide) (by decide)]
+    · rw [rKept .x9 (by decide) (by decide) (by decide), keptCopy .x9 (by decide) (by decide) (by decide)]
       exact cursor.heap
-    · rw [r6, keptCopy .x6 (by decide) (by decide), cursor.node, node_shift]
+    · rw [r6, keptCopy .x6 (by decide) (by decide) (by decide), cursor.node, node_shift]
     · rw [r21, dstCopied, show (32#64 : Word) = BitVec.ofNat 64 (siblingWidth level.val) by rw [width],
         destination_next ordinal level.val level.isLt]
     · rw [width]
@@ -334,8 +360,8 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
           (siblingDestination ordinal level.val) 30 := by
         rw [← halves]; exact copiedBytes
       exact byte_copy_extend c30 a1Bytes (by have := ordinalFit.2.2.1; rw [width] at this; omega) (by omega)
-    · intro reg a b c d
-      rw [rKept reg c a d, keptCopy reg d b]
+    · intro reg a b c d e
+      rw [rKept reg c a d, keptCopy reg d b e]
     · intro address below
       have above : proofBase ≤ siblingDestination ordinal level.val := by
         unfold siblingDestination recordBase; omega
@@ -353,17 +379,25 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
       change 2*(siblingSite level).halfwords = _; rw [exact, if_neg one]
     have ranTail : RunsOpeningBlock copied done 2 :=
       fun fuel coins => execute_sibling_tail copied level plain tailPC fuel coins
-    have kept (reg : Reg) (a : reg ≠ .x6) (b : reg ≠ .x7) (c : reg ≠ .x21) (d : reg ≠ .x31) :
+    have kept (reg : Reg) (a : reg ≠ .x6) (b : reg ≠ .x7) (c : reg ≠ .x21) (d : reg ≠ .x31) (e : reg ≠ .x29) :
         done.getReg reg = state.getReg reg :=
-      (tail.2.2.2.2 reg c a).trans (keptCopy reg d b)
+      (tail.2.2.2.2 reg c a).trans (keptCopy reg d b e)
     rw [blockEq]
-    refine ⟨?_, ⟨?_, (kept .x9 (by decide) (by decide) (by decide) (by decide)).trans cursor.heap, ?_, ?_⟩,
+    refine ⟨?_, ⟨?_, (kept .x9 (by decide) (by decide) (by decide) (by decide) (by decide)).trans cursor.heap, ?_, ?_⟩,
       ?_, kept, ?_⟩
     · have total := (ranHead.next field.run).next ranTail
-      rw [halves] at total
-      have cost : siblingCost level.val = 3+siblingWidth level.val+2 := by simp [siblingCost, one]; omega
-      rw [cost]
-      exact total
+      rw [fieldCost] at total
+      by_cases zero : level.val = 0
+      · rw [if_pos zero] at total
+        have cost : siblingCost ordinal level.val = 3+recordCopyCost ordinal+2 := by
+          simp only [siblingCost, if_pos zero]; omega
+        rw [cost]
+        exact total
+      · rw [if_neg zero, halves] at total
+        have cost : siblingCost ordinal level.val = 3+siblingWidth level.val+2 := by
+          simp [siblingCost, one, zero]; omega
+        rw [cost]
+        exact total
     · have final : done.pc = BitVec.ofNat 64 (4096+4*(siblingEnd level+2)) := by
         change (tailPrefix copied level 2).pc = _
         rw [tail.1, tailPC]
@@ -372,10 +406,10 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
         congr 1
       exact final.trans (lower_pc_next level inner)
     · apply physical_sibling_parent
-      exact (copy_register site prepared .x6 (by decide)).trans
+      exact (copy_register site prepared .x6 (by decide) (.inr (by decide))).trans
         ((head.2.2.2 .x6 (by decide)).trans cursor.node)
     · apply physical_sibling_destination
-      exact (copy_register site prepared .x21 (by decide)).trans dstReg
+      exact (copy_register site prepared .x21 (by decide) (.inr (by decide))).trans dstReg
     · rw [← halves]
       exact copiedBytes.move rfl tail.2.1
     · intro address below

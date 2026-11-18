@@ -5,8 +5,48 @@ import CommitGolfCandidate.QuartetOpeningSchedule
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp Sampling
 open PackedOpening (capSubtreeCycles)
-open QuartetOpening (proofLength scheduledCycles)
+open QuartetOpening (proofLength)
 open Opening (groupsBefore openingNodes capDigestAddress)
+
+/-- The opening's cycles with the wide record copies: as `QuartetOpening.scheduledCycles`, with each record's
+673 replaced by `545 + 4*recordCopyCost ordinal`. -/
+def wideCycles (positions : Positions) : Nat :=
+  if positions.card = 0 then 7 else
+    15 + (545*positions.card+4*copySum positions.card-1) + 2554 +
+      (PackedOpening.capSubtreeCycles (Opening.groupsBefore positions positions.card) 1 8 +
+        4*(Opening.openingNodes positions).length + 34*((Opening.openingNodes positions).length/8) + 3) + 4
+
+theorem wide_copy_le (ordinal : Nat) : recordCopyCost ordinal ≤ 38 := by
+  unfold recordCopyCost wideCost; split <;> (try split) <;> omega
+
+theorem copy_sum_le (n : Nat) : copySum n ≤ 38*n := by
+  induction n with
+  | zero => rfl
+  | succ n ih => have := wide_copy_le n; simp only [copySum]; omega
+
+theorem copy_sum_batch : copySum 128 = 3520 := by decide +kernel
+
+theorem wide_cycles_eq (positions : Positions) :
+    wideCycles positions+128*positions.card = QuartetOpening.scheduledCycles positions+4*copySum positions.card := by
+  unfold wideCycles QuartetOpening.scheduledCycles
+  by_cases empty : positions.card = 0
+  · rw [if_pos empty, if_pos empty, empty]; rfl
+  · rw [if_neg empty, if_neg empty]
+    omega
+
+theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15+697*p.card+100000 := by
+  have h := QuartetOpening.scheduled_cycles_le p nz
+  have e := wide_cycles_eq p
+  have c := copy_sum_le p.card
+  omega
+
+theorem wide_scored_limits (positions : Positions) (count : positions.card = BATCH) :
+    wideCycles positions ≤ 97692 ∧ proofLength positions ≤ 72160 := by
+  have old := QuartetOpening.scored_limits positions count
+  have e := wide_cycles_eq positions
+  have k : positions.card = 128 := count
+  rw [k, copy_sum_batch] at e
+  exact ⟨by omega, old.2⟩
 
 structure OpeningABI (s : Submission) extends OpeningLayout s where
   image : s.image .opening = openingImage
@@ -18,7 +58,7 @@ structure OpenPhysical (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
   success : result.exit = .success
   length : (result.state.getReg .x11).toNat = proofLength positions
   noCalls : result.oracleCalls = 0
-  cycles : result.cycles = scheduledCycles positions
+  cycles : result.cycles = wideCycles positions
   lower : CompletedRecords s trapdoor positions result.state positions.card
   footer : bytesAt result.state (recordBase positions.card) (capOffset (openingNodes positions).length) =
     foldNodes ((openingNodes positions).map (fun n => trapdoor.extractLsb' (256*n) 256))
@@ -44,9 +84,9 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState) (positive : 0<positions.card)
     (ready : RecordBoundary s trapdoor positions begin 0) (marks : Opening.RecordMarks positions begin 0)
     (surplus : Nat) :
-    ∃ final, execute openingImage (scheduledCycles positions-15+surplus) begin true =
-        pure ⟨.success,final,scheduledCycles positions-15,0⟩ ∧
-      OpenPhysical s trapdoor positions ⟨.success,final,scheduledCycles positions,0⟩ := by
+    ∃ final, execute openingImage (wideCycles positions-15+surplus) begin true =
+        pure ⟨.success,final,wideCycles positions-15,0⟩ ∧
+      OpenPhysical s trapdoor positions ⟨.success,final,wideCycles positions,0⟩ := by
     let initial := s.initialState .opening (trapdoor, positions)
     have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
     have allFit := (Nat.add_le_add_left (QuartetOpening.capacity_all positions) _).trans packed_proof_memory
@@ -99,13 +139,13 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
         ((show Opening.proofBase≤proofBase by decide).trans above) aligned room countdown
     let final := exitPrefix (advancePrefix after 41 2) 3
     let capCost := capSubtreeCycles grouped 1 8 + 4*nodes.length + 34*(nodes.length/8)
-    have charge : scheduledCycles positions = 15+(673*positions.card-1)+2555+capCost+6 := by
-      rw [scheduledCycles, if_neg empty, frontier]
-      dsimp only [grouped, capCost]
+    let recCost := 545*positions.card+4*copySum positions.card-1
+    have charge : wideCycles positions = 15+recCost+2555+capCost+6 := by
+      rw [wideCycles, if_neg empty, frontier]
+      dsimp only [grouped, capCost, recCost]
       omega
-    have ranRecords : RunsOpeningBlock begin lower (673*positions.card-1) := by
-      have charged : recordsCost positions.card 0 positions.card = 673*positions.card-1 := by
-        simp [recordsCost, positive]
+    have ranRecords : RunsOpeningBlock begin lower recCost := by
+      have charged : recordsCost positions.card 0 positions.card = recCost := records_total _ positive
       exact charged ▸ assembled.run
     have ranPrep : RunsOpeningBlock lower prepared 2555 :=
       execute_cap_preparation lower (by simpa using atCap.pc) atCap.marks
@@ -123,8 +163,8 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
       simpa only [MachineState.getByte, MachineState.getMem, eq] using unchanged
     refine ⟨final,?_,⟨rfl,?_,rfl,rfl,?_,?_⟩⟩
     · have nl : nodes.length = (Sampling.capFrontierNodes grouped 1 8).length := rfl
-      rw [show scheduledCycles positions-15+surplus=
-          (673*positions.card-1)+2555+capCost+(6+surplus) by omega]
+      rw [show wideCycles positions-15+surplus=
+          recCost+2555+capCost+(6+surplus) by omega]
       rw [((ranRecords.next ranPrep).next ranCap) (6+surplus) true,ranExit]
       simp [Execution.charge,final]
       omega
@@ -211,8 +251,8 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 99996 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
+    result.cycles ≤ 97692 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
   rw [physical.cycles, physical.length]
-  exact QuartetOpening.scored_limits positions count
+  exact wide_scored_limits positions count
 
 end TwoPermutationPrototype.GroupedOpening

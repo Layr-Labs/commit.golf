@@ -5,31 +5,32 @@ namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 8192
 
-/-- The final opener (930 words, no image data): K3-lite + L21 + chain + T238 (programs-final-v2 opening).
+/-- The final opener (1062 words, no image data): K3-lite + L21 + chain + T238 + wide copies.
 Words 0..712 are the record writer (records, cap frontier, size, halt); 713..812 the prefix pass;
 813..895 the T238 writer blocks (`a1Start`, `foldStart`, `wiStart`, `wkStart`, `wsStart`); 896..928 the 33 link
-calls of the salt chain and 929 its `jal` back to row 795. -/
+calls of the salt chain and 929 its `jal` back to row 795; 930..1061 the four wide-copy stubs (`wideStub`) that
+the `jal x29` at rows 43, 79, 115 and 153 enter. -/
 def openingImage : Image := ⟨[
   0x00078a13, 0x00078a93, 0x300806e3, 0x3190006f, 0x00060493, 0x00080913, 0x004009b7, 0x20000337,
   0x00648c33, 0x00331313, 0x006c0b33, 0x00100b93, 0x00048c93, 0x00001d37, 0x10000d93, 0x00043303,
   0x00431393, 0x007b03b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223,
   0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623,
   0x00e3df83, 0x01fa9723, 0x010a8a93, 0x00831393, 0xc003f393, 0x018383b3, 0x00337513, 0x00154e13,
-  0x005e1e13, 0x007e0e33, 0x248e0e13, 0x000e5f83, 0x01fa9023, 0x002e5f83, 0x01fa9123, 0x004e5f83,
+  0x005e1e13, 0x007e0e33, 0x248e0e13, 0x5dd00eef, 0x01fa9023, 0x002e5f83, 0x01fa9123, 0x004e5f83,
   0x01fa9223, 0x006e5f83, 0x01fa9323, 0x008e5f83, 0x01fa9423, 0x00ae5f83, 0x01fa9523, 0x00ce5f83,
   0x01fa9623, 0x00ee5f83, 0x01fa9723, 0x010e5f83, 0x01fa9823, 0x012e5f83, 0x01fa9923, 0x014e5f83,
   0x01fa9a23, 0x016e5f83, 0x01fa9b23, 0x018e5f83, 0x01fa9c23, 0x01ae5f83, 0x01fa9d23, 0x01ce5f83,
-  0x01fa9e23, 0x01ee5f83, 0x01fa9f23, 0x00254e13, 0x005e1e13, 0x007e0e33, 0x248e0e13, 0x000e5f83,
+  0x01fa9e23, 0x01ee5f83, 0x01fa9f23, 0x00254e13, 0x005e1e13, 0x007e0e33, 0x248e0e13, 0x5d100eef,
   0x03fa9023, 0x002e5f83, 0x03fa9123, 0x004e5f83, 0x03fa9223, 0x006e5f83, 0x03fa9323, 0x008e5f83,
   0x03fa9423, 0x00ae5f83, 0x03fa9523, 0x00ce5f83, 0x03fa9623, 0x00ee5f83, 0x03fa9723, 0x010e5f83,
   0x03fa9823, 0x012e5f83, 0x03fa9923, 0x014e5f83, 0x03fa9a23, 0x016e5f83, 0x03fa9b23, 0x018e5f83,
   0x03fa9c23, 0x01ae5f83, 0x03fa9d23, 0x01ce5f83, 0x03fa9e23, 0x01ee5f83, 0x03fa9f23, 0x00354e13,
-  0x005e1e13, 0x007e0e33, 0x248e0e13, 0x000e5f83, 0x05fa9023, 0x002e5f83, 0x05fa9123, 0x004e5f83,
+  0x005e1e13, 0x007e0e33, 0x248e0e13, 0x5c500eef, 0x05fa9023, 0x002e5f83, 0x05fa9123, 0x004e5f83,
   0x05fa9223, 0x006e5f83, 0x05fa9323, 0x008e5f83, 0x05fa9423, 0x00ae5f83, 0x05fa9523, 0x00ce5f83,
   0x05fa9623, 0x00ee5f83, 0x05fa9723, 0x010e5f83, 0x05fa9823, 0x012e5f83, 0x05fa9923, 0x014e5f83,
   0x05fa9a23, 0x016e5f83, 0x05fa9b23, 0x018e5f83, 0x05fa9c23, 0x01ae5f83, 0x05fa9d23, 0x01ce5f83,
   0x05fa9e23, 0x01ee5f83, 0x05fa9f23, 0x060a8a93, 0x00235313, 0x01330333, 0x00134393, 0x00539393,
-  0x007483b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83,
+  0x007483b3, 0x5b100eef, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223, 0x0063df83,
   0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623, 0x00e3df83,
   0x01fa9723, 0x0103df83, 0x01fa9823, 0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83,
   0x01fa9b23, 0x0183df83, 0x01fa9c23, 0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01e3df83,
@@ -126,10 +127,26 @@ def openingImage : Image := ⟨[
   0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
   0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
   0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073, 0x00000073,
-  0x00000073, 0xde9ff06f], []⟩
+  0x00000073, 0xde9ff06f, 0x007aff93, 0x000f8c63, 0xffcf8f93, 0x020f8a63, 0x000e5f83, 0x01fa9023,
+  0x004e8067, 0x000e3f83, 0x01fab023, 0x008e3f83, 0x01fab423, 0x010e3f83, 0x01fab823, 0x018e3f83,
+  0x01fabc23, 0x07ce8067, 0x000e2f83, 0x01faa023, 0x004e2f83, 0x01faa223, 0x008e2f83, 0x01faa423,
+  0x00ce2f83, 0x01faa623, 0x010e2f83, 0x01faa823, 0x014e2f83, 0x01faaa23, 0x018e2f83, 0x01faac23,
+  0x01ce2f83, 0x01faae23, 0x07ce8067, 0x007aff93, 0x000f8c63, 0xffcf8f93, 0x020f8a63, 0x000e5f83,
+  0x03fa9023, 0x004e8067, 0x000e3f83, 0x03fab023, 0x008e3f83, 0x03fab423, 0x010e3f83, 0x03fab823,
+  0x018e3f83, 0x03fabc23, 0x07ce8067, 0x000e2f83, 0x03faa023, 0x004e2f83, 0x03faa223, 0x008e2f83,
+  0x03faa423, 0x00ce2f83, 0x03faa623, 0x010e2f83, 0x03faa823, 0x014e2f83, 0x03faaa23, 0x018e2f83,
+  0x03faac23, 0x01ce2f83, 0x03faae23, 0x07ce8067, 0x007aff93, 0x000f8c63, 0xffcf8f93, 0x020f8a63,
+  0x000e5f83, 0x05fa9023, 0x004e8067, 0x000e3f83, 0x05fab023, 0x008e3f83, 0x05fab423, 0x010e3f83,
+  0x05fab823, 0x018e3f83, 0x05fabc23, 0x07ce8067, 0x000e2f83, 0x05faa023, 0x004e2f83, 0x05faa223,
+  0x008e2f83, 0x05faa423, 0x00ce2f83, 0x05faa623, 0x010e2f83, 0x05faa823, 0x014e2f83, 0x05faaa23,
+  0x018e2f83, 0x05faac23, 0x01ce2f83, 0x05faae23, 0x07ce8067, 0x007aff93, 0x000f8c63, 0xffcf8f93,
+  0x020f8a63, 0x0003df83, 0x01fa9023, 0x004e8067, 0x0003bf83, 0x01fab023, 0x0083bf83, 0x01fab423,
+  0x0103bf83, 0x01fab823, 0x0183bf83, 0x01fabc23, 0x07ce8067, 0x0003af83, 0x01faa023, 0x0043af83,
+  0x01faa223, 0x0083af83, 0x01faa423, 0x00c3af83, 0x01faa623, 0x0103af83, 0x01faa823, 0x0143af83,
+  0x01faaa23, 0x0183af83, 0x01faac23, 0x01c3af83, 0x01faae23, 0x07ce8067], []⟩
 
 /-- Number of words in the opener image. -/
-abbrev openingWords : Nat := 930
+abbrev openingWords : Nat := 1062
 
 /-! T238 writer blocks appended after the prefix pass (all writer code addresses live here). -/
 /-- A1: the 16th halfword of the level-1 sibling, then `addi x21,x21,32; jal <221>`. -/
@@ -188,9 +205,32 @@ theorem packed_fetch_ext (state : MachineState) (index : Nat) (instruction : Ins
       | word op rd rs₁ rs₂ => simp [dec] at decoded
       | sraiw rd rs sh => simp [dec] at decoded
 
+/-- `packed_fetch_base` for every row of the 1062-word image (the wide-copy stubs at 930..1061 included). -/
+theorem packed_fetch_all (state : MachineState) (index : Nat) (instruction : Instr)
+    (bounded : index < 1062) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
+    (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
+    fetch openingImage state = some (.base instruction) := by
+  have current : state.pc.toNat = 4096+4*index := by
+    rw [pc, BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+    omega
+  rw [fetch, current, ite_eq_left (by omega), show (4096+4*index-4096)/4=index by omega]
+  cases code : openingImage.code[index]? with
+  | none => simp [code] at decoded
+  | some word =>
+    simp [code, Opening.decodeBase] at decoded
+    cases dec : decodeInstruction word with
+    | none => simp [dec] at decoded
+    | some result =>
+      cases result with
+      | base inst =>
+        simp [dec] at decoded
+        simpa [decoded] using dec
+      | word op rd rs₁ rs₂ => simp [dec] at decoded
+      | sraiw rd rs sh => simp [dec] at decoded
+
 set_option maxHeartbeats 1600000 in
 /-- All decoded instruction literals and all data bytes match the submitted JSON image. -/
-private theorem image_word_match : ∀ k : Fin 930,
+private theorem image_word_match : ∀ k : Fin 1062,
     (K1Artifact.submission.image .opening).code.getD k.val 0 = openingImage.code.getD k.val 0 := by
   intro k
   simp only [K1Artifact.submission]
@@ -240,6 +280,12 @@ def CopySite.destOffset : CopySite → Nat
   | .quartet ordinal => 32*ordinal.val
   | _ => 0
 
+/-- The four 32-byte sites whose first word is a `jal x29` into a wide-copy stub (rows 43, 79, 115, 153):
+the three mates and the level-0 sibling. Their halfword pairs `1..15` stay in place. -/
+def CopySite.wide : CopySite → Bool
+  | .quartet _ | .firstSibling => true
+  | _ => false
+
 def copyLoad (offset : Nat) : Instr := .LHU .x31 .x7 (BitVec.ofNat 12 (2*offset))
 def copyStore (offset : Nat) : Instr := .SH .x21 .x31 (BitVec.ofNat 12 (2*offset))
 
@@ -254,12 +300,17 @@ private instance (site : CopySite) (offset : Nat) : Decidable (PairDecodes site 
   infer_instance
 
 set_option maxHeartbeats 2500000 in
-theorem copy_sites_decoded (site : CopySite) (offset : Fin site.halfwords) :
+theorem copy_sites_decoded (site : CopySite) (offset : Fin site.halfwords)
+    (later : site.wide = false ∨ 0 < offset.val) :
     PairDecodes site offset.val := by
   cases site with
   | nonce => exact (show ∀ i : Fin 8, PairDecodes .nonce i.val by decide) offset
-  | quartet j => exact (show ∀ j : Fin 3, ∀ i : Fin 16, PairDecodes (.quartet j) i.val by decide) j offset
-  | firstSibling => exact (show ∀ i : Fin 16, PairDecodes .firstSibling i.val by decide) offset
+  | quartet j =>
+    exact (show ∀ j : Fin 3, ∀ i : Fin 16, 0 < i.val → PairDecodes (.quartet j) i.val by decide) j offset
+      (by simpa [CopySite.wide] using later)
+  | firstSibling =>
+    exact (show ∀ i : Fin 16, 0 < i.val → PairDecodes .firstSibling i.val by decide) offset
+      (by simpa [CopySite.wide] using later)
   | sibling level =>
     have all : ∀ j : Fin 13, ∀ i : Fin 15, i.val < (CopySite.sibling j).halfwords →
         PairDecodes (.sibling j) i.val := by decide
@@ -286,16 +337,18 @@ theorem copy_site_inside (site : CopySite) (offset : Fin site.halfwords) :
   omega
 
 theorem fetch_copy_load (site : CopySite) (offset : Fin site.halfwords) (state : MachineState)
+    (later : site.wide = false ∨ 0 < offset.val)
     (pc : state.pc = BitVec.ofNat 64 (4096+4*(site.start+2*offset.val))) :
     fetch openingImage state = some (.base (.LHU .x31 site.source (BitVec.ofNat 12 (2*offset.val)))) :=
   packed_fetch_base _ _ _ (by have := copy_site_inside site offset; omega) pc
-    (copy_sites_decoded site offset).1
+    (copy_sites_decoded site offset later).1
 
 theorem fetch_copy_store (site : CopySite) (offset : Fin site.halfwords) (state : MachineState)
+    (later : site.wide = false ∨ 0 < offset.val)
     (pc : state.pc = BitVec.ofNat 64 (4096+4*(site.start+2*offset.val+1))) :
     fetch openingImage state = some (.base (.SH .x21 .x31 (BitVec.ofNat 12 (site.destOffset+2*offset.val)))) :=
   packed_fetch_base _ _ _ (copy_site_inside site offset) pc
-    (copy_sites_decoded site offset).2
+    (copy_sites_decoded site offset later).2
 
 /-! ### T238 code -/
 

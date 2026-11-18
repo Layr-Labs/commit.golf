@@ -1,4 +1,4 @@
-# Odd quartets reuse a2, with a shorter level-21 setup and a straight-line opener link chain
+# Odd quartets reuse a2, with a shorter level-21 setup, a straight-line opener link chain and word-wide record copies
 
 Built on our odd-quartet entry `750657ae` (kaankolcu), itself kshitij-hash's
 `cfad3d49-5038-4850-be68-98a1ee7d4f48` (public commit `34159694b89006446e2eaf6a3f7584fb47a73b04`) with the odd
@@ -11,8 +11,10 @@ quartet blocks moved 200 bytes below the even ones. Two small changes on top:
   straight into it. −4 commit cycles.
 - **Opener link chain, straight line** (the opener of patternrecognition9-del's `42ccb0c2-770b-47da-89be-0c846a629cb2`,
   public commit `40eb3d880edd79e4c2fea0241e790de5f8d28ed4`, withdrawn by its author before grading, on this tree): the `k = g mod 34` in-place generator links are a
-  computed jump into 33 appended `ecall`s (opening rows 790–794 and 896–929; 930 words). −7,936 on the certified
-  worst set.
+  computed jump into 33 appended `ecall`s (opening rows 790–794 and 896–929). −7,936 on the certified worst set.
+- **Word-wide record copies.** The four 32-byte halfword copies of each opening record (three sibling digests and the
+  level-0 sibling, rows 43, 79, 115, 153) jump to stubs (rows 930–1061; 1,062 opening words) that copy with
+  `ld/sd` or `lw/sw` when the destination allows it. −2,304 on the certified worst set.
 
 ## Result
 
@@ -20,8 +22,8 @@ quartet blocks moved 200 bytes below the even ones. Two small changes on top:
 | --- | ---: | ---: | ---: |
 | proof bytes | 72,160 | 72,160 | 72,160 |
 | commitment cycles | 506,688,062 | 504,595,021 | 504,595,017 |
-| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 145,965 |
-| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,422,109,261,120 |
+| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 143,661 |
+| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,421,943,004,480 |
 
 ## The level-21 setup
 
@@ -39,6 +41,14 @@ Here rows 790–794 compute a jump into a run of 33 appended `ecall`s (rows 896�
 and row 929 jumps back to row 795: `addi, slli, auipc, sub, jalr` to row `929 − k`. Each call has the same arguments
 and comes in the same order, so calls, memory and proofs are unchanged. Per position the chain costs `42 + 8k`
 cycles for `k ≤ 33` links (306 at the worst case `k = 33`, against 368).
+
+## Word-wide record copies (opener)
+
+Each opening record copies four 32-byte fields with 16 `lhu/sh` pairs (32 cycles). The four sites now `jal x29` to a
+33-word stub that tests the destination `x21 & 7`: 8-aligned, four `ld/sd` and `jalr 124(x29)` (12 cycles);
+4-aligned, eight `lw/sw` (22 cycles); 2-aligned, the first `lhu/sh` and a return into the site's own pairs 1..15 (38
+cycles). Record `o`'s destinations are `≡ 6o (mod 8)`, so a record costs `673 − 80, + 24, − 40, + 24` cycles for
+`o mod 4 = 0..3`; the writer term over 128 records goes from 99,996 to 97,692. Proof bytes are unchanged.
 
 ## The odd-quartet layout (as in `750657ae`)
 
@@ -79,13 +89,13 @@ and −512 cycles per 4,096-leaf tile, −2,097,152 cycles in all.
 
 - Commitment: exact, 504,595,017 cycles (Lean: `GroupedChecks.resources`; `budget_q` and a full-size RV64IM
   emulation give the same number and the same commitment as `750657ae`).
-- Opening: at most 145,965 cycles for 128 positions, `31 + (37 + 306 + 16)·128 + 1 + (99,996 − 15)` (`750657ae`'s
-  per-term bound with the link chain at 306 instead of 368 cycles per position); met exactly in full-size emulation.
+- Opening: at most 143,661 cycles for 128 positions, `31 + (37 + 306 + 16)·128 + 1 + (97,692 − 15)` (`750657ae`'s
+  per-term bound with the link chain at 306 instead of 368 cycles per position and the wide copies in the writer).
 - Proof: 72,160 bytes, unchanged.
 
 ## What is proved
 
-`Solution.lean` states `Certificate submission 72160 504595017 145965`. As in cfad3d49 it rests on the checker
+`Solution.lean` states `Certificate submission 72160 504595017 143661`. As in cfad3d49 it rests on the checker
 facts (termination, query budget, binding, honest acceptance), the linked hiding hybrid, the exact commit run, the
 opening resource bound and the opened-proof correspondence; here every statement that mentions the quartet layout
 or the heap leaf order is re-proved for the new images. `#print axioms CommitGolf.Challenge.certificate` shows only
@@ -104,9 +114,9 @@ patternrecognition9-del's `ffa6a198-899f-406b-818d-95dd3c9ea2b6` (public commit
 `10e21ee11e7e0b62972ab550d496b83f7444c080`), re-derived for this layout; no file of it is used. The straight-line link chain
 is the opener of patternrecognition9-del's `42ccb0c2-770b-47da-89be-0c846a629cb2` (public commit
 `40eb3d880edd79e4c2fea0241e790de5f8d28ed4`; withdrawn before grading), re-proved on this tree; its proof modules here
-are ours.
+are ours. The word-wide copy stubs and their proofs are ours.
 
-Every file of `CommitGolfCandidate/` is byte-identical to cfad3d49's except these (one new, `K3OpenReply.lean`):
+Every file of `CommitGolfCandidate/` is byte-identical to cfad3d49's except these (two new, `K3OpenReply` and `GroupOpenWideCopy`):
 
 - images and manifests: `K1Manifest`, `GroupedUpperImage`, `TwoPermutationPackedImage`;
 - commit body and setup: `GroupedImageBase`, `GroupedCommitImage`, `GroupedPacket`, `GroupedPacketRun`, `GroupedScan`,
@@ -123,6 +133,8 @@ Every file of `CommitGolfCandidate/` is byte-identical to cfad3d49's except thes
 - opener: `GroupOpenClosing`, `GroupOpenEffect`, `GroupOpenFixed`, `GroupOpenFull`, `GroupOpenImage`, `GroupOpenLatch`,
   `GroupOpenLeafFields`, `GroupOpenMemory`, `GroupOpenModel`, `GroupOpenPass`, `GroupOpenResume`, `GroupOpenStep`,
   `GroupOpenWalk`, `K3GRBridge`, `K3OpenFacts`, `K3OpenReply` (new), `K3OpenChainRows`, `K3OpenChainLink`,
-  `K3OpenChainRun`, `K3OpenChainPost`, `K3OpenChainExit`, `K3OpenChainReply`.
+  `K3OpenChainRun`, `K3OpenChainPost`, `K3OpenChainExit`, `K3OpenChainReply`, `GroupOpenABI`, `GroupOpenCapEmitPrefix`,
+  `GroupOpenCopy`, `GroupOpenPrefix`, `GroupOpenRecordData`, `GroupOpenRecordRun`, `GroupOpenRecordsAPI`,
+  `GroupOpenRecords`, `GroupOpenSiblingRun`, `GroupOpenUpperRun`, `GroupOpenWideCopy` (new).
 
 `programs.json`, `claim.json`, `Solution.lean` and this README are new for this entry.

@@ -173,7 +173,7 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
     (initial.2.2.2 .x21 (by decide)).trans position.destWord
   have place : FieldInputs .cap s1 (capDigestAddress node) dest := by
     refine ⟨by rw [initial.1, pc]; rfl, source, by simpa [CopySite.destOffset] using destination, ?_, ?_, ?_,
-      aligned⟩
+      aligned, fun w => absurd w (by decide)⟩
     · simp only [CopySite.halfwords]; omega
     · simp only [CopySite.halfwords]; omega
     · omega
@@ -181,7 +181,8 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
   let s2 := copyState .cap s1
   have copy : ByteCopy s1 s2 (capDigestAddress node) dest 28 := place.bytes
   have pc2 : s2.pc = BitVec.ofNat 64 (4096+4*698) := place.final_pc
-  have reg2 (r : Reg) (keep : r ≠ .x31) : s2.getReg r = s1.getReg r := copy_register .cap s1 r keep
+  have reg2 (r : Reg) (keep : r ≠ .x31) : s2.getReg r = s1.getReg r := copy_register .cap s1 r keep (.inl rfl)
+  have capRun : RunsOpeningBlock s1 s2 28 := place.run
   have frame2 : ∀ a < 2^64, (a < dest ∨ dest+28 ≤ a) →
       s2.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a) := by
     intro a small away
@@ -211,7 +212,7 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
     unfold halfAt
     rw [frame2 (capDigestAddress node+28+1) (by omega) (Or.inl (by omega)),
       frame2 (capDigestAddress node+28) (by omega) (Or.inl (by omega))]
-  refine ⟨s4, ((setupRun.next place.run).next step3.1).next step4.1, step4.2.trans (by decide +kernel), ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨s4, ((setupRun.next capRun).next step3.1).next step4.1, step4.2.trans (by decide +kernel), ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [reg4 .x21 (by decide), reg2 .x21 (by decide), destination]
   · rw [top4, half2]
   · intro r a b

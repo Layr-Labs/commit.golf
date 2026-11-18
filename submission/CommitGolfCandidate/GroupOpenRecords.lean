@@ -6,25 +6,9 @@ open Opening (sortedIndex RecordMarks)
 
 attribute [local irreducible] execute
 
-private theorem records_cost_next (size ordinal count : Nat) (limit : ordinal+(count+1) ≤ size) :
+private theorem records_cost_next (size ordinal count : Nat) (_limit : ordinal+(count+1) ≤ size) :
     recordsCost size ordinal (count+1) =
-      recordCost (decide (ordinal+1=size))+recordsCost size (ordinal+1) count := by
-  have sum : ordinal+(count+1)=ordinal+1+count := by omega
-  by_cases last : ordinal+1=size
-  · have empty : count = 0 := by omega
-    subst count
-    simp [recordsCost, recordCost, last]
-  · by_cases finished : ordinal+(count+1)=size
-    · have now : 0<count+1 ∧ ordinal+(count+1)=size := ⟨by omega, finished⟩
-      have later : 0<count ∧ ordinal+1+count=size := ⟨by omega, by omega⟩
-      simp only [recordsCost, ite_eq_left now, ite_eq_left later, recordCost,
-        decide_eq_false last, Bool.false_eq_true, ite_false]
-      omega
-    · have now : ¬ (0<count+1 ∧ ordinal+(count+1)=size) := fun h => finished h.2
-      have later : ¬ (0<count ∧ ordinal+1+count=size) := by omega
-      simp only [recordsCost, ite_eq_right now, ite_eq_right later, recordCost,
-        decide_eq_false last, Bool.false_eq_true, ite_false]
-      omega
+      recordCost ordinal (decide (ordinal+1=size))+recordsCost size (ordinal+1) count := rfl
 
 theorem same_input_byte {before after : MachineState} (unchanged : SameOpeningInput before after)
     (address : Nat) (above : trapdoorBase ≤ address) (below : address < proofBase) :
