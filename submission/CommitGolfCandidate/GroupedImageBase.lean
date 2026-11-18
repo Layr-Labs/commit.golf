@@ -39,13 +39,13 @@ theorem fetch_decoded (state : MachineState) (index : Nat)
 
 
 /-- Number of heads among the first n slots of a 64-leaf period. -/
-def heads (n : Nat) := 6*(n/64)+((n%64+10)/11)
-def rank (n : Nat) := (n%64)%11
-def pairPos (n : Nat) := (n%64)%22
-def pairHeads (n : Nat) := 3*(n/64)+(n%64+21)/22
+def heads (n : Nat) := 187*(n/2048)+((n%2048+10)/11)
+def rank (n : Nat) := (n%2048)%11
+def pairPos (n : Nat) := (n%2048)%22
+def pairHeads (n : Nat) := 94*(n/2048)+(n%2048+21)/22
 def firstWord (n : Nat) := 21+11*n+pairHeads n+n/32
 def heapImm (n : Nat) := BitVec.ofNat 12 (2048+512*((n/4)%8)+72+32*(n%4))
-def sourceImm (n : Nat) := BitVec.ofNat 12 (2560+2816*((n%64/11)%2)+16*(rank n-1))
+def sourceImm (n : Nat) := BitVec.ofNat 12 (2560+2816*((n%2048/11)%2)+16*(rank n-1))
 
 def packet (n : Nat) : List Instr :=
   [.ADDI .x12 .x10 (-32),.ECALL] ++

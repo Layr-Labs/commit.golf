@@ -57,7 +57,7 @@ theorem tail_counted (o : Oracle) (s : MachineState) : RunPublic o (tailBody s) 
   exact run_bind_public _ _ _ 4194176 0 (counted_packed_groups ..) (fun _ => run_pure_public ..)
 
 theorem counted_commit (o : Oracle) (msg : Message) :
-    o.run (actual.run .commit msg)=(do let k ← $ᵗ Key;return (packedOutput o (seededLeaves o msg k),43515903)) := by
+    o.run (actual.run .commit msg)=(do let k ← $ᵗ Key;return (packedOutput o (seededLeaves o msg k),43474943)) := by
   rw [commit_of_image actual exact_image.symm (by decide) msg ⟨rfl,rfl,rfl,rfl⟩]
   unfold commitTrace;rw [oracle_run_coins_bind];apply bind_congr;intro k
   rw [oracle_run_bind,fixed_scan_run _ _ _ _ (by decide),pure_bind];dsimp only

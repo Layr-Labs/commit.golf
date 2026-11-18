@@ -10,7 +10,7 @@ theorem submission_matches_artifact : submission = CommitGolf.Artifact.submissio
 
 private theorem grouped_manifest : submission = MaterializedArtifact.submission := rfl
 
-theorem certificate : Certificate submission 72192 519841054 98057 := by
+theorem certificate : Certificate submission 72192 519537950 98057 := by
   rw [grouped_manifest]
   exact TwoPermutationPrototype.GroupedOpening.grouped_certificate TwoPermutationPrototype.GroupedOpening.certifiedHeader
 
