@@ -13,7 +13,7 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 def setupInstructions : List Instr :=
   [.ADDI .x20 .x15 0, .ADDI .x21 .x15 0, .BEQ .x16 .x0 2828,
    .ADDI .x8 .x13 0, .ADDI .x9 .x12 0, .ADDI .x18 .x16 0,
-   .LUI .x19 1024, .LUI .x24 278528, .ADD .x24 .x9 .x24, .LUI .x6 376832, .ADD .x22 .x24 .x6,
+   .LUI .x19 1024, .LUI .x6 131072, .ADD .x24 .x9 .x6, .SLLI .x6 .x6 2, .ADD .x22 .x24 .x6,
    .ADDI .x23 .x0 1, .ADDI .x25 .x9 0, .LUI .x26 1, .ADDI .x27 .x0 256]
 
 def setupPrefix (state : MachineState) (count : Nat) : MachineState :=
@@ -28,17 +28,13 @@ theorem setup_registers (state : MachineState) :
     after.getReg .x18 = state.getReg .x16 ∧
     after.getReg .x19 = BitVec.ofNat 64 (LENGTH/4) ∧
     after.getReg .x22 = state.getReg .x12 + BitVec.ofNat 64 (160 * LENGTH) ∧
-    after.getReg .x24 = state.getReg .x12 + BitVec.ofNat 64 (68*LENGTH) ∧
+    after.getReg .x24 = state.getReg .x12 + BitVec.ofNat 64 (32*LENGTH) ∧
     after.getReg .x23 = 1 ∧ after.getReg .x25 = state.getReg .x12 ∧
     after.getReg .x26 = BitVec.ofNat 64 Opening.markBase ∧ after.getReg .x27 = 256 ∧
     after.mem = state.mem := by
   by_cases empty : state.getReg .x16 = 0#64 <;>
     simp [setupPrefix, setupInstructions, execInstrBr, signExtend12, LENGTH,
       LOG_LENGTH, BitVec.add_assoc, Opening.markBase, beq_iff_eq, empty] <;> rfl
-
-theorem setup_keeps_x5 (state : MachineState) : (setupPrefix state 15).getReg .x5 = state.getReg .x5 := by
-  by_cases empty : state.getReg .x16 = 0#64 <;>
-    simp [setupPrefix, setupInstructions, execInstrBr, beq_iff_eq, empty]
 
 theorem setup_pc (state : MachineState) (pc : state.pc = 0x1000)
     (nonempty : state.getReg .x16 ≠ 0#64) :

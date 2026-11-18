@@ -15,12 +15,11 @@ structure RecordStart (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
   leaves : state.getReg .x19=BitVec.ofNat 64 4194304
   slots : state.getReg .x24=BitVec.ofNat 64 groupSlots
   input : SameOpeningInput (s.initialState .opening (trapdoor,positions)) state
-  mult : state.getReg .x4=368
 
 def recordData (s : MachineState) := lowerRun 0 14 (recordPrefix s)
 
 structure RecordData (s u : MachineState) (i : Index) (o : Nat) : Prop where
-  run : RunsOpeningSlack s u 630 3
+  run : RunsOpeningBlock s u 627
   cursor : LowerCursor u i o 14
   register : Keeps s u
   input : ∀ a<proofBase, u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a)
@@ -60,7 +59,7 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
     rw [atStart.index,atStart.input _ ia ib align]
     exact input_index s layout t positions o present
   have px : PrefixStart st i o :=
-    ⟨atStart.pc,atStart.heap,atStart.slots,atStart.mult,atStart.nonce,atStart.leaves,atStart.dest,index,access⟩
+    ⟨atStart.pc,atStart.heap,atStart.slots,atStart.nonce,atStart.leaves,atStart.dest,index,access⟩
   obtain ⟨run0,cursor,written,kept⟩ := execute_record_prefix st i o (by omega) px
   have low := execute_lower (recordPrefix st) i o 0 14 (by omega) (by decide) cursor
   have beginEq : siblingDestination o 0=recordBase o+112 := rfl
@@ -74,7 +73,7 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
     unfold siblingAddress
     omega
   have base : proofBase≤recordBase o := by unfold recordBase; omega
-  refine ⟨run0.then low.run,low.next,?_,fun a ha => (low.input a ha).trans (written.input a ha),?_,?_,?_⟩
+  refine ⟨run0.next low.run,low.next,?_,fun a ha => (low.input a ha).trans (written.input a ha),?_,?_,?_⟩
   · intro r free
     have w := free
     simp only [prefixScratch,List.mem_cons,List.not_mem_nil,or_false,not_or] at w

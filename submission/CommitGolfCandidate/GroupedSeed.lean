@@ -71,26 +71,26 @@ theorem initially_good (o : Oracle) (k : Key) (msg : Message) :
     · rw [outside _ (by unfold qSalt;omega) (Or.inr (by omega)),high_word_zero msg _ (by unfold qSalt;omega) (by unfold qSalt;omega)]
       apply BitVec.eq_of_getLsbD_eq;intro n hn
       simp [keyBlock,hn,show 192≤64*(j-1)+n by omega]
-  · intro i _ nz;exact (nz rfl).elim
+  · intro i _ _ lt;exact absurd lt (Nat.not_lt_zero _)
 
 def fixedLeaf (o : Oracle) (s : MachineState) (i : Nat) :=
-  ((plan i).foldl (fixedStep o) s).setPC (startPC (i+1))
+  ((pairPlan i).foldl (fixedStep o) s).setPC (startPC (i+1))
 
 def fixedScan (o : Oracle) : Nat → Nat → MachineState → MachineState
   | 0,_,s => s
   | n+1,i,s => fixedScan o n (i+1) (fixedLeaf o s i)
 
 theorem fixed_leaf_run (o : Oracle) (s : MachineState) (i : Nat) :
-    o.run (stepTrace s i)=pure (fixedLeaf o s i,opCalls (plan i)) := by
+    o.run (stepTrace s i)=pure (fixedLeaf o s i,opCalls (pairPlan i)) := by
   rw [stepTrace,oracle_run_bind,fixed_ops,pure_bind];simp [oracle_run_pure,fixedLeaf]
 
 theorem fixed_leaf_supported (o : Oracle) (s : MachineState) (i : Nat) :
     fixedLeaf o s i ∈ support (stepTrace s i) := by
-  apply writer_support (o.world.withAddCost Oracle.callCost) _ (fixedLeaf o s i,opCalls (plan i))
+  apply writer_support (o.world.withAddCost Oracle.callCost) _ (fixedLeaf o s i,opCalls (pairPlan i))
   change (_,_)∈support (o.run (stepTrace s i))
   rw [fixed_leaf_run];simp
 
-theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n≤N) :
+theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n≤NP) :
     o.run (scan n i s)=pure (fixedScan o n i s,Q (i+n)-Q i) := by
   induction n generalizing s i with
   | zero => simp [scan,fixedScan,oracle_run_pure]
@@ -103,22 +103,23 @@ theorem fixed_scan_run (o : Oracle) (n i : Nat) (s : MachineState) (bound : i+n�
     simp only [fixedScan,pure_bind]
     apply congrArg pure
     apply congrArg (Prod.mk _)
-    change opCalls (plan i)+(Q ((i+1)+n)-Q (i+1))=Q (i+(n+1))-Q i
+    change opCalls (pairPlan i)+(Q ((i+1)+n)-Q (i+1))=Q (i+(n+1))-Q i
     rw [show i+(n+1)=(i+1)+n by omega];omega
 
+attribute [local irreducible] pairPlan in
 theorem scan_content (o : Oracle) (k : Key) (msg : Message) (n i : Nat) (s : MachineState)
-    (bound : i+n≤N) (r : Live s i) (good : Good o k msg (memoryView s) i)
-    (saved : Prefetched s.getReg (memoryView s) i) :
+    (bound : i+n≤NP) (r : Live s i) (good : Good o k msg (memoryView s) i) :
     Good o k msg (memoryView (fixedScan o n i s)) (i+n) := by
   induction n generalizing i s with
   | zero => exact good
   | succ n ih =>
-    have hi : i<N:=by omega
-    let idx : Index := ⟨i,hi⟩
-    obtain ⟨next,carry⟩ := fixed_packet_good o k msg s idx r.toPacketRegs good saved
+    have hi : i<NP:=by omega
+    have next := fixed_pair_good o k msg s i hi r.toPairRegs good
     have live := step_live s i hi r _ (fixed_leaf_supported o s i)
-    exact (show i+(n+1)=(i+1)+n by omega) ▸ ih (i+1) _ (by omega) live next (by
-      intro a b j
-      simpa only [fixedLeaf,MachineState.getReg_setPC,memoryView,MachineState.getMem_setPC] using carry a b j)
+    have pcm : ∀ (t : MachineState) (p : Word), memoryView (t.setPC p)=memoryView t := fun t p => rfl
+    have next' : Good o k msg (memoryView (fixedLeaf o s i)) (i+1) := by
+      unfold fixedLeaf; rw [pcm]; exact next
+    rw [show i+(n+1)=(i+1)+n by omega]
+    exact ih (i+1) _ (by omega) live next'
 
 end TwoPermutationPrototype.Grouped

@@ -20,7 +20,7 @@ structure QRegs (s : MachineState) (g : Nat) : Prop where
 
 def quadArgument (s : MachineState) (g : Nat) : BitVec 1600 :=
   packBuffer (window (memoryView s) (qSource g))
-def qMove (s : MachineState) := execInstrBr s (.ADDI .x10 .x10 368)
+def qMove (s : MachineState) := execInstrBr s (.ADDI .x10 .x10 512)
 def qMoves (s : MachineState) := execInstrBr (qMove s) (.ADDI .x12 .x12 32)
 def qAfter (s : MachineState) (g : Nat) (reply : BitVec 1600) :=
   qMoves (writeBits s (wordAddress (qUpper g)) reply)
@@ -47,9 +47,9 @@ theorem q_next_regs (s : MachineState) (g : Nat) (reply : BitVec 1600) (r : QReg
     (q_saved s g reply .x11 (by decide) (by decide)).trans r.size,
     (q_saved s g reply .x13 (by decide) (by decide)).trans r.primitive,
     (q_saved s g reply .x24 (by decide) (by decide)).trans r.stop⟩
-  · change (writeBits s _ reply).getReg .x10+368=_
+  · change (writeBits s _ reply).getReg .x10+512=_
     rw [CommitGolfCandidate.writeBits_register,r.source]
-    change wordAddress (qSource g)+wordAddress 46=_
+    change wordAddress (qSource g)+wordAddress 64=_
     rw [←wordAddress_add];congr 1 <;> unfold qSource <;>omega
   · change (writeBits s _ reply).getReg .x12+32=_
     rw [CommitGolfCandidate.writeBits_register,r.dest]
@@ -60,7 +60,7 @@ private theorem q_two_moves (s : MachineState) (slot : Fin 8192) (pc : s.pc=quad
     (fuel : Nat) :
     execute image (2+fuel) s true =
       (do let res ← execute image fuel (qMoves s) true; return res.charge 2 0) := by
-  have f1 : fetch image s=some (.base (.ADDI .x10 .x10 368)) := fetch_quad s slot 1 pc
+  have f1 : fetch image s=some (.base (.ADDI .x10 .x10 512)) := fetch_quad s slot 1 pc
   have nextPC : (qMove s).pc=quadPC slot.val+8 := by
     change s.pc+4=_;rw [pc,BitVec.add_assoc];rfl
   have f2 : fetch image (qMove s)=some (.base (.ADDI .x12 .x12 32)) :=

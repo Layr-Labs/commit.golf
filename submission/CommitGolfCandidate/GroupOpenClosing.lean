@@ -1,9 +1,7 @@
 import CommitGolfCandidate.GroupedPhysical
 import CommitGolfCandidate.GroupedChecks
 import CommitGolfCandidate.GroupOpenFull
-import CommitGolfCandidate.QuartetCounterCertificate
-import CommitGolfCandidate.TwoPermutationPackedCheckerCertificate
-import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
+import CommitGolfCandidate.PairCounterCertificate
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
@@ -58,17 +56,17 @@ theorem virtual_components (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actua
 theorem commit_distribution (o : Oracle) (m : Message) :
     fixedOracleRun o (actual.scheme.commit m) =ᵈ (do
       let k ← $ᵗ Grouped.Key
-      Pure.pure (QuartetCommit.physicalHeap o m (salts o.permutation k) 1,stash o m k)) := by
+      Pure.pure (QuartetCommit.pairHeap o m (salts o.permutation k) 1,stash o m k)) := by
   change fixedOracleRun o (actual.readCommit <$> actual.run .commit m)=ᵈ _
   rw [fixed_oracle_run_map];unfold fixedOracleRun;rw [Grouped.counted_commit]
   simp only [map_bind,map_pure]
   apply EvalDistEq.bind_right;intro k
-  have eq : committed o m k=(QuartetCommit.physicalHeap o m (salts o.permutation k) 1,stash o m k) :=
+  have eq : committed o m k=(QuartetCommit.pairHeap o m (salts o.permutation k) 1,stash o m k) :=
     Prod.ext (Grouped.physical_results o m k).1 rfl
   change Pure.pure (committed o m k) =ᵈ _
   rw [eq];rfl
 
-theorem grouped_refines (hc : HeaderFacts) : Quartet.CounterQuartetRefines actual.scheme := by
+theorem grouped_refines (hc : HeaderFacts) : Quartet.PairCounterRefines actual.scheme := by
   intro o m p
   unfold executableTranscript;rw [fixed_oracle_run_bind]
   apply ((commit_distribution o m).bind_left _).trans
@@ -77,14 +75,14 @@ theorem grouped_refines (hc : HeaderFacts) : Quartet.CounterQuartetRefines actua
   let virtual:=virtualFor o td p
   let π:=BiPermutation.equiv Block o.permutation
   let arr:=salts o.permutation k
-  let d:=pinnedFullLeafDigests π m arr
+  let d:=pairFullLeafDigests π m arr
   have ⟨nodes,children,opened⟩:=virtual_components hc o td p
   have orig:=Grouped.physical_results o m k
   rw [fixed_oracle_run_bind,fixed_open hc,pure_bind,fixed_oracle_run_pure]
   have leaf (i : Index) : trapdoorLeaf (s:=actual) td i.val=d i := by
     have v:=orig.2.2.1 i
-    change QuartetRV.trapdoorLeaf (s:=actual) td i.val=QuartetCommit.originalLeaf o m arr i.val at v
-    unfold QuartetCommit.originalLeaf Quartet.leafAt at v
+    change QuartetRV.trapdoorLeaf (s:=actual) td i.val=QuartetCommit.pairLeaf o m arr i.val at v
+    unfold QuartetCommit.pairLeaf Quartet.leafAt at v
     rw [dif_pos i.isLt] at v
     exact v
   have matchProof:=proof_from_trapdoor_matches actual virtual p (Quartet.quartetLookup π) o.compression d
@@ -96,10 +94,10 @@ theorem grouped_refines (hc : HeaderFacts) : Quartet.CounterQuartetRefines actua
   rw [matchProof,nonce]
   rfl
 
-theorem grouped_certificate (hc : HeaderFacts) : Certificate actual 72192 518591774 78922 :=
-  QuartetCounterCertificate.certificate_of_facts
+theorem grouped_certificate (hc : HeaderFacts) : Certificate actual 72192 514155807 99593 :=
+  PairCounterCertificate.certificate_of_facts
     GroupedChecks.resources GroupedChecks.admitted
     ⟨all_resources hc,grouped_refines hc⟩ GroupedChecks.checker_facts
-    (Quartet.scheme_hiding_of_counter actual.scheme (grouped_refines hc))
+    (Quartet.scheme_hiding_of_pair_counter actual.scheme (grouped_refines hc))
 
 end TwoPermutationPrototype.GroupedOpening

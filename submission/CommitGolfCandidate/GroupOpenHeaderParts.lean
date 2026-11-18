@@ -7,7 +7,7 @@ set_option maxRecDepth 22000
 set_option maxHeartbeats 2000000
 
 theorem header_fetch : presentRows headerRows := by
-  have raw : ∀ i : Fin headerRows.length, let r:=headerRows[i]; r.1<762 ∧
+  have raw : ∀ i : Fin headerRows.length, let r:=headerRows[i]; r.1<777 ∧
     (openingImage.code[r.1]?).bind Opening.decodeBase=some r.2 := by decide +kernel
   intro p hp;obtain ⟨j,hj,eq⟩:=List.mem_iff_getElem.mp hp;subst p
   intro st pc;exact packed_fetch_base _ _ _ (raw ⟨j,hj⟩).1 pc (raw ⟨j,hj⟩).2
@@ -72,11 +72,11 @@ theorem config_ok (s : MachineState) (pc : s.pc=address 725) : legal configRows 
   simp [configRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
 
 theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
-    (b : Base s p) (salt : s.getReg .x22=6979325984) (base : s.getReg .x26=4096) (sel : s.getReg .x5=0) :
+    (b : Base s p) (salt : s.getReg .x22=6979325984) (base : s.getReg .x26=4096) :
     let t:=walkRows s configRows
     t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card := by
   let t:=walkRows s configRows
-  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x4,.x14,.x17,.x29] : List Reg)) : t.getReg k=s.getReg k := by
+  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x5,.x14,.x17,.x29] : List Reg)) : t.getReg k=s.getReg k := by
     simp only [List.mem_cons,List.not_mem_nil,or_false,not_or] at h
     simp [t,configRows,walkRows,execInstrBr,Ne.symm h.1,Ne.symm h.2.1,Ne.symm h.2.2.1,Ne.symm h.2.2.2.1,
       Ne.symm h.2.2.2.2.1,Ne.symm h.2.2.2.2.2.1,Ne.symm h.2.2.2.2.2.2.1,Ne.symm h.2.2.2.2.2.2.2]
@@ -87,7 +87,7 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
       (keep _ (by decide)).trans b.leaves,(keep _ (by decide)).trans b.start,(keep _ (by decide)).trans b.dest,
       (keep _ (by decide)).trans b.mark,(keep _ (by decide)).trans b.slots,(keep _ (by decide)).trans b.cap,
       (keep _ (by decide)).trans b.capLeaves⟩
-  · constructor <;> simp [walkRows,configRows,execInstrBr,b.indices,b.count,salt,base,sel,indexAt,countWord,indicesBase,
+  · constructor <;> simp [walkRows,configRows,execInstrBr,b.indices,b.count,salt,base,indexAt,countWord,indicesBase,
       trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12] <;> rfl
 
 def keyCopy (s : MachineState) := ((s.setMem 1032 (s.getMem 6979325992)).setMem 1040 (s.getMem 6979326000)).setMem 1048 (s.getMem 6979326008)

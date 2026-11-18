@@ -2,6 +2,10 @@ import CommitGolfCandidate.GroupedEval
 import CommitGolfCandidate.QuartetCommitLeafSpill
 import CommitGolfCandidate.QuartetWordBridge
 import CommitGolfCandidate.TaggedPinnedBitLayout
+import CommitGolfCandidate.PairLeafModel
+import CommitGolfCandidate.GroupedSaltMap
+
+/-! Memory meaning of one pair packet (pair heads). Layout: `stack/PH-DESIGN.md`. -/
 
 namespace TwoPermutationPrototype.Grouped
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
@@ -13,175 +17,143 @@ set_option maxRecDepth 18000
 set_option maxHeartbeats 1800000
 set_option exponentiation.threshold 2048
 
-def firstReply (o : Oracle) (m : Memory) (i : Nat) := o.permutation (packBuffer (window m (msgWord i)))
-def firstState (o : Oracle) (m : Memory) (i : Nat) :=
-  writeWindow m (msgWord i-4) (replyWords (firstReply o m i))
-
-def seededMem (o : Oracle) (m : Memory) (i : Nat) :=
-  writeWord (firstState o m i) (qSalt 0) (wordAddress (msgWord i))
-def generated (o : Oracle) (m : Memory) (i : Nat) :=
-  o.permutation (packBuffer (window (seededMem o m i) (qSalt 0)))
-def directState (o : Oracle) (m : Memory) (i : Nat) :=
-  writeWord (writeWindow (seededMem o m i) (msgWord i-15) (replyWords (generated o m i)))
-    (msgWord i+7) (wordAddress (msgWord i+7))
-
-def laterState (o : Oracle) (m : Memory) (i : Nat) :=
-  let a := firstState o m i
-  let b := writeWord a (msgWord i+7) (wordAddress (msgWord i+7))
-  let c := writeWord b (msgWord i+8) (b (sourceWord i))
-  writeWord c (msgWord i+9) (c (sourceWord i+1))
-
-def preSecond (o : Oracle) (m : Memory) (i : Nat) :=
-  if rank i=0 then directState o m i else laterState o m i
-
-def digestReply (o : Oracle) (m : Memory) (i : Nat) :=
-  o.permutation (packBuffer (window (preSecond o m i) (msgWord i+7)))
-
-def packetMem (o : Oracle) (m : Memory) (i : Nat) :=
-  writeWindow (preSecond o m i) (qLeaf i) (replyWords (digestReply o m i))
+def replyE (o : Oracle) (m : Memory) (P : Nat) := o.permutation (packBuffer (window m (msgWord (2*P)+7)))
+def stateE (o : Oracle) (m : Memory) (P : Nat) := writeWindow m (msgWord (2*P)-25) (replyWords (replyE o m P))
+def replyO (o : Oracle) (m : Memory) (P : Nat) := o.permutation (packBuffer (window (stateE o m P) (msgWord (2*P+1))))
+def stateO (o : Oracle) (m : Memory) (P : Nat) :=
+  writeWindow (stateE o m P) (msgWord (2*P+1)-4) (replyWords (replyO o m P))
+def counterState (o : Oracle) (m : Memory) (P : Nat) :=
+  writeWord (stateO o m P) (qSalt 0) (wordAddress (msgWord (2*P+1)))
+def generatedP (o : Oracle) (m : Memory) (P : Nat) :=
+  o.permutation (packBuffer (window (counterState o m P) (qSalt 0)))
+def headState (o : Oracle) (m : Memory) (P : Nat) :=
+  writeWindow (counterState o m P) (msgWord (2*P+1)-15) (replyWords (generatedP o m P))
+def copyState (o : Oracle) (m : Memory) (P : Nat) :=
+  let a := stateO o m P
+  let b := writeWord a (msgWord (2*P+1)-15) (a (srcWord (2*P)))
+  let c := writeWord b (msgWord (2*P+1)-14) (b (srcWord (2*P)+1))
+  let d := writeWord c (msgWord (2*P+1)+8) (c (srcWord (2*P+1)))
+  writeWord d (msgWord (2*P+1)+9) (d (srcWord (2*P+1)+1))
+def saltedState (o : Oracle) (m : Memory) (P : Nat) :=
+  if pairHead (P%2048) then headState o m P else copyState o m P
+def taggedE (o : Oracle) (m : Memory) (P : Nat) :=
+  writeWord (saltedState o m P) (msgWord (2*P)-6) (wordAddress (msgWord (2*P)-6))
+def digestE (o : Oracle) (m : Memory) (P : Nat) :=
+  o.permutation (packBuffer (window (taggedE o m P) (msgWord (2*P)-6)))
+def stateE2 (o : Oracle) (m : Memory) (P : Nat) :=
+  writeWindow (taggedE o m P) (qLeaf (2*P)) (replyWords (digestE o m P))
+def taggedO (o : Oracle) (m : Memory) (P : Nat) :=
+  writeWord (stateE2 o m P) (msgWord (2*P+1)+7) (wordAddress (msgWord (2*P+1)+7))
+def digestO (o : Oracle) (m : Memory) (P : Nat) :=
+  o.permutation (packBuffer (window (taggedO o m P) (msgWord (2*P+1)+7)))
+def pairPacketMem (o : Oracle) (m : Memory) (P : Nat) :=
+  writeWindow (taggedO o m P) (qLeaf (2*P+1)) (replyWords (digestO o m P))
 
 attribute [local irreducible] packBuffer writeWord writeWindow window
 
-theorem coordinate_first (i : Index) : firstLeaf (coord i).1=i.val-rank i.val := by
-  unfold firstLeaf coord rank
-  dsimp only
-  have small : i.val%4096/11<373 := by omega
-  rw [show (373*(i.val/4096)+i.val%4096/11)/373=i.val/4096 by omega,
-    show (373*(i.val/4096)+i.val%4096/11)%373=i.val%4096/11 by omega]
-  omega
-
-theorem reply_pack (v : BitVec 1600) : packBuffer (replyWords v)=v := by
-  apply BitVec.eq_of_getLsbD_eq;intro k hk
-  let j : Fin 25 := ⟨k/64,by omega⟩
-  have h:=congrArg (fun w : BitVec 64 => w.getLsbD (k%64)) (packed_word (replyWords v) j)
-  have b : k%64<64 := by omega
-  unfold replyWords at h
-  dsimp only [j] at h
-  change ((packBuffer _).extractLsb' (64*(k/64)) 64).getLsbD (k%64) =
-    (v.extractLsb' (64*(k/64)) 64).getLsbD (k%64) at h
-  unfold replyWords
-  simpa only [BitVec.getLsbD_extractLsb',b,decide_true,Bool.true_and,Nat.div_add_mod] using h
-
-def keyBlock (key : BitVec 192) (j : Nat) : Word := key.extractLsb' (64*(j-1)) 64
-
-theorem input_word (idx : Index) (key : BitVec 192) (j : Fin 25) :
-    replyWords (input (coord idx).1 key) j =
-      (if j.val=0 then wordAddress (msgWord (idx.val-rank idx.val)) else keyBlock key j.val) := by
-  unfold input replyWords
-  have h := j.isLt
-  by_cases zero : j.val=0
-  · simp only [zero,ite_true,Nat.mul_zero]
-    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 0+64≤256),
-      BitVec.extractLsb'_append_eq_right]
-    unfold Permutation.CounterSalt.ctr
-    rw [coordinate_first];unfold wordAddress msgWord;congr 1 <;> omega
-  · rw [if_neg zero]
-    by_cases low : j.val<4
-    · rw [BitVec.extractLsb'_append_eq_of_add_le (by omega : 64*j.val+64≤256),
-          BitVec.extractLsb'_append_eq_of_le (by omega : 64≤64*j.val)]
-      unfold keyBlock;congr 1 <;> omega
-    · rw [BitVec.extractLsb'_append_eq_of_le (by omega : 256≤64*j.val)]
-      unfold keyBlock
-      apply BitVec.eq_of_getLsbD_eq;intro k hk
-      simp [hk,show 192≤64*(j.val-1)+k by omega]
-
-def KeyIntact (m : Memory) (key : BitVec 192) := ∀ j, 0<j → j<25 → m (qSalt 0+j)=keyBlock key j
+theorem pair_plan_meaning (o : Oracle) (v : View) (P : Nat) :
+    ((pairPlan P).foldl (viewStep o) v).mem=pairPacketMem o v.mem P := by
+  by_cases h : pairHead (P%2048) <;> by_cases k : P%16=15 <;>
+    simp [pairPlan,h,k,show P%2048%16=P%16 by omega,pairPacketMem,taggedO,digestO,stateE2,digestE,taggedE,
+      saltedState,headState,copyState,generatedP,counterState,stateO,replyO,stateE,replyE,
+      viewStep,View.reg,View.store,View.reply]
 
 attribute [local semireducible] window writeWord writeWindow
 
-private theorem counter_frame (o : Oracle) (m : Memory) (i : Index) (j : Nat) :
-    firstState o m i.val (qSalt 0+j)=m (qSalt 0+j) := by
-  unfold firstState writeWindow
-  apply dif_neg
-  have v : i.val<16777216:=i.isLt
-  unfold msgWord qSalt;omega
+private theorem msg_below_quartets (P : Nat) (limit : P<2^23) (i : Nat) : msgWord (2*P+1)+32 ≤ qLeaf i := by
+  unfold msgWord qLeaf qSource; omega
 
-theorem generated_eq (o : Oracle) (m : Memory) (idx : Index) (key : BitVec 192)
-    (intact : KeyIntact m key) (head : rank idx.val=0) :
-    generated o m idx.val=o.permutation (input (coord idx).1 key) := by
-  unfold generated
-  apply congrArg o.permutation
-  rw [←reply_pack (input (coord idx).1 key)]
-  apply congrArg packBuffer;funext j
-  rw [input_word];unfold seededMem window writeWord
-  by_cases zero : j.val=0
-  · simp [zero,head]
-  · simp only [zero,ite_false,show qSalt 0+j.val≠qSalt 0 by omega]
-    exact (counter_frame ..).trans (intact _ (by omega) j.isLt)
+theorem write_window_at (m : Memory) (a : Nat) (w : Words 25) (j : Nat) :
+    writeWindow m a w j = if h : a ≤ j ∧ j<a+25 then w ⟨j-a,by omega⟩ else m j := by
+  unfold writeWindow; split <;> rename_i h <;> simp [h]
 
-theorem earlier_buffer (i : Nat) (notHead : rank i≠0) :
-    sourceWord i+2≤msgWord i-4 := by
-  unfold sourceWord groupBuffer msgWord rank at *
-  omega
+theorem write_word_at (m : Memory) (a : Nat) (v : Word) (j : Nat) :
+    writeWord m a v j = if j=a then v else m j := by
+  unfold writeWord; rfl
 
-theorem later_eq (o : Oracle) (m : Memory) (i : Nat) (notHead : rank i≠0) :
-    laterState o m i = stamp (firstState o m i) (leafStart i) (wordAddress (msgWord i+7))
-      (window m (sourceWord i)) := by
-  have l := earlier_buffer i notHead
-  have keep (j : Nat) (h : j<2) : firstState o m i (sourceWord i+j)=m (sourceWord i+j) := by
-    unfold firstState writeWindow;apply dif_neg;omega
-  unfold laterState stamp window
-  rw [show leafStart i+12=msgWord i+7 by unfold leafStart msgWord;omega,
-      show leafStart i+13=msgWord i+8 by unfold leafStart msgWord;omega,
-      show leafStart i+14=msgWord i+9 by unfold leafStart msgWord;omega]
-  have v0 := keep 0 (by decide);have v1 := keep 1 (by decide)
-  simp only [writeWord,show sourceWord i≠msgWord i+7 by omega,show sourceWord i+1≠msgWord i+7 by omega,
-    show sourceWord i+1≠msgWord i+8 by omega,ite_false,Nat.add_zero,Fin.val_zero] at *
-  simp only [v0,v1];rfl
+/-- Memory after both first calls of pair `P`. -/
+theorem stateO_at (o : Oracle) (m : Memory) (P : Nat) (w : Nat) :
+    stateO o m P w =
+      if h : msgWord (2*P+1)-4 ≤ w ∧ w<msgWord (2*P+1)-4+25 then replyWords (replyO o m P) ⟨w-(msgWord (2*P+1)-4),by omega⟩
+      else if h' : msgWord (2*P)-25 ≤ w ∧ w<msgWord (2*P)-25+25 then replyWords (replyE o m P) ⟨w-(msgWord (2*P)-25),by omega⟩
+      else m w := by
+  unfold stateO stateE; rw [write_window_at,write_window_at]
 
-def cacheReg (j : Fin 4) : Reg :=
-  if j.val=0 then .x14 else if j.val=1 then .x15 else if j.val=2 then .x16 else .x17
+/-- The salt step only writes the salt words (and, at a head, the counter word and the reply window). -/
+theorem salted_eq_stateO (o : Oracle) (m : Memory) (P : Nat) (w : Nat)
+    (out : w<msgWord (2*P+1)-15 ∨ msgWord (2*P+1)+10 ≤ w) (key : w ≠ qSalt 0) :
+    saltedState o m P w = stateO o m P w := by
+  have lo : 544 ≤ msgWord (2*P+1) := by unfold msgWord; omega
+  unfold saltedState
+  split
+  · unfold headState counterState; rw [write_window_at,dif_neg (by omega),write_word_at,if_neg key]
+  · have h1 : w ≠ msgWord (2*P+1)+9 := by omega
+    have h2 : w ≠ msgWord (2*P+1)+8 := by omega
+    have h3 : w ≠ msgWord (2*P+1)-14 := by omega
+    have h4 : w ≠ msgWord (2*P+1)-15 := by omega
+    unfold copyState; simp only [write_word_at,h1,h2,h3,h4,ite_false]
 
-def Prefetched (regs : Reg → Word) (m : Memory) (i : Nat) : Prop :=
-  0<rank i → i%4096<4092 → ∀ j : Fin 4, regs (cacheReg j)=m (groupBuffer i+(16+j.val))
+/-- The even leaf's second-call window (salt words abstract). -/
+theorem even_window (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (msg : Words 32)
+    (hmsg : (window m (msgWord (2*P)) : Words 32)=msg) :
+    (window (taggedE o m P) (msgWord (2*P)-6) : Words 25)=
+      evenSecondInput ⟨2*P,by change 2*P<16777216; omega⟩ (fun j => saltedState o m P (msgWord (2*P)+17+j.val))
+        (replyWords (replyE o m P)) msg := by
+  have eE : msgWord (2*P)=512+64*P := by unfold msgWord; omega
+  have eO : msgWord (2*P+1)=544+64*P := by unfold msgWord; omega
+  have hq : msgWord (2*P+1)+32 ≤ qSalt 0 := by unfold qSalt; omega
+  funext j
+  have hj := j.isLt
+  unfold evenSecondInput
+  simp only [window,taggedE]
+  rw [write_word_at]
+  split
+  · rename_i z
+    rw [if_pos (by omega)]; unfold evenPositionTag wordAddress; dsimp only; congr 1; omega
+  · rename_i nz
+    rw [if_neg (by omega)]
+    split
+    · rename_i lt6
+      rw [salted_eq_stateO o m P _ (Or.inl (by omega)) (by omega),stateO_at,dif_neg (by omega),dif_pos (by omega)]
+      congr 2; omega
+    · split
+      · rename_i n6 lt23
+        rw [salted_eq_stateO o m P _ (Or.inl (by omega)) (by omega),stateO_at,dif_neg (by omega),dif_neg (by omega)]
+        have w := congrFun hmsg ⟨j.val-6,by omega⟩
+        simp only [window] at w
+        rw [← w]; congr 1; omega
+      · congr 1; omega
 
-private theorem ready_late (o : Oracle) (m : Memory) (i : Nat) (h : rank i≠0) :
-    let b:=writeWord (firstState o m i) (msgWord i+7) (wordAddress (msgWord i+7))
-    let c:=writeWord b (msgWord i+8) (b (sourceWord i))
-    b (sourceWord i)=m (sourceWord i) ∧ c (sourceWord i+1)=m (sourceWord i+1) := by
-  have lo:=earlier_buffer i h
-  simp only [firstState,writeWord,writeWindow,ite_false,dite_false,and_self,show sourceWord i≠msgWord i+7 by omega,
-    show sourceWord i+1≠msgWord i+7 by omega,show sourceWord i+1≠msgWord i+8 by omega,
-    show ¬(msgWord i-4≤sourceWord i ∧ sourceWord i<msgWord i-4+25) by omega,
-    show ¬(msgWord i-4≤sourceWord i+1 ∧ sourceWord i+1<msgWord i-4+25) by omega]
-
-theorem plan_meaning (o : Oracle) (v : View) (i : Nat) (inputReg : v.regs .x10=wordAddress (msgWord i))
-    (ready : Prefetched v.regs v.mem i) :
-    ((plan i).foldl (viewStep o) v).mem=packetMem o v.mem i := by
-  by_cases direct : rank i=0
-  · by_cases short : i%4096=4092 <;> by_cases shift : rebase (i%4096) <;>
-      simp [plan,within_rank,within_period,direct,short,(show ¬rebase 4092 by decide),(show rank 4092=0 by decide),shift,packetMem,digestReply,preSecond,directState,seededMem,
-        generated,firstReply,firstState,viewStep,View.reg,View.store,View.reply,inputReg]
-  · by_cases near : rank i≤8
-    · by_cases shift : rebase (i%4096) <;>
-        simp [plan,within_rank,within_period,direct,near,shift,packetMem,digestReply,preSecond,laterState,
-          firstReply,firstState,viewStep,View.reg,View.store,View.reply,inputReg]
-    · have short : i%4096<4092 := by unfold rank at near;omega
-      have j:=ready (by omega) short
-      have reads:=ready_late o v.mem i direct
-      have pack (a b : Reg) (h0 : v.regs a=v.mem (sourceWord i)) (h1 : v.regs b=v.mem (sourceWord i+1)) :
-          let t:=writeWord (firstState o v.mem i) (msgWord i+7) (wordAddress (msgWord i+7))
-          writeWord (writeWord t (msgWord i+8) (v.regs a)) (msgWord i+9) (v.regs b)=laterState o v.mem i := by
-        unfold laterState;dsimp only
-        rw [←reads.1] at h0
-        rw [h0,h1,reads.2]
-      by_cases ninth : rank i=9
-      · have a : v.regs .x14=v.mem (sourceWord i) := by
-          have h:=j 0;simpa [cacheReg,sourceWord,ninth] using h
-        have b : v.regs .x15=v.mem (sourceWord i+1) := by
-          have h:=j 1;simpa [cacheReg,sourceWord,ninth,Nat.add_assoc] using h
-        have eq:=pack .x14 .x15 a b
-        by_cases shift : rebase (i%4096) <;>
-          simp [plan,within_rank,direct,near,ninth,shift,packetMem,digestReply,preSecond,viewStep,View.reg,View.store,
-            View.reply,inputReg,←eq,firstState,firstReply]
-      · have tenth : rank i=10 := by unfold rank at *;omega
-        have a : v.regs .x16=v.mem (sourceWord i) := by
-          have h:=j 2;simpa [cacheReg,sourceWord,tenth] using h
-        have b : v.regs .x17=v.mem (sourceWord i+1) := by
-          have h:=j 3;simpa [cacheReg,sourceWord,tenth,Nat.add_assoc] using h
-        have eq:=pack .x16 .x17 a b
-        by_cases shift : rebase (i%4096) <;>
-          simp [plan,within_rank,direct,near,ninth,shift,packetMem,digestReply,preSecond,viewStep,View.reg,View.store,
-            View.reply,inputReg,←eq,firstState,firstReply]
+/-- The odd leaf's second-call window: the pinned layout (salt words abstract). -/
+theorem odd_window (o : Oracle) (m : Memory) (P : Nat) (limit : P<2^23) (msg : Words 32)
+    (hmsg : (window m (msgWord (2*P+1)) : Words 32)=msg) :
+    (window (taggedO o m P) (msgWord (2*P+1)+7) : Words 25)=
+      pinnedSecondInput ⟨2*P+1,by change 2*P+1<16777216; omega⟩ (fun j => saltedState o m P (msgWord (2*P+1)+8+j.val))
+        (replyWords (replyO o m P)) msg := by
+  have eE : msgWord (2*P)=512+64*P := by unfold msgWord; omega
+  have eO : msgWord (2*P+1)=544+64*P := by unfold msgWord; omega
+  have hq : msgWord (2*P+1)+32 ≤ qSalt 0 := by unfold qSalt; omega
+  have hl := msg_below_quartets P limit (2*P)
+  funext j
+  have hj := j.isLt
+  unfold pinnedSecondInput
+  simp only [window,taggedO,stateE2,taggedE]
+  rw [write_word_at]
+  split
+  · rename_i z
+    rw [if_pos (by omega)]; unfold pinnedPositionTag wordAddress; dsimp only; congr 1; omega
+  · rename_i nz
+    rw [if_neg (by omega),write_window_at,dif_neg (by omega),write_word_at,if_neg (by omega)]
+    split
+    · congr 1; omega
+    · split
+      · rename_i n3 lt14
+        rw [salted_eq_stateO o m P _ (Or.inr (by omega)) (by omega),stateO_at,dif_pos (by omega)]
+        congr 2; omega
+      · rename_i n3 n14
+        rw [salted_eq_stateO o m P _ (Or.inr (by omega)) (by omega),stateO_at,dif_neg (by omega),dif_neg (by omega)]
+        have w := congrFun hmsg ⟨j.val+7,by omega⟩
+        simp only [window] at w
+        rw [← w]; congr 1; omega
 
 end TwoPermutationPrototype.Grouped

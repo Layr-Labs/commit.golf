@@ -5,19 +5,19 @@ namespace TwoPermutationPrototype.QuartetCommit
 open CommitGolf
 
 def quartetCount : Nat := LENGTH / 4
-def quartetOffset (group : Nat) : Nat := 368 * group
+def quartetOffset (group : Nat) : Nat := 512 * group
 
 def quartetLeafOffset (index : Nat) : Nat :=
   quartetOffset (index / 4) + 72 + 32 * (index % 4)
 
 def upperLeafOffset (group : Nat) : Nat := 32 * (quartetCount + group)
-def quartetBaseOffset : Nat := 68 * LENGTH
-def saltBaseOffset : Nat := quartetBaseOffset + 368 * quartetCount
+def quartetBaseOffset : Nat := 32 * LENGTH
+def saltBaseOffset : Nat := quartetBaseOffset + 512 * quartetCount
 
 theorem quartet_count : quartetCount = 4194304 := rfl
 
 theorem base_offsets :
-    quartetBaseOffset = 1140850688 ∧ saltBaseOffset = 2684354560 := by
+    quartetBaseOffset = 536870912 ∧ saltBaseOffset = 2684354560 := by
   decide
 
 theorem quartet_leaf_offset_exact (group pos : Nat) (valid : pos < 4) :
@@ -52,7 +52,7 @@ theorem upper_output_spill_stays_before_quartets (group : Nat) (valid : group < 
   rw [quartet_count] at valid
   unfold upperLeafOffset
   rw [quartet_count]
-  have exactBase : quartetBaseOffset = 1140850688 := base_offsets.1
+  have exactBase : quartetBaseOffset = 536870912 := base_offsets.1
   omega
 
 def centeredLeafOffset (index : Nat) : Int :=

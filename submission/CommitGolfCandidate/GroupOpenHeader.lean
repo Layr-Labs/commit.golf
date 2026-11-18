@@ -23,7 +23,7 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
   let t:=header init
   have nr : init.getReg .x16≠0#64 := nonempty_count p nz
   obtain ⟨b,salt,marks,mem0⟩:=original_base td p nz
-  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks ((setup_keeps_x5 init).trans rfl) mem0
+  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks mem0
   refine ⟨valid,⟨regs.r,regs.b,?_,?_,?_⟩⟩
   · simpa only [passPC,ite_eq_right (Nat.ne_of_lt nz)] using regs.pc
   · intro w fit guard _ _

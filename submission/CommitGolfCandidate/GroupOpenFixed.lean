@@ -1,28 +1,28 @@
 import CommitGolfCandidate.GroupOpenPass
-import CommitGolfCandidate.GroupedInvariant
+import CommitGolfCandidate.GroupedSaltMap
 import CommitGolfCandidate.GroupOpenModel
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord salts)
 open TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Grouped (groupReply rank)
+open TwoPermutationPrototype.Grouped (groupReply)
 set_option maxRecDepth 18000
 set_option maxHeartbeats 1400000
 
 theorem input_for (s : MachineState) (i : Index) (ord left : Nat) (r : Input s i ord left)
     (k : BitVec 192) (intact : StoredKey s k) :
-    packBuffer (window (memoryView (beforeCall s)) 128)=Permutation.CounterSalt.input (coord i).1 k := by
+    packBuffer (window (memoryView (beforeCall s i)) 128)=Permutation.CounterSalt.input (coord i).1 k := by
   rw [←Grouped.reply_pack (Permutation.CounterSalt.input (coord i).1 k)]
   apply congrArg packBuffer;funext j
-  have mem := (before_regs s i ord left r).2.2.2.2
-  have atWord : memoryView (beforeCall s) (128+j.val)=
+  have mem := (pre_spec s i ord left r).2.2.2.2.1
+  have atWord : memoryView (beforeCall s i) (128+j.val)=
       writeWord (memoryView s) 128 (ctrAt i) (128+j.val) := by
-    change (beforeCall s).mem _=_
+    change (beforeCall s i).mem _=_
     rw [mem]
     exact memory_at_store (address:=128) (index:=128+j.val) (by decide) (by have := j.isLt;omega)
   rw [Grouped.input_word]
-  change memoryView (beforeCall s) (128+j.val)=_
+  change memoryView (beforeCall s i) (128+j.val)=_
   rw [atWord];by_cases zero : j.val=0
   · simp [writeWord,zero,ctrAt]
   · simp only [writeWord,show 128+j.val≠128 by omega,zero,ite_false];exact intact j.val (by omega) j.isLt

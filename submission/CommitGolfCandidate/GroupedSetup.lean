@@ -9,11 +9,11 @@ set_option maxHeartbeats 1800000
 attribute [local irreducible] execute image writeBits
 def setupOps : List Instr :=
   [.ADDI .x8 .x11 0,.ADDI .x9 .x12 0,.ADDI .x18 .x10 0,.LUI .x19 131072,
-   .LUI .x21 278528,.ADD .x21 .x9 .x21,.LUI .x22 376832,.ADD .x24 .x21 .x22,
+   .ADD .x21 .x9 .x19,.SLLI .x22 .x19 2,.ADD .x22 .x21 .x22,.ADDI .x24 .x22 0,
    .LUI .x23 1,.LUI .x7 1,.ADDI .x7 .x7 2048,.ADD .x20 .x21 .x7,
    .ADDI .x5 .x0 2,.ADDI .x10 .x24 8,.ADDI .x11 .x0 24,.ECALL,
    .ADD .x25 .x24 .x7,.ADDI .x5 .x0 0,.ADDI .x11 .x0 200,
-   .ADDI .x13 .x0 1,.ADDI .x10 .x18 0]
+   .ADDI .x13 .x0 1,.ADDI .x10 .x18 (-200)]
 private theorem setup_decoded : ∀ i : Fin 21, Manifest.decodeBase (codeWord (0+i.val)) =
     some ((setupOps[i.val]?).getD .EBREAK) := by decide +kernel
 theorem fetch_setup (s : MachineState) (i : Fin 21) (pc : s.pc=wordPC (0+i.val)) :
@@ -87,6 +87,7 @@ structure SeedRegs (s : MachineState) : Prop where
   stride : s.getReg .x19=536870912
   quartet : s.getReg .x21=wordAddress (qSource 0)
   cursor : s.getReg .x20=wordAddress (qSource 0)+2048
+  salt : s.getReg .x22=wordAddress (qSalt 0)
   sentinel : s.getReg .x24=wordAddress (qSource 4194304)
   bigStride : s.getReg .x23=4096
   bias : s.getReg .x7=2048
@@ -99,7 +100,7 @@ private structure Seed1 (s : MachineState) : Prop where
   heap : s.getReg .x9=4294971424
   message : s.getReg .x18=4096
   stride : s.getReg .x19=536870912
-  quartetHigh : s.getReg .x21=1140850688
+  quartet : s.getReg .x21=wordAddress (qSource 0)
 
 private theorem seedBlock1 (s : MachineState) (h : CommitEntry s) : Seed1 (seedChunk 0 s) := by
   constructor <;> dsimp [seedChunk,setupOps,List.drop,List.take,List.foldl,execInstrBr,MachineState.setPC,MachineState.setReg,MachineState.getReg]
@@ -115,6 +116,7 @@ private structure Seed2 (s : MachineState) : Prop where
   message : s.getReg .x18=4096
   stride : s.getReg .x19=536870912
   quartet : s.getReg .x21=wordAddress (qSource 0)
+  salt : s.getReg .x22=wordAddress (qSalt 0)
   sentinel : s.getReg .x24=wordAddress (qSource 4194304)
   bigStride : s.getReg .x23=4096
   temp : s.getReg .x7=4096
@@ -125,7 +127,7 @@ private theorem seedBlock2 (s : MachineState) (h : Seed1 s) : Seed2 (seedChunk 1
     show s.regs .x9=4294971424 from h.heap,
     show s.regs .x18=4096 from h.message,
     show s.regs .x19=536870912 from h.stride,
-    show s.regs .x21=1140850688 from h.quartetHigh]
+    show s.regs .x21=wordAddress (qSource 0) from h.quartet]
   all_goals rfl
 
 private theorem seedBlock3 (s : MachineState) (h : Seed2 s) : SeedRegs (seedChunk 2 s) := by
@@ -135,6 +137,7 @@ private theorem seedBlock3 (s : MachineState) (h : Seed2 s) : SeedRegs (seedChun
     show s.regs .x18=4096 from h.message,
     show s.regs .x19=536870912 from h.stride,
     show s.regs .x21=wordAddress (qSource 0) from h.quartet,
+    show s.regs .x22=wordAddress (qSalt 0) from h.salt,
     show s.regs .x24=wordAddress (qSource 4194304) from h.sentinel,
     show s.regs .x23=4096 from h.bigStride,
     show s.regs .x7=4096 from h.temp]
@@ -153,12 +156,12 @@ private theorem post_live_frame (w pre : MachineState) (r : SeedRegs pre)
     (pc : w.pc=wordPC 16) (keep : ∀ reg,w.getReg reg=pre.getReg reg) :
     Live (postPrefix w 5) 0 := by
   refine ⟨⟨?_,?_,?_,?_,?_,rfl,rfl,rfl⟩,?_,?_,?_,?_,?_,?_⟩
-  · change w.getReg .x18+0=_
+  · change w.getReg .x18+_=_
     rw [keep,r.message];rfl
   · exact (keep .x20).trans r.cursor
   · exact (keep .x23).trans r.bigStride
   · exact (keep .x24).trans r.sentinel
-  · trivial
+  · intro h;exact (h (by decide)).elim
   · change w.pc+4+4+4+4+4=_
     rw [pc];rfl
   · change w.getReg .x24+w.getReg .x7=_

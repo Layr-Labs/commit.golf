@@ -1,9 +1,0 @@
-import CommitGolfCandidate.TwoPermutationPinnedPeerLayout
-import CommitGolfCandidate.TwoPermutationPinnedReplayProbability
-
-namespace TwoPermutationPrototype.Sampling
-
-theorem pinned_replay_bound : PinnedReplayBound :=
-  pinned_replay_bound_of_layout ⟨pinnedPeerSalt, pinned_first_peer, pinned_second_peer⟩
-
-end TwoPermutationPrototype.Sampling

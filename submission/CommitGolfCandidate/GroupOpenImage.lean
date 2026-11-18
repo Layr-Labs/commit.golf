@@ -7,12 +7,12 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 8192
 
 /-- Quaternary-bottom opener, with no image data. -/
-def openingHead : List (BitVec 32) := [
-  0x00078a13, 0x00078a93, 0x300806e3, 0x3190006f, 0x00060493, 0x00080913, 0x004009b7, 0x44000c37,
-  0x01848c33, 0x5c000337, 0x006c0b33, 0x00100b93, 0x00048c93, 0x00001d37, 0x10000d93, 0x00043303,
+def openingImage : Image := ⟨[
+  0x00078a13, 0x00078a93, 0x300806e3, 0x3190006f, 0x00060493, 0x00080913, 0x004009b7, 0x20000337,
+  0x00648c33, 0x00231313, 0x006c0b33, 0x00100b93, 0x00048c93, 0x00001d37, 0x10000d93, 0x00043303,
   0x00431393, 0x007b03b3, 0x0003df83, 0x01fa9023, 0x0023df83, 0x01fa9123, 0x0043df83, 0x01fa9223,
   0x0063df83, 0x01fa9323, 0x0083df83, 0x01fa9423, 0x00a3df83, 0x01fa9523, 0x00c3df83, 0x01fa9623,
-  0x00e3df83, 0x01fa9723, 0x010a8a93, 0x00235393, 0x024383b3, 0x018383b3, 0x00337513, 0x00154e13,
+  0x00e3df83, 0x01fa9723, 0x010a8a93, 0x00731393, 0xe003f393, 0x018383b3, 0x00337513, 0x00154e13,
   0x005e1e13, 0x007e0e33, 0x048e0e13, 0x000e5f83, 0x01fa9023, 0x002e5f83, 0x01fa9123, 0x004e5f83,
   0x01fa9223, 0x006e5f83, 0x01fa9323, 0x008e5f83, 0x01fa9423, 0x00ae5f83, 0x01fa9523, 0x00ce5f83,
   0x01fa9623, 0x00ee5f83, 0x01fa9723, 0x010e5f83, 0x01fa9823, 0x012e5f83, 0x01fa9923, 0x014e5f83,
@@ -97,18 +97,18 @@ def openingHead : List (BitVec 32) := [
   0x0123df83, 0x01fa9923, 0x0143df83, 0x01fa9a23, 0x0163df83, 0x01fa9b23, 0x0183df83, 0x01fa9c23,
   0x01a3df83, 0x01fa9d23, 0x01c3df83, 0x01fa9e23, 0x01ea8a93, 0x00100393, 0x00730e63, 0x00137393,
   0x00038663, 0x00135313, 0xfedff06f, 0x00130313, 0xf45ff06f, 0x414a85b3, 0x00100293, 0x00000513,
-  0x00000073, 0x00068413, 0x00060493, 0x00080913, 0x004009b7, 0x44000c37, 0x01848c33, 0x5c000337,
+  0x00000073, 0x00068413, 0x00060493, 0x00080913, 0x004009b7, 0x20000337, 0x00648c33, 0x00231313,
   0x006c0b33, 0x00100b93, 0x00048c93, 0x00001d37, 0x10000d93, 0x40000513, 0x60000613, 0x0c800593,
-  0x00100693, 0x17000213, 0x00040713, 0x00090893, 0x00b00e93, 0x008b3f83, 0x01f53423, 0x010b3f83,
-  0x01f53823, 0x018b3f83, 0x01f53c23, 0x00073303, 0x03a37e33, 0x03de7e33, 0x41c303b3, 0x00839393,
-  0x01a383b3, 0x00753023, 0x00000073, 0xfffe0393, 0x00439393, 0x000e1463, 0x0b800393, 0x00c383b3,
-  0x00431f13, 0x016f0f33, 0x0003bf83, 0x01ff3023, 0x0083bf83, 0x01ff3423, 0x00870713, 0xfff88893,
-  0xfa0896e3, 0x0040006f]
-
-def openingImage : Image := ⟨openingHead ++ (ArtifactEncoding.decode 32 MaterializedArtifact.openingCode).drop 762, []⟩
+  0x00100693, 0x00000293, 0x00040713, 0x00090893, 0x00b00e93, 0x008b3f83, 0x01f53423, 0x010b3f83,
+  0x01f53823, 0x018b3f83, 0x01f53c23, 0x00073303, 0x00135e13, 0x7ffe7393, 0x03d3f3b3, 0x407e0e33,
+  0x00500f13, 0x01e3e663, 0xffb38393, 0x005e0e13, 0x00137f13, 0x00039863, 0x41e00fb3, 0x0b8fff93,
+  0x0240006f, 0x00539f93, 0x004f1f13, 0x01ef8fb3, 0xff0f8f93, 0x0a000f13, 0x01ef9663, 0xffbe0e13,
+  0x09000f93, 0x009e1e13, 0x01ae0e33, 0x100e0e13, 0x01c53023, 0x00000073, 0x00cf8fb3, 0x00431f13,
+  0x016f0f33, 0x000fbe03, 0x01cf3023, 0x008fbe03, 0x01cf3423, 0x00870713, 0xfff88893, 0xf60898e3,
+  0xc1cff06f], []⟩
 
 theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : Instr)
-    (bounded : index < 762) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
+    (bounded : index < 777) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
     (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
     fetch openingImage state = some (.base instruction) := by
   have current : state.pc.toNat = 4096+4*index := by
@@ -130,29 +130,24 @@ theorem packed_fetch_base (state : MachineState) (index : Nat) (instruction : In
       | sraiw rd rs sh => simp [dec] at decoded
 
 /-- All decoded instruction literals and all data bytes match the submitted JSON image. -/
-private theorem image_word_match : ∀ k : Fin 762,
-    (ArtifactEncoding.decode 32 MaterializedArtifact.openingCode).getD k.val 0 = openingHead.getD k.val 0 := by
+private theorem image_word_match : ∀ k : Fin 777,
+    (MaterializedArtifact.submission.image .opening).code.getD k.val 0 = openingImage.code.getD k.val 0 := by
   intro k
-  rw [ArtifactEncoding.getD_decode 32 _ _ (by have h:=k.isLt;omega)]
+  simp only [MaterializedArtifact.submission]
+  rw [ArtifactEncoding.getD_decode 32 _ _ k.isLt]
   revert k
   decide
 
 theorem image_actual : (MaterializedArtifact.submission.image .opening) = openingImage := by
-  let data := ArtifactEncoding.decode 32 MaterializedArtifact.openingCode
-  have len : data.length=2680 := ArtifactEncoding.length_decode _ _
-  have count : openingHead.length=762 := rfl
-  have hd : data.take 762=openingHead := by
+  have words : (MaterializedArtifact.submission.image .opening).code = openingImage.code := by
     apply List.ext_getElem
-    · rw [List.length_take,len,count];rfl
-    · intro n hin hn
-      have bound : n<762 := hn.trans_eq count
-      have room : n<data.length := by omega
-      have v:=image_word_match ⟨n,bound⟩
-      change data.getD n 0=openingHead.getD n 0 at v
-      rw [List.getD_eq_getElem _ _ room,List.getD_eq_getElem _ _ hn] at v
-      simpa only [List.getElem_take] using v
-  change Image.mk data []=Image.mk (openingHead++data.drop 762) []
-  rw [←hd,List.take_append_drop]
+    · simp only [MaterializedArtifact.submission,ArtifactEncoding.length_decode];rfl
+    · intro n hn hn'
+      have h := image_word_match ⟨n,hn'⟩
+      change (MaterializedArtifact.submission.image .opening).code[n]?.getD 0 = openingImage.code[n]?.getD 0 at h
+      rw [List.getElem?_eq_getElem hn, List.getElem?_eq_getElem hn'] at h
+      exact h
+  exact congrArg₂ Image.mk words rfl
 
 inductive CopySite where
   | nonce
@@ -206,7 +201,7 @@ theorem copy_sites_decoded (site : CopySite) (offset : Fin site.halfwords) :
   | cap => exact (show ∀ i : Fin 15, PairDecodes .cap i.val by decide) offset
 
 theorem copy_site_inside (site : CopySite) (offset : Fin site.halfwords) :
-    site.start+2*offset.val+1 < 762 := by
+    site.start+2*offset.val+1 < 777 := by
   cases site <;> have h := offset.isLt <;> simp [CopySite.start, CopySite.halfwords] at * <;> omega
 
 theorem fetch_copy_load (site : CopySite) (offset : Fin site.halfwords) (state : MachineState)

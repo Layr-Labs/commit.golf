@@ -5,34 +5,10 @@ namespace TwoPermutationPrototype.QuartetCommit
 open CommitGolf CommitGolf.Riscv TwoPermutationPrototype.RV64 TwoPermutationPrototype.RV64.PackedLeaves
 set_option maxHeartbeats 900000
 
-def qSource (g : Nat) := 679477764+46*g
+def qSource (g : Nat) := 603980292+64*g
 def qLeaf (i : Nat) := qSource (i/4)+9+4*(i%4)
 def qUpper (g : Nat) := 536871428+4*(4194304+g)
 def qSalt (i : Nat) := 872415748+2*i
-
-/-! Separation facts for 46-word (368-byte) quartet blocks, stated so that `omega` needs no rounding. -/
-theorem qleaf_in_block (i : Nat) : qSource (i/4)+9 ≤ qLeaf i ∧ qLeaf i+25 ≤ qSource (i/4+1) := by
-  unfold qLeaf qSource; omega
-theorem qsource_step {g h : Nat} (lt : g < h) : qSource g+46 ≤ qSource h := by
-  unfold qSource; omega
-theorem qleaf_before (j i : Nat) (h : j < i) : qLeaf j+4 ≤ qLeaf i := by
-  have q : j/4 ≤ i/4 := Nat.div_le_div_right h.le
-  rcases Nat.lt_or_eq_of_le q with lt | eq
-  · have a := qleaf_in_block j; have b := qleaf_in_block i
-    have c : qSource (j/4+1) ≤ qSource (i/4) := by unfold qSource; omega
-    omega
-  · unfold qLeaf; rw [eq]; omega
-theorem qpad_outside (g k i : Nat) (hk : k < 9) : qSource g+k<qLeaf i ∨ qLeaf i+25 ≤ qSource g+k := by
-  have b := qleaf_in_block i
-  rcases Nat.lt_trichotomy g (i/4) with lt | eq | gt
-  · left; have := qsource_step lt; omega
-  · left; subst eq; omega
-  · right; have : qSource (i/4+1) ≤ qSource g := by unfold qSource; omega
-    omega
-theorem qleaf_below_salts (i : Nat) (hi : i < 16777216) : qLeaf i+25 ≤ qSalt 0 := by
-  have b := qleaf_in_block i
-  have : qSource (i/4+1) ≤ qSalt 0 := by unfold qSource qSalt; omega
-  omega
 
 theorem source_address (g : Nat) :
     8*qSource g = 4294971424+quartetBaseOffset+quartetOffset g := by

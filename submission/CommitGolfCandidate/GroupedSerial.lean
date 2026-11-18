@@ -2,18 +2,16 @@ import CommitGolfCandidate.GroupedStores
 import CommitGolfCandidate.GroupedTailEval
 import CommitGolfCandidate.GroupedPhysicalBase
 import CommitGolfCandidate.GroupedQMeaning
-import CommitGolfCandidate.QuartetPhysicalInputs
-import CommitGolfCandidate.QuartetRVModel
-import CommitGolfCandidate.TwoPermutationRootBytes
+import CommitGolfCandidate.QuartetPhysical
 import CommitGolfCandidate.MaterializedManifest
 
 namespace TwoPermutationPrototype.Grouped
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.QuartetCommit (qSource qSalt qLeaf qUpper digestWords originalLeaf physicalHeap upper_sequence_semantics upper_groups_semantics UpperContent PaddedLeaves physical_heap_parent physical_heap_leaf packed_sequence_keeps_output wide_parent_full_register)
+open TwoPermutationPrototype.QuartetCommit (qSource qSalt qLeaf qUpper digestWords pairLeaf pairHeap upper_sequence_semantics upper_groups_semantics UpperContent PaddedLeaves pair_heap_parent pair_heap_leaf packed_sequence_keeps_output wide_parent_full_register)
 open CommitGolfCandidate.Permutation.CounterSalt (salts)
 set_option maxRecDepth 18000
 set_option maxHeartbeats 1000000
-attribute [local irreducible] readBuffer checkEvaluation qGroups qUnits scan fixedScan packedParentsTrace packedParentGroups rootPrefix physicalHeap originalLeaf readyState
+attribute [local irreducible] readBuffer checkEvaluation qGroups qUnits scan fixedScan packedParentsTrace packedParentGroups rootPrefix pairHeap pairLeaf readyState
 attribute [local irreducible] savedKey
 theorem serialize (parents : MachineState) (heap raw : Nat → BitVec 256) (key : Key)
     (res : Execution) (state : res.state=rootPrefix parents 10) (heapReg : parents.getReg .x9=4294971424)
@@ -35,7 +33,7 @@ theorem serialize (parents : MachineState) (heap raw : Nat → BitVec 256) (key 
     rw [root_preserves_heap_buffer parents outReg _ 32 (by unfold treeWord;omega) (by unfold treeWord;omega) (by decide)]
     exact stores.nodes n pos small
   · intro i;have hi : i.val<16777216 := i.isLt
-    let off := 68*LENGTH+368*(i.val/4)+72+32*(i.val%4)
+    let off := 32*LENGTH+512*(i.val/4)+72+32*(i.val%4)
     have slice := read_buffer_slice (rootPrefix parents 10) 4294971424 actual.sizes.trapdoor off 32
       (by rw [size];dsimp [off,LENGTH,LOG_LENGTH];omega)
     rw [show 4294971424+off=8*qLeaf i.val by dsimp [off,qLeaf,qSource,LENGTH,LOG_LENGTH];omega] at slice

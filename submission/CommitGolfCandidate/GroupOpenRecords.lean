@@ -128,7 +128,7 @@ theorem execute_records_from_step (execute_record : RecordExecute) (s : Submissi
     have rest := ih next (ordinal+1) (by omega) step.next withMark withBytes
     have shift : ordinal+(count+1)=ordinal+1+count := by omega
     refine ⟨?_, ?_, ?_, ?_⟩
-    · rw [records_cost_next _ _ _ limit, show 3*(count+1)=3+3*count by omega]
+    · rw [records_cost_next _ _ _ limit]
       exact step.run.next rest.run
     · rw [shift]
       exact rest.boundary
