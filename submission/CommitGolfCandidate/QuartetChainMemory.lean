@@ -1,12 +1,12 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolfCandidate.QuartetChainSetup
-import CommitGolfCandidate.NoncePairLayout
+import CommitGolfCandidate.NonceChainLayout
 import CommitGolfCandidate.QuartetCommitInput
 
-/-! Paired expansion memory refinement, adapted from c28dd9ca's chain frame.
-Each reply emits176 salt bytes. Even calls feed the complete reply to the next
-call; odd calls keep its final24 bytes and read176 untouched zero bytes after
-it. The explicit future-zero frame establishes that reset without any stores.
-All message bytes and quartet staging headers are preserved. -/
+/-! Adapted from submission c28dd9ca (dadon), `NonceChainMemory`, for the Quartet layout.
+The memory window read by each permutation call is the whole preceding reply; its 176 low bytes
+survive all later writes. The Quartet version also keeps the zero headers of the quartet source
+blocks, which lie below the tape and below the seed. -/
 namespace TwoPermutationPrototype.QuartetChain
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
 open TwoPermutationPrototype.Sampling
@@ -14,7 +14,7 @@ open TwoPermutationPrototype.RV64 (wordAddress memoryView leafStart CommitEntry)
 open TwoPermutationPrototype.RV64.Chain (chainPermInput chainPermReply ChainPermReady)
 open TwoPermutationPrototype.QuartetCommit (image prePrefix postPrefix StartLeafRegs qSalt qSource BodyContent
   initial_padding wide_message_byte)
-open CommitGolfCandidate.Permutation.NoncePair (Key Word1600 actualNonces pairedInput pairedReply nextInput hiddenKey seedState)
+open CommitGolfCandidate.Permutation.NonceChain (Key Word1600 actualNonces orbit seedState)
 set_option maxRecDepth 14000
 set_option maxHeartbeats 250000
 set_option exponentiation.threshold 2048
@@ -75,19 +75,15 @@ private theorem padding_below (g c : Nat) (hg : g < 4194304) (hc : c < 9) :
   omega
 
 structure ChainMemory (π : Perm) (k : Key) (m : Message) (j : Nat) (s : MachineState) : Prop where
-  input : readBuffer s (nonceChainSource j) 200 = pairedInput π k j
+  input : readBuffer s (nonceChainSource j) 200 = orbit π (seedState k) j
   message : ∀ i : Index, readBuffer s (4096+256*i.val) 256 = m i
   nonce : ∀ i : Index, i.val/11 < j → readBuffer s (nonceChainBase+16*i.val) 16 = actualNonces π k i
   padding : ∀ g < 4194304, ∀ c < 9, readBuffer s (8*(qSource g+c)) 8 = 0
-  future : ∀ address, nonceChainDest j+24 ≤ address →
-    address+176 ≤ nonceChainDest nonceChainCount+200 → readBuffer s address 176 = 0
 
 attribute [local irreducible] readBuffer writeBits actualNonces chainAdvance
 
 private theorem advance_mem (s : MachineState) (j : Nat) (y : Word1600) :
-    (chainAdvance s j y).mem = (writeBits s (s.getReg .x12) y).mem := by
-  unfold chainAdvance nonceIncrements
-  split <;> rfl
+    (chainAdvance s j y).mem = (writeBits s (s.getReg .x12) y).mem := by unfold chainAdvance;rfl
 
 theorem chain_step_memory (π : Perm) (k : Key) (m : Message) (s : MachineState) (j : Nat)
     (bound : j < nonceChainCount) (frame : NonceChainFrame s j) (old : ChainMemory π k m j s) :
@@ -95,50 +91,24 @@ theorem chain_step_memory (π : Perm) (k : Key) (m : Message) (s : MachineState)
   have src : (s.getReg .x10).toNat = nonceChainSource j := by
     rw [frame.input,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by
       dsimp [nonceChainCount] at bound; unfold nonceChainSource nonceChainBase;omega)]
-  have input : chainPermInput s = pairedInput π k j := by
+  have input : chainPermInput s = orbit π (seedState k) j := by
     unfold chainPermInput
     rw [src]
     exact old.input
   let answer : BitVec 1600 := π (chainPermInput s)
-  have val : answer = pairedReply π k j := congrArg π input
+  have val : answer = orbit π (seedState k) (j+1) := congrArg π input
   have space : nonceChainDest j+200 ≤ 2^64 := by
     dsimp [nonceChainCount] at bound; unfold nonceChainDest nonceChainBase;omega
   have mem : (chainAdvance s j answer).mem = (writeBits s (BitVec.ofNat 64 (nonceChainDest j)) answer).mem :=
     (advance_mem s j answer).trans (congrArg (fun a => (writeBits s a answer).mem) frame.output)
   constructor
-  · change readBuffer (chainAdvance s j answer) (nonceChainSource (j+1)) 200 = pairedInput π k (j+1)
-    have expected : nextInput j answer = pairedInput π k (j+1) :=
-      (congrArg (nextInput j) (congrArg π input)).trans
-        (CommitGolfCandidate.Permutation.NoncePair.pairedInput_succ π k j).symm
-    apply Eq.trans (b := nextInput j answer) ?_ expected
-    rw [read_buffer_memory_congr _ _ mem]
-    by_cases even : j%2=0
-    · have addr : nonceChainSource (j+1)=nonceChainDest j := by
-        unfold nonceChainSource nonceChainDest;omega
-      rw [addr,nextInput,if_pos even]
-      have readAll : readBuffer (writeBits s (BitVec.ofNat 64 (nonceChainDest j)) answer)
-          (nonceChainDest j) 200 = answer.extractLsb' 0 1600 :=
-        read_written s (nonceChainDest j) answer 0 200 (by decide) (by decide)
-      exact readAll.trans (extract_self answer)
-    · have addr : nonceChainSource (j+1)=nonceChainDest j+176 := by
-        unfold nonceChainSource nonceChainDest;omega
-      let written := writeBits s (BitVec.ofNat 64 (nonceChainDest j)) answer
-      have key : readBuffer written (nonceChainSource (j+1)) 24 = hiddenKey answer := by
-        rw [addr]
-        exact read_written s (nonceChainDest j) answer 176 24 (by decide) (by decide)
-      have zero : readBuffer written (nonceChainSource (j+1)+24) 176 = 0 := by
-        rw [write_bits_read_outside s answer (nonceChainDest j) _ _ space
-          (by unfold nonceChainSource nonceChainBase;dsimp [nonceChainCount] at bound;omega)
-          (Or.inr (by rw [addr]))]
-        apply old.future
-        · rw [addr];omega
-        · rw [addr];unfold nonceChainDest;dsimp [nonceChainCount] at bound ⊢;omega
-      rw [nextInput,if_neg even]
-      apply BitVec.eq_of_toNat_eq
-      rw [chain_read_append written (nonceChainSource (j+1)) 24 176 200
-        (nonceChainSource (j+1)+24) rfl rfl,key,zero]
-      change (hiddenKey answer).toNat+2^(8*24)*0=(hiddenKey answer).toNat%2^1600
-      rw [Nat.mul_zero,Nat.add_zero,Nat.mod_eq_of_lt (lt_trans (hiddenKey answer).isLt (by decide))]
+  · have addr : nonceChainSource (j+1) = nonceChainDest j := by
+      unfold nonceChainSource nonceChainDest nonceChainBase;omega
+    rw [read_buffer_memory_congr _ _ mem,addr,← val]
+    have readAll : readBuffer (writeBits s (BitVec.ofNat 64 (nonceChainDest j)) answer)
+        (nonceChainDest j) 200 = answer.extractLsb' 0 1600 :=
+      read_written s (nonceChainDest j) answer 0 200 (by decide) (by decide)
+    exact readAll.trans (extract_self answer)
   · intro i
     have length : i.val < 16777216 := i.isLt
     rw [read_buffer_memory_congr _ _ mem,write_bits_read_outside _ answer _ _ _ space (by omega)
@@ -156,19 +126,14 @@ theorem chain_step_memory (π : Perm) (k : Key) (m : Message) (s : MachineState)
         unfold nonceChainDest;omega
       rw [addr,read_written s _ answer (16*(i.val%11)) 16 (by omega) (by decide),val]
       unfold actualNonces
-      change _ = (pairedReply π k (i.val/11)).extractLsb' (128*(i.val%11)) 128
+      change _ = (orbit π (seedState k) (i.val/11+1)).extractLsb' (128*(i.val%11)) 128
       rw [thisBlock,show 8*(16*(i.val%11))=128*(i.val%11) by omega]
+      rfl
   · intro g hg c hc
     have below := padding_below g c hg hc
     rw [read_buffer_memory_congr _ _ mem,write_bits_read_outside _ answer _ _ _ space (by unfold qSource;omega)
       (Or.inl (by unfold nonceChainDest nonceChainSource nonceChainBase at *;omega))]
     exact old.padding g hg c hc
-  · intro address after before
-    rw [read_buffer_memory_congr _ _ mem,write_bits_read_outside s answer (nonceChainDest j)
-      address 176 space
-      (by unfold nonceChainDest nonceChainBase nonceChainCount at before;omega)
-      (Or.inr (by unfold nonceChainDest at after ⊢;omega))]
-    exact old.future address (by unfold nonceChainDest at after ⊢;omega) before
 
 def evalChain (π : Perm) (j : Nat) (s : MachineState) : Nat → MachineState
   | 0 => s
@@ -195,7 +160,7 @@ theorem chain_memory_run (π : Perm) (k : Key) (m : Message) (j n : Nat) (s : Ma
       (chain_step_memory π k m s j (by omega) frame old)
     simpa only [evalChain,show j+(n+1)=(j+1)+n by omega] using next
 
-theorem actual_entry (m : Message) : CommitEntry (Artifact.submission.initialState .commit m) := ⟨rfl,rfl,rfl,rfl⟩
+theorem actual_entry (m : Message) : CommitEntry (QuartetArtifact.submission.initialState .commit m) := ⟨rfl,rfl,rfl,rfl⟩
 
 attribute [local irreducible] chainInitial seedWritten nonceChainPC Submission.initialState evalChain chainRun
 
@@ -206,8 +171,8 @@ private theorem read_eight_word (s : MachineState) (w : Nat) :
   simpa only [Nat.mul_zero, Nat.add_zero, memoryView, wordAddress] using sliced.symm.trans extracted
 
 theorem initial_memory (o : Oracle) (m : Message) (k : Key) :
-    ChainMemory o.permutation k m 0 (chainInitial (Artifact.submission.initialState .commit m) k) := by
-  let init := Artifact.submission.initialState .commit m
+    ChainMemory o.permutation k m 0 (chainInitial (QuartetArtifact.submission.initialState .commit m) k) := by
+  let init := QuartetArtifact.submission.initialState .commit m
   let a := nonceChainSource 0
   let seed := prePrefix init 15
   let seeded := writeBits seed (BitVec.ofNat 64 a) k
@@ -222,15 +187,15 @@ theorem initial_memory (o : Oracle) (m : Message) (k : Key) :
     rw [read_buffer_memory_congr seed init (pre_mem init)]
     apply chain_read_zero
     intro j hj
-    rw [initial_input_byte Artifact.submission .commit m _ (by dsimp [a,nonceChainSource,nonceChainBase];omega)]
-    have outside : ¬(Artifact.submission.layout.message ≤ a+24+j ∧
-        a+24+j < Artifact.submission.layout.message + LENGTH*(LEAF_SIZE/8)) := by
-      change ¬(4096≤6979325984+24+j ∧ 6979325984+24+j < 4096+16777216*256)
+    rw [initial_input_byte QuartetArtifact.submission .commit m _ (by dsimp [a,nonceChainSource,nonceChainBase];omega)]
+    have outside : ¬(QuartetArtifact.submission.layout.message ≤ a+24+j ∧
+        a+24+j < QuartetArtifact.submission.layout.message + LENGTH*(LEAF_SIZE/8)) := by
+      change ¬(4096≤6979325808+24+j ∧ 6979325808+24+j < 4096+16777216*256)
       omega
-    have noData : (Artifact.submission.image .commit).data=[] := rfl
+    have noData : (QuartetArtifact.submission.image .commit).data=[] := rfl
     simp only [inputByte,Submission.inputBuffers,List.find?_cons,messageBuffer,outside,decide_false,List.find?_nil]
     split <;> simp [noData]
-  refine ⟨?_,?_,fun _ h => (Nat.not_lt_zero _ h).elim,?_,?_⟩
+  refine ⟨?_,?_,fun _ h => (Nat.not_lt_zero _ h).elim,?_⟩
   · rw [read_buffer_memory_congr _ _ mem]
     apply BitVec.eq_of_toNat_eq
     rw [chain_read_append seeded a 24 176 200 (a+24) rfl rfl,head,high,Nat.mul_zero,Nat.add_zero]
@@ -241,7 +206,7 @@ theorem initial_memory (o : Oracle) (m : Message) (k : Key) :
       write_bits_read_outside seed k a _ 256 (by decide) (by omega)
         (Or.inl (by dsimp [a,nonceChainSource,nonceChainBase];omega)),read_buffer_memory_congr seed init (pre_mem init)]
     have value := read_serialized_slice init (m i) (4096+256*i.val) 0 256 (fun j hj => by
-      simpa only [Nat.zero_add] using wide_message_byte Artifact.submission rfl m i j hj)
+      simpa only [Nat.zero_add] using wide_message_byte QuartetArtifact.submission rfl m i j hj)
     exact value.trans (extract_self _)
   · intro g hg c hc
     have below := padding_below g c hg hc
@@ -249,26 +214,6 @@ theorem initial_memory (o : Oracle) (m : Message) (k : Key) :
       write_bits_read_outside seed k a _ 8 (by decide) (by unfold qSource;omega) (Or.inl below),
       read_buffer_memory_congr seed init (pre_mem init),read_eight_word]
     exact initial_padding m g c hg hc
-  · intro address after before
-    rw [read_buffer_memory_congr _ _ mem,show seeded=writeBits seed (BitVec.ofNat 64 a) k from rfl,
-      write_bits_read_outside seed k a address 176 (by decide)
-        (by unfold nonceChainDest nonceChainBase nonceChainCount at before;omega)
-        (Or.inr (by dsimp [a,nonceChainSource,nonceChainDest] at *;omega)),
-      read_buffer_memory_congr seed init (pre_mem init)]
-    apply BitVec.eq_of_toNat_eq
-    change (readBuffer init address 176).toNat=0
-    apply chain_read_zero
-    intro j hj
-    rw [initial_input_byte Artifact.submission .commit m _
-      (by unfold nonceChainDest nonceChainBase nonceChainCount at before;omega)]
-    have outside : ¬(Artifact.submission.layout.message ≤ address+j ∧
-        address+j < Artifact.submission.layout.message + LENGTH*(LEAF_SIZE/8)) := by
-      change ¬(4096≤address+j ∧ address+j < 4096+16777216*256)
-      unfold nonceChainDest nonceChainBase at after
-      omega
-    have noData : (Artifact.submission.image .commit).data=[] := rfl
-    simp only [inputByte,Submission.inputBuffers,List.find?_cons,messageBuffer,outside,decide_false,List.find?_nil]
-    split <;> simp [noData]
 
 def chainFinalReady (π : Perm) (initial : MachineState) (k : Key) :=
   chainFinish (evalChain π 0 (chainInitial initial k) nonceChainCount)
@@ -276,10 +221,10 @@ def chainFinalReady (π : Perm) (initial : MachineState) (k : Key) :=
 private theorem finish_mem (s : MachineState) : (chainFinish s).mem=s.mem := rfl
 
 theorem final_content (o : Oracle) (m : Message) (k : Key) :
-    StartLeafRegs (chainFinalReady o.permutation (Artifact.submission.initialState .commit m) k) ∧
-    BodyContent (chainFinalReady o.permutation (Artifact.submission.initialState .commit m) k) m
+    StartLeafRegs (chainFinalReady o.permutation (QuartetArtifact.submission.initialState .commit m) k) ∧
+    BodyContent (chainFinalReady o.permutation (QuartetArtifact.submission.initialState .commit m) k) m
       (actualNonces o.permutation k) := by
-  let init := Artifact.submission.initialState .commit m
+  let init := QuartetArtifact.submission.initialState .commit m
   have entry : CommitEntry init := actual_entry m
   let last := evalChain o.permutation 0 (chainInitial init k) nonceChainCount
   have started := initial_frame init entry k

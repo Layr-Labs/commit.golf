@@ -13,7 +13,7 @@ structure FinalStores (s : MachineState) (heap raw : Nat → BitVec 256) (salts 
   nonces : ∀ i : Index, readBuffer s (8*qSalt i.val) 16=salts i
 
 def packedOutput (oracle : Oracle) (ready : MachineState) : Execution :=
-  ⟨.success,(checkEvaluation oracle (commitBody ready)).1,522614991,43468241⟩
+  ⟨.success,(checkEvaluation oracle (commitBody ready)).1,523377606,43468241⟩
 
 private theorem eval_phases (oracle : Oracle) (p : OracleComp World MachineState)
     (q f g : MachineState → OracleComp World MachineState) (finish : MachineState → MachineState) :
@@ -22,9 +22,9 @@ private theorem eval_phases (oracle : Oracle) (p : OracleComp World MachineState
   simp only [check_evaluation_bind,check_evaluation_pure]
 
 private theorem packed_output_eq (oracle : Oracle) (ready : MachineState) :
-    packedOutput oracle ready=⟨.success,(checkEvaluation oracle (commitBody ready)).1,522614991,43468241⟩ := rfl
+    packedOutput oracle ready=⟨.success,(checkEvaluation oracle (commitBody ready)).1,523377606,43468241⟩ := rfl
 private theorem packed_output_state (s : MachineState) :
-    (⟨.success,s,522614991,43468241⟩ : Execution).state=s := rfl
+    (⟨.success,s,523377606,43468241⟩ : Execution).state=s := rfl
 attribute [local irreducible] packedOutput
 
 private theorem eval_output (oracle : Oracle) (s : MachineState) :

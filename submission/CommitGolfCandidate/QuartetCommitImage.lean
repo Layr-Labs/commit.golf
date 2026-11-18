@@ -1,3 +1,4 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolf.Artifact
 import CommitGolfCandidate.TwoPermutationManifest
 
@@ -7,32 +8,32 @@ set_option maxRecDepth 16384
 set_option maxHeartbeats 6000000
 attribute [local irreducible] ArtifactEncoding.decode
 
-def image : Image := ⟨ArtifactEncoding.decode 32 Artifact.commitCode, ArtifactEncoding.decode 8 Artifact.commitData⟩
-theorem exact_image : image = Artifact.submission.image .commit := rfl
+def image : Image := ⟨ArtifactEncoding.decode 32 QuartetArtifact.commitCode, ArtifactEncoding.decode 8 QuartetArtifact.commitData⟩
+theorem exact_image : image = QuartetArtifact.submission.image .commit := rfl
 def codeWord (index : Nat) : BitVec 32 :=
-  if inside : index<258368 then Artifact.commitCode.get 32 ⟨index,inside⟩ else 0
+  if inside : index<261561 then QuartetArtifact.commitCode.get 32 ⟨index,inside⟩ else 0
 def wordPC (index : Nat) : Word := BitVec.ofNat 64 (4096 + 4*index)
 
 theorem fetch_decoded (state : MachineState) (index : Nat)
-    (inCode : index < 258368) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))
+    (inCode : index < 261561) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))
     (instruction : Instr)
     (decoded : Manifest.decodeBase (codeWord index)=some instruction) :
     fetch image state=some (.base instruction) := by
   have address : state.pc.toNat=4096+4*index := by
     rw [pc,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
-  have code : image.code=ArtifactEncoding.decode 32 Artifact.commitCode := by
+  have code : image.code=ArtifactEncoding.decode 32 QuartetArtifact.commitCode := by
     simp only [image]
   have length : index< image.code.length := by
     rw [code,ArtifactEncoding.length_decode]
     exact inCode
-  have atIndex : image.code[index]?=some (Artifact.commitCode.get 32 ⟨index,inCode⟩) := by
+  have atIndex : image.code[index]?=some (QuartetArtifact.commitCode.get 32 ⟨index,inCode⟩) := by
     rw [List.getElem?_eq_getElem length,←List.getD_eq_getElem _ _ length,code,
       ArtifactEncoding.getD_decode _ _ _ inCode]
   rw [fetch,address,ite_eq_left (by omega),show (4096+4*index-4096)/4=index by omega,atIndex]
-  have base : Manifest.decodeBase (Artifact.commitCode.get 32 ⟨index,inCode⟩)=some instruction := by
+  have base : Manifest.decodeBase (QuartetArtifact.commitCode.get 32 ⟨index,inCode⟩)=some instruction := by
     simpa only [codeWord,dite_eq_left inCode] using decoded
   unfold Manifest.decodeBase at base
-  cases result : decodeInstruction (Artifact.commitCode.get 32 ⟨index,inCode⟩) with
+  cases result : decodeInstruction (QuartetArtifact.commitCode.get 32 ⟨index,inCode⟩) with
   | none => simp [result] at base
   | some ins => cases ins <;> simp_all
 
@@ -54,7 +55,7 @@ def setupOps : List Instr :=
   [.ADDI .x8 .x11 0,.ADDI .x9 .x12 0,.ADDI .x18 .x10 0,.LUI .x19 131072,
    .ADD .x21 .x9 .x19,.SLLI .x22 .x19 2,.ADD .x22 .x21 .x22,.ADDI .x24 .x22 0,
    .LUI .x23 1,.LUI .x7 1,.ADDI .x7 .x7 2048,.ADD .x20 .x21 .x7,
-   .ADDI .x5 .x0 2,.ADDI .x10 .x22 0,.ADDI .x11 .x0 24,.ECALL,
+   .ADDI .x5 .x0 2,.ADDI .x10 .x22 (-176),.ADDI .x11 .x0 24,.ECALL,
    .ADD .x22 .x22 .x7,.ADD .x25 .x24 .x7,.ADDI .x5 .x0 0,.ADDI .x11 .x0 200,
    .ADDI .x13 .x0 1,.JAL .x0 713356]
 def quadSetupOps : List Instr := [.ADDI .x10 .x21 0,.SRLI .x7 .x19 2,.ADD .x12 .x9 .x7]

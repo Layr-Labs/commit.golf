@@ -1,3 +1,4 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolf.Artifact
 import CommitGolfCandidate.TwoPermutationCheckLoader
 
@@ -8,7 +9,7 @@ set_option autoImplicit false
 set_option maxRecDepth 16384
 set_option maxHeartbeats 1800000
 
-abbrev submission : Submission := Artifact.submission
+abbrev submission : Submission := QuartetArtifact.submission
 
 /-- The trusted loader writes buffer data and registers from the ABI. The
 packed and full-width checker layouts are equal and both data images are empty. -/

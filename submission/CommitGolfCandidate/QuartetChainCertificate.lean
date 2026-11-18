@@ -8,13 +8,11 @@ import CommitGolfCandidate.TwoPermutationCheckerReplay
 import CommitGolfCandidate.CountingCoins
 import CommitGolfCandidate.Machine
 
-/-! The Quartet assembly of the quartet lane (`QuartetCertificate`), with the chain-salt refinement of
-submission c28dd9ca's generator in place of the independent-salt one and the commit call bound stated
-against `COMMIT_BUDGET`. The check-program facts are the lane's `CheckerFacts`. -/
+/-! Reference certificate for the quartet tree with chain-generated salts. -/
 namespace TwoPermutationPrototype.QuartetChainCertificate
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate OracleComp TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.QuartetCertificate (CheckerFacts honestCheckInput)
-open CommitGolfCandidate.Permutation.NoncePair (Key actualNonces)
+open CommitGolfCandidate.Permutation.NonceChain (Key actualNonces)
 
 set_option autoImplicit false
 set_option maxRecDepth 16384

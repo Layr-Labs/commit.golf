@@ -1,28 +1,18 @@
-import CommitGolfCandidate.NoncePairLayout
+import CommitGolfCandidate.CounterSaltLayout
 import CommitGolfCandidate.NonceChainOracle
 
-/-! Replace paired-generator salts by independent salts in an arbitrary bounded
-public continuation. The oracle is shared with every forward/inverse query in
-that continuation; only the generator's private key is independently sampled. -/
-namespace CommitGolfCandidate.Permutation.NoncePair
-open CommitGolf OracleComp OracleSpec
-open NonceChain (mean)
-local instance pairDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
+namespace CommitGolfCandidate
+open CommitGolf OracleComp OracleSpec Permutation Permutation.NonceChain
+local instance counterDiscrete {α : Type} : MeasurableSpace α := ⊤
 set_option linter.unusedSectionVars false
 set_option maxRecDepth 12000
-
 variable {α : Type}
-abbrev SaltArray := Index → BitVec 128
 
-noncomputable def chainNonceGame (c : Compression) (g : SaltArray → OracleComp World α) : ProbComp α := do
+
+noncomputable def counterNonceGame (c : Compression) (g : SaltArray → OracleComp World α) : ProbComp α := do
   let π ← $ᵗ Perm
   let k ← $ᵗ Key
-  fixedOracleRun ⟨c,π⟩ (g (actualNonces π k))
-
-def iidNonceGame (c : Compression) (g : SaltArray → OracleComp World α) : ProbComp α := do
-  let r ← $ᵗ SaltArray
-  let π ← $ᵗ Perm
-  fixedOracleRun ⟨c,π⟩ (g r)
+  fixedOracleRun ⟨c,π⟩ (g (CounterSalt.salts π k))
 
 private theorem uniform_mean {X : Type} [Fintype X] [SampleableType X]
     (f : X → ProbComp α) (event : α → Prop) :
@@ -39,8 +29,8 @@ private theorem uniform_mean {X : Type} [Fintype X] [SampleableType X]
 
 open Classical in
 private noncomputable def eventStrategy (c : Compression) (g : SaltArray → OracleComp World α)
-    (event : α → Prop) (p : Fin blocks → Block) : Strat Word1600 Bool :=
-  (toStrat c (g (nonceAt p))).bind (fun a => Strat.done (decide (event a)))
+    (event : α → Prop) (p : Fin CounterSalt.groups → Block) : Strat Word1600 Bool :=
+  (toStrat c (g (CounterSalt.nonceAt p))).bind (fun a => Strat.done (decide (event a)))
 
 private theorem eager_event (π : Perm) (st : Strat Word1600 α) (event : α → Prop)
     [DecidablePred event] (s : PState Word1600) :
@@ -53,35 +43,25 @@ private theorem eager_event (π : Perm) (st : Strat Word1600 α) (event : α →
   | rand m k ih => exact avg_congr (fun i _ => ih i _)
 
 private theorem sample_event (c : Compression) (π : Perm) (g : SaltArray → OracleComp World α)
-    (event : α → Prop) (p : Fin blocks → Block) :
-    (prEvent (event <$> fixedOracleRun ⟨c,π⟩ (g (nonceAt p)))).toReal =
+    (event : α → Prop) (p : Fin CounterSalt.groups → Block) :
+    (prEvent (event <$> fixedOracleRun ⟨c,π⟩ (g (CounterSalt.nonceAt p)))).toReal =
       (eventStrategy c g event p).eager π PState.init (fun b _ => accept b) := by
   classical
   rw [fixed_run_prob c π _ event PState.init,
     ENNReal.toReal_ofReal (Strat.eager_nonneg _ (fun _ _ => ind_nonneg _) _ _)]
-  exact (eager_event π (toStrat c (g (nonceAt p))) event PState.init).symm
-
-attribute [local irreducible] orbit pairedInput pairedReply
+  exact (eager_event π (toStrat c (g (CounterSalt.nonceAt p))) event PState.init).symm
 
 private theorem real_event (c : Compression) (g : SaltArray → OracleComp World α) (e : α → Prop) :
-    (prEvent (e <$> chainNonceGame c g)).toReal =
-      realProb blockEquiv seedState inputTransform (eventStrategy c g e) := by
-  unfold chainNonceGame realProb
+    (prEvent (e <$> counterNonceGame c g)).toReal =
+      CounterSalt.realProb CounterSalt.splitReply CounterSalt.input (eventStrategy c g e) := by
+  unfold counterNonceGame CounterSalt.realProb
   rw [uniform_mean]
   apply avg_congr
   intro π _
   rw [uniform_mean]
   apply avg_congr
   intro k _
-  let p : Fin blocks → Block := fun i =>
-    (blockEquiv (orbit π inputTransform (seedState k) (i.val+1))).1
-  have salts : actualNonces π k = nonceAt p := by
-    unfold actualNonces
-    apply congrArg nonceAt
-    funext i
-    exact congrArg (fun y => (blockEquiv y).1) (pairedReply_eq_orbit π k i.val)
-  rw [salts]
-  exact sample_event c π g e p
+  exact sample_event c π g e _
 
 private theorem ideal_event (c : Compression) (g : SaltArray → OracleComp World α) (e : α → Prop) :
     (prEvent (e <$> iidNonceGame c g)).toReal = idealProb (eventStrategy c g e) := by
@@ -89,7 +69,7 @@ private theorem ideal_event (c : Compression) (g : SaltArray → OracleComp Worl
   rw [uniform_mean]
   let f := fun r : SaltArray =>
     (prEvent (e <$> (($ᵗ Perm) >>= fun π => fixedOracleRun ⟨c,π⟩ (g r)))).toReal
-  rw [CommitGolfCandidate.iid_nonce_marginal f]
+  rw [CounterSalt.iid_marginal f]
   apply avg_congr
   intro p _
   dsimp only [f]
@@ -98,24 +78,23 @@ private theorem ideal_event (c : Compression) (g : SaltArray → OracleComp Worl
   intro π _
   exact sample_event c π g e p
 
-/-- The paired tape is statistically close to iid salts even when the public
-continuation receives every salt and adaptively queries both oracle directions. -/
-theorem nonce_chain_oracle_distance (c : Compression) (g : SaltArray → OracleComp World α) (q : Nat)
+noncomputable def counterError (q : Nat) : ℝ := (CounterSalt.groups : ℝ) * ((2*q+CounterSalt.groups : ℝ)/2^192)
+
+theorem counter_oracle_distance (c : Compression) (g : SaltArray → OracleComp World α) (q : Nat)
     (bound : ∀ r, PublicQueryBound (g r) q) :
-    measureTVDist (chainNonceGame c g) (iidNonceGame c g) ≤ chainError q := by
+    measureTVDist (counterNonceGame c g) (iidNonceGame c g) ≤ counterError q := by
   classical
   have event (e : α → Prop) :
       (prEvent (e <$> iidNonceGame c g)).toReal ≤
-        (prEvent (e <$> chainNonceGame c g)).toReal + chainError q := by
+        (prEvent (e <$> counterNonceGame c g)).toReal + counterError q := by
     rw [real_event,ideal_event]
-    have B (p : Fin blocks → Block) : (eventStrategy c g e p).QB q :=
-      (to_strat_QB c (bound (nonceAt p))).bind (fun a =>
+    have B (p : Fin CounterSalt.groups → Block) : (eventStrategy c g e p).QB q :=
+      (to_strat_QB c (bound (CounterSalt.nonceAt p))).bind (fun a =>
         Strat.QB.done (decide (e a)) 0)
-    have h := ideal_le_real blockEquiv seedState inputTransform seed_injective
-      input_encoder_injective (eventStrategy c g e) q B
+    have h := CounterSalt.ideal_le_counter CounterSalt.splitReply CounterSalt.input CounterSalt.key_injective CounterSalt.counter_distinct (eventStrategy c g e) q B
     have card : Fintype.card Key = 2^192 := by rw [← FinEnum.card_eq_fintypeCard, FinEnum.card_bitVec]
-    simpa only [chainError,card,Nat.cast_pow,Nat.cast_ofNat] using h
-  apply CommitGolfCandidate.tv_le_of_events _ _ _ (by unfold chainError; positivity)
+    simpa only [counterError,card,Nat.cast_pow,Nat.cast_ofNat] using h
+  apply tv_le_of_events _ _ _ (by unfold counterError; positivity)
   intro e
   have upper := event (fun a => ¬e a)
   rw [prEvent_not_eq_one_sub,prEvent_not_eq_one_sub,ENNReal.toReal_sub_of_le (prEvent_le_one _) ENNReal.one_ne_top,
@@ -123,4 +102,4 @@ theorem nonce_chain_oracle_distance (c : Compression) (g : SaltArray → OracleC
   have lower := event e
   exact abs_sub_le_iff.mpr ⟨by linarith, by linarith⟩
 
-end CommitGolfCandidate.Permutation.NoncePair
+end CommitGolfCandidate

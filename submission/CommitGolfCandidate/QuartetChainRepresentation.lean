@@ -8,7 +8,7 @@ namespace TwoPermutationPrototype.QuartetRV
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate OracleComp Sampling
 open Opening (trapdoorHeap)
 open Sampling.Quartet (upperHeap quartetLookup builder ChainQuartetRefines)
-open CommitGolfCandidate.Permutation.NoncePair (Key actualNonces)
+open CommitGolfCandidate.Permutation.NonceChain (Key actualNonces)
 local instance quartetChainRepresentationDiscrete {α : Type} : MeasurableSpace α := ⊤
 
 theorem chain_transcript_refines (s : Submission) (abi : OpeningABI s)

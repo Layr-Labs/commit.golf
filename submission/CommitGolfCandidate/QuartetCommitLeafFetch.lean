@@ -166,7 +166,7 @@ theorem packed_wide_leaf_decode (slot : Fin 4096) (offset : Fin 11) :
 theorem packed_wide_fetch_leaf (slot : Fin 4096) (offset : Fin 11) (state : MachineState)
     (pc : state.pc=packed_wideLeafPC slot.val offset.val) :
     fetch image state=some (.base (packed_wideLeafOp slot.val offset.val)) := by
-  have fits : packed_wideLeafIndex slot.val+offset.val<258368 := by
+  have fits : packed_wideLeafIndex slot.val+offset.val<261561 := by
     have := slot.isLt
     have := offset.isLt
     simp only [packed_wideLeafIndex]
@@ -187,13 +187,13 @@ private theorem nonce_rebase_decoded : ∀ segment : Fin 16,
 theorem packed_wide_fetch_heap_rebase (tile : Fin 128) (state : MachineState)
     (pc : state.pc=BitVec.ofNat 64 (4096+4*packed_heapRebaseIndex tile.val)) :
     fetch image state=some (.base (.ADD .x20 .x20 .x23)) := by
-  have fits : packed_heapRebaseIndex tile.val < 258368 := by unfold packed_heapRebaseIndex packed_wideLeafIndex; have := tile.isLt; omega
+  have fits : packed_heapRebaseIndex tile.val < 261561 := by unfold packed_heapRebaseIndex packed_wideLeafIndex; have := tile.isLt; omega
   exact fetch_decoded state _ fits pc _ (heap_rebase_decoded tile)
 
 theorem packed_wide_fetch_nonce_rebase (segment : Fin 16) (state : MachineState)
     (pc : state.pc=BitVec.ofNat 64 (4096+4*packed_nonceRebaseIndex segment.val)) :
     fetch image state=some (.base (.ADD .x22 .x22 .x23)) := by
-  have fits : packed_nonceRebaseIndex segment.val < 258368 := by unfold packed_nonceRebaseIndex packed_wideLeafIndex; have := segment.isLt; omega
+  have fits : packed_nonceRebaseIndex segment.val < 261561 := by unfold packed_nonceRebaseIndex packed_wideLeafIndex; have := segment.isLt; omega
   exact fetch_decoded state _ fits pc _ (nonce_rebase_decoded segment)
 
 

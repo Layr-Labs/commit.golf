@@ -1,3 +1,4 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolfCandidate.QuartetCommitJoinRegs
 import CommitGolfCandidate.QuartetChainSetup
 
@@ -53,11 +54,11 @@ def commitTrace (s : MachineState) : OracleComp World Execution := do
   let k ← liftM ($ᵗ BitVec 192 : ProbComp (BitVec 192))
   let last ← QuartetChain.expansion s k
   let out ← commitBody (QuartetChain.chainFinish last)
-  return ⟨.success,out,522614991,43468241⟩
+  return ⟨.success,out,523377606,43468241⟩
 
 theorem commit_execution (s : MachineState) (entry : CommitEntry s) (fuel : Nat) :
-    execute image (218337301+fuel) s true = commitTrace s := by
-  rw [show 218337301+fuel=15+(1+(3813112+(214524173+fuel))) by omega,pre_run s entry.pc,
+    execute image (219099916+fuel) s true = commitTrace s := by
+  rw [show 219099916+fuel=15+(1+(4575727+(214524173+fuel))) by omega,pre_run s entry.pc,
     QuartetChain.seed_draw s entry]
   simp only [commitTrace,bind_assoc,pure_bind]
   apply bind_congr
@@ -72,15 +73,15 @@ theorem commit_execution (s : MachineState) (entry : CommitEntry s) (fuel : Nat)
   intro out
   congr 1
 
-theorem submission_run (program : Submission) (hi : program.image .commit=image) (fuel : 218337301≤program.steps .commit)
+theorem submission_run (program : Submission) (hi : program.image .commit=image) (fuel : 219099916≤program.steps .commit)
     (msg : Message) (entry : CommitEntry (program.initialState .commit msg)) :
     program.run .commit msg=commitTrace (program.initialState .commit msg) := by
   change execute (program.image .commit) (program.steps .commit) (program.initialState .commit msg) true=_
-  rw [hi,show program.steps .commit=218337301+(program.steps .commit-218337301) by omega]
+  rw [hi,show program.steps .commit=219099916+(program.steps .commit-219099916) by omega]
   exact commit_execution _ entry _
 
-theorem artifact_run (msg : Message) : Artifact.submission.run .commit msg =
-    commitTrace (Artifact.submission.initialState .commit msg) :=
-  submission_run Artifact.submission exact_image.symm (by decide) msg ⟨rfl,rfl,rfl,rfl⟩
+theorem artifact_run (msg : Message) : QuartetArtifact.submission.run .commit msg =
+    commitTrace (QuartetArtifact.submission.initialState .commit msg) :=
+  submission_run QuartetArtifact.submission exact_image.symm (by decide) msg ⟨rfl,rfl,rfl,rfl⟩
 
 end TwoPermutationPrototype.QuartetCommit

@@ -1,3 +1,4 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolfCandidate.QuartetWordBridge
 import CommitGolfCandidate.QuartetCommitInput
 import CommitGolfCandidate.QuartetCommitLeafMeaning
@@ -12,7 +13,7 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 1300000
 attribute [local irreducible] checkEvaluation QuartetLeaves.groups qGroups packedParentsTrace packedParentGroups rootPrefix
 
-abbrev actual := Artifact.submission
+abbrev actual := QuartetArtifact.submission
 
 def originalLeaf (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) :=
   leafAt (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts)

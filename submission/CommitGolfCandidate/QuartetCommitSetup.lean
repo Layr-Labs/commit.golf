@@ -65,7 +65,7 @@ theorem upStart_run (s : MachineState) (pc : s.pc=wordPC 46765) (fuel : Nat) :
 structure SeedRegs (s : MachineState) : Prop where
   pc : s.pc=wordPC 15
   selector : s.getReg .x5=2
-  target : s.getReg .x10=BitVec.ofNat 64 (8*qSalt 0)
+  target : s.getReg .x10=BitVec.ofNat 64 (8*qSalt 0-176)
   size : s.getReg .x11=24
   output : s.getReg .x8=4294971392
   heap : s.getReg .x9=4294971424

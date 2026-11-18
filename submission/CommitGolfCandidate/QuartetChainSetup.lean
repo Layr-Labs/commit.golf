@@ -2,8 +2,8 @@ import CommitGolfCandidate.QuartetChainExec
 import CommitGolfCandidate.QuartetCommitSetup
 
 /-! Adapted from submission c28dd9ca (dadon), `NonceChainSetup`, for the Quartet commitment:
-the 24-byte seed draw at word 15 (written at `T`), words 16-21 ending in the jump to the
-generator, its four-instruction head, and the return to the leaf loop at word 22. -/
+the 24-byte seed draw at word 15 (written at `T - 176`), words 16-21 ending in the jump to the
+generator, its three-instruction head, and the return to the leaf loop at word 22. -/
 namespace TwoPermutationPrototype.QuartetChain
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
 open TwoPermutationPrototype.RV64 (wordAddress Manifest.decodeBase CommitEntry written_pc)
@@ -14,8 +14,8 @@ set_option maxRecDepth 60000
 set_option maxHeartbeats 620000
 attribute [local irreducible] execute image chainRun
 
-def headOps : List Instr := [.ADDI .x12 .x24 0, .LUI .x7 65536, .ADD .x7 .x7 .x24, .JAL .x0 107984]
-def finishOps : List Instr := [.ADDI .x10 .x18 0, .JAL .x0 1063772]
+def headOps : List Instr := [.ADDI .x12 .x24 0, .LUI .x7 65536, .ADD .x7 .x7 .x24, .JAL .x0 40]
+def finishOps : List Instr := [.ADDI .x10 .x18 0, .JAL .x0 1051000]
 
 def seedWritten (s : MachineState) (k : BitVec 192) :=
   writeBits (prePrefix s 15) (BitVec.ofNat 64 (nonceChainSource 0)) k
@@ -36,7 +36,7 @@ structure Saved (s : MachineState) : Prop where
   stride : s.getReg .x19=536870912
   message : s.getReg .x18=4096
 
-private theorem seed_target : (BitVec.ofNat 64 (8*qSalt 0) : Word) = BitVec.ofNat 64 (nonceChainSource 0) := by
+private theorem seed_target : (BitVec.ofNat 64 (8*qSalt 0-176) : Word) = BitVec.ofNat 64 (nonceChainSource 0) := by
   decide
 
 theorem seed_draw (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
@@ -96,14 +96,14 @@ theorem start_run (s : MachineState) (e : CommitEntry s) (k : BitVec 192) (fuel 
   simp only [Execution.charge]
   congr 2 <;> omega
 
-theorem finish_run (s : MachineState) (pc : s.pc=BitVec.ofNat 64 (4096+4*258366)) (fuel : Nat) :
+theorem finish_run (s : MachineState) (pc : s.pc=BitVec.ofNat 64 (4096+4*261559)) (fuel : Nat) :
     execute image (2+fuel) s true =
       (do let result ← execute image fuel (chainFinish s) true
           return result.charge 2 0) := by
   apply execute_unit_steps (states := fun i => (finishOps.take i).foldl execInstrBr s)
   intro i hi
   refine ⟨.base ((finishOps[i]?).getD .EBREAK),?_,?_,?_⟩
-  · apply fetch_decoded _ (258366+i) (by omega)
+  · apply fetch_decoded _ (261559+i) (by omega)
     · interval_cases i <;>
         simp only [finishOps,List.take,List.foldl,execInstrBr,MachineState.setPC,pc] <;> rfl
     · interval_cases i <;> decide +kernel
@@ -191,11 +191,11 @@ private theorem init_x7 (s : MachineState) (k : BitVec 192) :
 private theorem post_ready (u : MachineState) : ChainPermReady (postPrefix u 6) := ⟨rfl,rfl,rfl⟩
 private theorem head_ready (v : MachineState) (h : ChainPermReady v) : ChainPermReady (headOps.foldl execInstrBr v) := h
 private theorem post_pc (u : MachineState) : (postPrefix u 6).pc = u.pc+4+4+4+4+4+signExtend21 713356 := rfl
-private theorem head_pc (v : MachineState) : (headOps.foldl execInstrBr v).pc = v.pc+4+4+4+signExtend21 107984 := rfl
+private theorem head_pc (v : MachineState) : (headOps.foldl execInstrBr v).pc = v.pc+4+4+4+signExtend21 40 := rfl
 private theorem init_ready (s : MachineState) (k : BitVec 192) : ChainPermReady (chainInitial s k) :=
   head_ready _ (post_ready _)
 private theorem init_pc (s : MachineState) (k : BitVec 192) :
-    (chainInitial s k).pc = (seedWritten s k).pc+4+4+4+4+4+signExtend21 713356+4+4+4+signExtend21 107984 := by
+    (chainInitial s k).pc = (seedWritten s k).pc+4+4+4+4+4+signExtend21 713356+4+4+4+signExtend21 40 := by
   rw [show chainInitial s k = headOps.foldl execInstrBr (postPrefix (seedWritten s k) 6) from rfl,head_pc,post_pc]
 private theorem dest_zero (x : Word) (h : x = wordAddress (qSource 4194304)) :
     x + signExtend12 0 = BitVec.ofNat 64 (nonceChainDest 0) := by rw [h]; decide
@@ -203,7 +203,7 @@ private theorem dest_count (x : Word) (h : x = wordAddress (qSource 4194304)) :
     BitVec.signExtend 64 ((65536#20).zeroExtend 32 <<< 12) + x = BitVec.ofNat 64 chainLimit := by
   rw [h]; decide
 private theorem start_pc (x : Word) (h : x = wordPC 16) :
-    x+4+4+4+4+4+signExtend21 713356+4+4+4+signExtend21 107984 = BitVec.ofNat 64 (nonceChainPC 0) := by rw [h]; decide
+    x+4+4+4+4+4+signExtend21 713356+4+4+4+signExtend21 40 = BitVec.ofNat 64 (nonceChainPC 0) := by rw [h]; decide
 
 theorem initial_frame (s : MachineState) (e : CommitEntry s) (k : BitVec 192) :
     NonceChainFrame (chainInitial s k) 0 ∧ Saved (chainInitial s k) := by
@@ -242,13 +242,13 @@ theorem run_frame (j n : Nat) (s : MachineState) (frame : NonceChainFrame s j) (
 
 theorem finish_regs (s : MachineState) (frame : NonceChainFrame s nonceChainCount) (h : Saved s) :
     StartLeafRegs (chainFinish s) := by
-  have pc : s.pc=BitVec.ofNat 64 (4096+4*258366) := frame.pc
+  have pc : s.pc=BitVec.ofNat 64 (4096+4*261559) := frame.pc
   have keep (r : Reg) (h : (chainFinish s).getReg r = s.getReg r := by rfl) : (chainFinish s).getReg r = s.getReg r := h
   refine ⟨?_,?_,(keep .x20).trans h.cursor,(keep .x22).trans h.salt,(keep .x23).trans h.bigStride,
     (keep .x5).trans frame.ready.1,(keep .x11).trans frame.ready.2.1,(keep .x13).trans frame.ready.2.2,
     (keep .x25).trans h.sentinel,(keep .x21).trans h.quartet,(keep .x24).trans h.stop,(keep .x8).trans h.output,
     (keep .x9).trans h.heap,(keep .x19).trans h.stride⟩
-  · change s.pc+4+signExtend21 1063772=_
+  · change s.pc+4+signExtend21 1051000=_
     rw [pc]
     rfl
   · change s.getReg .x18+signExtend12 0=_
@@ -260,21 +260,21 @@ def expansion (s : MachineState) (k : BitVec 192) : OracleComp World MachineStat
 
 theorem expansion_post (s : MachineState) (e : CommitEntry s) (k : BitVec 192)
     (last : MachineState) (hit : last ∈ support (expansion s k)) :
-    last.pc=BitVec.ofNat 64 (4096+4*258366) ∧ StartLeafRegs (chainFinish last) := by
+    last.pc=BitVec.ofNat 64 (4096+4*261559) ∧ StartLeafRegs (chainFinish last) := by
   obtain ⟨frame,saved⟩ := initial_frame s e k
   obtain ⟨tail,kept⟩ := run_frame 0 nonceChainCount _ frame saved last hit
   exact ⟨tail.pc,finish_regs last tail kept⟩
 
-theorem steps_total : nonceChainSteps nonceChainCount = 3813100 := by decide
+theorem steps_total : nonceChainSteps nonceChainCount = 4575715 := by decide
 theorem steps_zero : nonceChainSteps 0 = 0 := by decide
 
 theorem after_draw (s : MachineState) (e : CommitEntry s) (k : BitVec 192) (fuel : Nat) :
-    execute image (3813112+fuel) (seedWritten s k) true =
+    execute image (4575727+fuel) (seedWritten s k) true =
       (do let last ← expansion s k
           let result ← execute image fuel (chainFinish last) true
-          return result.charge 14489526 nonceChainCount) := by
+          return result.charge 15252141 nonceChainCount) := by
   have loop := nonce_chain_run (chainInitial s k) 0 nonceChainCount (by decide) (initial_frame s e k).1 (2+fuel)
-  rw [show 3813112+fuel = 10+(nonceChainSteps nonceChainCount+(2+fuel)) by rw [steps_total]; omega,
+  rw [show 4575727+fuel = 10+(nonceChainSteps nonceChainCount+(2+fuel)) by rw [steps_total]; omega,
     start_run s e k]
   rw [show nonceChainSteps nonceChainCount+(2+fuel) =
     nonceChainSteps (0+nonceChainCount)-nonceChainSteps 0+(2+fuel) by
@@ -287,7 +287,7 @@ theorem after_draw (s : MachineState) (e : CommitEntry s) (k : BitVec 192) (fuel
   apply bind_congr
   intro result
   simp only [Execution.charge]
-  have rate : nonceChainCycles (0+nonceChainCount)-nonceChainCycles 0 = 14489514 := by decide
+  have rate : nonceChainCycles (0+nonceChainCount)-nonceChainCycles 0 = 15252129 := by decide
   rw [rate]
   congr 2 <;> omega
 

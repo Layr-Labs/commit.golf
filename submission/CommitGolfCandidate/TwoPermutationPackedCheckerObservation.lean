@@ -1,3 +1,4 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolfCandidate.TwoPermutationPackedCheckerBody
 import CommitGolfCandidate.TwoPermutationPackedHeaderAssembly
 import CommitGolfCandidate.TwoPermutationPackedTrustedInput
@@ -15,7 +16,7 @@ set_option maxHeartbeats 1800000
 
 theorem artifact_image :
     PackedChecker.submission.image .check = packedImage := by
-  unfold PackedChecker.submission Artifact.submission packedImage
+  unfold PackedChecker.submission QuartetArtifact.submission packedImage
   rfl
 
 attribute [local irreducible] execute checkEvaluation

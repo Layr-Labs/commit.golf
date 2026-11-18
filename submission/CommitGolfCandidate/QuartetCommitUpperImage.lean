@@ -1,3 +1,4 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolf.Artifact
 import CommitGolfCandidate.TwoPermutationPackedParentControl
 import CommitGolfCandidate.TwoPermutationCommitRun
@@ -54,1237 +55,1237 @@ private theorem parent_periodic_window (packed : ArtifactEncoding.Packed 512)
   rw [same]
 
 private theorem parent_periodic_1 (i : Fin 512) :
-    Artifact.commitCode_0_92.get 32 i=parentWord (1+i.val) := by
+    QuartetArtifact.commitCode_0_92.get 32 i=parentWord (1+i.val) := by
   fin_cases i <;> rfl
 
-private theorem parent_window_0 : ParentRangeMatches Artifact.commitCode_0_0 0 := by
+private theorem parent_window_0 : ParentRangeMatches QuartetArtifact.commitCode_0_0 0 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_1 : ParentRangeMatches Artifact.commitCode_0_1 512 := by
+private theorem parent_window_1 : ParentRangeMatches QuartetArtifact.commitCode_0_1 512 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_2 : ParentRangeMatches Artifact.commitCode_0_2 1024 := by
+private theorem parent_window_2 : ParentRangeMatches QuartetArtifact.commitCode_0_2 1024 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_3 : ParentRangeMatches Artifact.commitCode_0_3 1536 := by
+private theorem parent_window_3 : ParentRangeMatches QuartetArtifact.commitCode_0_3 1536 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_4 : ParentRangeMatches Artifact.commitCode_0_4 2048 := by
+private theorem parent_window_4 : ParentRangeMatches QuartetArtifact.commitCode_0_4 2048 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_5 : ParentRangeMatches Artifact.commitCode_0_5 2560 := by
+private theorem parent_window_5 : ParentRangeMatches QuartetArtifact.commitCode_0_5 2560 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_6 : ParentRangeMatches Artifact.commitCode_0_6 3072 := by
+private theorem parent_window_6 : ParentRangeMatches QuartetArtifact.commitCode_0_6 3072 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_7 : ParentRangeMatches Artifact.commitCode_0_7 3584 := by
+private theorem parent_window_7 : ParentRangeMatches QuartetArtifact.commitCode_0_7 3584 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_8 : ParentRangeMatches Artifact.commitCode_0_8 4096 := by
+private theorem parent_window_8 : ParentRangeMatches QuartetArtifact.commitCode_0_8 4096 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_9 : ParentRangeMatches Artifact.commitCode_0_9 4608 := by
+private theorem parent_window_9 : ParentRangeMatches QuartetArtifact.commitCode_0_9 4608 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_10 : ParentRangeMatches Artifact.commitCode_0_10 5120 := by
+private theorem parent_window_10 : ParentRangeMatches QuartetArtifact.commitCode_0_10 5120 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_11 : ParentRangeMatches Artifact.commitCode_0_11 5632 := by
+private theorem parent_window_11 : ParentRangeMatches QuartetArtifact.commitCode_0_11 5632 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_12 : ParentRangeMatches Artifact.commitCode_0_12 6144 := by
+private theorem parent_window_12 : ParentRangeMatches QuartetArtifact.commitCode_0_12 6144 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_13 : ParentRangeMatches Artifact.commitCode_0_13 6656 := by
+private theorem parent_window_13 : ParentRangeMatches QuartetArtifact.commitCode_0_13 6656 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_14 : ParentRangeMatches Artifact.commitCode_0_14 7168 := by
+private theorem parent_window_14 : ParentRangeMatches QuartetArtifact.commitCode_0_14 7168 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_15 : ParentRangeMatches Artifact.commitCode_0_15 7680 := by
+private theorem parent_window_15 : ParentRangeMatches QuartetArtifact.commitCode_0_15 7680 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_16 : ParentRangeMatches Artifact.commitCode_0_16 8192 := by
+private theorem parent_window_16 : ParentRangeMatches QuartetArtifact.commitCode_0_16 8192 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_17 : ParentRangeMatches Artifact.commitCode_0_17 8704 := by
+private theorem parent_window_17 : ParentRangeMatches QuartetArtifact.commitCode_0_17 8704 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_18 : ParentRangeMatches Artifact.commitCode_0_18 9216 := by
+private theorem parent_window_18 : ParentRangeMatches QuartetArtifact.commitCode_0_18 9216 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_19 : ParentRangeMatches Artifact.commitCode_0_19 9728 := by
+private theorem parent_window_19 : ParentRangeMatches QuartetArtifact.commitCode_0_19 9728 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_20 : ParentRangeMatches Artifact.commitCode_0_20 10240 := by
+private theorem parent_window_20 : ParentRangeMatches QuartetArtifact.commitCode_0_20 10240 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_21 : ParentRangeMatches Artifact.commitCode_0_21 10752 := by
+private theorem parent_window_21 : ParentRangeMatches QuartetArtifact.commitCode_0_21 10752 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_22 : ParentRangeMatches Artifact.commitCode_0_22 11264 := by
+private theorem parent_window_22 : ParentRangeMatches QuartetArtifact.commitCode_0_22 11264 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_23 : ParentRangeMatches Artifact.commitCode_0_23 11776 := by
+private theorem parent_window_23 : ParentRangeMatches QuartetArtifact.commitCode_0_23 11776 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_24 : ParentRangeMatches Artifact.commitCode_0_24 12288 := by
+private theorem parent_window_24 : ParentRangeMatches QuartetArtifact.commitCode_0_24 12288 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_25 : ParentRangeMatches Artifact.commitCode_0_25 12800 := by
+private theorem parent_window_25 : ParentRangeMatches QuartetArtifact.commitCode_0_25 12800 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_26 : ParentRangeMatches Artifact.commitCode_0_26 13312 := by
+private theorem parent_window_26 : ParentRangeMatches QuartetArtifact.commitCode_0_26 13312 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_27 : ParentRangeMatches Artifact.commitCode_0_27 13824 := by
+private theorem parent_window_27 : ParentRangeMatches QuartetArtifact.commitCode_0_27 13824 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_28 : ParentRangeMatches Artifact.commitCode_0_28 14336 := by
+private theorem parent_window_28 : ParentRangeMatches QuartetArtifact.commitCode_0_28 14336 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_29 : ParentRangeMatches Artifact.commitCode_0_29 14848 := by
+private theorem parent_window_29 : ParentRangeMatches QuartetArtifact.commitCode_0_29 14848 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_30 : ParentRangeMatches Artifact.commitCode_0_30 15360 := by
+private theorem parent_window_30 : ParentRangeMatches QuartetArtifact.commitCode_0_30 15360 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_31 : ParentRangeMatches Artifact.commitCode_0_31 15872 := by
+private theorem parent_window_31 : ParentRangeMatches QuartetArtifact.commitCode_0_31 15872 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_32 : ParentRangeMatches Artifact.commitCode_0_32 16384 := by
+private theorem parent_window_32 : ParentRangeMatches QuartetArtifact.commitCode_0_32 16384 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_33 : ParentRangeMatches Artifact.commitCode_0_33 16896 := by
+private theorem parent_window_33 : ParentRangeMatches QuartetArtifact.commitCode_0_33 16896 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_34 : ParentRangeMatches Artifact.commitCode_0_34 17408 := by
+private theorem parent_window_34 : ParentRangeMatches QuartetArtifact.commitCode_0_34 17408 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_35 : ParentRangeMatches Artifact.commitCode_0_35 17920 := by
+private theorem parent_window_35 : ParentRangeMatches QuartetArtifact.commitCode_0_35 17920 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_36 : ParentRangeMatches Artifact.commitCode_0_36 18432 := by
+private theorem parent_window_36 : ParentRangeMatches QuartetArtifact.commitCode_0_36 18432 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_37 : ParentRangeMatches Artifact.commitCode_0_37 18944 := by
+private theorem parent_window_37 : ParentRangeMatches QuartetArtifact.commitCode_0_37 18944 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_38 : ParentRangeMatches Artifact.commitCode_0_38 19456 := by
+private theorem parent_window_38 : ParentRangeMatches QuartetArtifact.commitCode_0_38 19456 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_39 : ParentRangeMatches Artifact.commitCode_0_39 19968 := by
+private theorem parent_window_39 : ParentRangeMatches QuartetArtifact.commitCode_0_39 19968 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_40 : ParentRangeMatches Artifact.commitCode_0_40 20480 := by
+private theorem parent_window_40 : ParentRangeMatches QuartetArtifact.commitCode_0_40 20480 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_41 : ParentRangeMatches Artifact.commitCode_0_41 20992 := by
+private theorem parent_window_41 : ParentRangeMatches QuartetArtifact.commitCode_0_41 20992 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_42 : ParentRangeMatches Artifact.commitCode_0_42 21504 := by
+private theorem parent_window_42 : ParentRangeMatches QuartetArtifact.commitCode_0_42 21504 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_43 : ParentRangeMatches Artifact.commitCode_0_43 22016 := by
+private theorem parent_window_43 : ParentRangeMatches QuartetArtifact.commitCode_0_43 22016 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_44 : ParentRangeMatches Artifact.commitCode_0_44 22528 := by
+private theorem parent_window_44 : ParentRangeMatches QuartetArtifact.commitCode_0_44 22528 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_45 : ParentRangeMatches Artifact.commitCode_0_45 23040 := by
+private theorem parent_window_45 : ParentRangeMatches QuartetArtifact.commitCode_0_45 23040 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_46 : ParentRangeMatches Artifact.commitCode_0_46 23552 := by
+private theorem parent_window_46 : ParentRangeMatches QuartetArtifact.commitCode_0_46 23552 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_47 : ParentRangeMatches Artifact.commitCode_0_47 24064 := by
+private theorem parent_window_47 : ParentRangeMatches QuartetArtifact.commitCode_0_47 24064 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_48 : ParentRangeMatches Artifact.commitCode_0_48 24576 := by
+private theorem parent_window_48 : ParentRangeMatches QuartetArtifact.commitCode_0_48 24576 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_49 : ParentRangeMatches Artifact.commitCode_0_49 25088 := by
+private theorem parent_window_49 : ParentRangeMatches QuartetArtifact.commitCode_0_49 25088 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_50 : ParentRangeMatches Artifact.commitCode_0_50 25600 := by
+private theorem parent_window_50 : ParentRangeMatches QuartetArtifact.commitCode_0_50 25600 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_51 : ParentRangeMatches Artifact.commitCode_0_51 26112 := by
+private theorem parent_window_51 : ParentRangeMatches QuartetArtifact.commitCode_0_51 26112 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_52 : ParentRangeMatches Artifact.commitCode_0_52 26624 := by
+private theorem parent_window_52 : ParentRangeMatches QuartetArtifact.commitCode_0_52 26624 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_53 : ParentRangeMatches Artifact.commitCode_0_53 27136 := by
+private theorem parent_window_53 : ParentRangeMatches QuartetArtifact.commitCode_0_53 27136 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_54 : ParentRangeMatches Artifact.commitCode_0_54 27648 := by
+private theorem parent_window_54 : ParentRangeMatches QuartetArtifact.commitCode_0_54 27648 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_55 : ParentRangeMatches Artifact.commitCode_0_55 28160 := by
+private theorem parent_window_55 : ParentRangeMatches QuartetArtifact.commitCode_0_55 28160 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_56 : ParentRangeMatches Artifact.commitCode_0_56 28672 := by
+private theorem parent_window_56 : ParentRangeMatches QuartetArtifact.commitCode_0_56 28672 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_57 : ParentRangeMatches Artifact.commitCode_0_57 29184 := by
+private theorem parent_window_57 : ParentRangeMatches QuartetArtifact.commitCode_0_57 29184 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_58 : ParentRangeMatches Artifact.commitCode_0_58 29696 := by
+private theorem parent_window_58 : ParentRangeMatches QuartetArtifact.commitCode_0_58 29696 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_59 : ParentRangeMatches Artifact.commitCode_0_59 30208 := by
+private theorem parent_window_59 : ParentRangeMatches QuartetArtifact.commitCode_0_59 30208 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_60 : ParentRangeMatches Artifact.commitCode_0_60 30720 := by
+private theorem parent_window_60 : ParentRangeMatches QuartetArtifact.commitCode_0_60 30720 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_61 : ParentRangeMatches Artifact.commitCode_0_61 31232 := by
+private theorem parent_window_61 : ParentRangeMatches QuartetArtifact.commitCode_0_61 31232 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_62 : ParentRangeMatches Artifact.commitCode_0_62 31744 := by
+private theorem parent_window_62 : ParentRangeMatches QuartetArtifact.commitCode_0_62 31744 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_63 : ParentRangeMatches Artifact.commitCode_0_63 32256 := by
+private theorem parent_window_63 : ParentRangeMatches QuartetArtifact.commitCode_0_63 32256 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_64 : ParentRangeMatches Artifact.commitCode_0_64 32768 := by
+private theorem parent_window_64 : ParentRangeMatches QuartetArtifact.commitCode_0_64 32768 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_65 : ParentRangeMatches Artifact.commitCode_0_65 33280 := by
+private theorem parent_window_65 : ParentRangeMatches QuartetArtifact.commitCode_0_65 33280 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_66 : ParentRangeMatches Artifact.commitCode_0_66 33792 := by
+private theorem parent_window_66 : ParentRangeMatches QuartetArtifact.commitCode_0_66 33792 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_67 : ParentRangeMatches Artifact.commitCode_0_67 34304 := by
+private theorem parent_window_67 : ParentRangeMatches QuartetArtifact.commitCode_0_67 34304 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_68 : ParentRangeMatches Artifact.commitCode_0_68 34816 := by
+private theorem parent_window_68 : ParentRangeMatches QuartetArtifact.commitCode_0_68 34816 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_69 : ParentRangeMatches Artifact.commitCode_0_69 35328 := by
+private theorem parent_window_69 : ParentRangeMatches QuartetArtifact.commitCode_0_69 35328 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_70 : ParentRangeMatches Artifact.commitCode_0_70 35840 := by
+private theorem parent_window_70 : ParentRangeMatches QuartetArtifact.commitCode_0_70 35840 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_71 : ParentRangeMatches Artifact.commitCode_0_71 36352 := by
+private theorem parent_window_71 : ParentRangeMatches QuartetArtifact.commitCode_0_71 36352 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_72 : ParentRangeMatches Artifact.commitCode_0_72 36864 := by
+private theorem parent_window_72 : ParentRangeMatches QuartetArtifact.commitCode_0_72 36864 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_73 : ParentRangeMatches Artifact.commitCode_0_73 37376 := by
+private theorem parent_window_73 : ParentRangeMatches QuartetArtifact.commitCode_0_73 37376 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_74 : ParentRangeMatches Artifact.commitCode_0_74 37888 := by
+private theorem parent_window_74 : ParentRangeMatches QuartetArtifact.commitCode_0_74 37888 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_75 : ParentRangeMatches Artifact.commitCode_0_75 38400 := by
+private theorem parent_window_75 : ParentRangeMatches QuartetArtifact.commitCode_0_75 38400 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_76 : ParentRangeMatches Artifact.commitCode_0_76 38912 := by
+private theorem parent_window_76 : ParentRangeMatches QuartetArtifact.commitCode_0_76 38912 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_77 : ParentRangeMatches Artifact.commitCode_0_77 39424 := by
+private theorem parent_window_77 : ParentRangeMatches QuartetArtifact.commitCode_0_77 39424 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_78 : ParentRangeMatches Artifact.commitCode_0_78 39936 := by
+private theorem parent_window_78 : ParentRangeMatches QuartetArtifact.commitCode_0_78 39936 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_79 : ParentRangeMatches Artifact.commitCode_0_79 40448 := by
+private theorem parent_window_79 : ParentRangeMatches QuartetArtifact.commitCode_0_79 40448 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_80 : ParentRangeMatches Artifact.commitCode_0_80 40960 := by
+private theorem parent_window_80 : ParentRangeMatches QuartetArtifact.commitCode_0_80 40960 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_81 : ParentRangeMatches Artifact.commitCode_0_81 41472 := by
+private theorem parent_window_81 : ParentRangeMatches QuartetArtifact.commitCode_0_81 41472 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_82 : ParentRangeMatches Artifact.commitCode_0_82 41984 := by
+private theorem parent_window_82 : ParentRangeMatches QuartetArtifact.commitCode_0_82 41984 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_83 : ParentRangeMatches Artifact.commitCode_0_83 42496 := by
+private theorem parent_window_83 : ParentRangeMatches QuartetArtifact.commitCode_0_83 42496 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_84 : ParentRangeMatches Artifact.commitCode_0_84 43008 := by
+private theorem parent_window_84 : ParentRangeMatches QuartetArtifact.commitCode_0_84 43008 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_85 : ParentRangeMatches Artifact.commitCode_0_85 43520 := by
+private theorem parent_window_85 : ParentRangeMatches QuartetArtifact.commitCode_0_85 43520 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_86 : ParentRangeMatches Artifact.commitCode_0_86 44032 := by
+private theorem parent_window_86 : ParentRangeMatches QuartetArtifact.commitCode_0_86 44032 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_87 : ParentRangeMatches Artifact.commitCode_0_87 44544 := by
+private theorem parent_window_87 : ParentRangeMatches QuartetArtifact.commitCode_0_87 44544 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_88 : ParentRangeMatches Artifact.commitCode_0_88 45056 := by
+private theorem parent_window_88 : ParentRangeMatches QuartetArtifact.commitCode_0_88 45056 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_89 : ParentRangeMatches Artifact.commitCode_0_89 45568 := by
+private theorem parent_window_89 : ParentRangeMatches QuartetArtifact.commitCode_0_89 45568 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_90 : ParentRangeMatches Artifact.commitCode_0_90 46080 := by
+private theorem parent_window_90 : ParentRangeMatches QuartetArtifact.commitCode_0_90 46080 := by
   intro i lower upper
   have inside := i.isLt
   omega
 
-private theorem parent_window_91 : ParentRangeMatches Artifact.commitCode_0_91 46592 := by
+private theorem parent_window_91 : ParentRangeMatches QuartetArtifact.commitCode_0_91 46592 := by
   unfold ParentRangeMatches expectedWord parentWord rootWords
   decide +kernel
 
-private theorem parent_window_92 : ParentRangeMatches Artifact.commitCode_0_92 47104 := by
+private theorem parent_window_92 : ParentRangeMatches QuartetArtifact.commitCode_0_92 47104 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_93 : ParentRangeMatches Artifact.commitCode_0_93 47616 := by
+private theorem parent_window_93 : ParentRangeMatches QuartetArtifact.commitCode_0_93 47616 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_94 : ParentRangeMatches Artifact.commitCode_0_94 48128 := by
+private theorem parent_window_94 : ParentRangeMatches QuartetArtifact.commitCode_0_94 48128 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_95 : ParentRangeMatches Artifact.commitCode_0_95 48640 := by
+private theorem parent_window_95 : ParentRangeMatches QuartetArtifact.commitCode_0_95 48640 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_96 : ParentRangeMatches Artifact.commitCode_0_96 49152 := by
+private theorem parent_window_96 : ParentRangeMatches QuartetArtifact.commitCode_0_96 49152 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_97 : ParentRangeMatches Artifact.commitCode_0_97 49664 := by
+private theorem parent_window_97 : ParentRangeMatches QuartetArtifact.commitCode_0_97 49664 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_98 : ParentRangeMatches Artifact.commitCode_0_98 50176 := by
+private theorem parent_window_98 : ParentRangeMatches QuartetArtifact.commitCode_0_98 50176 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_99 : ParentRangeMatches Artifact.commitCode_0_99 50688 := by
+private theorem parent_window_99 : ParentRangeMatches QuartetArtifact.commitCode_0_99 50688 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_100 : ParentRangeMatches Artifact.commitCode_0_100 51200 := by
+private theorem parent_window_100 : ParentRangeMatches QuartetArtifact.commitCode_0_100 51200 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_101 : ParentRangeMatches Artifact.commitCode_0_101 51712 := by
+private theorem parent_window_101 : ParentRangeMatches QuartetArtifact.commitCode_0_101 51712 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_102 : ParentRangeMatches Artifact.commitCode_0_102 52224 := by
+private theorem parent_window_102 : ParentRangeMatches QuartetArtifact.commitCode_0_102 52224 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_103 : ParentRangeMatches Artifact.commitCode_0_103 52736 := by
+private theorem parent_window_103 : ParentRangeMatches QuartetArtifact.commitCode_0_103 52736 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_104 : ParentRangeMatches Artifact.commitCode_0_104 53248 := by
+private theorem parent_window_104 : ParentRangeMatches QuartetArtifact.commitCode_0_104 53248 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_105 : ParentRangeMatches Artifact.commitCode_0_105 53760 := by
+private theorem parent_window_105 : ParentRangeMatches QuartetArtifact.commitCode_0_105 53760 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_106 : ParentRangeMatches Artifact.commitCode_0_106 54272 := by
+private theorem parent_window_106 : ParentRangeMatches QuartetArtifact.commitCode_0_106 54272 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_107 : ParentRangeMatches Artifact.commitCode_0_107 54784 := by
+private theorem parent_window_107 : ParentRangeMatches QuartetArtifact.commitCode_0_107 54784 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_108 : ParentRangeMatches Artifact.commitCode_0_108 55296 := by
+private theorem parent_window_108 : ParentRangeMatches QuartetArtifact.commitCode_0_108 55296 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_109 : ParentRangeMatches Artifact.commitCode_0_109 55808 := by
+private theorem parent_window_109 : ParentRangeMatches QuartetArtifact.commitCode_0_109 55808 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_110 : ParentRangeMatches Artifact.commitCode_0_110 56320 := by
+private theorem parent_window_110 : ParentRangeMatches QuartetArtifact.commitCode_0_110 56320 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_111 : ParentRangeMatches Artifact.commitCode_0_111 56832 := by
+private theorem parent_window_111 : ParentRangeMatches QuartetArtifact.commitCode_0_111 56832 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_112 : ParentRangeMatches Artifact.commitCode_0_112 57344 := by
+private theorem parent_window_112 : ParentRangeMatches QuartetArtifact.commitCode_0_112 57344 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_113 : ParentRangeMatches Artifact.commitCode_0_113 57856 := by
+private theorem parent_window_113 : ParentRangeMatches QuartetArtifact.commitCode_0_113 57856 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_114 : ParentRangeMatches Artifact.commitCode_0_114 58368 := by
+private theorem parent_window_114 : ParentRangeMatches QuartetArtifact.commitCode_0_114 58368 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_115 : ParentRangeMatches Artifact.commitCode_0_115 58880 := by
+private theorem parent_window_115 : ParentRangeMatches QuartetArtifact.commitCode_0_115 58880 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_116 : ParentRangeMatches Artifact.commitCode_0_116 59392 := by
+private theorem parent_window_116 : ParentRangeMatches QuartetArtifact.commitCode_0_116 59392 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_117 : ParentRangeMatches Artifact.commitCode_0_117 59904 := by
+private theorem parent_window_117 : ParentRangeMatches QuartetArtifact.commitCode_0_117 59904 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_118 : ParentRangeMatches Artifact.commitCode_0_118 60416 := by
+private theorem parent_window_118 : ParentRangeMatches QuartetArtifact.commitCode_0_118 60416 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_119 : ParentRangeMatches Artifact.commitCode_0_119 60928 := by
+private theorem parent_window_119 : ParentRangeMatches QuartetArtifact.commitCode_0_119 60928 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_120 : ParentRangeMatches Artifact.commitCode_0_120 61440 := by
+private theorem parent_window_120 : ParentRangeMatches QuartetArtifact.commitCode_0_120 61440 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_121 : ParentRangeMatches Artifact.commitCode_0_121 61952 := by
+private theorem parent_window_121 : ParentRangeMatches QuartetArtifact.commitCode_0_121 61952 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_122 : ParentRangeMatches Artifact.commitCode_0_122 62464 := by
+private theorem parent_window_122 : ParentRangeMatches QuartetArtifact.commitCode_0_122 62464 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_123 : ParentRangeMatches Artifact.commitCode_0_123 62976 := by
+private theorem parent_window_123 : ParentRangeMatches QuartetArtifact.commitCode_0_123 62976 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_124 : ParentRangeMatches Artifact.commitCode_0_124 63488 := by
+private theorem parent_window_124 : ParentRangeMatches QuartetArtifact.commitCode_0_124 63488 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_125 : ParentRangeMatches Artifact.commitCode_0_125 64000 := by
+private theorem parent_window_125 : ParentRangeMatches QuartetArtifact.commitCode_0_125 64000 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_126 : ParentRangeMatches Artifact.commitCode_0_126 64512 := by
+private theorem parent_window_126 : ParentRangeMatches QuartetArtifact.commitCode_0_126 64512 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_127 : ParentRangeMatches Artifact.commitCode_0_127 65024 := by
+private theorem parent_window_127 : ParentRangeMatches QuartetArtifact.commitCode_0_127 65024 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_128 : ParentRangeMatches Artifact.commitCode_0_128 65536 := by
+private theorem parent_window_128 : ParentRangeMatches QuartetArtifact.commitCode_0_128 65536 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_129 : ParentRangeMatches Artifact.commitCode_0_129 66048 := by
+private theorem parent_window_129 : ParentRangeMatches QuartetArtifact.commitCode_0_129 66048 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_130 : ParentRangeMatches Artifact.commitCode_0_130 66560 := by
+private theorem parent_window_130 : ParentRangeMatches QuartetArtifact.commitCode_0_130 66560 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_131 : ParentRangeMatches Artifact.commitCode_0_131 67072 := by
+private theorem parent_window_131 : ParentRangeMatches QuartetArtifact.commitCode_0_131 67072 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_132 : ParentRangeMatches Artifact.commitCode_0_132 67584 := by
+private theorem parent_window_132 : ParentRangeMatches QuartetArtifact.commitCode_0_132 67584 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_133 : ParentRangeMatches Artifact.commitCode_0_133 68096 := by
+private theorem parent_window_133 : ParentRangeMatches QuartetArtifact.commitCode_0_133 68096 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_134 : ParentRangeMatches Artifact.commitCode_0_134 68608 := by
+private theorem parent_window_134 : ParentRangeMatches QuartetArtifact.commitCode_0_134 68608 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_135 : ParentRangeMatches Artifact.commitCode_0_135 69120 := by
+private theorem parent_window_135 : ParentRangeMatches QuartetArtifact.commitCode_0_135 69120 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_136 : ParentRangeMatches Artifact.commitCode_0_136 69632 := by
+private theorem parent_window_136 : ParentRangeMatches QuartetArtifact.commitCode_0_136 69632 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_137 : ParentRangeMatches Artifact.commitCode_0_137 70144 := by
+private theorem parent_window_137 : ParentRangeMatches QuartetArtifact.commitCode_0_137 70144 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_138 : ParentRangeMatches Artifact.commitCode_0_138 70656 := by
+private theorem parent_window_138 : ParentRangeMatches QuartetArtifact.commitCode_0_138 70656 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_139 : ParentRangeMatches Artifact.commitCode_0_139 71168 := by
+private theorem parent_window_139 : ParentRangeMatches QuartetArtifact.commitCode_0_139 71168 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_140 : ParentRangeMatches Artifact.commitCode_0_140 71680 := by
+private theorem parent_window_140 : ParentRangeMatches QuartetArtifact.commitCode_0_140 71680 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_141 : ParentRangeMatches Artifact.commitCode_0_141 72192 := by
+private theorem parent_window_141 : ParentRangeMatches QuartetArtifact.commitCode_0_141 72192 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_142 : ParentRangeMatches Artifact.commitCode_0_142 72704 := by
+private theorem parent_window_142 : ParentRangeMatches QuartetArtifact.commitCode_0_142 72704 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_143 : ParentRangeMatches Artifact.commitCode_0_143 73216 := by
+private theorem parent_window_143 : ParentRangeMatches QuartetArtifact.commitCode_0_143 73216 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_144 : ParentRangeMatches Artifact.commitCode_0_144 73728 := by
+private theorem parent_window_144 : ParentRangeMatches QuartetArtifact.commitCode_0_144 73728 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_145 : ParentRangeMatches Artifact.commitCode_0_145 74240 := by
+private theorem parent_window_145 : ParentRangeMatches QuartetArtifact.commitCode_0_145 74240 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_146 : ParentRangeMatches Artifact.commitCode_0_146 74752 := by
+private theorem parent_window_146 : ParentRangeMatches QuartetArtifact.commitCode_0_146 74752 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_147 : ParentRangeMatches Artifact.commitCode_0_147 75264 := by
+private theorem parent_window_147 : ParentRangeMatches QuartetArtifact.commitCode_0_147 75264 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_148 : ParentRangeMatches Artifact.commitCode_0_148 75776 := by
+private theorem parent_window_148 : ParentRangeMatches QuartetArtifact.commitCode_0_148 75776 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_149 : ParentRangeMatches Artifact.commitCode_0_149 76288 := by
+private theorem parent_window_149 : ParentRangeMatches QuartetArtifact.commitCode_0_149 76288 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_150 : ParentRangeMatches Artifact.commitCode_0_150 76800 := by
+private theorem parent_window_150 : ParentRangeMatches QuartetArtifact.commitCode_0_150 76800 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_151 : ParentRangeMatches Artifact.commitCode_0_151 77312 := by
+private theorem parent_window_151 : ParentRangeMatches QuartetArtifact.commitCode_0_151 77312 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_152 : ParentRangeMatches Artifact.commitCode_0_152 77824 := by
+private theorem parent_window_152 : ParentRangeMatches QuartetArtifact.commitCode_0_152 77824 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_153 : ParentRangeMatches Artifact.commitCode_0_153 78336 := by
+private theorem parent_window_153 : ParentRangeMatches QuartetArtifact.commitCode_0_153 78336 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_154 : ParentRangeMatches Artifact.commitCode_0_154 78848 := by
+private theorem parent_window_154 : ParentRangeMatches QuartetArtifact.commitCode_0_154 78848 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_155 : ParentRangeMatches Artifact.commitCode_0_155 79360 := by
+private theorem parent_window_155 : ParentRangeMatches QuartetArtifact.commitCode_0_155 79360 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_156 : ParentRangeMatches Artifact.commitCode_0_156 79872 := by
+private theorem parent_window_156 : ParentRangeMatches QuartetArtifact.commitCode_0_156 79872 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_157 : ParentRangeMatches Artifact.commitCode_0_157 80384 := by
+private theorem parent_window_157 : ParentRangeMatches QuartetArtifact.commitCode_0_157 80384 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_158 : ParentRangeMatches Artifact.commitCode_0_158 80896 := by
+private theorem parent_window_158 : ParentRangeMatches QuartetArtifact.commitCode_0_158 80896 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_159 : ParentRangeMatches Artifact.commitCode_0_159 81408 := by
+private theorem parent_window_159 : ParentRangeMatches QuartetArtifact.commitCode_0_159 81408 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_160 : ParentRangeMatches Artifact.commitCode_0_160 81920 := by
+private theorem parent_window_160 : ParentRangeMatches QuartetArtifact.commitCode_0_160 81920 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_161 : ParentRangeMatches Artifact.commitCode_0_161 82432 := by
+private theorem parent_window_161 : ParentRangeMatches QuartetArtifact.commitCode_0_161 82432 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_162 : ParentRangeMatches Artifact.commitCode_0_162 82944 := by
+private theorem parent_window_162 : ParentRangeMatches QuartetArtifact.commitCode_0_162 82944 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_163 : ParentRangeMatches Artifact.commitCode_0_163 83456 := by
+private theorem parent_window_163 : ParentRangeMatches QuartetArtifact.commitCode_0_163 83456 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_164 : ParentRangeMatches Artifact.commitCode_0_164 83968 := by
+private theorem parent_window_164 : ParentRangeMatches QuartetArtifact.commitCode_0_164 83968 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_165 : ParentRangeMatches Artifact.commitCode_0_165 84480 := by
+private theorem parent_window_165 : ParentRangeMatches QuartetArtifact.commitCode_0_165 84480 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_166 : ParentRangeMatches Artifact.commitCode_0_166 84992 := by
+private theorem parent_window_166 : ParentRangeMatches QuartetArtifact.commitCode_0_166 84992 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_167 : ParentRangeMatches Artifact.commitCode_0_167 85504 := by
+private theorem parent_window_167 : ParentRangeMatches QuartetArtifact.commitCode_0_167 85504 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_168 : ParentRangeMatches Artifact.commitCode_0_168 86016 := by
+private theorem parent_window_168 : ParentRangeMatches QuartetArtifact.commitCode_0_168 86016 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_169 : ParentRangeMatches Artifact.commitCode_0_169 86528 := by
+private theorem parent_window_169 : ParentRangeMatches QuartetArtifact.commitCode_0_169 86528 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_170 : ParentRangeMatches Artifact.commitCode_0_170 87040 := by
+private theorem parent_window_170 : ParentRangeMatches QuartetArtifact.commitCode_0_170 87040 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_171 : ParentRangeMatches Artifact.commitCode_0_171 87552 := by
+private theorem parent_window_171 : ParentRangeMatches QuartetArtifact.commitCode_0_171 87552 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_172 : ParentRangeMatches Artifact.commitCode_0_172 88064 := by
+private theorem parent_window_172 : ParentRangeMatches QuartetArtifact.commitCode_0_172 88064 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_173 : ParentRangeMatches Artifact.commitCode_0_173 88576 := by
+private theorem parent_window_173 : ParentRangeMatches QuartetArtifact.commitCode_0_173 88576 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_174 : ParentRangeMatches Artifact.commitCode_0_174 89088 := by
+private theorem parent_window_174 : ParentRangeMatches QuartetArtifact.commitCode_0_174 89088 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_175 : ParentRangeMatches Artifact.commitCode_0_175 89600 := by
+private theorem parent_window_175 : ParentRangeMatches QuartetArtifact.commitCode_0_175 89600 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_176 : ParentRangeMatches Artifact.commitCode_0_176 90112 := by
+private theorem parent_window_176 : ParentRangeMatches QuartetArtifact.commitCode_0_176 90112 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_177 : ParentRangeMatches Artifact.commitCode_0_177 90624 := by
+private theorem parent_window_177 : ParentRangeMatches QuartetArtifact.commitCode_0_177 90624 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_178 : ParentRangeMatches Artifact.commitCode_0_178 91136 := by
+private theorem parent_window_178 : ParentRangeMatches QuartetArtifact.commitCode_0_178 91136 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_179 : ParentRangeMatches Artifact.commitCode_0_179 91648 := by
+private theorem parent_window_179 : ParentRangeMatches QuartetArtifact.commitCode_0_179 91648 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_180 : ParentRangeMatches Artifact.commitCode_0_180 92160 := by
+private theorem parent_window_180 : ParentRangeMatches QuartetArtifact.commitCode_0_180 92160 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_181 : ParentRangeMatches Artifact.commitCode_0_181 92672 := by
+private theorem parent_window_181 : ParentRangeMatches QuartetArtifact.commitCode_0_181 92672 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_182 : ParentRangeMatches Artifact.commitCode_0_182 93184 := by
+private theorem parent_window_182 : ParentRangeMatches QuartetArtifact.commitCode_0_182 93184 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_183 : ParentRangeMatches Artifact.commitCode_0_183 93696 := by
+private theorem parent_window_183 : ParentRangeMatches QuartetArtifact.commitCode_0_183 93696 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_184 : ParentRangeMatches Artifact.commitCode_0_184 94208 := by
+private theorem parent_window_184 : ParentRangeMatches QuartetArtifact.commitCode_0_184 94208 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_185 : ParentRangeMatches Artifact.commitCode_0_185 94720 := by
+private theorem parent_window_185 : ParentRangeMatches QuartetArtifact.commitCode_0_185 94720 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_186 : ParentRangeMatches Artifact.commitCode_0_186 95232 := by
+private theorem parent_window_186 : ParentRangeMatches QuartetArtifact.commitCode_0_186 95232 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_187 : ParentRangeMatches Artifact.commitCode_0_187 95744 := by
+private theorem parent_window_187 : ParentRangeMatches QuartetArtifact.commitCode_0_187 95744 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_188 : ParentRangeMatches Artifact.commitCode_0_188 96256 := by
+private theorem parent_window_188 : ParentRangeMatches QuartetArtifact.commitCode_0_188 96256 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_189 : ParentRangeMatches Artifact.commitCode_0_189 96768 := by
+private theorem parent_window_189 : ParentRangeMatches QuartetArtifact.commitCode_0_189 96768 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_190 : ParentRangeMatches Artifact.commitCode_0_190 97280 := by
+private theorem parent_window_190 : ParentRangeMatches QuartetArtifact.commitCode_0_190 97280 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_191 : ParentRangeMatches Artifact.commitCode_0_191 97792 := by
+private theorem parent_window_191 : ParentRangeMatches QuartetArtifact.commitCode_0_191 97792 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_192 : ParentRangeMatches Artifact.commitCode_0_192 98304 := by
+private theorem parent_window_192 : ParentRangeMatches QuartetArtifact.commitCode_0_192 98304 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_193 : ParentRangeMatches Artifact.commitCode_0_193 98816 := by
+private theorem parent_window_193 : ParentRangeMatches QuartetArtifact.commitCode_0_193 98816 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_194 : ParentRangeMatches Artifact.commitCode_0_194 99328 := by
+private theorem parent_window_194 : ParentRangeMatches QuartetArtifact.commitCode_0_194 99328 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_195 : ParentRangeMatches Artifact.commitCode_0_195 99840 := by
+private theorem parent_window_195 : ParentRangeMatches QuartetArtifact.commitCode_0_195 99840 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_196 : ParentRangeMatches Artifact.commitCode_0_196 100352 := by
+private theorem parent_window_196 : ParentRangeMatches QuartetArtifact.commitCode_0_196 100352 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_197 : ParentRangeMatches Artifact.commitCode_0_197 100864 := by
+private theorem parent_window_197 : ParentRangeMatches QuartetArtifact.commitCode_0_197 100864 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_198 : ParentRangeMatches Artifact.commitCode_0_198 101376 := by
+private theorem parent_window_198 : ParentRangeMatches QuartetArtifact.commitCode_0_198 101376 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_199 : ParentRangeMatches Artifact.commitCode_0_199 101888 := by
+private theorem parent_window_199 : ParentRangeMatches QuartetArtifact.commitCode_0_199 101888 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_200 : ParentRangeMatches Artifact.commitCode_0_200 102400 := by
+private theorem parent_window_200 : ParentRangeMatches QuartetArtifact.commitCode_0_200 102400 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_201 : ParentRangeMatches Artifact.commitCode_0_201 102912 := by
+private theorem parent_window_201 : ParentRangeMatches QuartetArtifact.commitCode_0_201 102912 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_202 : ParentRangeMatches Artifact.commitCode_0_202 103424 := by
+private theorem parent_window_202 : ParentRangeMatches QuartetArtifact.commitCode_0_202 103424 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_203 : ParentRangeMatches Artifact.commitCode_0_203 103936 := by
+private theorem parent_window_203 : ParentRangeMatches QuartetArtifact.commitCode_0_203 103936 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_204 : ParentRangeMatches Artifact.commitCode_0_204 104448 := by
+private theorem parent_window_204 : ParentRangeMatches QuartetArtifact.commitCode_0_204 104448 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_205 : ParentRangeMatches Artifact.commitCode_0_205 104960 := by
+private theorem parent_window_205 : ParentRangeMatches QuartetArtifact.commitCode_0_205 104960 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_206 : ParentRangeMatches Artifact.commitCode_0_206 105472 := by
+private theorem parent_window_206 : ParentRangeMatches QuartetArtifact.commitCode_0_206 105472 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_207 : ParentRangeMatches Artifact.commitCode_0_207 105984 := by
+private theorem parent_window_207 : ParentRangeMatches QuartetArtifact.commitCode_0_207 105984 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_208 : ParentRangeMatches Artifact.commitCode_0_208 106496 := by
+private theorem parent_window_208 : ParentRangeMatches QuartetArtifact.commitCode_0_208 106496 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_209 : ParentRangeMatches Artifact.commitCode_0_209 107008 := by
+private theorem parent_window_209 : ParentRangeMatches QuartetArtifact.commitCode_0_209 107008 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_210 : ParentRangeMatches Artifact.commitCode_0_210 107520 := by
+private theorem parent_window_210 : ParentRangeMatches QuartetArtifact.commitCode_0_210 107520 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_211 : ParentRangeMatches Artifact.commitCode_0_211 108032 := by
+private theorem parent_window_211 : ParentRangeMatches QuartetArtifact.commitCode_0_211 108032 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_212 : ParentRangeMatches Artifact.commitCode_0_212 108544 := by
+private theorem parent_window_212 : ParentRangeMatches QuartetArtifact.commitCode_0_212 108544 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_213 : ParentRangeMatches Artifact.commitCode_0_213 109056 := by
+private theorem parent_window_213 : ParentRangeMatches QuartetArtifact.commitCode_0_213 109056 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_214 : ParentRangeMatches Artifact.commitCode_0_214 109568 := by
+private theorem parent_window_214 : ParentRangeMatches QuartetArtifact.commitCode_0_214 109568 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_215 : ParentRangeMatches Artifact.commitCode_0_215 110080 := by
+private theorem parent_window_215 : ParentRangeMatches QuartetArtifact.commitCode_0_215 110080 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_216 : ParentRangeMatches Artifact.commitCode_0_216 110592 := by
+private theorem parent_window_216 : ParentRangeMatches QuartetArtifact.commitCode_0_216 110592 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_217 : ParentRangeMatches Artifact.commitCode_0_217 111104 := by
+private theorem parent_window_217 : ParentRangeMatches QuartetArtifact.commitCode_0_217 111104 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_218 : ParentRangeMatches Artifact.commitCode_0_218 111616 := by
+private theorem parent_window_218 : ParentRangeMatches QuartetArtifact.commitCode_0_218 111616 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_219 : ParentRangeMatches Artifact.commitCode_0_219 112128 := by
+private theorem parent_window_219 : ParentRangeMatches QuartetArtifact.commitCode_0_219 112128 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_220 : ParentRangeMatches Artifact.commitCode_0_220 112640 := by
+private theorem parent_window_220 : ParentRangeMatches QuartetArtifact.commitCode_0_220 112640 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_221 : ParentRangeMatches Artifact.commitCode_0_221 113152 := by
+private theorem parent_window_221 : ParentRangeMatches QuartetArtifact.commitCode_0_221 113152 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_222 : ParentRangeMatches Artifact.commitCode_0_222 113664 := by
+private theorem parent_window_222 : ParentRangeMatches QuartetArtifact.commitCode_0_222 113664 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_223 : ParentRangeMatches Artifact.commitCode_0_223 114176 := by
+private theorem parent_window_223 : ParentRangeMatches QuartetArtifact.commitCode_0_223 114176 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_224 : ParentRangeMatches Artifact.commitCode_0_224 114688 := by
+private theorem parent_window_224 : ParentRangeMatches QuartetArtifact.commitCode_0_224 114688 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_225 : ParentRangeMatches Artifact.commitCode_0_225 115200 := by
+private theorem parent_window_225 : ParentRangeMatches QuartetArtifact.commitCode_0_225 115200 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_226 : ParentRangeMatches Artifact.commitCode_0_226 115712 := by
+private theorem parent_window_226 : ParentRangeMatches QuartetArtifact.commitCode_0_226 115712 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_227 : ParentRangeMatches Artifact.commitCode_0_227 116224 := by
+private theorem parent_window_227 : ParentRangeMatches QuartetArtifact.commitCode_0_227 116224 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_228 : ParentRangeMatches Artifact.commitCode_0_228 116736 := by
+private theorem parent_window_228 : ParentRangeMatches QuartetArtifact.commitCode_0_228 116736 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_229 : ParentRangeMatches Artifact.commitCode_0_229 117248 := by
+private theorem parent_window_229 : ParentRangeMatches QuartetArtifact.commitCode_0_229 117248 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_230 : ParentRangeMatches Artifact.commitCode_0_230 117760 := by
+private theorem parent_window_230 : ParentRangeMatches QuartetArtifact.commitCode_0_230 117760 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_231 : ParentRangeMatches Artifact.commitCode_0_231 118272 := by
+private theorem parent_window_231 : ParentRangeMatches QuartetArtifact.commitCode_0_231 118272 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_232 : ParentRangeMatches Artifact.commitCode_0_232 118784 := by
+private theorem parent_window_232 : ParentRangeMatches QuartetArtifact.commitCode_0_232 118784 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_233 : ParentRangeMatches Artifact.commitCode_0_233 119296 := by
+private theorem parent_window_233 : ParentRangeMatches QuartetArtifact.commitCode_0_233 119296 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_234 : ParentRangeMatches Artifact.commitCode_0_234 119808 := by
+private theorem parent_window_234 : ParentRangeMatches QuartetArtifact.commitCode_0_234 119808 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_235 : ParentRangeMatches Artifact.commitCode_0_235 120320 := by
+private theorem parent_window_235 : ParentRangeMatches QuartetArtifact.commitCode_0_235 120320 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_236 : ParentRangeMatches Artifact.commitCode_0_236 120832 := by
+private theorem parent_window_236 : ParentRangeMatches QuartetArtifact.commitCode_0_236 120832 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_237 : ParentRangeMatches Artifact.commitCode_0_237 121344 := by
+private theorem parent_window_237 : ParentRangeMatches QuartetArtifact.commitCode_0_237 121344 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_238 : ParentRangeMatches Artifact.commitCode_0_238 121856 := by
+private theorem parent_window_238 : ParentRangeMatches QuartetArtifact.commitCode_0_238 121856 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_239 : ParentRangeMatches Artifact.commitCode_0_239 122368 := by
+private theorem parent_window_239 : ParentRangeMatches QuartetArtifact.commitCode_0_239 122368 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_240 : ParentRangeMatches Artifact.commitCode_0_240 122880 := by
+private theorem parent_window_240 : ParentRangeMatches QuartetArtifact.commitCode_0_240 122880 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_241 : ParentRangeMatches Artifact.commitCode_0_241 123392 := by
+private theorem parent_window_241 : ParentRangeMatches QuartetArtifact.commitCode_0_241 123392 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_242 : ParentRangeMatches Artifact.commitCode_0_242 123904 := by
+private theorem parent_window_242 : ParentRangeMatches QuartetArtifact.commitCode_0_242 123904 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_243 : ParentRangeMatches Artifact.commitCode_0_243 124416 := by
+private theorem parent_window_243 : ParentRangeMatches QuartetArtifact.commitCode_0_243 124416 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_244 : ParentRangeMatches Artifact.commitCode_0_244 124928 := by
+private theorem parent_window_244 : ParentRangeMatches QuartetArtifact.commitCode_0_244 124928 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_245 : ParentRangeMatches Artifact.commitCode_0_245 125440 := by
+private theorem parent_window_245 : ParentRangeMatches QuartetArtifact.commitCode_0_245 125440 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_246 : ParentRangeMatches Artifact.commitCode_0_246 125952 := by
+private theorem parent_window_246 : ParentRangeMatches QuartetArtifact.commitCode_0_246 125952 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_247 : ParentRangeMatches Artifact.commitCode_0_247 126464 := by
+private theorem parent_window_247 : ParentRangeMatches QuartetArtifact.commitCode_0_247 126464 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_248 : ParentRangeMatches Artifact.commitCode_0_248 126976 := by
+private theorem parent_window_248 : ParentRangeMatches QuartetArtifact.commitCode_0_248 126976 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_249 : ParentRangeMatches Artifact.commitCode_0_249 127488 := by
+private theorem parent_window_249 : ParentRangeMatches QuartetArtifact.commitCode_0_249 127488 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_250 : ParentRangeMatches Artifact.commitCode_0_250 128000 := by
+private theorem parent_window_250 : ParentRangeMatches QuartetArtifact.commitCode_0_250 128000 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_251 : ParentRangeMatches Artifact.commitCode_0_251 128512 := by
+private theorem parent_window_251 : ParentRangeMatches QuartetArtifact.commitCode_0_251 128512 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_252 : ParentRangeMatches Artifact.commitCode_0_252 129024 := by
+private theorem parent_window_252 : ParentRangeMatches QuartetArtifact.commitCode_0_252 129024 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_253 : ParentRangeMatches Artifact.commitCode_0_253 129536 := by
+private theorem parent_window_253 : ParentRangeMatches QuartetArtifact.commitCode_0_253 129536 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_254 : ParentRangeMatches Artifact.commitCode_0_254 130048 := by
+private theorem parent_window_254 : ParentRangeMatches QuartetArtifact.commitCode_0_254 130048 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_255 : ParentRangeMatches Artifact.commitCode_0_255 130560 := by
+private theorem parent_window_255 : ParentRangeMatches QuartetArtifact.commitCode_0_255 130560 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_256 : ParentRangeMatches Artifact.commitCode_0_256 131072 := by
+private theorem parent_window_256 : ParentRangeMatches QuartetArtifact.commitCode_0_256 131072 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_257 : ParentRangeMatches Artifact.commitCode_0_257 131584 := by
+private theorem parent_window_257 : ParentRangeMatches QuartetArtifact.commitCode_0_257 131584 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_258 : ParentRangeMatches Artifact.commitCode_0_258 132096 := by
+private theorem parent_window_258 : ParentRangeMatches QuartetArtifact.commitCode_0_258 132096 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_259 : ParentRangeMatches Artifact.commitCode_0_259 132608 := by
+private theorem parent_window_259 : ParentRangeMatches QuartetArtifact.commitCode_0_259 132608 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_260 : ParentRangeMatches Artifact.commitCode_0_260 133120 := by
+private theorem parent_window_260 : ParentRangeMatches QuartetArtifact.commitCode_0_260 133120 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_261 : ParentRangeMatches Artifact.commitCode_0_261 133632 := by
+private theorem parent_window_261 : ParentRangeMatches QuartetArtifact.commitCode_0_261 133632 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_262 : ParentRangeMatches Artifact.commitCode_0_262 134144 := by
+private theorem parent_window_262 : ParentRangeMatches QuartetArtifact.commitCode_0_262 134144 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_263 : ParentRangeMatches Artifact.commitCode_0_263 134656 := by
+private theorem parent_window_263 : ParentRangeMatches QuartetArtifact.commitCode_0_263 134656 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_264 : ParentRangeMatches Artifact.commitCode_0_264 135168 := by
+private theorem parent_window_264 : ParentRangeMatches QuartetArtifact.commitCode_0_264 135168 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_265 : ParentRangeMatches Artifact.commitCode_0_265 135680 := by
+private theorem parent_window_265 : ParentRangeMatches QuartetArtifact.commitCode_0_265 135680 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_266 : ParentRangeMatches Artifact.commitCode_0_266 136192 := by
+private theorem parent_window_266 : ParentRangeMatches QuartetArtifact.commitCode_0_266 136192 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_267 : ParentRangeMatches Artifact.commitCode_0_267 136704 := by
+private theorem parent_window_267 : ParentRangeMatches QuartetArtifact.commitCode_0_267 136704 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_268 : ParentRangeMatches Artifact.commitCode_0_268 137216 := by
+private theorem parent_window_268 : ParentRangeMatches QuartetArtifact.commitCode_0_268 137216 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_269 : ParentRangeMatches Artifact.commitCode_0_269 137728 := by
+private theorem parent_window_269 : ParentRangeMatches QuartetArtifact.commitCode_0_269 137728 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_270 : ParentRangeMatches Artifact.commitCode_0_270 138240 := by
+private theorem parent_window_270 : ParentRangeMatches QuartetArtifact.commitCode_0_270 138240 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_271 : ParentRangeMatches Artifact.commitCode_0_271 138752 := by
+private theorem parent_window_271 : ParentRangeMatches QuartetArtifact.commitCode_0_271 138752 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_272 : ParentRangeMatches Artifact.commitCode_0_272 139264 := by
+private theorem parent_window_272 : ParentRangeMatches QuartetArtifact.commitCode_0_272 139264 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_273 : ParentRangeMatches Artifact.commitCode_0_273 139776 := by
+private theorem parent_window_273 : ParentRangeMatches QuartetArtifact.commitCode_0_273 139776 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_274 : ParentRangeMatches Artifact.commitCode_0_274 140288 := by
+private theorem parent_window_274 : ParentRangeMatches QuartetArtifact.commitCode_0_274 140288 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_275 : ParentRangeMatches Artifact.commitCode_0_275 140800 := by
+private theorem parent_window_275 : ParentRangeMatches QuartetArtifact.commitCode_0_275 140800 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_276 : ParentRangeMatches Artifact.commitCode_0_276 141312 := by
+private theorem parent_window_276 : ParentRangeMatches QuartetArtifact.commitCode_0_276 141312 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_277 : ParentRangeMatches Artifact.commitCode_0_277 141824 := by
+private theorem parent_window_277 : ParentRangeMatches QuartetArtifact.commitCode_0_277 141824 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_278 : ParentRangeMatches Artifact.commitCode_0_278 142336 := by
+private theorem parent_window_278 : ParentRangeMatches QuartetArtifact.commitCode_0_278 142336 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_279 : ParentRangeMatches Artifact.commitCode_0_279 142848 := by
+private theorem parent_window_279 : ParentRangeMatches QuartetArtifact.commitCode_0_279 142848 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_280 : ParentRangeMatches Artifact.commitCode_0_280 143360 := by
+private theorem parent_window_280 : ParentRangeMatches QuartetArtifact.commitCode_0_280 143360 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_281 : ParentRangeMatches Artifact.commitCode_0_281 143872 := by
+private theorem parent_window_281 : ParentRangeMatches QuartetArtifact.commitCode_0_281 143872 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_282 : ParentRangeMatches Artifact.commitCode_0_282 144384 := by
+private theorem parent_window_282 : ParentRangeMatches QuartetArtifact.commitCode_0_282 144384 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_283 : ParentRangeMatches Artifact.commitCode_0_283 144896 := by
+private theorem parent_window_283 : ParentRangeMatches QuartetArtifact.commitCode_0_283 144896 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_284 : ParentRangeMatches Artifact.commitCode_0_284 145408 := by
+private theorem parent_window_284 : ParentRangeMatches QuartetArtifact.commitCode_0_284 145408 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_285 : ParentRangeMatches Artifact.commitCode_0_285 145920 := by
+private theorem parent_window_285 : ParentRangeMatches QuartetArtifact.commitCode_0_285 145920 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_286 : ParentRangeMatches Artifact.commitCode_0_286 146432 := by
+private theorem parent_window_286 : ParentRangeMatches QuartetArtifact.commitCode_0_286 146432 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_287 : ParentRangeMatches Artifact.commitCode_0_287 146944 := by
+private theorem parent_window_287 : ParentRangeMatches QuartetArtifact.commitCode_0_287 146944 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_288 : ParentRangeMatches Artifact.commitCode_0_288 147456 := by
+private theorem parent_window_288 : ParentRangeMatches QuartetArtifact.commitCode_0_288 147456 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_289 : ParentRangeMatches Artifact.commitCode_0_289 147968 := by
+private theorem parent_window_289 : ParentRangeMatches QuartetArtifact.commitCode_0_289 147968 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_290 : ParentRangeMatches Artifact.commitCode_0_290 148480 := by
+private theorem parent_window_290 : ParentRangeMatches QuartetArtifact.commitCode_0_290 148480 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_291 : ParentRangeMatches Artifact.commitCode_0_291 148992 := by
+private theorem parent_window_291 : ParentRangeMatches QuartetArtifact.commitCode_0_291 148992 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_292 : ParentRangeMatches Artifact.commitCode_0_292 149504 := by
+private theorem parent_window_292 : ParentRangeMatches QuartetArtifact.commitCode_0_292 149504 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_293 : ParentRangeMatches Artifact.commitCode_0_293 150016 := by
+private theorem parent_window_293 : ParentRangeMatches QuartetArtifact.commitCode_0_293 150016 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_294 : ParentRangeMatches Artifact.commitCode_0_294 150528 := by
+private theorem parent_window_294 : ParentRangeMatches QuartetArtifact.commitCode_0_294 150528 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_295 : ParentRangeMatches Artifact.commitCode_0_295 151040 := by
+private theorem parent_window_295 : ParentRangeMatches QuartetArtifact.commitCode_0_295 151040 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_296 : ParentRangeMatches Artifact.commitCode_0_296 151552 := by
+private theorem parent_window_296 : ParentRangeMatches QuartetArtifact.commitCode_0_296 151552 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_297 : ParentRangeMatches Artifact.commitCode_0_297 152064 := by
+private theorem parent_window_297 : ParentRangeMatches QuartetArtifact.commitCode_0_297 152064 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_298 : ParentRangeMatches Artifact.commitCode_0_298 152576 := by
+private theorem parent_window_298 : ParentRangeMatches QuartetArtifact.commitCode_0_298 152576 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_299 : ParentRangeMatches Artifact.commitCode_0_299 153088 := by
+private theorem parent_window_299 : ParentRangeMatches QuartetArtifact.commitCode_0_299 153088 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_300 : ParentRangeMatches Artifact.commitCode_0_300 153600 := by
+private theorem parent_window_300 : ParentRangeMatches QuartetArtifact.commitCode_0_300 153600 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_301 : ParentRangeMatches Artifact.commitCode_0_301 154112 := by
+private theorem parent_window_301 : ParentRangeMatches QuartetArtifact.commitCode_0_301 154112 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_302 : ParentRangeMatches Artifact.commitCode_0_302 154624 := by
+private theorem parent_window_302 : ParentRangeMatches QuartetArtifact.commitCode_0_302 154624 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_303 : ParentRangeMatches Artifact.commitCode_0_303 155136 := by
+private theorem parent_window_303 : ParentRangeMatches QuartetArtifact.commitCode_0_303 155136 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_304 : ParentRangeMatches Artifact.commitCode_0_304 155648 := by
+private theorem parent_window_304 : ParentRangeMatches QuartetArtifact.commitCode_0_304 155648 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_305 : ParentRangeMatches Artifact.commitCode_0_305 156160 := by
+private theorem parent_window_305 : ParentRangeMatches QuartetArtifact.commitCode_0_305 156160 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_306 : ParentRangeMatches Artifact.commitCode_0_306 156672 := by
+private theorem parent_window_306 : ParentRangeMatches QuartetArtifact.commitCode_0_306 156672 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_307 : ParentRangeMatches Artifact.commitCode_0_307 157184 := by
+private theorem parent_window_307 : ParentRangeMatches QuartetArtifact.commitCode_0_307 157184 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_308 : ParentRangeMatches Artifact.commitCode_0_308 157696 := by
+private theorem parent_window_308 : ParentRangeMatches QuartetArtifact.commitCode_0_308 157696 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_309 : ParentRangeMatches Artifact.commitCode_0_309 158208 := by
+private theorem parent_window_309 : ParentRangeMatches QuartetArtifact.commitCode_0_309 158208 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_310 : ParentRangeMatches Artifact.commitCode_0_310 158720 := by
+private theorem parent_window_310 : ParentRangeMatches QuartetArtifact.commitCode_0_310 158720 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_311 : ParentRangeMatches Artifact.commitCode_0_311 159232 := by
+private theorem parent_window_311 : ParentRangeMatches QuartetArtifact.commitCode_0_311 159232 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_312 : ParentRangeMatches Artifact.commitCode_0_312 159744 := by
+private theorem parent_window_312 : ParentRangeMatches QuartetArtifact.commitCode_0_312 159744 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_313 : ParentRangeMatches Artifact.commitCode_0_313 160256 := by
+private theorem parent_window_313 : ParentRangeMatches QuartetArtifact.commitCode_0_313 160256 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_314 : ParentRangeMatches Artifact.commitCode_0_314 160768 := by
+private theorem parent_window_314 : ParentRangeMatches QuartetArtifact.commitCode_0_314 160768 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_315 : ParentRangeMatches Artifact.commitCode_0_315 161280 := by
+private theorem parent_window_315 : ParentRangeMatches QuartetArtifact.commitCode_0_315 161280 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_316 : ParentRangeMatches Artifact.commitCode_0_316 161792 := by
+private theorem parent_window_316 : ParentRangeMatches QuartetArtifact.commitCode_0_316 161792 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_317 : ParentRangeMatches Artifact.commitCode_0_317 162304 := by
+private theorem parent_window_317 : ParentRangeMatches QuartetArtifact.commitCode_0_317 162304 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_318 : ParentRangeMatches Artifact.commitCode_0_318 162816 := by
+private theorem parent_window_318 : ParentRangeMatches QuartetArtifact.commitCode_0_318 162816 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_319 : ParentRangeMatches Artifact.commitCode_0_319 163328 := by
+private theorem parent_window_319 : ParentRangeMatches QuartetArtifact.commitCode_0_319 163328 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_320 : ParentRangeMatches Artifact.commitCode_0_320 163840 := by
+private theorem parent_window_320 : ParentRangeMatches QuartetArtifact.commitCode_0_320 163840 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_321 : ParentRangeMatches Artifact.commitCode_0_321 164352 := by
+private theorem parent_window_321 : ParentRangeMatches QuartetArtifact.commitCode_0_321 164352 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_322 : ParentRangeMatches Artifact.commitCode_0_322 164864 := by
+private theorem parent_window_322 : ParentRangeMatches QuartetArtifact.commitCode_0_322 164864 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_323 : ParentRangeMatches Artifact.commitCode_0_323 165376 := by
+private theorem parent_window_323 : ParentRangeMatches QuartetArtifact.commitCode_0_323 165376 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_324 : ParentRangeMatches Artifact.commitCode_0_324 165888 := by
+private theorem parent_window_324 : ParentRangeMatches QuartetArtifact.commitCode_0_324 165888 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_325 : ParentRangeMatches Artifact.commitCode_0_325 166400 := by
+private theorem parent_window_325 : ParentRangeMatches QuartetArtifact.commitCode_0_325 166400 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_326 : ParentRangeMatches Artifact.commitCode_0_326 166912 := by
+private theorem parent_window_326 : ParentRangeMatches QuartetArtifact.commitCode_0_326 166912 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_327 : ParentRangeMatches Artifact.commitCode_0_327 167424 := by
+private theorem parent_window_327 : ParentRangeMatches QuartetArtifact.commitCode_0_327 167424 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_328 : ParentRangeMatches Artifact.commitCode_0_328 167936 := by
+private theorem parent_window_328 : ParentRangeMatches QuartetArtifact.commitCode_0_328 167936 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_329 : ParentRangeMatches Artifact.commitCode_0_329 168448 := by
+private theorem parent_window_329 : ParentRangeMatches QuartetArtifact.commitCode_0_329 168448 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_330 : ParentRangeMatches Artifact.commitCode_0_330 168960 := by
+private theorem parent_window_330 : ParentRangeMatches QuartetArtifact.commitCode_0_330 168960 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_331 : ParentRangeMatches Artifact.commitCode_0_331 169472 := by
+private theorem parent_window_331 : ParentRangeMatches QuartetArtifact.commitCode_0_331 169472 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_332 : ParentRangeMatches Artifact.commitCode_0_332 169984 := by
+private theorem parent_window_332 : ParentRangeMatches QuartetArtifact.commitCode_0_332 169984 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_333 : ParentRangeMatches Artifact.commitCode_0_333 170496 := by
+private theorem parent_window_333 : ParentRangeMatches QuartetArtifact.commitCode_0_333 170496 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_334 : ParentRangeMatches Artifact.commitCode_0_334 171008 := by
+private theorem parent_window_334 : ParentRangeMatches QuartetArtifact.commitCode_0_334 171008 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_335 : ParentRangeMatches Artifact.commitCode_0_335 171520 := by
+private theorem parent_window_335 : ParentRangeMatches QuartetArtifact.commitCode_0_335 171520 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_336 : ParentRangeMatches Artifact.commitCode_0_336 172032 := by
+private theorem parent_window_336 : ParentRangeMatches QuartetArtifact.commitCode_0_336 172032 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_337 : ParentRangeMatches Artifact.commitCode_0_337 172544 := by
+private theorem parent_window_337 : ParentRangeMatches QuartetArtifact.commitCode_0_337 172544 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_338 : ParentRangeMatches Artifact.commitCode_0_338 173056 := by
+private theorem parent_window_338 : ParentRangeMatches QuartetArtifact.commitCode_0_338 173056 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_339 : ParentRangeMatches Artifact.commitCode_0_339 173568 := by
+private theorem parent_window_339 : ParentRangeMatches QuartetArtifact.commitCode_0_339 173568 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_340 : ParentRangeMatches Artifact.commitCode_0_340 174080 := by
+private theorem parent_window_340 : ParentRangeMatches QuartetArtifact.commitCode_0_340 174080 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_341 : ParentRangeMatches Artifact.commitCode_0_341 174592 := by
+private theorem parent_window_341 : ParentRangeMatches QuartetArtifact.commitCode_0_341 174592 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_342 : ParentRangeMatches Artifact.commitCode_0_342 175104 := by
+private theorem parent_window_342 : ParentRangeMatches QuartetArtifact.commitCode_0_342 175104 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_343 : ParentRangeMatches Artifact.commitCode_0_343 175616 := by
+private theorem parent_window_343 : ParentRangeMatches QuartetArtifact.commitCode_0_343 175616 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_344 : ParentRangeMatches Artifact.commitCode_0_344 176128 := by
+private theorem parent_window_344 : ParentRangeMatches QuartetArtifact.commitCode_0_344 176128 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_345 : ParentRangeMatches Artifact.commitCode_0_345 176640 := by
+private theorem parent_window_345 : ParentRangeMatches QuartetArtifact.commitCode_0_345 176640 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_346 : ParentRangeMatches Artifact.commitCode_0_346 177152 := by
+private theorem parent_window_346 : ParentRangeMatches QuartetArtifact.commitCode_0_346 177152 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_347 : ParentRangeMatches Artifact.commitCode_0_347 177664 := by
+private theorem parent_window_347 : ParentRangeMatches QuartetArtifact.commitCode_0_347 177664 := by
   exact parent_periodic_window _ _ 1 (by decide) (by decide) (by decide) parent_periodic_1
 
-private theorem parent_window_348 : ParentRangeMatches Artifact.commitCode_0_348 178176 := by
+private theorem parent_window_348 : ParentRangeMatches QuartetArtifact.commitCode_0_348 178176 := by
   unfold ParentRangeMatches expectedWord parentWord rootWords
   decide +kernel
 
@@ -1292,487 +1293,505 @@ private theorem parent_window_beyond {count : Nat} (packed : ArtifactEncoding.Pa
     (offset : Nat) (beyond : 178360 ≤ offset) : ParentRangeMatches packed offset :=
   fun _ _ upper => absurd upper (by omega)
 
-private theorem parent_window_349 : ParentRangeMatches Artifact.commitCode_0_349 178688 :=
+private theorem parent_window_349 : ParentRangeMatches QuartetArtifact.commitCode_0_349 178688 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_350 : ParentRangeMatches Artifact.commitCode_0_350 179200 :=
+private theorem parent_window_350 : ParentRangeMatches QuartetArtifact.commitCode_0_350 179200 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_351 : ParentRangeMatches Artifact.commitCode_0_351 179712 :=
+private theorem parent_window_351 : ParentRangeMatches QuartetArtifact.commitCode_0_351 179712 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_352 : ParentRangeMatches Artifact.commitCode_0_352 180224 :=
+private theorem parent_window_352 : ParentRangeMatches QuartetArtifact.commitCode_0_352 180224 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_353 : ParentRangeMatches Artifact.commitCode_0_353 180736 :=
+private theorem parent_window_353 : ParentRangeMatches QuartetArtifact.commitCode_0_353 180736 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_354 : ParentRangeMatches Artifact.commitCode_0_354 181248 :=
+private theorem parent_window_354 : ParentRangeMatches QuartetArtifact.commitCode_0_354 181248 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_355 : ParentRangeMatches Artifact.commitCode_0_355 181760 :=
+private theorem parent_window_355 : ParentRangeMatches QuartetArtifact.commitCode_0_355 181760 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_356 : ParentRangeMatches Artifact.commitCode_0_356 182272 :=
+private theorem parent_window_356 : ParentRangeMatches QuartetArtifact.commitCode_0_356 182272 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_357 : ParentRangeMatches Artifact.commitCode_0_357 182784 :=
+private theorem parent_window_357 : ParentRangeMatches QuartetArtifact.commitCode_0_357 182784 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_358 : ParentRangeMatches Artifact.commitCode_0_358 183296 :=
+private theorem parent_window_358 : ParentRangeMatches QuartetArtifact.commitCode_0_358 183296 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_359 : ParentRangeMatches Artifact.commitCode_0_359 183808 :=
+private theorem parent_window_359 : ParentRangeMatches QuartetArtifact.commitCode_0_359 183808 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_360 : ParentRangeMatches Artifact.commitCode_0_360 184320 :=
+private theorem parent_window_360 : ParentRangeMatches QuartetArtifact.commitCode_0_360 184320 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_361 : ParentRangeMatches Artifact.commitCode_0_361 184832 :=
+private theorem parent_window_361 : ParentRangeMatches QuartetArtifact.commitCode_0_361 184832 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_362 : ParentRangeMatches Artifact.commitCode_0_362 185344 :=
+private theorem parent_window_362 : ParentRangeMatches QuartetArtifact.commitCode_0_362 185344 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_363 : ParentRangeMatches Artifact.commitCode_0_363 185856 :=
+private theorem parent_window_363 : ParentRangeMatches QuartetArtifact.commitCode_0_363 185856 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_364 : ParentRangeMatches Artifact.commitCode_0_364 186368 :=
+private theorem parent_window_364 : ParentRangeMatches QuartetArtifact.commitCode_0_364 186368 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_365 : ParentRangeMatches Artifact.commitCode_0_365 186880 :=
+private theorem parent_window_365 : ParentRangeMatches QuartetArtifact.commitCode_0_365 186880 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_366 : ParentRangeMatches Artifact.commitCode_0_366 187392 :=
+private theorem parent_window_366 : ParentRangeMatches QuartetArtifact.commitCode_0_366 187392 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_367 : ParentRangeMatches Artifact.commitCode_0_367 187904 :=
+private theorem parent_window_367 : ParentRangeMatches QuartetArtifact.commitCode_0_367 187904 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_368 : ParentRangeMatches Artifact.commitCode_0_368 188416 :=
+private theorem parent_window_368 : ParentRangeMatches QuartetArtifact.commitCode_0_368 188416 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_369 : ParentRangeMatches Artifact.commitCode_0_369 188928 :=
+private theorem parent_window_369 : ParentRangeMatches QuartetArtifact.commitCode_0_369 188928 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_370 : ParentRangeMatches Artifact.commitCode_0_370 189440 :=
+private theorem parent_window_370 : ParentRangeMatches QuartetArtifact.commitCode_0_370 189440 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_371 : ParentRangeMatches Artifact.commitCode_0_371 189952 :=
+private theorem parent_window_371 : ParentRangeMatches QuartetArtifact.commitCode_0_371 189952 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_372 : ParentRangeMatches Artifact.commitCode_0_372 190464 :=
+private theorem parent_window_372 : ParentRangeMatches QuartetArtifact.commitCode_0_372 190464 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_373 : ParentRangeMatches Artifact.commitCode_0_373 190976 :=
+private theorem parent_window_373 : ParentRangeMatches QuartetArtifact.commitCode_0_373 190976 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_374 : ParentRangeMatches Artifact.commitCode_0_374 191488 :=
+private theorem parent_window_374 : ParentRangeMatches QuartetArtifact.commitCode_0_374 191488 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_375 : ParentRangeMatches Artifact.commitCode_0_375 192000 :=
+private theorem parent_window_375 : ParentRangeMatches QuartetArtifact.commitCode_0_375 192000 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_376 : ParentRangeMatches Artifact.commitCode_0_376 192512 :=
+private theorem parent_window_376 : ParentRangeMatches QuartetArtifact.commitCode_0_376 192512 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_377 : ParentRangeMatches Artifact.commitCode_0_377 193024 :=
+private theorem parent_window_377 : ParentRangeMatches QuartetArtifact.commitCode_0_377 193024 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_378 : ParentRangeMatches Artifact.commitCode_0_378 193536 :=
+private theorem parent_window_378 : ParentRangeMatches QuartetArtifact.commitCode_0_378 193536 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_379 : ParentRangeMatches Artifact.commitCode_0_379 194048 :=
+private theorem parent_window_379 : ParentRangeMatches QuartetArtifact.commitCode_0_379 194048 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_380 : ParentRangeMatches Artifact.commitCode_0_380 194560 :=
+private theorem parent_window_380 : ParentRangeMatches QuartetArtifact.commitCode_0_380 194560 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_381 : ParentRangeMatches Artifact.commitCode_0_381 195072 :=
+private theorem parent_window_381 : ParentRangeMatches QuartetArtifact.commitCode_0_381 195072 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_382 : ParentRangeMatches Artifact.commitCode_0_382 195584 :=
+private theorem parent_window_382 : ParentRangeMatches QuartetArtifact.commitCode_0_382 195584 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_383 : ParentRangeMatches Artifact.commitCode_0_383 196096 :=
+private theorem parent_window_383 : ParentRangeMatches QuartetArtifact.commitCode_0_383 196096 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_384 : ParentRangeMatches Artifact.commitCode_0_384 196608 :=
+private theorem parent_window_384 : ParentRangeMatches QuartetArtifact.commitCode_0_384 196608 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_385 : ParentRangeMatches Artifact.commitCode_0_385 197120 :=
+private theorem parent_window_385 : ParentRangeMatches QuartetArtifact.commitCode_0_385 197120 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_386 : ParentRangeMatches Artifact.commitCode_0_386 197632 :=
+private theorem parent_window_386 : ParentRangeMatches QuartetArtifact.commitCode_0_386 197632 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_387 : ParentRangeMatches Artifact.commitCode_0_387 198144 :=
+private theorem parent_window_387 : ParentRangeMatches QuartetArtifact.commitCode_0_387 198144 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_388 : ParentRangeMatches Artifact.commitCode_0_388 198656 :=
+private theorem parent_window_388 : ParentRangeMatches QuartetArtifact.commitCode_0_388 198656 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_389 : ParentRangeMatches Artifact.commitCode_0_389 199168 :=
+private theorem parent_window_389 : ParentRangeMatches QuartetArtifact.commitCode_0_389 199168 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_390 : ParentRangeMatches Artifact.commitCode_0_390 199680 :=
+private theorem parent_window_390 : ParentRangeMatches QuartetArtifact.commitCode_0_390 199680 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_391 : ParentRangeMatches Artifact.commitCode_0_391 200192 :=
+private theorem parent_window_391 : ParentRangeMatches QuartetArtifact.commitCode_0_391 200192 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_392 : ParentRangeMatches Artifact.commitCode_0_392 200704 :=
+private theorem parent_window_392 : ParentRangeMatches QuartetArtifact.commitCode_0_392 200704 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_393 : ParentRangeMatches Artifact.commitCode_0_393 201216 :=
+private theorem parent_window_393 : ParentRangeMatches QuartetArtifact.commitCode_0_393 201216 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_394 : ParentRangeMatches Artifact.commitCode_0_394 201728 :=
+private theorem parent_window_394 : ParentRangeMatches QuartetArtifact.commitCode_0_394 201728 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_395 : ParentRangeMatches Artifact.commitCode_0_395 202240 :=
+private theorem parent_window_395 : ParentRangeMatches QuartetArtifact.commitCode_0_395 202240 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_396 : ParentRangeMatches Artifact.commitCode_0_396 202752 :=
+private theorem parent_window_396 : ParentRangeMatches QuartetArtifact.commitCode_0_396 202752 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_397 : ParentRangeMatches Artifact.commitCode_0_397 203264 :=
+private theorem parent_window_397 : ParentRangeMatches QuartetArtifact.commitCode_0_397 203264 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_398 : ParentRangeMatches Artifact.commitCode_0_398 203776 :=
+private theorem parent_window_398 : ParentRangeMatches QuartetArtifact.commitCode_0_398 203776 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_399 : ParentRangeMatches Artifact.commitCode_0_399 204288 :=
+private theorem parent_window_399 : ParentRangeMatches QuartetArtifact.commitCode_0_399 204288 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_400 : ParentRangeMatches Artifact.commitCode_0_400 204800 :=
+private theorem parent_window_400 : ParentRangeMatches QuartetArtifact.commitCode_0_400 204800 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_401 : ParentRangeMatches Artifact.commitCode_0_401 205312 :=
+private theorem parent_window_401 : ParentRangeMatches QuartetArtifact.commitCode_0_401 205312 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_402 : ParentRangeMatches Artifact.commitCode_0_402 205824 :=
+private theorem parent_window_402 : ParentRangeMatches QuartetArtifact.commitCode_0_402 205824 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_403 : ParentRangeMatches Artifact.commitCode_0_403 206336 :=
+private theorem parent_window_403 : ParentRangeMatches QuartetArtifact.commitCode_0_403 206336 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_404 : ParentRangeMatches Artifact.commitCode_0_404 206848 :=
+private theorem parent_window_404 : ParentRangeMatches QuartetArtifact.commitCode_0_404 206848 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_405 : ParentRangeMatches Artifact.commitCode_0_405 207360 :=
+private theorem parent_window_405 : ParentRangeMatches QuartetArtifact.commitCode_0_405 207360 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_406 : ParentRangeMatches Artifact.commitCode_0_406 207872 :=
+private theorem parent_window_406 : ParentRangeMatches QuartetArtifact.commitCode_0_406 207872 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_407 : ParentRangeMatches Artifact.commitCode_0_407 208384 :=
+private theorem parent_window_407 : ParentRangeMatches QuartetArtifact.commitCode_0_407 208384 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_408 : ParentRangeMatches Artifact.commitCode_0_408 208896 :=
+private theorem parent_window_408 : ParentRangeMatches QuartetArtifact.commitCode_0_408 208896 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_409 : ParentRangeMatches Artifact.commitCode_0_409 209408 :=
+private theorem parent_window_409 : ParentRangeMatches QuartetArtifact.commitCode_0_409 209408 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_410 : ParentRangeMatches Artifact.commitCode_0_410 209920 :=
+private theorem parent_window_410 : ParentRangeMatches QuartetArtifact.commitCode_0_410 209920 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_411 : ParentRangeMatches Artifact.commitCode_0_411 210432 :=
+private theorem parent_window_411 : ParentRangeMatches QuartetArtifact.commitCode_0_411 210432 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_412 : ParentRangeMatches Artifact.commitCode_0_412 210944 :=
+private theorem parent_window_412 : ParentRangeMatches QuartetArtifact.commitCode_0_412 210944 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_413 : ParentRangeMatches Artifact.commitCode_0_413 211456 :=
+private theorem parent_window_413 : ParentRangeMatches QuartetArtifact.commitCode_0_413 211456 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_414 : ParentRangeMatches Artifact.commitCode_0_414 211968 :=
+private theorem parent_window_414 : ParentRangeMatches QuartetArtifact.commitCode_0_414 211968 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_415 : ParentRangeMatches Artifact.commitCode_0_415 212480 :=
+private theorem parent_window_415 : ParentRangeMatches QuartetArtifact.commitCode_0_415 212480 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_416 : ParentRangeMatches Artifact.commitCode_0_416 212992 :=
+private theorem parent_window_416 : ParentRangeMatches QuartetArtifact.commitCode_0_416 212992 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_417 : ParentRangeMatches Artifact.commitCode_0_417 213504 :=
+private theorem parent_window_417 : ParentRangeMatches QuartetArtifact.commitCode_0_417 213504 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_418 : ParentRangeMatches Artifact.commitCode_0_418 214016 :=
+private theorem parent_window_418 : ParentRangeMatches QuartetArtifact.commitCode_0_418 214016 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_419 : ParentRangeMatches Artifact.commitCode_0_419 214528 :=
+private theorem parent_window_419 : ParentRangeMatches QuartetArtifact.commitCode_0_419 214528 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_420 : ParentRangeMatches Artifact.commitCode_0_420 215040 :=
+private theorem parent_window_420 : ParentRangeMatches QuartetArtifact.commitCode_0_420 215040 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_421 : ParentRangeMatches Artifact.commitCode_0_421 215552 :=
+private theorem parent_window_421 : ParentRangeMatches QuartetArtifact.commitCode_0_421 215552 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_422 : ParentRangeMatches Artifact.commitCode_0_422 216064 :=
+private theorem parent_window_422 : ParentRangeMatches QuartetArtifact.commitCode_0_422 216064 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_423 : ParentRangeMatches Artifact.commitCode_0_423 216576 :=
+private theorem parent_window_423 : ParentRangeMatches QuartetArtifact.commitCode_0_423 216576 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_424 : ParentRangeMatches Artifact.commitCode_0_424 217088 :=
+private theorem parent_window_424 : ParentRangeMatches QuartetArtifact.commitCode_0_424 217088 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_425 : ParentRangeMatches Artifact.commitCode_0_425 217600 :=
+private theorem parent_window_425 : ParentRangeMatches QuartetArtifact.commitCode_0_425 217600 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_426 : ParentRangeMatches Artifact.commitCode_0_426 218112 :=
+private theorem parent_window_426 : ParentRangeMatches QuartetArtifact.commitCode_0_426 218112 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_427 : ParentRangeMatches Artifact.commitCode_0_427 218624 :=
+private theorem parent_window_427 : ParentRangeMatches QuartetArtifact.commitCode_0_427 218624 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_428 : ParentRangeMatches Artifact.commitCode_0_428 219136 :=
+private theorem parent_window_428 : ParentRangeMatches QuartetArtifact.commitCode_0_428 219136 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_429 : ParentRangeMatches Artifact.commitCode_0_429 219648 :=
+private theorem parent_window_429 : ParentRangeMatches QuartetArtifact.commitCode_0_429 219648 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_430 : ParentRangeMatches Artifact.commitCode_0_430 220160 :=
+private theorem parent_window_430 : ParentRangeMatches QuartetArtifact.commitCode_0_430 220160 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_431 : ParentRangeMatches Artifact.commitCode_0_431 220672 :=
+private theorem parent_window_431 : ParentRangeMatches QuartetArtifact.commitCode_0_431 220672 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_432 : ParentRangeMatches Artifact.commitCode_0_432 221184 :=
+private theorem parent_window_432 : ParentRangeMatches QuartetArtifact.commitCode_0_432 221184 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_433 : ParentRangeMatches Artifact.commitCode_0_433 221696 :=
+private theorem parent_window_433 : ParentRangeMatches QuartetArtifact.commitCode_0_433 221696 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_434 : ParentRangeMatches Artifact.commitCode_0_434 222208 :=
+private theorem parent_window_434 : ParentRangeMatches QuartetArtifact.commitCode_0_434 222208 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_435 : ParentRangeMatches Artifact.commitCode_0_435 222720 :=
+private theorem parent_window_435 : ParentRangeMatches QuartetArtifact.commitCode_0_435 222720 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_436 : ParentRangeMatches Artifact.commitCode_0_436 223232 :=
+private theorem parent_window_436 : ParentRangeMatches QuartetArtifact.commitCode_0_436 223232 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_437 : ParentRangeMatches Artifact.commitCode_0_437 223744 :=
+private theorem parent_window_437 : ParentRangeMatches QuartetArtifact.commitCode_0_437 223744 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_438 : ParentRangeMatches Artifact.commitCode_0_438 224256 :=
+private theorem parent_window_438 : ParentRangeMatches QuartetArtifact.commitCode_0_438 224256 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_439 : ParentRangeMatches Artifact.commitCode_0_439 224768 :=
+private theorem parent_window_439 : ParentRangeMatches QuartetArtifact.commitCode_0_439 224768 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_440 : ParentRangeMatches Artifact.commitCode_0_440 225280 :=
+private theorem parent_window_440 : ParentRangeMatches QuartetArtifact.commitCode_0_440 225280 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_441 : ParentRangeMatches Artifact.commitCode_0_441 225792 :=
+private theorem parent_window_441 : ParentRangeMatches QuartetArtifact.commitCode_0_441 225792 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_442 : ParentRangeMatches Artifact.commitCode_0_442 226304 :=
+private theorem parent_window_442 : ParentRangeMatches QuartetArtifact.commitCode_0_442 226304 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_443 : ParentRangeMatches Artifact.commitCode_0_443 226816 :=
+private theorem parent_window_443 : ParentRangeMatches QuartetArtifact.commitCode_0_443 226816 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_444 : ParentRangeMatches Artifact.commitCode_0_444 227328 :=
+private theorem parent_window_444 : ParentRangeMatches QuartetArtifact.commitCode_0_444 227328 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_445 : ParentRangeMatches Artifact.commitCode_0_445 227840 :=
+private theorem parent_window_445 : ParentRangeMatches QuartetArtifact.commitCode_0_445 227840 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_446 : ParentRangeMatches Artifact.commitCode_0_446 228352 :=
+private theorem parent_window_446 : ParentRangeMatches QuartetArtifact.commitCode_0_446 228352 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_447 : ParentRangeMatches Artifact.commitCode_0_447 228864 :=
+private theorem parent_window_447 : ParentRangeMatches QuartetArtifact.commitCode_0_447 228864 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_448 : ParentRangeMatches Artifact.commitCode_0_448 229376 :=
+private theorem parent_window_448 : ParentRangeMatches QuartetArtifact.commitCode_0_448 229376 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_449 : ParentRangeMatches Artifact.commitCode_0_449 229888 :=
+private theorem parent_window_449 : ParentRangeMatches QuartetArtifact.commitCode_0_449 229888 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_450 : ParentRangeMatches Artifact.commitCode_0_450 230400 :=
+private theorem parent_window_450 : ParentRangeMatches QuartetArtifact.commitCode_0_450 230400 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_451 : ParentRangeMatches Artifact.commitCode_0_451 230912 :=
+private theorem parent_window_451 : ParentRangeMatches QuartetArtifact.commitCode_0_451 230912 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_452 : ParentRangeMatches Artifact.commitCode_0_452 231424 :=
+private theorem parent_window_452 : ParentRangeMatches QuartetArtifact.commitCode_0_452 231424 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_453 : ParentRangeMatches Artifact.commitCode_0_453 231936 :=
+private theorem parent_window_453 : ParentRangeMatches QuartetArtifact.commitCode_0_453 231936 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_454 : ParentRangeMatches Artifact.commitCode_0_454 232448 :=
+private theorem parent_window_454 : ParentRangeMatches QuartetArtifact.commitCode_0_454 232448 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_455 : ParentRangeMatches Artifact.commitCode_0_455 232960 :=
+private theorem parent_window_455 : ParentRangeMatches QuartetArtifact.commitCode_0_455 232960 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_456 : ParentRangeMatches Artifact.commitCode_0_456 233472 :=
+private theorem parent_window_456 : ParentRangeMatches QuartetArtifact.commitCode_0_456 233472 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_457 : ParentRangeMatches Artifact.commitCode_0_457 233984 :=
+private theorem parent_window_457 : ParentRangeMatches QuartetArtifact.commitCode_0_457 233984 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_458 : ParentRangeMatches Artifact.commitCode_0_458 234496 :=
+private theorem parent_window_458 : ParentRangeMatches QuartetArtifact.commitCode_0_458 234496 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_459 : ParentRangeMatches Artifact.commitCode_0_459 235008 :=
+private theorem parent_window_459 : ParentRangeMatches QuartetArtifact.commitCode_0_459 235008 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_460 : ParentRangeMatches Artifact.commitCode_0_460 235520 :=
+private theorem parent_window_460 : ParentRangeMatches QuartetArtifact.commitCode_0_460 235520 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_461 : ParentRangeMatches Artifact.commitCode_0_461 236032 :=
+private theorem parent_window_461 : ParentRangeMatches QuartetArtifact.commitCode_0_461 236032 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_462 : ParentRangeMatches Artifact.commitCode_0_462 236544 :=
+private theorem parent_window_462 : ParentRangeMatches QuartetArtifact.commitCode_0_462 236544 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_463 : ParentRangeMatches Artifact.commitCode_0_463 237056 :=
+private theorem parent_window_463 : ParentRangeMatches QuartetArtifact.commitCode_0_463 237056 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_464 : ParentRangeMatches Artifact.commitCode_0_464 237568 :=
+private theorem parent_window_464 : ParentRangeMatches QuartetArtifact.commitCode_0_464 237568 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_465 : ParentRangeMatches Artifact.commitCode_0_465 238080 :=
+private theorem parent_window_465 : ParentRangeMatches QuartetArtifact.commitCode_0_465 238080 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_466 : ParentRangeMatches Artifact.commitCode_0_466 238592 :=
+private theorem parent_window_466 : ParentRangeMatches QuartetArtifact.commitCode_0_466 238592 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_467 : ParentRangeMatches Artifact.commitCode_0_467 239104 :=
+private theorem parent_window_467 : ParentRangeMatches QuartetArtifact.commitCode_0_467 239104 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_468 : ParentRangeMatches Artifact.commitCode_0_468 239616 :=
+private theorem parent_window_468 : ParentRangeMatches QuartetArtifact.commitCode_0_468 239616 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_469 : ParentRangeMatches Artifact.commitCode_0_469 240128 :=
+private theorem parent_window_469 : ParentRangeMatches QuartetArtifact.commitCode_0_469 240128 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_470 : ParentRangeMatches Artifact.commitCode_0_470 240640 :=
+private theorem parent_window_470 : ParentRangeMatches QuartetArtifact.commitCode_0_470 240640 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_471 : ParentRangeMatches Artifact.commitCode_0_471 241152 :=
+private theorem parent_window_471 : ParentRangeMatches QuartetArtifact.commitCode_0_471 241152 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_472 : ParentRangeMatches Artifact.commitCode_0_472 241664 :=
+private theorem parent_window_472 : ParentRangeMatches QuartetArtifact.commitCode_0_472 241664 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_473 : ParentRangeMatches Artifact.commitCode_0_473 242176 :=
+private theorem parent_window_473 : ParentRangeMatches QuartetArtifact.commitCode_0_473 242176 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_474 : ParentRangeMatches Artifact.commitCode_0_474 242688 :=
+private theorem parent_window_474 : ParentRangeMatches QuartetArtifact.commitCode_0_474 242688 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_475 : ParentRangeMatches Artifact.commitCode_0_475 243200 :=
+private theorem parent_window_475 : ParentRangeMatches QuartetArtifact.commitCode_0_475 243200 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_476 : ParentRangeMatches Artifact.commitCode_0_476 243712 :=
+private theorem parent_window_476 : ParentRangeMatches QuartetArtifact.commitCode_0_476 243712 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_477 : ParentRangeMatches Artifact.commitCode_0_477 244224 :=
+private theorem parent_window_477 : ParentRangeMatches QuartetArtifact.commitCode_0_477 244224 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_478 : ParentRangeMatches Artifact.commitCode_0_478 244736 :=
+private theorem parent_window_478 : ParentRangeMatches QuartetArtifact.commitCode_0_478 244736 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_479 : ParentRangeMatches Artifact.commitCode_0_479 245248 :=
+private theorem parent_window_479 : ParentRangeMatches QuartetArtifact.commitCode_0_479 245248 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_480 : ParentRangeMatches Artifact.commitCode_0_480 245760 :=
+private theorem parent_window_480 : ParentRangeMatches QuartetArtifact.commitCode_0_480 245760 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_481 : ParentRangeMatches Artifact.commitCode_0_481 246272 :=
+private theorem parent_window_481 : ParentRangeMatches QuartetArtifact.commitCode_0_481 246272 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_482 : ParentRangeMatches Artifact.commitCode_0_482 246784 :=
+private theorem parent_window_482 : ParentRangeMatches QuartetArtifact.commitCode_0_482 246784 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_483 : ParentRangeMatches Artifact.commitCode_0_483 247296 :=
+private theorem parent_window_483 : ParentRangeMatches QuartetArtifact.commitCode_0_483 247296 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_484 : ParentRangeMatches Artifact.commitCode_0_484 247808 :=
+private theorem parent_window_484 : ParentRangeMatches QuartetArtifact.commitCode_0_484 247808 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_485 : ParentRangeMatches Artifact.commitCode_0_485 248320 :=
+private theorem parent_window_485 : ParentRangeMatches QuartetArtifact.commitCode_0_485 248320 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_486 : ParentRangeMatches Artifact.commitCode_0_486 248832 :=
+private theorem parent_window_486 : ParentRangeMatches QuartetArtifact.commitCode_0_486 248832 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_487 : ParentRangeMatches Artifact.commitCode_0_487 249344 :=
+private theorem parent_window_487 : ParentRangeMatches QuartetArtifact.commitCode_0_487 249344 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_488 : ParentRangeMatches Artifact.commitCode_0_488 249856 :=
+private theorem parent_window_488 : ParentRangeMatches QuartetArtifact.commitCode_0_488 249856 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_489 : ParentRangeMatches Artifact.commitCode_0_489 250368 :=
+private theorem parent_window_489 : ParentRangeMatches QuartetArtifact.commitCode_0_489 250368 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_490 : ParentRangeMatches Artifact.commitCode_0_490 250880 :=
+private theorem parent_window_490 : ParentRangeMatches QuartetArtifact.commitCode_0_490 250880 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_491 : ParentRangeMatches Artifact.commitCode_0_491 251392 :=
+private theorem parent_window_491 : ParentRangeMatches QuartetArtifact.commitCode_0_491 251392 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_492 : ParentRangeMatches Artifact.commitCode_0_492 251904 :=
+private theorem parent_window_492 : ParentRangeMatches QuartetArtifact.commitCode_0_492 251904 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_493 : ParentRangeMatches Artifact.commitCode_0_493 252416 :=
+private theorem parent_window_493 : ParentRangeMatches QuartetArtifact.commitCode_0_493 252416 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_494 : ParentRangeMatches Artifact.commitCode_0_494 252928 :=
+private theorem parent_window_494 : ParentRangeMatches QuartetArtifact.commitCode_0_494 252928 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_495 : ParentRangeMatches Artifact.commitCode_0_495 253440 :=
+private theorem parent_window_495 : ParentRangeMatches QuartetArtifact.commitCode_0_495 253440 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_496 : ParentRangeMatches Artifact.commitCode_0_496 253952 :=
+private theorem parent_window_496 : ParentRangeMatches QuartetArtifact.commitCode_0_496 253952 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_497 : ParentRangeMatches Artifact.commitCode_0_497 254464 :=
+private theorem parent_window_497 : ParentRangeMatches QuartetArtifact.commitCode_0_497 254464 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_498 : ParentRangeMatches Artifact.commitCode_0_498 254976 :=
+private theorem parent_window_498 : ParentRangeMatches QuartetArtifact.commitCode_0_498 254976 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_499 : ParentRangeMatches Artifact.commitCode_0_499 255488 :=
+private theorem parent_window_499 : ParentRangeMatches QuartetArtifact.commitCode_0_499 255488 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_500 : ParentRangeMatches Artifact.commitCode_0_500 256000 :=
+private theorem parent_window_500 : ParentRangeMatches QuartetArtifact.commitCode_0_500 256000 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_501 : ParentRangeMatches Artifact.commitCode_0_501 256512 :=
+private theorem parent_window_501 : ParentRangeMatches QuartetArtifact.commitCode_0_501 256512 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_502 : ParentRangeMatches Artifact.commitCode_0_502 257024 :=
+private theorem parent_window_502 : ParentRangeMatches QuartetArtifact.commitCode_0_502 257024 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_503 : ParentRangeMatches Artifact.commitCode_0_503 257536 :=
+private theorem parent_window_503 : ParentRangeMatches QuartetArtifact.commitCode_0_503 257536 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_window_504 : ParentRangeMatches Artifact.commitCode_0_504 258048 :=
+private theorem parent_window_504 : ParentRangeMatches QuartetArtifact.commitCode_0_504 258048 :=
   parent_window_beyond _ _ (by decide)
 
-private theorem parent_packed_matches : ParentRangeMatches Artifact.commitCode 0 := by
-  exact (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_0 parent_window_1) (parent_range_join _ _ _ parent_window_2 parent_window_3)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_4 parent_window_5) (parent_range_join _ _ _ parent_window_6 parent_window_7))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_8 parent_window_9) (parent_range_join _ _ _ parent_window_10 parent_window_11)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_12 parent_window_13) (parent_range_join _ _ _ parent_window_14 parent_window_15)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_16 parent_window_17) (parent_range_join _ _ _ parent_window_18 parent_window_19)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_20 parent_window_21) (parent_range_join _ _ _ parent_window_22 parent_window_23))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_24 parent_window_25) (parent_range_join _ _ _ parent_window_26 parent_window_27)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_28 parent_window_29) (parent_range_join _ _ _ parent_window_30 parent_window_31))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_32 parent_window_33) (parent_range_join _ _ _ parent_window_34 parent_window_35)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_36 parent_window_37) (parent_range_join _ _ _ parent_window_38 parent_window_39))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_40 parent_window_41) (parent_range_join _ _ _ parent_window_42 parent_window_43)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_44 parent_window_45) (parent_range_join _ _ _ parent_window_46 parent_window_47)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_48 parent_window_49) (parent_range_join _ _ _ parent_window_50 parent_window_51)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_52 parent_window_53) (parent_range_join _ _ _ parent_window_54 parent_window_55))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_56 parent_window_57) (parent_range_join _ _ _ parent_window_58 parent_window_59)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_60 parent_window_61) (parent_range_join _ _ _ parent_window_62 parent_window_63)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_64 parent_window_65) (parent_range_join _ _ _ parent_window_66 parent_window_67)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_68 parent_window_69) (parent_range_join _ _ _ parent_window_70 parent_window_71))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_72 parent_window_73) (parent_range_join _ _ _ parent_window_74 parent_window_75)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_76 parent_window_77) (parent_range_join _ _ _ parent_window_78 parent_window_79)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_80 parent_window_81) (parent_range_join _ _ _ parent_window_82 parent_window_83)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_84 parent_window_85) (parent_range_join _ _ _ parent_window_86 parent_window_87))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_88 parent_window_89) (parent_range_join _ _ _ parent_window_90 parent_window_91)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_92 parent_window_93) (parent_range_join _ _ _ parent_window_94 parent_window_95))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_96 parent_window_97) (parent_range_join _ _ _ parent_window_98 parent_window_99)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_100 parent_window_101) (parent_range_join _ _ _ parent_window_102 parent_window_103))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_104 parent_window_105) (parent_range_join _ _ _ parent_window_106 parent_window_107)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_108 parent_window_109) (parent_range_join _ _ _ parent_window_110 parent_window_111)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_112 parent_window_113) (parent_range_join _ _ _ parent_window_114 parent_window_115)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_116 parent_window_117) (parent_range_join _ _ _ parent_window_118 parent_window_119))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_120 parent_window_121) (parent_range_join _ _ _ parent_window_122 parent_window_123)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_124 parent_window_125) (parent_range_join _ _ _ parent_window_126 parent_window_127))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_128 parent_window_129) (parent_range_join _ _ _ parent_window_130 parent_window_131)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_132 parent_window_133) (parent_range_join _ _ _ parent_window_134 parent_window_135))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_136 parent_window_137) (parent_range_join _ _ _ parent_window_138 parent_window_139)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_140 parent_window_141) (parent_range_join _ _ _ parent_window_142 parent_window_143)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_144 parent_window_145) (parent_range_join _ _ _ parent_window_146 parent_window_147)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_148 parent_window_149) (parent_range_join _ _ _ parent_window_150 parent_window_151))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_152 parent_window_153) (parent_range_join _ _ _ parent_window_154 parent_window_155)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_156 parent_window_157) (parent_range_join _ _ _ parent_window_158 parent_window_159))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_160 parent_window_161) (parent_range_join _ _ _ parent_window_162 parent_window_163)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_164 parent_window_165) (parent_range_join _ _ _ parent_window_166 parent_window_167))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_168 parent_window_169) (parent_range_join _ _ _ parent_window_170 parent_window_171)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_172 parent_window_173) (parent_range_join _ _ _ parent_window_174 parent_window_175)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_176 parent_window_177) (parent_range_join _ _ _ parent_window_178 parent_window_179)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_180 parent_window_181) (parent_range_join _ _ _ parent_window_182 parent_window_183))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_184 parent_window_185) (parent_range_join _ _ _ parent_window_186 parent_window_187)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_188 parent_window_189) (parent_range_join _ _ _ parent_window_190 parent_window_191)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_192 parent_window_193) (parent_range_join _ _ _ parent_window_194 parent_window_195)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_196 parent_window_197) (parent_range_join _ _ _ parent_window_198 parent_window_199))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_200 parent_window_201) (parent_range_join _ _ _ parent_window_202 parent_window_203)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_204 parent_window_205) (parent_range_join _ _ _ parent_window_206 parent_window_207)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_208 parent_window_209) (parent_range_join _ _ _ parent_window_210 parent_window_211)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_212 parent_window_213) (parent_range_join _ _ _ parent_window_214 parent_window_215))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_216 parent_window_217) (parent_range_join _ _ _ parent_window_218 parent_window_219)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_220 parent_window_221) (parent_range_join _ _ _ parent_window_222 parent_window_223))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_224 parent_window_225) (parent_range_join _ _ _ parent_window_226 parent_window_227)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_228 parent_window_229) (parent_range_join _ _ _ parent_window_230 parent_window_231))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_232 parent_window_233) (parent_range_join _ _ _ parent_window_234 parent_window_235)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_236 parent_window_237) (parent_range_join _ _ _ parent_window_238 parent_window_239)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_240 parent_window_241) (parent_range_join _ _ _ parent_window_242 parent_window_243)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_244 parent_window_245) (parent_range_join _ _ _ parent_window_246 parent_window_247))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_248 parent_window_249) (parent_range_join _ _ _ parent_window_250 parent_window_251)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_252 parent_window_253) (parent_range_join _ _ _ parent_window_254 parent_window_255)))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_256 parent_window_257) (parent_range_join _ _ _ parent_window_258 parent_window_259)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_260 parent_window_261) (parent_range_join _ _ _ parent_window_262 parent_window_263))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_264 parent_window_265) (parent_range_join _ _ _ parent_window_266 parent_window_267)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_268 parent_window_269) (parent_range_join _ _ _ parent_window_270 parent_window_271)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_272 parent_window_273) (parent_range_join _ _ _ parent_window_274 parent_window_275)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_276 parent_window_277) (parent_range_join _ _ _ parent_window_278 parent_window_279))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_280 parent_window_281) (parent_range_join _ _ _ parent_window_282 parent_window_283)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_284 parent_window_285) (parent_range_join _ _ _ parent_window_286 parent_window_287))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_288 parent_window_289) (parent_range_join _ _ _ parent_window_290 parent_window_291)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_292 parent_window_293) (parent_range_join _ _ _ parent_window_294 parent_window_295))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_296 parent_window_297) (parent_range_join _ _ _ parent_window_298 parent_window_299)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_300 parent_window_301) (parent_range_join _ _ _ parent_window_302 parent_window_303)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_304 parent_window_305) (parent_range_join _ _ _ parent_window_306 parent_window_307)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_308 parent_window_309) (parent_range_join _ _ _ parent_window_310 parent_window_311))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_312 parent_window_313) (parent_range_join _ _ _ parent_window_314 parent_window_315)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_316 parent_window_317) (parent_range_join _ _ _ parent_window_318 parent_window_319)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_320 parent_window_321) (parent_range_join _ _ _ parent_window_322 parent_window_323)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_324 parent_window_325) (parent_range_join _ _ _ parent_window_326 parent_window_327))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_328 parent_window_329) (parent_range_join _ _ _ parent_window_330 parent_window_331)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_332 parent_window_333) (parent_range_join _ _ _ parent_window_334 parent_window_335)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_336 parent_window_337) (parent_range_join _ _ _ parent_window_338 parent_window_339)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_340 parent_window_341) (parent_range_join _ _ _ parent_window_342 parent_window_343))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_344 parent_window_345) (parent_range_join _ _ _ parent_window_346 parent_window_347)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_348 parent_window_349) (parent_range_join _ _ _ parent_window_350 parent_window_351))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_352 parent_window_353) (parent_range_join _ _ _ parent_window_354 parent_window_355)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_356 parent_window_357) (parent_range_join _ _ _ parent_window_358 parent_window_359))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_360 parent_window_361) (parent_range_join _ _ _ parent_window_362 parent_window_363)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_364 parent_window_365) (parent_range_join _ _ _ parent_window_366 parent_window_367)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_368 parent_window_369) (parent_range_join _ _ _ parent_window_370 parent_window_371)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_372 parent_window_373) (parent_range_join _ _ _ parent_window_374 parent_window_375))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_376 parent_window_377) (parent_range_join _ _ _ parent_window_378 parent_window_379)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_380 parent_window_381) (parent_range_join _ _ _ parent_window_382 parent_window_383))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_384 parent_window_385) (parent_range_join _ _ _ parent_window_386 parent_window_387)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_388 parent_window_389) (parent_range_join _ _ _ parent_window_390 parent_window_391))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_392 parent_window_393) (parent_range_join _ _ _ parent_window_394 parent_window_395)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_396 parent_window_397) (parent_range_join _ _ _ parent_window_398 parent_window_399)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_400 parent_window_401) (parent_range_join _ _ _ parent_window_402 parent_window_403)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_404 parent_window_405) (parent_range_join _ _ _ parent_window_406 parent_window_407))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_408 parent_window_409) (parent_range_join _ _ _ parent_window_410 parent_window_411)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_412 parent_window_413) (parent_range_join _ _ _ parent_window_414 parent_window_415))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_416 parent_window_417) (parent_range_join _ _ _ parent_window_418 parent_window_419)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_420 parent_window_421) (parent_range_join _ _ _ parent_window_422 parent_window_423))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_424 parent_window_425) (parent_range_join _ _ _ parent_window_426 parent_window_427)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_428 parent_window_429) (parent_range_join _ _ _ parent_window_430 parent_window_431)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_432 parent_window_433) (parent_range_join _ _ _ parent_window_434 parent_window_435)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_436 parent_window_437) (parent_range_join _ _ _ parent_window_438 parent_window_439))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_440 parent_window_441) (parent_range_join _ _ _ parent_window_442 parent_window_443)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_444 parent_window_445) (parent_range_join _ _ _ parent_window_446 parent_window_447)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_448 parent_window_449) (parent_range_join _ _ _ parent_window_450 parent_window_451)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_452 parent_window_453) (parent_range_join _ _ _ parent_window_454 parent_window_455))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_456 parent_window_457) (parent_range_join _ _ _ parent_window_458 parent_window_459)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_460 parent_window_461) (parent_range_join _ _ _ parent_window_462 parent_window_463)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_464 parent_window_465) (parent_range_join _ _ _ parent_window_466 parent_window_467)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_468 parent_window_469) (parent_range_join _ _ _ parent_window_470 parent_window_471))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_472 parent_window_473) (parent_range_join _ _ _ parent_window_474 parent_window_475)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_476 parent_window_477) (parent_range_join _ _ _ parent_window_478 parent_window_479))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_480 parent_window_481) (parent_range_join _ _ _ parent_window_482 parent_window_483)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_484 parent_window_485) (parent_range_join _ _ _ parent_window_486 parent_window_487))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_488 parent_window_489) (parent_range_join _ _ _ parent_window_490 parent_window_491)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_492 parent_window_493) (parent_range_join _ _ _ parent_window_494 parent_window_495)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_496 parent_window_497) (parent_range_join _ _ _ parent_window_498 parent_window_499)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_500 parent_window_501) (parent_range_join _ _ _ parent_window_502 parent_window_503))) parent_window_504))))))
+private theorem parent_window_505 : ParentRangeMatches QuartetArtifact.commitCode_0_505 258560 :=
+  parent_window_beyond _ _ (by decide)
+
+private theorem parent_window_506 : ParentRangeMatches QuartetArtifact.commitCode_0_506 259072 :=
+  parent_window_beyond _ _ (by decide)
+
+private theorem parent_window_507 : ParentRangeMatches QuartetArtifact.commitCode_0_507 259584 :=
+  parent_window_beyond _ _ (by decide)
+
+private theorem parent_window_508 : ParentRangeMatches QuartetArtifact.commitCode_0_508 260096 :=
+  parent_window_beyond _ _ (by decide)
+
+private theorem parent_window_509 : ParentRangeMatches QuartetArtifact.commitCode_0_509 260608 :=
+  parent_window_beyond _ _ (by decide)
+
+private theorem parent_window_510 : ParentRangeMatches QuartetArtifact.commitCode_0_510 261120 :=
+  parent_window_beyond _ _ (by decide)
+
+private theorem parent_packed_matches : ParentRangeMatches QuartetArtifact.commitCode 0 := by
+  exact (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_0 parent_window_1) (parent_range_join _ _ _ parent_window_2 parent_window_3)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_4 parent_window_5) (parent_range_join _ _ _ parent_window_6 parent_window_7))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_8 parent_window_9) (parent_range_join _ _ _ parent_window_10 parent_window_11)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_12 parent_window_13) (parent_range_join _ _ _ parent_window_14 parent_window_15)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_16 parent_window_17) (parent_range_join _ _ _ parent_window_18 parent_window_19)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_20 parent_window_21) (parent_range_join _ _ _ parent_window_22 parent_window_23))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_24 parent_window_25) (parent_range_join _ _ _ parent_window_26 parent_window_27)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_28 parent_window_29) (parent_range_join _ _ _ parent_window_30 parent_window_31))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_32 parent_window_33) (parent_range_join _ _ _ parent_window_34 parent_window_35)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_36 parent_window_37) (parent_range_join _ _ _ parent_window_38 parent_window_39))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_40 parent_window_41) (parent_range_join _ _ _ parent_window_42 parent_window_43)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_44 parent_window_45) (parent_range_join _ _ _ parent_window_46 parent_window_47)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_48 parent_window_49) (parent_range_join _ _ _ parent_window_50 parent_window_51)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_52 parent_window_53) (parent_range_join _ _ _ parent_window_54 parent_window_55))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_56 parent_window_57) (parent_range_join _ _ _ parent_window_58 parent_window_59)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_60 parent_window_61) (parent_range_join _ _ _ parent_window_62 parent_window_63)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_64 parent_window_65) (parent_range_join _ _ _ parent_window_66 parent_window_67)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_68 parent_window_69) (parent_range_join _ _ _ parent_window_70 parent_window_71))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_72 parent_window_73) (parent_range_join _ _ _ parent_window_74 parent_window_75)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_76 parent_window_77) (parent_range_join _ _ _ parent_window_78 parent_window_79)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_80 parent_window_81) (parent_range_join _ _ _ parent_window_82 parent_window_83)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_84 parent_window_85) (parent_range_join _ _ _ parent_window_86 parent_window_87))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_88 parent_window_89) (parent_range_join _ _ _ parent_window_90 parent_window_91)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_92 parent_window_93) (parent_range_join _ _ _ parent_window_94 parent_window_95))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_96 parent_window_97) (parent_range_join _ _ _ parent_window_98 parent_window_99)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_100 parent_window_101) (parent_range_join _ _ _ parent_window_102 parent_window_103))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_104 parent_window_105) (parent_range_join _ _ _ parent_window_106 parent_window_107)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_108 parent_window_109) (parent_range_join _ _ _ parent_window_110 parent_window_111)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_112 parent_window_113) (parent_range_join _ _ _ parent_window_114 parent_window_115)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_116 parent_window_117) (parent_range_join _ _ _ parent_window_118 parent_window_119))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_120 parent_window_121) (parent_range_join _ _ _ parent_window_122 parent_window_123)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_124 parent_window_125) (parent_range_join _ _ _ parent_window_126 parent_window_127))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_128 parent_window_129) (parent_range_join _ _ _ parent_window_130 parent_window_131)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_132 parent_window_133) (parent_range_join _ _ _ parent_window_134 parent_window_135))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_136 parent_window_137) (parent_range_join _ _ _ parent_window_138 parent_window_139)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_140 parent_window_141) (parent_range_join _ _ _ parent_window_142 parent_window_143)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_144 parent_window_145) (parent_range_join _ _ _ parent_window_146 parent_window_147)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_148 parent_window_149) (parent_range_join _ _ _ parent_window_150 parent_window_151))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_152 parent_window_153) (parent_range_join _ _ _ parent_window_154 parent_window_155)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_156 parent_window_157) (parent_range_join _ _ _ parent_window_158 parent_window_159))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_160 parent_window_161) (parent_range_join _ _ _ parent_window_162 parent_window_163)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_164 parent_window_165) (parent_range_join _ _ _ parent_window_166 parent_window_167))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_168 parent_window_169) (parent_range_join _ _ _ parent_window_170 parent_window_171)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_172 parent_window_173) (parent_range_join _ _ _ parent_window_174 parent_window_175)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_176 parent_window_177) (parent_range_join _ _ _ parent_window_178 parent_window_179)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_180 parent_window_181) (parent_range_join _ _ _ parent_window_182 parent_window_183))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_184 parent_window_185) (parent_range_join _ _ _ parent_window_186 parent_window_187)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_188 parent_window_189) (parent_range_join _ _ _ parent_window_190 parent_window_191)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_192 parent_window_193) (parent_range_join _ _ _ parent_window_194 parent_window_195)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_196 parent_window_197) (parent_range_join _ _ _ parent_window_198 parent_window_199))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_200 parent_window_201) (parent_range_join _ _ _ parent_window_202 parent_window_203)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_204 parent_window_205) (parent_range_join _ _ _ parent_window_206 parent_window_207)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_208 parent_window_209) (parent_range_join _ _ _ parent_window_210 parent_window_211)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_212 parent_window_213) (parent_range_join _ _ _ parent_window_214 parent_window_215))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_216 parent_window_217) (parent_range_join _ _ _ parent_window_218 parent_window_219)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_220 parent_window_221) (parent_range_join _ _ _ parent_window_222 parent_window_223))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_224 parent_window_225) (parent_range_join _ _ _ parent_window_226 parent_window_227)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_228 parent_window_229) (parent_range_join _ _ _ parent_window_230 parent_window_231))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_232 parent_window_233) (parent_range_join _ _ _ parent_window_234 parent_window_235)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_236 parent_window_237) (parent_range_join _ _ _ parent_window_238 parent_window_239)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_240 parent_window_241) (parent_range_join _ _ _ parent_window_242 parent_window_243)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_244 parent_window_245) (parent_range_join _ _ _ parent_window_246 parent_window_247))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_248 parent_window_249) (parent_range_join _ _ _ parent_window_250 parent_window_251)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_252 parent_window_253) (parent_range_join _ _ _ parent_window_254 parent_window_255)))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_256 parent_window_257) (parent_range_join _ _ _ parent_window_258 parent_window_259)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_260 parent_window_261) (parent_range_join _ _ _ parent_window_262 parent_window_263))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_264 parent_window_265) (parent_range_join _ _ _ parent_window_266 parent_window_267)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_268 parent_window_269) (parent_range_join _ _ _ parent_window_270 parent_window_271)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_272 parent_window_273) (parent_range_join _ _ _ parent_window_274 parent_window_275)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_276 parent_window_277) (parent_range_join _ _ _ parent_window_278 parent_window_279))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_280 parent_window_281) (parent_range_join _ _ _ parent_window_282 parent_window_283)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_284 parent_window_285) (parent_range_join _ _ _ parent_window_286 parent_window_287))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_288 parent_window_289) (parent_range_join _ _ _ parent_window_290 parent_window_291)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_292 parent_window_293) (parent_range_join _ _ _ parent_window_294 parent_window_295))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_296 parent_window_297) (parent_range_join _ _ _ parent_window_298 parent_window_299)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_300 parent_window_301) (parent_range_join _ _ _ parent_window_302 parent_window_303)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_304 parent_window_305) (parent_range_join _ _ _ parent_window_306 parent_window_307)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_308 parent_window_309) (parent_range_join _ _ _ parent_window_310 parent_window_311))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_312 parent_window_313) (parent_range_join _ _ _ parent_window_314 parent_window_315)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_316 parent_window_317) (parent_range_join _ _ _ parent_window_318 parent_window_319)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_320 parent_window_321) (parent_range_join _ _ _ parent_window_322 parent_window_323)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_324 parent_window_325) (parent_range_join _ _ _ parent_window_326 parent_window_327))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_328 parent_window_329) (parent_range_join _ _ _ parent_window_330 parent_window_331)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_332 parent_window_333) (parent_range_join _ _ _ parent_window_334 parent_window_335)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_336 parent_window_337) (parent_range_join _ _ _ parent_window_338 parent_window_339)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_340 parent_window_341) (parent_range_join _ _ _ parent_window_342 parent_window_343))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_344 parent_window_345) (parent_range_join _ _ _ parent_window_346 parent_window_347)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_348 parent_window_349) (parent_range_join _ _ _ parent_window_350 parent_window_351))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_352 parent_window_353) (parent_range_join _ _ _ parent_window_354 parent_window_355)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_356 parent_window_357) (parent_range_join _ _ _ parent_window_358 parent_window_359))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_360 parent_window_361) (parent_range_join _ _ _ parent_window_362 parent_window_363)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_364 parent_window_365) (parent_range_join _ _ _ parent_window_366 parent_window_367)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_368 parent_window_369) (parent_range_join _ _ _ parent_window_370 parent_window_371)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_372 parent_window_373) (parent_range_join _ _ _ parent_window_374 parent_window_375))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_376 parent_window_377) (parent_range_join _ _ _ parent_window_378 parent_window_379)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_380 parent_window_381) (parent_range_join _ _ _ parent_window_382 parent_window_383))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_384 parent_window_385) (parent_range_join _ _ _ parent_window_386 parent_window_387)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_388 parent_window_389) (parent_range_join _ _ _ parent_window_390 parent_window_391))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_392 parent_window_393) (parent_range_join _ _ _ parent_window_394 parent_window_395)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_396 parent_window_397) (parent_range_join _ _ _ parent_window_398 parent_window_399)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_400 parent_window_401) (parent_range_join _ _ _ parent_window_402 parent_window_403)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_404 parent_window_405) (parent_range_join _ _ _ parent_window_406 parent_window_407))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_408 parent_window_409) (parent_range_join _ _ _ parent_window_410 parent_window_411)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_412 parent_window_413) (parent_range_join _ _ _ parent_window_414 parent_window_415))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_416 parent_window_417) (parent_range_join _ _ _ parent_window_418 parent_window_419)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_420 parent_window_421) (parent_range_join _ _ _ parent_window_422 parent_window_423))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_424 parent_window_425) (parent_range_join _ _ _ parent_window_426 parent_window_427)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_428 parent_window_429) (parent_range_join _ _ _ parent_window_430 parent_window_431)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_432 parent_window_433) (parent_range_join _ _ _ parent_window_434 parent_window_435)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_436 parent_window_437) (parent_range_join _ _ _ parent_window_438 parent_window_439))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_440 parent_window_441) (parent_range_join _ _ _ parent_window_442 parent_window_443)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_444 parent_window_445) (parent_range_join _ _ _ parent_window_446 parent_window_447)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_448 parent_window_449) (parent_range_join _ _ _ parent_window_450 parent_window_451)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_452 parent_window_453) (parent_range_join _ _ _ parent_window_454 parent_window_455))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_456 parent_window_457) (parent_range_join _ _ _ parent_window_458 parent_window_459)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_460 parent_window_461) (parent_range_join _ _ _ parent_window_462 parent_window_463)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_464 parent_window_465) (parent_range_join _ _ _ parent_window_466 parent_window_467)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_468 parent_window_469) (parent_range_join _ _ _ parent_window_470 parent_window_471))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_472 parent_window_473) (parent_range_join _ _ _ parent_window_474 parent_window_475)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_476 parent_window_477) (parent_range_join _ _ _ parent_window_478 parent_window_479))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_480 parent_window_481) (parent_range_join _ _ _ parent_window_482 parent_window_483)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_484 parent_window_485) (parent_range_join _ _ _ parent_window_486 parent_window_487))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_488 parent_window_489) (parent_range_join _ _ _ parent_window_490 parent_window_491)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_492 parent_window_493) (parent_range_join _ _ _ parent_window_494 parent_window_495)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_496 parent_window_497) (parent_range_join _ _ _ parent_window_498 parent_window_499)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_500 parent_window_501) (parent_range_join _ _ _ parent_window_502 parent_window_503))) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_504 (parent_range_join _ _ _ parent_window_505 parent_window_506)) (parent_range_join _ _ _ (parent_range_join _ _ _ parent_window_507 parent_window_508) (parent_range_join _ _ _ parent_window_509 parent_window_510)))))))))
 
 attribute [local irreducible] ArtifactEncoding.decode
 
 def packedWideCommitImage : Image :=
-  ⟨ArtifactEncoding.decode 32 Artifact.commitCode,ArtifactEncoding.decode 8 Artifact.commitData⟩
+  ⟨ArtifactEncoding.decode 32 QuartetArtifact.commitCode,ArtifactEncoding.decode 8 QuartetArtifact.commitData⟩
 
-theorem packed_manifest_image : packedWideCommitImage = Artifact.submission.image .commit := by
-  simp only [packedWideCommitImage,Artifact.submission]
+theorem packed_manifest_image : packedWideCommitImage = QuartetArtifact.submission.image .commit := by
+  simp only [packedWideCommitImage,QuartetArtifact.submission]
 
 private theorem wide_commit_code :
-    packedWideCommitImage.code = ArtifactEncoding.decode 32 Artifact.commitCode := by
+    packedWideCommitImage.code = ArtifactEncoding.decode 32 QuartetArtifact.commitCode := by
   simp only [packedWideCommitImage]
 
 theorem packed_index_fetch (state : MachineState) (index : Nat)
@@ -1781,7 +1800,7 @@ theorem packed_index_fetch (state : MachineState) (index : Nat)
     fetch packedWideCommitImage state=decodeInstruction (expectedWord index) := by
   have pc : state.pc.toNat=4096+4*index := by
     rw [point,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
-  have inPacked : index<258368 := by omega
+  have inPacked : index<261561 := by omega
   have packed := parent_packed_matches ⟨index,inPacked⟩
     (by simpa only [Nat.zero_add,Fin.val_mk] using lower)
     (by simpa only [Nat.zero_add,Fin.val_mk] using upper)

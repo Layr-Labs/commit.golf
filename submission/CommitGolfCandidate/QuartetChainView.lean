@@ -1,4 +1,4 @@
-import CommitGolfCandidate.NoncePairOracle
+import CommitGolfCandidate.NonceChainOracle
 import CommitGolfCandidate.QuartetConcrete
 import CommitGolfCandidate.PublicQueryList
 
@@ -8,7 +8,7 @@ computation now also queries the 2^22 quartet permutation nodes, so its budget i
 leaf tape, so the queried answers can stand in for the permutation. -/
 namespace TwoPermutationPrototype.Sampling.Quartet
 open CommitGolf OracleComp CommitGolfCandidate
-open CommitGolfCandidate.Permutation.NoncePair (Key actualNonces blocks)
+open CommitGolfCandidate.Permutation.NonceChain (Key actualNonces blocks)
 local instance quartetChainViewDiscrete {α : Type} : MeasurableSpace α := ⊤
 set_option maxRecDepth 8192
 set_option exponentiation.threshold 2048

@@ -7,7 +7,7 @@ public-call count, the commit distribution over a uniform 192-bit key, the trans
 and the hiding clause. -/
 namespace TwoPermutationPrototype.QuartetCommit
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open CommitGolfCandidate.Permutation.NoncePair (Key actualNonces)
+open CommitGolfCandidate.Permutation.NonceChain (Key actualNonces)
 set_option maxRecDepth 16384
 set_option maxHeartbeats 1700000
 local instance quartetCommitDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
