@@ -92,8 +92,8 @@ theorem opening_physical_with (recordsExecute : RecordsExecute) (s : Submission)
     have above : proofBase ≤ dest := by unfold dest recordBase; omega
     obtain ⟨after, ranCap, afterPC, endPosition, footerBytes⟩ :=
       cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC above aligned room
-    let final := exitPrefix (advancePrefix after 41 2) 3
-    have charge : scheduledCycles positions = 13+(590*positions.card-1)+2552+capSubtreeCycles grouped 1 8+6 := by
+    let final := exitPrefix (advanceUp after) 3
+    have charge : scheduledCycles positions = 13+(590*positions.card-1)+770+capSubtreeCycles grouped 1 8+8 := by
       rw [scheduledCycles, if_neg empty]
       dsimp only [grouped]
       omega
@@ -105,7 +105,7 @@ theorem opening_physical_with (recordsExecute : RecordsExecute) (s : Submission)
       have charged : recordsCost positions.card 0 positions.card = 590*positions.card-1 := by
         simp [recordsCost, positive]
       exact charged ▸ assembled.run
-    have ranPrep : RunsOpeningBlock lower prepared 2552 :=
+    have ranPrep : RunsOpeningBlock lower prepared 770 :=
       execute_cap_preparation lower (by simpa using atCap.pc) atCap.marks
     have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord surplus true
     have lowerFrame (address : Nat) (fromProof : proofBase ≤ address) (beforeCap : address < dest) :
@@ -125,9 +125,9 @@ theorem opening_physical_with (recordsExecute : RecordsExecute) (s : Submission)
       rw [abi.image, ← enough]
       change execute openingImage (scheduledCycles positions+surplus) initial true = pure result
       have amount : scheduledCycles positions+surplus =
-          13+(590*positions.card-1)+2552+capSubtreeCycles grouped 1 8+(6+surplus) := by
-        exact congrArg (fun amount => amount+surplus) charge |>.trans (Nat.add_assoc _ 6 surplus)
-      have prefixTrace := (((ranSetup.next ranRecords).next ranPrep).next ranCap) (6+surplus) true
+          13+(590*positions.card-1)+770+capSubtreeCycles grouped 1 8+(8+surplus) := by
+        exact congrArg (fun amount => amount+surplus) charge |>.trans (Nat.add_assoc _ 8 surplus)
+      have prefixTrace := (((ranSetup.next ranRecords).next ranPrep).next ranCap) (8+surplus) true
       rw [amount, prefixTrace, ranExit]
       simp [Execution.charge, result, final, charge, Nat.add_comm]
     · change (final.getReg .x11).toNat = _
@@ -196,7 +196,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 88311 ∧ (result.state.getReg .x11).toNat ≤ 67584 := by
+    result.cycles ≤ 85511 ∧ (result.state.getReg .x11).toNat ≤ 67584 := by
   rw [physical.cycles, physical.length]
   exact scheduled_scored_limits positions count
 

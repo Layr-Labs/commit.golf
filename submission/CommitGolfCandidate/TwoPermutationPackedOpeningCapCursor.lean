@@ -11,8 +11,8 @@ def capWalkInstructions : List Instr :=
    .SLLI .x7 .x6 5, .ADD .x7 .x25 .x7] ++
   (List.range 15).flatMap (fun j => [copyLoad j, copyStore j]) ++
   [.ADDI .x21 .x21 30,
-   .ADDI .x7 .x0 1, .BEQ .x6 .x7 28, .ANDI .x7 .x6 1, .BEQ .x7 .x0 12,
-   .SRLI .x6 .x6 1, .JAL .x0 2097132, .ADDI .x6 .x6 1, .JAL .x0 2096964]
+   .ANDI .x7 .x6 1, .BNE .x7 .x0 20, .ADDI .x6 .x6 1, .JAL .x0 2096980,
+   .ADDI .x0 .x0 0, .ADDI .x0 .x0 0, .SRLI .x6 .x6 1, .BNE .x6 .x0 8164]
 
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 

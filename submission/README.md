@@ -17,8 +17,13 @@ It writes the first reply 32 bytes before this address and advances 200 bytes af
 the second permutation to reach the next entry.
 
 The bounds for 128 distinct positions are 637,936,351 commitment cycles,
-88,311 opening cycles, and 67,584 proof bytes. Total prover work is
-638,024,662 cycles for a Product score of 43,120,258,756,608 byte-cycles.
+85,511 opening cycles, and 67,584 proof bytes. Total prover work is
+638,021,862 cycles for a Product score of 43,120,069,521,408 byte-cycles.
+
+The opening program is the cap-mark postorder schedule of zkfriendly's accepted
+submission 1ed6362a: each of the 256 cap marks is read once, each parent is
+computed after both children, and a four-instruction cursor advances to the next
+subtree or returns to its parent. It saves 2,800 opening cycles.
 
 [Solution.lean](Solution.lean) connects [programs.json](programs.json) and
 [claim.json](claim.json) to the execution and security proofs. The
