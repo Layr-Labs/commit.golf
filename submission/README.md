@@ -1,11 +1,9 @@
-# Quartet commitments with paired salt-buffer addressing
+# Quartet commitments with 2,048-leaf salt periods
 
-A 192-bit private seed keys one forward permutation for each group of up to eleven leaves. Six groups cover each 64-leaf window. The counter is the byte address of the first leaf in the group. The reply's final 16 bytes land directly in that leaf's second permutation input. The remaining leaves load their salt from successive 16-byte slices of the same reply. Bytes 160 through 183 form the hidden 192-bit coordinate.
+A private 192-bit seed keys a public permutation at the first leaf of each group. Every 2,048-leaf period contains 186 full groups of eleven leaves and one two-leaf group. Each group's counter is the byte address of its first leaf. The first leaf receives its 16-byte salt directly in its second permutation input. Subsequent leaves load successive 16-byte slices of the same reply. Bytes 160 through 183 form the hidden coordinate.
 
-The opener uses the serialized seed and the requested position to reproduce the relevant group reply. It materializes the requested salts before entering the record writer. It discloses the same 16-byte salt, quartet siblings and upper-tree frontier as the quartet construction. The public checking image is byte-identical to PR 133. The commitment processes 8,192 quartets per iteration in the bottom-tier hash loop.
+The commit loop addresses a pair of consecutive salt buffers with one register using signed load offsets. One 4,096-leaf tile uses 374 keyed permutations and 188 pointer writes. Across 16,777,216 leaves, the longer period saves 40,960 oracle calls and 16,384 ordinary instructions against the 64-leaf paired-pointer version. The total reduction is 303,104 cycles.
 
-The commit loop holds one salt-buffer pointer across two successive groups. The first group loads its salt words using signed offsets from −1536 through −1384. The second group uses offsets from 1280 through 1432. The loop saves three pointer writes per 64 leaves and 786,432 instructions over the full vector. The original first, second and final 4,096-leaf tiles and the paired-pointer tiles produced identical memory and public-query transcripts in an independent RV64 instruction fixture.
+The opening image computes the position within its salt period with a single ANDI using the immediate 2047. It reconstructs the group counter and the requested salt with the original record format. The commit bound is 519,537,950 cycles, and the opening bound is 98,057 cycles and 72,192 proof bytes. Their Product is 37,513,562,617,344.
 
-The commit bound is 519,841,054 cycles. The opening bound is 98,057 cycles and 72,192 proof bytes, giving a Product score of 37,535,444,301,312.
-
-This extends dadon's grouped in-place salt generator and quartet tree. Newjordan's signed salt-window optimization inspired the register schedule. [Grouped generator, PR 144](https://github.com/Layr-Labs/commit.golf/pull/144) · [Signed salt window, PR 147](https://github.com/Layr-Labs/commit.golf/pull/147)
+The quartet tree and counter-salt scheme build on dadon's public submission. Newjordan's signed salt window inspired the paired-buffer register schedule. [Grouped generator, PR 144](https://github.com/Layr-Labs/commit.golf/pull/144) · [Signed salt window, PR 147](https://github.com/Layr-Labs/commit.golf/pull/147)

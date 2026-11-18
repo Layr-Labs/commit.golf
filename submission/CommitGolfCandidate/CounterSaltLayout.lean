@@ -7,7 +7,7 @@ open NonceChain (Word1600 Key Nonce Block)
 set_option exponentiation.threshold 2048
 set_option maxRecDepth 8000
 
-abbrev groups : Nat := 1572864
+abbrev groups : Nat := 1531904
 def bitOffset (j : Fin 11) : Nat := if j.val=0 then 1472 else 128*(j.val-1)
 
 def parts (w : Word1600) : Block × Key :=
@@ -41,7 +41,7 @@ noncomputable def splitReply : Word1600 ≃ Block × Key :=
   Equiv.ofBijective parts ((Fintype.bijective_iff_injective_and_card _).mpr
     ⟨parts_injective,Fintype.card_congr NonceChain.blockEquiv⟩)
 
-def firstLeaf (j : Fin groups) := 64*(j.val/6)+11*(j.val%6)
+def firstLeaf (j : Fin groups) := 2048*(j.val/187)+11*(j.val%187)
 def ctr (j : Fin groups) := BitVec.ofNat 64 (4096+256*firstLeaf j)
 def input (j : Fin groups) (k : Key) : Word1600 := (0#1344) ++ (k ++ ctr j)
 
@@ -61,7 +61,7 @@ theorem counter_distinct (k : Key) : Function.Injective (fun j => input j k) := 
       exact BitVec.extractLsb'_append_eq_right
     exact (low a).symm.trans (e.trans (low b))
   have bound (j : Fin groups) : 4096+256*firstLeaf j<2^64 := by
-    have sz : j.val < 1572864 := j.isLt
+    have sz : j.val < 1531904 := j.isLt
     unfold firstLeaf
     omega
   have en := congrArg BitVec.toNat c
@@ -71,8 +71,8 @@ theorem counter_distinct (k : Key) : Function.Injective (fun j => input j k) := 
   omega
 
 def coord (i : Index) : Fin groups × Fin 11 :=
-  (⟨6*(i.val/64)+(i.val%64)/11, by have hi : i.val<16777216 := i.isLt; unfold groups;omega⟩,
-   ⟨(i.val%64)%11, Nat.mod_lt _ (by decide)⟩)
+  (⟨187*(i.val/2048)+(i.val%2048)/11, by have hi : i.val<16777216 := i.isLt; unfold groups;omega⟩,
+   ⟨(i.val%2048)%11, Nat.mod_lt _ (by decide)⟩)
 
 def nonceAt (p : Fin groups → Block) (i : Index) := p (coord i).1 (coord i).2
 
@@ -81,9 +81,9 @@ private theorem coord_injective : Function.Injective coord := by
   have fst := congrArg (fun p : Fin groups × Fin 11 => p.1.val) eq
   have snd := congrArg (fun p : Fin groups × Fin 11 => p.2.val) eq
   dsimp only [coord] at fst snd
-  have low (i : Index) : (i.val%64)/11 < 6 := by omega
-  have group : a.val/64=b.val/64 := by omega
-  have major : (a.val%64)/11=(b.val%64)/11 := by omega
+  have low (i : Index) : (i.val%2048)/11 < 187 := by omega
+  have group : a.val/2048=b.val/2048 := by omega
+  have major : (a.val%2048)/11=(b.val%2048)/11 := by omega
   apply Fin.ext
   omega
 

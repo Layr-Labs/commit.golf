@@ -52,10 +52,10 @@ theorem admitted : actual.Admission := by
     ArtifactEncoding.length_decode] <;> decide
 
 theorem resources (msg : Message) (z : Execution) (hit : z∈support (actual.run .commit msg)) :
-    z.exit=.success ∧ z.cycles=519841054 ∧ z.oracleCalls≤COMMIT_BUDGET := by
+    z.exit=.success ∧ z.cycles=519537950 ∧ z.oracleCalls≤COMMIT_BUDGET := by
   rw [Grouped.commit_of_image actual Grouped.exact_image.symm (by decide) msg ⟨rfl,rfl,rfl,rfl⟩] at hit
   simp only [Grouped.commitTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
   obtain ⟨_,_,_,_,_,_,rfl⟩:=hit
-  exact ⟨rfl,rfl,show 43515903≤COMMIT_BUDGET by decide⟩
+  exact ⟨rfl,rfl,show 43474943≤COMMIT_BUDGET by decide⟩
 
 end TwoPermutationPrototype.GroupedChecks

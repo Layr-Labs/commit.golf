@@ -5,20 +5,18 @@ set_option maxHeartbeats 6000000
 set_option maxRecDepth 16384
 theorem heads_succ (n : Nat) : heads (n+1)=heads n+(if rank n=0 then 1 else 0) := by
   unfold heads rank
-  by_cases last : n%64=63
-  · rw [show (n+1)/64=n/64+1 by omega,show (n+1)%64=0 by omega,last]
+  by_cases last : n%2048=2047
+  · rw [show (n+1)/2048=n/2048+1 by omega,show (n+1)%2048=0 by omega,last]
     norm_num;omega
-  · rw [show (n+1)/64=n/64 by omega,show (n+1)%64=n%64+1 by omega]
-    have tab : ∀ j : Fin 63, (j.val+1+10)/11=(j.val+10)/11+(if j.val%11=0 then 1 else 0) := by decide
-    rw [tab ⟨n%64,by omega⟩]; simp only [Fin.val_mk,Nat.add_assoc]
+  · rw [show (n+1)/2048=n/2048 by omega,show (n+1)%2048=n%2048+1 by omega]
+    by_cases h : n%2048%11=0 <;> simp [h] <;> omega
 
 theorem pair_succ (n : Nat) : pairHeads (n+1)=pairHeads n+(if pairPos n=0 then 1 else 0) := by
   unfold pairHeads pairPos
-  by_cases last : n%64=63
-  · rw [show (n+1)/64=n/64+1 by omega,show (n+1)%64=0 by omega,last];norm_num;omega
-  · rw [show (n+1)/64=n/64 by omega,show (n+1)%64=n%64+1 by omega]
-    have tab : ∀ j : Fin 63, (j.val+1+21)/22=(j.val+21)/22+(if j.val%22=0 then 1 else 0) := by decide
-    rw [tab ⟨n%64,by omega⟩];simp only [Fin.val_mk,Nat.add_assoc]
+  by_cases last : n%2048=2047
+  · rw [show (n+1)/2048=n/2048+1 by omega,show (n+1)%2048=0 by omega,last];norm_num;omega
+  · rw [show (n+1)/2048=n/2048 by omega,show (n+1)%2048=n%2048+1 by omega]
+    by_cases h : n%2048%22=0 <;> simp [h] <;> omega
 
 theorem pair_head (n : Nat) (h : pairPos n=0) : rank n=0 := by unfold pairPos rank at *;omega
 
