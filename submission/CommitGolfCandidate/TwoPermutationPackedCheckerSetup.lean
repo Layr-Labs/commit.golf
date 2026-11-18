@@ -11,7 +11,7 @@ attribute [local simp] Opening.getReg_setReg MachineState.getReg_setPC
 
 def checkPrepareWords : List Instr :=
   [.ADDI .x8 .x13 0,.ADDI .x9 .x11 0,.ADDI .x18 .x16 0,.ADDI .x19 .x14 4056,
-   .LUI .x20 1024,.ADDI .x21 .x15 0,.ADD .x22 .x15 .x17,.LUI .x23 3,
+   .LUI .x20 4096,.ADDI .x21 .x15 0,.ADD .x22 .x15 .x17,.LUI .x23 3,
    .LUI .x24 3,.ADDI .x24 .x24 256,.LUI .x25 4,.LUI .x26 1,
    .ADDI .x27 .x0 256,.LUI .x4 3,.ADDI .x4 .x4 4080,.LUI .x3 1,.ADDI .x3 .x3 4056,.ADDI .x5 .x0 0]
 
@@ -35,7 +35,7 @@ structure CheckPrepared (s t : MachineState) : Prop where
   root : t.getReg .x9=s.getReg .x11
   count : t.getReg .x18=s.getReg .x16
   value : t.getReg .x19=s.getReg .x14-40
-  length : t.getReg .x20=4194304
+  length : t.getReg .x20=16777216
   proof : t.getReg .x21=s.getReg .x15
   proofEnd : t.getReg .x22=s.getReg .x15+s.getReg .x17
   digest : t.getReg .x23=12288

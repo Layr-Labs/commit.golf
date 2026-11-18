@@ -52,7 +52,7 @@ theorem checker_marks_as_word (state : MachineState) (group : Nat) :
   rw [show 4096+8*group=8*(512+group) by omega]
 
 theorem collected_table_empty (oracle : Oracle) (input : CheckInput) (state : MachineState)
-    (memory : state.mem = (QAssembly.submission.initialState .check input).mem) :
+    (memory : state.mem = (Assembly.submission.initialState .check input).mem) :
     CollectedTable oracle input 0 state [] := by
   constructor
   · intro group inside

@@ -7,7 +7,7 @@ open TwoPermutationPrototype.Checker (GroupAccepted groupMemory group_memory_oth
   RecordInputFrame checkIndexWord checkSourceWord record_input_frame_step checker_positions_bound
   aligned_digest_frame aligned_buffer_frame honestIndex checker_cap_group
   check_recorded_map machineMarks capRootAt checker_marks_as_word)
-open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
+open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 set_option maxHeartbeats 1000000
 set_option maxRecDepth 8192
 
@@ -75,7 +75,7 @@ theorem execute_record_group (oracle : Oracle) (input : CheckInput) (ordinal : N
     let group := groupRun block.state (capGroup index)
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel group.1 false))
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+group.2+fuel) state false)) =
-      ((tail.1.1.charge (block.cycles+group.2) 17, block.rows ++ tail.1.2), 17+tail.2) := by
+      ((tail.1.1.charge (block.cycles+group.2) 18, block.rows ++ tail.1.2), 18+tail.2) := by
   let index := (honestIndex input.positions ordinal present).val
   let group := groupRun block.state (capGroup index)
   have phase := group_after_record_ready oracle input ordinal present state cursor block facts
@@ -94,11 +94,11 @@ theorem record_preserves_cap (oracle : Oracle) (input : CheckInput) (ordinal : N
   have sourceAbove : 4096 ≤ checkSourceWord ordinal := by unfold checkSourceWord; omega
   constructor
   · rw [checker_marks_as_word, checker_marks_as_word]
-    exact facts.frame (512+group) (by omega) (Or.inl (by omega)) (Or.inl (by omega)) (Or.inl (by omega))
+    exact facts.frame (512+group) (by omega) (Or.inl (by omega)) (Or.inl (by omega))
   · change readBuffer _ (8*(2048+4*group)) 32 = readBuffer _ (8*(2048+4*group)) 32
     apply aligned_digest_frame
     intro offset bounded
-    exact facts.frame _ (by omega) (Or.inl (by omega)) (Or.inr (by omega)) (Or.inr (by omega))
+    exact facts.frame _ (by omega) (Or.inl (by omega)) (Or.inr (by omega))
 
 theorem group_accepts_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (state : MachineState)
@@ -153,18 +153,16 @@ theorem group_collect_transition (oracle : Oracle) (input : CheckInput) (ordinal
   refine ⟨group_after_record_cursor oracle input ordinal present state cursor block facts accepted, ?_, ?_⟩
   · apply record_input_frame_step input ordinal state next loaded
     intro word fit used
-    obtain ⟨source, scratch⟩ := packed_input_address_after input ordinal word used
-    have away : word ≠ 512+group ∧ (word < 2048+4*group ∨ 2048+4*group+4 ≤ word) ∧
-        (word < 1673 ∨ 1690 ≤ word) := by
-      have card := checker_positions_bound input
+    have above : 4096 ≤ word := by
       rcases used with h | h | h
       · omega
       · unfold checkIndexWord at h
         omega
       · unfold checkSourceWord at h
         omega
-    exact (same word (by omega) away.1 away.2.1).trans
-      (facts.frame word fit source (Or.inr scratch) away.2.2)
+    obtain ⟨source, scratch⟩ := packed_input_address_after input ordinal word used
+    exact (same word (by omega) (by omega) (Or.inr (by omega))).trans
+      (facts.frame word fit source (Or.inr scratch))
   have targetRoot : capRootAt next group = readBuffer block.state 12288 32 :=
     (read_buffer_memory_congr _ _ physical.memory _ _).trans (group_memory_root block.state group bound accepted)
   have oldMark : memoryView block.state (512+group) =

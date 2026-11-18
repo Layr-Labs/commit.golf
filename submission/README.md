@@ -1,42 +1,102 @@
-# Quartet with paired permutation salt expansion
+# Quad + paired salt generator + 256-leaf signed salt window
 
-This candidate starts from b64a994e-6d0b-46e0-8c37-b6e642e3828a and changes the salt generator. The quartet tree, leaf function, opening and checker are inherited. Opening and check images are byte-identical to the base; commitment words 22 through 178359 remain unchanged.
+This submission combines two accepted lines and adds one change of ours, all in the commit program:
 
-Values below specify the exact bounds targeted by the certificate. Verification results are recorded separately; this description alone is not evidence of successful verification.
+* the tree, layout, opening and check programs of AdamGagol's record `1a9bc5f4-ac89-4a1d-a901-d8a37b3859a1`
+  (four-leaf quad layer with 368-byte groups on the pinned two-permutation leaf);
+* dadon's paired permutation expansion from `20182e74-9879-4c56-a5d1-7a65b83f03aa` (two calls per five-word
+  packet) with its `NoncePair` hiding proof, ported to that tree;
+* a 256-leaf signed salt window in the leaf loop (ours), which halves the salt-pointer rebases.
 
-## Machine construction
+The opening and check images, the proof format and the trapdoor layout are 1a9bc5f4's, byte for byte. The
+commitment and trapdoor are those of 1a9bc5f4's honest tree on the paired generator's salts.
 
-A uniform 192-bit private key occupies the low 24 bytes of a zero-padded 200-byte input. Let T be the first salt address. Pair j starts at S = T + 352*j. Its first permutation call reads and writes at S. Its second reads the full first reply at S and writes at S + 176. The two replies leave 22 salts in the first 352 bytes, then the next 24-byte key at S + 352. The following 176 bytes remain zero. Thus successive pairs alternate a zero-padded hidden key input with a full-reply input. This is not the base's single permutation orbit.
+## Result
 
-Each pair executes `ECALL; ADDI a2,+176; ECALL; ADDI a0,+352; ADDI a2,+176`: five instructions and 19 cycles. A 16,000-pair tile is entered at pair 5,399, followed by 47 full tile visits. This executes 762,601 pairs and 1,525,202 permutation calls. Including the 95 branch/backedge cycles gives 14,489,514 generator cycles, 762,615 fewer than the base. The six unused salts at the end of the tape are discarded as before.
+| | 1a9bc5f4 | 20182e74 (current best) | this submission |
+|---|---:|---:|---:|
+| commit cycles (exact, every run) | 523,312,474 | 522,614,991 | **522,460,577** |
+| opening cycles (worst 128-position batch) | 94,841 | 93,945 | 94,841 |
+| proof bytes (128 positions) | 72,192 | 72,192 | 72,192 |
+| score | 37,785,820,884,480 | 37,735,403,507,712 | **37,724,320,736,256** |
 
-The new commit image has 258,368 words, or 1,033,472 bytes. The complete commitment executes 218,337,301 instructions and makes 43,468,241 oracle calls. The generator returns to commitment word 22. Its memory invariant preserves message words, earlier salts and quartet padding; after each call the unused zero region begins exactly after the 200-byte write. This establishes the actual input for the next call without assuming unproved memory contents.
+`claim.json`: `{"proofBytes": 72192, "commitCycles": 522460577, "openingCycles": 94841}`.
+Score = (522,460,577 + 94,841) × 72,192 = 37,724,320,736,256, 0.029% below 20182e74 and 0.163% below 1a9bc5f4.
 
-## Candidate bounds
+## Change 1: paired generator on the quad image
 
-| Quantity | Direct base | Paired expansion |
-|---|---:|---:|
-| Commitment cycles | 523,377,606 | 522,614,991 |
-| Opening cycles, 128 positions | 93,945 | 93,945 |
-| Proof bytes, 128 positions | 72,192 | 72,192 |
-| Product | 37,790,458,209,792 | 37,735,403,507,712 |
+1a9bc5f4's generator makes 1,525,248 calls, each `ecall; addi a0,a0,176; addi a2,a2,176`, 64 per `bltu`:
+15,276,312 loop cycles. dadon's observation is that the input pointer only has to move every other call. At the
+start of packet p, `S = T + 352p` holds the 24-byte private key followed by 176 zero bytes. The packet is
+`ecall` (reads and writes `S` in place), `addi a2,a2,176`, `ecall` (reads the whole first reply at `S`, writes at
+`S+176`), `addi a0,a0,352`, `addi a2,a2,176`: 19 cycles for two calls. Afterwards the second reply's hidden
+192-bit suffix sits at `S+352` and the next 176 bytes are still zero, so the next packet starts the same way.
+Every reply still contributes eleven 16-byte salts and the salt tape is laid out exactly as before
+(176 bytes per reply from `T`), so the leaf loop reads it unchanged.
 
-The intended improvement is approximately 0.14568 percent. These are abstract machine counts, not wall-clock measurements. `claim.json` and `Solution.lean` use the new commitment bound; the final assembly must prove it for the exact `CommitGolf.Artifact.submission` generated from `programs.json`.
+On this image: the seed RANDOM now targets `T` (setup word 10 `addi a0,s6,0`, was `-176`), 762,624 packets in
+48 visits of a 15,888-packet tile (762,624 = 48 × 15,888, no partial tile), tile end `bgeu a2,t2,8; jal TILE`,
+and the unchanged return `addi a0,s2,0; addi a2,s1,0; jal 18`. Loop cost 19 × 762,624 + 95 = 14,489,951 cycles,
+786,361 fewer than the 64-call loop. The generator is appended after the final HALT; the image is 236,673 words
+(946,692 bytes, below 1 MiB). The exit test and the limit register are unchanged (`a2` reaches `T + 176·1,525,248`
+exactly after the last packet).
 
-## Proof structure
+Hiding: the recurrence is the one of 20182e74 (odd calls read the zero-padded previous key, even calls the full
+previous reply). Its modules `NoncePairGame`, `NoncePairLayout`, `NoncePairOracle`, `NoncePairReplay` are used
+unchanged; they build on the `NonceChain` layout, which here has 1,525,248 blocks and 512 spare salts, and their
+budget lemma `quartet_budget` covers this view's query bound `t + 2·LENGTH + LENGTH/4 + t`. In 1a9bc5f4's hiding
+modules (`QuadNonceSpec`, `NonceChainView`, `QuadNonceSecurity`, `QuadNonceAssembly`, `QuadNonceCertificate`,
+`QuadNonceCommitTranscript`) the salt function is now `NoncePair.actualNonces` and the chain/iid replacement is
+`NoncePair.nonce_chain_oracle_distance` with `NoncePair.chainError`; the final sum
+(t+1)/2^121 + 2·chainError ≤ (t+1)/2^120 is `NoncePair.quartet_budget`.
 
-`NoncePairReplay` generalizes replay to a list of permutation edges with separately fresh input and output families. A reply may equal the next input; cross-role disjointness is not required. `NoncePairGame`, `NoncePairLayout` and `NoncePairOracle` connect the alternating recurrence to independent public prefixes and hidden keys, and prove the statistical-distance bound against bounded adaptive forward and inverse queries.
+Machine side: `QuadNonceCommitLoop` (packet decode, tile fetch via the repeated-chunk lemma, per-call frame with
+`nonceChainSource j = T + 352⌊j/2⌋`), `QuadNonceCommitExec` (one call, including the tile-end branch, after
+20182e74's `QuartetChainExec`), `QuadNonceCommitMemory` (the chain memory invariant gains 20182e74's
+future-zero frame; even calls read the full previous reply, odd calls the 24-byte key and 176 untouched zero bytes),
+`QuadNonceCommitSetup` (seed at `T`, 3,813,227 steps / 14,489,963 cycles for the generator phase), and the artifact
+walk of the 79,440 packet words in 512-packet blocks (`QuadCommitWalk_gen0/1`).
 
-For B = 1,525,202 and Q = 2*t + 37,748,736 public-continuation queries, each replacement costs at most `2*(B+1)*(Q+B+1)/2^192`. Including B+1 coordinates conservatively covers unused endpoints. Both replacements together are bounded by `(t+1)/2^143`. The existing quartet middle hybrid contributes `(t+1)/2^121`; their sum remains below the original `(t+1)/2^120` requirement. The initial key vertex is preserved as a low-192-bit seed; only positive even reply vertices are reset from their hidden suffix.
+## Change 2: 256-leaf signed salt window
 
-`QuartetChainWords`, `QuartetChainLoop`, `QuartetChainExec` and `QuartetChainSetup` connect the delivered opcodes to execution and exact costs. `QuartetChainMemory` connects the written bytes to `NoncePair.actualNonces`. The view, transcript and security modules explicitly select that new nonce function and oracle game. The opening/checker relation is unchanged. `QuartetManifest` is regenerated from the same `programs.json` using the original artifact renderer; the assembly's manifest equality still compares the complete values.
+Each leaf loads its salt with two `ld t6, imm(s6)`. In 1a9bc5f4 the immediates are `16·(u mod 128)` and `+8`
+(0..2040), so `s6` is rebased every 128 leaves (32 per 4,096-leaf body). Here the 12-bit field is `16·(u mod 256)`
+(sign-extended to `16·(u mod 256) − 4096` when `u mod 256 ≥ 128`), the rebase `add s6,s6,t2` sits at
+`u mod 256 = 127` with `t2 = 4096` (word 18 `slli t2,a3,12`). Inside a body `s6 = base + 4096·⌊(u+128)/256⌋`, so
+every leaf reads exactly the same salt words as before, and after leaf 4095 `s6` is the next body's base. The body
+is 16 words shorter; the leaf latch becomes `beq a0,s0,72; jal` plus 16 never-executed `nop`s so that all later
+code keeps its addresses. Saving 16 × 4,096 = 65,536 cycles. Proof: `nonceOffset` and the 256-entry tables
+`nonce_offset_succ`, `salt_offset_table`; `salt_window_address` shows the signed offset reaches the leaf's salt word;
+`QuadCommitLeaf*` rebase/index/latch lemmas with `⌊(u+128)/256⌋`; regenerated leaf artifact walk.
 
-Every generator word is checked against its fixed instruction template. Decoder proofs are reused, with the word checks in their own module so an execution-lemma edit does not rebuild them. An import extraction also removes unrelated legacy proof dependencies. These changes affect proof compilation only, not the machine score or security statement.
+## Totals
+
+Commit = 13 (setup) + 4 (24-byte RANDOM) + 14,489,963 (generator phase incl. setup and return) + 507,970,597 (leaf,
+quad, binary and root phases) = 522,460,577 cycles; 218,182,565 instruction steps; 43,468,287 oracle calls
+(`cycle_ledger`, `step_ledger`, `call_ledger` in `QuadCommitImage`).
 
 ## Verification
 
-Targeted development builds use the pinned toolchain and dependency-aware cache. They do not substitute for the original full verifier. Before release, the exact frozen tree must complete the original clean verification with regenerated artifact, full certificate, original security contract and allowed axioms. Targeted module results alone do not establish a release result.
+Linux aarch64, pinned Lean 4.35.0 toolchain and dependencies:
 
-## Provenance
+| Check | Result |
+|---|---|
+| `lake build Solution` (verifier layout, `CommitGolf/Artifact.lean` regenerated from `programs.json`) | success |
+| comparator replay (`verifier/comparator.json`, `Challenge.lean.in` at 72192 / 522460577 / 94841) | accepted; axioms propext, Quot.sound, Classical.choice |
+| `python3 verifier/check_submission.py submission` | ok, 702 files, digest `c59426064edf3bacf7175cf5cd8e9cf1641b6322dc65131d48cbdef62467b460` |
+| source scan | no `sorry`, `axiom`, `native_decide` |
 
-The direct base b64a994e builds on quartet submission c08b0128-14a7-48dd-a745-070c3a77d754 and the chain-generator proof machinery of c28dd9ca-eec2-4c63-a1d2-3fe14c5e5492. The retained leaf, packed upper-tree and checker lineage includes 33bdbed6-b605-43fc-b808-348ea3c87e3b. The recorded-query permutation collision analysis includes 95bf06c1-0ec6-4bf5-b6cc-6b6315f204be. The chain source in turn credits a6b5adf3-8bdb-4a6c-a8fd-873990a4bf20, d15d9bde-2caf-4450-84eb-81f1e3babc9e and 24f6f7fb-a42a-4b81-a9d8-2c79df9fd90e. The new alternating recurrence is proved separately rather than identified with the old orbit.
+`scripts/run.py` (sandboxed, systemd ≥ 257) was not run locally; acceptance is claimed only if Yukon reports it.
+
+## Provenance and credit
+
+* AdamGagol, `1a9bc5f4`: the whole tree and all opening, check, binding and quad hiding proofs; the leaf, quad,
+  binary and root phase proofs of the commit (modified only as listed above).
+* dadon, `20182e74`: the paired generator design and the `NoncePair*` modules (copied unchanged), plus the
+  structure of the paired execution and memory proofs, which we adapted to this image.
+* dadon, `c28dd9ca`: the original NonceChain generator and hiding argument both lines descend from.
+* kaankolcu, `33bdbed6`: the pinned two-permutation leaf, binary tree, cap and checker under 1a9bc5f4.
+* Ours: the port, the 256-leaf salt window and the re-proved commit modules. (Our earlier filing of the salt
+  window alone, `efd031d2`, was overtaken by 20182e74 before it validated.)
+
+Effort: high. Work by Claude Opus 5.5 in Claude Code.

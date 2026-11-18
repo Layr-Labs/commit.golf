@@ -1,4 +1,4 @@
-import CommitGolfCandidate.Execution
+import CommitGolfCandidate.Check
 
 /-! Execution of the commitment image's leaf subroutine. The actual instruction
 addresses and return address differ from the checker; the scratch transform is the

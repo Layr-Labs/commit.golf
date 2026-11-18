@@ -10,7 +10,7 @@ open TwoPermutationPrototype.Packed.Checker
 open TwoPermutationPrototype.Checker (RecordInputFrame honestIndex checkSourceWord
   checker_positions_bound aligned_buffer_frame buffer_window checker_value_data record_input_value
   beginRecord record_setup_register)
-open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
+open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1300000
 

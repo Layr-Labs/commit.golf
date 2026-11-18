@@ -7,7 +7,7 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.Checker (RecordInputFrame capRootAt checker_cap_group record_input_root
   checker_positions_bound checker_global_budget)
-open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
+open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 set_option maxHeartbeats 1000000
 
 structure CheckerObservationFacts (oracle : Oracle) (input : CheckInput)
@@ -15,7 +15,7 @@ structure CheckerObservationFacts (oracle : Oracle) (input : CheckInput)
   terminates : observed.1.1.exit ≠ .unfinished
   queries : observed.2 ≤ 26*input.positions.card
   paths : observed.1.1.exit = .success → ∀ index : {i // i ∈ input.positions},
-    Nonempty (Quartet.RecordedQuartetOpening oracle index.val (input.values index) input.commitment observed.1.2)
+    Nonempty (ProjectedOpening oracle index.val (input.values index) input.commitment observed.1.2)
   honest : ∀ message salts, input = honestCheckInput oracle message input.positions salts →
     observed.1.1.exit = .success
 
@@ -26,7 +26,7 @@ theorem checker_cap_bindings (oracle : Oracle) (input : CheckInput) (state : Mac
     (paths : ∀ leaf ∈ Opening.groupsBefore input.positions input.positions.card, 256 ≤ leaf → leaf < 512 →
       ProjectedPath capRows leaf 8 (capRootAt state leaf) (readBuffer state (8*536871424) 32)) :
     ∀ index : {i // i ∈ input.positions},
-      Nonempty (Quartet.RecordedQuartetOpening oracle index.val (input.values index) input.commitment (lowerRows++capRows)) := by
+      Nonempty (ProjectedOpening oracle index.val (input.values index) input.commitment (lowerRows++capRows)) := by
   intro index
   obtain ⟨seen, ⟨lower⟩⟩ := collect_authenticated_index oracle input state lowerRows table index
   obtain ⟨low, high⟩ := checker_cap_group index.val
@@ -77,15 +77,15 @@ theorem checker_body_facts (record : Oracle → Nat → Index → MachineState �
       exact execute_header_reject _ pc _
     change CheckerObservationFacts oracle input
       (((checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).1.1.charge
-        collected.cycles (17*collected.records),
+        collected.cycles (18*collected.records),
         collected.rows ++ (checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).1.2),
-        17*collected.records+(checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).2)
+        18*collected.records+(checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).2)
     rw [finish,record_rows_pure,check_evaluation_pure]
     refine ⟨?_,?_,?_,?_⟩
     · intro impossible
       cases impossible
     · have count : collected.records ≤ input.positions.card := facts.queryRecords
-      change 17*collected.records+0 ≤ 26*input.positions.card
+      change 18*collected.records+0 ≤ 26*input.positions.card
       omega
     · intro impossible
       cases impossible

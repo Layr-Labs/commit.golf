@@ -32,7 +32,7 @@ theorem packed_input_address_after (input : CheckInput) (ordinal word : Nat)
     (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) ∧
       1576 ≤ word := by
   have card := checker_positions_bound input
-  rcases used with commitment | ⟨first, last⟩ | source
+  rcases used with ⟨first, last⟩ | ⟨first, last⟩ | source
   · unfold checkSourceWord
     omega
   · unfold checkIndexWord at first last
@@ -45,7 +45,7 @@ theorem record_proof_frame (input : CheckInput) (ordinal offset count : Nat) (st
     (frame : RecordInputFrame input ordinal state) (before : ordinal ≤ input.positions.card)
     (bounded : checkProofByte ordinal+offset+count ≤ 2^36) :
     readBuffer state (checkProofByte ordinal+offset) count =
-      readBuffer (QAssembly.submission.initialState .check input) (checkProofByte ordinal+offset) count := by
+      readBuffer (Assembly.submission.initialState .check input) (checkProofByte ordinal+offset) count := by
   apply buffer_byte_frame
   intro j inside
   have card := checker_positions_bound input
