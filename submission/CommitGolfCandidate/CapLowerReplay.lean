@@ -1,9 +1,15 @@
 import CommitGolfCandidate.BindingReplay
 import CommitGolfCandidate.CapConsistency
+import CommitGolfCandidate.S3LeafProbe
+import CommitGolfCandidate.S6Model
 
-/-! Paid replay of the sixteen-level lower records. The parser and machine
-bridges remain separate: these records explicitly contain a salt and exactly
-sixteen siblings, with every direction fixed by the original ABI index. -/
+/-! Paid replay of the lower records. A record holds its leaf's salt, the three
+other leaf digests of the leaf's group and the fourteen siblings of the group
+node, with every direction fixed by the ABI index. Its replay pays two forward
+permutation calls for the leaf (`s3HashLeaf`), one for the group window
+(`s6HashWindow`) and fourteen compression calls whose replies are truncated to
+240 bits (`replayPath`). Every node function takes the node compression; the
+tree's is `s6Compress oracle.compression`. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec
 
@@ -11,56 +17,92 @@ structure CapLowerRecord where
   index : Index
   value : Entry
   salt : Digest
-  sibling : Fin 16 → Digest
+  others : Fin 3 → Digest
+  sibling : Fin 14 → Digest
 
 def CapLowerRecord.path (record : CapLowerRecord) : List (Bool × Digest) :=
-  List.ofFn fun level : Fin 16 => (record.index.val.testBit level.val, record.sibling level)
+  s6RecordPath record.index.val record.sibling
 
-theorem cap_lower_path_length (record : CapLowerRecord) : record.path.length = 16 := by
-  simp [CapLowerRecord.path]
+theorem cap_lower_path_length (record : CapLowerRecord) : record.path.length = 14 :=
+  s6_record_path_length _ _
 
 theorem cap_lower_path_directions (record : CapLowerRecord) :
-    record.path.map Prod.fst = (List.range 16).map record.index.val.testBit := by
-  rw [CapLowerRecord.path, List.map_ofFn, List.ofFn_eq_map]
-  change (List.finRange 16).map (record.index.val.testBit ∘ Fin.val) = _
-  rw [← List.map_map, List.map_coe_finRange_eq_range]
+    record.path.map Prod.fst = (List.range 14).map (record.index.val/4).testBit :=
+  s6_record_path_directions _ _
 
-def CapLowerRecord.root (record : CapLowerRecord) (compress : Compression) : Digest :=
-  climb compress (leafDigest compress record.salt record.value) record.path
+/-- The group digest of the record's leaf: one permutation call on its group window. -/
+def CapLowerRecord.group (record : CapLowerRecord) (permutation : Perm) : Digest :=
+  s6RecordGroup permutation record.salt record.value record.index.val record.others
 
-def CapLowerRecord.inputs (record : CapLowerRecord) (compress : Compression) :
-    List (BitVec 512) :=
-  openingInputs compress record.salt record.value record.path
+def CapLowerRecord.root (record : CapLowerRecord) (compress : Compression)
+    (permutation : Perm) : Digest :=
+  climb compress (record.group permutation) record.path
 
-theorem cap_lower_inputs_length (record : CapLowerRecord) (compress : Compression) :
-    (record.inputs compress).length = 24 := by
-  rw [CapLowerRecord.inputs, openingInputs_length, cap_lower_path_length]
+theorem cap_lower_root_eq (record : CapLowerRecord) (compress : Compression) (permutation : Perm) :
+    record.root compress permutation =
+      s6RecordRoot compress permutation record.salt record.value record.index.val record.others
+        record.sibling := rfl
 
-/-- Each retained input was queried through World before it is returned. -/
+/-- Compression inputs of one record: its fourteen path inputs. -/
+def CapLowerRecord.inputs (record : CapLowerRecord) (compress : Compression)
+    (permutation : Perm) : List (BitVec 512) :=
+  pathInputs compress (record.group permutation) record.path
+
+theorem cap_lower_inputs_length (record : CapLowerRecord) (compress : Compression)
+    (permutation : Perm) : (record.inputs compress permutation).length = 14 := by
+  rw [CapLowerRecord.inputs, pathInputs_length, cap_lower_path_length]
+
+/-- One forward permutation query; the low 256 bits of the reply. -/
+def s6HashWindow (window : BitVec PERMUTATION_WIDTH) : OracleComp World Digest := do
+  let reply ← (liftM (World.query (.inr (.inr (.inl window)))) :
+    OracleComp World (BitVec PERMUTATION_WIDTH))
+  return BitVec.ofNat 256 reply.toNat
+
+theorem s6_hash_window_run (oracle : Oracle) (window : BitVec PERMUTATION_WIDTH) :
+    oracle.run (s6HashWindow window) = pure (BitVec.ofNat 256 (oracle.permutation window).toNat, 1) := by
+  unfold s6HashWindow
+  erw [oracle_run_public_bind oracle (.inr (.inl window))]
+  simp only [oracle_run_pure, pure_bind]
+  rfl
+
+theorem s6_hash_window_bound (window : BitVec PERMUTATION_WIDTH) :
+    IsTotalQueryBound (s6HashWindow window) 1 := by
+  unfold s6HashWindow
+  erw [isTotalQueryBound_query_bind_iff]
+  exact ⟨by simp, fun reply => trivial⟩
+
+/-- Each retained input was queried through World before it is returned. The leaf
+is two paid permutation calls and the group one; only compression inputs are retained. -/
 def capReplayLower (record : CapLowerRecord) : OracleComp World (Digest × List (BitVec 512)) := do
-  let (leaf, leafInputs) ← replayChain record.salt (leafBlocks record.value)
-  let (root, lowerInputs) ← replayPath leaf record.path
-  return (root, leafInputs ++ lowerInputs)
+  let leaf ← s3HashLeaf record.salt record.value
+  let group ← s6HashWindow (s6RecordWindow leaf record.index.val record.others)
+  replayPath group record.path
 
 theorem cap_replay_lower_run (oracle : Oracle) (record : CapLowerRecord) :
     oracle.run (capReplayLower record) =
-      pure ((record.root oracle.compression, record.inputs oracle.compression), 24) := by
-  simp only [capReplayLower, oracle_run_bind, replay_chain_run, pure_bind,
-    bind_pure_comp, oracle_run_map, replay_path_run, map_pure]
-  simp [CapLowerRecord.root, CapLowerRecord.inputs, openingInputs,
-    leafDigest_eq_fold, leafBlocks, cap_lower_path_length]
+      pure ((record.root (s6Compress oracle.compression) oracle.permutation,
+        record.inputs (s6Compress oracle.compression) oracle.permutation), 17) := by
+  simp only [capReplayLower, oracle_run_bind, s3_hash_leaf_run, s6_hash_window_run, pure_bind,
+    replay_path_run, cap_lower_path_length]
+  rfl
 
 /-- This bound holds for all replies, including replies inconsistent with a fixed
-compression function. A record always pays eight leaf and sixteen lower calls. -/
+oracle. A record pays two leaf calls, one group call and fourteen lower calls; the
+ceiling of twenty-four per record is kept so every later budget statement is unchanged. -/
 theorem cap_replay_lower_query_bound (record : CapLowerRecord) :
     IsTotalQueryBound (capReplayLower record) 24 := by
   unfold capReplayLower
-  change IsTotalQueryBound (_ >>= _) (8 + 16)
-  apply isTotalQueryBound_bind
-  · simpa [leafBlocks] using replay_chain_query_bound record.salt (leafBlocks record.value)
-  · rintro ⟨leaf, inputs⟩
-    simpa only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff,
-      cap_lower_path_length] using replay_path_query_bound leaf record.path
+  have exact : IsTotalQueryBound
+      (s3HashLeaf record.salt record.value >>= fun leaf =>
+        s6HashWindow (s6RecordWindow leaf record.index.val record.others) >>= fun group =>
+          replayPath group record.path)
+      (2 + (1 + 14)) := by
+    apply isTotalQueryBound_bind (s3_hash_leaf_bound _ _)
+    intro leaf
+    apply isTotalQueryBound_bind (s6_hash_window_bound _)
+    intro group
+    simpa only [cap_lower_path_length] using replay_path_query_bound group record.path
+  exact exact.mono (by omega)
 
 /-- Forward duplicate checking occurs after the current record's paid queries,
 before any queries for the next record. -/
@@ -75,19 +117,20 @@ def capReplayLowerBatch : List CapLowerRecord → CapRootMap →
           let result ← capReplayLowerBatch rest next
           return result.map fun (finalRoots, laterInputs) => (finalRoots, inputs ++ laterInputs)
 
-def capLowerBatchRoots (compress : Compression) : List CapLowerRecord → CapRootMap →
-    Option CapRootMap
+def capLowerBatchRoots (compress : Compression) (permutation : Perm) :
+    List CapLowerRecord → CapRootMap → Option CapRootMap
   | [], roots => some roots
   | record :: rest, roots => do
-      let next ← capInsert roots (capGroup record.index).val (record.root compress)
-      capLowerBatchRoots compress rest next
+      let next ← capInsert roots (capGroup record.index).val (record.root compress permutation)
+      capLowerBatchRoots compress permutation rest next
 
-def capLowerBatchInputs (compress : Compression) (records : List CapLowerRecord) :
-    List (BitVec 512) :=
-  records.flatMap fun record => record.inputs compress
+def capLowerBatchInputs (compress : Compression) (permutation : Perm)
+    (records : List CapLowerRecord) : List (BitVec 512) :=
+  records.flatMap fun record => record.inputs compress permutation
 
-theorem cap_lower_batch_inputs_length (compress : Compression) (records : List CapLowerRecord) :
-    (capLowerBatchInputs compress records).length = 24 * records.length := by
+theorem cap_lower_batch_inputs_length (compress : Compression) (permutation : Perm)
+    (records : List CapLowerRecord) :
+    (capLowerBatchInputs compress permutation records).length = 14 * records.length := by
   induction records with
   | nil => simp [capLowerBatchInputs]
   | cons record rest ih =>
@@ -114,19 +157,24 @@ theorem cap_replay_lower_batch_query_bound (records : List CapLowerRecord) (root
 paid lower-record inputs. No query is omitted by a duplicate-group reuse. -/
 theorem cap_replay_lower_batch_run (oracle : Oracle) (records : List CapLowerRecord)
     (roots finalRoots : CapRootMap)
-    (accepted : capLowerBatchRoots oracle.compression records roots = some finalRoots) :
+    (accepted : capLowerBatchRoots (s6Compress oracle.compression) oracle.permutation records roots =
+      some finalRoots) :
     oracle.run (capReplayLowerBatch records roots) =
-      pure (some (finalRoots, capLowerBatchInputs oracle.compression records), 24 * records.length) := by
+      pure (some (finalRoots,
+        capLowerBatchInputs (s6Compress oracle.compression) oracle.permutation records),
+        17 * records.length) := by
   induction records generalizing roots with
   | nil =>
       simp only [capLowerBatchRoots, Option.some.injEq] at accepted
       subst finalRoots
       simp [capReplayLowerBatch, capLowerBatchInputs, oracle_run_pure]
   | cons record rest ih =>
-      cases inserted : capInsert roots (capGroup record.index).val (record.root oracle.compression) with
+      cases inserted : capInsert roots (capGroup record.index).val
+          (record.root (s6Compress oracle.compression) oracle.permutation) with
       | none => simp [capLowerBatchRoots, inserted] at accepted
       | some next =>
-          have later : capLowerBatchRoots oracle.compression rest next = some finalRoots := by
+          have later : capLowerBatchRoots (s6Compress oracle.compression) oracle.permutation rest next =
+              some finalRoots := by
             simpa [capLowerBatchRoots, inserted] using accepted
           simp only [capReplayLowerBatch]
           erw [oracle_run_bind, cap_replay_lower_run]
@@ -135,9 +183,10 @@ theorem cap_replay_lower_batch_run (oracle : Oracle) (records : List CapLowerRec
           simp [oracle_run_pure, capLowerBatchInputs, Nat.mul_add, Nat.add_comm]
 
 /-- An accepted suffix preserves roots that were already known at its entry. -/
-theorem cap_lower_batch_preserves (compress : Compression) (records : List CapLowerRecord)
+theorem cap_lower_batch_preserves (compress : Compression) (permutation : Perm)
+    (records : List CapLowerRecord)
     (roots finalRoots : CapRootMap) (group : Nat) (value : Digest)
-    (accepted : capLowerBatchRoots compress records roots = some finalRoots)
+    (accepted : capLowerBatchRoots compress permutation records roots = some finalRoots)
     (known : roots group = some value) : finalRoots group = some value := by
   induction records generalizing roots with
   | nil =>
@@ -145,7 +194,8 @@ theorem cap_lower_batch_preserves (compress : Compression) (records : List CapLo
       subst finalRoots
       exact known
   | cons record rest ih =>
-      cases inserted : capInsert roots (capGroup record.index).val (record.root compress) with
+      cases inserted : capInsert roots (capGroup record.index).val
+          (record.root compress permutation) with
       | none => simp [capLowerBatchRoots, inserted] at accepted
       | some next =>
           apply ih next (by simpa [capLowerBatchRoots, inserted] using accepted)
@@ -153,22 +203,23 @@ theorem cap_lower_batch_preserves (compress : Compression) (records : List CapLo
 
 /-- Every accepted record, including a duplicate, agrees with the retained group
 root. This is the lower-root premise needed by the cap path extractor. -/
-theorem cap_lower_batch_member (compress : Compression) (records : List CapLowerRecord)
-    (roots finalRoots : CapRootMap)
-    (accepted : capLowerBatchRoots compress records roots = some finalRoots)
+theorem cap_lower_batch_member (compress : Compression) (permutation : Perm)
+    (records : List CapLowerRecord) (roots finalRoots : CapRootMap)
+    (accepted : capLowerBatchRoots compress permutation records roots = some finalRoots)
     (record : CapLowerRecord) (member : record ∈ records) :
-    finalRoots (capGroup record.index).val = some (record.root compress) := by
+    finalRoots (capGroup record.index).val = some (record.root compress permutation) := by
   induction records generalizing roots with
   | nil => simp at member
   | cons head rest ih =>
-      cases inserted : capInsert roots (capGroup head.index).val (head.root compress) with
+      cases inserted : capInsert roots (capGroup head.index).val
+          (head.root compress permutation) with
       | none => simp [capLowerBatchRoots, inserted] at accepted
       | some next =>
-          have later : capLowerBatchRoots compress rest next = some finalRoots := by
+          have later : capLowerBatchRoots compress permutation rest next = some finalRoots := by
             simpa [capLowerBatchRoots, inserted] using accepted
           rcases List.mem_cons.mp member with same | laterMember
           · subst head
-            apply cap_lower_batch_preserves compress rest next finalRoots _ _ later
+            apply cap_lower_batch_preserves compress permutation rest next finalRoots _ _ later
             rw [cap_insert_lookup roots next _ _ _ inserted]
             simp
           · exact ih next later laterMember

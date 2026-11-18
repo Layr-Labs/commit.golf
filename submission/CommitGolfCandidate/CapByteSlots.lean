@@ -46,14 +46,25 @@ theorem cap_encoding_read (state : MachineState) (digests : List Digest) (suffix
         (bytes offset inside).trans (cap_encoding_byte digests suffix ordinal offset present inside))
   simpa only [Nat.mul_zero, Nat.zero_add, Nat.reduceMul, BitVec.extractLsb'_eq_self] using decoded
 
-/-- A seventeen-digest lower record begins with its salt. -/
+/-- An eighteen-digest lower record begins with its salt. -/
 theorem cap_lower_encoding_salt (record : CapLowerRecord) :
     (capLowerEncoding record)[0]'(by rw [cap_lower_encoding_length]; decide) =
       record.salt := rfl
 
-/-- Its next sixteen slots are the original supplied siblings in order. -/
-theorem cap_lower_encoding_sibling (record : CapLowerRecord) (level : Fin 16) :
-    (capLowerEncoding record)[level.val + 1]'(by
+/-- Its next three slots are the supplied digests of the other leaves of the group. -/
+theorem cap_lower_encoding_other (record : CapLowerRecord) (k : Fin 3) :
+    (capLowerEncoding record)[k.val + 1]'(by
+      rw [cap_lower_encoding_length]; omega) = record.others k := by
+  simp only [capLowerEncoding, List.getElem_cons_succ]
+  rw [List.getElem_append_left (by simp)]
+  simp only [List.getElem_ofFn]
+
+/-- Its last fourteen slots are the supplied siblings in order. -/
+theorem cap_lower_encoding_sibling (record : CapLowerRecord) (level : Fin 14) :
+    (capLowerEncoding record)[level.val + 4]'(by
       rw [cap_lower_encoding_length]; omega) = record.sibling level := by
-  simp only [capLowerEncoding, List.getElem_cons_succ, List.getElem_ofFn]
+  simp only [capLowerEncoding, show level.val + 4 = (level.val + 3) + 1 by omega,
+    List.getElem_cons_succ]
+  rw [List.getElem_append_right (by simp)]
+  simp only [List.getElem_ofFn, List.length_ofFn, Nat.add_sub_cancel]
 end CommitGolfCandidate

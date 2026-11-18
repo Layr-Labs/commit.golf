@@ -53,7 +53,7 @@ ordinary bounded naturals, not wrapped word comparisons. -/
 theorem cap_check_loader_bounds (input : CheckInput)
     (admitted : input.proof.length ≤ capProgram.sizes.proof) :
     capProgram.layout.proof + input.proof.length ≤ MEMORY_BYTES ∧
-    544 * input.positions.card < 2^64 ∧
+    576 * input.positions.card < 2^64 ∧
     capProgram.layout.proof + input.proof.length < 2^64 := by
   have cardinal : input.positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ input.positions
@@ -62,11 +62,11 @@ theorem cap_check_loader_bounds (input : CheckInput)
   omega
 
 theorem cap_check_required_length (input : CheckInput) :
-    ((capProgram.initialState .check input).getReg .x16 * BitVec.ofNat 64 544).toNat =
-      544 * input.positions.card := by
+    ((capProgram.initialState .check input).getReg .x16 * BitVec.ofNat 64 576).toNat =
+      576 * input.positions.card := by
   have cardinal : input.positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ input.positions
-  change (BitVec.ofNat 64 input.positions.card * BitVec.ofNat 64 544).toNat = _
+  change (BitVec.ofNat 64 input.positions.card * BitVec.ofNat 64 576).toNat = _
   rw [← BitVec.ofNat_mul, BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
   · omega
   · norm_num [LENGTH, LOG_LENGTH] at cardinal

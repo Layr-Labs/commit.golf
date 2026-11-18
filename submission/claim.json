@@ -1,1 +1,5 @@
-{"commitCycles": 541679900, "openingCycles": 93945, "proofBytes": 72192}
+{
+  "proofBytes": 72192,
+  "commitCycles": 524638547,
+  "openingCycles": 168725
+}

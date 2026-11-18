@@ -20,11 +20,11 @@ theorem cap_digest_encoding_length (digests : List Digest) :
       omega
 
 theorem cap_lower_encoding_length (record : CapLowerRecord) :
-    (capLowerEncoding record).length = 17 := by
+    (capLowerEncoding record).length = 18 := by
   simp [capLowerEncoding]
 
 theorem cap_lower_transcript_length (records : List CapLowerRecord) :
-    (capLowerTranscript records).length = 17 * records.length := by
+    (capLowerTranscript records).length = 18 * records.length := by
   induction records with
   | nil => rfl
   | cons record rest ih =>
@@ -43,17 +43,17 @@ def capHonestBytes (compress : Compression) (records : List CapLowerRecord)
 theorem cap_honest_bytes_length (compress : Compression) (records : List CapLowerRecord)
     (tree : Tree 8) (view : CapView 8) (nonempty : records ≠ []) :
     (capHonestBytes compress records tree view).length =
-      544 * records.length + 32 * (capProof compress tree view).length := by
+      576 * records.length + 32 * (capProof compress tree view).length := by
   rw [capHonestBytes, if_neg (by simpa using nonempty), cap_digest_encoding_length, List.length_append,
     cap_lower_transcript_length]
   omega
 
-/-- A batch of 128 lower records uses 69,632 bytes; the occupied height-eight
+/-- A batch of 128 lower records uses 73,728 bytes; the occupied height-eight
 frontier contributes at most another 4,096 bytes, with no headers. -/
 theorem cap_honest_bytes_batch_bound (compress : Compression)
     (records : List CapLowerRecord) (tree : Tree 8) (view : CapView 8)
     (batch : records.length = BATCH) (occupied : capOccupied view = true) :
-    (capHonestBytes compress records tree view).length ≤ 73728 := by
+    (capHonestBytes compress records tree view).length ≤ 77824 := by
   have nonempty : records ≠ [] := by
     intro empty
     rw [empty] at batch
@@ -61,7 +61,7 @@ theorem cap_honest_bytes_batch_bound (compress : Compression)
     contradiction
   rw [cap_honest_bytes_length _ _ _ _ nonempty, batch]
   have boundary := cap_occupied_proof_bound compress tree view occupied
-  change 544 * 128 + 32 * (capProof compress tree view).length ≤ 73728
+  change 576 * 128 + 32 * (capProof compress tree view).length ≤ 77824
   omega
 
 theorem cap_honest_bytes_empty (compress : Compression) (tree : Tree 8) (view : CapView 8) :

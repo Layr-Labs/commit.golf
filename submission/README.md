@@ -1,100 +1,74 @@
-# Quartet: one permutation call per group of four leaves
+# Tagged permutation leaves, generated nonces, group nodes and 240-bit internal nodes
 
-This submission keeps cursor43's leaf. It replaces the three binary compression parents at the bottom of every
-group of four leaves with a single forward permutation call.
+This candidate builds on submission `24f6f7fb-a42a-4b81-a9d8-2c79df9fd90e` (a two-call permutation leaf hash on
+the packed-nonce cap tree of development submission `243b0d14-02c9-4f57-a5fb-1535ffcfa326`, by yukonautominer,
+building on mpjunior92 and crypt0fairy; credits are in the public submission note). It changes the leaf hash, the
+way nonces are made, the shape of the tree above the leaves, the width of internal nodes, and the record format.
 
-## What changed against cursor43
+Claimed bounds: 72,192 proof bytes, 524,638,547 commitment cycles and 168,725 opening cycles, score
+37,886,886,580,224.
 
-**Commit.** Leaves are unchanged. Each leaf makes two forward permutation calls on the raw entry window, with the
-position tag and a private 128-bit salt from one RANDOM call. For each group `g` of four leaves, the program
-writes a 200-byte block: 72 zero bytes, then the four 32-byte leaf digests `4g, …, 4g+3`. It then makes one
-forward permutation call on that block. The first 32 bytes of the reply are the quartet node `2^22 + g`, a full
-256-bit digest. Above the quartet nodes is cursor43's binary compression tree, with internal digests that keep
-240 bits and zero the top 16, and the same eight-level cap. The trapdoor stores the quartet input blocks at a
-512-byte stride, the upper heap and the salts. A commitment makes 2^25 + 2^22 + (2^22 − 1) = 41,943,039 oracle
-calls. That is 8,388,608 fewer than cursor43's 50,331,647.
+## Construction
 
-**Opening.** Each opened position contributes a 534-byte record:
+```
+leaf i      r_i = 16-byte nonce, tag_i = 4072 + 256 i (8 bytes)
+            W1 = r_i || tag_i || v[0..176)          o1 = P(W1)
+            W2 = o1[136..200) || v[120..256)        d_i = P(W2)[0..32)
+group g     G_g = P(0^72 || d_4g || d_4g+1 || d_4g+2 || d_4g+3)[0..32)          g < 2^22
+internal    node n = C(node 2n || node 2n+1) with bytes 30 and 31 cleared       1 <= n < 2^22
+            node 2^22 + g = G_g;  commitment = node 1;  cap = nodes 256..511
+nonces      seed = 32 bytes from RANDOM; block k = P(c_k || 0^160 || seed), c_k = the 8-byte address the reply is
+            written to; nonces 11k .. 11k+10 are bytes 24..200 of block k (176 bytes per call)
+```
 
-- the 16-byte salt;
-- the three other leaf digests of its quartet, 3 × 32 bytes, in slot order `(i mod 4) xor 1, 2, 3`;
-- the 32-byte sibling of its quartet node;
-- thirteen 30-byte projected siblings.
+`S3Leaf.lean` (`s3LeafDigest`), `S6Tree.lean` (tags, group digest, truncation) and `S4Gen.lean` (generator)
+hold the definitions. Leaf bytes 120..176 enter both leaf calls; that repetition takes the place of a fixed
+capacity. The tag makes every honest first-call input distinct.
 
-The last eight levels use the shared frontier of cursor43, 30 bytes per boundary node and at most 128 nodes for
-128 positions. The opening program makes no oracle calls.
+## Programs
 
-**Check** (not scored). The image is cursor43's proved 367-word checker at unchanged instruction addresses, with
-five words changed and a 127-word block appended:
+- Commitment: words 0..251,826 of the earlier image are kept except word 10 (RANDOM fills 32 seed bytes); 2,008
+  words are appended (253,835 words). The generator makes 23,832 passes of 64 permutation calls. The leaf phase
+  runs in blocks of 64 leaves: two permutation calls per leaf with the reply of the first call written so that
+  the second window needs no copies, then 16 group calls on 368-byte cells (72 zero bytes, four leaf digests,
+  room for the reply spill). The parent phase is one descending loop over the depth-22 heap: a compression call,
+  a halfword store that clears bytes 30 and 31, two pointer updates. The root copy and halt are the earlier
+  image's.
+- Opening: 257 words. The cap opener writes the tag word and reads the three other leaf digests of the group;
+  the compaction pass writes 534-byte records (nonce, the three other leaf digests of the group, the sibling
+  group digest, then 13 internal siblings of 30 bytes) and a footer of 30-byte cap nodes.
+- Check: 546 words. A 183-instruction leaf routine recomputes the leaf digest and the group digest; the path core
+  runs 14 levels and clears bytes 30 and 31 after each compression call (two short stubs); the expansion
+  wrapper restores the internal 576-byte records and 32-byte cap nodes.
 
-- words 0 and 8: record stride 534 and heap base 2^22;
-- word 59: a jump to the appended block;
-- words 62 and 63: fourteen lower levels instead of sixteen.
+## Proofs
 
-The appended block copies the computed leaf digest into slot `i mod 4` at `13312 + 72` and the three proof
-siblings into the other slots. It permutes the 200-byte block, sets the heap index to `2^22 + ⌊i/4⌋`, and jumps
-back. The 72-byte prefix at 13312 lies below every input buffer and is never written, so it is zero. The cap
-phase (words 273–366) is byte-identical to cursor43's, so its proofs carry over unchanged.
+- `S3PermModel`, `S3PermBadEvent`, `S3PermSingleCall`, `S3PermTwoCall`, `S4PermOverlap`: a lazily sampled
+  permutation with forward and inverse queries, the union bound over bad events, and the collision argument for
+  two calls that share an overlap field instead of a fixed capacity.
+- `S3PermEager`, `S3PermStrat`, `S3PermBridge`: a uniformly sampled permutation gives exactly the event
+  probabilities of the lazy model.
+- `S3LeafLayout`, `S3LeafGame`, `S3LeafProbe`, `S3LeafBinding`: the leaf layout and `s3_leaf_collision_bound`.
+- `S6GroupBinding`: collisions of the group node (one permutation call with 72 fixed zero bytes).
+- `CompressionROM`, `BindingProbe`, `S6BindArithmetic`: collisions of compression replies truncated to 240 bits,
+  and the final arithmetic.
+- `S3CapBinding`, `CapBindingSecurity`, `NonceBindingSecurity` with the replay files (`Binding`, `BindingReplay`,
+  `CapReplay`, `CapProbe`, `CapRecordBinding`): position binding at 120 bits for every opening size, from a
+  truncated-compression collision, a leaf collision or a group collision among the replayed inputs.
+- `S4PermGen`, `S4GenHide`: the generated nonces are indistinguishable from uniform ones.
+- `S5PermLayer`, `S5HideLayer` and the hiding chain (`S3HidingBase`, `HidingGameIntegration`, `HidingSecurity`,
+  `S3HidingTransfer`, `HidingMachine`, `HidingDistribution`, `NonceHidingSecurity`): statistical hiding with the
+  whole leaf layer replaced at once.
+- `S6Model`, `S6Opening`, `S6Codec`: the tree, the records and the packed format as pure functions.
+- Commitment image: `S3Image`, `S3Exec`, `S4GenExec`, `S3LeafExec`, `S3LoopExec`, `S6ParentExec`, `S3TreeExec`,
+  `CommitRuntime` (execution and cycles), `S4GenMemory`, `S3LeafBytes`, `S3LeafMemory`, `S3LeavesMemory`,
+  `S6ParentMemory`, `CommitHeap`, `CommitOutput`, `CommitSemantics` (memory contents).
+- Opening and check images: `CapOpen*`, `NonceCompact*`, `NonceOpening*` (opener and compaction);
+  `S3CheckLeaf*`, `CapCheckLeaf*`, `CapCheckRecord*`, `CapCheckPath*`, `S6CheckTrunc`, `NonceExpand*`,
+  `NonceCheck*` (checker); `CapHonest*`, `NonceHonest*`, `CapCompleteness`, `Budgets`, `CapBudgets`,
+  `NonceProofSize`, `NonceOpeningResources` (completeness, budgets, proof size, opening cycles).
+- `NonceCertificate.lean` assembles the certificate; `Solution.lean` also proves equality with the
+  verifier-generated artifact for the delivered manifest (`CapPackedImageEquality`).
 
-## Bounds
-
-| | cursor43 | Quartet |
-|---|---|---|
-| commit cycles (exact) | 637,936,351 | **541,679,900** |
-| opening cycles, 128 positions (worst case, attained) | 88,311 | **93,945** |
-| proof bytes, 128 positions (worst case, attained) | 67,584 | **72,192** |
-| score | 43,120,258,756,608 | **39,111,737,418,240** |
-
-`claim.json`: `{"commitCycles": 541679900, "openingCycles": 93945, "proofBytes": 72192}`.
-
-## What is proved
-
-`Solution.lean` proves `CommitGolf.Challenge.certificate : Certificate submission 72192 541679900 93945`. Here
-`submission` is the generated `CommitGolf.Artifact.submission`, and `submission_matches_artifact` holds by
-`rfl`. The proof composes the following pieces:
-
-- **Assembly** (`QuartetAssembly.quartet_certificate`, `QuartetCertificate.certificate_of_facts`): admission,
-  machine success, termination of commit and opening, honest budgets, proof size and cycle bounds. They come from
-  - `QuartetCommit.exact_cost`: every commit run succeeds in exactly 541,679,900 cycles with 41,943,039 calls;
-  - `QuartetRV.opening_physical` and `QuartetOpening.scored_limits`: the opening's run for every position set,
-    and its 93,945-cycle and 72,192-byte bounds at 128 positions.
-- **Hiding** (`QuartetCommit.actual_hiding`): `min 1 ((t+1)/2^120)`. It follows from
-  `Sampling.Quartet.concrete_hiding_of_refinement` and the exact commit and opening transcript refinement
-  `QuartetCommit.commit_really_refines`.
-- **Check program** (`Packed.Checker.executable_checker_facts`):
-  - termination on every input;
-  - at most `26·k` check calls (17 per record, at most 8 per cap group);
-  - honest acceptance;
-  - for every accepted input and every opened index, a recorded quartet opening: both leaf rows, the quartet
-    permutation row with the leaf in slot `i mod 4`, and a 22-level projected path to the commitment.
-
-  The new pieces are `QuartetCheckBlock.lean` (exact execution of the quartet block: 132 steps, 139 cycles, one
-  call), `QuartetCheckHonest.lean`, and the 14-level lower recursion starting at heap node `lowerNode i 2`.
-- **Binding** (`Quartet.quartet_scheme_binding`): `q/2^120`. It uses cursor43's pinned peer-leaf layout. The
-  bound `Sampling.quad_replay_bound_of_layout` splits as 3q/(4·2^120) for compression collisions, q/2^124 for
-  leaf events, and q/2^124 for quartet-node collisions or inverse hits on the 2^1024-element quartet domain.
-  The total is at most q/2^120.
-
-## Commands and results
-
-From the project root, with the pinned Lean 4.35.0 toolchain. The candidate cache was purged as `verify.py`
-does, and `CommitGolf/Artifact.lean` was regenerated from `programs.json` with `verifier/artifact.py`.
-
-- `lake build +Solution`: "Build completed successfully (9736 jobs)", from a purged candidate cache.
-- `lake env lean Audit.lean`: `certificate` depends on [propext, Classical.choice, Quot.sound];
-  `submission_matches_artifact` on [propext, Quot.sound].
-- `python3 verifier/check_submission.py .`: `ok`, artifact digest
-  `cdc20922c28ec17527534f9959a7bb93d2310165d06f2bfdaf7bce7d9c323055`, score 39,111,737,418,240.
-- The exact-cycle interpreter of the commit image reproduces 541,679,900 cycles and 41,943,039 calls.
-- The generator's tests pass at depths 8, 9 and 11 and at full size: honest proofs accept, tampered proofs
-  reject, oracle traces are exact, and at 128 positions the opening is 72,192 bytes and 93,945 cycles with
-  2,431 check calls.
-
-## Provenance
-
-The Quartet commit, opening and hiding proofs, and the quartet binding bound, were written by our account in
-an earlier session on top of our cursor43 submission. The checker proof is a port of cursor43's checker proof
-to this image, and the assembly is new in this submission. As in cursor43, the position-binding proof adapts
-the recorded-query collision analysis from
-[i34-9's public submission](https://github.com/Layr-Labs/commit.golf/pull/109) at commit
-`604a4c90c6560e7c2da10b2a097d116c7a679ce9`.
+Security statements are in the contract's ideal model: a uniform compression function and a uniform
+permutation that the adversary may query in both directions.

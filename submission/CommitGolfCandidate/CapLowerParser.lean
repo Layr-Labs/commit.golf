@@ -1,8 +1,9 @@
 import CommitGolfCandidate.CapBatchBudget
 
-/-! Digest-level parsing of the fixed seventeen-digest lower records. Supplied
-indices and values come from the trusted ABI, while salts and siblings come
-from the adversarial proof. Byte packing and actual loader access are separate. -/
+/-! Digest-level parsing of the fixed eighteen-digest lower records (salt, three
+other leaf digests of the group, fourteen siblings). Supplied indices and values
+come from the trusted ABI, while salts, digests and siblings come from the
+adversarial proof. Byte packing and actual loader access are separate. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp
 
@@ -13,29 +14,38 @@ def capParseLower (values : Index → Entry) :
       match proof with
       | [] => none
       | salt :: rest =>
-          if 16 ≤ rest.length then do
-            let (records, capProof) ← capParseLower values indices (rest.drop 16)
-            let record : CapLowerRecord :=
-              ⟨index, values index, salt, fun level => rest[level.val]?.getD 0⟩
+          if 17 ≤ rest.length then do
+            let (records, capProof) ← capParseLower values indices (rest.drop 17)
+            let record : CapLowerRecord := ⟨index, values index, salt, fun k => rest[k.val]?.getD 0,
+              fun level => rest[3+level.val]?.getD 0⟩
             return (record :: records, capProof)
           else none
 
 def capLowerEncoding (record : CapLowerRecord) : List Digest :=
-  record.salt :: List.ofFn record.sibling
+  record.salt :: (List.ofFn record.others ++ List.ofFn record.sibling)
 
 def capLowerTranscript (records : List CapLowerRecord) : List Digest :=
   records.flatMap capLowerEncoding
 
-theorem cap_lower_siblings_take (proof : List Digest) (enough : 16 ≤ proof.length) :
-    List.ofFn (fun level : Fin 16 => proof[level.val]?.getD 0) = proof.take 16 := by
+theorem cap_lower_siblings_take (proof : List Digest) (enough : 17 ≤ proof.length) :
+    List.ofFn (fun k : Fin 3 => proof[k.val]?.getD 0) ++
+      List.ofFn (fun level : Fin 14 => proof[3+level.val]?.getD 0) = proof.take 17 := by
   apply List.ext_getElem
   · simp [List.length_take, Nat.min_eq_left enough]
   · intro index leftBound rightBound
     have bound : index < proof.length := by
-      simp only [List.length_ofFn] at leftBound
+      simp only [List.length_append, List.length_ofFn] at leftBound
       omega
-    simp only [List.getElem_ofFn, List.getElem_take, List.getElem?_eq_getElem bound,
-      Option.getD_some]
+    rw [List.getElem_take, List.getElem_append]
+    split
+    · next small =>
+        simp only [List.getElem_ofFn, List.getElem?_eq_getElem bound, Option.getD_some]
+    · next large =>
+        simp only [List.length_ofFn] at large
+        simp only [List.getElem_ofFn, List.length_ofFn]
+        rw [List.getElem?_eq_getElem (by omega), Option.getD_some]
+        congr 1
+        omega
 
 /-- Exact digest slots, not only the total length: each parsed salt and sibling
 re-encodes the consumed prefix, and the cap receives precisely the suffix. -/
@@ -52,31 +62,32 @@ theorem cap_parse_lower_encoding (values : Index → Entry) (indices : List Inde
       cases proof with
       | nil => simp [capParseLower] at parsed
       | cons salt tail =>
-          by_cases enough : 16 ≤ tail.length
-          · cases later : capParseLower values indices (tail.drop 16) with
+          by_cases enough : 17 ≤ tail.length
+          · cases later : capParseLower values indices (tail.drop 17) with
             | none => simp [capParseLower, enough, later] at parsed
             | some pair =>
                 rcases pair with ⟨laterRecords, capProof⟩
                 have same :
-                    (⟨index, values index, salt, fun level => tail[level.val]?.getD 0⟩ ::
+                    (⟨index, values index, salt, fun k => tail[k.val]?.getD 0,
+                      fun level => tail[3+level.val]?.getD 0⟩ ::
                       laterRecords, capProof) = (records, rest) := by
                   simpa [capParseLower, enough, later] using parsed
                 cases same
                 have suffix := ih _ _ _ later
-                change tail.drop 16 = laterRecords.flatMap capLowerEncoding ++ rest at suffix
+                change tail.drop 17 = laterRecords.flatMap capLowerEncoding ++ rest at suffix
                 simp only [capLowerTranscript, List.flatMap_cons, capLowerEncoding,
                   cap_lower_siblings_take tail enough, List.cons_append, List.append_assoc]
                 rw [← suffix, List.take_append_drop]
           · simp [capParseLower, enough] at parsed
 
 /-- An accepted parse neither changes the ABI index order nor invents values,
-and consumes exactly seventeen digest words per record. -/
+and consumes exactly eighteen digest words per record. -/
 theorem cap_parse_lower_facts (values : Index → Entry) (indices : List Index)
     (proof : List Digest) (records : List CapLowerRecord) (rest : List Digest)
     (parsed : capParseLower values indices proof = some (records, rest)) :
     records.length = indices.length ∧
     records.map CapLowerRecord.index = indices ∧
-    proof.length = 17 * records.length + rest.length ∧
+    proof.length = 18 * records.length + rest.length ∧
     ∀ record ∈ records, record.value = values record.index := by
   induction indices generalizing proof records rest with
   | nil =>
@@ -87,13 +98,14 @@ theorem cap_parse_lower_facts (values : Index → Entry) (indices : List Index)
       cases proof with
       | nil => simp [capParseLower] at parsed
       | cons salt tail =>
-          by_cases enough : 16 ≤ tail.length
-          · cases later : capParseLower values indices (tail.drop 16) with
+          by_cases enough : 17 ≤ tail.length
+          · cases later : capParseLower values indices (tail.drop 17) with
             | none => simp [capParseLower, enough, later] at parsed
             | some pair =>
                 rcases pair with ⟨laterRecords, capProof⟩
                 have same :
-                    (⟨index, values index, salt, fun level => tail[level.val]?.getD 0⟩ ::
+                    (⟨index, values index, salt, fun k => tail[k.val]?.getD 0,
+                      fun level => tail[3+level.val]?.getD 0⟩ ::
                       laterRecords, capProof) = (records, rest) := by
                   simpa [capParseLower, enough, later] using parsed
                 cases same
@@ -108,9 +120,9 @@ theorem cap_parse_lower_facts (values : Index → Entry) (indices : List Index)
           · simp [capParseLower, enough] at parsed
 
 /-- The image's up-front minimum-length guard is sufficient for every lower
-record read, including the last record's sixteen siblings. -/
+record read, including the last record's fourteen siblings. -/
 theorem cap_parse_lower_exists (values : Index → Entry) (indices : List Index)
-    (proof : List Digest) (enough : 17 * indices.length ≤ proof.length) :
+    (proof : List Digest) (enough : 18 * indices.length ≤ proof.length) :
     ∃ records rest, capParseLower values indices proof = some (records, rest) := by
   induction indices generalizing proof with
   | nil => exact ⟨[], proof, rfl⟩
@@ -118,15 +130,16 @@ theorem cap_parse_lower_exists (values : Index → Entry) (indices : List Index)
       cases proof with
       | nil => simp at enough
       | cons salt tail =>
-          have lowerEnough : 16 ≤ tail.length := by
+          have lowerEnough : 17 ≤ tail.length := by
             simp only [List.length_cons] at enough
             omega
-          have tailEnough : 17 * indices.length ≤ (tail.drop 16).length := by
+          have tailEnough : 18 * indices.length ≤ (tail.drop 17).length := by
             simp only [List.length_cons] at enough
             simp only [List.length_drop]
             omega
-          obtain ⟨records, rest, parsed⟩ := ih (tail.drop 16) tailEnough
-          exact ⟨⟨index, values index, salt, fun level => tail[level.val]?.getD 0⟩ :: records,
+          obtain ⟨records, rest, parsed⟩ := ih (tail.drop 17) tailEnough
+          exact ⟨⟨index, values index, salt, fun k => tail[k.val]?.getD 0,
+              fun level => tail[3+level.val]?.getD 0⟩ :: records,
             rest, by simp [capParseLower, lowerEnough, parsed]⟩
 
 /-- The actual empty-position convention is handled outside the nonempty cap
