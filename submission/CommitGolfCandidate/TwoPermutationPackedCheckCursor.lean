@@ -5,9 +5,9 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 open TwoPermutationPrototype.RV64
 open TwoPermutationPrototype.Checker (checkIndexWord checkSourceWord)
 
-def checkProofByte (ordinal : Nat) : Nat := 10334769248+498*ordinal
+def checkProofByte (ordinal : Nat) : Nat := 10334769248+502*ordinal
 
-/-- The packed checker cursor points to byte-aligned 498-byte records. -/
+/-- The packed checker cursor points to byte-aligned 502-byte records. -/
 structure RecordCursor (input : CheckInput) (ordinal : Nat) (state : MachineState) : Prop where
   pc : state.pc = if ordinal = input.positions.card then 0x1444 else 0x1058
   index : state.getReg .x8 = wordAddress (checkIndexWord ordinal)

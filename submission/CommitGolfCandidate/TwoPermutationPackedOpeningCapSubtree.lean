@@ -11,16 +11,16 @@ open Opening (CapSpan proofBase cap_span_node cap_span_children cap_frontier_nod
 def EmitCap : Prop :=
   ∀ (groups : List Nat) (state : MachineState) (node dest : Nat),
     node < 512 → CapPosition groups state node dest →
-    state.pc = 0x19b8 → proofBase ≤ dest → dest % 2 = 0 → dest+30 ≤ MEMORY_BYTES →
-    ∃ after, RunsOpeningBlock state after 33 ∧ after.pc = 0x1a3c ∧
+    state.pc = 0x19c8 → proofBase ≤ dest → dest % 2 = 0 → dest+30 ≤ MEMORY_BYTES →
+    ∃ after, RunsOpeningBlock state after 33 ∧ after.pc = 0x1a4c ∧
       CapPosition groups after node (dest+30) ∧ CapWrites state after dest [node]
 
 private theorem lookup_block (groups : List Nat) (state : MachineState) (node height dest : Nat)
     (span : CapSpan node height) (position : CapPosition groups state node dest)
-    (pc : state.pc = 0x199c) :
+    (pc : state.pc = 0x19ac) :
     let after := cursorVisitPrefix state 4
     RunsOpeningBlock state after 4 ∧
-    after.pc = (if capIsMarked groups node height then 0x19ac else 0x19b8) ∧
+    after.pc = (if capIsMarked groups node height then 0x19bc else 0x19c8) ∧
     CapPosition groups after node dest ∧ after.mem = state.mem := by
   obtain ⟨_, target, nextNode, nextDest, memory, context⟩ :=
     cap_lookup state groups node height 0 false span position.context pc position.nodeWord
@@ -29,12 +29,12 @@ private theorem lookup_block (groups : List Nat) (state : MachineState) (node he
 
 private theorem walk_unmarked (emitCap : EmitCap) (groups : List Nat) (state : MachineState) (node height dest : Nat)
     (span : CapSpan node height) (position : CapPosition groups state node dest)
-    (pc : state.pc = 0x199c) (mark : capIsMarked groups node height = false)
+    (pc : state.pc = 0x19ac) (mark : capIsMarked groups node height = false)
     (separate : proofBase ≤ dest) (aligned : dest % 2 = 0) (fits : dest+30 ≤ MEMORY_BYTES) :
-    ∃ after, RunsOpeningBlock state after 37 ∧ after.pc = 0x1a3c ∧
+    ∃ after, RunsOpeningBlock state after 37 ∧ after.pc = 0x1a4c ∧
       CapPosition groups after node (dest+30) ∧ CapWrites state after dest [node] := by
   obtain ⟨lookup, branch, looked, stable⟩ := lookup_block groups state node height dest span position pc
-  have target : (cursorVisitPrefix state 4).pc = 0x19b8 := by simpa [mark] using branch
+  have target : (cursorVisitPrefix state 4).pc = 0x19c8 := by simpa [mark] using branch
   obtain ⟨after, emit, next, final, writes⟩ := emitCap groups _ node dest (cap_span_node node height span).2
     looked target separate aligned fits
   exact ⟨_, lookup.next emit, next, final, writes.move stable.symm rfl⟩
@@ -44,10 +44,10 @@ left-to-right order. A subtree returns at its own advance label, before any
 sibling traversal, and preserves memory outside the appended proof bytes. -/
 theorem execute_cap_subtree (emitCap : EmitCap) (groups : List Nat) (state : MachineState) (node height dest : Nat)
     (span : CapSpan node height) (position : CapPosition groups state node dest)
-    (pc : state.pc = 0x199c) (separate : proofBase ≤ dest) (aligned : dest % 2 = 0)
+    (pc : state.pc = 0x19ac) (separate : proofBase ≤ dest) (aligned : dest % 2 = 0)
     (fits : dest + 30 * (capFrontierNodes groups node height).length ≤ MEMORY_BYTES) :
     ∃ after, RunsOpeningBlock state after (capSubtreeCycles groups node height) ∧
-      after.pc = 0x1a3c ∧
+      after.pc = 0x1a4c ∧
       CapPosition groups after node (dest + 30 * (capFrontierNodes groups node height).length) ∧
       CapWrites state after dest (capFrontierNodes groups node height) := by
   induction height generalizing state node dest with
@@ -57,11 +57,11 @@ theorem execute_cap_subtree (emitCap : EmitCap) (groups : List Nat) (state : Mac
       simpa [capSubtreeCycles, capFrontierNodes, mark] using
         walk_unmarked emitCap groups state node 0 dest span position pc mark separate aligned small
     · obtain ⟨lookup, branch, looked, mem⟩ := lookup_block groups state node 0 dest span position pc
-      have target : (cursorVisitPrefix state 4).pc = 0x19ac := by simpa [mark] using branch
+      have target : (cursorVisitPrefix state 4).pc = 0x19bc := by simpa [mark] using branch
       obtain ⟨prune, next, final, memAfter⟩ := cap_prune_step groups _ node dest looked span target
       have bytes := cap_writes_empty state (cursorKnownPrefix (cursorVisitPrefix state 4) 1) dest (memAfter.trans mem)
       simpa [capFrontierNodes, capSubtreeCycles, mark] using
-        (show ∃ after, RunsOpeningBlock state after 5 ∧ after.pc = 0x1a3c ∧
+        (show ∃ after, RunsOpeningBlock state after 5 ∧ after.pc = 0x1a4c ∧
           CapPosition groups after node dest ∧ CapWrites state after dest [] from
             ⟨_, lookup.next prune, next, final, bytes⟩)
   | succ height ih =>
@@ -81,7 +81,7 @@ theorem execute_cap_subtree (emitCap : EmitCap) (groups : List Nat) (state : Mac
         simp only [midway, List.length_append, Nat.mul_add] at *
         omega
       obtain ⟨lookup, branch, looked, mem⟩ := lookup_block groups state node (height+1) dest span position pc
-      have target : (cursorVisitPrefix state 4).pc = 0x19ac := by simpa [mark] using branch
+      have target : (cursorVisitPrefix state 4).pc = 0x19bc := by simpa [mark] using branch
       obtain ⟨descend, leftPC, leftPos, memLeft⟩ := cap_descend_step groups _ node height dest looked span target
       obtain ⟨leftSpan, rightSpan⟩ := cap_span_children node height span
       obtain ⟨leftEnd, ranLeft, leftDone, fromLeft, leftBytes⟩ :=

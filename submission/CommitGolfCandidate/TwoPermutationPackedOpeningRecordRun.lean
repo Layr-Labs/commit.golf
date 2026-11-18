@@ -27,10 +27,10 @@ private theorem after_latch_memory (marked : MachineState) (final : Bool) :
 private theorem after_latch_register (marked : MachineState) (final : Bool) (r : Reg) :
     (afterLatch marked final).getReg r = marked.getReg r := by cases final <;> rfl
 
-private theorem record_tail_target (state : MachineState) (pc : state.pc = 0x1950)
+private theorem record_tail_target (state : MachineState) (pc : state.pc = 0x1960)
     (remaining : Word) (last : Prop) [Decidable last]
     (counter : state.getReg .x18-1 = remaining) (matchEnd : remaining = 0#64 ↔ last) :
-    (recordTailPrefix state 6).pc = (if last then 0x196c else 0x1968) := by
+    (recordTailPrefix state 6).pc = (if last then 0x197c else 0x1978) := by
   rw [(record_tail_post state pc).2.2.2]
   by_cases h : last
   · have zero : state.getReg .x18-1 = 0#64 := Eq.trans counter (matchEnd.mpr h)
@@ -40,7 +40,7 @@ private theorem record_tail_target (state : MachineState) (pc : state.pc = 0x195
       exact fun z => h (matchEnd.mp z)
     rw [ite_eq_right nonzero, ite_eq_right h]
 
-private theorem tail_mark_memory (prepared : MachineState) (final : Bool) (pc : prepared.pc = 0x1950)
+private theorem tail_mark_memory (prepared : MachineState) (final : Bool) (pc : prepared.pc = 0x1960)
     (address : Word) (target : Opening.recordMarkAddress prepared = address)
     (flag : prepared.getReg .x23 = 1#64) :
     (afterLatch (recordTailPrefix prepared 6) final).mem = (prepared.setMem address 1#64).mem := by
@@ -54,7 +54,7 @@ private def latchCost (final : Bool) : Nat := if final then 6 else 7
 
 private theorem run_latch (state : MachineState) (last : Prop) [Decidable last]
     (run : RunsOpeningBlock state (recordTailPrefix state 6) 6)
-    (pc : (recordTailPrefix state 6).pc = if last then 0x196c else 0x1968) :
+    (pc : (recordTailPrefix state 6).pc = if last then 0x197c else 0x1978) :
     RunsOpeningBlock state (afterLatch (recordTailPrefix state 6) (decide last)) (latchCost (decide last)) := by
   by_cases h : last
   · have bit : decide last = true := decide_eq_true h
@@ -62,22 +62,22 @@ private theorem run_latch (state : MachineState) (last : Prop) [Decidable last]
     exact run
   · have bit : decide last = false := decide_eq_false h
     rw [bit]
-    have jumpPC : (recordTailPrefix state 6).pc = 0x1968 := pc.trans (ite_eq_right h)
+    have jumpPC : (recordTailPrefix state 6).pc = 0x1978 := pc.trans (ite_eq_right h)
     have jump : RunsOpeningBlock (recordTailPrefix state 6)
         ((recordTailPrefix state 6).setPC 0x1034) 1 := fun fuel coins =>
       execute_record_continue _ jumpPC fuel coins
     exact run.next jump
 
 private theorem latch_target (marked : MachineState) (last : Prop) [Decidable last]
-    (pc : marked.pc = if last then 0x196c else 0x1968) :
-    (afterLatch marked (decide last)).pc = if last then 0x196c else 0x1034 := by
+    (pc : marked.pc = if last then 0x197c else 0x1978) :
+    (afterLatch marked (decide last)).pc = if last then 0x197c else 0x1034 := by
   by_cases h : last
   · rw [show decide last = true from decide_eq_true h, ite_eq_left h]
     exact pc.trans (ite_eq_left h)
   · rw [show decide last = false from decide_eq_false h, ite_eq_right h]
     rfl
 
-private theorem complete_record_cost (final : Bool) : 583+latchCost final = recordCost final := by
+private theorem complete_record_cost (final : Bool) : 587+latchCost final = recordCost final := by
   cases final <;> decide
 
 private theorem execute_record_with_data (s : Submission)
@@ -93,7 +93,7 @@ private theorem execute_record_with_data (s : Submission)
   let group := Sampling.capGroup index
   let markAddr := markBase+8*group
   have card : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
-  have pc : prepared.pc = 0x1950 := data.cursor.pc
+  have pc : prepared.pc = 0x1960 := data.cursor.pc
   have groupBound : group < 512 := (Opening.lower_cap_range index).2
   have markFit : markAddr < trapdoorBase := by
     have room := Opening.marks_before_trapdoor
@@ -154,7 +154,7 @@ private theorem execute_record_with_data (s : Submission)
   have markRun : RunsOpeningBlock prepared marked 6 := fun fuel coins =>
     execute_record_tail prepared pc fuel coins safe
   have nextPC : (afterLatch (recordTailPrefix prepared 6) (decide (ordinal+1=positions.card))).pc =
-      (if ordinal+1=positions.card then 0x196c else 0x1034) :=
+      (if ordinal+1=positions.card then 0x197c else 0x1034) :=
     @latch_target (recordTailPrefix prepared 6) (ordinal+1=positions.card) (inferInstance) markPC
   refine ⟨?_, ⟨nextPC,
     (saved .x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans boundary.heap,

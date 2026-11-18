@@ -80,7 +80,7 @@ theorem route_pc (s : MachineState) (leaf even : Bool) (pc : s.pc=BitVec.ofNat 6
 
 theorem route_run (s : MachineState) (leaf even : Bool) (pc : s.pc=BitVec.ofNat 64 (4096+4*mergeEnd leaf even)) :
     GroupHop s (route s leaf even) (routeCost leaf even) := by
-  have jump (ord imm : Nat) (here : s.pc=BitVec.ofNat 64 (4096+4*ord)) (ordBound : ord<367)
+  have jump (ord imm : Nat) (here : s.pc=BitVec.ofNat 64 (4096+4*ord)) (ordBound : ord<372)
       (fetched : (packedImage.code[ord]?).bind decodeInstruction=some (.base (.JAL .x0 (BitVec.ofNat 21 imm))))
       (landing : s.pc+signExtend21 (BitVec.ofNat 21 imm)=5024) :
       GroupHop s (s.setPC 5024) 1 := by

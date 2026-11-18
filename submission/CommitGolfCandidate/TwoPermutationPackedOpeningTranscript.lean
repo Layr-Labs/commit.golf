@@ -31,7 +31,7 @@ theorem opening_scored_attainment (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) :
     ∃ (positions : Positions) (result : Execution), positions.card = BATCH ∧
       s.run .opening (trapdoor, positions) = pure result ∧
-      result.cycles = 88311 ∧ (s.readProof result).length = 67584 := by
+      result.cycles = 88823 ∧ (s.readProof result).length = 68096 := by
   obtain ⟨positions, count, cycleVal, byteVal⟩ := scheduled_scored_attainment
   obtain ⟨result, run, physical⟩ := opening_physical s abi trapdoor positions
   exact ⟨positions, result, count, run, physical.cycles.trans cycleVal,
@@ -43,14 +43,14 @@ theorem transcript_refines (s : Submission) (abi : OpeningABI s)
     (distribution : ∀ oracle message, fixedOracleRun oracle (s.scheme.commit message) =ᵈ
       (do let salts ← sampleCompleteSaltTape
           let leaves := pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts
-          pure (transcriptHeap true oracle.compression leaves 1, trapdoorOf oracle message salts)))
+          pure (mixedTranscriptHeap oracle.compression leaves 1, trapdoorOf oracle message salts)))
     (nonce : ∀ oracle message salts index,
       trapdoorSalt (s := s) (trapdoorOf oracle message salts) index = salts index)
     (heap : ∀ oracle message salts node, 0<node → node<2*LENGTH →
       trapdoorHeap (s := s) (trapdoorOf oracle message salts) node =
-        transcriptHeap true oracle.compression
+        mixedTranscriptHeap oracle.compression
           (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts) node) :
-    PinnedTranscriptRefines s.scheme (transcriptBuilder true) := by
+    PinnedTranscriptRefines s.scheme (mixedTranscriptBuilder) := by
   intro oracle message positions
   unfold executableTranscript
   rw [fixed_oracle_run_bind]

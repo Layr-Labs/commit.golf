@@ -4,7 +4,7 @@ namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 
 theorem fetch_at (s : MachineState) (index : Nat) (instruction : Instr)
-    (bounded : index < 367) (pc : s.pc = BitVec.ofNat 64 (4096+4*index))
+    (bounded : index < 372) (pc : s.pc = BitVec.ofNat 64 (4096+4*index))
     (decoded : (packedImage.code[index]?).bind decodeInstruction = some (.base instruction)) :
     fetch packedImage s = some (.base instruction) :=
   cap_image_fetch packedImage s index instruction (by omega) pc decoded

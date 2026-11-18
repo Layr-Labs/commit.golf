@@ -1,4 +1,5 @@
-import CommitGolfCandidate.TwoPermutationPackedParentImage
+import CommitGolfCandidate.MixedWidthParentImage
+import CommitGolfCandidate.TwoPermutationPackedLeafTemplates
 
 namespace TwoPermutationPrototype.RV64
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
@@ -10,164 +11,161 @@ attribute [local irreducible] ArtifactEncoding.decode
 def packed_wideLeafIndex (slot : Nat) : Nat := 18+11*slot+slot/64+slot/128
 def packed_wideLeafPC (slot offset : Nat) : Word := BitVec.ofNat 64 (4096+4*(packed_wideLeafIndex slot+offset))
 
-def packed_wideFirstOps (_slot : Nat) : List Instr :=
-  [.ADDI .x12 .x10 4064]
-
-def packed_wideSecondOps (slot : Nat) : List Instr :=
-  [.ADDI .x10 .x10 56, .SD .x10 .x10 0,
-   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot%128))), .SD .x10 .x31 8,
-   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot%128)+8)), .SD .x10 .x31 16,
-   .ADDI .x12 .x20 (BitVec.ofNat 12 (32*(slot%64)))]
-
-def packed_wideLeafOp (slot offset : Nat) : Instr :=
-  (((packed_wideFirstOps slot) ++ [.ECALL] ++ packed_wideSecondOps slot ++ [.ECALL,.ADDI .x10 .x10 200])[offset]?).getD .EBREAK
-
 def packed_wideCodeWord (index : Nat) : BitVec 32 :=
   if inCode : index < 233369 then Artifact.commitCode.get 32 ⟨index,inCode⟩ else 0
 
-private def LeafTileDecodes (tile : Nat) : Prop :=
+private def LeafTileWordsMatch (tile : Nat) : Prop :=
   ∀ slot : Fin 64, ∀ offset : Fin 11,
-    Manifest.decodeBase (packed_wideCodeWord (packed_wideLeafIndex (64*tile+slot.val)+offset.val)) =
-    some (packed_wideLeafOp (64*tile+slot.val) offset.val)
+    packed_wideCodeWord (packed_wideLeafIndex (64*tile+slot.val)+offset.val)=
+      packed_leafTemplateWord (64*tile+slot.val) offset.val
 
-private theorem tile0 : LeafTileDecodes 0 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile1 : LeafTileDecodes 1 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile2 : LeafTileDecodes 2 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile3 : LeafTileDecodes 3 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile4 : LeafTileDecodes 4 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile5 : LeafTileDecodes 5 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile6 : LeafTileDecodes 6 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile7 : LeafTileDecodes 7 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile8 : LeafTileDecodes 8 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile9 : LeafTileDecodes 9 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile10 : LeafTileDecodes 10 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile11 : LeafTileDecodes 11 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile12 : LeafTileDecodes 12 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile13 : LeafTileDecodes 13 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile14 : LeafTileDecodes 14 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile15 : LeafTileDecodes 15 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile16 : LeafTileDecodes 16 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile17 : LeafTileDecodes 17 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile18 : LeafTileDecodes 18 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile19 : LeafTileDecodes 19 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile20 : LeafTileDecodes 20 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile21 : LeafTileDecodes 21 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile22 : LeafTileDecodes 22 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile23 : LeafTileDecodes 23 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile24 : LeafTileDecodes 24 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile25 : LeafTileDecodes 25 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile26 : LeafTileDecodes 26 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile27 : LeafTileDecodes 27 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile28 : LeafTileDecodes 28 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile29 : LeafTileDecodes 29 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile30 : LeafTileDecodes 30 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile31 : LeafTileDecodes 31 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile32 : LeafTileDecodes 32 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile33 : LeafTileDecodes 33 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile34 : LeafTileDecodes 34 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile35 : LeafTileDecodes 35 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile36 : LeafTileDecodes 36 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile37 : LeafTileDecodes 37 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile38 : LeafTileDecodes 38 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile39 : LeafTileDecodes 39 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile40 : LeafTileDecodes 40 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile41 : LeafTileDecodes 41 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile42 : LeafTileDecodes 42 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile43 : LeafTileDecodes 43 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile44 : LeafTileDecodes 44 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile45 : LeafTileDecodes 45 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile46 : LeafTileDecodes 46 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile47 : LeafTileDecodes 47 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile48 : LeafTileDecodes 48 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile49 : LeafTileDecodes 49 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile50 : LeafTileDecodes 50 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile51 : LeafTileDecodes 51 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile52 : LeafTileDecodes 52 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile53 : LeafTileDecodes 53 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile54 : LeafTileDecodes 54 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile55 : LeafTileDecodes 55 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile56 : LeafTileDecodes 56 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile57 : LeafTileDecodes 57 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile58 : LeafTileDecodes 58 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile59 : LeafTileDecodes 59 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile60 : LeafTileDecodes 60 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile61 : LeafTileDecodes 61 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile62 : LeafTileDecodes 62 := by unfold LeafTileDecodes; decide +kernel
-private theorem tile63 : LeafTileDecodes 63 := by unfold LeafTileDecodes; decide +kernel
+private theorem words0 : LeafTileWordsMatch 0 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words1 : LeafTileWordsMatch 1 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words2 : LeafTileWordsMatch 2 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words3 : LeafTileWordsMatch 3 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words4 : LeafTileWordsMatch 4 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words5 : LeafTileWordsMatch 5 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words6 : LeafTileWordsMatch 6 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words7 : LeafTileWordsMatch 7 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words8 : LeafTileWordsMatch 8 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words9 : LeafTileWordsMatch 9 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words10 : LeafTileWordsMatch 10 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words11 : LeafTileWordsMatch 11 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words12 : LeafTileWordsMatch 12 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words13 : LeafTileWordsMatch 13 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words14 : LeafTileWordsMatch 14 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words15 : LeafTileWordsMatch 15 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words16 : LeafTileWordsMatch 16 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words17 : LeafTileWordsMatch 17 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words18 : LeafTileWordsMatch 18 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words19 : LeafTileWordsMatch 19 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words20 : LeafTileWordsMatch 20 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words21 : LeafTileWordsMatch 21 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words22 : LeafTileWordsMatch 22 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words23 : LeafTileWordsMatch 23 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words24 : LeafTileWordsMatch 24 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words25 : LeafTileWordsMatch 25 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words26 : LeafTileWordsMatch 26 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words27 : LeafTileWordsMatch 27 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words28 : LeafTileWordsMatch 28 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words29 : LeafTileWordsMatch 29 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words30 : LeafTileWordsMatch 30 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words31 : LeafTileWordsMatch 31 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words32 : LeafTileWordsMatch 32 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words33 : LeafTileWordsMatch 33 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words34 : LeafTileWordsMatch 34 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words35 : LeafTileWordsMatch 35 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words36 : LeafTileWordsMatch 36 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words37 : LeafTileWordsMatch 37 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words38 : LeafTileWordsMatch 38 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words39 : LeafTileWordsMatch 39 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words40 : LeafTileWordsMatch 40 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words41 : LeafTileWordsMatch 41 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words42 : LeafTileWordsMatch 42 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words43 : LeafTileWordsMatch 43 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words44 : LeafTileWordsMatch 44 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words45 : LeafTileWordsMatch 45 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words46 : LeafTileWordsMatch 46 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words47 : LeafTileWordsMatch 47 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words48 : LeafTileWordsMatch 48 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words49 : LeafTileWordsMatch 49 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words50 : LeafTileWordsMatch 50 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words51 : LeafTileWordsMatch 51 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words52 : LeafTileWordsMatch 52 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words53 : LeafTileWordsMatch 53 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words54 : LeafTileWordsMatch 54 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words55 : LeafTileWordsMatch 55 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words56 : LeafTileWordsMatch 56 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words57 : LeafTileWordsMatch 57 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words58 : LeafTileWordsMatch 58 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words59 : LeafTileWordsMatch 59 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words60 : LeafTileWordsMatch 60 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words61 : LeafTileWordsMatch 61 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words62 : LeafTileWordsMatch 62 := by unfold LeafTileWordsMatch; decide +kernel
+private theorem words63 : LeafTileWordsMatch 63 := by unfold LeafTileWordsMatch; decide +kernel
 
-theorem packed_wide_leaf_decode (slot : Fin 4096) (offset : Fin 11) :
-    Manifest.decodeBase (packed_wideCodeWord (packed_wideLeafIndex slot.val+offset.val)) =
-      some (packed_wideLeafOp slot.val offset.val) := by
-  have bound : slot.val/64 < 64 := by have := slot.isLt; omega
-  have group : LeafTileDecodes (slot.val/64) := by
+/-- Every delivered leaf word is still checked, but no decoder is run in these
+64 tables. The two reusable templates supply the decode theorem afterward. -/
+private theorem packed_wide_leaf_word_matches (slot : Fin 4096) (offset : Fin 11) :
+    packed_wideCodeWord (packed_wideLeafIndex slot.val+offset.val)=
+      packed_leafTemplateWord slot.val offset.val := by
+  have bound : slot.val/64<64 := by have := slot.isLt; omega
+  have group : LeafTileWordsMatch (slot.val/64) := by
     generalize slot.val/64=tile at bound ⊢
     interval_cases tile
-    · exact tile0
-    · exact tile1
-    · exact tile2
-    · exact tile3
-    · exact tile4
-    · exact tile5
-    · exact tile6
-    · exact tile7
-    · exact tile8
-    · exact tile9
-    · exact tile10
-    · exact tile11
-    · exact tile12
-    · exact tile13
-    · exact tile14
-    · exact tile15
-    · exact tile16
-    · exact tile17
-    · exact tile18
-    · exact tile19
-    · exact tile20
-    · exact tile21
-    · exact tile22
-    · exact tile23
-    · exact tile24
-    · exact tile25
-    · exact tile26
-    · exact tile27
-    · exact tile28
-    · exact tile29
-    · exact tile30
-    · exact tile31
-    · exact tile32
-    · exact tile33
-    · exact tile34
-    · exact tile35
-    · exact tile36
-    · exact tile37
-    · exact tile38
-    · exact tile39
-    · exact tile40
-    · exact tile41
-    · exact tile42
-    · exact tile43
-    · exact tile44
-    · exact tile45
-    · exact tile46
-    · exact tile47
-    · exact tile48
-    · exact tile49
-    · exact tile50
-    · exact tile51
-    · exact tile52
-    · exact tile53
-    · exact tile54
-    · exact tile55
-    · exact tile56
-    · exact tile57
-    · exact tile58
-    · exact tile59
-    · exact tile60
-    · exact tile61
-    · exact tile62
-    · exact tile63
+    · exact words0
+    · exact words1
+    · exact words2
+    · exact words3
+    · exact words4
+    · exact words5
+    · exact words6
+    · exact words7
+    · exact words8
+    · exact words9
+    · exact words10
+    · exact words11
+    · exact words12
+    · exact words13
+    · exact words14
+    · exact words15
+    · exact words16
+    · exact words17
+    · exact words18
+    · exact words19
+    · exact words20
+    · exact words21
+    · exact words22
+    · exact words23
+    · exact words24
+    · exact words25
+    · exact words26
+    · exact words27
+    · exact words28
+    · exact words29
+    · exact words30
+    · exact words31
+    · exact words32
+    · exact words33
+    · exact words34
+    · exact words35
+    · exact words36
+    · exact words37
+    · exact words38
+    · exact words39
+    · exact words40
+    · exact words41
+    · exact words42
+    · exact words43
+    · exact words44
+    · exact words45
+    · exact words46
+    · exact words47
+    · exact words48
+    · exact words49
+    · exact words50
+    · exact words51
+    · exact words52
+    · exact words53
+    · exact words54
+    · exact words55
+    · exact words56
+    · exact words57
+    · exact words58
+    · exact words59
+    · exact words60
+    · exact words61
+    · exact words62
+    · exact words63
   have pos : 64*(slot.val/64)+slot.val%64=slot.val := by omega
   simpa only [Fin.val_mk,pos] using group ⟨slot.val%64,by omega⟩ offset
+
+theorem packed_wide_leaf_decode (slot : Fin 4096) (offset : Fin 11) :
+    Manifest.decodeBase (packed_wideCodeWord (packed_wideLeafIndex slot.val+offset.val))=
+      some (packed_wideLeafOp slot.val offset.val) := by
+  rw [packed_wide_leaf_word_matches slot offset]
+  have template := packed_leaf_template_decode ⟨slot.val%128,Nat.mod_lt _ (by decide)⟩ offset
+  simpa only [Fin.val_mk,packed_leafTemplateWord_periodic,packed_wideLeafOp_periodic] using template
 
 theorem packed_wide_fetch_decoded (state : MachineState) (index : Nat)
     (inCode : index < 233369) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))

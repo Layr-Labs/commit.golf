@@ -105,7 +105,7 @@ theorem wide_reference_leaf (oracle : Oracle) (msg : Message) (packed : BitVec (
     packedPublicTree oracle msg (splitBlocks 128 LENGTH packed) (LENGTH+i.val)=
       outputDigest (pinnedFinalReply oracle (memoryView (packed_wideReadyState (packedSubmission.initialState .commit msg) packed)) i.val) := by
   rw [wide_ready_memory_view]
-  rw [packedPublicTree,transcript_heap_leaf,pinnedFinalReply,wide_ready_messages packedSubmission rfl msg packed i,
+  rw [packedPublicTree,mixed_heap_leaf,pinnedFinalReply,wide_ready_messages packedSubmission rfl msg packed i,
     ready_salts _ packed i]
   simp only [pinnedFullLeafDigests,pinnedLeafDigest,pinnedFirstRow,pinnedSecondRow,pinned_typed_words]
   rfl
@@ -117,7 +117,7 @@ def executableMeaning : PackedLeafMeaning executableLeaves where
   content oracle msg salts ready frame bytes := by
     have ref (i : Index) : packedPublicTree oracle msg salts (LENGTH+i.val) =
         outputDigest (pinnedFinalReply oracle (memoryView ready) i.val) := by
-      rw [packedPublicTree,transcript_heap_leaf,pinnedFinalReply,bytes.messages i,bytes.nonces i]
+      rw [packedPublicTree,mixed_heap_leaf,pinnedFinalReply,bytes.messages i,bytes.nonces i]
       simp only [pinnedFullLeafDigests,pinnedLeafDigest,pinnedFirstRow,pinnedSecondRow,pinned_typed_words]
       rfl
     exact pinned_parent_content_of_leaf_prefix oracle (memoryView ready) _ _ _

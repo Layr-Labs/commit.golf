@@ -91,8 +91,8 @@ theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : 
     have frame := record_proof_frame honest input.positions.card (30*i) 30 state reframed (by rfl) limit
     have raw := honest_frontier_digest oracle message input.positions salts i present
     rw [PackedChecker.initial_state] at raw
-    have addr : PackedChecker.submission.layout.proof+(498*input.positions.card+30*i) =
-        pointer+30*i := by change 10334769248+(498*input.positions.card+30*i) = _; unfold pointer checkProofByte; omega
+    have addr : PackedChecker.submission.layout.proof+(502*input.positions.card+30*i) =
+        pointer+30*i := by change 10334769248+(502*input.positions.card+30*i) = _; unfold pointer checkProofByte; omega
     rw [addr] at raw
     have index := List.getElem_of_eq nodes present
     rw [index] at raw

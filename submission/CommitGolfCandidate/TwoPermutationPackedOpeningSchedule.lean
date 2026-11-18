@@ -3,7 +3,7 @@ import CommitGolfCandidate.TwoPermutationOpeningResources
 namespace TwoPermutationPrototype.PackedOpening
 open CommitGolf TwoPermutationPrototype.Sampling
 
-def recordBytes : Nat := 498
+def recordBytes : Nat := 502
 def capacity : Nat := recordBytes * LENGTH + 30*256
 
 def proofLength (positions : Positions) : Nat :=
@@ -32,13 +32,13 @@ theorem cap_cycle_delta (groups : List Nat) (node height : Nat) :
 
 def scheduledCycles (positions : Positions) : Nat :=
   if positions.card = 0 then 7 else
-    13 + (590*positions.card-1) + 2551 +
+    13 + (594*positions.card-1) + 2551 +
       (capSubtreeCycles (Opening.groupsBefore positions positions.card) 1 8 + 3) + 4
 
-def siblingWidth (level : Nat) : Nat := if level = 0 then 32 else 30
+def siblingWidth (level : Nat) : Nat := if level ≤ 2 then 32 else 30
 
 def siblingOffset (level : Nat) : Nat :=
-  if level = 0 then 16 else 48+30*(level-1)
+  if level ≤ 3 then 16+32*level else 112+30*(level-3)
 
 def recordBase (ordinal : Nat) : Nat := Opening.proofBase+recordBytes*ordinal
 
@@ -46,7 +46,8 @@ def siblingDestination (ordinal level : Nat) : Nat := recordBase ordinal+sibling
 
 theorem sibling_offset_next (level : Nat) :
     siblingOffset (level+1) = siblingOffset level+siblingWidth level := by
-  cases level <;> simp [siblingOffset, siblingWidth, Nat.mul_succ] <;> omega
+  unfold siblingOffset siblingWidth
+  split_ifs <;> omega
 
 theorem record_end (ordinal : Nat) :
     siblingDestination ordinal 16 = recordBase (ordinal+1) := by
@@ -81,7 +82,7 @@ theorem scheduled_fuel_fits (positions : Positions) : scheduledCycles positions 
     omega
 
 theorem scheduled_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    scheduledCycles positions ≤ 88311 ∧ proofLength positions ≤ 67584 := by
+    scheduledCycles positions ≤ 88823 ∧ proofLength positions ≤ 68096 := by
   have size : positions.card = 128 := count
   have cap := Opening.opening_cap_cycles_bound (Opening.groupsBefore positions positions.card)
   have bytes := Opening.opening_nodes_bound positions
@@ -92,8 +93,8 @@ theorem scheduled_scored_limits (positions : Positions) (count : positions.card 
   omega
 
 theorem scheduled_scored_attainment :
-    ∃ positions : Positions, positions.card = BATCH ∧ scheduledCycles positions = 88311 ∧
-      proofLength positions = 67584 := by
+    ∃ positions : Positions, positions.card = BATCH ∧ scheduledCycles positions = 88823 ∧
+      proofLength positions = 68096 := by
   obtain ⟨positions, count, cycles, bytes⟩ := Opening.opening_scored_attainment
   have size : positions.card = 128 := count
   have positive : positions.card ≠ 0 := by omega

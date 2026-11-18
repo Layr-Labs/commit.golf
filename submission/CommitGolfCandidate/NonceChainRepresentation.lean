@@ -15,13 +15,13 @@ structure ChainRepresentation (s : Submission) where
     (do let k ← $ᵗ Key
         let r := actualNonces o.permutation k
         let leaves := pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) m r
-        pure (transcriptHeap true o.compression leaves 1, trapdoorOf o m k))
+        pure (mixedTranscriptHeap o.compression leaves 1, trapdoorOf o m k))
   nonce : ∀ o m k i, trapdoorSalt (s := s) (trapdoorOf o m k) i = actualNonces o.permutation k i
   heap : ∀ o m k n, 0<n → n<2*LENGTH → trapdoorHeap (s := s) (trapdoorOf o m k) n =
-    transcriptHeap true o.compression (pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) m (actualNonces o.permutation k)) n
+    mixedTranscriptHeap o.compression (pinnedFullLeafDigests (BiPermutation.equiv Block o.permutation) m (actualNonces o.permutation k)) n
 
 theorem chain_transcript (s : Submission) (abi : OpeningABI s) (commit : ChainRepresentation s) :
-    ChainTranscriptRefines s.scheme (transcriptBuilder true) := by
+    ChainTranscriptRefines s.scheme mixedTranscriptBuilder := by
   intro o m p
   unfold executableTranscript
   rw [fixed_oracle_run_bind]

@@ -1,4 +1,5 @@
 import CommitGolfCandidate.TwoPermutationPackedCheckRecordData
+import CommitGolfCandidate.TwoPermutationMixedTreeLevels
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.ShortTree RiscvZkvm.Rv64
@@ -9,8 +10,8 @@ open TwoPermutationPrototype.PackedHonest (honestHeap honest_projected_node)
 set_option maxRecDepth 8192
 
 def lowerWireSibling (state : MachineState) (ordinal level : Nat) : Digest :=
-  if level = 0 then readBuffer state (checkProofByte ordinal+16) 32
-  else 0#16 ++ readBuffer state (checkProofByte ordinal+48+30*(level-1)) 30
+  if level ≤ 2 then readBuffer state (checkProofByte ordinal+MixedWidth.siblingOffset level) 32
+  else 0#16 ++ readBuffer state (checkProofByte ordinal+MixedWidth.siblingOffset level) 30
 
 private theorem later_sibling_internal (index : Index) (level : Nat) (later : 0 < level) (within : level < 16) :
     0 < Opening.lowerNode index level ^^^ 1 ∧ Opening.lowerNode index level ^^^ 1 < LENGTH := by
@@ -39,30 +40,34 @@ private theorem later_sibling_internal (index : Index) (level : Nat) (later : 0 
     omega
 
 theorem canonical_lower_wire_sibling (oracle : Oracle) (message : Message)
-    (positions : Positions) (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card)
+    (positions : Positions) (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal<positions.card)
     (state : MachineState) (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state)
-    (level : Nat) (within : level < 16) :
+    (level : Nat) (within : level<16) :
     lowerWireSibling state ordinal level =
       honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) level ^^^ 1) := by
-  by_cases first : level = 0
-  · subst level
-    simpa only [lowerWireSibling, ite_true, Opening.lowerNode, Nat.pow_zero, Nat.div_one] using
-      packed_record_first_sibling oracle message positions salts ordinal present state framed
-  · rw [lowerWireSibling, ite_eq_right first]
-    let slot := level-1
-    have restored : slot+1=level := by unfold slot; omega
+  by_cases full : level≤2
+  · simpa only [lowerWireSibling,if_pos full,MixedWidth.siblingOffset,if_pos (by omega : level≤3),
+      ←Nat.add_assoc] using
+      packed_record_full_sibling oracle message positions salts ordinal present state framed level (by omega)
+  · have offset : MixedWidth.siblingOffset level=112+30*(level-3) := by
+      unfold MixedWidth.siblingOffset
+      split_ifs <;> omega
+    rw [lowerWireSibling,if_neg full,offset,←Nat.add_assoc]
+    let slot := level-3
+    have restored : slot+3=level := by unfold slot; omega
     have actual := packed_record_later_sibling oracle message positions salts ordinal present state framed slot (by
       unfold slot
       omega)
     rw [restored] at actual
     rw [actual]
-    obtain ⟨lo,hi⟩ := later_sibling_internal (honestIndex positions ordinal present) level (by omega) within
-    exact honest_projected_node _ _ _ lo hi
+    obtain ⟨lo,_⟩ := later_sibling_internal (honestIndex positions ordinal present) level (by omega) within
+    exact honest_projected_node _ _ _ lo
+      (mixed_lower_sibling_projected (honestIndex positions ordinal present) level (by omega) within)
 
 /-- A fold over the sixteen siblings and the two-permutation leaf digest. -/
 def lowerDigestFold (oracle : Oracle) (index : Index) (leaf : Digest) (sibling : Nat → Digest) : Nat → Digest
   | 0 => leaf
-  | count+1 => padLow (oracle.compression
+  | count+1 => projectMixed (Opening.lowerNode index count / 2) (oracle.compression
       (pathPair (Opening.lowerNode index count) (lowerDigestFold oracle index leaf sibling count) (sibling count)))
 
 private theorem lower_node_above_two (index : Index) (level : Nat) (within : level < 16) :
@@ -77,13 +82,13 @@ theorem lower_fold_canonical (oracle : Oracle) (leaves : DigestTape) (index : In
     (leaf : Digest) (leafCorrect : leaf = leaves index) (sibling : Nat → Digest)
     (levels : Nat) (within : levels ≤ 16)
     (siblings : ∀ j < levels, sibling j =
-      transcriptHeap true oracle.compression leaves (Opening.lowerNode index j ^^^ 1)) :
+      mixedTranscriptHeap oracle.compression leaves (Opening.lowerNode index j ^^^ 1)) :
     lowerDigestFold oracle index leaf sibling levels =
-      transcriptHeap true oracle.compression leaves (Opening.lowerNode index levels) := by
+      mixedTranscriptHeap oracle.compression leaves (Opening.lowerNode index levels) := by
   induction levels with
   | zero =>
     simpa only [lowerDigestFold, Opening.lowerNode, Nat.pow_zero, Nat.div_one,
-      transcript_heap_leaf] using leafCorrect
+      mixed_heap_leaf] using leafCorrect
   | succ level ih =>
     rw [lowerDigestFold, ih (by omega) (fun j inside => siblings j (by omega)), siblings level (by omega),
       Opening.lower_node_next]

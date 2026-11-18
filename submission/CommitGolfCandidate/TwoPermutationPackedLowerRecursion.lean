@@ -34,7 +34,7 @@ structure LowerStepFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (leve
   digest :
     let pair := pathPair (Opening.lowerNode index level) (readBuffer before 12288 32)
       (lowerWireSibling before ordinal level)
-    readBuffer step.state 12288 32 = padLow (oracle.compression pair)
+    readBuffer step.state 12288 32 = projectMixed (Opening.lowerNode index level / 2) (oracle.compression pair)
   row :
     let pair := pathPair (Opening.lowerNode index level) (readBuffer before 12288 32)
       (lowerWireSibling before ordinal level)
@@ -46,7 +46,7 @@ structure LowerStepFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (leve
 
 def LowerStepRefines (step : Oracle → Nat → Index → Nat → MachineState → RecordBlock) : Prop :=
   ∀ (oracle : Oracle) (ordinal : Nat) (index : Index) (level : Nat) (state : MachineState),
-    level < 16 → checkProofByte ordinal+498 ≤ MEMORY_BYTES → LowerCursor ordinal index level state →
+    level < 16 → checkProofByte ordinal+502 ≤ MEMORY_BYTES → LowerCursor ordinal index level state →
       LowerStepFacts oracle ordinal index level state (step oracle ordinal index level state)
 
 def runLower (step : Oracle → Nat → Index → Nat → MachineState → RecordBlock)
@@ -66,7 +66,7 @@ structure LowerRunFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (level
   path : ProjectedPath run.rows (Opening.lowerNode index level) left (readBuffer before 12288 32)
     (readBuffer run.state 12288 32)
   honest : ∀ leaves : DigestTape,
-    let heap := transcriptHeap true oracle.compression leaves
+    let heap := mixedTranscriptHeap oracle.compression leaves
     readBuffer before 12288 32 = heap (Opening.lowerNode index level) →
     (∀ j, level ≤ j → j < 16 →
       lowerWireSibling before ordinal j = heap (Opening.lowerNode index j ^^^ 1)) →
@@ -77,25 +77,22 @@ structure LowerRunFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (level
       ((tail.1.1.charge run.cycles left,run.rows++tail.1.2),left+tail.2)
 
 private theorem saved_wire (before after : MachineState) (ordinal level : Nat)
-    (room : checkProofByte ordinal+498 ≤ MEMORY_BYTES) (within : level<16) (framed : LowerFrame before after) :
-    lowerWireSibling after ordinal level = lowerWireSibling before ordinal level := by
+    (room : checkProofByte ordinal+502≤MEMORY_BYTES) (within : level<16) (framed : LowerFrame before after) :
+    lowerWireSibling after ordinal level=lowerWireSibling before ordinal level := by
+  have geometry := lower_proof_geometry ordinal level within room
   apply lower_wire_sibling_frame
   intro j inside
-  by_cases first : level=0
-  · change checkProofByte ordinal+498 ≤ 2^36 at room
-    simp only [lowerProofByte,lowerSiblingWidth,first,ite_true] at inside ⊢
-    unfold checkProofByte at room ⊢
-    exact framed _ (by omega) (Or.inr (by omega)) (Or.inr (by omega))
-  · change checkProofByte ordinal+498 ≤ 2^36 at room
-    simp only [lowerProofByte,lowerSiblingWidth,first,ite_false] at inside ⊢
-    unfold checkProofByte at room ⊢
-    exact framed _ (by omega) (Or.inr (by omega)) (Or.inr (by omega))
+  have fits : lowerProofByte ordinal level+j<2^36 := by
+    have bound := geometry.2.2
+    change lowerProofByte ordinal level+lowerSiblingWidth level≤2^36 at bound
+    omega
+  exact framed _ (by omega) (Or.inr (by omega)) (Or.inr (by omega))
 
-attribute [local irreducible] execute checkEvaluation transcriptHeap readBuffer
+attribute [local irreducible] execute checkEvaluation readBuffer
 
 theorem run_lower_facts (step : Oracle → Nat → Index → Nat → MachineState → RecordBlock)
     (kernel : LowerStepRefines step) (oracle : Oracle) (ordinal : Nat) (index : Index)
-    (left level : Nat) (remaining : level+left=16) (room : checkProofByte ordinal+498 ≤ MEMORY_BYTES)
+    (left level : Nat) (remaining : level+left=16) (room : checkProofByte ordinal+502 ≤ MEMORY_BYTES)
     (state : MachineState) (cursor : LowerCursor ordinal index level state) :
     LowerRunFacts oracle ordinal index level left state (runLower step oracle ordinal index left level state) := by
   induction left generalizing level state with
@@ -140,7 +137,7 @@ theorem run_lower_facts (step : Oracle → Nat → Index → Nat → MachineStat
           change 2*2^level ≤ 16777216+index.val
           omega
         change readBuffer head.state 12288 32 =
-          transcriptHeap true oracle.compression leaves (Opening.lowerNode index (level+1))
+          mixedTranscriptHeap oracle.compression leaves (Opening.lowerNode index (level+1))
         rw [headDigest, child, siblings level (by omega) fit,Opening.lower_node_next]
         exact packed_honest_heap_climb oracle leaves _ low (Opening.lower_node_bound index level)
       · intro k next within

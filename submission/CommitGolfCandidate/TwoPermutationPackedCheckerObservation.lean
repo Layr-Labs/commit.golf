@@ -38,7 +38,7 @@ private abbrev rawObserved (oracle : Oracle) (input : CheckInput) :=
     (execute packedImage 34359803904 (Assembly.submission.initialState .check input) false))
 
 private theorem raw_empty (oracle : Oracle) (input : CheckInput)
-    (fits : input.proof.length ≤ 8355061248) (empty : input.positions.card = 0) :
+    (fits : input.proof.length ≤ 8422170112) (empty : input.positions.card = 0) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   obtain ⟨result, executed, terminal, succeeds⟩ := header_empty input fits empty
   unfold rawObserved
@@ -52,7 +52,7 @@ private theorem raw_empty (oracle : Oracle) (input : CheckInput)
     exact canonical.symm ▸ honest_input_empty oracle message input.positions salts empty
 
 private theorem raw_short (oracle : Oracle) (input : CheckInput)
-    (fits : input.proof.length ≤ 8355061248) (short : input.proof.length < 498*input.positions.card) :
+    (fits : input.proof.length ≤ 8422170112) (short : input.proof.length < 502*input.positions.card) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   obtain ⟨result,executed,failed⟩ := header_short input fits short
   unfold rawObserved
@@ -66,7 +66,7 @@ private theorem raw_short (oracle : Oracle) (input : CheckInput)
     rw [failed] at impossible
     cases impossible
   · intro message salts canonical
-    have required : 498*input.positions.card ≤ input.proof.length :=
+    have required : 502*input.positions.card ≤ input.proof.length :=
       canonical.symm ▸ honest_input_records_fit oracle message input.positions salts
     omega
 
@@ -85,8 +85,8 @@ private theorem raw_positive (record : Oracle → Nat → Index → MachineState
       ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
-    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8355061248)
-    (nonempty : input.positions.card ≠ 0) (long : 498*input.positions.card ≤ input.proof.length) :
+    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8422170112)
+    (nonempty : input.positions.card ≠ 0) (long : 502*input.positions.card ≤ input.proof.length) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   obtain ⟨state,cursor,memory,executeHeader⟩ := header_positive input fits nonempty long
   have cardinal := checker_positions_bound input
@@ -107,11 +107,11 @@ private theorem raw_checker_observation (record : Oracle → Nat → Index → M
       ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
-    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8355061248) :
+    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8422170112) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   by_cases empty : input.positions.card = 0
   · exact raw_empty oracle input fits empty
-  by_cases short : input.proof.length < 498*input.positions.card
+  by_cases short : input.proof.length < 502*input.positions.card
   · exact raw_short oracle input fits short
   exact raw_positive record verified cap oracle input fits empty (Nat.le_of_not_gt short)
 

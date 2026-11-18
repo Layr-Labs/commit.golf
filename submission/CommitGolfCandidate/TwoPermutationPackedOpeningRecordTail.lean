@@ -27,13 +27,13 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 open Opening (recordMarkAddress)
 
 def recordTailInstructions : List Instr :=
-  Opening.recordTailInstructions.take 5 ++ [.BEQ .x18 .x0 8, .JAL .x0 2094796]
+  Opening.recordTailInstructions.take 5 ++ [.BEQ .x18 .x0 8, .JAL .x0 2094780]
 
 def recordTailPrefix (state : MachineState) (count : Nat) : MachineState :=
   (recordTailInstructions.take count).foldl execInstrBr state
 
 private theorem record_tail_decoded (i : Fin 6) :
-    (openingImage.code[596 + i.val]?).bind Opening.decodeBase =
+    (openingImage.code[600 + i.val]?).bind Opening.decodeBase =
       some (recordTailInstructions[i.val]?.getD .EBREAK) := by
   fin_cases i <;> rfl
 
@@ -52,7 +52,7 @@ private theorem record_tail_ordinary (state : MachineState) (i : Fin 6)
   fin_cases i <;> simp [recordTailInstructions, Opening.recordTailInstructions] at valid ⊢ <;> exact ite_eq_left valid
 
 /-- Mark the current cap group, advance the ordinal, and branch if any remain. -/
-theorem execute_record_tail (state : MachineState) (pc : state.pc = 0x1950) (fuel : Nat)
+theorem execute_record_tail (state : MachineState) (pc : state.pc = 0x1960) (fuel : Nat)
     (allowCoins : Bool) (markAccess : accessValid (recordMarkAddress state) 8 = true) :
     execute openingImage (6 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (recordTailPrefix state 6) allowCoins
@@ -60,7 +60,7 @@ theorem execute_record_tail (state : MachineState) (pc : state.pc = 0x1950) (fue
   apply execute_unit_steps (states := recordTailPrefix state)
   intro i bounded
   refine ⟨.base (recordTailInstructions[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply packed_fetch_base _ (596+i) _ (by omega) _ (record_tail_decoded ⟨i, bounded⟩)
+  · apply packed_fetch_base _ (600+i) _ (by omega) _ (record_tail_decoded ⟨i, bounded⟩)
     interval_cases i <;> simp [recordTailPrefix, recordTailInstructions, Opening.recordTailInstructions, execInstrBr, pc]
   · rw [record_tail_prefix_succ state i bounded]
     apply record_tail_ordinary _ ⟨i, bounded⟩
@@ -70,24 +70,24 @@ theorem execute_record_tail (state : MachineState) (pc : state.pc = 0x1950) (fue
         execInstrBr, signExtend12, markAccess]
   · interval_cases i <;> rfl
 
-theorem record_tail_post (state : MachineState) (pc : state.pc = 0x1950) :
+theorem record_tail_post (state : MachineState) (pc : state.pc = 0x1960) :
     let after := recordTailPrefix state 6
     after.mem = (state.setMem (recordMarkAddress state) (state.getReg .x23)).mem ∧
     after.getReg .x8 = state.getReg .x8 + 8#64 ∧
     after.getReg .x18 = state.getReg .x18 - 1 ∧
-    after.pc = if state.getReg .x18 - 1 = 0#64 then 0x196c else 0x1968 := by
+    after.pc = if state.getReg .x18 - 1 = 0#64 then 0x197c else 0x1978 := by
   by_cases done : state.getReg .x18 + 18446744073709551615#64 = 0#64 <;>
     simp [recordTailPrefix, recordTailInstructions, Opening.recordTailInstructions, execInstrBr, recordMarkAddress, signExtend12,
       signExtend13, BitVec.sub_eq_add_neg, pc, done]
 
 /-- The continuing latch jumps back to the next record after its common prefix. -/
-theorem execute_record_continue (state : MachineState) (pc : state.pc = 0x1968)
+theorem execute_record_continue (state : MachineState) (pc : state.pc = 0x1978)
     (fuel : Nat) (allowCoins : Bool) :
     execute openingImage (1+fuel) state allowCoins =
       (do let result ← execute openingImage fuel (state.setPC 0x1034) allowCoins
           return result.charge 1 0) := by
-  have fetched := packed_fetch_base state 602 (.JAL .x0 2094796) (by decide) pc rfl
-  have step : ordinaryStep state (.base (.JAL .x0 2094796)) = some (state.setPC 0x1034) := by
+  have fetched := packed_fetch_base state 606 (.JAL .x0 2094780) (by decide) pc rfl
+  have step : ordinaryStep state (.base (.JAL .x0 2094780)) = some (state.setPC 0x1034) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21, pc, MachineState.setReg]
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched step]
   rfl

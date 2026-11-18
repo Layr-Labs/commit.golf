@@ -1,5 +1,5 @@
-import CommitGolfCandidate.TwoPermutationPackedLowerRecursion
 import CommitGolfCandidate.TaggedPinnedModel
+import CommitGolfCandidate.TwoPermutationPackedLowerRecursion
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
@@ -62,13 +62,13 @@ private theorem leaf_sibling_frame (before after : MachineState) (input : CheckI
   apply lower_wire_sibling_frame
   intro digit inside
   have card := checker_positions_bound input
-  by_cases first : level = 0
-  · simp only [lowerProofByte,lowerSiblingWidth,first,ite_true] at inside ⊢
-    unfold checkProofByte
-    exact frame _ (by omega) (Or.inr (by unfold checkSourceWord; omega)) (Or.inr (by omega))
-  · simp only [lowerProofByte,lowerSiblingWidth,first,ite_false] at inside ⊢
-    unfold checkProofByte
-    exact frame _ (by omega) (Or.inr (by unfold checkSourceWord; omega)) (Or.inr (by omega))
+  have offsets : 16≤MixedWidth.siblingOffset level ∧
+      MixedWidth.siblingOffset level+MixedWidth.siblingWidth level≤502 := by
+    unfold MixedWidth.siblingOffset MixedWidth.siblingWidth
+    split_ifs <;> omega
+  change digit<MixedWidth.siblingWidth level at inside
+  unfold lowerProofByte checkProofByte
+  exact frame _ (by omega) (Or.inr (by unfold checkSourceWord; omega)) (Or.inr (by omega))
 
 attribute [local irreducible] execute checkEvaluation readBuffer
 
@@ -117,9 +117,9 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
     have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
       Eq.mp (congrArg (fun data => RecordInputFrame data ordinal before) canonical) framed
     change readBuffer later.state 12288 32 =
-      transcriptHeap true oracle.compression leaves (capGroup item.val)
+      mixedTranscriptHeap oracle.compression leaves (capGroup item.val)
     apply tail.honest leaves
-    · simpa only [Opening.lowerNode,Nat.pow_zero,Nat.div_one,transcript_heap_leaf] using entry.honest message salts canonical
+    · simpa only [Opening.lowerNode,Nat.pow_zero,Nat.div_one,mixed_heap_leaf] using entry.honest message salts canonical
     · intro level _ within
       rw [leaf_sibling_frame before early.state input ordinal level present within entry.frame]
       exact canonical_lower_wire_sibling oracle message input.positions salts ordinal present before loaded level within

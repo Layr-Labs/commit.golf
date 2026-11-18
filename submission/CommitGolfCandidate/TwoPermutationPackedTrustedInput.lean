@@ -29,7 +29,7 @@ theorem initial_state (input : CheckInput) :
 private theorem admitted_reference (input : CheckInput)
     (valid : input.proof.length ≤ submission.sizes.proof) :
     input.proof.length ≤ Assembly.submission.sizes.proof := by
-  change input.proof.length ≤ 8355061248 at valid
+  change input.proof.length ≤ 8422170112 at valid
   change input.proof.length ≤ 8858378240
   omega
 

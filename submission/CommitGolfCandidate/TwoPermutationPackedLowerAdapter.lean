@@ -1,5 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedLowerRecursion
 import CommitGolfCandidate.TwoPermutationPackedLevelSpec
+import CommitGolfCandidate.TwoPermutationMixedTreeLevels
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
@@ -18,14 +19,14 @@ theorem lower_step_from_level (step : Oracle → MachineState → Nat → Nat �
   let node := Opening.lowerNode index level
   let proof := lowerProofByte ordinal level
   let left := 16-level
-  have widthEq : width (decide (left=16)) = lowerSiblingWidth level := by
+  have widthEq : width (decide (14≤left)) = lowerSiblingWidth level := by
     rw [lower_width_from_counter]
-    change width (decide (16-level=16)) = _
-    by_cases first : 16-level=16 <;> simp [width,first]
-  have wireEq : wire state proof (decide (left=16)) = lowerWireSibling state ordinal level := by
+    change width (decide (14≤16-level)) = _
+    by_cases first : 14≤16-level <;> simp [width,first]
+  have wireEq : wire state proof (decide (14≤left)) = lowerWireSibling state ordinal level := by
     rw [lower_wire_sibling_from_cursor]
-    change wire state (lowerProofByte ordinal level) (decide (16-level=16)) = _
-    by_cases first : 16-level=16 <;> simp [wire,first]
+    change wire state (lowerProofByte ordinal level) (decide (14≤16-level)) = _
+    by_cases first : 14≤16-level <;> simp [wire,first]
   have bounds := lower_proof_geometry ordinal level inside room
   have nodeBound : node < 2^64 := by
     have fit := Opening.lower_node_bound index level
@@ -50,7 +51,12 @@ theorem lower_step_from_level (step : Oracle → MachineState → Nat → Nat �
   · exact (realStep.saved .x23 (by decide)).trans cursor.digest
   · exact (realStep.saved .x24 (by decide)).trans cursor.pair
   · exact (realStep.saved .x5 (by decide)).trans cursor.selector
-  · simpa only [levelPair,wireEq] using realStep.digest
+  · let answer : BitVec 256 := oracle.compression
+      (pathPair node (readBuffer state 12288 32) (lowerWireSibling state ordinal level))
+    have actual : readBuffer (step oracle state node proof left).state 12288 32 =
+        (if 15≤left then answer else CommitGolfCandidate.ShortTree.padLow answer) := by
+      simpa only [COMPRESSION_OUTPUT_LENGTH,answer,levelPair,wireEq] using realStep.digest
+    exact actual.trans (mixed_lower_parent_projection index level inside answer).symm
   · simpa only [levelPair,wireEq] using realStep.row
 
 end TwoPermutationPrototype.Packed.Checker

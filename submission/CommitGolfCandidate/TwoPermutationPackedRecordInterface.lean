@@ -10,7 +10,7 @@ open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 open TwoPermutationPrototype.PackedHonest (honestHeap)
 
 def ProofWithin (input : CheckInput) : Prop :=
-  498*input.positions.card ≤ input.proof.length ∧ input.proof.length ≤ 8355061248
+  502*input.positions.card ≤ input.proof.length ∧ input.proof.length ≤ 8422170112
 
 structure RecordBlock where
   state : MachineState

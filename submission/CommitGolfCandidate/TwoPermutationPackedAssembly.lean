@@ -38,7 +38,7 @@ attribute [local irreducible] RV64.Chain.expansion RV64.Chain.chainRun RV64.pack
 
 theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Message)
     (result : Execution) (reachable : result ∈ support (packedSubmission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 619658240 ∧ result.oracleCalls = 51856895 := by
+    result.exit = .success ∧ result.cycles = 607075918 ∧ result.oracleCalls = 51856895 := by
   have entry : RV64.CommitEntry (packedSubmission.initialState .commit message) := ⟨rfl,rfl,rfl,rfl⟩
   erw [RV64.packed_submission_wide_commit_run leaves packedSubmission RV64.packed_manifest_image.symm
     (by decide) message entry] at reachable
@@ -49,7 +49,7 @@ theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Messag
 theorem packed_certificate (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (checks : CheckerFacts packedSubmission)
     (privateView : packedSubmission.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
-    Certificate packedSubmission 67584 619658240 88311 :=
+    Certificate packedSubmission 68096 607075918 88823 :=
   certificate_of_facts (fun m result hit => by
     obtain ⟨ex,cost,calls⟩ := packed_commit_resources leaves m result hit
     exact ⟨ex,cost,calls.trans_le (by decide)⟩) packed_admitted
