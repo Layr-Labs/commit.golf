@@ -139,8 +139,8 @@ def selectRows (k : Fin 3) : List Row :=
       else [(798,.ADDI .x7 .x0 1720),(799,.JAL .x0 16)])) ++
   [(803,.SLLI .x30 .x6 4),(804,.ADD .x30 .x30 .x22)]
 def copyRows : List Row := [(805,.LD .x31 .x7 0),(806,.SD .x30 .x31 0),(807,.LD .x31 .x7 8),(808,.SD .x30 .x31 8)]
-def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.ADDI .x17 .x17 (-1)),(811,.BNE .x17 .x0 7908)] ++
-  (if last then [(812,.JAL .x0 2093964)] else [])
+def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.BNE .x14 .x17 7912)] ++
+  (if last then [(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] else [])
 
 def postRows (k : Fin 3) (last : Bool) : List Row := selectRows k ++ copyRows ++ nextRows last
 

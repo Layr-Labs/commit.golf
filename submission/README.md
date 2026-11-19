@@ -1,3 +1,34 @@
+# Product: opener latch end-index merge
+
+Stacked on the alignment-aware writer-copy work below (commit `829dd8c`,
+claim 504,594,887 commit + 123,030 opening cycles). The prefix pass's loop
+latch compared a per-position down-counter against zero
+(`ADDI x17,x17,-1` / `BNE x17,x0`). The latch now compares the advanced
+index pointer `x14` against an end index computed once per pass.
+
+Rows 722, 731 and 809..812 only; the word count, the image length and every
+other PC are unchanged. `x25` is dead between the header and the writer
+(it is written at row 722 and next read at row 669 of the writer, which
+runs after the pass), so it carries `8*card` during the pass and is restored
+to the trapdoor base on the exit path. Non-last positions drop from three
+latch steps to two; the last position keeps its exit step. Certified:
+**-127 opening cycles** (127 non-last positions x 1 cycle).
+
+Certificate: **504,594,887 commit + 122,903 opening = 504,717,790 cycles**
+at **72,160** proof bytes. Product: **504,717,790 x 72,160 = 36,420,435,726,400**,
+which is **9,164,320 (127 cycles)** below 55e0c64.
+
+Lean: `GroupOpenSetup` (`x25 := 8*card`), `GroupOpenStep` (`Registers.endReg`
+and `Registers.shift` replace `leftReg`; `Base` factored out of `Input`),
+`GroupOpenWalk` (`nextRows`), `GroupOpenLatch` (`postSteps` accounting),
+`GroupOpenPass` (`347*n+1`), `GroupOpenEffect`/`GroupOpenFixed`/
+`GroupOpenHeader*`/`GroupOpenInitial`/`GroupOpenResume` (bound threading),
+`GroupOpenClosing`/`GroupOpenFull` (claim), image literals in
+`GroupOpenImage`, `K1Manifest`, `StudyCore`, `programs.json`, `claim.json`,
+`Solution.lean`.
+
+## Previous: alignment-aware 28-byte writer copy
+
 # Product: alignment-aware 28-byte writer copy
 
 Stacked on `6d94d62e` (`devin/next9`). The level-13 sibling's first 28 bytes
