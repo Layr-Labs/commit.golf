@@ -129,11 +129,14 @@ def sibRows : List Row :=
 /-- A new quartet after its inverse call: rows 762..776. -/
 def headPost : List Row := restoreRows ++ sibRows
 
-/-- Reply-offset rows by rank class `k` (0: rank 0, 1: rank 1, 2: rank ≥ 2), ending with the salt destination. -/
+/-- Reply-offset rows by rank class `k` (0: rank 0, 1: rank 1, 2: rank ≥ 2), ending with the salt destination.
+`x7` is `16 (r-1)` after 797; rank 0 adds 16 back to `x7` (giving 0), rank 1 overwrites it with 184 and
+rank ≥ 2 keeps it. -/
 def selectRows (k : Fin 3) : List Row :=
-  [(796,.ADDI .x7 .x28 (-1)),(797,.SLLI .x7 .x7 4),(798,.BLTU .x23 .x28 16)] ++
-  (if k.val ≤ 1 then [(799,.ADDI .x7 .x0 0),(800,.BNE .x28 .x23 8)] else []) ++
-  (if k.val = 1 then [(801,.ADDI .x7 .x0 184)] else []) ++
+  [(796,.ADDI .x7 .x28 (-1)),(797,.SLLI .x7 .x7 4),(798,.BNE .x28 .x0 8)] ++
+  (if k.val = 0 then [(799,.ADDI .x7 .x7 16),(800,.BNE .x28 .x23 8)] else
+    (if k.val = 1 then [(800,.BNE .x28 .x23 8),(801,.ADDI .x7 .x0 184)]
+      else [(800,.BNE .x28 .x23 8)])) ++
   [(802,.ADD .x7 .x7 .x12),(803,.SLLI .x30 .x6 4),(804,.ADD .x30 .x30 .x22)]
 def copyRows : List Row := [(805,.LD .x31 .x7 0),(806,.SD .x30 .x31 0),(807,.LD .x31 .x7 8),(808,.SD .x30 .x31 8)]
 def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.ADDI .x17 .x17 (-1)),(811,.BNE .x17 .x0 7908)] ++

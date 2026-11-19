@@ -1,6 +1,11 @@
-# Odd quartets reuse a2, with a shorter level-21 setup, a straight-line opener link chain, a 374-based link counter and word-wide record copies (four 32-byte fields and writer levels 2..12)
+# One opening step less per position: the rank→salt-offset map re-encoded in place
 
-Built on our odd-quartet entry `750657ae` (kaankolcu), itself kshitij-hash's
+Built on the current master `74e3f693-ac71-48cc-81de-21897463800a` (Bome2017, public commit
+`165be01526586c7a7a74416ff0a03b84d44377af`), which is `5d0c1c31` plus one shared 30-byte wide-copy stub
+for writer levels 2..12 (rows 1062..1096; 1,867 opening words). This entry changes one 7-word block of
+the opener and nothing else.
+
+The master's own lineage, unchanged here: our odd-quartet entry `750657ae` (kaankolcu), itself kshitij-hash's
 `cfad3d49-5038-4850-be68-98a1ee7d4f48` (public commit `34159694b89006446e2eaf6a3f7584fb47a73b04`) with the odd
 quartet blocks moved 200 bytes below the even ones. Three changes on top (our `804b758d`):
 
@@ -16,7 +21,7 @@ quartet blocks moved 200 bytes below the even ones. Three changes on top (our `8
   level-0 sibling, rows 43, 79, 115, 153) jump to stubs (rows 930–1061) that copy with
   `ld/sd` or `lw/sw` when the destination allows it. −2,304 on the certified worst set.
 
-This entry (on our `804b758d`, the tree above) changes only the opener, in two places:
+The master (on our `804b758d`, the tree above) changes only the opener, in two places:
 
 - **374-based link counter** (pepedesigner's `ca54b35f-af11-4644-8031-a6d8b9e6fef6`, public commit
   `9d9b1e75ed5a76bc9185efb3ea9826a621d1423e`, taken over unchanged, image words and Lean): the per-position counter
@@ -25,14 +30,49 @@ This entry (on our `804b758d`, the tree above) changes only the opener, in two p
   one shared stub (rows 1062–1096; 1,097 opening words) that copies with `ld/sd`, `lw/sw` and a final `lhu/sh` when
   the destination allows it. −4,928 on the certified worst set.
 
+## This entry: the rank→salt-offset map
+
+The opener copies each position's 16-byte salt into the record at `x12 + off(rank)`, where
+`off(0) = 0`, `off(1) = 184` and `off(r) = 16 (r-1)` for `r ≥ 2`. The map sits in the seven words
+796..802 and was four instructions on the common path (rank ≥ 2), six for rank 0 and seven for rank 1:
+
+```
+796 addi x7,x28,-1   797 slli x7,x7,4   798 bltu x23,x28,+16
+799 addi x7,x0,0     800 bne x28,x23,+8  801 addi x7,x0,184   802 add x7,x7,x12
+```
+
+Both words 798 and 799 are re-encoded in place, so the image length, every other word, every PC outside the
+block and the phase layout are unchanged (the master's rank-map words are byte-identical to the ones this
+trim was first built on):
+
+```
+796 addi x7,x28,-1   797 slli x7,x7,4   798 bne x28,x0,+8
+799 addi x7,x7,16    800 bne x28,x23,+8  801 addi x7,x0,184   802 add x7,x7,x12
+```
+
+`x7` is `16 (r-1)` after 797; rank 0 falls through 798 and 799 adds 16 back (giving 0), rank ≥ 1 jumps over
+799, and 800/801 keep rank 1 at 184 while rank ≥ 2 keeps `16 (r-1)`. The salt address is identical for every
+rank (simulated for `r = 0..10`), so every record byte, proof byte and digest is unchanged; only the path
+lengths move, from 4/6/7 to 5/6/6. The worst case is now rank 1 at 6 steps instead of 7, which is the only
+rank-dependent term in the certified opening bound: `postSteps` becomes `13 + (2 for rank 0, 2 for rank 1,
+1 for rank ≥ 2) + [last]` and the per-position cycle bound 352 → 351. The opening bound drops by 128 cycles:
+`31 + (37 + 299 + 15)·128 + 1 + (90,980 − 15) = 135,925`.
+
+Proofs: `GroupOpenWalk.selectRows` carries the new row list per rank class (including the word-800 branch for
+rank ≥ 2); `GroupOpenSelect.choose_legal`/`chosen` re-prove the branch outcomes and `x7 = readAt i`, with
+`rank_ne_zero`/`rank_ne_one` matching the post-`simp` `BitVec.ofNat` form; `GroupOpenLatch.postSteps`/
+`post_length` re-count; `GroupOpenPass.pass_cycles_bound` is 351·n+1; `GroupOpenFull.per_steps_le`/
+`pass_steps_bound` are 167·n; the claim sites (`GroupOpenClosing`, `GroupOpenFull.all_resources`,
+`Solution.lean`, `claim.json`) carry 135,925.
+
 ## Result
 
-| | `cfad3d49` | `750657ae` | `804b758d` | This entry |
+| | `cfad3d49` | `750657ae` | `74e3f693` (master) | This entry |
 | --- | ---: | ---: | ---: | ---: |
 | proof bytes | 72,160 | 72,160 | 72,160 | 72,160 |
 | commitment cycles | 506,688,062 | 504,595,021 | 504,595,017 | 504,595,017 |
-| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 143,661 | 137,837 |
-| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,421,943,004,480 | 36,421,522,744,640 |
+| opening cycles (128 positions, proved bound) | 154,669 | 153,901 | 136,053 | **135,925** |
+| score | 36,573,771,468,960 | 36,422,682,211,520 | 36,421,394,011,200 | **36,421,384,774,720** |
 
 ## The level-21 setup
 
@@ -125,9 +165,9 @@ and −512 cycles per 4,096-leaf tile, −2,097,152 cycles in all.
 
 - Commitment: exact, 504,595,017 cycles (Lean: `GroupedChecks.resources`; `budget_q` and a full-size RV64IM
   emulation give the same number and the same commitment as `750657ae`).
-- Opening: at most 137,837 cycles for 128 positions, `31 + (37 + 299 + 16)·128 + 1 + (92,764 − 15)` (`750657ae`'s
-  per-term bound with the link chain at 299 instead of 368 cycles per position and the 32- and 30-byte wide copies in
-  the writer: each record costs `215 + 4·c32(o) + c30(o)`; over 128 records 99,996 → 92,764).
+- Opening: at most 135,925 cycles for 128 positions, `31 + (37 + 299 + 15)·128 + 1 + (90,980 − 15)` (the
+  master's per-term bound with the rank map at 15 instead of 16 cycles per position; the writer term is 90,980
+  with the 32- and 30-byte wide copies, each record costing `215 + 4·c32(o) + c30(o)`).
   A full-size RV64IM emulation against `804b758d`'s opener, on the certified worst set and on positions 0..127 for
   1..9, 13, 64, 127 and 128 positions, gives exactly `−7 − 46, −7 − 28, −7 − 46, −7 − 34` cycles per record for
   `o mod 4 = 0..3` (worst set, 128 positions: 143,661 → 137,837), byte-identical proofs, honest acceptance and every
@@ -136,7 +176,7 @@ and −512 cycles per 4,096-leaf tile, −2,097,152 cycles in all.
 
 ## What is proved
 
-`Solution.lean` states `Certificate submission 72160 504595017 137837`. As in cfad3d49 it rests on the checker
+`Solution.lean` states `Certificate submission 72160 504595017 135925`. As in cfad3d49 it rests on the checker
 facts (termination, query budget, binding, honest acceptance), the linked hiding hybrid, the exact commit run, the
 opening resource bound and the opened-proof correspondence; here every statement that mentions the quartet layout
 or the heap leaf order is re-proved for the new images. `#print axioms CommitGolf.Challenge.certificate` shows only
@@ -144,7 +184,9 @@ or the heap leaf order is re-proved for the new images. `#print axioms CommitGol
 
 ## Provenance and credits
 
-The tree is kshitij-hash's `cfad3d49-5038-4850-be68-98a1ee7d4f48` and, through it, its lineage as credited in that
+The master `74e3f693` is Bome2017's (public commit `165be01`); the 30-byte shared stub for writer levels
+2..12 and its proofs (`GroupOpenWideCopy30` and cost plumbing) are Bome2017's. Below it the tree is
+kshitij-hash's `cfad3d49-5038-4850-be68-98a1ee7d4f48` and, through it, its lineage as credited in that
 entry: kaankolcu `606a7986-afd0-4f91-84b4-6c11f779c9d1`, `bc5cc89e-4952-4ff7-be8d-9d11905d730c`,
 `c08b0128-14a7-48dd-a745-070c3a77d754`, `b64a994e-6d0b-46e0-8c37-b6e642e3828a`, `33bdbed6-b605-43fc-b808-348ea3c87e3b`,
 `4dbc847a-414f-41f2-854d-79e6c80f26fc`; dadon `2b2405a1-5be9-4681-b48e-a0fcefd4588d`,
@@ -196,4 +238,11 @@ Relative to our `804b758d`, these files of `CommitGolfCandidate/` differ (one ne
   `GroupOpenCopy`, `GroupOpenPrefix`, `GroupOpenRecordData`, `GroupOpenRecordRun`, `GroupOpenRecordsAPI`,
   `GroupOpenRecords`, `GroupOpenSiblingRun`, `GroupOpenUpperRun`, `GroupOpenWideCopy` (new).
 
-`programs.json`, `claim.json`, `Solution.lean` and this README are new for this entry.
+Relative to the master `74e3f693` (commit `165be01`), this entry changes only `GroupOpenImage.lean`
+(words 798/799 of the 1,867-word opener), the same two words of the duplicate literal in
+`StudyCore.lean` (`CapStudy.openingImage`), `K1Manifest.lean` (the two opening chunks containing those words),
+`GroupOpenWalk.lean` (`selectRows`), `GroupOpenSelect.lean` (`rank_ne_zero`, `rank_ne_one`, `choose_legal`,
+`chosen`), `GroupOpenLatch.lean` (`postSteps`, `post_length`), `GroupOpenPass.lean` (`pass_cycles_bound`),
+`GroupOpenFull.lean` (`per_steps_le`, `pass_steps_bound`, `all_resources`), `GroupOpenClosing.lean`
+(`claimOpeningCycles`), `Solution.lean` and `claim.json`; `programs.json` is re-packed after the two words and
+this README is new. No other file of the master differs.
