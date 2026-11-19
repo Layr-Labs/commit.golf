@@ -1,5 +1,6 @@
 import CommitGolfCandidate.Model
 import CommitGolfCandidate.Memory
+import CommitGolfCandidate.CopyRefinement
 import CommitGolfCandidate.CommitLeaf
 import CommitGolfCandidate.CheckEvaluation
 
@@ -88,21 +89,27 @@ theorem check_leaf_step_outside (state : MachineState) (answer : BitVec 256)
     exact ⟨outside 4 (by decide), outside 5 (by decide), outside 6 (by decide), outside 7 (by decide)⟩
   · exact ⟨outside 0 (by decide), outside 1 (by decide), outside 2 (by decide), outside 3 (by decide)⟩
 
-/-- Commit and check use the identical leaf copy and compression operations. -/
+/-- Commit and check use identical leaf copies and compression memory effects.
+Commit prepares its syscall registers in the subroutine prologue. -/
 theorem commit_leaf_copy_eq_check (state : MachineState) :
     commitLeafCopyState state = checkLeafCopyState state := rfl
 
-theorem commit_compression_eq_check (state : MachineState) (answer : BitVec 256) :
-    commitCompressionState state answer = checkCompressionState state answer := rfl
+theorem commit_compression_memory_eq_check (state : MachineState) (answer : BitVec 256) :
+    (commitCompressionState state answer).mem = (checkCompressionState state answer).mem := rfl
 
-/-- The two leaf-step states differ only in their next program counter. -/
+/-- Both leaf loops have identical memory effects despite their different
+syscall setup and program counters. -/
 theorem commit_leaf_step_memory (state : MachineState) (answer : BitVec 256) :
-    (commitLeafStepState state answer).mem = (checkLeafStepState state answer).mem := rfl
+    (commitLeafStepState state answer).mem = (checkLeafStepState state answer).mem := by
+  change (commitCompressionState (commitLeafCopyState state) answer).mem =
+    (checkCompressionState (checkLeafCopyState state) answer).mem
+  rw [commit_leaf_copy_eq_check]
+  exact commit_compression_memory_eq_check _ _
 
 theorem commit_leaf_step_digest (state : MachineState) (answer : BitVec 256) :
     readBuffer (commitLeafStepState state answer) 256 32 = answer := by
-  change readBuffer (checkCompressionState (checkLeafCopyState state) answer) 256 32 = answer
-  exact check_compression_digest _ _
+  rw [read_buffer_memory_congr _ _ (commit_leaf_step_memory state answer)]
+  exact check_leaf_step_digest state answer
 
 /-- Commitment uses the same input block ordering as checking. -/
 theorem commit_leaf_input (state : MachineState)
@@ -119,7 +126,10 @@ theorem commit_leaf_step_outside (state : MachineState) (answer : BitVec 256)
     (address : Word) (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256 + 8*i)) :
     (commitLeafStepState state answer).getMem address = state.getMem address := by
-  change (checkLeafStepState state answer).getMem address = _
+  have same : (commitLeafStepState state answer).getMem address =
+      (checkLeafStepState state answer).getMem address := by
+    simp only [MachineState.getMem, commit_leaf_step_memory state answer]
+  rw [same]
   exact check_leaf_step_outside state answer address scratch outside
 
 /-- The checker leaf loop computes the reference fold over the message blocks.

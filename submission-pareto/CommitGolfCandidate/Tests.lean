@@ -23,7 +23,21 @@ private def ensure (label : String) (condition : Bool) : IO Unit :=
     let committed := run (s.run .commit message)
     ensure "commit must halt successfully" (committed.exit == Exit.success)
     ensure "commit query count" (committed.oracleCalls == 9 * 2^depth - 1)
+    let baselineCode := (commitCode depth).take
+      ((commitCode depth).length - commitLeafSubroutine.length) ++ leafSubroutine
+    let baseline : Submission := { s with image := fun program => match program with
+      | .commit => ⟨assemble baselineCode, []⟩
+      | other => s.image other }
+    let baselineCommitted := run (baseline.run .commit message)
+    ensure "baseline commit must halt successfully" (baselineCommitted.exit == Exit.success)
+    ensure "hoisting saves exactly 35 cycles per leaf"
+      (baselineCommitted.cycles == committed.cycles + 35 * 2^depth)
+    ensure "commit image length is unchanged"
+      ((s.image .commit).code.length == (baseline.image .commit).code.length)
     let (root, trapdoor) := s.readCommit committed
+    let (baselineRoot, baselineTrapdoor) := baseline.readCommit baselineCommitted
+    ensure "hoisting preserves the baseline root and private trapdoor"
+      (root == baselineRoot && trapdoor == baselineTrapdoor)
     let salt := fun i => trapdoor.extractLsb' (8 * (64 * 2^depth + 32*i)) 256
     let leaves := (List.range (2^depth)).map fun i =>
       leafDigest testOracle.compression (salt i) (message ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩)

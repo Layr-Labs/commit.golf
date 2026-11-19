@@ -92,6 +92,13 @@ def leafSubroutine : List Asm :=
   copyDigest 8 21 0 32 ++ compressScratch ++
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
+/-- Commitment uses the same scratch address for all eight blocks. Initialize
+the syscall registers once per leaf rather than once per compression. -/
+def commitLeafSubroutine : List Asm :=
+  [.label "leaf", addi 28 0 8] ++ compressScratch.take 5 ++
+  [.label "leaf-block"] ++ copyDigest 8 21 0 32 ++ [insn 0x73] ++
+  [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
+
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
@@ -109,7 +116,7 @@ def commitCode (depth : Nat) : List Asm :=
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
    addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ leafSubroutine
+  copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
