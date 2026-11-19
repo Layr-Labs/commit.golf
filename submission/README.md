@@ -1,3 +1,38 @@
+# Pareto port: shorter special-rank salt selection
+
+This candidate ports `552a6b9d` and replaces opener words 796..802 in place. Commit and checker images,
+image lengths, ABI, proof encoding and all other opener words are unchanged.
+
+```text
+word  before                       after
+796   addi x7,x28,-1                slli x7,x28,4
+797   slli x7,x7,4                  beq x28,x23,+16
+798   bne x28,x0,+8                 beq x28,x0,+16
+799   addi x7,x7,16                 addi x7,x7,1520
+800   bne x28,x23,+8                jal x0,+12
+801   addi x7,x0,184                addi x7,x0,184
+802   add x7,x7,x12                 add x7,x7,x12
+```
+
+At entry `x28` is the salt rank, `x23 = 1`, and `x12 = 1536`. Rank 0 branches to word 802 and
+rank 1 branches to word 801; both paths take four selection instructions instead of six.
+Ranks at least 2 form `16*rank + 1520 = 1536 + 16*(rank-1)` and jump over the special cases,
+still taking five instructions. All paths reach word 803 with the same source address as before.
+
+The maximum post cost falls from 15 to 14 cycles (plus the final exit jump), giving
+`31 + (37 + 299 + 14)*128 + 1 + (90980 - 15) = 135797` opening cycles.
+The claim is **504595017 commit cycles, 135797 opening cycles, 72160 proof bytes**;
+the Pareto point is **[504730814, 72160]**, 128 cycles below the ported entry.
+
+RV64IM differential emulation with identity permutation and zero compression gives byte-identical
+proofs on empty, singleton, consecutive, random, and separated 128-position inputs, with zero and
+patterned trapdoor fixtures. The zero fixtures' proofs are accepted by the unchanged checker.
+For `131072*k + 363` (`k = 0..127`), cycles drop from 135925 to 135669. The new worst-case witness
+`131072*k + 739` takes 135797 cycles with 72160 proof bytes. Emulation is a regression check;
+the Lean certificate proves the bounds and correctness for every permitted oracle and honest input.
+
+## Ported entry's lineage
+
 # One opening step less per position: the rank→salt-offset map re-encoded in place
 
 Built on the current master `74e3f693-ac71-48cc-81de-21897463800a` (Bome2017, public commit

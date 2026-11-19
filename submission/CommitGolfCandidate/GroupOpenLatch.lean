@@ -145,13 +145,13 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
 
 def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 29 else 30
 def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 36 else 37
-def postSteps (i : Index) (left : Nat) := 13+(if kindOf i=0 then 2 else if kindOf i=1 then 2 else 1)+(if left=1 then 1 else 0)
+def postSteps (i : Index) (left : Nat) := 13+(if kindOf i=0 then 0 else if kindOf i=1 then 0 else 1)+(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
 def perCycles (i : Index) (left last : Nat) := headCycles i last+(chainCycles i+postSteps i left)
 
 private theorem post_length (k : Fin 3) (last : Bool) :
-    (postRows k last).length=13+(if k=0 then 2 else if k=1 then 2 else 1)+(if last then 1 else 0) ∧
+    (postRows k last).length=13+(if k=0 then 0 else if k=1 then 0 else 1)+(if last then 1 else 0) ∧
     price (postRows k last)=(postRows k last).length := by
   revert k last; decide
 

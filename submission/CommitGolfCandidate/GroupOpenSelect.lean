@@ -49,14 +49,14 @@ theorem choose_legal (s : MachineState) (i : Index) (pc : s.pc=address 796)
   rcases kind_cases i with ⟨r,k⟩|⟨r,k⟩|⟨r,k⟩ <;> rw [k]
   · rw [r] at sub
     simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,sub,one,address,
-      show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide] <;> decide
+      show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide] <;> decide
   · rw [r] at sub
     simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,sub,one,address,
-      show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide] <;> decide
+      show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide] <;> decide
   · have nz : BitVec.ofNat 64 (rank i.val)≠0#64 := rank_ne_zero i r
     have no : BitVec.ofNat 64 (rank i.val)≠1#64 := rank_ne_one i r
     simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,sub,one,nz,no,address,
-      show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide] <;> decide
+      show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide] <;> decide
 
 def choose (s : MachineState) (i : Index) := walkRows s (selectRows (kindOf i))
 
@@ -93,13 +93,13 @@ theorem choose_keeps (s : MachineState) (i : Index) (r : Reg) (a : r≠.x7) (b :
   unfold choose
   rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;> rw [k] <;> apply rows_preserve <;> intro p h u <;>
     simp [selectRows] at h <;> rcases h with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;>
-    first | exact bne_reg .. | exact bltu_reg .. | simp [execInstrBr,Ne.symm a,Ne.symm b]
+    first | exact bne_reg .. | exact bltu_reg .. | simp [execInstrBr,Ne.symm a,Ne.symm b,open_zero] <;> split <;> simp [MachineState.getReg_setPC]
 
 theorem chosen_memory (s : MachineState) (i : Index) : (choose s i).mem=s.mem := by
   unfold choose
   rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;> rw [k] <;> apply rows_memory <;> intro p h u <;>
     simp [selectRows] at h <;> rcases h with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;>
-    first | exact bne_mem .. | exact bltu_mem .. | simp [execInstrBr]
+    first | exact bne_mem .. | exact bltu_mem .. | simp [execInstrBr] <;> split <;> rfl
 
 theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
     (idx : s.getReg .x6=BitVec.ofNat 64 i.val) (sub : s.getReg .x28=BitVec.ofNat 64 (rank i.val))
@@ -112,22 +112,26 @@ theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
     simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,address,out,salts,e,dst,
       show signExtend12 (-1 : BitVec 12)=(-1 : Word) by decide,
       show signExtend12 16#12=16#64 by decide,show signExtend13 8#13=8#64 by decide,
-      show signExtend13 16#13=16#64 by decide]
-    decide
+      show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide]
   · rw [r] at sub
     simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,address,out,salts,
       show signExtend12 (-1 : BitVec 12)=(-1 : Word) by decide,
-      show signExtend12 184#12=184#64 by decide,show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,dst]
+      show signExtend12 184#12=184#64 by decide,show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide,dst]
     have e : readAt i=1720#64 := by unfold readAt offAt;rw [if_neg (by omega),if_pos r]
     simp only [e] <;> decide
   · have nz : BitVec.ofNat 64 (rank i.val)≠0#64 := rank_ne_zero i r
     have no : BitVec.ofNat 64 (rank i.val)≠1#64 := rank_ne_one i r
-    have src := output_address i r
-    change ((BitVec.ofNat 64 (rank i.val)+signExtend12 4095#12) <<< (4:Nat))+1536#64=readAt i at src
-    simp at src
+    have src : (BitVec.ofNat 64 (rank i.val) <<< (4:Nat))+1520#64=readAt i := by
+      rw [BitVec.shiftLeft_eq_mul_twoPow]
+      change BitVec.ofNat 64 (rank i.val)*BitVec.ofNat 64 16+BitVec.ofNat 64 1520=_
+      rw [←BitVec.ofNat_mul,←BitVec.ofNat_add]
+      unfold readAt offAt
+      rw [if_neg (show rank i.val≠0 by omega),if_neg (show rank i.val≠1 by omega)]
+      congr 1
+      omega
     simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,nz,no,address,out,salts,
-      show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,dst]
-    simpa [sub] using src
+      show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,
+      show signExtend12 1520#12=1520#64 by decide,dst,src]
 
 theorem copy_addresses (i : Index) :
     accessValid (readAt i) 8=true ∧ accessValid (readAt i+8) 8=true ∧
