@@ -33,8 +33,7 @@ theorem cap_subtree (groups : List Nat) (state : MachineState) (node height dest
     (pc : state.pc=0x1a54) (separate : Opening.proofBase ≤ dest) (aligned : dest%2=0)
     (fits : dest+capOffset (Sampling.capFrontierNodes groups node height).length+2 ≤ MEMORY_BYTES)
     (counter : state.getReg .x30=7#64) :
-    ∃ after, RunsOpeningBlock state after (PackedOpening.capSubtreeCycles groups node height+
-        4*(Sampling.capFrontierNodes groups node height).length+34*((Sampling.capFrontierNodes groups node height).length/8)) ∧
+    ∃ after, RunsOpeningBlock state after (capWalkCycles groups node height dest 0) ∧
       after.pc=0x1af4 ∧
       CapPosition groups after node (dest+capOffset (Sampling.capFrontierNodes groups node height).length) ∧
       (∀ address<2^64, address<dest ∨ dest+capOffset (Sampling.capFrontierNodes groups node height).length ≤ address →

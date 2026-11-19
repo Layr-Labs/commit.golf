@@ -186,7 +186,7 @@ def CodeAt (word : Nat) (code : List Instr) : Prop :=
   ∀ j : Fin code.length, Decodes (word+j.val) code[j]
 
 theorem code_run (code : List Instr) : ∀ (word : Nat) (s : MachineState),
-    word+code.length ≤ 1890 → CodeAt word code → Ready s code →
+    word+code.length ≤ 1913 → CodeAt word code → Ready s code →
     s.pc = BitVec.ofNat 64 (4096+4*word) →
     (∀ i ∈ code, stepKind i = true) →
     (∀ u i, i ∈ code → (execInstrBr u i).pc = u.pc+4) →
