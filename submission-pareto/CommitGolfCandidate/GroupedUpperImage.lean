@@ -1,0 +1,1413 @@
+import CommitGolfCandidate.K1Manifest
+import CommitGolfCandidate.K3CUBands
+import CommitGolfCandidate.TwoPermutationRoot
+
+/-!
+# The decoded commit tail (odd-quartet image; from the generated cfad3d49 file, re-indexed by stack/oqc1/tools/gen_upper.py)
+
+Words 45662..45665: the last four post-body words (run and proved in `GroupedSetup`); 45666..45672: level-21 setup (the
+short form of ffa6a198: `x10`, `x7` from `x24 = Q + 2^32`); 45673..143976: level-21 loop (32768 three-word parents per pass, 64 passes); 143977..143978: its latch;
+143979..143985: heap setup and band glue; 143986..209521: band A (16384 record parents per pass, 120 passes); 209522..209523: its latch;
+209524: `addi x7,x9,32`; 209525..261952: band B (8738 238-bit parents per pass, 15 passes); 261953..261954: its latch;
+261955..261958: the root parent; 261959..261969: root copy and halt.
+-/
+
+namespace TwoPermutationPrototype.GroupedUpper
+open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Grouped
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
+
+set_option maxRecDepth 65536
+set_option maxHeartbeats 6000000
+
+/-- First word of the tail (the level-21 setup). -/
+def tailStart : Nat := 45666
+def l21SetupLen : Nat := 7
+def l21Span : Nat := 32768
+def l21Passes : Nat := 64
+def bandASpan : Nat := 16384
+def bandAPasses : Nat := 120
+def bandBSpan : Nat := 8738
+def bandBPasses : Nat := 15
+def l21Base : Word := 186788
+def heapSetupPC : Word := 580012
+def bandABase : Word := 580040
+def midPC : Word := 842192
+def bandBBase : Word := 842196
+def rootParentPC : Word := 1051916
+def rootPC : Word := 1051932
+
+def l21SetupOps : List Instr :=
+  [.ADDI .x11 .x0 64,.ADDI .x13 .x0 0,.ADDI .x7 .x21 2184,.ADDI .x10 .x24 2184,.LUI .x12 32768,.ADD .x12 .x12 .x9,.ADDI .x12 .x12 4064]
+def heapSetupOps : List Instr :=
+  [.SUB .x10 .x12 .x9,.ADD .x10 .x10 .x12,.LUI .x7 1024,.ADD .x7 .x7 .x9,.ADDI .x7 .x7 4064,.LUI .x6 4,.ADDI .x6 .x6 4095]
+
+private def l21Word (phase : Nat) : BitVec 32 :=
+  if phase%3=0 then 0x00000073 else if phase%3=1 then 0x80050513 else 0xfe060613
+private def bandAWord (phase : Nat) : BitVec 32 :=
+  if phase%4=0 then 0x00000073 else if phase%4=1 then 0x00061f23 else if phase%4=2 then 0xfc050513 else 0xfe060613
+private def bandBWord (phase : Nat) : BitVec 32 :=
+  if phase%6=0 then 0x00000073 else if phase%6=1 then 0x01c65f83 else if phase%6=2 then 0x006fffb3 else if phase%6=3 then 0x01f62e23 else if phase%6=4 then 0xfc050513 else 0xfe060613
+private def lit0Words : List (BitVec 32) := [0x020f9f93,0x41fc0ab3,0x20000fb7,0x41fa84b3,0x04000593,0x00000693,0x888a8393,0x888c0513,0x08000637,0x00960633,0xfe060613]
+private def lit1Words : List (BitVec 32) := [0x00750463,0xffd9f06f,0x40960533,0x00c50533,0x004003b7,0x009383b3,0xfe038393,0x00004337,0xfff30313]
+private def lit2Words : List (BitVec 32) := [0x00760463,0xffdbf06f,0x02048393]
+private def lit3Words : List (BitVec 32) := [0x00760463,0xccdcc06f,0x00000073,0x01c65f83,0x006fffb3,0x01f62e23,0x0204bf83,0x01f43023,0x0284bf83,0x01f43423,0x0304bf83,0x01f43823,0x0384bf83,0x01f43c23,0x00100293,0x00000513,0x00000073]
+
+private def expectedWord (index : Nat) : BitVec 32 :=
+  if index<45673 then lit0Words.getD (index-45662) 0
+  else if index<143977 then l21Word (index-45673)
+  else if index<143986 then lit1Words.getD (index-143977) 0
+  else if index<209522 then bandAWord (index-143986)
+  else if index<209525 then lit2Words.getD (index-209522) 0
+  else if index<261953 then bandBWord (index-209525)
+  else if index<261970 then lit3Words.getD (index-261953) 0
+  else 0
+
+private def ParentRangeMatches {count : Nat} (packed : ArtifactEncoding.Packed count) (offset : Nat) : Prop :=
+  ∀ i : Fin count, 45662≤offset+i.val → offset+i.val<261970 → packed.get 32 i=expectedWord (offset+i.val)
+
+private theorem parent_range_join {leftCount rightCount : Nat}
+    (left : ArtifactEncoding.Packed leftCount) (right : ArtifactEncoding.Packed rightCount)
+    (offset : Nat) (first : ParentRangeMatches left offset)
+    (last : ParentRangeMatches right (offset+leftCount)) :
+    ParentRangeMatches (.join left right) offset := by
+  intro index lower upper
+  by_cases inside : index.val<leftCount
+  · rw [ArtifactEncoding.get_join_left 32 left right index inside]
+    exact first ⟨index.val,inside⟩ lower upper
+  · rw [ArtifactEncoding.get_join_right 32 left right index inside]
+    have position : offset+leftCount+(index.val-leftCount)=offset+index.val := by omega
+    have equal := last ⟨index.val-leftCount,by omega⟩ (by simpa only [position] using lower)
+      (by simpa only [position] using upper)
+    simpa only [position] using equal
+
+private theorem l21_periodic_window (packed : ArtifactEncoding.Packed 512)
+    (offset phase : Nat) (alignment : (offset-45673)%3=phase%3)
+    (inside : 45673≤offset) (ends : offset+512≤143977)
+    (decode : ∀ i : Fin 512, packed.get 32 i=l21Word (phase+i.val)) :
+    ParentRangeMatches packed offset := by
+  intro i _ _
+  have before := i.isLt
+  rw [expectedWord,if_neg (by omega),if_pos (by omega),decode]
+  simp only [l21Word]
+  have same : (phase+i.val)%3=(offset+i.val-45673)%3 := by omega
+  rw [same]
+
+private theorem bandA_periodic_window (packed : ArtifactEncoding.Packed 512)
+    (offset phase : Nat) (alignment : (offset-143986)%4=phase%4)
+    (inside : 143986≤offset) (ends : offset+512≤209522)
+    (decode : ∀ i : Fin 512, packed.get 32 i=bandAWord (phase+i.val)) :
+    ParentRangeMatches packed offset := by
+  intro i _ _
+  have before := i.isLt
+  rw [expectedWord,if_neg (by omega),if_neg (by omega),if_neg (by omega),if_pos (by omega),decode]
+  simp only [bandAWord]
+  have same : (phase+i.val)%4=(offset+i.val-143986)%4 := by omega
+  rw [same]
+
+private theorem bandB_periodic_window (packed : ArtifactEncoding.Packed 512)
+    (offset phase : Nat) (alignment : (offset-209525)%6=phase%6)
+    (inside : 209525≤offset) (ends : offset+512≤261953)
+    (decode : ∀ i : Fin 512, packed.get 32 i=bandBWord (phase+i.val)) :
+    ParentRangeMatches packed offset := by
+  intro i _ _
+  have before := i.isLt
+  rw [expectedWord,if_neg (by omega),if_neg (by omega),if_neg (by omega),if_neg (by omega),if_neg (by omega),if_pos (by omega),decode]
+  simp only [bandBWord]
+  have same : (phase+i.val)%6=(offset+i.val-209525)%6 := by omega
+  rw [same]
+
+private theorem bandA_periodic_2 (i : Fin 512) :
+    K1Artifact.commitCode_0_282.get 32 i=bandAWord (2+i.val) := by
+  fin_cases i <;> rfl
+
+private theorem bandB_periodic_1 (i : Fin 512) :
+    K1Artifact.commitCode_0_411.get 32 i=bandBWord (1+i.val) := by
+  fin_cases i <;> rfl
+
+private theorem bandB_periodic_3 (i : Fin 512) :
+    K1Artifact.commitCode_0_412.get 32 i=bandBWord (3+i.val) := by
+  fin_cases i <;> rfl
+
+private theorem bandB_periodic_5 (i : Fin 512) :
+    K1Artifact.commitCode_0_410.get 32 i=bandBWord (5+i.val) := by
+  fin_cases i <;> rfl
+
+private theorem l21_periodic_0 (i : Fin 512) :
+    K1Artifact.commitCode_0_92.get 32 i=l21Word (0+i.val) := by
+  fin_cases i <;> rfl
+
+private theorem l21_periodic_1 (i : Fin 512) :
+    K1Artifact.commitCode_0_91.get 32 i=l21Word (1+i.val) := by
+  fin_cases i <;> rfl
+
+private theorem l21_periodic_2 (i : Fin 512) :
+    K1Artifact.commitCode_0_90.get 32 i=l21Word (2+i.val) := by
+  fin_cases i <;> rfl
+
+private theorem win0 : ParentRangeMatches K1Artifact.commitCode_0_0 0 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win1 : ParentRangeMatches K1Artifact.commitCode_0_1 512 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win2 : ParentRangeMatches K1Artifact.commitCode_0_2 1024 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win3 : ParentRangeMatches K1Artifact.commitCode_0_3 1536 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win4 : ParentRangeMatches K1Artifact.commitCode_0_4 2048 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win5 : ParentRangeMatches K1Artifact.commitCode_0_5 2560 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win6 : ParentRangeMatches K1Artifact.commitCode_0_6 3072 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win7 : ParentRangeMatches K1Artifact.commitCode_0_7 3584 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win8 : ParentRangeMatches K1Artifact.commitCode_0_8 4096 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win9 : ParentRangeMatches K1Artifact.commitCode_0_9 4608 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win10 : ParentRangeMatches K1Artifact.commitCode_0_10 5120 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win11 : ParentRangeMatches K1Artifact.commitCode_0_11 5632 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win12 : ParentRangeMatches K1Artifact.commitCode_0_12 6144 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win13 : ParentRangeMatches K1Artifact.commitCode_0_13 6656 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win14 : ParentRangeMatches K1Artifact.commitCode_0_14 7168 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win15 : ParentRangeMatches K1Artifact.commitCode_0_15 7680 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win16 : ParentRangeMatches K1Artifact.commitCode_0_16 8192 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win17 : ParentRangeMatches K1Artifact.commitCode_0_17 8704 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win18 : ParentRangeMatches K1Artifact.commitCode_0_18 9216 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win19 : ParentRangeMatches K1Artifact.commitCode_0_19 9728 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win20 : ParentRangeMatches K1Artifact.commitCode_0_20 10240 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win21 : ParentRangeMatches K1Artifact.commitCode_0_21 10752 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win22 : ParentRangeMatches K1Artifact.commitCode_0_22 11264 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win23 : ParentRangeMatches K1Artifact.commitCode_0_23 11776 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win24 : ParentRangeMatches K1Artifact.commitCode_0_24 12288 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win25 : ParentRangeMatches K1Artifact.commitCode_0_25 12800 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win26 : ParentRangeMatches K1Artifact.commitCode_0_26 13312 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win27 : ParentRangeMatches K1Artifact.commitCode_0_27 13824 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win28 : ParentRangeMatches K1Artifact.commitCode_0_28 14336 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win29 : ParentRangeMatches K1Artifact.commitCode_0_29 14848 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win30 : ParentRangeMatches K1Artifact.commitCode_0_30 15360 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win31 : ParentRangeMatches K1Artifact.commitCode_0_31 15872 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win32 : ParentRangeMatches K1Artifact.commitCode_0_32 16384 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win33 : ParentRangeMatches K1Artifact.commitCode_0_33 16896 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win34 : ParentRangeMatches K1Artifact.commitCode_0_34 17408 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win35 : ParentRangeMatches K1Artifact.commitCode_0_35 17920 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win36 : ParentRangeMatches K1Artifact.commitCode_0_36 18432 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win37 : ParentRangeMatches K1Artifact.commitCode_0_37 18944 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win38 : ParentRangeMatches K1Artifact.commitCode_0_38 19456 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win39 : ParentRangeMatches K1Artifact.commitCode_0_39 19968 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win40 : ParentRangeMatches K1Artifact.commitCode_0_40 20480 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win41 : ParentRangeMatches K1Artifact.commitCode_0_41 20992 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win42 : ParentRangeMatches K1Artifact.commitCode_0_42 21504 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win43 : ParentRangeMatches K1Artifact.commitCode_0_43 22016 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win44 : ParentRangeMatches K1Artifact.commitCode_0_44 22528 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win45 : ParentRangeMatches K1Artifact.commitCode_0_45 23040 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win46 : ParentRangeMatches K1Artifact.commitCode_0_46 23552 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win47 : ParentRangeMatches K1Artifact.commitCode_0_47 24064 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win48 : ParentRangeMatches K1Artifact.commitCode_0_48 24576 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win49 : ParentRangeMatches K1Artifact.commitCode_0_49 25088 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win50 : ParentRangeMatches K1Artifact.commitCode_0_50 25600 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win51 : ParentRangeMatches K1Artifact.commitCode_0_51 26112 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win52 : ParentRangeMatches K1Artifact.commitCode_0_52 26624 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win53 : ParentRangeMatches K1Artifact.commitCode_0_53 27136 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win54 : ParentRangeMatches K1Artifact.commitCode_0_54 27648 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win55 : ParentRangeMatches K1Artifact.commitCode_0_55 28160 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win56 : ParentRangeMatches K1Artifact.commitCode_0_56 28672 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win57 : ParentRangeMatches K1Artifact.commitCode_0_57 29184 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win58 : ParentRangeMatches K1Artifact.commitCode_0_58 29696 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win59 : ParentRangeMatches K1Artifact.commitCode_0_59 30208 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win60 : ParentRangeMatches K1Artifact.commitCode_0_60 30720 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win61 : ParentRangeMatches K1Artifact.commitCode_0_61 31232 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win62 : ParentRangeMatches K1Artifact.commitCode_0_62 31744 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win63 : ParentRangeMatches K1Artifact.commitCode_0_63 32256 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win64 : ParentRangeMatches K1Artifact.commitCode_0_64 32768 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win65 : ParentRangeMatches K1Artifact.commitCode_0_65 33280 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win66 : ParentRangeMatches K1Artifact.commitCode_0_66 33792 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win67 : ParentRangeMatches K1Artifact.commitCode_0_67 34304 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win68 : ParentRangeMatches K1Artifact.commitCode_0_68 34816 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win69 : ParentRangeMatches K1Artifact.commitCode_0_69 35328 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win70 : ParentRangeMatches K1Artifact.commitCode_0_70 35840 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win71 : ParentRangeMatches K1Artifact.commitCode_0_71 36352 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win72 : ParentRangeMatches K1Artifact.commitCode_0_72 36864 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win73 : ParentRangeMatches K1Artifact.commitCode_0_73 37376 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win74 : ParentRangeMatches K1Artifact.commitCode_0_74 37888 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win75 : ParentRangeMatches K1Artifact.commitCode_0_75 38400 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win76 : ParentRangeMatches K1Artifact.commitCode_0_76 38912 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win77 : ParentRangeMatches K1Artifact.commitCode_0_77 39424 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win78 : ParentRangeMatches K1Artifact.commitCode_0_78 39936 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win79 : ParentRangeMatches K1Artifact.commitCode_0_79 40448 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win80 : ParentRangeMatches K1Artifact.commitCode_0_80 40960 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win81 : ParentRangeMatches K1Artifact.commitCode_0_81 41472 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win82 : ParentRangeMatches K1Artifact.commitCode_0_82 41984 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win83 : ParentRangeMatches K1Artifact.commitCode_0_83 42496 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win84 : ParentRangeMatches K1Artifact.commitCode_0_84 43008 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win85 : ParentRangeMatches K1Artifact.commitCode_0_85 43520 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win86 : ParentRangeMatches K1Artifact.commitCode_0_86 44032 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win87 : ParentRangeMatches K1Artifact.commitCode_0_87 44544 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win88 : ParentRangeMatches K1Artifact.commitCode_0_88 45056 := by
+  intro i lo _; have h := i.isLt;omega
+private theorem win89 : ParentRangeMatches K1Artifact.commitCode_0_89 45568 := by
+  unfold ParentRangeMatches expectedWord l21Word bandAWord bandBWord lit0Words lit1Words lit2Words lit3Words;decide +kernel
+private theorem win90 : ParentRangeMatches K1Artifact.commitCode_0_90 46080 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win91 : ParentRangeMatches K1Artifact.commitCode_0_91 46592 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win92 : ParentRangeMatches K1Artifact.commitCode_0_92 47104 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win93 : ParentRangeMatches K1Artifact.commitCode_0_93 47616 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win94 : ParentRangeMatches K1Artifact.commitCode_0_94 48128 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win95 : ParentRangeMatches K1Artifact.commitCode_0_95 48640 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win96 : ParentRangeMatches K1Artifact.commitCode_0_96 49152 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win97 : ParentRangeMatches K1Artifact.commitCode_0_97 49664 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win98 : ParentRangeMatches K1Artifact.commitCode_0_98 50176 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win99 : ParentRangeMatches K1Artifact.commitCode_0_99 50688 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win100 : ParentRangeMatches K1Artifact.commitCode_0_100 51200 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win101 : ParentRangeMatches K1Artifact.commitCode_0_101 51712 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win102 : ParentRangeMatches K1Artifact.commitCode_0_102 52224 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win103 : ParentRangeMatches K1Artifact.commitCode_0_103 52736 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win104 : ParentRangeMatches K1Artifact.commitCode_0_104 53248 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win105 : ParentRangeMatches K1Artifact.commitCode_0_105 53760 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win106 : ParentRangeMatches K1Artifact.commitCode_0_106 54272 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win107 : ParentRangeMatches K1Artifact.commitCode_0_107 54784 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win108 : ParentRangeMatches K1Artifact.commitCode_0_108 55296 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win109 : ParentRangeMatches K1Artifact.commitCode_0_109 55808 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win110 : ParentRangeMatches K1Artifact.commitCode_0_110 56320 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win111 : ParentRangeMatches K1Artifact.commitCode_0_111 56832 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win112 : ParentRangeMatches K1Artifact.commitCode_0_112 57344 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win113 : ParentRangeMatches K1Artifact.commitCode_0_113 57856 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win114 : ParentRangeMatches K1Artifact.commitCode_0_114 58368 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win115 : ParentRangeMatches K1Artifact.commitCode_0_115 58880 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win116 : ParentRangeMatches K1Artifact.commitCode_0_116 59392 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win117 : ParentRangeMatches K1Artifact.commitCode_0_117 59904 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win118 : ParentRangeMatches K1Artifact.commitCode_0_118 60416 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win119 : ParentRangeMatches K1Artifact.commitCode_0_119 60928 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win120 : ParentRangeMatches K1Artifact.commitCode_0_120 61440 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win121 : ParentRangeMatches K1Artifact.commitCode_0_121 61952 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win122 : ParentRangeMatches K1Artifact.commitCode_0_122 62464 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win123 : ParentRangeMatches K1Artifact.commitCode_0_123 62976 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win124 : ParentRangeMatches K1Artifact.commitCode_0_124 63488 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win125 : ParentRangeMatches K1Artifact.commitCode_0_125 64000 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win126 : ParentRangeMatches K1Artifact.commitCode_0_126 64512 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win127 : ParentRangeMatches K1Artifact.commitCode_0_127 65024 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win128 : ParentRangeMatches K1Artifact.commitCode_0_128 65536 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win129 : ParentRangeMatches K1Artifact.commitCode_0_129 66048 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win130 : ParentRangeMatches K1Artifact.commitCode_0_130 66560 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win131 : ParentRangeMatches K1Artifact.commitCode_0_131 67072 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win132 : ParentRangeMatches K1Artifact.commitCode_0_132 67584 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win133 : ParentRangeMatches K1Artifact.commitCode_0_133 68096 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win134 : ParentRangeMatches K1Artifact.commitCode_0_134 68608 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win135 : ParentRangeMatches K1Artifact.commitCode_0_135 69120 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win136 : ParentRangeMatches K1Artifact.commitCode_0_136 69632 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win137 : ParentRangeMatches K1Artifact.commitCode_0_137 70144 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win138 : ParentRangeMatches K1Artifact.commitCode_0_138 70656 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win139 : ParentRangeMatches K1Artifact.commitCode_0_139 71168 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win140 : ParentRangeMatches K1Artifact.commitCode_0_140 71680 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win141 : ParentRangeMatches K1Artifact.commitCode_0_141 72192 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win142 : ParentRangeMatches K1Artifact.commitCode_0_142 72704 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win143 : ParentRangeMatches K1Artifact.commitCode_0_143 73216 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win144 : ParentRangeMatches K1Artifact.commitCode_0_144 73728 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win145 : ParentRangeMatches K1Artifact.commitCode_0_145 74240 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win146 : ParentRangeMatches K1Artifact.commitCode_0_146 74752 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win147 : ParentRangeMatches K1Artifact.commitCode_0_147 75264 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win148 : ParentRangeMatches K1Artifact.commitCode_0_148 75776 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win149 : ParentRangeMatches K1Artifact.commitCode_0_149 76288 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win150 : ParentRangeMatches K1Artifact.commitCode_0_150 76800 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win151 : ParentRangeMatches K1Artifact.commitCode_0_151 77312 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win152 : ParentRangeMatches K1Artifact.commitCode_0_152 77824 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win153 : ParentRangeMatches K1Artifact.commitCode_0_153 78336 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win154 : ParentRangeMatches K1Artifact.commitCode_0_154 78848 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win155 : ParentRangeMatches K1Artifact.commitCode_0_155 79360 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win156 : ParentRangeMatches K1Artifact.commitCode_0_156 79872 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win157 : ParentRangeMatches K1Artifact.commitCode_0_157 80384 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win158 : ParentRangeMatches K1Artifact.commitCode_0_158 80896 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win159 : ParentRangeMatches K1Artifact.commitCode_0_159 81408 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win160 : ParentRangeMatches K1Artifact.commitCode_0_160 81920 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win161 : ParentRangeMatches K1Artifact.commitCode_0_161 82432 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win162 : ParentRangeMatches K1Artifact.commitCode_0_162 82944 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win163 : ParentRangeMatches K1Artifact.commitCode_0_163 83456 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win164 : ParentRangeMatches K1Artifact.commitCode_0_164 83968 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win165 : ParentRangeMatches K1Artifact.commitCode_0_165 84480 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win166 : ParentRangeMatches K1Artifact.commitCode_0_166 84992 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win167 : ParentRangeMatches K1Artifact.commitCode_0_167 85504 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win168 : ParentRangeMatches K1Artifact.commitCode_0_168 86016 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win169 : ParentRangeMatches K1Artifact.commitCode_0_169 86528 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win170 : ParentRangeMatches K1Artifact.commitCode_0_170 87040 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win171 : ParentRangeMatches K1Artifact.commitCode_0_171 87552 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win172 : ParentRangeMatches K1Artifact.commitCode_0_172 88064 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win173 : ParentRangeMatches K1Artifact.commitCode_0_173 88576 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win174 : ParentRangeMatches K1Artifact.commitCode_0_174 89088 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win175 : ParentRangeMatches K1Artifact.commitCode_0_175 89600 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win176 : ParentRangeMatches K1Artifact.commitCode_0_176 90112 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win177 : ParentRangeMatches K1Artifact.commitCode_0_177 90624 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win178 : ParentRangeMatches K1Artifact.commitCode_0_178 91136 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win179 : ParentRangeMatches K1Artifact.commitCode_0_179 91648 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win180 : ParentRangeMatches K1Artifact.commitCode_0_180 92160 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win181 : ParentRangeMatches K1Artifact.commitCode_0_181 92672 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win182 : ParentRangeMatches K1Artifact.commitCode_0_182 93184 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win183 : ParentRangeMatches K1Artifact.commitCode_0_183 93696 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win184 : ParentRangeMatches K1Artifact.commitCode_0_184 94208 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win185 : ParentRangeMatches K1Artifact.commitCode_0_185 94720 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win186 : ParentRangeMatches K1Artifact.commitCode_0_186 95232 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win187 : ParentRangeMatches K1Artifact.commitCode_0_187 95744 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win188 : ParentRangeMatches K1Artifact.commitCode_0_188 96256 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win189 : ParentRangeMatches K1Artifact.commitCode_0_189 96768 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win190 : ParentRangeMatches K1Artifact.commitCode_0_190 97280 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win191 : ParentRangeMatches K1Artifact.commitCode_0_191 97792 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win192 : ParentRangeMatches K1Artifact.commitCode_0_192 98304 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win193 : ParentRangeMatches K1Artifact.commitCode_0_193 98816 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win194 : ParentRangeMatches K1Artifact.commitCode_0_194 99328 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win195 : ParentRangeMatches K1Artifact.commitCode_0_195 99840 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win196 : ParentRangeMatches K1Artifact.commitCode_0_196 100352 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win197 : ParentRangeMatches K1Artifact.commitCode_0_197 100864 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win198 : ParentRangeMatches K1Artifact.commitCode_0_198 101376 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win199 : ParentRangeMatches K1Artifact.commitCode_0_199 101888 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win200 : ParentRangeMatches K1Artifact.commitCode_0_200 102400 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win201 : ParentRangeMatches K1Artifact.commitCode_0_201 102912 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win202 : ParentRangeMatches K1Artifact.commitCode_0_202 103424 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win203 : ParentRangeMatches K1Artifact.commitCode_0_203 103936 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win204 : ParentRangeMatches K1Artifact.commitCode_0_204 104448 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win205 : ParentRangeMatches K1Artifact.commitCode_0_205 104960 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win206 : ParentRangeMatches K1Artifact.commitCode_0_206 105472 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win207 : ParentRangeMatches K1Artifact.commitCode_0_207 105984 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win208 : ParentRangeMatches K1Artifact.commitCode_0_208 106496 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win209 : ParentRangeMatches K1Artifact.commitCode_0_209 107008 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win210 : ParentRangeMatches K1Artifact.commitCode_0_210 107520 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win211 : ParentRangeMatches K1Artifact.commitCode_0_211 108032 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win212 : ParentRangeMatches K1Artifact.commitCode_0_212 108544 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win213 : ParentRangeMatches K1Artifact.commitCode_0_213 109056 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win214 : ParentRangeMatches K1Artifact.commitCode_0_214 109568 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win215 : ParentRangeMatches K1Artifact.commitCode_0_215 110080 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win216 : ParentRangeMatches K1Artifact.commitCode_0_216 110592 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win217 : ParentRangeMatches K1Artifact.commitCode_0_217 111104 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win218 : ParentRangeMatches K1Artifact.commitCode_0_218 111616 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win219 : ParentRangeMatches K1Artifact.commitCode_0_219 112128 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win220 : ParentRangeMatches K1Artifact.commitCode_0_220 112640 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win221 : ParentRangeMatches K1Artifact.commitCode_0_221 113152 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win222 : ParentRangeMatches K1Artifact.commitCode_0_222 113664 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win223 : ParentRangeMatches K1Artifact.commitCode_0_223 114176 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win224 : ParentRangeMatches K1Artifact.commitCode_0_224 114688 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win225 : ParentRangeMatches K1Artifact.commitCode_0_225 115200 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win226 : ParentRangeMatches K1Artifact.commitCode_0_226 115712 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win227 : ParentRangeMatches K1Artifact.commitCode_0_227 116224 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win228 : ParentRangeMatches K1Artifact.commitCode_0_228 116736 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win229 : ParentRangeMatches K1Artifact.commitCode_0_229 117248 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win230 : ParentRangeMatches K1Artifact.commitCode_0_230 117760 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win231 : ParentRangeMatches K1Artifact.commitCode_0_231 118272 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win232 : ParentRangeMatches K1Artifact.commitCode_0_232 118784 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win233 : ParentRangeMatches K1Artifact.commitCode_0_233 119296 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win234 : ParentRangeMatches K1Artifact.commitCode_0_234 119808 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win235 : ParentRangeMatches K1Artifact.commitCode_0_235 120320 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win236 : ParentRangeMatches K1Artifact.commitCode_0_236 120832 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win237 : ParentRangeMatches K1Artifact.commitCode_0_237 121344 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win238 : ParentRangeMatches K1Artifact.commitCode_0_238 121856 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win239 : ParentRangeMatches K1Artifact.commitCode_0_239 122368 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win240 : ParentRangeMatches K1Artifact.commitCode_0_240 122880 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win241 : ParentRangeMatches K1Artifact.commitCode_0_241 123392 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win242 : ParentRangeMatches K1Artifact.commitCode_0_242 123904 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win243 : ParentRangeMatches K1Artifact.commitCode_0_243 124416 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win244 : ParentRangeMatches K1Artifact.commitCode_0_244 124928 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win245 : ParentRangeMatches K1Artifact.commitCode_0_245 125440 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win246 : ParentRangeMatches K1Artifact.commitCode_0_246 125952 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win247 : ParentRangeMatches K1Artifact.commitCode_0_247 126464 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win248 : ParentRangeMatches K1Artifact.commitCode_0_248 126976 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win249 : ParentRangeMatches K1Artifact.commitCode_0_249 127488 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win250 : ParentRangeMatches K1Artifact.commitCode_0_250 128000 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win251 : ParentRangeMatches K1Artifact.commitCode_0_251 128512 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win252 : ParentRangeMatches K1Artifact.commitCode_0_252 129024 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win253 : ParentRangeMatches K1Artifact.commitCode_0_253 129536 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win254 : ParentRangeMatches K1Artifact.commitCode_0_254 130048 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win255 : ParentRangeMatches K1Artifact.commitCode_0_255 130560 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win256 : ParentRangeMatches K1Artifact.commitCode_0_256 131072 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win257 : ParentRangeMatches K1Artifact.commitCode_0_257 131584 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win258 : ParentRangeMatches K1Artifact.commitCode_0_258 132096 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win259 : ParentRangeMatches K1Artifact.commitCode_0_259 132608 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win260 : ParentRangeMatches K1Artifact.commitCode_0_260 133120 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win261 : ParentRangeMatches K1Artifact.commitCode_0_261 133632 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win262 : ParentRangeMatches K1Artifact.commitCode_0_262 134144 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win263 : ParentRangeMatches K1Artifact.commitCode_0_263 134656 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win264 : ParentRangeMatches K1Artifact.commitCode_0_264 135168 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win265 : ParentRangeMatches K1Artifact.commitCode_0_265 135680 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win266 : ParentRangeMatches K1Artifact.commitCode_0_266 136192 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win267 : ParentRangeMatches K1Artifact.commitCode_0_267 136704 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win268 : ParentRangeMatches K1Artifact.commitCode_0_268 137216 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win269 : ParentRangeMatches K1Artifact.commitCode_0_269 137728 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win270 : ParentRangeMatches K1Artifact.commitCode_0_270 138240 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win271 : ParentRangeMatches K1Artifact.commitCode_0_271 138752 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win272 : ParentRangeMatches K1Artifact.commitCode_0_272 139264 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win273 : ParentRangeMatches K1Artifact.commitCode_0_273 139776 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win274 : ParentRangeMatches K1Artifact.commitCode_0_274 140288 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win275 : ParentRangeMatches K1Artifact.commitCode_0_275 140800 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win276 : ParentRangeMatches K1Artifact.commitCode_0_276 141312 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win277 : ParentRangeMatches K1Artifact.commitCode_0_277 141824 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win278 : ParentRangeMatches K1Artifact.commitCode_0_278 142336 := by
+  exact l21_periodic_window _ _ 0 (by decide) (by decide) (by decide) l21_periodic_0
+private theorem win279 : ParentRangeMatches K1Artifact.commitCode_0_279 142848 := by
+  exact l21_periodic_window _ _ 2 (by decide) (by decide) (by decide) l21_periodic_2
+private theorem win280 : ParentRangeMatches K1Artifact.commitCode_0_280 143360 := by
+  exact l21_periodic_window _ _ 1 (by decide) (by decide) (by decide) l21_periodic_1
+private theorem win281 : ParentRangeMatches K1Artifact.commitCode_0_281 143872 := by
+  unfold ParentRangeMatches expectedWord l21Word bandAWord bandBWord lit0Words lit1Words lit2Words lit3Words;decide +kernel
+private theorem win282 : ParentRangeMatches K1Artifact.commitCode_0_282 144384 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win283 : ParentRangeMatches K1Artifact.commitCode_0_283 144896 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win284 : ParentRangeMatches K1Artifact.commitCode_0_284 145408 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win285 : ParentRangeMatches K1Artifact.commitCode_0_285 145920 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win286 : ParentRangeMatches K1Artifact.commitCode_0_286 146432 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win287 : ParentRangeMatches K1Artifact.commitCode_0_287 146944 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win288 : ParentRangeMatches K1Artifact.commitCode_0_288 147456 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win289 : ParentRangeMatches K1Artifact.commitCode_0_289 147968 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win290 : ParentRangeMatches K1Artifact.commitCode_0_290 148480 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win291 : ParentRangeMatches K1Artifact.commitCode_0_291 148992 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win292 : ParentRangeMatches K1Artifact.commitCode_0_292 149504 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win293 : ParentRangeMatches K1Artifact.commitCode_0_293 150016 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win294 : ParentRangeMatches K1Artifact.commitCode_0_294 150528 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win295 : ParentRangeMatches K1Artifact.commitCode_0_295 151040 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win296 : ParentRangeMatches K1Artifact.commitCode_0_296 151552 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win297 : ParentRangeMatches K1Artifact.commitCode_0_297 152064 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win298 : ParentRangeMatches K1Artifact.commitCode_0_298 152576 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win299 : ParentRangeMatches K1Artifact.commitCode_0_299 153088 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win300 : ParentRangeMatches K1Artifact.commitCode_0_300 153600 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win301 : ParentRangeMatches K1Artifact.commitCode_0_301 154112 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win302 : ParentRangeMatches K1Artifact.commitCode_0_302 154624 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win303 : ParentRangeMatches K1Artifact.commitCode_0_303 155136 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win304 : ParentRangeMatches K1Artifact.commitCode_0_304 155648 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win305 : ParentRangeMatches K1Artifact.commitCode_0_305 156160 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win306 : ParentRangeMatches K1Artifact.commitCode_0_306 156672 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win307 : ParentRangeMatches K1Artifact.commitCode_0_307 157184 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win308 : ParentRangeMatches K1Artifact.commitCode_0_308 157696 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win309 : ParentRangeMatches K1Artifact.commitCode_0_309 158208 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win310 : ParentRangeMatches K1Artifact.commitCode_0_310 158720 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win311 : ParentRangeMatches K1Artifact.commitCode_0_311 159232 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win312 : ParentRangeMatches K1Artifact.commitCode_0_312 159744 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win313 : ParentRangeMatches K1Artifact.commitCode_0_313 160256 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win314 : ParentRangeMatches K1Artifact.commitCode_0_314 160768 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win315 : ParentRangeMatches K1Artifact.commitCode_0_315 161280 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win316 : ParentRangeMatches K1Artifact.commitCode_0_316 161792 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win317 : ParentRangeMatches K1Artifact.commitCode_0_317 162304 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win318 : ParentRangeMatches K1Artifact.commitCode_0_318 162816 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win319 : ParentRangeMatches K1Artifact.commitCode_0_319 163328 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win320 : ParentRangeMatches K1Artifact.commitCode_0_320 163840 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win321 : ParentRangeMatches K1Artifact.commitCode_0_321 164352 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win322 : ParentRangeMatches K1Artifact.commitCode_0_322 164864 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win323 : ParentRangeMatches K1Artifact.commitCode_0_323 165376 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win324 : ParentRangeMatches K1Artifact.commitCode_0_324 165888 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win325 : ParentRangeMatches K1Artifact.commitCode_0_325 166400 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win326 : ParentRangeMatches K1Artifact.commitCode_0_326 166912 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win327 : ParentRangeMatches K1Artifact.commitCode_0_327 167424 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win328 : ParentRangeMatches K1Artifact.commitCode_0_328 167936 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win329 : ParentRangeMatches K1Artifact.commitCode_0_329 168448 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win330 : ParentRangeMatches K1Artifact.commitCode_0_330 168960 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win331 : ParentRangeMatches K1Artifact.commitCode_0_331 169472 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win332 : ParentRangeMatches K1Artifact.commitCode_0_332 169984 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win333 : ParentRangeMatches K1Artifact.commitCode_0_333 170496 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win334 : ParentRangeMatches K1Artifact.commitCode_0_334 171008 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win335 : ParentRangeMatches K1Artifact.commitCode_0_335 171520 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win336 : ParentRangeMatches K1Artifact.commitCode_0_336 172032 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win337 : ParentRangeMatches K1Artifact.commitCode_0_337 172544 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win338 : ParentRangeMatches K1Artifact.commitCode_0_338 173056 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win339 : ParentRangeMatches K1Artifact.commitCode_0_339 173568 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win340 : ParentRangeMatches K1Artifact.commitCode_0_340 174080 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win341 : ParentRangeMatches K1Artifact.commitCode_0_341 174592 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win342 : ParentRangeMatches K1Artifact.commitCode_0_342 175104 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win343 : ParentRangeMatches K1Artifact.commitCode_0_343 175616 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win344 : ParentRangeMatches K1Artifact.commitCode_0_344 176128 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win345 : ParentRangeMatches K1Artifact.commitCode_0_345 176640 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win346 : ParentRangeMatches K1Artifact.commitCode_0_346 177152 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win347 : ParentRangeMatches K1Artifact.commitCode_0_347 177664 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win348 : ParentRangeMatches K1Artifact.commitCode_0_348 178176 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win349 : ParentRangeMatches K1Artifact.commitCode_0_349 178688 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win350 : ParentRangeMatches K1Artifact.commitCode_0_350 179200 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win351 : ParentRangeMatches K1Artifact.commitCode_0_351 179712 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win352 : ParentRangeMatches K1Artifact.commitCode_0_352 180224 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win353 : ParentRangeMatches K1Artifact.commitCode_0_353 180736 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win354 : ParentRangeMatches K1Artifact.commitCode_0_354 181248 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win355 : ParentRangeMatches K1Artifact.commitCode_0_355 181760 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win356 : ParentRangeMatches K1Artifact.commitCode_0_356 182272 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win357 : ParentRangeMatches K1Artifact.commitCode_0_357 182784 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win358 : ParentRangeMatches K1Artifact.commitCode_0_358 183296 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win359 : ParentRangeMatches K1Artifact.commitCode_0_359 183808 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win360 : ParentRangeMatches K1Artifact.commitCode_0_360 184320 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win361 : ParentRangeMatches K1Artifact.commitCode_0_361 184832 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win362 : ParentRangeMatches K1Artifact.commitCode_0_362 185344 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win363 : ParentRangeMatches K1Artifact.commitCode_0_363 185856 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win364 : ParentRangeMatches K1Artifact.commitCode_0_364 186368 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win365 : ParentRangeMatches K1Artifact.commitCode_0_365 186880 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win366 : ParentRangeMatches K1Artifact.commitCode_0_366 187392 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win367 : ParentRangeMatches K1Artifact.commitCode_0_367 187904 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win368 : ParentRangeMatches K1Artifact.commitCode_0_368 188416 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win369 : ParentRangeMatches K1Artifact.commitCode_0_369 188928 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win370 : ParentRangeMatches K1Artifact.commitCode_0_370 189440 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win371 : ParentRangeMatches K1Artifact.commitCode_0_371 189952 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win372 : ParentRangeMatches K1Artifact.commitCode_0_372 190464 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win373 : ParentRangeMatches K1Artifact.commitCode_0_373 190976 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win374 : ParentRangeMatches K1Artifact.commitCode_0_374 191488 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win375 : ParentRangeMatches K1Artifact.commitCode_0_375 192000 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win376 : ParentRangeMatches K1Artifact.commitCode_0_376 192512 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win377 : ParentRangeMatches K1Artifact.commitCode_0_377 193024 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win378 : ParentRangeMatches K1Artifact.commitCode_0_378 193536 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win379 : ParentRangeMatches K1Artifact.commitCode_0_379 194048 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win380 : ParentRangeMatches K1Artifact.commitCode_0_380 194560 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win381 : ParentRangeMatches K1Artifact.commitCode_0_381 195072 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win382 : ParentRangeMatches K1Artifact.commitCode_0_382 195584 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win383 : ParentRangeMatches K1Artifact.commitCode_0_383 196096 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win384 : ParentRangeMatches K1Artifact.commitCode_0_384 196608 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win385 : ParentRangeMatches K1Artifact.commitCode_0_385 197120 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win386 : ParentRangeMatches K1Artifact.commitCode_0_386 197632 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win387 : ParentRangeMatches K1Artifact.commitCode_0_387 198144 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win388 : ParentRangeMatches K1Artifact.commitCode_0_388 198656 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win389 : ParentRangeMatches K1Artifact.commitCode_0_389 199168 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win390 : ParentRangeMatches K1Artifact.commitCode_0_390 199680 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win391 : ParentRangeMatches K1Artifact.commitCode_0_391 200192 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win392 : ParentRangeMatches K1Artifact.commitCode_0_392 200704 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win393 : ParentRangeMatches K1Artifact.commitCode_0_393 201216 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win394 : ParentRangeMatches K1Artifact.commitCode_0_394 201728 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win395 : ParentRangeMatches K1Artifact.commitCode_0_395 202240 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win396 : ParentRangeMatches K1Artifact.commitCode_0_396 202752 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win397 : ParentRangeMatches K1Artifact.commitCode_0_397 203264 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win398 : ParentRangeMatches K1Artifact.commitCode_0_398 203776 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win399 : ParentRangeMatches K1Artifact.commitCode_0_399 204288 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win400 : ParentRangeMatches K1Artifact.commitCode_0_400 204800 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win401 : ParentRangeMatches K1Artifact.commitCode_0_401 205312 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win402 : ParentRangeMatches K1Artifact.commitCode_0_402 205824 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win403 : ParentRangeMatches K1Artifact.commitCode_0_403 206336 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win404 : ParentRangeMatches K1Artifact.commitCode_0_404 206848 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win405 : ParentRangeMatches K1Artifact.commitCode_0_405 207360 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win406 : ParentRangeMatches K1Artifact.commitCode_0_406 207872 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win407 : ParentRangeMatches K1Artifact.commitCode_0_407 208384 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win408 : ParentRangeMatches K1Artifact.commitCode_0_408 208896 := by
+  exact bandA_periodic_window _ _ 2 (by decide) (by decide) (by decide) bandA_periodic_2
+private theorem win409 : ParentRangeMatches K1Artifact.commitCode_0_409 209408 := by
+  unfold ParentRangeMatches expectedWord l21Word bandAWord bandBWord lit0Words lit1Words lit2Words lit3Words;decide +kernel
+private theorem win410 : ParentRangeMatches K1Artifact.commitCode_0_410 209920 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win411 : ParentRangeMatches K1Artifact.commitCode_0_411 210432 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win412 : ParentRangeMatches K1Artifact.commitCode_0_412 210944 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win413 : ParentRangeMatches K1Artifact.commitCode_0_413 211456 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win414 : ParentRangeMatches K1Artifact.commitCode_0_414 211968 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win415 : ParentRangeMatches K1Artifact.commitCode_0_415 212480 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win416 : ParentRangeMatches K1Artifact.commitCode_0_416 212992 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win417 : ParentRangeMatches K1Artifact.commitCode_0_417 213504 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win418 : ParentRangeMatches K1Artifact.commitCode_0_418 214016 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win419 : ParentRangeMatches K1Artifact.commitCode_0_419 214528 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win420 : ParentRangeMatches K1Artifact.commitCode_0_420 215040 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win421 : ParentRangeMatches K1Artifact.commitCode_0_421 215552 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win422 : ParentRangeMatches K1Artifact.commitCode_0_422 216064 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win423 : ParentRangeMatches K1Artifact.commitCode_0_423 216576 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win424 : ParentRangeMatches K1Artifact.commitCode_0_424 217088 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win425 : ParentRangeMatches K1Artifact.commitCode_0_425 217600 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win426 : ParentRangeMatches K1Artifact.commitCode_0_426 218112 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win427 : ParentRangeMatches K1Artifact.commitCode_0_427 218624 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win428 : ParentRangeMatches K1Artifact.commitCode_0_428 219136 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win429 : ParentRangeMatches K1Artifact.commitCode_0_429 219648 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win430 : ParentRangeMatches K1Artifact.commitCode_0_430 220160 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win431 : ParentRangeMatches K1Artifact.commitCode_0_431 220672 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win432 : ParentRangeMatches K1Artifact.commitCode_0_432 221184 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win433 : ParentRangeMatches K1Artifact.commitCode_0_433 221696 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win434 : ParentRangeMatches K1Artifact.commitCode_0_434 222208 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win435 : ParentRangeMatches K1Artifact.commitCode_0_435 222720 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win436 : ParentRangeMatches K1Artifact.commitCode_0_436 223232 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win437 : ParentRangeMatches K1Artifact.commitCode_0_437 223744 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win438 : ParentRangeMatches K1Artifact.commitCode_0_438 224256 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win439 : ParentRangeMatches K1Artifact.commitCode_0_439 224768 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win440 : ParentRangeMatches K1Artifact.commitCode_0_440 225280 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win441 : ParentRangeMatches K1Artifact.commitCode_0_441 225792 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win442 : ParentRangeMatches K1Artifact.commitCode_0_442 226304 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win443 : ParentRangeMatches K1Artifact.commitCode_0_443 226816 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win444 : ParentRangeMatches K1Artifact.commitCode_0_444 227328 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win445 : ParentRangeMatches K1Artifact.commitCode_0_445 227840 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win446 : ParentRangeMatches K1Artifact.commitCode_0_446 228352 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win447 : ParentRangeMatches K1Artifact.commitCode_0_447 228864 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win448 : ParentRangeMatches K1Artifact.commitCode_0_448 229376 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win449 : ParentRangeMatches K1Artifact.commitCode_0_449 229888 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win450 : ParentRangeMatches K1Artifact.commitCode_0_450 230400 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win451 : ParentRangeMatches K1Artifact.commitCode_0_451 230912 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win452 : ParentRangeMatches K1Artifact.commitCode_0_452 231424 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win453 : ParentRangeMatches K1Artifact.commitCode_0_453 231936 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win454 : ParentRangeMatches K1Artifact.commitCode_0_454 232448 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win455 : ParentRangeMatches K1Artifact.commitCode_0_455 232960 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win456 : ParentRangeMatches K1Artifact.commitCode_0_456 233472 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win457 : ParentRangeMatches K1Artifact.commitCode_0_457 233984 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win458 : ParentRangeMatches K1Artifact.commitCode_0_458 234496 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win459 : ParentRangeMatches K1Artifact.commitCode_0_459 235008 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win460 : ParentRangeMatches K1Artifact.commitCode_0_460 235520 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win461 : ParentRangeMatches K1Artifact.commitCode_0_461 236032 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win462 : ParentRangeMatches K1Artifact.commitCode_0_462 236544 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win463 : ParentRangeMatches K1Artifact.commitCode_0_463 237056 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win464 : ParentRangeMatches K1Artifact.commitCode_0_464 237568 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win465 : ParentRangeMatches K1Artifact.commitCode_0_465 238080 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win466 : ParentRangeMatches K1Artifact.commitCode_0_466 238592 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win467 : ParentRangeMatches K1Artifact.commitCode_0_467 239104 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win468 : ParentRangeMatches K1Artifact.commitCode_0_468 239616 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win469 : ParentRangeMatches K1Artifact.commitCode_0_469 240128 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win470 : ParentRangeMatches K1Artifact.commitCode_0_470 240640 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win471 : ParentRangeMatches K1Artifact.commitCode_0_471 241152 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win472 : ParentRangeMatches K1Artifact.commitCode_0_472 241664 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win473 : ParentRangeMatches K1Artifact.commitCode_0_473 242176 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win474 : ParentRangeMatches K1Artifact.commitCode_0_474 242688 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win475 : ParentRangeMatches K1Artifact.commitCode_0_475 243200 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win476 : ParentRangeMatches K1Artifact.commitCode_0_476 243712 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win477 : ParentRangeMatches K1Artifact.commitCode_0_477 244224 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win478 : ParentRangeMatches K1Artifact.commitCode_0_478 244736 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win479 : ParentRangeMatches K1Artifact.commitCode_0_479 245248 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win480 : ParentRangeMatches K1Artifact.commitCode_0_480 245760 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win481 : ParentRangeMatches K1Artifact.commitCode_0_481 246272 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win482 : ParentRangeMatches K1Artifact.commitCode_0_482 246784 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win483 : ParentRangeMatches K1Artifact.commitCode_0_483 247296 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win484 : ParentRangeMatches K1Artifact.commitCode_0_484 247808 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win485 : ParentRangeMatches K1Artifact.commitCode_0_485 248320 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win486 : ParentRangeMatches K1Artifact.commitCode_0_486 248832 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win487 : ParentRangeMatches K1Artifact.commitCode_0_487 249344 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win488 : ParentRangeMatches K1Artifact.commitCode_0_488 249856 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win489 : ParentRangeMatches K1Artifact.commitCode_0_489 250368 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win490 : ParentRangeMatches K1Artifact.commitCode_0_490 250880 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win491 : ParentRangeMatches K1Artifact.commitCode_0_491 251392 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win492 : ParentRangeMatches K1Artifact.commitCode_0_492 251904 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win493 : ParentRangeMatches K1Artifact.commitCode_0_493 252416 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win494 : ParentRangeMatches K1Artifact.commitCode_0_494 252928 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win495 : ParentRangeMatches K1Artifact.commitCode_0_495 253440 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win496 : ParentRangeMatches K1Artifact.commitCode_0_496 253952 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win497 : ParentRangeMatches K1Artifact.commitCode_0_497 254464 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win498 : ParentRangeMatches K1Artifact.commitCode_0_498 254976 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win499 : ParentRangeMatches K1Artifact.commitCode_0_499 255488 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win500 : ParentRangeMatches K1Artifact.commitCode_0_500 256000 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win501 : ParentRangeMatches K1Artifact.commitCode_0_501 256512 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win502 : ParentRangeMatches K1Artifact.commitCode_0_502 257024 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win503 : ParentRangeMatches K1Artifact.commitCode_0_503 257536 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win504 : ParentRangeMatches K1Artifact.commitCode_0_504 258048 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win505 : ParentRangeMatches K1Artifact.commitCode_0_505 258560 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win506 : ParentRangeMatches K1Artifact.commitCode_0_506 259072 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win507 : ParentRangeMatches K1Artifact.commitCode_0_507 259584 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win508 : ParentRangeMatches K1Artifact.commitCode_0_508 260096 := by
+  exact bandB_periodic_window _ _ 3 (by decide) (by decide) (by decide) bandB_periodic_3
+private theorem win509 : ParentRangeMatches K1Artifact.commitCode_0_509 260608 := by
+  exact bandB_periodic_window _ _ 5 (by decide) (by decide) (by decide) bandB_periodic_5
+private theorem win510 : ParentRangeMatches K1Artifact.commitCode_0_510 261120 := by
+  exact bandB_periodic_window _ _ 1 (by decide) (by decide) (by decide) bandB_periodic_1
+private theorem win511 : ParentRangeMatches K1Artifact.commitCode_0_511 261632 := by
+  unfold ParentRangeMatches expectedWord l21Word bandAWord bandBWord lit0Words lit1Words lit2Words lit3Words;decide +kernel
+
+private theorem parent_packed_matches : ParentRangeMatches K1Artifact.commitCode 0 := by
+  exact (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win0 win1) (parent_range_join _ _ _ win2 win3)) (parent_range_join _ _ _ (parent_range_join _ _ _ win4 win5) (parent_range_join _ _ _ win6 win7))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win8 win9) (parent_range_join _ _ _ win10 win11)) (parent_range_join _ _ _ (parent_range_join _ _ _ win12 win13) (parent_range_join _ _ _ win14 win15)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win16 win17) (parent_range_join _ _ _ win18 win19)) (parent_range_join _ _ _ (parent_range_join _ _ _ win20 win21) (parent_range_join _ _ _ win22 win23))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win24 win25) (parent_range_join _ _ _ win26 win27)) (parent_range_join _ _ _ (parent_range_join _ _ _ win28 win29) (parent_range_join _ _ _ win30 win31))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win32 win33) (parent_range_join _ _ _ win34 win35)) (parent_range_join _ _ _ (parent_range_join _ _ _ win36 win37) (parent_range_join _ _ _ win38 win39))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win40 win41) (parent_range_join _ _ _ win42 win43)) (parent_range_join _ _ _ (parent_range_join _ _ _ win44 win45) (parent_range_join _ _ _ win46 win47)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win48 win49) (parent_range_join _ _ _ win50 win51)) (parent_range_join _ _ _ (parent_range_join _ _ _ win52 win53) (parent_range_join _ _ _ win54 win55))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win56 win57) (parent_range_join _ _ _ win58 win59)) (parent_range_join _ _ _ (parent_range_join _ _ _ win60 win61) (parent_range_join _ _ _ win62 win63)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win64 win65) (parent_range_join _ _ _ win66 win67)) (parent_range_join _ _ _ (parent_range_join _ _ _ win68 win69) (parent_range_join _ _ _ win70 win71))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win72 win73) (parent_range_join _ _ _ win74 win75)) (parent_range_join _ _ _ (parent_range_join _ _ _ win76 win77) (parent_range_join _ _ _ win78 win79)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win80 win81) (parent_range_join _ _ _ win82 win83)) (parent_range_join _ _ _ (parent_range_join _ _ _ win84 win85) (parent_range_join _ _ _ win86 win87))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win88 win89) (parent_range_join _ _ _ win90 win91)) (parent_range_join _ _ _ (parent_range_join _ _ _ win92 win93) (parent_range_join _ _ _ win94 win95))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win96 win97) (parent_range_join _ _ _ win98 win99)) (parent_range_join _ _ _ (parent_range_join _ _ _ win100 win101) (parent_range_join _ _ _ win102 win103))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win104 win105) (parent_range_join _ _ _ win106 win107)) (parent_range_join _ _ _ (parent_range_join _ _ _ win108 win109) (parent_range_join _ _ _ win110 win111)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win112 win113) (parent_range_join _ _ _ win114 win115)) (parent_range_join _ _ _ (parent_range_join _ _ _ win116 win117) (parent_range_join _ _ _ win118 win119))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win120 win121) (parent_range_join _ _ _ win122 win123)) (parent_range_join _ _ _ (parent_range_join _ _ _ win124 win125) (parent_range_join _ _ _ win126 win127))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win128 win129) (parent_range_join _ _ _ win130 win131)) (parent_range_join _ _ _ (parent_range_join _ _ _ win132 win133) (parent_range_join _ _ _ win134 win135))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win136 win137) (parent_range_join _ _ _ win138 win139)) (parent_range_join _ _ _ (parent_range_join _ _ _ win140 win141) (parent_range_join _ _ _ win142 win143)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win144 win145) (parent_range_join _ _ _ win146 win147)) (parent_range_join _ _ _ (parent_range_join _ _ _ win148 win149) (parent_range_join _ _ _ win150 win151))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win152 win153) (parent_range_join _ _ _ win154 win155)) (parent_range_join _ _ _ (parent_range_join _ _ _ win156 win157) (parent_range_join _ _ _ win158 win159))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win160 win161) (parent_range_join _ _ _ win162 win163)) (parent_range_join _ _ _ (parent_range_join _ _ _ win164 win165) (parent_range_join _ _ _ win166 win167))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win168 win169) (parent_range_join _ _ _ win170 win171)) (parent_range_join _ _ _ (parent_range_join _ _ _ win172 win173) (parent_range_join _ _ _ win174 win175)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win176 win177) (parent_range_join _ _ _ win178 win179)) (parent_range_join _ _ _ (parent_range_join _ _ _ win180 win181) (parent_range_join _ _ _ win182 win183))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win184 win185) (parent_range_join _ _ _ win186 win187)) (parent_range_join _ _ _ (parent_range_join _ _ _ win188 win189) (parent_range_join _ _ _ win190 win191)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win192 win193) (parent_range_join _ _ _ win194 win195)) (parent_range_join _ _ _ (parent_range_join _ _ _ win196 win197) (parent_range_join _ _ _ win198 win199))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win200 win201) (parent_range_join _ _ _ win202 win203)) (parent_range_join _ _ _ (parent_range_join _ _ _ win204 win205) (parent_range_join _ _ _ win206 win207)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win208 win209) (parent_range_join _ _ _ win210 win211)) (parent_range_join _ _ _ (parent_range_join _ _ _ win212 win213) (parent_range_join _ _ _ win214 win215))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win216 win217) (parent_range_join _ _ _ win218 win219)) (parent_range_join _ _ _ (parent_range_join _ _ _ win220 win221) (parent_range_join _ _ _ win222 win223))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win224 win225) (parent_range_join _ _ _ win226 win227)) (parent_range_join _ _ _ (parent_range_join _ _ _ win228 win229) (parent_range_join _ _ _ win230 win231))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win232 win233) (parent_range_join _ _ _ win234 win235)) (parent_range_join _ _ _ (parent_range_join _ _ _ win236 win237) (parent_range_join _ _ _ win238 win239)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win240 win241) (parent_range_join _ _ _ win242 win243)) (parent_range_join _ _ _ (parent_range_join _ _ _ win244 win245) (parent_range_join _ _ _ win246 win247))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win248 win249) (parent_range_join _ _ _ win250 win251)) (parent_range_join _ _ _ (parent_range_join _ _ _ win252 win253) (parent_range_join _ _ _ win254 win255)))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win256 win257) (parent_range_join _ _ _ win258 win259)) (parent_range_join _ _ _ (parent_range_join _ _ _ win260 win261) (parent_range_join _ _ _ win262 win263))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win264 win265) (parent_range_join _ _ _ win266 win267)) (parent_range_join _ _ _ (parent_range_join _ _ _ win268 win269) (parent_range_join _ _ _ win270 win271)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win272 win273) (parent_range_join _ _ _ win274 win275)) (parent_range_join _ _ _ (parent_range_join _ _ _ win276 win277) (parent_range_join _ _ _ win278 win279))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win280 win281) (parent_range_join _ _ _ win282 win283)) (parent_range_join _ _ _ (parent_range_join _ _ _ win284 win285) (parent_range_join _ _ _ win286 win287))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win288 win289) (parent_range_join _ _ _ win290 win291)) (parent_range_join _ _ _ (parent_range_join _ _ _ win292 win293) (parent_range_join _ _ _ win294 win295))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win296 win297) (parent_range_join _ _ _ win298 win299)) (parent_range_join _ _ _ (parent_range_join _ _ _ win300 win301) (parent_range_join _ _ _ win302 win303)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win304 win305) (parent_range_join _ _ _ win306 win307)) (parent_range_join _ _ _ (parent_range_join _ _ _ win308 win309) (parent_range_join _ _ _ win310 win311))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win312 win313) (parent_range_join _ _ _ win314 win315)) (parent_range_join _ _ _ (parent_range_join _ _ _ win316 win317) (parent_range_join _ _ _ win318 win319)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win320 win321) (parent_range_join _ _ _ win322 win323)) (parent_range_join _ _ _ (parent_range_join _ _ _ win324 win325) (parent_range_join _ _ _ win326 win327))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win328 win329) (parent_range_join _ _ _ win330 win331)) (parent_range_join _ _ _ (parent_range_join _ _ _ win332 win333) (parent_range_join _ _ _ win334 win335)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win336 win337) (parent_range_join _ _ _ win338 win339)) (parent_range_join _ _ _ (parent_range_join _ _ _ win340 win341) (parent_range_join _ _ _ win342 win343))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win344 win345) (parent_range_join _ _ _ win346 win347)) (parent_range_join _ _ _ (parent_range_join _ _ _ win348 win349) (parent_range_join _ _ _ win350 win351))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win352 win353) (parent_range_join _ _ _ win354 win355)) (parent_range_join _ _ _ (parent_range_join _ _ _ win356 win357) (parent_range_join _ _ _ win358 win359))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win360 win361) (parent_range_join _ _ _ win362 win363)) (parent_range_join _ _ _ (parent_range_join _ _ _ win364 win365) (parent_range_join _ _ _ win366 win367)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win368 win369) (parent_range_join _ _ _ win370 win371)) (parent_range_join _ _ _ (parent_range_join _ _ _ win372 win373) (parent_range_join _ _ _ win374 win375))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win376 win377) (parent_range_join _ _ _ win378 win379)) (parent_range_join _ _ _ (parent_range_join _ _ _ win380 win381) (parent_range_join _ _ _ win382 win383))))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win384 win385) (parent_range_join _ _ _ win386 win387)) (parent_range_join _ _ _ (parent_range_join _ _ _ win388 win389) (parent_range_join _ _ _ win390 win391))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win392 win393) (parent_range_join _ _ _ win394 win395)) (parent_range_join _ _ _ (parent_range_join _ _ _ win396 win397) (parent_range_join _ _ _ win398 win399)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win400 win401) (parent_range_join _ _ _ win402 win403)) (parent_range_join _ _ _ (parent_range_join _ _ _ win404 win405) (parent_range_join _ _ _ win406 win407))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win408 win409) (parent_range_join _ _ _ win410 win411)) (parent_range_join _ _ _ (parent_range_join _ _ _ win412 win413) (parent_range_join _ _ _ win414 win415))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win416 win417) (parent_range_join _ _ _ win418 win419)) (parent_range_join _ _ _ (parent_range_join _ _ _ win420 win421) (parent_range_join _ _ _ win422 win423))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win424 win425) (parent_range_join _ _ _ win426 win427)) (parent_range_join _ _ _ (parent_range_join _ _ _ win428 win429) (parent_range_join _ _ _ win430 win431)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win432 win433) (parent_range_join _ _ _ win434 win435)) (parent_range_join _ _ _ (parent_range_join _ _ _ win436 win437) (parent_range_join _ _ _ win438 win439))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win440 win441) (parent_range_join _ _ _ win442 win443)) (parent_range_join _ _ _ (parent_range_join _ _ _ win444 win445) (parent_range_join _ _ _ win446 win447)))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win448 win449) (parent_range_join _ _ _ win450 win451)) (parent_range_join _ _ _ (parent_range_join _ _ _ win452 win453) (parent_range_join _ _ _ win454 win455))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win456 win457) (parent_range_join _ _ _ win458 win459)) (parent_range_join _ _ _ (parent_range_join _ _ _ win460 win461) (parent_range_join _ _ _ win462 win463)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win464 win465) (parent_range_join _ _ _ win466 win467)) (parent_range_join _ _ _ (parent_range_join _ _ _ win468 win469) (parent_range_join _ _ _ win470 win471))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win472 win473) (parent_range_join _ _ _ win474 win475)) (parent_range_join _ _ _ (parent_range_join _ _ _ win476 win477) (parent_range_join _ _ _ win478 win479))))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win480 win481) (parent_range_join _ _ _ win482 win483)) (parent_range_join _ _ _ (parent_range_join _ _ _ win484 win485) (parent_range_join _ _ _ win486 win487))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win488 win489) (parent_range_join _ _ _ win490 win491)) (parent_range_join _ _ _ (parent_range_join _ _ _ win492 win493) (parent_range_join _ _ _ win494 win495)))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win496 win497) (parent_range_join _ _ _ win498 win499)) (parent_range_join _ _ _ (parent_range_join _ _ _ win500 win501) (parent_range_join _ _ _ win502 win503))) (parent_range_join _ _ _ (parent_range_join _ _ _ (parent_range_join _ _ _ win504 win505) (parent_range_join _ _ _ win506 win507)) (parent_range_join _ _ _ (parent_range_join _ _ _ win508 win509) (parent_range_join _ _ _ win510 win511)))))))))
+
+
+attribute [local irreducible] ArtifactEncoding.decode
+
+def packedWideCommitImage : Image :=
+  ⟨ArtifactEncoding.decode 32 K1Artifact.commitCode,ArtifactEncoding.decode 8 K1Artifact.commitData⟩
+
+theorem packed_manifest_image : packedWideCommitImage = K1Artifact.submission.image .commit := by
+  simp only [packedWideCommitImage,K1Artifact.submission]
+
+private theorem wide_commit_code :
+    packedWideCommitImage.code = ArtifactEncoding.decode 32 K1Artifact.commitCode := by
+  simp only [packedWideCommitImage]
+
+private theorem packed_index_fetch (state : MachineState) (index : Nat)
+    (point : state.pc=BitVec.ofNat 64 (4096+4*index))
+    (lower : (45662 : Nat) ≤ index) (upper : index < 261970) :
+    fetch packedWideCommitImage state=decodeInstruction (expectedWord index) := by
+  have pc : state.pc.toNat=4096+4*index := by
+    rw [point,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
+  have packed := parent_packed_matches ⟨index,upper⟩
+    (by simpa only [Nat.zero_add,Fin.val_mk] using lower)
+    (by simpa only [Nat.zero_add,Fin.val_mk] using upper)
+  have word : packedWideCommitImage.code.getD index 0 = expectedWord index := by
+    rw [wide_commit_code,ArtifactEncoding.getD_decode _ _ _ upper]
+    simpa only [Nat.zero_add] using packed
+  have inside : index<packedWideCommitImage.code.length := by
+    rw [wide_commit_code,ArtifactEncoding.length_decode]
+    exact upper
+  have atIndex : packedWideCommitImage.code[index]? = some (expectedWord index) := by
+    rw [List.getElem?_eq_getElem inside,←List.getD_eq_getElem _ _ inside,word]
+  rw [fetch,pc,if_pos (by omega),
+    show (4096+4*index-4096)/4=index by omega,atIndex]
+
+private theorem l21_opcode (state : MachineState) (slot : Nat) (bounded : slot<32768) (part : Fin 3)
+    (pc : state.pc=l21PC l21Base slot+BitVec.ofNat 64 (4*part.val)) :
+    fetch packedWideCommitImage state=decodeInstruction (l21Word part.val) := by
+  have inside := part.isLt
+  have address : state.pc=BitVec.ofNat 64 (4096+4*(45673+3*slot+part.val)) := by
+    rw [pc]
+    change BitVec.ofNat 64 186788+BitVec.ofNat 64 (12*slot)+BitVec.ofNat 64 (4*part.val)=_
+    rw [←BitVec.ofNat_add,←BitVec.ofNat_add]
+    congr 1
+    omega
+  rw [packed_index_fetch state (45673+3*slot+part.val) address (by omega) (by omega)]
+  rw [expectedWord,if_neg (by omega),if_pos (by omega)]
+  simp only [l21Word]
+  have phase : ((45673+3*slot+part.val)-45673)%3=part.val%3 := by omega
+  rw [phase]
+
+theorem l21_words (slot : Nat) (bounded : slot<32768) :
+    L21WordsAt packedWideCommitImage (l21PC l21Base slot) := by
+  refine ⟨fun state pc => ?_,fun state pc => ?_,fun state pc => ?_⟩
+  · exact l21_opcode state slot bounded 0 (by simpa using pc)
+  · exact l21_opcode state slot bounded 1 pc
+  · exact l21_opcode state slot bounded 2 pc
+
+private theorem bandA_opcode (state : MachineState) (slot : Nat) (bounded : slot<16384) (part : Fin 4)
+    (pc : state.pc=kindPC recordKind bandABase slot+BitVec.ofNat 64 (4*part.val)) :
+    fetch packedWideCommitImage state=decodeInstruction (bandAWord part.val) := by
+  have inside := part.isLt
+  have address : state.pc=BitVec.ofNat 64 (4096+4*(143986+4*slot+part.val)) := by
+    rw [pc]
+    change BitVec.ofNat 64 580040+BitVec.ofNat 64 (16*slot)+BitVec.ofNat 64 (4*part.val)=_
+    rw [←BitVec.ofNat_add,←BitVec.ofNat_add]
+    congr 1
+    omega
+  rw [packed_index_fetch state (143986+4*slot+part.val) address (by omega) (by omega)]
+  rw [expectedWord,if_neg (by omega),if_neg (by omega),if_neg (by omega),if_pos (by omega)]
+  simp only [bandAWord]
+  have phase : ((143986+4*slot+part.val)-143986)%4=part.val%4 := by omega
+  rw [phase]
+
+theorem bandA_words (slot : Nat) (bounded : slot<16384) :
+    PackedParentWordsAt packedWideCommitImage (kindPC recordKind bandABase slot) := by
+  refine ⟨fun state pc => ?_,fun state pc => ?_,fun state pc => ?_,fun state pc => ?_⟩
+  · exact bandA_opcode state slot bounded 0 (by simpa using pc)
+  · exact bandA_opcode state slot bounded 1 pc
+  · exact bandA_opcode state slot bounded 2 pc
+  · exact bandA_opcode state slot bounded 3 pc
+
+private theorem bandB_opcode (state : MachineState) (slot : Nat) (bounded : slot<8738) (part : Fin 6)
+    (pc : state.pc=kindPC t238Kind bandBBase slot+BitVec.ofNat 64 (4*part.val)) :
+    fetch packedWideCommitImage state=decodeInstruction (bandBWord part.val) := by
+  have inside := part.isLt
+  have address : state.pc=BitVec.ofNat 64 (4096+4*(209525+6*slot+part.val)) := by
+    rw [pc]
+    change BitVec.ofNat 64 842196+BitVec.ofNat 64 (24*slot)+BitVec.ofNat 64 (4*part.val)=_
+    rw [←BitVec.ofNat_add,←BitVec.ofNat_add]
+    congr 1
+    omega
+  rw [packed_index_fetch state (209525+6*slot+part.val) address (by omega) (by omega)]
+  rw [expectedWord,if_neg (by omega),if_neg (by omega),if_neg (by omega),if_neg (by omega),if_neg (by omega),if_pos (by omega)]
+  simp only [bandBWord]
+  have phase : ((209525+6*slot+part.val)-209525)%6=part.val%6 := by omega
+  rw [phase]
+
+theorem bandB_words (slot : Nat) (bounded : slot<8738) :
+    T238WordsAt packedWideCommitImage (kindPC t238Kind bandBBase slot) := by
+  refine ⟨fun state pc => ?_,fun state pc => ?_,fun state pc => ?_,fun state pc => ?_,fun state pc => ?_,fun state pc => ?_⟩
+  · exact bandB_opcode state slot bounded 0 (by simpa using pc)
+  · exact bandB_opcode state slot bounded 1 pc
+  · exact bandB_opcode state slot bounded 2 pc
+  · exact bandB_opcode state slot bounded 3 pc
+  · exact bandB_opcode state slot bounded 4 pc
+  · exact bandB_opcode state slot bounded 5 pc
+
+def l21Control : L21Control packedWideCommitImage l21Base 32768 where
+  backOffset := 1703932
+  backTarget := by decide
+  branch state pc := packed_index_fetch state 143977 pc (by decide) (by decide)
+  jump state pc := packed_index_fetch state 143978 pc (by decide) (by decide)
+
+def bandAControl : BandControl packedWideCommitImage recordKind bandABase 16384 where
+  backOffset := 1835004
+  backTarget := by decide
+  branch state pc := packed_index_fetch state 209522 pc (by decide) (by decide)
+  jump state pc := packed_index_fetch state 209523 pc (by decide) (by decide)
+
+def bandBControl : BandControl packedWideCommitImage t238Kind bandBBase 8738 where
+  backOffset := 1887436
+  backTarget := by decide
+  branch state pc := packed_index_fetch state 261953 pc (by decide) (by decide)
+  jump state pc := packed_index_fetch state 261954 pc (by decide) (by decide)
+
+theorem fetch_l21_setup (s : MachineState) (i : Fin 7) (pc : s.pc=BitVec.ofNat 64 (4096+4*(45666+i.val))) :
+    fetch packedWideCommitImage s=some (.base ((l21SetupOps[i.val]?).getD .EBREAK)) := by
+  have hi := i.isLt
+  rw [packed_index_fetch s _ pc (by omega) (by omega)]
+  fin_cases i <;> rfl
+
+theorem fetch_heap_setup (s : MachineState) (i : Fin 7) (pc : s.pc=BitVec.ofNat 64 (4096+4*(143979+i.val))) :
+    fetch packedWideCommitImage s=some (.base ((heapSetupOps[i.val]?).getD .EBREAK)) := by
+  have hi := i.isLt
+  rw [packed_index_fetch s _ pc (by omega) (by omega)]
+  fin_cases i <;> rfl
+
+theorem fetch_mid (s : MachineState) (pc : s.pc=midPC) :
+    fetch packedWideCommitImage s=some (.base (.ADDI .x7 .x9 32)) :=
+  packed_index_fetch s 209524 pc (by decide) (by decide)
+
+/-- The root parent: the first four words of a 238-bit parent. -/
+theorem root_parent_words (s : MachineState) :
+    (s.pc=rootParentPC → fetch packedWideCommitImage s=some (.base .ECALL)) ∧
+    (s.pc=rootParentPC+4 → fetch packedWideCommitImage s=some (.base (.LHU .x31 .x12 28))) ∧
+    (s.pc=rootParentPC+8 → fetch packedWideCommitImage s=some (.base (.AND .x31 .x31 .x6))) ∧
+    (s.pc=rootParentPC+12 → fetch packedWideCommitImage s=some (.base (.SW .x12 .x31 28))) :=
+  ⟨fun pc => packed_index_fetch s 261955 pc (by decide) (by decide),
+   fun pc => packed_index_fetch s 261956 pc (by decide) (by decide),
+   fun pc => packed_index_fetch s 261957 pc (by decide) (by decide),
+   fun pc => packed_index_fetch s 261958 pc (by decide) (by decide)⟩
+
+private theorem wide_root_fetch (state : MachineState) (i : Nat) (inside : i < 11)
+    (pc : state.pc=BitVec.ofNat 64 (1051932+4*i)) :
+    fetch packedWideCommitImage state=some (.base ((rootOps[i]?).getD .ECALL)) := by
+  have address : state.pc=BitVec.ofNat 64 (4096+4*(261959+i)) := by
+    rw [pc]
+    congr 1
+    omega
+  rw [packed_index_fetch state (261959+i) address (by omega) (by omega)]
+  interval_cases i <;> rfl
+
+attribute [local irreducible] execute
+
+def l21StartPrefix (s : MachineState) (i : Nat) := (l21SetupOps.take i).foldl execInstrBr s
+def heapStartPrefix (s : MachineState) (i : Nat) := (heapSetupOps.take i).foldl execInstrBr s
+
+theorem l21Start_run (s : MachineState) (pc : s.pc=BitVec.ofNat 64 (4096+4*tailStart)) (fuel : Nat) :
+    execute packedWideCommitImage (7+fuel) s true = (do
+      let e ← execute packedWideCommitImage fuel (l21StartPrefix s l21SetupLen) true; return e.charge 7 0) := by
+  apply CommitGolfCandidate.execute_unit_steps (states := l21StartPrefix s)
+  intro i hi
+  refine ⟨.base ((l21SetupOps[i]?).getD .EBREAK),?_,?_,?_⟩
+  · have here : (l21StartPrefix s i).pc=BitVec.ofNat 64 (4096+4*(45666+i)) := by
+      interval_cases i <;> simp only [l21StartPrefix,l21SetupOps,List.take,List.foldl,execInstrBr,
+        MachineState.setPC,pc,tailStart] <;> rfl
+    have cell := fetch_l21_setup (l21StartPrefix s i) ⟨i,hi⟩ here
+    interval_cases i <;> exact cell
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+
+theorem heapStart_run (s : MachineState) (pc : s.pc=heapSetupPC) (fuel : Nat) :
+    execute packedWideCommitImage (7+fuel) s true = (do
+      let e ← execute packedWideCommitImage fuel (heapStartPrefix s 7) true; return e.charge 7 0) := by
+  apply CommitGolfCandidate.execute_unit_steps (states := heapStartPrefix s)
+  intro i hi
+  refine ⟨.base ((heapSetupOps[i]?).getD .EBREAK),?_,?_,?_⟩
+  · have here : (heapStartPrefix s i).pc=BitVec.ofNat 64 (4096+4*(143979+i)) := by
+      interval_cases i <;> simp only [heapStartPrefix,heapSetupOps,List.take,List.foldl,execInstrBr,
+        MachineState.setPC,pc,heapSetupPC] <;> rfl
+    have cell := fetch_heap_setup (heapStartPrefix s i) ⟨i,hi⟩ here
+    interval_cases i <;> exact cell
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+
+private theorem wide_root_access (state : MachineState) (heap : state.getReg .x9=4294971424)
+    (out : state.getReg .x8=4294971392) (i : Nat) (inside : i<10) :
+    memoryArgumentsValid (rootPrefix state i) ((rootOps[i]?).getD .EBREAK)=true := by
+  interval_cases i
+  · change accessValid (state.getReg .x9+32) 8=true; rw [heap]; decide
+  · change accessValid (state.getReg .x8+0) 8=true; rw [out]; decide
+  · change accessValid (state.getReg .x9+40) 8=true; rw [heap]; decide
+  · change accessValid (state.getReg .x8+8) 8=true; rw [out]; decide
+  · change accessValid (state.getReg .x9+48) 8=true; rw [heap]; decide
+  · change accessValid (state.getReg .x8+16) 8=true; rw [out]; decide
+  · change accessValid (state.getReg .x9+56) 8=true; rw [heap]; decide
+  · change accessValid (state.getReg .x8+24) 8=true; rw [out]; decide
+  · rfl
+  · rfl
+
+theorem execute_packed_root (state : MachineState) (pc : state.pc=rootPC)
+    (heap : state.getReg .x9=4294971424) (out : state.getReg .x8=4294971392) (fuel : Nat) :
+    execute packedWideCommitImage (11+fuel) state true = pure ⟨.success,rootPrefix state 10,11,0⟩ := by
+  have prefixPC (i : Nat) (inside : i<11) :
+      (rootPrefix state i).pc=BitVec.ofNat 64 (1051932+4*i) := by
+    interval_cases i <;>
+      simp only [rootPrefix,rootOps,List.take,List.foldl,execInstrBr,MachineState.setPC,pc,rootPC] <;> rfl
+  have run (left : Nat) :
+      execute packedWideCommitImage (10+left) state true =
+        (do let result ← execute packedWideCommitImage left (rootPrefix state 10) true
+            return result.charge 10 0) := by
+    apply CommitGolfCandidate.execute_unit_steps (states := rootPrefix state)
+    intro i inside
+    refine ⟨.base ((rootOps[i]?).getD .EBREAK),?_,?_,?_⟩
+    · have fetched := wide_root_fetch (rootPrefix state i) i (by omega) (prefixPC i (by omega))
+      interval_cases i <;> exact fetched
+    · have access := wide_root_access state heap out i inside
+      interval_cases i <;>
+        simp only [rootOps,List.getElem?_cons_zero,List.getElem?_cons_succ,Option.getD_some] at access ⊢ <;>
+        simp only [ordinaryStep,access,↓reduceIte] <;> rfl
+    · interval_cases i <;> rfl
+  have fetched : fetch packedWideCommitImage (rootPrefix state 10)=some (.base .ECALL) :=
+    wide_root_fetch (rootPrefix state 10) 10 (by decide) (prefixPC 10 (by decide))
+  have halt : (rootPrefix state 10).getReg .x5=1 := rfl
+  have success : (rootPrefix state 10).getReg .x10=0 := rfl
+  rw [show 11+fuel=10+(fuel+1) by omega,run,execute,fetched]
+  simp only [halt,success]
+  rfl
+
+end TwoPermutationPrototype.GroupedUpper
