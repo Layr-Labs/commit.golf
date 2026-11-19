@@ -1,4 +1,45 @@
-# Product: double the level-21 loop span
+# Product: shifted 32-byte copies
+
+Stacked on `9b3cd204` (`devin/copy30`). The four 32-byte writer sites use
+aligned dword loads and shifted halfword/word stores when the destination is
+2 mod 4. The alignment dispatch branches directly into the site's old copy slots.
+The paths cost 14 cycles (8-aligned), 22 (4 mod 8), or 28 (2 mod 4),
+instead of 12, 22, or 38. Across 128 records this saves **2,304 opening cycles**.
+Proof serialization, commit/check images, embedded data, image lengths and ABI
+are unchanged.
+
+The certified claim is **504,594,887 commit cycles**, **128,437 opening cycles**
+and **72,160 proof bytes**. Product:
+**504,723,324 × 72,160 = 36,420,835,059,840**,
+an improvement of **166,256,640** over the copy30/head certificate.
+
+## Previous entry: common rebuilt-block destination
+
+Stacked on the shifted-copy certificate (`e2f859f`). Compute `B_g` from the quartet index
+already in `x28`, and set the inverse-call destination `B_g+512` before selecting parity.
+Each parity arm now needs only two address selections. Fresh-quartet heads save one cycle
+(36 even, 35 odd); repeated-quartet heads remain three cycles. This saves another **128**
+worst-case opening cycles without changing serialized proof bytes, commit/check images,
+embedded data, image lengths or ABI.
+
+The certified claim is **504,594,887 commit cycles**, **130,741 opening cycles** and
+**72,160 proof bytes**. Product: **504,725,628 × 72,160 = 36,421,001,316,480**, improving
+by **9,236,480** over copy30 and **364,840,960** over `devin/next-trim`.
+
+## Previous entry: shifted 30-byte copies
+
+Stacked on `a2b726ec` (`devin/next-trim`). The 2-mod-4 path of the shared 30-byte writer
+copy uses aligned dword loads, shifts and mixed-width stores instead of fifteen halfword
+load/store pairs. Each slow copy falls from 34 to 27 cycles. Across 128 records, 704 such
+copies save **4,928 opening cycles**, with identical proof serialization and length.
+The added 23-word stub brings the opening image to **7,560 bytes**. Commit/check images,
+embedded data and ABI are unchanged. The byte-copy refinement includes the final six-byte
+chunk: the high two bytes of its aligned load are never stored.
+
+Commit cycles remain **504,594,887**, opening falls to **130,869**, and proof bytes remain
+**72,160**. Product: **504,725,756 × 72,160 = 36,421,010,552,960**, improving by **355,604,480**.
+
+## Previous entry: double the level-21 loop span
 
 Stacked on the two-cycle startup trim (`8fe651cd`, submitted as `bf616286`). Double the unrolled
 level-21 compression body from 16,384 to 32,768 nodes, reducing its passes from 128 to 64 and

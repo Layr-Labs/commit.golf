@@ -143,8 +143,8 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
     let t ← chainTrace (headed s i last 0) i
     return finishOne t i left
 
-def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 29 else 30
-def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 36 else 37
+def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 28 else 29
+def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 35 else 36
 def postSteps (i : Index) (left : Nat) := 13+(if kindOf i=0 then 0 else if kindOf i=1 then 0 else 1)+(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
@@ -311,8 +311,8 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     apply bind_congr; intro t; apply bind_congr; intro e; apply congrArg pure
     rw [charge_comm, charge_comm, charge_comm]; congr 1
     · rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h <;>
-        simp [perCycles,headCycles,oddOf,same,h,show price (preRows true)=13 from rfl,
-          show price (preRows false)=14 from rfl,show price headPost=15 from rfl] <;> omega
+        simp [perCycles,headCycles,oddOf,same,h,show price (preRows true)=12 from rfl,
+          show price (preRows false)=13 from rfl,show price headPost=15 from rfl] <;> omega
     · simp [perCalls,inv] <;> omega
 
 end TwoPermutationPrototype.GroupedOpening

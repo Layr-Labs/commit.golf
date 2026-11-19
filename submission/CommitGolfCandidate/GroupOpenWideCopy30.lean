@@ -1,10 +1,11 @@
 import CommitGolfCandidate.GroupOpenWideCopy
+import CommitGolfCandidate.GroupOpenShifted30
 
 /-! The shared 30-byte copy stub (opening words 1062..1096) of writer levels 2..12.
 
 Rows `225+35k` (`k = 0..10`, the sites `CopySite.sibling l` with `l = k+1`) hold `jal x29,<1062>`. The stub tests
-`x21 & 3`: a destination that is 2 mod 4 copies its first halfword and returns to the site's own halfword pairs
-1..14 (34 cycles). Otherwise it tests `x21 & 7`: 4 mod 8 copies seven words and the last halfword (22 cycles),
+`x21 & 3`: a destination that is 2 mod 4 enters the shifted-load path at row 1867 (27 cycles).
+Otherwise it tests `x21 & 7`: 4 mod 8 copies seven words and the last halfword (22 cycles),
 0 mod 8 three dwords, a word and the last halfword (16 cycles). The source (`x7`, a heap node) is 8-aligned. Every
 path ends at the site's word `start+30` with only `x29` and `x31` changed. Built on the width-generic pairs of
 `GroupOpenWideCopy`. -/
@@ -21,8 +22,8 @@ structure Stub30Code (site : CopySite) : Prop where
   entry : Decodes site.start (.JAL .x29 (BitVec.ofNat 21 (4*(1062-site.start))))
   test4 : Decodes 1062 (.ANDI .x31 .x21 3)
   four : Decodes (1062+1) (.BEQ .x31 .x0 16)
-  firstHalf : PairsAt (1062+2) 1 2 .x7 0 0
-  back : Decodes (1062+4) (.JALR .x0 .x29 4)
+  shiftJump : Decodes (1062+2) (.JAL .x0 3212)
+  shiftBack : Decodes 1889 (.JALR .x0 .x29 116)
   test8 : Decodes (1062+5) (.ANDI .x31 .x21 7)
   eight : Decodes (1062+6) (.BEQ .x31 .x0 72)
   words : PairsAt (1062+7) 7 4 .x7 0 0
@@ -32,7 +33,6 @@ structure Stub30Code (site : CopySite) : Prop where
   dwordsWord : PairsAt (1062+30) 1 4 .x7 24 24
   dwordsHalf : PairsAt (1062+32) 1 2 .x7 28 28
   dwordsBack : Decodes (1062+34) (.JALR .x0 .x29 116)
-  halves : PairsAt (site.start+2) 14 2 .x7 2 2
 
 set_option maxHeartbeats 4000000 in
 theorem stub30_code_all : ∀ l : Fin 13, 0 < l.val → l.val < 12 → Stub30Code (.sibling l) := by
@@ -116,7 +116,7 @@ def slow30 (site : CopySite) (s : MachineState) : MachineState :=
   execInstrBr (execInstrBr (enter30 site s) (.ANDI .x31 .x21 7)) (.BEQ .x31 .x0 72)
 
 def half30Path (site : CopySite) (s : MachineState) : MachineState :=
-  pairsRun 2 .x7 2 2 0 14 (execInstrBr (pairsRun 2 .x7 0 0 0 1 (enter30 site s)) (.JALR .x0 .x29 4))
+  execInstrBr (Shifted30.copy30 (execInstrBr (enter30 site s) (.JAL .x0 3212))) (.JALR .x0 .x29 116)
 
 def word30Path (site : CopySite) (s : MachineState) : MachineState :=
   execInstrBr (pairsRun 2 .x7 28 28 0 1 (pairsRun 4 .x7 0 0 0 7 (slow30 site s))) (.JALR .x0 .x29 116)
@@ -131,8 +131,8 @@ def wide30State (site : CopySite) (s : MachineState) : MachineState :=
     (if (s.getReg .x21).toNat % 8 = 0 then dword30Path site s else word30Path site s)
   else half30Path site s
 
-/-- Cycles of a 30-byte site's copy into `target`: 16 (8-aligned), 22 (4 mod 8) or 34 (2 mod 4). -/
-def wide30Cost (target : Nat) : Nat := if target % 4 = 0 then (if target % 8 = 0 then 16 else 22) else 34
+/-- Cycles of a 30-byte site's copy into `target`: 16 (8-aligned), 22 (4 mod 8) or 27 (2 mod 4). -/
+def wide30Cost (target : Nat) : Nat := if target % 4 = 0 then (if target % 8 = 0 then 16 else 22) else 27
 
 structure Wide30Inputs (site : CopySite) (s : MachineState) (S T : Nat) : Prop where
   wide30 : site.wide30 = true
@@ -239,50 +239,42 @@ structure Wide30Done (site : CopySite) (s t : MachineState) (S T cost : Nat) : P
   below : ∀ q : Word, q.toNat < T - T % 8 → t.getMem q = s.getMem q
 
 theorem half30_done (site : CopySite) (s : MachineState) (S T : Nat) (input : Wide30Inputs site s S T)
-    (h : T % 4 ≠ 0) : Wide30Done site s (half30Path site s) S T 34 := by
+    (h : T % 4 ≠ 0) : Wide30Done site s (half30Path site s) S T 27 := by
   have facts := site_facts30 site input.wide30
   have code := stub30_code site input.wide30
-  have sf := facts.startFit
   have room := input.room
   have apart := input.apart
-  have even := input.dstEven
-  have sa := input.srcAligned
+  have ram : MEMORY_BYTES < 2^64 := by decide
   obtain ⟨run3, entered, pc3⟩ := enter30_facts site s S T input
   rw [if_neg h] at pc3
-  generalize he3 : enter30 site s = e3 at run3 entered pc3
-  have dst0 : e3.getReg .x21 + BitVec.ofNat 64 0 = BitVec.ofNat 64 T := by
-    rw [entered.dst]; exact BitVec.add_zero _
-  obtain ⟨runA, pcA, regsA, copyA, belowA⟩ := run_pairs 2 (by decide) .x7 (by decide) (1062+2) 0 0 S T
-    (by omega) (by omega) 1 0 e3 (by simpa using code.firstHalf) (by omega) (by simpa using pc3) entered.src dst0
-    (by omega) (by omega) (by omega) (by omega)
-  generalize hc : pairsRun 2 .x7 0 0 0 1 e3 = c at runA pcA regsA copyA belowA
-  have pcC : c.pc = BitVec.ofNat 64 (4096+4*(1062+4)) := by rw [pcA]
-  have runJ := run_step c (1062+4) _ (by omega) pcC code.back rfl rfl
-  obtain ⟨pJ, mJ⟩ := jalr_facts c 4
-  generalize hr : execInstrBr c (.JALR .x0 .x29 4) = r at pJ mJ runJ
-  have pcR : r.pc = BitVec.ofNat 64 (4096+4*(site.start+2+2*0)) := by
-    rw [pJ, regsA .x29 (by decide), entered.x29]; exact facts.back4
-  have srcR : r.getReg .x7 = BitVec.ofNat 64 S := by
-    rw [keep_x0 mJ, regsA .x7 (by decide)]; exact entered.src
-  have dstR : r.getReg .x21 + BitVec.ofNat 64 2 = BitVec.ofNat 64 (T+2) := by
-    rw [keep_x0 mJ, regsA .x21 (by decide), entered.dst, ← BitVec.ofNat_add]
-  obtain ⟨runB, pcB, regsB, copyB, belowB⟩ := run_pairs 2 (by decide) .x7 (by decide) (site.start+2) 2 2 S (T+2)
-    (by omega) (by omega) 14 0 r (by simpa using code.halves) (by omega) pcR srcR dstR
-    (by omega) (by omega) (by omega) (by omega)
-  generalize hf : pairsRun 2 .x7 2 2 0 14 r = f at runB pcB regsB copyB belowB
-  have same : half30Path site s = f := by rw [← hf, ← hr, ← hc, ← he3]; unfold half30Path; exact Eq.refl _
+  let e := enter30 site s
+  let j := execInstrBr e (.JAL .x0 3212)
+  have runJ := run_step e 1064 _ (by decide) pc3 code.shiftJump rfl rfl
+  have jpc : j.pc = BitVec.ofNat 64 (4096+4*1867) := by
+    change e.pc + signExtend21 3212 = _
+    rw [pc3]
+    rfl
+  have jregs (r : Reg) : j.getReg r = e.getReg r := by
+    simp only [j, execInstrBr, MachineState.getReg_setPC, MachineState.setReg]
+  have jmem : j.mem = e.mem := rfl
+  have done := Shifted30.copy30_done j S T jpc
+    ((jregs .x7).trans entered.src) ((jregs .x21).trans entered.dst)
+    input.srcAligned (by have := input.dstEven; omega) apart (by omega) room
+  let c := Shifted30.copy30 j
+  have runBack := run_step c 1889 _ (by decide) done.pc code.shiftBack rfl rfl
+  obtain ⟨pBack, mBack⟩ := jalr_facts c 116
+  have same : half30Path site s = execInstrBr c (.JALR .x0 .x29 116) := rfl
   rw [same]
-  have total := ((run3.next runA).next runJ).next runB
-  rw [show 3+2*1+1+2*14 = 34 from rfl] at total
-  refine ⟨total, ?_, ?_, ?_, ?_⟩
-  · rw [pcB]
-  · intro x a b; rw [regsB x a, keep_x0 mJ x, regsA x a, entered.regs x a b]
-  · have head : ByteCopy e3 c S T 2 := by simpa using copyA
-    have tail : ByteCopy c f (S+2) (T+2) 28 := copy_congr_before mJ.mem.symm (by simpa using copyB)
-    have whole := copy_extend head tail (by omega) (by unfold MEMORY_BYTES at room; omega)
-    exact copy_congr_before entered.mem.symm whole
+  refine ⟨((run3.next runJ).next done.run).next runBack, ?_, ?_, ?_, ?_⟩
+  · rw [pBack, done.regs .x29 (by decide), jregs .x29, entered.x29]
+    exact facts.back116
+  · intro r a b
+    rw [keep_x0 mBack, done.regs r a, jregs r, entered.regs r a b]
+  · have copied := copy_congr_before (jmem.trans entered.mem).symm done.bytes
+    exact copy_congr_mem mBack.mem copied
   · intro q below
-    rw [belowB q (by omega), getMem_eq30 mJ.mem, belowA q below, getMem_eq30 entered.mem]
+    rw [getMem_eq30 mBack.mem, done.below q below]
+    exact getMem_eq30 (jmem.trans entered.mem) q
 
 theorem word30_done (site : CopySite) (s : MachineState) (S T : Nat) (input : Wide30Inputs site s S T)
     (h : T % 8 = 4) : Wide30Done site s (word30Path site s) S T 22 := by
@@ -413,6 +405,9 @@ theorem wide30_regs (site : CopySite) (s : MachineState) (r : Reg) (a : r ≠ .x
       rw [keep_x0 (jalr_facts _ 116).2, pairs_regs _ _ _ _ r a, pairs_regs _ _ _ _ r a, pairs_regs _ _ _ _ r a, slow]
     · unfold word30Path
       rw [keep_x0 (jalr_facts _ 116).2, pairs_regs _ _ _ _ r a, pairs_regs _ _ _ _ r a, slow]
-  · unfold half30Path; rw [pairs_regs _ _ _ _ r a, keep_x0 (jalr_facts _ 4).2, pairs_regs _ _ _ _ r a, enter]
+  · unfold half30Path
+    rw [keep_x0 (jalr_facts _ 116).2, Shifted30.copy30_regs _ r a]
+    change (enter30 site s).getReg r = s.getReg r
+    exact enter
 
 end TwoPermutationPrototype.GroupedOpening

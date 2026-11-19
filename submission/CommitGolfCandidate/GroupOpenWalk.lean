@@ -103,20 +103,20 @@ def pairRows (start : Nat) (src dst : Reg) : List (Nat × Nat) → List Row
   | (a,b)::rest => (start,.LD .x31 src (BitVec.ofNat 12 (8*a))) :: (start+1,.SD dst .x31 (BitVec.ofNat 12 (8*b))) ::
       pairRows (start+2) src dst rest
 
-/-! K3-lite prefix, one position `i` (quartet `g = i >> 2`, even block `B = B_{2 (g >> 1)}`), rows 740..812.
+/-! K3-lite prefix, one position `i` (quartet `g = i >> 2`, block `B = B_g`), rows 740..812.
 Head paths (rows 740..776): `skip` when `g` equals the previous position's quartet (`x4`); otherwise `x4 := g`, the
-parity selects the reply (`B+168` even, `B-32` odd), the rebuilt block (`B+512` even, `B+1536` odd, both
-`Q+512+1024 g`) and the level-22 sibling node (`B+136` even, `B+168` odd); the inverse of the reply lands in the
+rebuilt block is `B+512`; parity selects the reply (`B+168` even, `B-1056` odd)
+and the level-22 sibling node (`B+136` even, `B-856` odd); the inverse of the reply lands in the
 rebuilt block (call at 761), rows 762..764 restore `x13, x12, x10` and rows 765..776 copy the sibling to
 `heap[2^22 + (g ^ 1)]`. Then the chained salt generator (777..795, `K3OpenChain`) and the K1 salt rows (796..812). -/
 
 def headRows : List Row := [(740,.LD .x6 .x14 0),(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]
-def newRows : List Row := [(743,.ADDI .x4 .x28 0),(744,.SRLI .x7 .x6 3),(745,.SLLI .x7 .x7 11),(746,.ADD .x7 .x7 .x24),
-  (747,.ANDI .x30 .x6 4),(748,.BNE .x30 .x0 36)]
-/-- Even quartet: reply_E at `B+168`, rebuilt block at `B+512`, sibling G_O at `B+136`; jump to 760. -/
-def evenSel : List Row := [(749,.ADDI .x10 .x7 168),(750,.ADDI .x12 .x7 512),(751,.ADDI .x30 .x7 136),(752,.JAL .x0 32)]
-/-- Odd quartet: reply_O at `B-32` (immediate `4064 = -32` in 12 bits), rebuilt block at `B+1536`, sibling G_E at `B+168`. -/
-def oddSel : List Row := [(757,.ADDI .x10 .x7 4064),(758,.ADDI .x12 .x7 1536),(759,.ADDI .x30 .x7 168)]
+def newRows : List Row := [(743,.ADDI .x4 .x28 0),(744,.SLLI .x7 .x28 10),(745,.ADD .x7 .x7 .x24),(746,.ADDI .x12 .x7 512),
+  (747,.ANDI .x30 .x6 4),(748,.BNE .x30 .x0 40)]
+/-- Even quartet: reply_E at `B+168`, sibling G_O at `B+136`; jump to 760. -/
+def evenSel : List Row := [(749,.ADDI .x10 .x7 168),(750,.ADDI .x30 .x7 136),(751,.JAL .x0 36)]
+/-- Odd quartet: reply_O at `B-1056`, sibling G_E at `B-856`. -/
+def oddSel : List Row := [(758,.ADDI .x10 .x7 3040),(759,.ADDI .x30 .x7 3240)]
 def selRows (odd : Bool) : List Row := if odd then oddSel else evenSel
 def callRow : List Row := [(760,.ADDI .x13 .x0 2)]
 /-- A new quartet before its inverse call (row 761). -/

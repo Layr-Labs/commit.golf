@@ -21,7 +21,7 @@ theorem copy_sum_le (n : Nat) : copySum n ≤ 454*n := by
   | zero => rfl
   | succ n ih => have := record_extra_le n; simp only [copySum]; omega
 
-theorem copy_sum_batch : copySum 128 = 51392 := by decide +kernel
+theorem copy_sum_batch : copySum 128 = 44160 := by decide +kernel
 
 theorem wide_cycles_eq (positions : Positions) :
     wideCycles positions+458*positions.card+(if positions.card = 0 then 0 else 1784) = QuartetOpening.scheduledCycles positions+copySum positions.card := by
@@ -39,7 +39,7 @@ theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15
   omega
 
 theorem wide_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    wideCycles positions ≤ 90980 ∧ proofLength positions ≤ 72160 := by
+    wideCycles positions ≤ 83748 ∧ proofLength positions ≤ 72160 := by
   have old := QuartetOpening.scored_limits positions count
   have e := wide_cycles_eq positions
   have k : positions.card = 128 := count
@@ -249,7 +249,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 90980 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
+    result.cycles ≤ 83748 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
   rw [physical.cycles, physical.length]
   exact wide_scored_limits positions count
 
