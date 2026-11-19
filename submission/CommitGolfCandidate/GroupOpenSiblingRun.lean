@@ -140,12 +140,12 @@ theorem wide_cost_shift (a k : Nat) : wideCost (a+8*k) = wideCost a := by
   unfold wideCost
   rw [Nat.add_mul_mod_self_left]
 
-/-- Cycles of the 30-byte copy of writer level `level` (2..12) of record `ordinal`. -/
+/-- Cycles of the 30-byte copy of writer level `level` (1..12) of record `ordinal`. -/
 def levelCopyCost (ordinal level : Nat) : Nat := wide30Cost (siblingDestination ordinal level)
 
-/-- The 30-byte copies of writer levels 2..12 of record `ordinal`. -/
+/-- The 30-byte copies of writer levels 1..12 of record `ordinal`. -/
 def levelCopies (ordinal : Nat) : Nat :=
-  levelCopyCost ordinal 2+levelCopyCost ordinal 3+levelCopyCost ordinal 4+levelCopyCost ordinal 5+
+  levelCopyCost ordinal 1+levelCopyCost ordinal 2+levelCopyCost ordinal 3+levelCopyCost ordinal 4+levelCopyCost ordinal 5+
     levelCopyCost ordinal 6+levelCopyCost ordinal 7+levelCopyCost ordinal 8+levelCopyCost ordinal 9+
     levelCopyCost ordinal 10+levelCopyCost ordinal 11+levelCopyCost ordinal 12
 
@@ -168,35 +168,35 @@ theorem level_copies_mod (ordinal : Nat) : levelCopies ordinal = levelCopies (or
   unfold levelCopies
   simp only [level_copy_cost_mod ordinal, Nat.mod_mod]
 
-/-- The wide-copy cycles of record `ordinal`: its four 32-byte copies and its eleven 30-byte ones. -/
+/-- The wide-copy cycles of record `ordinal`: its four 32-byte copies and its twelve 30-byte ones. -/
 def recordExtra (ordinal : Nat) : Nat := 4*recordCopyCost ordinal+levelCopies ordinal
 
 theorem record_extra_mod (ordinal : Nat) : recordExtra ordinal = recordExtra (ordinal%4) := by
   unfold recordExtra
   rw [record_copy_cost_mod ordinal, level_copies_mod ordinal]
 
-theorem record_extra_le (ordinal : Nat) : recordExtra ordinal ≤ 454 := by
+theorem record_extra_le (ordinal : Nat) : recordExtra ordinal ≤ 479 := by
   rw [record_extra_mod]
   have small : ordinal % 4 < 4 := Nat.mod_lt _ (by decide)
   generalize ordinal % 4 = r at small
   interval_cases r <;> decide +kernel
 
 /-- Cycles of the block of level `level < 13` of record `ordinal`: level 0 is a 32-byte wide copy, levels
-2..12 30-byte wide copies. -/
+1..12 30-byte wide copies. -/
 def siblingCost (ordinal level : Nat) : Nat :=
-  if level = 0 then 5+recordCopyCost ordinal else if level = 1 then 39 else 5+levelCopyCost ordinal level
+  if level = 0 then 5+recordCopyCost ordinal else if level = 1 then 9+levelCopyCost ordinal level else 5+levelCopyCost ordinal level
 
 theorem sibling_site_wide : ∀ level : Fin 14, (siblingSite level).wide = decide (level.val = 0) := by
   decide
 
 theorem sibling_site_wide30 : ∀ level : Fin 14,
-    (siblingSite level).wide30 = decide (2 ≤ level.val ∧ level.val ≤ 12) := by
+    (siblingSite level).wide30 = decide (1 ≤ level.val ∧ level.val ≤ 12) := by
   decide
 
 theorem sibling_copy_cost (level : Fin 14) (ordinal : Nat) :
     copyCost (siblingSite level) (siblingDestination ordinal level.val) =
       if level.val = 0 then recordCopyCost ordinal
-      else if 2 ≤ level.val ∧ level.val ≤ 12 then levelCopyCost ordinal level.val
+      else if 1 ≤ level.val ∧ level.val ≤ 12 then levelCopyCost ordinal level.val
       else 2*(siblingSite level).halfwords := by
   unfold copyCost
   rw [sibling_site_wide level, sibling_site_wide30 level]
@@ -206,7 +206,7 @@ theorem sibling_copy_cost (level : Fin 14) (ordinal : Nat) :
     rw [show recordBase ordinal + (if 0 < 2 then 112 + 32 * 0 else if 0 < 14 then 176 + 30 * (0 - 2) else 534) =
       recordBase ordinal + 8*14 by simp, wide_cost_shift]
   · rw [if_neg (by simpa using zero), if_neg zero]
-    by_cases mid : 2 ≤ level.val ∧ level.val ≤ 12
+    by_cases mid : 1 ≤ level.val ∧ level.val ≤ 12
     · rw [if_pos (decide_eq_true mid), if_pos mid]; rfl
     · rw [if_neg (by simpa using mid), if_neg mid]
 
@@ -398,8 +398,8 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
     rw [blockEq]
     refine ⟨?_, ⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩
     · have total := (ranHead.next field.run).next ranA1
-      rw [fieldCost, if_neg (by omega), if_neg (by omega), halves] at total
-      have cost : siblingCost ordinal level.val = 3+30+6 := by simp [siblingCost, one]
+      rw [fieldCost, if_neg (by omega), if_pos (by omega)] at total
+      have cost : siblingCost ordinal level.val = 3+levelCopyCost ordinal level.val+6 := by simp [siblingCost, one]; omega
       rw [cost]
       exact total
     · rw [a1PC, one]
