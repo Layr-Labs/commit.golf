@@ -1,4 +1,68 @@
-# Product: shifted 32-byte copies
+# Product: inline shifted 30-byte writer copies
+
+Stacked on `6b50c997` (`devin/next6`). Each of the eleven 30-byte writer sites
+uses its old copy slots for destination-2-mod-4 shifted loads and stores.
+The inline dispatch and direct exit avoid two shared-stub instructions:
+25 cycles instead of 27. The aligned paths still cost 16 or 22 cycles.
+Across 128 records, 704 copies use the shifted path, saving **1,408 opening
+cycles**. The byte-copy proof is relocation-generic and proves the inline
+copies at all eleven sites. Proof serialization, commit/check images,
+embedded data, image lengths and ABI are unchanged.
+
+The certified claim is **504,594,887 commit cycles**, **125,462 opening cycles**
+and **72,160 proof bytes**. Product:
+**504,720,349 × 72,160 = 36,420,620,383,840**,
+an improvement of **101,601,280** over next6.
+
+## Previous entry: direct common-rank post selection
+
+Stacked on `1a7e1aa7` (`devin/next5`). The post selector branches directly to
+the rank ≥ 2 address calculation, eliminating two instructions on that path.
+Ranks 0 and 1 use absolute reply addresses with unchanged path costs. The
+nonfinal post costs 13 cycles for ranks 0/1 and 12 for higher ranks, rather
+than 13/14. Thus the uniform per-position bound falls from 349 to 348 cycles,
+saving **128 certified opening cycles**; the spread rank ≥ 2 fixture saves 256.
+Only nine opening words change, including a rank-0 stub in unused head padding.
+Proof serialization, commit/check images, embedded data, image lengths and ABI
+are unchanged.
+
+The certified claim is **504,594,887 commit cycles**, **126,870 opening cycles**
+and **72,160 proof bytes**. Product:
+**504,721,757 × 72,160 = 36,420,721,985,120**,
+an improvement of **9,236,480** over next5.
+
+## Previous entry: alignment-aware cap copies
+
+Stacked on `33a7f43d` (`devin/next4`). The cap emitter copies its first 28 digest
+bytes using aligned dword loads and stores, word pairs, or shifted dword loads
+with halfword/word stores. Including dispatch, the complete prefix costs
+17, 22, or 30 cycles for destinations 0 mod 8, 4 mod 8, or 2 mod 4, respectively,
+instead of 32. Each eight-node fold block saves 58 cycles; the worst case saves
+**928 opening cycles**. The traversal proof telescopes the destination-dependent
+savings through each subtree. The opening grows by 23 words (92 bytes);
+proof serialization, commit/check images, embedded data and ABI are unchanged.
+
+The certified claim is **504,594,887 commit cycles**, **126,998 opening cycles**
+and **72,160 proof bytes**. Product:
+**504,721,885 × 72,160 = 36,420,731,221,600**,
+an improvement of **66,964,480** over next4.
+
+## Previous entry: cap cursor root comparison
+
+Stacked on `e8352c2b` (`devin/next3`). The cap cursor compares its node directly
+with the preserved `x23 = 1`, eliminating the repeated constant load in its
+root test. Child advances cost five rather than six cycles, and the final
+root exit saves one cycle. The worst case saves **511 opening cycles**:
+two advances for each of 255 marked internal nodes, plus the final exit.
+Only six opening words change; proof serialization, commit/check images,
+embedded data, image lengths and ABI are unchanged.
+
+The certified claim is **504,594,887 commit cycles**, **127,926 opening cycles**
+and **72,160 proof bytes**. Product:
+**504,722,813 × 72,160 = 36,420,798,186,080**,
+an improvement of **36,873,760** over next3.
+
+## Previous entry: shifted 32-byte copies
 
 Stacked on `9b3cd204` (`devin/copy30`). The four 32-byte writer sites use
 aligned dword loads and shifted halfword/word stores when the destination is

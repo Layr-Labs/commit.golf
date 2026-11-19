@@ -13,6 +13,13 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 attribute [local simp] pc_of_set mem_of_set mem_of_reg open_zero
 attribute [local simp] MachineState.getMem_setPC MachineState.getMem_setReg
 
+@[local simp] theorem select_back_offset : signExtend13 8012#13=(-180 : Word) := by decide
+@[local simp] theorem select_zero_jump : signExtend21 200#21=200#64 := by decide
+@[local simp] theorem select_one_jump : signExtend21 16#21=16#64 := by decide
+@[local simp] theorem select_zero_source : signExtend12 1536#12=1536#64 := by decide
+@[local simp] theorem select_one_source : signExtend12 1720#12=1720#64 := by decide
+@[local simp] theorem select_common_branch : signExtend13 20#13=20#64 := by decide
+
 theorem kind_cases (i : Index) :
     (rank i.val=0 ∧ kindOf i=0) ∨ (rank i.val=1 ∧ kindOf i=1) ∨ (2≤rank i.val ∧ kindOf i=2) := by
   unfold kindOf
@@ -37,7 +44,7 @@ theorem rank_ne_one (i : Index) (two : 2≤rank i.val) : BitVec.ofNat 64 (rank i
     Nat.mod_eq_of_lt (by decide : (1:Nat)<2^64)] at this
   omega
 
-theorem rank_ult (i : Index) (two : 2≤rank i.val) : BitVec.ult (1 : Word) (BitVec.ofNat 64 (rank i.val))=true := by
+theorem rank_ult (i : Index) (two : 2≤rank i.val) : BitVec.ult 1#64 (BitVec.ofNat 64 (rank i.val))=true := by
   have small : rank i.val<11 := by unfold rank;omega
   simp only [BitVec.ult,BitVec.toNat_ofNat,decide_eq_true_eq]
   change 1<rank i.val%2^64
@@ -55,7 +62,8 @@ theorem choose_legal (s : MachineState) (i : Index) (pc : s.pc=address 796)
       show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide] <;> decide
   · have nz : BitVec.ofNat 64 (rank i.val)≠0#64 := rank_ne_zero i r
     have no : BitVec.ofNat 64 (rank i.val)≠1#64 := rank_ne_one i r
-    simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,sub,one,nz,no,address,
+    have lt := rank_ult i r
+    simp [selectRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,sub,one,nz,no,lt,address,
       show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide] <;> decide
 
 def choose (s : MachineState) (i : Index) := walkRows s (selectRows (kindOf i))
@@ -88,6 +96,12 @@ theorem bne_mem (u : MachineState) (a b : Reg) (imm : BitVec 13) : (execInstrBr 
 theorem bltu_mem (u : MachineState) (a b : Reg) (imm : BitVec 13) : (execInstrBr u (.BLTU a b imm)).mem=u.mem := by
   simp only [execInstrBr];split <;> rfl
 
+theorem beq_mem (u : MachineState) (a b : Reg) (imm : BitVec 13) : (execInstrBr u (.BEQ a b imm)).mem=u.mem := by
+  simp only [execInstrBr];split <;> rfl
+
+theorem jal_mem (u : MachineState) (a : Reg) (imm : BitVec 21) : (execInstrBr u (.JAL a imm)).mem=u.mem := by
+  simp [execInstrBr]
+
 theorem choose_keeps (s : MachineState) (i : Index) (r : Reg) (a : r≠.x7) (b : r≠.x30) :
     (choose s i).getReg r=s.getReg r := by
   unfold choose
@@ -99,7 +113,7 @@ theorem chosen_memory (s : MachineState) (i : Index) : (choose s i).mem=s.mem :=
   unfold choose
   rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;> rw [k] <;> apply rows_memory <;> intro p h u <;>
     simp [selectRows] at h <;> rcases h with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;>
-    first | exact bne_mem .. | exact bltu_mem .. | simp [execInstrBr] <;> split <;> rfl
+    first | exact bltu_mem .. | exact beq_mem .. | exact jal_mem .. | rfl
 
 theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
     (idx : s.getReg .x6=BitVec.ofNat 64 i.val) (sub : s.getReg .x28=BitVec.ofNat 64 (rank i.val))
@@ -121,6 +135,7 @@ theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
     simp only [e] <;> decide
   · have nz : BitVec.ofNat 64 (rank i.val)≠0#64 := rank_ne_zero i r
     have no : BitVec.ofNat 64 (rank i.val)≠1#64 := rank_ne_one i r
+    have lt := rank_ult i r
     have src : (BitVec.ofNat 64 (rank i.val) <<< (4:Nat))+1520#64=readAt i := by
       rw [BitVec.shiftLeft_eq_mul_twoPow]
       change BitVec.ofNat 64 (rank i.val)*BitVec.ofNat 64 16+BitVec.ofNat 64 1520=_
@@ -129,7 +144,7 @@ theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
       rw [if_neg (show rank i.val≠0 by omega),if_neg (show rank i.val≠1 by omega)]
       congr 1
       omega
-    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,nz,no,address,out,salts,
+    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,nz,no,lt,address,out,salts,
       show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,
       show signExtend12 1520#12=1520#64 by decide,dst,src]
 

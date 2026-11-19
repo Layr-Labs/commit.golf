@@ -130,13 +130,13 @@ def sibRows : List Row :=
 def headPost : List Row := restoreRows ++ sibRows
 
 /-- Reply-offset rows by rank class `k` (0: rank 0, 1: rank 1, 2: rank ≥ 2), ending with the salt destination.
-Ranks 0 and 1 branch to the shared base addition; rank ≥ 2 forms `16*r + 1520` and skips it. -/
+Rank ≥ 2 branches directly to `16*r + 1520`; ranks 0 and 1 select their absolute reply addresses. -/
 def selectRows (k : Fin 3) : List Row :=
-  [(796,.SLLI .x7 .x28 4),(797,.BEQ .x28 .x23 16)] ++
-  (if k.val = 1 then [(801,.ADDI .x7 .x0 184),(802,.ADD .x7 .x7 .x12)] else
-    [(798,.BEQ .x28 .x0 16)] ++
-    (if k.val = 0 then [(802,.ADD .x7 .x7 .x12)]
-      else [(799,.ADDI .x7 .x7 1520),(800,.JAL .x0 12)])) ++
+  [(796,.BLTU .x23 .x28 20)] ++
+  (if k.val = 2 then [(801,.SLLI .x7 .x28 4),(802,.ADDI .x7 .x7 1520)] else
+    [(797,.BEQ .x28 .x0 8012)] ++
+    (if k.val = 0 then [(752,.ADDI .x7 .x0 1536),(753,.JAL .x0 200)]
+      else [(798,.ADDI .x7 .x0 1720),(799,.JAL .x0 16)])) ++
   [(803,.SLLI .x30 .x6 4),(804,.ADD .x30 .x30 .x22)]
 def copyRows : List Row := [(805,.LD .x31 .x7 0),(806,.SD .x30 .x31 0),(807,.LD .x31 .x7 8),(808,.SD .x30 .x31 8)]
 def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.ADDI .x17 .x17 (-1)),(811,.BNE .x17 .x0 7908)] ++
