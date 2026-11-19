@@ -1,0 +1,458 @@
+import CommitGolfCandidate.QuadOpeningLeafPart
+
+/-! The quad-group part of one opening record (words 159..279, 121 unit cycles): with `x6`
+holding the quad node `(LENGTH + index) / 4`, locate the quad group of the opened index, copy
+the three other quad nodes of its quad group in rotation order `s+1, s+2, s+3 (mod 4)`,
+`s = (index / 4) % 4`, into the record, and enter the lower path at the quad2 node
+`(LENGTH + index) / 16`. The rotation code is literally the leaf rotation code: the quad node is
+`2^22 + index / 4`, so its low two bits are `s`. -/
+
+namespace TwoPermutationPrototype.QuadOpening
+set_option maxRecDepth 8192
+open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
+open QOpening (trapdoorBase proofBase quadGroupBase)
+
+@[local simp] private theorem mem_set_register (state : MachineState) (reg : Reg) (word : Word) :
+    (state.setReg reg word).mem = state.mem := by cases reg <;> rfl
+
+@[local simp] private theorem mem_set_pc (state : MachineState) (pc : Word) :
+    (state.setPC pc).mem = state.mem := rfl
+
+attribute [local simp] MachineState.getReg_setPC QOpening.getReg_setReg
+
+@[local simp] private theorem pc_set (state : MachineState) (pc : Word) :
+    (state.setPC pc).pc = pc := rfl
+
+def quadGroupCode : List Instr :=
+  [.SRLI .x30 .x6 2, .SLLI .x10 .x30 8, .SLLI .x11 .x30 6, .ADD .x10 .x10 .x11, .SLLI .x11 .x30 5,
+   .ADD .x10 .x10 .x11, .SLLI .x11 .x30 4, .ADD .x10 .x10 .x11, .ADD .x30 .x28 .x10]
+
+def quadExitCode : List Instr := [.SRLI .x6 .x6 2]
+
+def quadHeadStart (j : Fin 3) : Nat := 168+37*j.val
+def quadTailStart (j : Fin 3) : Nat := 204+37*j.val
+
+/-- Trapdoor address of the `j`-th other quad node of the quad group (rotation order). -/
+def quadAddress (index : Index) (j : Nat) : Nat :=
+  quadGroupBase+368*(index.val/16)+32*((index.val/4+j+1)%4)
+
+set_option maxRecDepth 8192 in
+private theorem group_decode : ∀ i : Fin 9,
+    (openingImage.code[159+i.val]?).bind QOpening.decodeBase = some (quadGroupCode[i.val]?.getD .EBREAK) := by
+  decide
+
+set_option maxRecDepth 8192 in
+private theorem head_decode : ∀ (j : Fin 3) (i : Fin 4),
+    (openingImage.code[quadHeadStart j+i.val]?).bind QOpening.decodeBase =
+      some ((leafHeadCode j)[i.val]?.getD .EBREAK) := by
+  decide
+
+set_option maxRecDepth 8192 in
+private theorem tail_decode : ∀ (j : Fin 3),
+    (openingImage.code[quadTailStart j]?).bind QOpening.decodeBase = some (.ADDI .x21 .x21 32) := by
+  decide
+
+private theorem exit_decode :
+    (openingImage.code[279]?).bind QOpening.decodeBase = some (.SRLI .x6 .x6 2) := by
+  decide
+
+private theorem head_site (j : Fin 3) : quadHeadStart j+4 = (CopySite.quad j).start := by
+  simp [quadHeadStart, CopySite.start]; omega
+
+private theorem tail_site (j : Fin 3) :
+    (CopySite.quad j).start+2*(CopySite.quad j).halfwords = quadTailStart j := by
+  simp [quadTailStart, CopySite.start, CopySite.halfwords]; omega
+
+private theorem pc_offset (start i : Nat) :
+    BitVec.ofNat 64 (4096+4*start) + BitVec.ofNat 64 (4*i) = BitVec.ofNat 64 (4096+4*(start+i)) := by
+  rw [← BitVec.ofNat_add]; congr 1; omega
+
+theorem execute_quad_group (state : MachineState) (pc : state.pc = BitVec.ofNat 64 (4096+4*159))
+    (fuel : Nat) (coins : Bool) :
+    execute openingImage (9+fuel) state coins =
+      (do let result ← execute openingImage fuel (runCode quadGroupCode state 9) coins
+          return result.charge 9 0) := by
+  apply execute_unit_steps (states := runCode quadGroupCode state)
+  intro i inside
+  refine ⟨.base (quadGroupCode[i]?.getD .EBREAK), ?_, ?_, ?_⟩
+  · apply packed_fetch_base _ (159+i) _ (by omega)
+    · rw [← pc_offset]
+      interval_cases i <;> simp [runCode, quadGroupCode, execInstrBr, pc, BitVec.add_assoc]
+    · exact group_decode ⟨i, inside⟩
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+
+theorem execute_quad_head (state : MachineState) (j : Fin 3)
+    (pc : state.pc = BitVec.ofNat 64 (4096+4*quadHeadStart j)) (fuel : Nat) (coins : Bool) :
+    execute openingImage (4+fuel) state coins =
+      (do let result ← execute openingImage fuel (runCode (leafHeadCode j) state 4) coins
+          return result.charge 4 0) := by
+  apply execute_unit_steps (states := runCode (leafHeadCode j) state)
+  intro i inside
+  refine ⟨.base ((leafHeadCode j)[i]?.getD .EBREAK), ?_, ?_, ?_⟩
+  · apply packed_fetch_base _ (quadHeadStart j+i) _ (by have := j.isLt; unfold quadHeadStart; omega)
+    · rw [← pc_offset]
+      interval_cases i <;> simp [runCode, leafHeadCode, execInstrBr, pc, BitVec.add_assoc]
+    · exact head_decode j ⟨i, inside⟩
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+
+theorem execute_quad_tail (state : MachineState) (j : Fin 3)
+    (pc : state.pc = BitVec.ofNat 64 (4096+4*quadTailStart j)) (fuel : Nat) (coins : Bool) :
+    execute openingImage (1+fuel) state coins =
+      (do let result ← execute openingImage fuel (runCode leafTailCode state 1) coins
+          return result.charge 1 0) := by
+  have fetched := packed_fetch_base state (quadTailStart j) (.ADDI .x21 .x21 32)
+    (by have := j.isLt; unfold quadTailStart; omega) pc (tail_decode j)
+  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched (show ordinaryStep state _ = _ from rfl)]
+  rfl
+
+theorem execute_quad_exit (state : MachineState) (pc : state.pc = BitVec.ofNat 64 (4096+4*279))
+    (fuel : Nat) (coins : Bool) :
+    execute openingImage (1+fuel) state coins =
+      (do let result ← execute openingImage fuel (runCode quadExitCode state 1) coins
+          return result.charge 1 0) := by
+  have fetched := packed_fetch_base state 279 (.SRLI .x6 .x6 2) (by decide) pc exit_decode
+  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched (show ordinaryStep state _ = _ from rfl)]
+  rfl
+
+private theorem ofNat_mask (n : Nat) : BitVec.ofNat 64 n &&& 3#64 = BitVec.ofNat 64 (n % 4) := by
+  apply BitVec.eq_of_toNat_eq
+  have mask (x : Nat) : x &&& 3 = x % 4 := Nat.and_two_pow_sub_one_eq_mod x 2
+  have small : n % 4 < 2^64 := by omega
+  simp only [BitVec.toNat_and, BitVec.toNat_ofNat, Nat.mod_eq_of_lt small]
+  rw [show (3 : Nat) % 2^64 = 3 by decide, mask]
+  omega
+
+private theorem ofNat_shift (n k : Nat) (fit : n*2^k < 2^64) :
+    BitVec.ofNat 64 n <<< k = BitVec.ofNat 64 (n*2^k) := by
+  apply BitVec.eq_of_toNat_eq
+  have nfit : n < 2^64 := by
+    have : n ≤ n*2^k := Nat.le_mul_of_pos_right n (Nat.two_pow_pos k)
+    omega
+  simp only [BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.shiftLeft_eq, Nat.mod_eq_of_lt nfit,
+    Nat.mod_eq_of_lt fit]
+
+private theorem ofNat_shr (n k : Nat) (fit : n < 2^64) :
+    BitVec.ofNat 64 n >>> k = BitVec.ofNat 64 (n/2^k) := by
+  apply BitVec.eq_of_toNat_eq
+  have qfit : n/2^k < 2^64 := lt_of_le_of_lt (Nat.div_le_self n _) fit
+  simp only [BitVec.toNat_ushiftRight, BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow, Nat.mod_eq_of_lt fit,
+    Nat.mod_eq_of_lt qfit]
+
+private theorem quad_group_value (index : Index) :
+    BitVec.ofNat 64 quadBase +
+      ((((BitVec.ofNat 64 (QOpening.lowerNode index 2) >>> 2) <<< 8) +
+        ((BitVec.ofNat 64 (QOpening.lowerNode index 2) >>> 2) <<< 6)) +
+        ((BitVec.ofNat 64 (QOpening.lowerNode index 2) >>> 2) <<< 5) +
+        ((BitVec.ofNat 64 (QOpening.lowerNode index 2) >>> 2) <<< 4)) =
+      BitVec.ofNat 64 (quadGroupBase+368*(index.val/16)) := by
+  have bound := index.isLt
+  have hL : LENGTH = 16777216 := rfl
+  have hQ : quadBase = 4294971424 + 0x65004000 := rfl
+  have hG : quadGroupBase = 4294971424 + 0x7C004000 := rfl
+  have node : QOpening.lowerNode index 2 = (16777216+index.val)/4 := by
+    unfold QOpening.lowerNode; rfl
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_add, BitVec.toNat_shiftLeft, BitVec.toNat_ushiftRight, BitVec.toNat_ofNat,
+    Nat.shiftLeft_eq, Nat.shiftRight_eq_div_pow, node]
+  omega
+
+theorem quad_group_post (state : MachineState) (index : Index)
+    (quads : state.getReg .x28 = BitVec.ofNat 64 quadBase)
+    (node : state.getReg .x6 = BitVec.ofNat 64 (QOpening.lowerNode index 2)) :
+    let next := runCode quadGroupCode state 9
+    next.pc = state.pc+36#64 ∧ next.mem = state.mem ∧
+      next.getReg .x30 = BitVec.ofNat 64 (quadGroupBase+368*(index.val/16)) ∧
+      ∀ reg, reg ≠ .x10 → reg ≠ .x11 → reg ≠ .x30 → next.getReg reg = state.getReg reg := by
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simp [runCode, quadGroupCode, execInstrBr, BitVec.add_assoc]
+  · simp [runCode, quadGroupCode, execInstrBr]
+  · simp [runCode, quadGroupCode, execInstrBr, quads, node]
+    rw [← quad_group_value index]
+  · intro reg a b c
+    simp [runCode, quadGroupCode, execInstrBr, Ne.symm a, Ne.symm b, Ne.symm c]
+
+private theorem quad_value (index : Index) (j : Fin 3) :
+    BitVec.ofNat 64 (quadGroupBase+368*(index.val/16)) +
+      (((BitVec.ofNat 64 (QOpening.lowerNode index 2) + BitVec.ofNat 64 (j.val+1)) &&& 3#64) <<< 5) =
+      BitVec.ofNat 64 (quadAddress index j.val) := by
+  have r := Nat.mod_lt (QOpening.lowerNode index 2+(j.val+1)) (show 0 < 4 by decide)
+  rw [← BitVec.ofNat_add, ofNat_mask, ofNat_shift _ 5 (by omega), ← BitVec.ofNat_add]
+  congr 1
+  have hL : LENGTH = 16777216 := rfl
+  have node : QOpening.lowerNode index 2 = (16777216+index.val)/4 := by
+    unfold QOpening.lowerNode; rfl
+  unfold quadAddress
+  rw [node]
+  omega
+
+theorem quad_head_post (state : MachineState) (index : Index) (j : Fin 3)
+    (group : state.getReg .x30 = BitVec.ofNat 64 (quadGroupBase+368*(index.val/16)))
+    (node : state.getReg .x6 = BitVec.ofNat 64 (QOpening.lowerNode index 2)) :
+    let next := runCode (leafHeadCode j) state 4
+    next.pc = state.pc+16#64 ∧ next.mem = state.mem ∧
+      next.getReg .x7 = BitVec.ofNat 64 (quadAddress index j.val) ∧
+      ∀ reg, reg ≠ .x7 → next.getReg reg = state.getReg reg := by
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simp [runCode, leafHeadCode, execInstrBr, BitVec.add_assoc]
+  · simp [runCode, leafHeadCode, execInstrBr]
+  · rw [← quad_value index j]
+    fin_cases j <;> simp [runCode, leafHeadCode, execInstrBr, group, node, signExtend12] <;> rfl
+  · intro reg a
+    simp [runCode, leafHeadCode, execInstrBr, Ne.symm a]
+
+theorem quad_exit_post (state : MachineState) (index : Index)
+    (node : state.getReg .x6 = BitVec.ofNat 64 (QOpening.lowerNode index 2)) :
+    let next := runCode quadExitCode state 1
+    next.pc = state.pc+4#64 ∧ next.mem = state.mem ∧
+      next.getReg .x6 = BitVec.ofNat 64 (lowerNode index 0) ∧
+      ∀ reg, reg ≠ .x6 → next.getReg reg = state.getReg reg := by
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simp [runCode, quadExitCode, execInstrBr]
+  · simp [runCode, quadExitCode, execInstrBr]
+  · have bound := index.isLt
+    have hL : LENGTH = 16777216 := rfl
+    have value : BitVec.ofNat 64 (QOpening.lowerNode index 2) >>> 2 =
+        BitVec.ofNat 64 (lowerNode index 0) := by
+      rw [ofNat_shr _ 2 (by unfold QOpening.lowerNode; omega)]
+      unfold lowerNode QOpening.lowerNode
+      congr 1
+      rw [Nat.div_div_eq_div_mul]
+      norm_num
+    rw [← value, ← node]
+    simp [runCode, quadExitCode, execInstrBr]
+  · intro reg a
+    simp [runCode, quadExitCode, execInstrBr, Ne.symm a]
+
+/-! Geometry of the three quad copies. -/
+
+theorem quad_offset_inside (j : Nat) (inside : j < 3) : quadOffset j+32 ≤ siblingOffset 0 := by
+  unfold quadOffset siblingOffset; simp; omega
+
+theorem all_quad_copies_fit (index : Index) (ordinal j : Nat) (inside : ordinal < LENGTH) (valid : j < 3) :
+    quadAddress index j % 2 = 0 ∧ quadDestination ordinal j % 2 = 0 ∧
+      quadAddress index j+32 ≤ quadDestination ordinal j ∧
+      quadDestination ordinal j+32 ≤ MEMORY_BYTES ∧
+      quadAddress index j+32 ≤ proofBase ∧ trapdoorBase ≤ quadAddress index j := by
+  have endRecord := all_record_ends_fit ordinal inside
+  have bound := index.isLt
+  have hL : LENGTH = 16777216 := rfl
+  have hG : quadGroupBase = 4294971424 + 0x7C004000 := rfl
+  have hT : trapdoorBase = 4294971424 := rfl
+  have hP : proofBase = 4294971424 + 2466267136 + 8 * 16777216 + 64 + 256 * 16777216 := rfl
+  have r := Nat.mod_lt (index.val/4+j+1) (show 0 < 4 by decide)
+  refine ⟨?_, even_quad_destination ordinal j, ?_, ?_, ?_, ?_⟩
+  all_goals simp only [quadAddress, quadDestination, quadOffset, recordBase, recordBytes] at * <;> omega
+
+/-! One quad copy block: head, 16 halfword pairs, pointer bump. -/
+
+def quadBlock (j : Fin 3) (state : MachineState) : MachineState :=
+  runCode leafTailCode (copyState (.quad j) (runCode (leafHeadCode j) state 4)) 1
+
+theorem quad_address_aligned (index : Index) (j : Nat) : quadAddress index j % 8 = 0 := by
+  have base : quadGroupBase % 8 = 0 := by decide
+  unfold quadAddress; omega
+
+structure QuadStep (state : MachineState) (index : Index) (ordinal : Nat) (j : Fin 3) : Prop where
+  run : RunsOpeningBlock state (quadBlock j state) (4+siteCost (.quad j) (quadDestination ordinal j.val)+1)
+  pc : (quadBlock j state).pc = BitVec.ofNat 64 (4096+4*(quadHeadStart j+37))
+  dest : (quadBlock j state).getReg .x21 = BitVec.ofNat 64 (quadDestination ordinal j.val+32)
+  bytes : ByteCopy state (quadBlock j state) (quadAddress index j.val) (quadDestination ordinal j.val) 32
+  register : ∀ reg, reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x31 → reg ≠ .x10 →
+    (quadBlock j state).getReg reg = state.getReg reg
+  input : ∀ address < proofBase,
+    (quadBlock j state).getMem (BitVec.ofNat 64 address) = state.getMem (BitVec.ofNat 64 address)
+
+theorem execute_quad (state : MachineState) (index : Index) (ordinal : Nat) (bounded : ordinal < LENGTH)
+    (j : Fin 3) (pc : state.pc = BitVec.ofNat 64 (4096+4*quadHeadStart j))
+    (group : state.getReg .x30 = BitVec.ofNat 64 (quadGroupBase+368*(index.val/16)))
+    (node : state.getReg .x6 = BitVec.ofNat 64 (QOpening.lowerNode index 2))
+    (dest : state.getReg .x21 = BitVec.ofNat 64 (quadDestination ordinal j.val)) :
+    QuadStep state index ordinal j := by
+  let prepared := runCode (leafHeadCode j) state 4
+  let copied := copyState (.quad j) prepared
+  have head := quad_head_post state index j group node
+  have tail := leaf_tail_post copied
+  have fit := all_quad_copies_fit index ordinal j.val bounded j.isLt
+  have before : prepared.pc = BitVec.ofNat 64 (4096+4*(CopySite.quad j).start) := by
+    rw [head.1, pc, ← head_site j]
+    change BitVec.ofNat 64 _+BitVec.ofNat 64 16 = _
+    rw [← BitVec.ofNat_add]
+    congr 1
+  have field : FieldInputs (.quad j) prepared (quadAddress index j.val) (quadDestination ordinal j.val) :=
+    ⟨before, head.2.2.1, (head.2.2.2 .x21 (by decide)).trans dest,
+      by simpa [CopySite.halfwords] using fit.2.2.1,
+      by simpa [CopySite.halfwords] using fit.2.2.2.1, fit.1, fit.2.1, fun _ => quad_address_aligned index j.val⟩
+  have tailPC : copied.pc = BitVec.ofNat 64 (4096+4*quadTailStart j) := by
+    rw [field.final_pc, tail_site]
+  have ranHead : RunsOpeningBlock state prepared 4 :=
+    fun fuel coins => execute_quad_head state j pc fuel coins
+  have ranTail : RunsOpeningBlock copied (quadBlock j state) 1 :=
+    fun fuel coins => execute_quad_tail copied j tailPC fuel coins
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · exact (ranHead.next field.run).next ranTail
+  · change (runCode leafTailCode copied 1).pc = _
+    rw [tail.1, tailPC]
+    change BitVec.ofNat 64 _+BitVec.ofNat 64 4 = _
+    rw [← BitVec.ofNat_add]
+    congr 1
+    simp [quadTailStart, quadHeadStart]
+    omega
+  · change (runCode leafTailCode copied 1).getReg .x21 = _
+    rw [tail.2.2.1, copy_register _ prepared .x21 (by decide) (Or.inr (by decide)), head.2.2.2 .x21 (by decide), dest,
+      ← BitVec.ofNat_add]
+  · change ByteCopy state (runCode leafTailCode copied 1) _ _ _
+    simpa [CopySite.halfwords] using field.bytes.move head.2.1.symm tail.2.1
+  · intro reg a b c d
+    change (runCode leafTailCode copied 1).getReg reg = _
+    rw [tail.2.2.2 reg b, copy_register _ prepared reg c (Or.inr d), head.2.2.2 reg a]
+  · intro address below
+    have above : proofBase ≤ quadDestination ordinal j.val := by
+      unfold quadDestination recordBase; omega
+    have stable := field.words_before proofBase address below above (by decide)
+    have saved : (runCode leafTailCode copied 1).mem = copied.mem := tail.2.1
+    have reads : prepared.mem = state.mem := head.2.1
+    change (runCode leafTailCode copied 1).getMem _ = _
+    simpa only [MachineState.getMem, saved, reads] using stable
+
+/-! The whole quad-group part. -/
+
+def quadPart (state : MachineState) : MachineState :=
+  runCode quadExitCode (quadBlock 2 (quadBlock 1 (quadBlock 0 (runCode quadGroupCode state 9)))) 1
+
+def quadPartCost (ordinal : Nat) : Nat :=
+  9+(4+siteCost (.quad 0) (quadDestination ordinal 0)+1)+(4+siteCost (.quad 1) (quadDestination ordinal 1)+1)+
+    (4+siteCost (.quad 2) (quadDestination ordinal 2)+1)+1
+
+structure QuadTrace (state : MachineState) (index : Index) (ordinal : Nat) : Prop where
+  run : RunsOpeningBlock state (quadPart state) (quadPartCost ordinal)
+  next : LowerCursor (quadPart state) index ordinal 0
+  quad : ∀ j < 3, ∀ byte < 32,
+    (quadPart state).getByte (BitVec.ofNat 64 (quadDestination ordinal j+byte)) =
+      state.getByte (BitVec.ofNat 64 (quadAddress index j+byte))
+  frame : ∀ address < 2^64, address < quadDestination ordinal 0 ∨ siblingDestination ordinal 0 ≤ address →
+    (quadPart state).getByte (BitVec.ofNat 64 address) = state.getByte (BitVec.ofNat 64 address)
+  register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x10 → reg ≠ .x11 → reg ≠ .x21 → reg ≠ .x30 →
+    reg ≠ .x31 → (quadPart state).getReg reg = state.getReg reg
+  input : ∀ address < proofBase,
+    (quadPart state).getMem (BitVec.ofNat 64 address) = state.getMem (BitVec.ofNat 64 address)
+
+private theorem byte_of_mem {one two : MachineState} (same : one.mem = two.mem) (address : Word) :
+    one.getByte address = two.getByte address := by
+  simp only [MachineState.getByte, MachineState.getMem, same]
+
+private theorem quad_copy_outside {before after : MachineState} {source dest size : Nat}
+    (copy : ByteCopy before after source dest size) (address : Nat)
+    (fit : address < 2^64) (endFit : dest+size ≤ 2^64)
+    (outside : address < dest ∨ dest+size ≤ address) :
+    after.getByte (BitVec.ofNat 64 address) = before.getByte (BitVec.ofNat 64 address) := by
+  apply copy.frame
+  intro i inside equal
+  have same := QOpening.nat_address_injective fit (by omega) equal
+  omega
+
+theorem execute_quad_part (state : MachineState) (index : Index) (ordinal : Nat) (bounded : ordinal < LENGTH)
+    (entry : QuadEntry state index ordinal) : QuadTrace state index ordinal := by
+  let s0 := runCode quadGroupCode state 9
+  let s1 := quadBlock 0 s0
+  let s2 := quadBlock 1 s1
+  let s3 := quadBlock 2 s2
+  have g := quad_group_post state index entry.quads entry.node
+  have g6 : s0.getReg .x6 = BitVec.ofNat 64 (QOpening.lowerNode index 2) :=
+    (g.2.2.2 .x6 (by decide) (by decide) (by decide)).trans entry.node
+  have g21 : s0.getReg .x21 = BitVec.ofNat 64 (quadDestination ordinal 0) :=
+    (g.2.2.2 .x21 (by decide) (by decide) (by decide)).trans entry.dest
+  have pc0 : s0.pc = BitVec.ofNat 64 (4096+4*quadHeadStart 0) := by
+    rw [g.1, entry.pc]; rfl
+  have l0 := execute_quad s0 index ordinal bounded 0 pc0 g.2.2.1 g6 g21
+  have l1 := execute_quad s1 index ordinal bounded 1 l0.pc
+    ((l0.register .x30 (by decide) (by decide) (by decide) (by decide)).trans g.2.2.1)
+    ((l0.register .x6 (by decide) (by decide) (by decide) (by decide)).trans g6) l0.dest
+  have l2 := execute_quad s2 index ordinal bounded 2 l1.pc
+    ((l1.register .x30 (by decide) (by decide) (by decide) (by decide)).trans
+      ((l0.register .x30 (by decide) (by decide) (by decide) (by decide)).trans g.2.2.1))
+    ((l1.register .x6 (by decide) (by decide) (by decide) (by decide)).trans
+      ((l0.register .x6 (by decide) (by decide) (by decide) (by decide)).trans g6)) l1.dest
+  have keep (reg : Reg) (a : reg ≠ .x7) (b : reg ≠ .x21) (c : reg ≠ .x31) (d : reg ≠ .x10) :
+      s3.getReg reg = s0.getReg reg :=
+    (l2.register reg a b c d).trans ((l1.register reg a b c d).trans (l0.register reg a b c d))
+  have e := quad_exit_post s3 index ((keep .x6 (by decide) (by decide) (by decide) (by decide)).trans g6)
+  have ram : MEMORY_BYTES < 2^64 := by decide
+  have b0 : ByteCopy s0 s1 (quadAddress index 0) (quadDestination ordinal 0) 32 := l0.bytes
+  have b1 : ByteCopy s1 s2 (quadAddress index 1) (quadDestination ordinal 1) 32 := l1.bytes
+  have b2 : ByteCopy s2 s3 (quadAddress index 2) (quadDestination ordinal 2) 32 := l2.bytes
+  have fits (j : Nat) (valid : j < 3) := all_quad_copies_fit index ordinal j bounded valid
+  have destOrder (j : Nat) : quadDestination ordinal j = recordBase ordinal+112+32*j := by
+    unfold quadDestination quadOffset; omega
+  have recordFit := all_record_ends_fit ordinal bounded
+  have endFit : siblingDestination ordinal 0 = recordBase ordinal+208 := rfl
+  have recordWide : recordBase ordinal+208 ≤ recordBase (ordinal+1) := by
+    unfold recordBase recordBytes; omega
+  have m0 : s0.mem = state.mem := g.2.1
+  have m4 : (quadPart state).mem = s3.mem := e.2.1
+  refine ⟨?_, ⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_⟩
+  · have ranGroup : RunsOpeningBlock state s0 9 :=
+      fun fuel coins => execute_quad_group state entry.pc fuel coins
+    have pc3 : s3.pc = BitVec.ofNat 64 (4096+4*279) := l2.pc
+    have ranExit : RunsOpeningBlock s3 (quadPart state) 1 :=
+      fun fuel coins => execute_quad_exit s3 pc3 fuel coins
+    exact (((ranGroup.next l0.run).next l1.run).next l2.run).next ranExit
+  · change (runCode quadExitCode s3 1).pc = lowerPC 0
+    rw [e.1, l2.pc]
+    rfl
+  · change (runCode quadExitCode s3 1).getReg .x9 = _
+    rw [e.2.2.2 .x9 (by decide), keep .x9 (by decide) (by decide) (by decide) (by decide),
+      g.2.2.2 .x9 (by decide) (by decide) (by decide), entry.heap]
+  · exact e.2.2.1
+  · change (runCode quadExitCode s3 1).getReg .x21 = _
+    rw [e.2.2.2 .x21 (by decide), l2.dest]
+    congr 1
+  · intro j valid byte inside
+    have f0 := fits 0 (by decide)
+    have f1 := fits 1 (by decide)
+    have f2 := fits 2 (by decide)
+    have d0 := destOrder 0
+    have d1 := destOrder 1
+    have d2 := destOrder 2
+    have top : (quadPart state).getByte (BitVec.ofNat 64 (quadDestination ordinal j+byte)) =
+        s3.getByte (BitVec.ofNat 64 (quadDestination ordinal j+byte)) := byte_of_mem m4 _
+    have bottom : s0.getByte (BitVec.ofNat 64 (quadAddress index j+byte)) =
+        state.getByte (BitVec.ofNat 64 (quadAddress index j+byte)) := byte_of_mem m0 _
+    refine top.trans (Eq.trans ?_ bottom)
+    have pr : proofBase ≤ recordBase ordinal := by unfold recordBase; omega
+    interval_cases j
+    · exact (quad_copy_outside b2 _ (by omega) (by omega) (Or.inl (by omega))).trans
+        ((quad_copy_outside b1 _ (by omega) (by omega) (Or.inl (by omega))).trans
+          (b0.copied byte inside))
+    · exact (quad_copy_outside b2 _ (by omega) (by omega) (Or.inl (by omega))).trans
+        ((b1.copied byte inside).trans
+          (quad_copy_outside b0 _ (by omega) (by omega) (Or.inl (by omega))))
+    · exact (b2.copied byte inside).trans
+        ((quad_copy_outside b1 _ (by omega) (by omega) (Or.inl (by omega))).trans
+          (quad_copy_outside b0 _ (by omega) (by omega) (Or.inl (by omega))))
+  · intro address fit outside
+    have f0 := fits 0 (by decide)
+    have f1 := fits 1 (by decide)
+    have f2 := fits 2 (by decide)
+    have d0 := destOrder 0
+    have d1 := destOrder 1
+    have d2 := destOrder 2
+    rw [endFit] at outside
+    exact (byte_of_mem m4 _).trans
+      ((quad_copy_outside b2 _ fit (by omega) (by omega)).trans
+      ((quad_copy_outside b1 _ fit (by omega) (by omega)).trans
+      ((quad_copy_outside b0 _ fit (by omega) (by omega)).trans
+        (byte_of_mem m0 _))))
+  · intro reg a b c d e' f h
+    change (runCode quadExitCode s3 1).getReg reg = _
+    rw [e.2.2.2 reg a, keep reg b e' h c, g.2.2.2 reg c d f]
+  · intro address below
+    have top : (quadPart state).getMem (BitVec.ofNat 64 address) = s3.getMem (BitVec.ofNat 64 address) := by
+      simp only [MachineState.getMem, m4]
+    have bottom : s0.getMem (BitVec.ofNat 64 address) = state.getMem (BitVec.ofNat 64 address) := by
+      simp only [MachineState.getMem, m0]
+    exact top.trans ((l2.input address below).trans ((l1.input address below).trans
+      ((l0.input address below).trans bottom)))
+
+end TwoPermutationPrototype.QuadOpening
