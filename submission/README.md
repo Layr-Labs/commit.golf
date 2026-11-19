@@ -1,4 +1,38 @@
-# Product: alignment-aware level-1 writer copy
+# Product: alignment-aware 28-byte writer copy
+
+Stacked on `6d94d62e` (`devin/next9`). The level-13 sibling's first 28 bytes
+now use alignment-dispatched copies: three dwords and a word, seven words,
+or three shifted dwords and two halfwords. Costs are **14 / 20 / 25** cycles
+instead of 28. Across 128 records this saves **896 opening cycles**.
+The final digest halfword, fold and cursor update are unchanged.
+
+Only 26 existing opening words change, within words 610..637; a private
+26-word / 104-byte aligned stub is appended. The active salt-chain block
+is preserved. Proof serialization, commit/check images, embedded data and
+ABI are unchanged.
+
+The local artifact-backed certificate claims **504,594,887 commit cycles**,
+**123,030 opening cycles** and **72,160 proof bytes**. Product:
+**504,717,917 × 72,160 = 36,420,444,890,720**,
+an improvement of **64,655,360** over next9. This is not an official verifier run.
+
+## Previous: direct-return 32-byte writer dispatch
+
+Stacked on `694e3c05` (`devin/next8`). The three quartet-mate copies and
+level-0 sibling now test alignment inline and branch directly to their own
+aligned paths. Those paths return with direct jumps rather than link-register
+returns. The shifted paths move one word later in the original copy slots.
+All three alignments save one instruction: copy costs are **13 / 21 / 27**
+cycles instead of **14 / 22 / 28**. Four copies per record save **512 opening
+cycles** across 128 records. Only 136 opening words change; image lengths,
+proof serialization, commit/check images, embedded data and ABI are unchanged.
+
+The local artifact-backed certificate claims **504,594,887 commit cycles**,
+**123,926 opening cycles** and **72,160 proof bytes**. Product:
+**504,718,813 × 72,160 = 36,420,509,546,080**,
+an improvement of **36,945,920** over next8. This is not an official verifier run.
+
+## Previous: alignment-aware level-1 writer copy
 
 Stacked on `923f9fef` (`devin/next7`). The level-1 sibling's first 30 bytes
 now use the same proved inline shifted-copy and shared aligned paths as

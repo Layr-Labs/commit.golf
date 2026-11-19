@@ -23,7 +23,7 @@ structure Done (s t : MachineState) (S T n cycles word : Nat) : Prop where
 
 theorem pairs (s : MachineState) (S T word load width n : Nat)
     (hw : width = 2 ∨ width = 4 ∨ width = 8)
-    (code : PairsAt word n width .x7 load load) (bound : word+2*n ≤ 1913)
+    (code : PairsAt word n width .x7 load load) (bound : word+2*n ≤ 1939)
     (pc : s.pc = BitVec.ofNat 64 (4096+4*word))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
     (sa : (S+load)%width=0) (ta : (T+load)%width=0)
@@ -43,19 +43,20 @@ private theorem chunks_code : ∀ k : Fin 3,
     CodeAt (1890+6*k.val) (Shifted32.chunkCode .x7 0 (8*k.val)) := by
   unfold CodeAt; decide +kernel
 
-theorem chunk (k : Fin 3) (s : MachineState) (S T : Nat)
-    (pc : s.pc = BitVec.ofNat 64 (4096+4*(1890+6*k.val)))
+theorem chunk_at (word : Nat) (k : Fin 3) (s : MachineState) (S T : Nat)
+    (code : CodeAt (word+6*k.val) (Shifted32.chunkCode .x7 0 (8*k.val)))
+    (bound : word+18 ≤ 1939)
+    (pc : s.pc = BitVec.ofNat 64 (4096+4*(word+6*k.val)))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%4=2) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
     Done s (execCode s (Shifted32.chunkCode .x7 0 (8*k.val)))
-      (S+8*k.val) (T+8*k.val) 8 6 (1890+6*k.val+6) := by
+      (S+8*k.val) (T+8*k.val) 8 6 (word+6*k.val+6) := by
   have hk := k.isLt
   have src' : s.getReg .x7+BitVec.ofNat 64 (8*k.val)=BitVec.ofNat 64 (S+8*k.val) := by
     rw [src, ← BitVec.ofNat_add]
   have dst' : s.getReg .x21+BitVec.ofNat 64 (0+8*k.val)=BitVec.ofNat 64 (T+8*k.val) := by
     rw [dst]; simp only [Nat.zero_add, ← BitVec.ofNat_add]
   have mem := Shifted32.chunk_memory s .x7 0 _ _ _ src' dst' (by omega)
-  have code := chunks_code k
   have run := code_run (Shifted32.chunkCode .x7 0 (8*k.val)) _ s (by simp [Shifted32.chunkCode]; omega)
     code (Shifted32.chunk_ready s _ _ _ _ _ src' dst' (by omega) (by omega) (by omega) (by omega) (by omega)) pc
     (by intro i hi; simp only [Shifted32.chunkCode, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hi
@@ -70,6 +71,14 @@ theorem chunk (k : Fin 3) (s : MachineState) (S T : Nat)
     rw [getMem_congr mem]
     exact chunk_below s _ _ false q (by unfold MEMORY_BYTES at room; omega) low
 
+theorem chunk (k : Fin 3) (s : MachineState) (S T : Nat)
+    (pc : s.pc = BitVec.ofNat 64 (4096+4*(1890+6*k.val)))
+    (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
+    (sa : S%8=0) (ta : T%4=2) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
+    Done s (execCode s (Shifted32.chunkCode .x7 0 (8*k.val)))
+      (S+8*k.val) (T+8*k.val) 8 6 (1890+6*k.val+6) :=
+  chunk_at 1890 k s S T (chunks_code k) (by decide) pc src dst sa ta apart room
+
 theorem append {s t u : MachineState} {S T n m c d word next : Nat}
     (first : Done s t S T n c word) (last : Done t u (S+n) (T+n) m d next)
     (apart : S+n+m ≤ T) (room : T+n+m ≤ MEMORY_BYTES) :
@@ -80,7 +89,7 @@ theorem append {s t u : MachineState} {S T n m c d word next : Nat}
   rw [last.below q (by omega), first.below q low]
 
 theorem jump {s t : MachineState} {S T n c word : Nat} (copy : Done s t S T n c word)
-    (off : BitVec 21) (bound : word<1913) (code : Decodes word (.JAL .x0 off))
+    (off : BitVec 21) (bound : word<1939) (code : Decodes word (.JAL .x0 off))
     (target : BitVec.ofNat 64 (4096+4*word)+signExtend21 off=BitVec.ofNat 64 (4096+4*698)) :
     Done s (execInstrBr t (.JAL .x0 off)) S T n (c+1) 698 := by
   have mem : (execInstrBr t (.JAL .x0 off)).mem=t.mem := rfl
@@ -140,7 +149,7 @@ theorem before {s e t : MachineState} {S T n c d word : Nat}
   intro q low; exact (copy.below q low).trans (getMem_congr mem q)
 
 theorem test (s : MachineState) (T word modulus : Nat) (mask : BitVec 12) (off : BitVec 13)
-    (bound : word+1<1913) (pc : s.pc=BitVec.ofNat 64 (4096+4*word))
+    (bound : word+1<1939) (pc : s.pc=BitVec.ofNat 64 (4096+4*word))
     (code1 : Decodes word (.ANDI .x31 .x21 mask))
     (code2 : Decodes (word+1) (.BNE .x31 .x0 off))
     (small : 0<modulus ∧ modulus ≤ 8) (bits : s.getReg .x21 &&& signExtend12 mask=BitVec.ofNat 64 (T%modulus)) :

@@ -1,6 +1,7 @@
 import CommitGolfCandidate.GroupOpenCopy
 import CommitGolfCandidate.TwoPermutationPackedOpeningCapEmit
 import CommitGolfCandidate.GroupOpenGeometry
+import CommitGolfCandidate.GroupOpenWideCopy28
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
@@ -168,14 +169,28 @@ theorem level_copies_mod (ordinal : Nat) : levelCopies ordinal = levelCopies (or
   unfold levelCopies
   simp only [level_copy_cost_mod ordinal, Nat.mod_mod]
 
-/-- The wide-copy cycles of record `ordinal`: its four 32-byte copies and its twelve 30-byte ones. -/
-def recordExtra (ordinal : Nat) : Nat := 4*recordCopyCost ordinal+levelCopies ordinal
+/-- The final 28-byte copy of a record. -/
+def lastCopyCost (ordinal : Nat) : Nat := Writer28.cycles (siblingDestination ordinal 13)
+
+theorem last_copy_cost_mod (ordinal : Nat) : lastCopyCost ordinal = lastCopyCost (ordinal%4) := by
+  unfold lastCopyCost siblingDestination recordBase
+  rw [show proofBase+recordBytes*ordinal+siblingOffset 13 =
+    proofBase+recordBytes*(ordinal%4)+siblingOffset 13+8*(267*(ordinal/4)) by
+      unfold recordBytes; have := Nat.mod_add_div ordinal 4; omega]
+  unfold Writer28.cycles
+  rw [Nat.add_mul_mod_self_left, show
+    proofBase+recordBytes*(ordinal%4)+siblingOffset 13+8*(267*(ordinal/4)) =
+    proofBase+recordBytes*(ordinal%4)+siblingOffset 13+4*(2*(267*(ordinal/4))) by omega,
+    Nat.add_mul_mod_self_left]
+
+/-- Alignment-dependent cycles of all writer copies in a record. -/
+def recordExtra (ordinal : Nat) : Nat := 4*recordCopyCost ordinal+levelCopies ordinal+lastCopyCost ordinal
 
 theorem record_extra_mod (ordinal : Nat) : recordExtra ordinal = recordExtra (ordinal%4) := by
   unfold recordExtra
-  rw [record_copy_cost_mod ordinal, level_copies_mod ordinal]
+  rw [record_copy_cost_mod ordinal, level_copies_mod ordinal, last_copy_cost_mod ordinal]
 
-theorem record_extra_le (ordinal : Nat) : recordExtra ordinal ≤ 479 := by
+theorem record_extra_le (ordinal : Nat) : recordExtra ordinal ≤ 500 := by
   rw [record_extra_mod]
   have small : ordinal % 4 < 4 := Nat.mod_lt _ (by decide)
   generalize ordinal % 4 = r at small
@@ -333,7 +348,7 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
   let copied := copyState site prepared
   have head := sibling_head_post state
   have ordinalFit := all_sibling_copies_fit index ordinal level.val bounded level.isLt
-  have exact := sibling_width_exact level
+  have exact := sibling_width_exact level inner
   have narrow : 2*site.halfwords ≤ siblingWidth level.val := by
     change 2*(siblingSite level).halfwords ≤ _
     rw [exact]
@@ -359,7 +374,8 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
     · have := ordinalFit.2.2.2; omega
     · have base : trapdoorBase % 8 = 0 := by decide
       unfold siblingAddress; omega
-  have tailPC : copied.pc = BitVec.ofNat 64 (4096+4*siblingEnd level) := field.final_pc
+  have tailPC : copied.pc = BitVec.ofNat 64 (4096+4*siblingEnd level) := by
+    simpa only [siblingEnd, if_neg (by omega : level.val ≠ 13)] using field.final_pc
   have ranHead : RunsOpeningBlock state prepared 3 :=
     fun fuel coins => execute_sibling_head state level start fuel coins
   have keptCopy (reg : Reg) (d : reg ≠ .x31) (b : reg ≠ .x7) (e : reg ≠ .x29) :
