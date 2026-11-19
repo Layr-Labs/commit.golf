@@ -5,8 +5,8 @@ import CommitGolfCandidate.GroupedTailEval
 # The whole commit run
 
 Setup (key draw) | 2^24 leaf slots of the body (scan) | six post words | tail (level-21 loop, heap loop, root
-copy, halt). Steps 42 + 185,356,288 + 6 + 14,942,749 = 200,299,085, cycles 45 + 460,292,096 + 6 + 44,302,870 =
-504,595,017, oracle calls 39,276,544 + 4,194,303 = 43,470,847.
+copy, halt). Steps 40 + 185,356,288 + 6 + 14,942,749 = 200,299,083, cycles 43 + 460,292,096 + 6 + 44,302,870 =
+504,595,015, oracle calls 39,276,544 + 4,194,303 = 43,470,847.
 -/
 
 namespace TwoPermutationPrototype.Grouped
@@ -17,7 +17,7 @@ set_option maxHeartbeats 1800000
 attribute [local irreducible] execute image GroupedUpper.packedWideCommitImage scan tailBody
 
 /-- Steps of the whole commit run (odd-quartet image). -/
-def commitSteps : Nat := 200299085
+def commitSteps : Nat := 200299083
 
 theorem image_eq_packed : image=GroupedUpper.packedWideCommitImage :=
   exact_image.trans GroupedUpper.packed_manifest_image.symm
@@ -36,7 +36,7 @@ attribute [local irreducible] readyState
 
 theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
     execute image (commitSteps+fuel) s true = commitTrace s := by
-  rw [show commitSteps+fuel=42+(185356288+(6+(14942749+fuel))) by unfold commitSteps;omega,setup_run s e]
+  rw [show commitSteps+fuel=40+(185356288+(6+(14942749+fuel))) by unfold commitSteps;omega,setup_run s e]
   simp only [commitTrace,bind_assoc,pure_bind];apply bind_congr;intro key
   have read := ready_live s e key
   have run := run_scan N 0 _ (by decide) read (6+(14942749+fuel))

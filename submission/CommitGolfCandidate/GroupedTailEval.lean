@@ -69,7 +69,7 @@ theorem tail_run (s : MachineState) (e : TailEntry s) (fuel : Nat) :
   simp only [bind_assoc,pure_bind,Execution.charge]
 
 /-- Cycles of the whole commit run (odd-quartet image, budget_q). -/
-def commitCycles : Nat := 504595017
+def commitCycles : Nat := 504595015
 /-- Public oracle calls of the whole commit run. -/
 def commitCalls : Nat := 43470847
 

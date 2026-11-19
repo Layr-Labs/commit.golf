@@ -1,4 +1,15 @@
-# Pareto port: shorter special-rank salt selection
+# Product: two-cycle startup trim
+
+Based on `a33961ff-408d-482b-88a2-fc4ff48b45d3`. Remove the dead initial commitment-pointer save
+and compute the generator key-block address directly in its final register, eliminating a copy.
+The prologue executes two fewer words; unreachable padding keeps every word from index 21 onward,
+all later PCs, opening/check images, ABI and proof encoding unchanged.
+
+Commit cycles fall from **504,595,017** to **504,595,015**. Opening remains **135,797** cycles
+and the proof bound remains **72,160** bytes. The Product score is
+**504,730,812 × 72,160 = 36,421,375,393,920**, an improvement of 144,320.
+
+## Base entry: shorter special-rank salt selection
 
 This candidate ports `552a6b9d` and replaces opener words 796..802 in place. Commit and checker images,
 image lengths, ABI, proof encoding and all other opener words are unchanged.
