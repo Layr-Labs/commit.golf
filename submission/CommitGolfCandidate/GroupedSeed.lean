@@ -34,7 +34,7 @@ private theorem high_word_zero (msg : Message) (w : Nat) (lo : 4294971392≤8*w)
 
 theorem seed_memory (s : MachineState) (k : Key) : (readyState s k).mem=
     (writeBits s (BitVec.ofNat 64 (8*qSalt 0+8)) k).mem := by
-  let a := prePrefix s 15
+  let a := prePrefix s 13
   have adr : wordAddress (qSalt 0)+8=BitVec.ofNat 64 (8*qSalt 0+8) := by decide
   change (writeBits a (wordAddress (qSalt 0)+8) k).mem=_
   rw [adr]

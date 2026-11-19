@@ -33,11 +33,11 @@ def tailBody (s : MachineState) : OracleComp World MachineState := do
   rootTrace b
 
 theorem tail_run (s : MachineState) (e : TailEntry s) (fuel : Nat) :
-    execute packedWideCommitImage (14942621+fuel) s true =
-      (do let t ← tailBody s; return ⟨.success,t,44302742,4194303⟩) := by
+    execute packedWideCommitImage (14943221+fuel) s true =
+      (do let t ← tailBody s; return ⟨.success,t,44303342,4194303⟩) := by
   have regs := l21_start_regs s e
   have startPC := l21_start_pc s e
-  rw [show 14942621+fuel=7+(6291583+(7+(7864559+(1+(786449+(4+(11+fuel))))))) by omega,l21Start_run s e.pc,
+  rw [show 14943221+fuel=7+(6291967+(7+(7864703+(1+(786521+(4+(11+fuel))))))) by omega,l21Start_run s e.pc,
     l21_loop_run _ _ regs startPC]
   unfold tailBody
   simp only [bind_assoc];apply bind_congr_of_forall_mem_support
@@ -69,7 +69,7 @@ theorem tail_run (s : MachineState) (e : TailEntry s) (fuel : Nat) :
   simp only [bind_assoc,pure_bind,Execution.charge]
 
 /-- Cycles of the whole commit run (odd-quartet image, budget_q). -/
-def commitCycles : Nat := 504594887
+def commitCycles : Nat := 504586268
 /-- Public oracle calls of the whole commit run. -/
 def commitCalls : Nat := 43470847
 

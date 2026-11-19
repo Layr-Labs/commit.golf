@@ -1,4 +1,4 @@
-import CommitGolfCandidate.GroupedImageBase
+import CommitGolfCandidate.GroupedTileCopy
 namespace TwoPermutationPrototype.Grouped
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype.RV64
 set_option maxHeartbeats 6000000
@@ -8,7 +8,7 @@ def PacketTile (t : Nat) : Prop :=
   ∀ u : Fin 64, ∀ i : Fin 18,
     let n := 64*t+u.val
     i.val < (packet n).length →
-      Manifest.decodeBase (codeWord (firstWord n+i.val)) = some ((packet n)[i.val]?.getD .EBREAK)
+      Manifest.decodeBase (tile0At (firstWord n+i.val)) = some ((packet n)[i.val]?.getD .EBREAK)
 
 private theorem packetTile0 : PacketTile 0 := by unfold PacketTile; decide +kernel
 private theorem packetTile1 : PacketTile 1 := by unfold PacketTile; decide +kernel

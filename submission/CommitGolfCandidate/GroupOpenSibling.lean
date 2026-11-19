@@ -118,14 +118,12 @@ def siblingSite (level : Fin 14) : CopySite :=
   split <;> rfl
 
 def siblingStart (level : Fin 14) : Nat := (siblingSite level).start-3
-def siblingEnd (level : Fin 14) : Nat :=
-  if level.val = 13 then 638 else (siblingSite level).start+2*(siblingSite level).halfwords
+def siblingEnd (level : Fin 14) : Nat := (siblingSite level).start+2*(siblingSite level).halfwords
 
 /-- The straight-line copy of a level moves its whole width, except level 1 (whose 16th halfword is
 copied by A1). -/
 theorem sibling_width_exact :
-    ∀ level : Fin 14, level.val < 13 →
-      2*(siblingSite level).halfwords = if level.val = 1 then 30 else siblingWidth level.val := by
+    ∀ level : Fin 14, 2*(siblingSite level).halfwords = if level.val = 1 then 30 else siblingWidth level.val := by
   decide
 
 theorem sibling_copy_start : ∀ level : Fin 14, siblingStart level+3 = (siblingSite level).start := by

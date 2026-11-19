@@ -4,9 +4,8 @@ import CommitGolfCandidate.ProjectedHalfwordMemory
 import RiscvZkvm.Rv64.Logic.ByteOps
 
 /-! Width-generic copy refinements and decoding of the four 32-byte copy stubs.
-The inline test falls through to shifted loads for 2-mod-4 destinations;
-the other destinations branch to four dwords or eight words in the stub,
-whose direct jumps return to the site's continuation. -/
+The 2-mod-4 destinations branch to shifted loads in the original site slots;
+the other destinations copy four dwords or eight words in the stub. -/
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
@@ -272,18 +271,17 @@ instance (word count width : Nat) (src : Reg) (load store : Nat) :
   unfold PairsAt; infer_instance
 
 structure StubCode (site : CopySite) : Prop where
-  test : Decodes site.start (.ANDI .x31 .x21 3)
-  aligned : Decodes (site.start+1) (.BEQ .x31 .x0
-    (BitVec.ofNat 13 (4*(site.stub+2-(site.start+1)))))
+  entry : Decodes site.start (.JAL .x29 (BitVec.ofNat 21 (4*(site.stub-site.start))))
+  test : Decodes site.stub (.ANDI .x31 .x21 3)
+  shifted : Decodes (site.stub+1) (.BNE .x31 .x0
+    (BitVec.ofNat 13 (8192+4*(site.start+1)-4*(site.stub+1))))
   test8 : Decodes (site.stub+2) (.ANDI .x31 .x21 7)
   four : Decodes (site.stub+3) (.BNE .x31 .x0 52)
   dwords : PairsAt (site.stub+4) 4 8 site.source 0 site.destOffset
-  dwordsBack : Decodes (site.stub+12) (.JAL .x0
-    (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+12))))
+  dwordsBack : Decodes (site.stub+12) (.JALR .x0 .x29 124)
   words : PairsAt (site.stub+16) 8 4 site.source 0 site.destOffset
-  wordsBack : Decodes (site.stub+32) (.JAL .x0
-    (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+32))))
-  shiftedBack : Decodes (site.start+26) (.JAL .x0 24)
+  wordsBack : Decodes (site.stub+32) (.JALR .x0 .x29 124)
+  shiftedBack : Decodes (site.start+25) (.JAL .x0 28)
 
 set_option maxHeartbeats 4000000 in
 theorem stub_code_quartet : ∀ j : Fin 3, StubCode (.quartet j) := by
@@ -306,7 +304,7 @@ def stepKind : Instr → Bool
   | .SRLI .. | .LHU .. | .SH .. | .LW .. | .SW .. | .LD .. | .SD .. | .ADDI .. | .ANDI .. | .BEQ .. | .BNE .. | .JAL .. | .JALR .. => true
   | _ => false
 
-theorem run_step (s : MachineState) (word : Nat) (i : Instr) (bounded : word < 1939)
+theorem run_step (s : MachineState) (word : Nat) (i : Instr) (bounded : word < 1890)
     (pc : s.pc = BitVec.ofNat 64 (4096+4*word)) (dec : Decodes word i) (kind : stepKind i = true)
     (valid : memoryArgumentsValid s i = true) : RunsOpeningBlock s (execInstrBr s i) 1 := by
   intro fuel coins
@@ -510,7 +508,7 @@ theorem run_zero (s : MachineState) : RunsOpeningBlock s s 0 := by
 
 theorem run_pairs (width : Nat) (hw : width = 2 ∨ width = 4 ∨ width = 8) (src : Reg) (st : src ≠ .x31)
     (word load store S T : Nat) (sa : (S+load) % width = 0) (ta : T % width = 0) :
-    ∀ (n j : Nat) (s : MachineState), PairsAt word (j+n) width src load store → word+2*(j+n) ≤ 1939 →
+    ∀ (n j : Nat) (s : MachineState), PairsAt word (j+n) width src load store → word+2*(j+n) ≤ 1890 →
       s.pc = BitVec.ofNat 64 (4096+4*(word+2*j)) →
       s.getReg src = BitVec.ofNat 64 S → s.getReg .x21 + BitVec.ofNat 64 store = BitVec.ofNat 64 T →
       load + width*(j+n) ≤ 2048 → store + width*(j+n) ≤ 2048 →

@@ -1,5 +1,4 @@
 import CommitGolfCandidate.GroupOpenRecordsAPI
-import CommitGolfCandidate.GroupOpenStep
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
@@ -52,8 +51,9 @@ theorem opening_first_boundary (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8 * s.sizes.trapdoor)) (positions : Positions)
     (nonempty : 0 < positions.card) :
     let initial := s.initialState .opening (trapdoor, positions)
-    Base (setupPrefix initial 15) positions := by
+    RecordBoundary s trapdoor positions (setupPrefix initial 15) 0 := by
   let initial := s.initialState .opening (trapdoor, positions)
+  have start : initial.pc = 0x1000 := rfl
   have trapPointer : initial.getReg .x12 = BitVec.ofNat 64 trapdoorBase :=
     congrArg (BitVec.ofNat 64) layout.trapdoor
   have indexPointer : initial.getReg .x13 = BitVec.ofNat 64 indicesBase :=
@@ -61,13 +61,21 @@ theorem opening_first_boundary (s : Submission) (layout : OpeningLayout s)
   have proofPointer : initial.getReg .x15 = BitVec.ofNat 64 proofBase :=
     congrArg (BitVec.ofNat 64) layout.proof
   have countValue : initial.getReg .x16 = BitVec.ofNat 64 positions.card := rfl
-  obtain ⟨proofStart, dest, ordinal, heap, count, size, nonce, slots, one, shift, marks, capLeaves, memory⟩ :=
+  have ⟨proofStart, dest, ordinal, heap, count, size, nonce, slots, one, capHeap, marks, capLeaves, memory⟩ :=
     setup_registers initial
-  exact ⟨ordinal.trans indexPointer, heap.trans trapPointer,
-    count.trans countValue, by simpa [LENGTH, LOG_LENGTH] using size,
-    proofStart.trans proofPointer, dest.trans proofPointer, one,
-    by rw [slots,trapPointer,← BitVec.ofNat_add]; rfl,
-    by simpa [Opening.markBase] using capLeaves⟩
+  refine ⟨?_, heap.trans trapPointer, ?_, ?_, ?_, size, ?_, ?_, ?_, marks, one,
+    capHeap.trans trapPointer, capLeaves, proofStart.trans proofPointer⟩
+  · rw [ite_eq_right (show (0 : Nat) ≠ positions.card by omega)]
+    exact setup_pc initial start (countValue ▸ nonempty_count positions nonempty)
+  · simpa using ordinal.trans indexPointer
+  · rw [nonce, trapPointer, ← BitVec.ofNat_add]
+    rfl
+  · simpa [recordBase] using dest.trans proofPointer
+  · rw [slots,trapPointer,← BitVec.ofNat_add]
+    rfl
+  · intro address _ _ _
+    exact congrFun memory (BitVec.ofNat 64 address)
+  · simpa using count.trans countValue
 
 theorem initial_record_marks (s : Submission) (layout : OpeningLayout s)
     (image : s.image .opening = openingImage) (trapdoor : BitVec (8 * s.sizes.trapdoor))

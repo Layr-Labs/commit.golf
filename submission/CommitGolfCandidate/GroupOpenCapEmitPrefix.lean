@@ -1,10 +1,9 @@
 import CommitGolfCandidate.K3OpenCapSpec
 import CommitGolfCandidate.GroupOpenSiblingRun
 import CommitGolfCandidate.GroupOpenFields
-import CommitGolfCandidate.GroupOpenCapCopy
 
-/-! T238 cap emit, the part both node kinds share: `x7 := x25+32·node`, the alignment-dispatched 28-byte copy,
-`lhu x31,28(x7)` and the `jal` to WK (word 855); `CapCopy.cycles dest+4` cycles.
+/-! T238 cap emit, the part both node kinds share (opener rows 668..699): `x7 := x25+32·node`, the 14 `lhu/sh`
+pairs (bytes 0..27 of the node's digest to `dest`), `lhu x31,28(x7)` and the `jal` to WK (word 855); 32 cycles.
 Also the single-step, halfword and position helpers the two emit cases use. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
@@ -139,7 +138,7 @@ theorem cap_position_kept {groups : List Nat} {before after : MachineState} {nod
   apply position.context.of_preserved
   · intro reg member
     simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-    rcases member with rfl | rfl | rfl | rfl | rfl <;>
+    rcases member with rfl | rfl | rfl | rfl <;>
       exact regs _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
   · intro n _ inside
     have below : Opening.markBase+8*n < Opening.proofBase := by
@@ -152,7 +151,7 @@ theorem cap_position_kept {groups : List Nat} {before after : MachineState} {nod
 theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : Nat)
     (bounded : node < 512) (position : CapPosition groups state node dest) (pc : state.pc = 0x1a70)
     (separate : Opening.proofBase ≤ dest) (aligned : dest % 2 = 0) (fits : dest+30 ≤ MEMORY_BYTES) :
-    ∃ mid, RunsOpeningBlock state mid (CapCopy.cycles dest+4) ∧ mid.pc = BitVec.ofNat 64 (4096+4*855) ∧
+    ∃ mid, RunsOpeningBlock state mid 32 ∧ mid.pc = BitVec.ofNat 64 (4096+4*855) ∧
       mid.getReg .x21 = BitVec.ofNat 64 dest ∧
       mid.getReg .x31 = (halfAt state (capDigestAddress node+28)).zeroExtend 64 ∧
       (∀ r, r ≠ .x7 → r ≠ .x31 → mid.getReg r = state.getReg r) ∧
@@ -172,14 +171,18 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
     rfl
   have destination : s1.getReg .x21 = BitVec.ofNat 64 dest :=
     (initial.2.2.2 .x21 (by decide)).trans position.destWord
+  have place : FieldInputs .cap s1 (capDigestAddress node) dest := by
+    refine ⟨by rw [initial.1, pc]; rfl, source, by simpa [CopySite.destOffset] using destination, ?_, ?_, ?_,
+      aligned, fun w => absurd w (by decide)⟩
+    · simp only [CopySite.halfwords]; omega
+    · simp only [CopySite.halfwords]; omega
+    · omega
   have setupRun : RunsOpeningBlock state s1 2 := fun fuel coins => execute_cap_source state pc fuel coins
-  have sa : capDigestAddress node%8=0 := srcAlign
-  obtain ⟨s2, place⟩ := CapCopy.copy s1 (capDigestAddress node) dest
-    (by rw [initial.1, pc]; rfl) source destination sa aligned (by omega) (by omega)
+  let s2 := copyState .cap s1
   have copy : ByteCopy s1 s2 (capDigestAddress node) dest 28 := place.bytes
-  have pc2 := place.pc
-  have reg2 := place.regs
-  have capRun := place.run
+  have pc2 : s2.pc = BitVec.ofNat 64 (4096+4*698) := place.final_pc
+  have reg2 (r : Reg) (keep : r ≠ .x31) : s2.getReg r = s1.getReg r := copy_register .cap s1 r keep (.inl rfl)
+  have capRun : RunsOpeningBlock s1 s2 28 := place.run
   have frame2 : ∀ a < 2^64, (a < dest ∨ dest+28 ≤ a) →
       s2.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a) := by
     intro a small away
@@ -209,8 +212,7 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
     unfold halfAt
     rw [frame2 (capDigestAddress node+28+1) (by omega) (Or.inl (by omega)),
       frame2 (capDigestAddress node+28) (by omega) (Or.inl (by omega))]
-  refine ⟨s4, ?_, step4.2.trans (by decide +kernel), ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · convert ((setupRun.next capRun).next step3.1).next step4.1 using 1 <;> omega
+  refine ⟨s4, ((setupRun.next capRun).next step3.1).next step4.1, step4.2.trans (by decide +kernel), ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [reg4 .x21 (by decide), reg2 .x21 (by decide), destination]
   · rw [top4, half2]
   · intro r a b
@@ -224,10 +226,7 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
     exact frame2 a small away
   · intro a below
     have stable : s2.getMem (BitVec.ofNat 64 a) = s1.getMem (BitVec.ofNat 64 a) :=
-      place.below _ (by
-        rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show a<2^64 by omega)]
-        have : Opening.proofBase%8=0 := by decide
-        omega)
+      place.words_before Opening.proofBase a below separate (by decide)
     have m1 : s1.mem = state.mem := initial.2.1
     calc s4.getMem (BitVec.ofNat 64 a) = s2.getMem (BitVec.ofNat 64 a) := by
           simp only [MachineState.getMem, mem4]

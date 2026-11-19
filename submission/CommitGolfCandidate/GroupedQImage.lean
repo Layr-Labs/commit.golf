@@ -72,10 +72,10 @@ theorem heap_start_pc (s : MachineState) (pc : s.pc=GroupedUpper.heapSetupPC) :
   rfl
 
 theorem l21_loop_run (s : MachineState) (fuel : Nat) (r : L21Regs s 2097152) (pc : s.pc=GroupedUpper.l21Base) :
-    execute packedWideCommitImage (6291583+fuel) s true = (do
+    execute packedWideCommitImage (6291967+fuel) s true = (do
       let mid ← l21Groups GroupedUpper.l21Base GroupedUpper.l21Span GroupedUpper.l21Passes s
       let e ← execute packedWideCommitImage fuel mid true
-      return e.charge 20971647 2097152) :=
+      return e.charge 20972031 2097152) :=
   l21_group_execution packedWideCommitImage GroupedUpper.l21Base GroupedUpper.l21Span
     (fun i hi => GroupedUpper.l21_words i hi) GroupedUpper.l21Control (by decide) GroupedUpper.l21Passes fuel s
     (by decide) r (fun _ => pc)
@@ -88,10 +88,10 @@ theorem l21_loop_post (s : MachineState) (r : L21Regs s 2097152) (pc : s.pc=Grou
   exact ⟨post.1,(post.2 (by decide)).trans (by decide)⟩
 
 theorem bandA_run (s : MachineState) (fuel : Nat) (r : BandRegs s 2097151 131071) (pc : s.pc=GroupedUpper.bandABase) :
-    execute packedWideCommitImage (7864559+fuel) s true = (do
+    execute packedWideCommitImage (7864703+fuel) s true = (do
       let mid ← bandGroups recordKind GroupedUpper.bandABase GroupedUpper.bandASpan 131071 GroupedUpper.bandAPasses s
       let e ← execute packedWideCommitImage fuel mid true
-      return e.charge 21627119 1966080) :=
+      return e.charge 21627263 1966080) :=
   band_execution recordKind packedWideCommitImage GroupedUpper.bandABase GroupedUpper.bandASpan
     (fun i hi => GroupedUpper.bandA_words i hi) GroupedUpper.bandAControl (by decide) 131071 GroupedUpper.bandAPasses
     fuel s (by decide) r (fun _ => pc)
@@ -136,10 +136,10 @@ theorem mid_pc (s : MachineState) (pc : s.pc=GroupedUpper.midPC) : (midState s).
   change s.pc+4=_; rw [pc]; rfl
 
 theorem bandB_run (s : MachineState) (fuel : Nat) (r : BandRegs s 131071 1) (pc : s.pc=GroupedUpper.bandBBase) :
-    execute packedWideCommitImage (786449+fuel) s true = (do
+    execute packedWideCommitImage (786521+fuel) s true = (do
       let mid ← bandGroups t238Kind GroupedUpper.bandBBase GroupedUpper.bandBSpan 1 GroupedUpper.bandBPasses s
       let e ← execute packedWideCommitImage fuel mid true
-      return e.charge 1703939 131070) :=
+      return e.charge 1704011 131070) :=
   band_execution t238Kind packedWideCommitImage GroupedUpper.bandBBase GroupedUpper.bandBSpan
     (fun i hi => GroupedUpper.bandB_words i hi) GroupedUpper.bandBControl (by decide) 1 GroupedUpper.bandBPasses
     fuel s (by decide) r (fun _ => pc)

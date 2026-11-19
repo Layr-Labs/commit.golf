@@ -186,7 +186,7 @@ def CodeAt (word : Nat) (code : List Instr) : Prop :=
   ∀ j : Fin code.length, Decodes (word+j.val) code[j]
 
 theorem code_run (code : List Instr) : ∀ (word : Nat) (s : MachineState),
-    word+code.length ≤ 1939 → CodeAt word code → Ready s code →
+    word+code.length ≤ 1890 → CodeAt word code → Ready s code →
     s.pc = BitVec.ofNat 64 (4096+4*word) →
     (∀ i ∈ code, stepKind i = true) →
     (∀ u i, i ∈ code → (execInstrBr u i).pc = u.pc+4) →
@@ -258,15 +258,13 @@ structure ChunkDone (s t : MachineState) (S T word size : Nat) : Prop where
   bytes : ByteCopy s t S T size
   below : ∀ q : Word, q.toNat < T-T%8 → t.getMem q = s.getMem q
 
-theorem chunk_done (word : Nat) (k : Fin 4) (s : MachineState) (S T : Nat)
-    (bounded : word+22 ≤ 1913)
-    (decoded : CodeAt (word+6*k.val) (chunkCode (8*k.val) (decide (k.val=3))))
-    (pc : s.pc = BitVec.ofNat 64 (4096+4*(word+6*k.val)))
+theorem chunk_done (k : Fin 4) (s : MachineState) (S T : Nat)
+    (pc : s.pc = BitVec.ofNat 64 (4096+4*(1867+6*k.val)))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
     (sa : S % 8 = 0) (ta : T % 4 = 2) (apart : S+30 ≤ T)
     (sf : S+32 ≤ MEMORY_BYTES) (tf : T+30 ≤ MEMORY_BYTES) :
     ChunkDone s (execCode s (chunkCode (8*k.val) (decide (k.val=3))))
-      (S+8*k.val) (T+8*k.val) (word+6*k.val) (if k.val=3 then 6 else 8) := by
+      (S+8*k.val) (T+8*k.val) (1867+6*k.val) (if k.val=3 then 6 else 8) := by
   have hk := k.isLt
   have ram : MEMORY_BYTES < 2^64 := by decide
   let last := decide (k.val=3)
@@ -283,8 +281,8 @@ theorem chunk_done (word : Nat) (k : Fin 4) (s : MachineState) (S T : Nat)
   have nextpc : ∀ u i, i ∈ code → (execInstrBr u i).pc = u.pc+4 := by
     intro u i h; cases hlast : last <;> simp [code, hlast, chunkCode] at h <;>
       rcases h with rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
-  have run := code_run code (word+6*k.val) s (by rw [len]; split <;> omega)
-    decoded ready pc kind nextpc
+  have run := code_run code (1867+6*k.val) s (by rw [len]; split <;> omega)
+    (chunk_decoded k) ready pc kind nextpc
   rw [len] at run
   have mem := chunk_memory s (S+8*k.val) (T+8*k.val) (8*k.val) last sr dr (by omega)
   have copy := copy_congr_mem mem (chunk_copy s (S+8*k.val) (T+8*k.val) last
@@ -305,43 +303,41 @@ def copy30 (s : MachineState) : MachineState :=
   execCode (execCode (execCode (execCode s (chunkCode 0 false))
     (chunkCode 8 false)) (chunkCode 16 false)) (chunkCode 24 true)
 
-structure CopyDone (s t : MachineState) (S T word : Nat) : Prop where
+structure CopyDone (s t : MachineState) (S T : Nat) : Prop where
   run : RunsOpeningBlock s t 22
-  pc : t.pc = BitVec.ofNat 64 (4096+4*(word+22))
+  pc : t.pc = BitVec.ofNat 64 (4096+4*1889)
   regs : ∀ r, r ≠ .x31 → t.getReg r = s.getReg r
   bytes : ByteCopy s t S T 30
   below : ∀ q : Word, q.toNat < T-T%8 → t.getMem q = s.getMem q
 
-theorem copy30_done (word : Nat) (s : MachineState) (S T : Nat)
-    (bounded : word+22 ≤ 1913)
-    (decoded : ∀ k : Fin 4, CodeAt (word+6*k.val) (chunkCode (8*k.val) (decide (k.val=3))))
-    (pc : s.pc = BitVec.ofNat 64 (4096+4*word))
+theorem copy30_done (s : MachineState) (S T : Nat)
+    (pc : s.pc = BitVec.ofNat 64 (4096+4*1867))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
     (sa : S % 8 = 0) (ta : T % 4 = 2) (apart : S+30 ≤ T)
     (sf : S+32 ≤ MEMORY_BYTES) (tf : T+30 ≤ MEMORY_BYTES) :
-    CopyDone s (copy30 s) S T word := by
+    CopyDone s (copy30 s) S T := by
   let a := execCode s (chunkCode 0 false)
   let b := execCode a (chunkCode 8 false)
   let c := execCode b (chunkCode 16 false)
   let d := execCode c (chunkCode 24 true)
-  have c0 : ChunkDone s a S T word 8 := by
-    simpa using chunk_done word (0 : Fin 4) s S T bounded (decoded 0) (by simpa using pc) src dst sa ta apart sf tf
-  have c1 : ChunkDone a b (S+8) (T+8) (word+6) 8 := by
-    simpa using chunk_done word (1 : Fin 4) a S T bounded (decoded 1) c0.pc
+  have c0 : ChunkDone s a S T 1867 8 := by
+    simpa using chunk_done (0 : Fin 4) s S T pc src dst sa ta apart sf tf
+  have c1 : ChunkDone a b (S+8) (T+8) 1873 8 := by
+    simpa using chunk_done (1 : Fin 4) a S T c0.pc
       ((c0.regs .x7 (by decide)).trans src) ((c0.regs .x21 (by decide)).trans dst) sa ta apart sf tf
-  have c2 : ChunkDone b c (S+16) (T+16) (word+12) 8 := by
-    simpa using chunk_done word (2 : Fin 4) b S T bounded (decoded 2) (by simpa [Nat.add_assoc] using c1.pc)
+  have c2 : ChunkDone b c (S+16) (T+16) 1879 8 := by
+    simpa using chunk_done (2 : Fin 4) b S T c1.pc
       ((c1.regs .x7 (by decide)).trans ((c0.regs .x7 (by decide)).trans src))
       ((c1.regs .x21 (by decide)).trans ((c0.regs .x21 (by decide)).trans dst)) sa ta apart sf tf
-  have c3 : ChunkDone c d (S+24) (T+24) (word+18) 6 := by
-    simpa using chunk_done word (3 : Fin 4) c S T bounded (decoded 3) (by simpa [Nat.add_assoc] using c2.pc)
+  have c3 : ChunkDone c d (S+24) (T+24) 1885 6 := by
+    simpa using chunk_done (3 : Fin 4) c S T c2.pc
       ((c2.regs .x7 (by decide)).trans ((c1.regs .x7 (by decide)).trans ((c0.regs .x7 (by decide)).trans src)))
       ((c2.regs .x21 (by decide)).trans ((c1.regs .x21 (by decide)).trans ((c0.regs .x21 (by decide)).trans dst)))
       sa ta apart sf tf
   have ram : MEMORY_BYTES < 2^64 := by decide
   have copy16 : ByteCopy s b S T 16 := copy_extend c0.bytes c1.bytes (by omega) (by omega)
   have copy24 : ByteCopy s c S T 24 := copy_extend copy16 c2.bytes (by omega) (by omega)
-  refine ⟨((c0.run.next c1.run).next c2.run).next c3.run, by simpa [Nat.add_assoc, a, b, c, d, copy30] using c3.pc, ?_,
+  refine ⟨((c0.run.next c1.run).next c2.run).next c3.run, c3.pc, ?_,
     copy_extend copy24 c3.bytes apart (by omega), ?_⟩
   · intro r h
     change d.getReg r = s.getReg r

@@ -27,11 +27,11 @@ def fieldCode (site : CopySite) : CopyCode where
   load := fun offset inside state pc => by
     have plain : (site.wide || site.wide30) = false := by cases h : (site.wide || site.wide30) <;> simp_all
     have small : offset < site.halfwords := by simp only [plain, Bool.false_eq_true, ite_false] at inside; exact inside
-    exact fetch_copy_load site ⟨offset, small⟩ state plain pc
+    exact fetch_copy_load site ⟨offset, small⟩ state (Or.inl plain) pc
   store := fun offset inside state pc => by
     have plain : (site.wide || site.wide30) = false := by cases h : (site.wide || site.wide30) <;> simp_all
     have small : offset < site.halfwords := by simp only [plain, Bool.false_eq_true, ite_false] at inside; exact inside
-    exact fetch_copy_store site ⟨offset, small⟩ state plain pc
+    exact fetch_copy_store site ⟨offset, small⟩ state (Or.inl plain) pc
 
 /-- A site's copy: the halfword kernel, or for a wide site its stub path. -/
 def copyState (site : CopySite) (state : MachineState) : MachineState :=

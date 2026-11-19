@@ -23,11 +23,11 @@ attribute [local irreducible] ArtifactEncoding.decode
 def image : Image := ⟨ArtifactEncoding.decode 32 K1Artifact.commitCode, ArtifactEncoding.decode 8 K1Artifact.commitData⟩
 theorem exact_image : image = K1Artifact.submission.image .commit := rfl
 def codeWord (index : Nat) : BitVec 32 :=
-  if inside : index<261970 then K1Artifact.commitCode.get 32 ⟨index,inside⟩ else 0
+  if inside : index<262039 then K1Artifact.commitCode.get 32 ⟨index,inside⟩ else 0
 def wordPC (index : Nat) : Word := BitVec.ofNat 64 (4096 + 4*index)
 
 theorem fetch_decoded (state : MachineState) (index : Nat)
-    (inCode : index < 261970) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))
+    (inCode : index < 262039) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))
     (instruction : Instr)
     (decoded : Manifest.decodeBase (codeWord index)=some instruction) :
     fetch image state=some (.base instruction) := by
@@ -78,7 +78,7 @@ def rankPrefix (r : Nat) : Nat :=
   else if r=9 then 99 else if r=10 then 108 else 117
 
 /-- First code word of slot `n ≤ 4096` of the tile body (slot 4096 is the latch): both quartet calls add two words. -/
-def firstWord (n : Nat) := 21+117*(n/11)+rankPrefix (n%11)+2*((n+4)/8)+2*(n/8)-chainedBefore n
+def firstWord (n : Nat) := 38+117*(n/11)+rankPrefix (n%11)+2*((n+4)/8)+2*(n/8)-chainedBefore n
 
 /-- Increment of x10 at the end of slot `n` (no quartet call): to the next entry. -/
 def trail (n : Nat) : BitVec 12 := if rank n=0 then 368 else if rank (n+1)=0 then 256 else 200
@@ -110,5 +110,7 @@ def packet (n : Nat) : List Instr :=
   else
     [.ADDI .x12 .x10 (-32),.ECALL,.ADDI .x10 .x10 56,.SD .x10 .x10 16] ++ saltCode (rank n) ++
     [.ADD .x12 .x10 (sreg n),.ECALL]) ++ tailCode n
+
+def firstWord4 (m : Nat) : Nat := 45250*(m/4096) + firstWord (m%4096)
 
 end TwoPermutationPrototype.Grouped

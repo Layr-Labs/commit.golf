@@ -104,12 +104,14 @@ theorem plan_words (i : Nat) : (plan i).map Action.op=packet (i%4096) := by
     · by_cases e : i%4096/4%2=0 <;> simp [t,m,e,Action.op]
     · simp [t,m,Action.op]
 
-theorem plan_fetch (i : Nat) : fetchOps (firstWord (i%4096)) (plan i) := by
+theorem plan_fetch (i : Nat) : fetchOps (firstWord4 (i%16384)) (plan i) := by
   intro j s pc
   have len := congrArg List.length (plan_words i)
   simp only [List.length_map] at len
-  have inside : j.val<(packet (i%4096)).length := len ▸ j.isLt
-  have got := fetch_packet ⟨i%4096,by omega⟩ j.val inside s pc
+  have mod4 : (i%16384)%4096 = i%4096 := by omega
+  have inside : j.val<(packet ((i%16384)%4096)).length := by rw [mod4]; exact len ▸ j.isLt
+  have got := fetch_packet4 ⟨i%16384,by omega⟩ j.val inside s pc
+  simp only [mod4] at got
   rw [←plan_words,List.getElem?_eq_getElem (by simpa using j.isLt)] at got
   change fetch image s=some (.base (plan i)[j.val].op)
   simpa only [List.getElem_map,Option.getD_some] using got

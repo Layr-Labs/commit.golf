@@ -20,8 +20,8 @@ local instance groupedFullSpace {α : Type} : MeasurableSpace α := ⊤
 
 /-- The claim: proof bytes, commit cycles and worst opening cycles. -/
 abbrev claimProofBytes : Nat := 72160
-abbrev claimCommitCycles : Nat := 504594887
-abbrev claimOpeningCycles : Nat := 122903
+abbrev claimCommitCycles : Nat := 504586268
+abbrev claimOpeningCycles : Nat := 128437
 
 noncomputable def committed (o : Oracle) (m : Message) (k : Grouped.Key) :=
   actual.readCommit (Grouped.packedOutput o (Grouped.seededLeaves o m k))

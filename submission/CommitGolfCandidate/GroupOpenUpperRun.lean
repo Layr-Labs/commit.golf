@@ -24,7 +24,7 @@ def lowerCost (ordinal level : Nat) : Nat → Nat
   | 0 => 0
   | left+1 => siblingCost ordinal level+lowerCost ordinal (level+1) left
 
-theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 69+levelCopies ordinal+recordCopyCost ordinal := by
+theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 99+levelCopies ordinal+recordCopyCost ordinal := by
   simp [lowerCost, siblingCost, levelCopies]
   omega
 
@@ -140,7 +140,7 @@ theorem last_tail_next : rowNext lastTail[2] = BitVec.ofNat 64 (4096+4*642) := b
 
 /-- Level 13: head, 14 halfwords, `lhu x31,28(x7)` (the top halfword of the last packed node), the fold of
 its 14 high bits into slots 0..6 of the packed block, `addi x21,x21,28; srli x6,x6,1`. -/
-def lastCopy (state : MachineState) : MachineState := Writer28.state (headPrefix state 3)
+def lastCopy (state : MachineState) : MachineState := copyState (siblingSite 13) (headPrefix state 3)
 def lastLoaded (state : MachineState) : MachineState := rowsState (lastCopy state) lastHead 2
 def lastFolded (state : MachineState) : MachineState := foldUpTo foldStart 7 (lastLoaded state)
 def lastLevel (state : MachineState) : MachineState := rowsState (lastFolded state) lastTail 3
@@ -198,7 +198,7 @@ private theorem align_nat_full (q : Nat) (fit : q < 2^64) :
   omega
 
 structure LastTrace (state : MachineState) (index : Index) (ordinal : Nat) : Prop where
-  run : RunsOpeningBlock state (lastLevel state) (42+lastCopyCost ordinal)
+  run : RunsOpeningBlock state (lastLevel state) 70
   next : LowerCursor (lastLevel state) index ordinal 14
   register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x28 → reg ≠ .x29 → reg ≠ .x31 →
     (lastLevel state).getReg reg = state.getReg reg
@@ -231,6 +231,7 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
   have o13 : siblingOffset 13 = 506 := rfl
   have head := sibling_head_post state
   have ordinalFit := all_sibling_copies_fit index ordinal 13 bounded (by decide)
+  have halves : 2*site.halfwords = 28 := rfl
   have start : state.pc = BitVec.ofNat 64 (4096+4*siblingStart level) := cursor.pc
   have before : prepared.pc = BitVec.ofNat 64 (4096+4*site.start) := by
     rw [head.1, start]
@@ -244,20 +245,18 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
   have dstReg : prepared.getReg .x21 = BitVec.ofNat 64 dst :=
     (head.2.2.2 .x21 (by decide)).trans cursor.dest
   have width13 : siblingWidth 13 = 28 := rfl
-  have sa : src%8=0 := by
-    unfold src siblingAddress
-    have : trapdoorBase%8=0 := by decide
-    omega
-  have field := Writer28.copy prepared src dst before srcReg dstReg sa ordinalFit.2.1
-    (by have := ordinalFit.2.2.1; rw [width13] at this; exact this)
-    (by have := ordinalFit.2.2.2; rw [width13] at this; exact this)
-  have copyPC : copied.pc = BitVec.ofNat 64 (4096+4*638) := field.pc
+  have field : FieldInputs site prepared src dst := by
+    refine ⟨before, by simpa [site] using srcReg, by simpa [site] using dstReg, ?_, ?_, ordinalFit.1, ordinalFit.2.1,
+      fun w => absurd w (by decide)⟩
+    · have := ordinalFit.2.2.1; rw [width13] at this; rw [halves]; exact this
+    · have := ordinalFit.2.2.2; rw [width13] at this; rw [halves]; exact this
+  have copyPC : copied.pc = BitVec.ofNat 64 (4096+4*638) := field.final_pc
   have keptCopy (reg : Reg) (d : reg ≠ .x31) (b : reg ≠ .x7) : copied.getReg reg = state.getReg reg :=
-    (field.regs reg d).trans (head.2.2.2 reg b)
+    (copy_register site prepared reg d (.inl (by decide))).trans (head.2.2.2 reg b)
   have srcCopied : copied.getReg .x7 = BitVec.ofNat 64 src :=
-    (field.regs .x7 (by decide)).trans srcReg
+    (copy_register site prepared .x7 (by decide) (.inl (by decide))).trans srcReg
   have dstCopied : copied.getReg .x21 = BitVec.ofNat 64 dst :=
-    (field.regs .x21 (by decide)).trans dstReg
+    (copy_register site prepared .x21 (by decide) (.inl (by decide))).trans dstReg
   -- the head rows: lhu x31,28(x7); jal F
   have headStart : ∀ h : 0 < lastHead.length, copied.pc = BitVec.ofNat 64 (4096+4*lastHead[0].1) := fun _ => copyPC
   have srcHalfFit : src+28+2 ≤ MEMORY_BYTES := by have := ordinalFit.2.2.1; have := ordinalFit.2.2.2; omega
@@ -314,16 +313,13 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
     (last_tail_shape folded (BitVec.ofNat 21 (2^21-4*(foldStart+34-640)))).2.2.1
   -- bytes of the copy
   have copiedBytes : ByteCopy state copied src dst 28 := by
-    exact field.bytes.move head.2.1.symm rfl
+    rw [← halves]; exact field.bytes.move head.2.1.symm rfl
   have copiedInput (address : Nat) (below : address < proofBase) :
       copied.getMem (BitVec.ofNat 64 address) = state.getMem (BitVec.ofNat 64 address) := by
     have above : proofBase ≤ dst := by unfold dst siblingDestination recordBase; omega
-    have stable := field.below (BitVec.ofNat 64 address) (by
-      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : address<2^64)]
-      have aligned : proofBase%8=0 := by decide
-      omega)
+    have stable := field.words_before proofBase address below above (by decide)
     have reads : prepared.mem = state.mem := head.2.1
-    show (Writer28.state prepared).getMem (BitVec.ofNat 64 address) = state.getMem (BitVec.ofNat 64 address)
+    show (copyState site prepared).getMem (BitVec.ofNat 64 address) = state.getMem (BitVec.ofNat 64 address)
     simpa only [MachineState.getMem, reads] using stable
   -- the fold slots
   have slotAt (k : Nat) (inside : k < 7) : foldAddress dst k = siblingDestination ordinal (6+k)+28 := by
@@ -372,7 +368,9 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
   · have total := ((((show RunsOpeningBlock state prepared 3 from
       fun fuel coins => execute_sibling_head state level start fuel coins).next field.run).next ranLoad).next
       ranFold).next ranTail
-    convert total using 1 <;> simp only [lastCopyCost, dst] <;> omega
+    have c13 : copyCost site dst = 28 := by unfold copyCost; rw [if_neg (by decide)]; rfl
+    rw [c13] at total
+    exact total
   · exact tailPC
   · rw [tailReg .x9 (by decide) (by decide), foldKeep' .x9 (by decide) (by decide) (by decide),
       loadReg .x9 (by decide), keptCopy .x9 (by decide) (by decide)]

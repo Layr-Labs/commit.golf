@@ -10,10 +10,10 @@ def layoutRows : List Row :=
   [(0,.ADDI .x20 .x15 0),(1,.ADDI .x21 .x15 0),(2,.BEQ .x16 .x0 2828),(3,.JAL .x0 2840),
    (713,.ADDI .x8 .x13 0),(714,.ADDI .x9 .x12 0),(715,.ADDI .x18 .x16 0),(716,.LUI .x19 1024),
    (717,.LUI .x6 131072),(718,.ADD .x24 .x9 .x6),(719,.SLLI .x6 .x6 3),(720,.ADD .x22 .x24 .x6),
-   (721,.ADDI .x23 .x0 1),(722,.SLLI .x25 .x18 3),(723,.LUI .x26 1),(724,.ADDI .x27 .x0 256)]
+   (721,.ADDI .x23 .x0 1),(722,.ADDI .x25 .x9 0),(723,.LUI .x26 1),(724,.ADDI .x27 .x0 256)]
 def configRows : List Row :=
   [(725,.ADDI .x10 .x0 1024),(726,.ADDI .x12 .x0 1536),(727,.ADDI .x11 .x0 200),(728,.ADDI .x13 .x0 1),
-   (729,.ADDI .x5 .x0 0),(730,.ADDI .x14 .x8 0),(731,.ADD .x17 .x8 .x25),(732,.ADDI .x29 .x0 11)]
+   (729,.ADDI .x5 .x0 0),(730,.ADDI .x14 .x8 0),(731,.ADDI .x17 .x18 0),(732,.ADDI .x29 .x0 11)]
 def keyRows : List Row :=
   [(733,.LD .x31 .x22 8),(734,.SD .x10 .x31 8),(735,.LD .x31 .x22 16),(736,.SD .x10 .x31 16),
    (737,.LD .x31 .x22 24),(738,.SD .x10 .x31 24)]

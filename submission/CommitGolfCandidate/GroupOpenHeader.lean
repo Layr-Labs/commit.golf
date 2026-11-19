@@ -23,12 +23,7 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
   let t:=header init
   have nr : init.getReg .x16≠0#64 := nonempty_count p nz
   obtain ⟨b,salt,marks,mem0⟩:=original_base td p nz
-  have shift0 : (setupPrefix init 15).getReg .x25=BitVec.ofNat 64 (8*p.card) := by
-    obtain ⟨_,_,_,_,_,_,_,_,_,h25,_,_,_⟩ := setup_registers init
-    rw [h25, show init.getReg .x16 = BitVec.ofNat 64 p.card from rfl]
-    apply BitVec.eq_of_toNat_eq
-    simp [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc]
-  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks shift0 nz mem0
+  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks mem0
   refine ⟨valid,⟨regs.r,regs.b,?_,by simpa [lastOf] using regs.quartet,?_,?_⟩⟩
   · simpa only [passPC,ite_eq_right (Nat.ne_of_lt nz)] using regs.pc
   · intro w fit away

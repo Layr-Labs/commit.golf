@@ -23,21 +23,21 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 @[local simp] private theorem abi_zero (state : MachineState) : state.getReg .x0 = 0#64 := rfl
 
 theorem root_exit (state : MachineState) (pc : state.pc = 0x1af4)
-    (root : state.getReg .x6 = 1#64) (one : state.getReg .x23 = 1#64) (fuel : Nat) (allowCoins : Bool) :
-    let result := exitPrefix (advancePrefix state 41 1) 3
-    execute openingImage (5 + fuel) state allowCoins = pure ⟨.success, result, 5, 0⟩ ∧
+    (root : state.getReg .x6 = 1#64) (fuel : Nat) (allowCoins : Bool) :
+    let result := exitPrefix (advancePrefix state 41 2) 3
+    execute openingImage (6 + fuel) state allowCoins = pure ⟨.success, result, 6, 0⟩ ∧
     result.mem = state.mem ∧ result.getReg .x11 = state.getReg .x21 - state.getReg .x20 := by
-  let checked := advancePrefix state 41 1
-  have ready : checked.pc = 0x1b14 := by rw [advance_root_target state pc one, root]; simp
+  let checked := advancePrefix state 41 2
+  have ready : checked.pc = 0x1b14 := by rw [advance_root_target state pc, root]; simp
   have memory : checked.mem = state.mem := by
-    simp [checked, advancePrefix, advanceCode, execInstrBr, one, root]
+    simp [checked, advancePrefix, advanceCode, execInstrBr, signExtend12, root]
     rfl
   have dest : checked.getReg .x21 = state.getReg .x21 := by
-    simp [checked, advancePrefix, advanceCode, execInstrBr, one, root]
+    simp [checked, advancePrefix, advanceCode, execInstrBr, signExtend12, root]
   have start : checked.getReg .x20 = state.getReg .x20 := by
-    simp [checked, advancePrefix, advanceCode, execInstrBr, one, root]
+    simp [checked, advancePrefix, advanceCode, execInstrBr, signExtend12, root]
   refine ⟨?_, (exit_memory checked).trans memory, ?_⟩
-  · rw [show 5 + fuel = 1 + (4 + fuel) by omega, execute_advance_root_test _ pc,
+  · rw [show 6 + fuel = 2 + (4 + fuel) by omega, execute_advance_root_test _ pc,
       execute_exit _ ready]
     simp [Execution.charge, checked]
   · rw [exit_register, dest, start]

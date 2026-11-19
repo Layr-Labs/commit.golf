@@ -9,31 +9,30 @@ open Wide
 
 /-! ### The stub paths -/
 
+def entryJump (site : CopySite) : Instr := .JAL .x29 (BitVec.ofNat 21 (4*(site.stub-site.start)))
+
 def enterState (site : CopySite) (s : MachineState) : MachineState :=
-  execInstrBr (execInstrBr s (.ANDI .x31 .x21 3))
-    (.BEQ .x31 .x0 (BitVec.ofNat 13 (4*(site.stub+2-(site.start+1)))))
+  execInstrBr (execInstrBr (execInstrBr s (entryJump site)) (.ANDI .x31 .x21 3)) (.BNE .x31 .x0 (BitVec.ofNat 13 (8192+4*(site.start+1)-4*(site.stub+1))))
 
 def slowState (site : CopySite) (s : MachineState) : MachineState :=
   execInstrBr (execInstrBr (enterState site s) (.ANDI .x31 .x21 7)) (.BNE .x31 .x0 52)
 
 def dwordPath (site : CopySite) (s : MachineState) : MachineState :=
-  execInstrBr (pairsRun 8 site.source 0 site.destOffset 0 4 (slowState site s))
-    (.JAL .x0 (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+12))))
+  execInstrBr (pairsRun 8 site.source 0 site.destOffset 0 4 (slowState site s)) (.JALR .x0 .x29 124)
 
 def wordPath (site : CopySite) (s : MachineState) : MachineState :=
-  execInstrBr (pairsRun 4 site.source 0 site.destOffset 0 8 (slowState site s))
-    (.JAL .x0 (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+32))))
+  execInstrBr (pairsRun 4 site.source 0 site.destOffset 0 8 (slowState site s)) (.JALR .x0 .x29 124)
 
 def halfPath (site : CopySite) (s : MachineState) : MachineState :=
-  execInstrBr (Shifted32.copy32 site (enterState site s)) (.JAL .x0 24)
+  execInstrBr (Shifted32.copy32 site (enterState site s)) (.JAL .x0 28)
 
 /-- The state after a wide site's copy: the stub path picked by the destination's alignment. -/
 def wideState (site : CopySite) (s : MachineState) : MachineState :=
   if (s.getReg .x21).toNat % 8 = 0 then dwordPath site s
   else if (s.getReg .x21).toNat % 8 = 4 then wordPath site s else halfPath site s
 
-/-- Cycles of a wide copy: 13 (8-aligned), 21 (4-aligned), or 27. -/
-def wideCost (target : Nat) : Nat := if target % 8 = 0 then 13 else if target % 8 = 4 then 21 else 27
+/-- Cycles of a wide copy: 14 (8-aligned), 22 (4-aligned), or 28. -/
+def wideCost (target : Nat) : Nat := if target % 8 = 0 then 14 else if target % 8 = 4 then 22 else 28
 
 structure WideInputs (site : CopySite) (s : MachineState) (S T : Nat) : Prop where
   wide : site.wide = true
@@ -48,15 +47,13 @@ structure WideInputs (site : CopySite) (s : MachineState) (S T : Nat) : Prop whe
 structure SiteFacts (site : CopySite) : Prop where
   startFit : site.start+32 ≤ 1062
   stubFit : site.stub+33 ≤ 1062
-  aligned : BitVec.ofNat 64 (4096+4*(site.start+1)) +
-    signExtend13 (BitVec.ofNat 13 (4*(site.stub+2-(site.start+1)))) =
-      BitVec.ofNat 64 (4096+4*(site.stub+2))
-  backDwords : BitVec.ofNat 64 (4096+4*(site.stub+12)) +
-    signExtend21 (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+12))) =
+  jump : BitVec.ofNat 64 (4096+4*site.start) + signExtend21 (BitVec.ofNat 21 (4*(site.stub-site.start))) =
+    BitVec.ofNat 64 (4096+4*site.stub)
+  back124 : (BitVec.ofNat 64 (4096+4*(site.start+1)) + signExtend12 124) &&& ~~~1#64 =
     BitVec.ofNat 64 (4096+4*(site.start+32))
-  backWords : BitVec.ofNat 64 (4096+4*(site.stub+32)) +
-    signExtend21 (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+32))) =
-      BitVec.ofNat 64 (4096+4*(site.start+32))
+  slowTarget : BitVec.ofNat 64 (4096+4*(site.stub+1)) +
+    signExtend13 (BitVec.ofNat 13 (8192+4*(site.start+1)-4*(site.stub+1))) =
+      BitVec.ofNat 64 (4096+4*(site.start+1))
   back4 : (BitVec.ofNat 64 (4096+4*(site.start+1)) + signExtend12 4) &&& ~~~1#64 =
     BitVec.ofNat 64 (4096+4*(site.start+2))
   src31 : site.source ≠ .x31
@@ -156,6 +153,7 @@ theorem copy_after {s t u : MachineState} {S T n : Nat} (copy : ByteCopy s t S T
     ByteCopy s u S T n := copy_congr_mem same copy
 
 structure Entered (site : CopySite) (s e : MachineState) (S T : Nat) : Prop where
+  x29 : e.getReg .x29 = BitVec.ofNat 64 (4096+4*(site.start+1))
   src : e.getReg site.source = BitVec.ofNat 64 S
   dst : e.getReg .x21 + BitVec.ofNat 64 site.destOffset = BitVec.ofNat 64 T
   mem : e.mem = s.mem
@@ -166,27 +164,11 @@ theorem moves_reg {u v : MachineState} {changed : Reg} (m : Moves u v changed) (
 
 theorem x0_any (u v : MachineState) : v.getReg .x0 = u.getReg .x0 := rfl
 
-theorem beq_direct_facts (u : MachineState) (off : BitVec 13) :
-    let v := execInstrBr u (.BEQ .x31 .x0 off)
-    v.pc = (if u.getReg .x31 = 0#64 then u.pc + signExtend13 off else u.pc + 4) ∧ Moves u v .x0 := by
-  refine ⟨?_, fun r _ => ?_, ?_⟩
-  · simp only [execInstrBr, zero_reg]
-    by_cases h : u.getReg .x31 = 0#64 <;> simp [h, MachineState.setPC]
-  · simp only [execInstrBr]; split <;> rfl
-  · simp only [execInstrBr]; split <;> rfl
-
-theorem direct_jump_facts (u : MachineState) (off : BitVec 21) :
-    let v := execInstrBr u (.JAL .x0 off)
-    v.pc = u.pc + signExtend21 off ∧ Moves u v .x0 := by
-  refine ⟨rfl, ?_, rfl⟩
-  intro r _
-  cases r <;> rfl
-
 theorem enter_facts (site : CopySite) (s : MachineState) (S T : Nat) (input : WideInputs site s S T) :
-    RunsOpeningBlock s (enterState site s) 2 ∧ Entered site s (enterState site s) S T ∧
+    RunsOpeningBlock s (enterState site s) 3 ∧ Entered site s (enterState site s) S T ∧
     (enterState site s).getReg .x31 = BitVec.ofNat 64 (T % 4) ∧
     (enterState site s).pc = (if T % 4 = 0 then BitVec.ofNat 64 (4096+4*(site.stub+2))
-      else BitVec.ofNat 64 (4096+4*(site.start+2))) := by
+      else BitVec.ofNat 64 (4096+4*(site.start+1))) := by
   have facts := site_facts site input.wide
   have code := stub_code site input.wide
   have sf := facts.startFit
@@ -198,33 +180,42 @@ theorem enter_facts (site : CopySite) (s : MachineState) (S T : Nat) (input : Wi
     rw [show signExtend12 3 = (3#64 : Word) from rfl, BitVec.toNat_and,
       show (3#64 : Word).toNat = 2^2-1 from rfl, Nat.and_two_pow_sub_one_eq_mod, BitVec.toNat_ofNat]
     omega
-  have run1 := run_step s site.start _ (by omega) input.pc code.test rfl rfl
-  obtain ⟨p1, x31a, m1⟩ := andi_facts s 3
-  generalize he1 : execInstrBr s (.ANDI .x31 .x21 3) = e1 at p1 x31a m1 run1
-  have pc1 : e1.pc = BitVec.ofNat 64 (4096+4*(site.start+1)) := by rw [p1, input.pc, ofNat_four]
-  have v31 : e1.getReg .x31 = BitVec.ofNat 64 (T % 4) := by rw [x31a, andBits4]
-  have run2 := run_step e1 (site.start+1) _ (by omega) pc1 code.aligned rfl rfl
-  obtain ⟨p2, m2⟩ := beq_direct_facts e1 (BitVec.ofNat 13 (4*(site.stub+2-(site.start+1))))
-  generalize he2 : execInstrBr e1 (.BEQ .x31 .x0 (BitVec.ofNat 13 (4*(site.stub+2-(site.start+1))))) = e2 at p2 m2 run2
-  have same : enterState site s = e2 := by rw [← he2, ← he1]; rfl
+  have run1 := run_step s site.start _ (by omega) input.pc code.entry rfl rfl
+  obtain ⟨p1, x29a, m1⟩ := jal_facts s (BitVec.ofNat 21 (4*(site.stub-site.start)))
+  generalize he1 : execInstrBr s (.JAL .x29 (BitVec.ofNat 21 (4*(site.stub-site.start)))) = e1 at p1 x29a m1
+  have run1' : RunsOpeningBlock s e1 1 := by rw [← he1]; exact run1
+  have pc1 : e1.pc = BitVec.ofNat 64 (4096+4*site.stub) := by rw [p1, input.pc]; exact facts.jump
+  have run2 := run_step e1 site.stub _ (by omega) pc1 code.test rfl rfl
+  obtain ⟨p2, x31b, m2⟩ := andi_facts e1 3
+  generalize he2 : execInstrBr e1 (.ANDI .x31 .x21 3) = e2 at p2 x31b m2 run2
+  have pc2 : e2.pc = BitVec.ofNat 64 (4096+4*(site.stub+1)) := by rw [p2, pc1, ofNat_four]
+  have v31 : e2.getReg .x31 = BitVec.ofNat 64 (T % 4) := by rw [x31b, m1.regs .x21 (by decide), andBits4]
+  have run3 := run_step e2 (site.stub+1) _ (by omega) pc2 code.shifted rfl rfl
+  obtain ⟨p3, m3⟩ := bne_facts e2 (BitVec.ofNat 13 (8192+4*(site.start+1)-4*(site.stub+1)))
+  generalize he3 : execInstrBr e2 (.BNE .x31 .x0 (BitVec.ofNat 13 (8192+4*(site.start+1)-4*(site.stub+1)))) = e3 at p3 m3 run3
+  have same : enterState site s = e3 := by rw [← he3, ← he2, ← he1]; unfold enterState entryJump; exact Eq.refl _
   rw [same]
-  have keep (r : Reg) (a : r ≠ .x31) (_b : r ≠ .x29) : e2.getReg r = s.getReg r := by
+  have keep (r : Reg) (a : r ≠ .x31) (b : r ≠ .x29) : e3.getReg r = s.getReg r := by
     by_cases z : r = .x0
     · subst z; exact x0_any _ _
-    · rw [m2.regs r z, m1.regs r a]
-  refine ⟨run1.next run2, ⟨?_, ?_, ?_, keep⟩, by rw [m2.regs .x31 (by decide), v31], ?_⟩
+    · rw [m3.regs r z, m2.regs r a, m1.regs r b]
+  have total := (run1'.next run2).next run3
+  rw [show 1+1+1 = 3 from rfl] at total
+  refine ⟨total, ⟨?_, ?_, ?_, ?_, keep⟩, by rw [m3.regs .x31 (by decide), v31], ?_⟩
+  · rw [m3.regs .x29 (by decide), m2.regs .x29 (by decide), x29a, input.pc, ofNat_four]
   · rw [keep _ facts.src31 facts.src29, input.src]
   · rw [keep .x21 (by decide) (by decide)]; exact input.dst
-  · rw [m2.mem, m1.mem]
-  · rw [p2, v31, pc1]
+  · rw [m3.mem, m2.mem, m1.mem]
+  · rw [p3, v31, pc2]
     have cls : T % 4 = 0 ∨ T % 4 = 2 := by have := input.dstEven; omega
     rcases cls with h | h <;> rw [h]
-    · rw [if_pos rfl, if_pos rfl]; exact facts.aligned
-    · rw [if_neg (by decide), if_neg (by decide), ofNat_four]
+    · rw [if_pos rfl, if_pos rfl, ofNat_four]
+    · rw [if_neg (by decide), if_neg (by decide)]
+      exact facts.slowTarget
 
 theorem slow_facts (site : CopySite) (s : MachineState) (S T : Nat) (input : WideInputs site s S T)
     (fast : T % 4 = 0) :
-    RunsOpeningBlock s (slowState site s) 4 ∧ Entered site s (slowState site s) S T ∧
+    RunsOpeningBlock s (slowState site s) 5 ∧ Entered site s (slowState site s) S T ∧
     (slowState site s).pc = (if T % 8 = 4 then BitVec.ofNat 64 (4096+4*(site.stub+16))
       else BitVec.ofNat 64 (4096+4*(site.stub+4))) := by
   have facts := site_facts site input.wide
@@ -247,8 +238,9 @@ theorem slow_facts (site : CopySite) (s : MachineState) (S T : Nat) (input : Wid
     · subst z; exact x0_any _ _
     · rw [m5.regs r z, m4.regs r a]
   have total := (run3.next run4).next run5
-  rw [show 2+1+1 = 4 from rfl] at total
-  refine ⟨total, ⟨?_, ?_, ?_, ?_⟩, ?_⟩
+  rw [show 3+1+1 = 5 from rfl] at total
+  refine ⟨total, ⟨?_, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · rw [keep .x29 (by decide)]; exact entered.x29
   · rw [keep _ facts.src31]; exact entered.src
   · rw [keep .x21 (by decide)]; exact entered.dst
   · rw [m5.mem, m4.mem]; exact entered.mem
@@ -274,7 +266,7 @@ theorem keep_x0 {u v : MachineState} (m : Moves u v .x0) (r : Reg) : v.getReg r 
   · exact m.regs r z
 
 theorem dword_path_done (site : CopySite) (s : MachineState) (S T : Nat) (input : WideInputs site s S T)
-    (h : T % 8 = 0) : WideDone site s (dwordPath site s) S T 13 := by
+    (h : T % 8 = 0) : WideDone site s (dwordPath site s) S T 14 := by
   have facts := site_facts site input.wide
   have code := stub_code site input.wide
   have sf := facts.startFit
@@ -290,14 +282,14 @@ theorem dword_path_done (site : CopySite) (s : MachineState) (S T : Nat) (input 
   generalize hc : pairsRun 8 site.source 0 site.destOffset 0 4 e3 = c at runP pcP regsP copyP belowP
   have pcC : c.pc = BitVec.ofNat 64 (4096+4*(site.stub+12)) := by rw [pcP]
   have runJ := run_step c (site.stub+12) _ (by omega) pcC code.dwordsBack rfl rfl
-  obtain ⟨pJ, mJ⟩ := direct_jump_facts c (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+12)))
-  generalize hf : execInstrBr c (.JAL .x0 (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+12)))) = f at pJ mJ runJ
+  obtain ⟨pJ, mJ⟩ := jalr_facts c 124
+  generalize hf : execInstrBr c (.JALR .x0 .x29 124) = f at pJ mJ runJ
   have same : dwordPath site s = f := by rw [← hf, ← hc, ← he3]; unfold dwordPath; exact Eq.refl _
   rw [same]
   have total := (run3.next runP).next runJ
-  rw [show 4+2*4+1 = 13 from rfl] at total
+  rw [show 5+2*4+1 = 14 from rfl] at total
   refine ⟨total, ?_, ?_, ?_, ?_⟩
-  · rw [pJ, pcC]; exact facts.backDwords
+  · rw [pJ, regsP .x29 (by decide), entered.x29]; exact facts.back124
   · intro r a b; rw [keep_x0 mJ r, regsP r a, entered.regs r a b]
   · have c32 : ByteCopy e3 c S T 32 := by simpa using copyP
     exact copy_congr_mem mJ.mem (copy_congr_before entered.mem.symm c32)
@@ -305,7 +297,7 @@ theorem dword_path_done (site : CopySite) (s : MachineState) (S T : Nat) (input 
     rw [getMem_congr mJ.mem, belowP q below, getMem_congr entered.mem]
 
 theorem word_path_done (site : CopySite) (s : MachineState) (S T : Nat) (input : WideInputs site s S T)
-    (h : T % 8 = 4) : WideDone site s (wordPath site s) S T 21 := by
+    (h : T % 8 = 4) : WideDone site s (wordPath site s) S T 22 := by
   have facts := site_facts site input.wide
   have code := stub_code site input.wide
   have sf := facts.startFit
@@ -321,30 +313,30 @@ theorem word_path_done (site : CopySite) (s : MachineState) (S T : Nat) (input :
   generalize hc : pairsRun 4 site.source 0 site.destOffset 0 8 e5 = c at runP pcP regsP copyP belowP
   have pcC : c.pc = BitVec.ofNat 64 (4096+4*(site.stub+32)) := by rw [pcP]
   have runJ := run_step c (site.stub+32) _ (by omega) pcC code.wordsBack rfl rfl
-  obtain ⟨pJ, mJ⟩ := direct_jump_facts c (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+32)))
-  generalize hf : execInstrBr c (.JAL .x0 (BitVec.ofNat 21 (2^21+4*(site.start+32)-4*(site.stub+32)))) = f at pJ mJ runJ
+  obtain ⟨pJ, mJ⟩ := jalr_facts c 124
+  generalize hf : execInstrBr c (.JALR .x0 .x29 124) = f at pJ mJ runJ
   have same : wordPath site s = f := by rw [← hf, ← hc, ← he5]; unfold wordPath; exact Eq.refl _
   rw [same]
   have total := (run5.next runP).next runJ
-  rw [show 4+2*8+1 = 21 from rfl] at total
+  rw [show 5+2*8+1 = 22 from rfl] at total
   refine ⟨total, ?_, ?_, ?_, ?_⟩
-  · rw [pJ, pcC]; exact facts.backWords
+  · rw [pJ, regsP .x29 (by decide), entered.x29]; exact facts.back124
   · intro r a b; rw [keep_x0 mJ r, regsP r a, entered.regs r a b]
   · have c32 : ByteCopy e5 c S T 32 := by simpa using copyP
     exact copy_congr_mem mJ.mem (copy_congr_before entered.mem.symm c32)
   · intro q below
     rw [getMem_congr mJ.mem, belowP q below, getMem_congr entered.mem]
 
-theorem jump24_facts (u : MachineState) :
-    let v := execInstrBr u (.JAL .x0 24)
-    v.pc = u.pc + signExtend21 24 ∧ (∀ r, v.getReg r = u.getReg r) ∧ v.mem = u.mem := by
+theorem jump28_facts (u : MachineState) :
+    let v := execInstrBr u (.JAL .x0 28)
+    v.pc = u.pc + signExtend21 28 ∧ (∀ r, v.getReg r = u.getReg r) ∧ v.mem = u.mem := by
   refine ⟨rfl, ?_, rfl⟩
   intro r
   cases r <;> rfl
 
 set_option maxHeartbeats 2000000 in
 theorem half_path_done (site : CopySite) (s : MachineState) (S T : Nat) (input : WideInputs site s S T)
-    (h : T % 8 ≠ 0) (h4 : T % 8 ≠ 4) : WideDone site s (halfPath site s) S T 27 := by
+    (h : T % 8 ≠ 0) (h4 : T % 8 ≠ 4) : WideDone site s (halfPath site s) S T 28 := by
   have facts := site_facts site input.wide
   have code := stub_code site input.wide
   have ta : T % 4 = 2 := by have := input.dstEven; omega
@@ -354,22 +346,22 @@ theorem half_path_done (site : CopySite) (s : MachineState) (S T : Nat) (input :
     pc3 entered.src entered.dst input.srcAligned ta input.apart
     (by have := input.room; have := input.apart; omega) input.room
   let c := Shifted32.copy32 site (enterState site s)
-  have runJ := run_step c (site.start+26) (.JAL .x0 24) (by have := facts.startFit; omega)
+  have runJ := run_step c (site.start+25) (.JAL .x0 28) (by have := facts.startFit; omega)
     copied.pc code.shiftedBack rfl rfl
-  obtain ⟨pcJ, regsJ, memJ⟩ := jump24_facts c
+  obtain ⟨pcJ, regsJ, memJ⟩ := jump28_facts c
   refine ⟨(run3.next copied.run).next runJ, ?_, ?_, ?_, ?_⟩
-  · change (execInstrBr c (.JAL .x0 24)).pc = _
-    rw [pcJ, copied.pc, show signExtend21 24 = BitVec.ofNat 64 (4*6) from rfl, ofNat_step]
+  · change (execInstrBr c (.JAL .x0 28)).pc = _
+    rw [pcJ, copied.pc, show signExtend21 28 = BitVec.ofNat 64 (4*7) from rfl, ofNat_step]
   · intro r a b
-    rw [show halfPath site s = execInstrBr c (.JAL .x0 24) from rfl, regsJ r,
+    rw [show halfPath site s = execInstrBr c (.JAL .x0 28) from rfl, regsJ r,
       copied.regs r a, entered.regs r a b]
   · exact copy_congr_mem memJ (copy_congr_before entered.mem.symm copied.bytes)
   · intro q below
-    change (execInstrBr c (.JAL .x0 24)).getMem q = s.getMem q
+    change (execInstrBr c (.JAL .x0 28)).getMem q = s.getMem q
     rw [getMem_congr memJ, copied.below q below, getMem_congr entered.mem]
 
 /-- A wide site's copy: the cycles depend on the destination's alignment, everything else is as for the
-halfword copy it replaces. -/
+halfword copy it replaces (`x29` is clobbered too). -/
 theorem wide_copy (site : CopySite) (s : MachineState) (S T : Nat) (input : WideInputs site s S T) :
     WideDone site s (wideState site s) S T (wideCost T) := by
   have facts := site_facts site input.wide
@@ -407,18 +399,18 @@ theorem pairs_regs (width : Nat) (src : Reg) (load store : Nat) (r : Reg) (h : r
 theorem wide_regs (site : CopySite) (s : MachineState) (r : Reg) (a : r ≠ .x31) (b : r ≠ .x29) :
     (wideState site s).getReg r = s.getReg r := by
   have enter : (enterState site s).getReg r = s.getReg r := by
-    unfold enterState
-    rw [keep_x0 (beq_direct_facts _ _).2, (andi_facts _ 3).2.2.regs r a]
+    unfold enterState entryJump
+    rw [keep_x0 (bne_facts _ _).2, (andi_facts _ 3).2.2.regs r a, (jal_facts _ _).2.2.regs r b]
   have slow : (slowState site s).getReg r = s.getReg r := by
     unfold slowState
     rw [keep_x0 (bne_facts _ 52).2, (andi_facts _ 7).2.2.regs r a, enter]
   unfold wideState
   split
-  · unfold dwordPath; rw [keep_x0 (direct_jump_facts _ _).2, pairs_regs _ _ _ _ r a, slow]
+  · unfold dwordPath; rw [keep_x0 (jalr_facts _ 124).2, pairs_regs _ _ _ _ r a, slow]
   · split
-    · unfold wordPath; rw [keep_x0 (direct_jump_facts _ _).2, pairs_regs _ _ _ _ r a, slow]
+    · unfold wordPath; rw [keep_x0 (jalr_facts _ 124).2, pairs_regs _ _ _ _ r a, slow]
     · unfold halfPath
-      have jump (u : MachineState) : (execInstrBr u (.JAL .x0 24)).getReg r = u.getReg r := by cases r <;> rfl
+      have jump (u : MachineState) : (execInstrBr u (.JAL .x0 28)).getReg r = u.getReg r := by cases r <;> rfl
       rw [jump]
       unfold Shifted32.copy32
       rw [Shifted32.chunk_regs _ _ _ _ r a, Shifted32.chunk_regs _ _ _ _ r a,

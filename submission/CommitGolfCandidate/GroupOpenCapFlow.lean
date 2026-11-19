@@ -88,7 +88,7 @@ theorem cap_lookup (state : MachineState) (groups : List Nat) (node height fuel 
   · apply context.of_preserved
     · intro r member
       simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-      rcases member with rfl | rfl | rfl | rfl | rfl <;> exact visit_register state _ (by decide) (by decide)
+      rcases member with rfl | rfl | rfl | rfl <;> exact visit_register state _ (by decide) (by decide)
     · intro target _ _
       exact congrFun (visit_memory state) (BitVec.ofNat 64 (markBase + 8 * target))
 

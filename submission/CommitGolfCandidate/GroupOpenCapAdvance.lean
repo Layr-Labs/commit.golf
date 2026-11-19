@@ -12,12 +12,12 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 @[local simp] private theorem step_zeroreg (state : MachineState) : state.getReg .x0 = 0#64 := rfl
 
 def advanceCode : List Instr :=
-  [.BEQ .x6 .x23 32, .ANDI .x7 .x6 1, .BEQ .x7 .x0 16,
-   .SRLI .x6 .x6 1, .JAL .x0 2097136, .ADDI .x0 .x0 0, .ADDI .x6 .x6 1, .JAL .x0 2096964]
+  [.ADDI .x7 .x0 1, .BEQ .x6 .x7 28, .ANDI .x7 .x6 1, .BEQ .x7 .x0 12,
+   .SRLI .x6 .x6 1, .JAL .x0 2097132, .ADDI .x6 .x6 1, .JAL .x0 2096964]
 
 theorem at_root_test : capWalkInstructions.drop 41 = advanceCode := rfl
-theorem at_parity_test : capWalkInstructions.drop 42 = advanceCode.drop 1 := rfl
-theorem at_parent_step : capWalkInstructions.drop 44 = advanceCode.drop 3 := rfl
+theorem at_parity_test : capWalkInstructions.drop 43 = advanceCode.drop 2 := rfl
+theorem at_parent_step : capWalkInstructions.drop 45 = advanceCode.drop 4 := rfl
 theorem at_right_step : capWalkInstructions.drop 47 = advanceCode.drop 6 := rfl
 
 attribute [local simp] at_root_test at_parity_test at_parent_step at_right_step
@@ -52,51 +52,48 @@ private theorem execute_cap_pair (state : MachineState) (index : Nat) (fuel : Na
 
 theorem execute_advance_root_test (state : MachineState) (pc : state.pc = 0x1af4)
     (fuel : Nat) (allowCoins : Bool) :
-    execute openingImage (1 + fuel) state allowCoins =
-      (do let result ← execute openingImage fuel (advancePrefix state 41 1) allowCoins
-          return result.charge 1 0) := by
-  apply execute_unit_steps (states := advancePrefix state 41)
-  intro i hi
-  have zero : i = 0 := by omega
-  subst i
-  refine ⟨.base (.BEQ .x6 .x23 32), ?_, rfl, rfl⟩
-  exact packed_fetch_base state 701 _ (by decide) pc (by decide +kernel)
-
-theorem advance_root_target (state : MachineState) (pc : state.pc = 0x1af4)
-    (one : state.getReg .x23 = 1#64) :
-    (advancePrefix state 41 1).pc =
-      if state.getReg .x6 = 1#64 then 0x1b14 else 0x1af8 := by
-  by_cases root : state.getReg .x6 = 1#64 <;>
-    simp [advancePrefix, advanceCode, execInstrBr, signExtend12, signExtend13, pc, one, root]
-
-theorem execute_advance_parity_test (state : MachineState) (pc : state.pc = 0x1af8)
-    (fuel : Nat) (allowCoins : Bool) :
     execute openingImage (2 + fuel) state allowCoins =
-      (do let result ← execute openingImage fuel (advancePrefix state 42 2) allowCoins
+      (do let result ← execute openingImage fuel (advancePrefix state 41 2) allowCoins
           return result.charge 2 0) := by
-  apply execute_cap_pair _ 42 _ _ (by decide) pc
+  apply execute_cap_pair _ 41 _ _ (by decide) pc
   · simp [advancePrefix, advanceCode, execInstrBr, pc]
   · intro i hi
     interval_cases i <;> exact ⟨rfl, rfl, rfl⟩
 
-theorem advance_parity_target (state : MachineState) (pc : state.pc = 0x1af8) :
-    (advancePrefix state 42 2).pc =
-      if (state.getReg .x6 &&& 1#64) = 0#64 then 0x1b0c else 0x1b00 := by
+theorem advance_root_target (state : MachineState) (pc : state.pc = 0x1af4) :
+    (advancePrefix state 41 2).pc =
+      if state.getReg .x6 = 1#64 then 0x1b14 else 0x1afc := by
+  by_cases root : state.getReg .x6 = 1#64 <;>
+    simp [advancePrefix, advanceCode, execInstrBr, signExtend12, signExtend13, pc, root]
+
+theorem execute_advance_parity_test (state : MachineState) (pc : state.pc = 0x1afc)
+    (fuel : Nat) (allowCoins : Bool) :
+    execute openingImage (2 + fuel) state allowCoins =
+      (do let result ← execute openingImage fuel (advancePrefix state 43 2) allowCoins
+          return result.charge 2 0) := by
+  apply execute_cap_pair _ 43 _ _ (by decide) pc
+  · simp [advancePrefix, advanceCode, execInstrBr, pc]
+  · intro i hi
+    interval_cases i <;> exact ⟨rfl, rfl, rfl⟩
+
+theorem advance_parity_target (state : MachineState) (pc : state.pc = 0x1afc) :
+    (advancePrefix state 43 2).pc =
+      if (state.getReg .x6 &&& 1#64) = 0#64 then 0x1b0c else 0x1b04 := by
   by_cases even : (state.getReg .x6 &&& 1#64) = 0#64 <;>
     simp [advancePrefix, advanceCode, execInstrBr, signExtend12, signExtend13, pc, even]
 
-theorem execute_advance_up (state : MachineState) (pc : state.pc = 0x1b00)
+theorem execute_advance_up (state : MachineState) (pc : state.pc = 0x1b04)
     (fuel : Nat) (allowCoins : Bool) :
     execute openingImage (2 + fuel) state allowCoins =
-      (do let result ← execute openingImage fuel (advancePrefix state 44 2) allowCoins
+      (do let result ← execute openingImage fuel (advancePrefix state 45 2) allowCoins
           return result.charge 2 0) := by
-  apply execute_cap_pair _ 44 _ _ (by decide) pc
+  apply execute_cap_pair _ 45 _ _ (by decide) pc
   · simp [advancePrefix, advanceCode, execInstrBr, pc]
   · intro i hi
     interval_cases i <;> exact ⟨rfl, rfl, rfl⟩
 
-theorem advance_up_post (state : MachineState) (pc : state.pc = 0x1b00) :
-    let after := advancePrefix state 44 2
+theorem advance_up_post (state : MachineState) (pc : state.pc = 0x1b04) :
+    let after := advancePrefix state 45 2
     after.pc = 0x1af4 ∧ after.getReg .x6 = state.getReg .x6 >>> 1 ∧
       after.getReg .x21 = state.getReg .x21 ∧ after.mem = state.mem := by
   simp [advancePrefix, advanceCode, execInstrBr, signExtend21, pc]
