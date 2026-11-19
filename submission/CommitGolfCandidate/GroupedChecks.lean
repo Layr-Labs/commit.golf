@@ -23,7 +23,7 @@ theorem admitted : actual.Admission := by
 
 /-- The commit facts at the claimed cycle count (P's frozen final programs). -/
 theorem resources (msg : Message) (z : Execution) (hit : z∈support (actual.run .commit msg)) :
-    z.exit=.success ∧ z.cycles=504595015 ∧ z.oracleCalls≤COMMIT_BUDGET :=
+    z.exit=.success ∧ z.cycles=504594887 ∧ z.oracleCalls≤COMMIT_BUDGET :=
   Grouped.commit_resources msg z hit
 
 end TwoPermutationPrototype.GroupedChecks

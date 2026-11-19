@@ -72,10 +72,10 @@ theorem heap_start_pc (s : MachineState) (pc : s.pc=GroupedUpper.heapSetupPC) :
   rfl
 
 theorem l21_loop_run (s : MachineState) (fuel : Nat) (r : L21Regs s 2097152) (pc : s.pc=GroupedUpper.l21Base) :
-    execute packedWideCommitImage (6291711+fuel) s true = (do
+    execute packedWideCommitImage (6291583+fuel) s true = (do
       let mid ← l21Groups GroupedUpper.l21Base GroupedUpper.l21Span GroupedUpper.l21Passes s
       let e ← execute packedWideCommitImage fuel mid true
-      return e.charge 20971775 2097152) :=
+      return e.charge 20971647 2097152) :=
   l21_group_execution packedWideCommitImage GroupedUpper.l21Base GroupedUpper.l21Span
     (fun i hi => GroupedUpper.l21_words i hi) GroupedUpper.l21Control (by decide) GroupedUpper.l21Passes fuel s
     (by decide) r (fun _ => pc)

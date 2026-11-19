@@ -23,11 +23,11 @@ attribute [local irreducible] ArtifactEncoding.decode
 def image : Image := ⟨ArtifactEncoding.decode 32 K1Artifact.commitCode, ArtifactEncoding.decode 8 K1Artifact.commitData⟩
 theorem exact_image : image = K1Artifact.submission.image .commit := rfl
 def codeWord (index : Nat) : BitVec 32 :=
-  if inside : index<212818 then K1Artifact.commitCode.get 32 ⟨index,inside⟩ else 0
+  if inside : index<261970 then K1Artifact.commitCode.get 32 ⟨index,inside⟩ else 0
 def wordPC (index : Nat) : Word := BitVec.ofNat 64 (4096 + 4*index)
 
 theorem fetch_decoded (state : MachineState) (index : Nat)
-    (inCode : index < 212818) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))
+    (inCode : index < 261970) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))
     (instruction : Instr)
     (decoded : Manifest.decodeBase (codeWord index)=some instruction) :
     fetch image state=some (.base instruction) := by

@@ -1,4 +1,16 @@
-# Product: two-cycle startup trim
+# Product: double the level-21 loop span
+
+Stacked on the two-cycle startup trim (`8fe651cd`, submitted as `bf616286`). Double the unrolled
+level-21 compression body from 16,384 to 32,768 nodes, reducing its passes from 128 to 64 and
+removing 128 latch instructions. Compression order, inputs, destinations, commitment, trapdoor,
+opening/check images, ABI and proof encoding are unchanged. Later commit code is relocated by
+49,152 words. The commit image is **1,047,880 bytes**, 696 bytes below the 1 MiB limit.
+
+Commit cycles fall from **504,595,015** to **504,594,887**; opening remains **135,797** cycles
+and the proof bound remains **72,160** bytes. The Product score is
+**504,730,684 × 72,160 = 36,421,366,157,440**, an improvement of 9,236,480.
+
+## Previous entry: two-cycle startup trim
 
 Based on `a33961ff-408d-482b-88a2-fc4ff48b45d3`. Remove the dead initial commitment-pointer save
 and compute the generator key-block address directly in its final register, eliminating a copy.
