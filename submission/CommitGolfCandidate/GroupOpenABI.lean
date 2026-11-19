@@ -4,47 +4,62 @@ import CommitGolfCandidate.QuartetOpeningSchedule
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp Sampling
-open PackedOpening (capSubtreeCycles)
 open QuartetOpening (proofLength)
 open Opening (groupsBefore openingNodes capDigestAddress)
 
-/-- The opening's cycles with the wide record copies: as `QuartetOpening.scheduledCycles`, with each record's
-673 replaced by `215 + recordExtra ordinal` and the positive-cardinality cap preparation reduced to 771 cycles. -/
+/-- Wide record copies, 771-cycle cap preparation, and the five-cycle cap advances and root exit. -/
 def wideCycles (positions : Positions) : Nat :=
   if positions.card = 0 then 7 else
-    15 + (215*positions.card+copySum positions.card-1) + 770 +
-      (PackedOpening.capSubtreeCycles (Opening.groupsBefore positions positions.card) 1 8 +
-        4*(Opening.openingNodes positions).length + 34*((Opening.openingNodes positions).length/8) + 3) + 4
+    15 + (157*positions.card+copySum positions.card-1) + 770 +
+      (capWalkCycles (Opening.groupsBefore positions positions.card) 1 8 (recordBase positions.card) 0+2) + 4
 
-theorem copy_sum_le (n : Nat) : copySum n ≤ 454*n := by
+theorem copy_sum_le (n : Nat) : copySum n ≤ 500*n := by
   induction n with
   | zero => rfl
   | succ n ih => have := record_extra_le n; simp only [copySum]; omega
 
-theorem copy_sum_batch : copySum 128 = 44160 := by decide +kernel
+theorem copy_sum_batch : copySum 128 = 47744 := by decide +kernel
 
-theorem wide_cycles_eq (positions : Positions) :
-    wideCycles positions+458*positions.card+(if positions.card = 0 then 0 else 1784) = QuartetOpening.scheduledCycles positions+copySum positions.card := by
+theorem wide_cycles_le_old (positions : Positions) :
+    wideCycles positions+516*positions.card+(if positions.card = 0 then 0 else 1785) ≤ QuartetOpening.scheduledCycles positions+copySum positions.card := by
+  have cap := cap_cycles_le_old (Opening.groupsBefore positions positions.card) 1 8
+  have saving := cap_walk_le_old (Opening.groupsBefore positions positions.card) 1 8 (recordBase positions.card)
   unfold wideCycles QuartetOpening.scheduledCycles
   by_cases empty : positions.card = 0
-  · simp only [empty]; rfl
+  · simp only [empty]; exact Nat.le_refl _
   · simp only [ite_eq_right empty]
+    have nodes : (Opening.openingNodes positions).length=
+        (capFrontierNodes (Opening.groupsBefore positions positions.card) 1 8).length := by
+      simp [Opening.openingNodes, empty]
     omega
 
-theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15+697*p.card+98216 := by
+theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15+688*p.card+98216 := by
   have h := QuartetOpening.scheduled_cycles_le p nz
-  have e := wide_cycles_eq p
+  have e := wide_cycles_le_old p
   rw [ite_eq_right nz] at e
   have c := copy_sum_le p.card
   omega
 
 theorem wide_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    wideCycles positions ≤ 83748 ∧ proofLength positions ≤ 72160 := by
+    wideCycles positions ≤ 78469 ∧ proofLength positions ≤ 72160 := by
   have old := QuartetOpening.scored_limits positions count
-  have e := wide_cycles_eq positions
+  have nodes := Opening.opening_nodes_bound positions
   have k : positions.card = 128 := count
-  rw [k, copy_sum_batch, ite_eq_right (by decide : (128 : Nat) ≠ 0)] at e
-  exact ⟨by omega, old.2⟩
+  have frontier : Opening.openingNodes positions=capFrontierNodes (Opening.groupsBefore positions positions.card) 1 8 := by
+    unfold Opening.openingNodes
+    rw [if_neg (by omega)]
+  rw [frontier] at nodes
+  have aligned : (recordBase positions.card)%2=0 := by
+    unfold recordBase recordBytes
+    have : proofBase%2=0 := by decide
+    omega
+  have cap := cap_walk_scored_bound (Opening.groupsBefore positions positions.card) (recordBase positions.card) aligned nodes
+  rw [k] at cap
+  have c : copySum positions.card = 47744 := by rw [k, copy_sum_batch]
+  refine ⟨?_, old.2⟩
+  unfold wideCycles
+  rw [if_neg (by omega), c, k]
+  omega
 
 structure OpeningABI (s : Submission) extends OpeningLayout s where
   image : s.image .opening = openingImage
@@ -106,7 +121,7 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
         Opening.machineMarks lower node = Opening.markWord grouped node := by
       rw [groups node inside, Opening.mark_word_leaf grouped ⟨node,inside⟩ (show 256 ≤ node by omega)]
     have ⟨rootPC, root, countdown⟩ := cap_preparation_context lower grouped dest
-      atCap.marks atCap.capHeap atCap.capLeaves atCap.proofBegin atCap.dest leafMarks
+      atCap.marks atCap.capHeap atCap.capLeaves atCap.proofBegin atCap.one atCap.dest leafMarks
     have frontier : openingNodes positions = nodes := by simp [openingNodes, empty, nodes, grouped]
     have lengthSplit : proofLength positions = 534*positions.card+capOffset nodes.length := by
       unfold proofLength capOffset
@@ -135,19 +150,19 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     obtain ⟨after, ranCap, afterPC, endPosition, footerFrame, footerBytes⟩ :=
       cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC
         ((show Opening.proofBase≤proofBase by decide).trans above) aligned room countdown
-    let final := exitPrefix (advancePrefix after 41 2) 3
-    let capCost := capSubtreeCycles grouped 1 8 + 4*nodes.length + 34*(nodes.length/8)
-    let recCost := 215*positions.card+copySum positions.card-1
-    have charge : wideCycles positions = 15+recCost+771+capCost+6 := by
-      rw [wideCycles, if_neg empty, frontier]
-      dsimp only [grouped, capCost, recCost]
+    let final := exitPrefix (advancePrefix after 41 1) 3
+    let capCost := capWalkCycles grouped 1 8 dest 0
+    let recCost := 157*positions.card+copySum positions.card-1
+    have charge : wideCycles positions = 15+recCost+771+capCost+5 := by
+      rw [wideCycles, if_neg empty]
+      dsimp only [grouped, capCost, recCost, dest]
       omega
     have ranRecords : RunsOpeningBlock begin lower recCost := by
       have charged : recordsCost positions.card 0 positions.card = recCost := records_total _ positive
       exact charged ▸ assembled.run
     have ranPrep : RunsOpeningBlock lower prepared 771 :=
       execute_cap_preparation lower (by simpa using atCap.pc) atCap.marks
-    have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord surplus true
+    have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord endPosition.context.one surplus true
     have lowerFrame (address : Nat) (fromProof : proofBase ≤ address) (beforeCap : address < dest) :
         final.getByte (BitVec.ofNat 64 address) = lower.getByte (BitVec.ofNat 64 address) := by
       have byteFit : address < MEMORY_BYTES := by omega
@@ -162,8 +177,8 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     refine ⟨final,?_,⟨rfl,?_,rfl,rfl,?_,?_⟩⟩
     · have nl : nodes.length = (Sampling.capFrontierNodes grouped 1 8).length := rfl
       rw [show wideCycles positions-15+surplus=
-          recCost+771+capCost+(6+surplus) by omega]
-      rw [((ranRecords.next ranPrep).next ranCap) (6+surplus) true,ranExit]
+          recCost+771+capCost+(5+surplus) by omega]
+      rw [((ranRecords.next ranPrep).next ranCap) (5+surplus) true,ranExit]
       simp [Execution.charge,final]
       omega
     · change (final.getReg .x11).toNat = _
@@ -249,7 +264,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 83748 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
+    result.cycles ≤ 78469 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
   rw [physical.cycles, physical.length]
   exact wide_scored_limits positions count
 

@@ -4,10 +4,10 @@ import CommitGolfCandidate.K3OpenPack238
 
 /-! # T238 cap emit: the eighth node of a group (`count = 0`)
 
-After the shared 32-cycle prefix (rows 668..699: the node's first 28 bytes and its halfword 14 in `x31`, then the jump
+After the shared alignment-dispatched prefix (the node's first 28 bytes and its halfword 14 in `x31`, then the jump
 to WK), word 855 `beq x30,x0` sends `x30 = 0` to WS: 859 `addi x30,x0,7`, the seven folds 860..893 (halfword 14 of
 slot `k` of the group OR'd with bits `2k, 2k+1` of `x31` in bits 14, 15), 894 `addi x21,x21,-2`, 895 `jal` to 700,
-700 `addi x21,x21,30`: 71 cycles, the cursor 28 bytes on, the countdown back at 7. -/
+700 `addi x21,x21,30`: `CapCopy.cycles dest+43` cycles, the cursor 28 bytes on, the countdown back at 7. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (capDigestAddress)
@@ -50,7 +50,7 @@ theorem emit_cap238_fold (groups : List Nat) (state : MachineState) (node dest :
     (bounded : node < 512) (position : CapPosition groups state node dest)
     (counter : state.getReg .x30 = BitVec.ofNat 64 0) (pc : state.pc = 0x1a70)
     (separate : Opening.proofBase+210 ≤ dest) (aligned : dest%2=0) (fits : dest+30 ≤ MEMORY_BYTES) :
-    ∃ after, RunsOpeningBlock state after 71 ∧ after.pc = 0x1af4 ∧
+    ∃ after, RunsOpeningBlock state after (CapCopy.cycles dest+43) ∧ after.pc = 0x1af4 ∧
       CapPosition groups after node (dest+28) ∧
       after.getReg .x30 = BitVec.ofNat 64 7 ∧
       (∀ b<28, after.getByte (BitVec.ofNat 64 (dest+b)) = state.getByte (BitVec.ofNat 64 (capDigestAddress node+b))) ∧

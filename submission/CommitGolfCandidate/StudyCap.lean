@@ -7,9 +7,9 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 attribute [local simp] getReg_setReg getReg_setMem
 set_option maxRecDepth 8192
 
-private theorem saved : ∀ j : Fin 9, Postorder.reg j.val ∉ ([.x20,.x21,.x25,.x26,.x27] : List Reg) := by decide
+private theorem saved : ∀ j : Fin 9, Postorder.reg j.val ∉ ([.x20,.x21,.x25,.x26,.x27,.x23] : List Reg) := by decide
 
-theorem pass_register (s : MachineState) (r : Reg) (keep : r ∈ ([.x20,.x21,.x25,.x26,.x27] : List Reg)) :
+theorem pass_register (s : MachineState) (r : Reg) (keep : r ∈ ([.x20,.x21,.x25,.x26,.x27,.x23] : List Reg)) :
     (Postorder.eval s 1 8 0).getReg r = s.getReg r :=
   Postorder.eval_register _ _ _ _ _ (by intro j lo hi eq; exact saved ⟨j,by omega⟩ (eq ▸ keep))
 
@@ -88,7 +88,7 @@ theorem cap_preparation_context (s : MachineState) (expected : Nat → Word)
     (parent : ∀ k, 0 < k → k < 256 → expected k = expected (2*k) ||| expected (2*k+1)) :
     let out := capPreparation s
     out.pc = 0x1a54 ∧ out.getReg .x6 = 1 ∧ out.getReg .x30 = 7 ∧
-    (∀ r, r ∈ ([.x20,.x21,.x25,.x26,.x27] : List Reg) → out.getReg r = s.getReg r) ∧
+    (∀ r, r ∈ ([.x20,.x21,.x25,.x26,.x27,.x23] : List Reg) → out.getReg r = s.getReg r) ∧
     (∀ k, 0 < k → k < 512 → out.getMem (Postorder.addr k) = expected k) := by
   refine ⟨rfl, rfl, rfl, ?_, ?_⟩
   · intro r keep

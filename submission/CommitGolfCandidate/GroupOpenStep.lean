@@ -130,12 +130,24 @@ structure Registers (s : MachineState) (ord left : Nat) : Prop where
   width : s.getReg .x11=200
   primitive : s.getReg .x13=1
   index : s.getReg .x14=indexAt ord
-  leftReg : s.getReg .x17=countWord left
+  endReg : s.getReg .x17=indexAt (ord+left)
+  shift : s.getReg .x25=if left=0 then s.getReg .x9 else BitVec.ofNat 64 (8*(ord+left))
   salt : s.getReg .x22=9126809632
   base : s.getReg .x26=4096
   divReg : s.getReg .x29=11
 
 /-- Entry of position `i` at ordinal `ord` (`left` to go), `x4` = the previous position's quartet `last`. -/
+structure Base (s : MachineState) (p : Positions) : Prop where
+  indices : s.getReg .x8=BitVec.ofNat 64 indicesBase
+  heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
+  count : s.getReg .x18=BitVec.ofNat 64 p.card
+  leaves : s.getReg .x19=4194304
+  start : s.getReg .x20=BitVec.ofNat 64 proofBase
+  dest : s.getReg .x21=BitVec.ofNat 64 proofBase
+  mark : s.getReg .x23=1
+  slots : s.getReg .x24=BitVec.ofNat 64 groupSlots
+  capLeaves : s.getReg .x27=256
+
 structure Input (s : MachineState) (i : Index) (ord left last : Nat) extends Registers s ord left where
   pc : s.pc=address 740
   one : s.getReg .x23=1

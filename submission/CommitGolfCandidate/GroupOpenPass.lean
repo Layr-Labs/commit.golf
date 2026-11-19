@@ -14,18 +14,6 @@ def pos (p : Positions) (j : Nat) : Index := ((p.sort (·≤·))[j]?).getD ⟨0,
 theorem pos_present (p : Positions) (j : Nat) (hj : j<p.card) : pos p j=sortedIndex p j hj := by
   unfold pos sortedIndex;rw [List.getElem?_eq_getElem (by simpa using hj)];rfl
 
-structure Base (s : MachineState) (p : Positions) : Prop where
-  indices : s.getReg .x8=BitVec.ofNat 64 indicesBase
-  heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
-  count : s.getReg .x18=BitVec.ofNat 64 p.card
-  leaves : s.getReg .x19=4194304
-  start : s.getReg .x20=BitVec.ofNat 64 proofBase
-  dest : s.getReg .x21=BitVec.ofNat 64 proofBase
-  mark : s.getReg .x23=1
-  slots : s.getReg .x24=BitVec.ofNat 64 groupSlots
-  cap : s.getReg .x25=BitVec.ofNat 64 trapdoorBase
-  capLeaves : s.getReg .x27=256
-
 /-- The previous position's quartet (`x4`); none before the first position. -/
 def lastOf (p : Positions) (j : Nat) : Nat := if j=0 then 2^64-1 else (pos p (j-1)).val/4
 /-- Quartets below this one may have had their blocks rebuilt (sorted positions). -/
@@ -134,12 +122,12 @@ theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key 
   let i:=pos p j
   have card : p.card≤16777216:=by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
   have inp:=input_of_ready td p key s j r hj
-  obtain ⟨reg,pc,q4,keep,same⟩:=trace_post s i j _ _ (by omega) (by omega) inp t hit
+  obtain ⟨reg,pc,q4,keep,same⟩:=trace_post s i j _ _ (by omega) (by omega) (by omega) inp t hit
   have kp (a : Reg) (safe : Saved a := by unfold Saved;decide) := keep a safe
   refine ⟨by simpa only [show p.card-j-1=p.card-(j+1) by omega] using reg,
     ⟨(kp .x8).trans r.indices,(kp .x9).trans r.heap,(kp .x18).trans r.count,
      (kp .x19).trans r.leaves,(kp .x20).trans r.start,(kp .x21).trans r.dest,(kp .x23).trans r.mark,
-     (kp .x24).trans r.slots,(kp .x25).trans r.cap,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_⟩
+     (kp .x24).trans r.slots,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_⟩
   · rw [pc];unfold finalPC passPC;split <;> rename_i h <;> simp [show j+1=p.card ↔ p.card-j=1 by omega,h]
   · rw [q4]; simp [lastOf,i]
   · intro w fit away
@@ -187,7 +175,7 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
   | zero => simp [passSteps,passTrace,passCycles,passCalls,Execution.charge]
   | succ n ih =>
     have card : p.card≤16777216 := by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
-    rw [passSteps,Nat.add_assoc,per_run s (pos p j) j _ _ _ (by omega) (by omega) (input_of_ready _ _ _ _ _ r (by omega))]
+    rw [passSteps,Nat.add_assoc,per_run s (pos p j) j _ _ _ (by omega) (by omega) (by omega) (input_of_ready _ _ _ _ _ r (by omega))]
     simp only [passTrace,bind_assoc]
     apply bind_congr_of_forall_mem_support;intro u hit
     rw [ih u (j+1) (next_ready _ _ _ _ _ _ r (by omega) hit) (by omega)]
@@ -203,8 +191,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 349 cycles per position (new even quartet 36, chain link 33: 299, rank ≥ 2: 14) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤349*n+1 := by
+/-- At most 347 cycles per position (new even quartet 36, chain link 33: 299, post ≤ 12) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤347*n+2 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

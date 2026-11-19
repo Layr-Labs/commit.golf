@@ -2,7 +2,7 @@ import CommitGolfCandidate.GroupOpenCapEmitPrefix
 
 /-! T238 cap emit, plain node (`count ≠ 0`): after the shared prefix, WK (word 855) `beq x30,x0` falls through,
 `addi x30,x30,-1; sh x31,28(x21)` stores halfword 14 of the node, `jal` back to word 700, `addi x21,x21,30`;
-37 cycles, one 30-byte slot. -/
+`CapCopy.cycles dest+9` cycles, one 30-byte slot. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (capDigestAddress cap_digest_bounds)
@@ -53,7 +53,7 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
     (bounded : node < 512) (position : CapPosition groups state node dest)
     (counter : state.getReg .x30 = BitVec.ofNat 64 count) (positive : 0 < count) (small : count ≤ 7)
     (pc : state.pc = 0x1a70) (separate : Opening.proofBase ≤ dest) (aligned : dest%2=0) (fits : dest+30 ≤ MEMORY_BYTES) :
-    ∃ after, RunsOpeningBlock state after 37 ∧ after.pc = 0x1af4 ∧
+    ∃ after, RunsOpeningBlock state after (CapCopy.cycles dest+9) ∧ after.pc = 0x1af4 ∧
       CapPosition groups after node (dest+30) ∧
       after.getReg .x30 = BitVec.ofNat 64 (count-1) ∧
       (∀ b<30, after.getByte (BitVec.ofNat 64 (dest+b)) =
@@ -139,8 +139,9 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
     refine ⟨fun e => away.1 (Opening.nat_address_injective qsmall (by omega) e), fun e => ?_⟩
     rw [← succ_word] at e
     exact away.2 (Opening.nat_address_injective qsmall (by omega) e)
-  refine ⟨s9, ((((run.next run5).next step6.1).next step7.1).next step8.1).next step9.1,
+  refine ⟨s9, ?_,
     step9.2.trans (by decide +kernel), ?_, ?_, ?_, ?_⟩
+  · exact ((((run.next run5).next step6.1).next step7.1).next step8.1).next step9.1
   · apply cap_position_kept position
     · intro r h7 h21 _ _ h30 h31
       rw [reg9 r h21, reg7, reg6 r h30, regs5]

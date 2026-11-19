@@ -66,7 +66,7 @@ theorem chunk_ready (s : MachineState) (source : Reg) (store S T offset : Nat)
     sourceAddr, dst0, addr 2 (by omega), addr 6 (by omega), v0, v1, v2, v3, and_self]
 
 theorem chunk_decoded (site : CopySite) (wide : site.wide = true) : ∀ k : Fin 4,
-    CodeAt (site.start+1+6*k.val) (chunkCode site.source site.destOffset (8*k.val)) := by
+    CodeAt (site.start+2+6*k.val) (chunkCode site.source site.destOffset (8*k.val)) := by
   cases site with
   | quartet j => clear wide; revert j; unfold CodeAt; decide +kernel
   | firstSibling => unfold CodeAt; decide +kernel
@@ -80,13 +80,13 @@ structure ChunkDone (s t : MachineState) (S T word : Nat) : Prop where
   below : ∀ q : Word, q.toNat < T-T%8 → t.getMem q = s.getMem q
 
 theorem chunk_done (site : CopySite) (wide : site.wide = true) (k : Fin 4) (s : MachineState) (S T : Nat)
-    (pc : s.pc = BitVec.ofNat 64 (4096+4*(site.start+1+6*k.val)))
+    (pc : s.pc = BitVec.ofNat 64 (4096+4*(site.start+2+6*k.val)))
     (src : s.getReg site.source = BitVec.ofNat 64 S)
     (dst : s.getReg .x21 + BitVec.ofNat 64 site.destOffset = BitVec.ofNat 64 T)
     (sa : S % 8 = 0) (ta : T % 4 = 2) (apart : S+32 ≤ T)
     (sf : S+32 ≤ MEMORY_BYTES) (tf : T+32 ≤ MEMORY_BYTES) :
     ChunkDone s (execCode s (chunkCode site.source site.destOffset (8*k.val)))
-      (S+8*k.val) (T+8*k.val) (site.start+1+6*k.val) := by
+      (S+8*k.val) (T+8*k.val) (site.start+2+6*k.val) := by
   have hk := k.isLt
   have bounds : site.start+32 ≤ 1062 ∧ site.destOffset+32 ≤ 2000 := by
     clear pc src dst
@@ -118,13 +118,13 @@ def copy32 (site : CopySite) (s : MachineState) : MachineState :=
 
 structure CopyDone (site : CopySite) (s t : MachineState) (S T : Nat) : Prop where
   run : RunsOpeningBlock s t 24
-  pc : t.pc = BitVec.ofNat 64 (4096+4*(site.start+25))
+  pc : t.pc = BitVec.ofNat 64 (4096+4*(site.start+26))
   regs : ∀ r, r ≠ .x31 → t.getReg r = s.getReg r
   bytes : ByteCopy s t S T 32
   below : ∀ q : Word, q.toNat < T-T%8 → t.getMem q = s.getMem q
 
 theorem copy32_done (site : CopySite) (wide : site.wide = true) (src31 : site.source ≠ .x31)
-    (s : MachineState) (S T : Nat) (pc : s.pc = BitVec.ofNat 64 (4096+4*(site.start+1)))
+    (s : MachineState) (S T : Nat) (pc : s.pc = BitVec.ofNat 64 (4096+4*(site.start+2)))
     (src : s.getReg site.source = BitVec.ofNat 64 S)
     (dst : s.getReg .x21 + BitVec.ofNat 64 site.destOffset = BitVec.ofNat 64 T)
     (sa : S % 8 = 0) (ta : T % 4 = 2) (apart : S+32 ≤ T)
@@ -134,16 +134,16 @@ theorem copy32_done (site : CopySite) (wide : site.wide = true) (src31 : site.so
   let b := execCode a (chunkCode site.source site.destOffset 8)
   let c := execCode b (chunkCode site.source site.destOffset 16)
   let d := execCode c (chunkCode site.source site.destOffset 24)
-  have c0 : ChunkDone s a S T (site.start+1) := by
+  have c0 : ChunkDone s a S T (site.start+2) := by
     simpa using chunk_done site wide (0 : Fin 4) s S T pc src dst sa ta apart sf tf
-  have c1 : ChunkDone a b (S+8) (T+8) (site.start+7) := by
+  have c1 : ChunkDone a b (S+8) (T+8) (site.start+8) := by
     simpa [Nat.add_assoc] using chunk_done site wide (1 : Fin 4) a S T c0.pc
       ((c0.regs _ src31).trans src) (by rw [c0.regs .x21 (by decide)]; exact dst) sa ta apart sf tf
-  have c2 : ChunkDone b c (S+16) (T+16) (site.start+13) := by
+  have c2 : ChunkDone b c (S+16) (T+16) (site.start+14) := by
     simpa [Nat.add_assoc] using chunk_done site wide (2 : Fin 4) b S T (by simpa [Nat.add_assoc] using c1.pc)
       ((c1.regs _ src31).trans ((c0.regs _ src31).trans src))
       (by rw [c1.regs .x21 (by decide), c0.regs .x21 (by decide)]; exact dst) sa ta apart sf tf
-  have c3 : ChunkDone c d (S+24) (T+24) (site.start+19) := by
+  have c3 : ChunkDone c d (S+24) (T+24) (site.start+20) := by
     simpa [Nat.add_assoc] using chunk_done site wide (3 : Fin 4) c S T (by simpa [Nat.add_assoc] using c2.pc)
       ((c2.regs _ src31).trans ((c1.regs _ src31).trans ((c0.regs _ src31).trans src)))
       (by rw [c2.regs .x21 (by decide), c1.regs .x21 (by decide), c0.regs .x21 (by decide)]; exact dst)

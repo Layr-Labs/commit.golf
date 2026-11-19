@@ -30,7 +30,7 @@ theorem boundary_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) 
     have h:=r.frame w wlim (untouched_low p p.card w (Or.inr (Or.inr (Or.inr (Or.inr wlo)))))
     rw [ea];exact h)
   have start : s.pc=0x103c := by simpa [passPC,address] using r.pc
-  refine ⟨⟨?_,r.heap,?_,r.salt,r.dest,r.leaves,r.slots,inp,?_,r.base,r.mark,r.cap,r.capLeaves,r.start⟩,?_⟩
+  refine ⟨⟨?_,r.heap,?_,r.salt,r.dest,r.leaves,r.slots,inp,?_,r.base,r.mark,(by rw [r.shift]; simpa using r.heap),r.capLeaves,r.start⟩,?_⟩
   · simpa only [ite_eq_right (Nat.ne_of_lt p0)] using start
   · simpa using r.indices
   · simpa using r.count
