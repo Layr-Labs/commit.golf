@@ -7,48 +7,14 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open Opening (markBase trapdoorBase markMachine markParentPrefix mark_addresses parentAddress
   marks_before_trapdoor nat_address_injective)
 
-private theorem observed_store_outside (before after : MachineState) (dest value address : Word)
-    (memory : after.mem = (before.setMem dest value).mem) (outside : address ≠ dest) :
-    after.getMem address = before.getMem address := by
-  have observed : after.getMem address = (before.setMem dest value).getMem address :=
-    congrFun memory address
-  exact observed.trans (MachineState.getMem_setMem_ne outside)
-
-attribute [local irreducible] markParentPrefix execute
-
-private theorem sweep_frame (state : MachineState) (remaining address : Nat) (bounded : remaining < 256)
-    (above : Opening.trapdoorBase ≤ address) (fit : address < 2^64)
-    (pc : state.pc = if remaining = 0 then 0x1a50 else 0x1a28)
-    (base : state.getReg .x26 = BitVec.ofNat 64 markBase)
-    (count : state.getReg .x6 = BitVec.ofNat 64 remaining) :
-    (markMachine state remaining).getMem (BitVec.ofNat 64 address) =
-      state.getMem (BitVec.ofNat 64 address) := by
-  induction remaining generalizing state with
-  | zero => rfl
-  | succ remaining ih =>
-    have parentPC : state.pc = 0x1a28 := by simpa using pc
-    have ⟨_, _, parent⟩ := mark_addresses state (remaining+1) base count
-    have mark := mark_parent_post state parentPC
-    have different : BitVec.ofNat 64 address ≠ parentAddress state := by
-      rw [parent]
-      intro same
-      have below := marks_before_trapdoor
-      have cellFit : markBase + 8*(remaining+1) < 2^64 := by unfold markBase; omega
-      have eq := nat_address_injective fit cellFit same
-      omega
-    have ⟨nextPC, nextCount⟩ := mark_sweep_pc state remaining (by omega) parentPC count
-    have nextBase := mark.2.1.trans base
-    have earlier := observed_store_outside _ _ _ _ _ mark.1 different
-    change (markMachine (markParentPrefix state 10) remaining).getMem (BitVec.ofNat 64 address) = _
-    exact (ih _ (by omega) nextPC nextBase nextCount).trans earlier
+attribute [local irreducible] execute
 
 theorem cap_preparation_frame (state : MachineState) (address : Nat) (above : Opening.trapdoorBase ≤ address)
     (fit : address < 2^64) (base : state.getReg .x26 = BitVec.ofNat 64 markBase) :
     (capPreparation state).getMem (BitVec.ofNat 64 address) =
       state.getMem (BitVec.ofNat 64 address) := by
-  change (markMachine (markSweepEntry state) 255).getMem (BitVec.ofNat 64 address) =
-    (markSweepEntry state).getMem (BitVec.ofNat 64 address)
-  exact sweep_frame _ 255 address (by decide) above fit rfl base rfl
+  clear base
+  exact CapStudy.cap_preparation_frame state address above fit
 
 attribute [local simp] at_root_test
 
