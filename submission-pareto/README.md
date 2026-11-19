@@ -1,255 +1,78 @@
-# Submission
+# Pure 240-bit binary tree with counter-mode salts, a 4,096-leaf salt period and prefetched group salts
 
-This is the sole solver-editable directory. Put `Solution.lean`, `claim.json`, `programs.json`, and
-optional supporting Lean modules under `CommitGolfCandidate/` here.
+This Pareto candidate puts the leaf phase of our `d047a24e-16f9-457a-b65e-278e87a20717` (dadon's keyed counter-mode
+in-place salts as kaankolcu ported them to the binary tree in `8e6529af`, with the 4,096-leaf-period prefetch tile of
+kaankolcu's `df0caa4c`) on the tree of blocksek's `746ff19e-9144-4ea5-8340-1738fd1563e5`: Th0rgal's 240-bit truncated
+binary tree with no full-width parent level, blocksek's centered heap pointer and zkfriendly's cap-mark opening, at
+67,584 proof bytes. `746ff19e` uses the permutation-chain salt tape; here the tape and its generator are gone.
 
-Define `CommitGolf.Challenge.submission : CommitGolf.Submission` with three RISC-V
-images (commit, opening, check), buffer sizes/addresses, and instruction allowances.
-The scheme used in security games is derived from these images. Prove:
+Claimed bounds (`claim.json`): 614,814,633 commitment cycles, 90,007 opening cycles (128 positions, worst case) and
+67,584 proof bytes.
 
-```lean
-CommitGolf.Challenge.certificate :
-  CommitGolf.Certificate submission proofBytes commitCycles openingCycles
+| | 746ff19e (blocksek) | this candidate |
+|---|---:|---:|
+| commit cycles (exact, every run) | 619,461,636 | **614,814,633** |
+| opening cycles (128 positions, worst case) | 85,511 | **90,007** |
+| proof bytes (128 positions, worst case) | 67,584 | **67,584** |
+| prover cycles | 619,547,147 | **614,904,640** |
 
-CommitGolf.Challenge.submission_matches_artifact :
-  submission = CommitGolf.Artifact.submission
-```
+## Commit program (233,357 words)
 
-`claim.json` must contain exactly `proofBytes`, `commitCycles`, and `openingCycles`.
-These are certified worst-case honest bounds for 128-position openings. The score
-is `(commitCycles + openingCycles) * proofBytes`, including one full commitment.
-The certificate also requires hiding, binding, completeness, query budgets, successful
-honest machine execution, valid image layouts, and termination on all inputs.
+- **Words 0-45,671** (key prologue, 4,096-packet leaf tile, latch, padding): `d047a24e`'s words, byte for byte.
+- **Words 45,672-45,676**: the five parent-setup words (the same in `746ff19e`, `04680e02` and `d047a24e`).
+- **Words 45,677-193,168**: the parent loop of `746ff19e` (`ecall; sh zero,30(a2); addi a0,a0,−64; addi a2,a2,−32`
+  per node), unrolled over 36,873 nodes and run 455 times. `746ff19e` unrolls 46,995 nodes and runs 357 times; both
+  products are 2^24 − 1. The shorter span keeps the image at the 233,357 words of `d047a24e`, whose leaf-phase
+  proofs fix that length; it costs 98 more latch passes, 196 cycles.
+- **Words 193,169-193,170**: latch `beq a2,s1,+2w; jal zero,−147493w`. **Words 193,171-193,181**: root copy.
+  Words 193,182 onward are zero and never executed. `746ff19e`'s tape generator block is not present.
 
-Both fixed oracles are available together: 512→256 compression and 1,600-bit permutation
-with its inverse. Each call costs one public query and eight abstract machine cycles.
-Private coins are allowed for commitment and opening, but not checking. See
-[RULES.md](../RULES.md) for the byte layout, syscall interface, and complete requirements.
+Leaf phase: 184,688,639 steps, 35,082,240 calls (430,264,319 cycles), as in `d047a24e`. Post-leaf phase:
+184,550,290 cycles, 16,777,215 calls. Total 251,798,445 steps, 51,859,455 oracle calls, 614,814,633 cycles.
 
-Run `bash scripts/setup.sh` and `python3 scripts/run.py` on the supported Linux
-verifier host. Historical baselines remain separate and uncompiled.
+## Opening program (1,482 words)
 
-## Delivered programs
+`746ff19e`'s 1,435-word opener with word 3 replaced by `jal +1432w`, followed by `d047a24e`'s 47-word counter-salt
+prefix at words 1,435-1,481 (words 1,441-1,487 there), its last word re-encoded as `jal −1468w` back to word 13. The
+prefix computes `rank = (i mod 4096) mod 11`, regenerates the group's generator reply from the key and the group
+head's message address, and hands the body the 16-byte salt. Bound 90,007 = 85,511 + 4,112 + 384.
 
-`programs.json` contains exactly these fields:
+## Check program, sizes
 
-- `schemaVersion`: the integer `1`.
-- `sizes`: integer byte capacities `trapdoor` and `proof`.
-- `layout`: integer byte addresses `message`, `commitment`, `trapdoor`, `indices`, `values`, and `proof`.
-- `steps`: positive instruction allowances `commit`, `opening`, and `check`.
-- `images`: `commit`, `opening`, and `check`, each containing `code` and `data` strings.
+`746ff19e`'s, byte-identical.
 
-Both strings use lowercase hexadecimal bytes, with no prefix or whitespace. `code`
-contains complete 32-bit instructions in little-endian byte order: the instruction
-`0x00000073` is encoded as `"73000000"`. `data` contains the embedded bytes in increasing
-address order. An empty byte string is `""`. Each image's combined code and data must
-be smaller than 1 MiB. Capacities and addresses are at most `2^36`; instruction
-allowances are at most `2^48`. The certificate additionally enforces the layout and
-machine requirements in `RULES.md`.
+## Proof structure
 
-Unknown or duplicate fields, noninteger metadata, noncanonical hexadecimal, and
-truncated instructions are rejected before compilation. The manifest is at most 8 MiB
-and counts toward the submission's existing 32-MiB limit.
+Three-way merge with base `04680e02` (the three-full-level tree both sides descend from), one side `d047a24e`, other
+side `746ff19e`:
 
-The verifier freezes this file, generates a concrete `CommitGolf.Artifact.submission`
-from the delivered bytes and ABI, and requires the equality theorem above in addition
-to the security certificate. It generates that module inside its isolated build project.
-Import `CommitGolf.Artifact` in `Solution.lean`; do not provide that module yourself.
-The generated module packs bounded little-endian chunks, with exact counts, into balanced
-named trees. Its pure Lean decoder yields the same image lists; this internal encoding
-does not change the delivered manifest or image-size limits.
+- 50 files that `746ff19e` changes against `04680e02` and `d047a24e` does not: taken from `746ff19e`.
+- The 12 modules of the mixed-width tree that do not exist in `746ff19e` (`MixedWidth*`, `TwoPermutationMixed*`,
+  `TwoPermutationPackedLeafTemplates`) are removed.
+- `TwoPermutationPackedParentImage` (present in `746ff19e`, replaced by the mixed-width image module in `8e6529af`)
+  is restored from `746ff19e` for the new sweep position and span: loop from word 45,677, latch at 193,169, 456
+  image windows of 512 words with boundary windows 89 and 377, `packedParentGroups 186804 36873 455`.
+- `P4Commit`, `P4Physical`, `P4Results`: the post-leaf run is one packed phase (`packed_parent_phase`,
+  `packed_parent_phase_post`, `execute_packed_root`) in place of the full-width phase followed by the projected
+  phase; the public tree is `transcriptHeap true`, its content by `packed_parent_content`.
+- `P4OpenHeader`, `P4OpenLoop`, `P4OpenPass`, `P4OpenEffect`: prefix rows 1,435-1,481, entry jump 5,728 bytes,
+  empty-opening branch 2,644, closing jump field 2,091,280. `TwoPermutationPackedOpeningABI`: `d047a24e`'s
+  `body_from_boundary` with 590 cycles per record. `TwoPermutationPackedOpeningImage`: `746ff19e`'s module with the
+  image literal regenerated from `programs.json`. Three opener modules are clean merges.
+- `P4OpenFull`, `P4OpenClosing`, `BinaryCounterCertificate`: bounds 90,007 and 67,584, transcript builder
+  `transcriptBuilder true`.
+- Every `Grouped*` module and `CounterSaltLayout` are `d047a24e`'s bytes. Hiding:
+  `BinaryCounterSecurity.scheme_hiding_of_counter`. Binding, termination and query budget: `746ff19e`'s checker facts.
 
-For large images, define the certified submission directly from the generated value:
+`Solution.lean` proves `Certificate submission 67584 614814633 90007` with `submission := Artifact.submission`.
 
-```lean
-import CommitGolf.Artifact
+## Credits
 
-namespace CommitGolf.Challenge
-
-def submission : CommitGolf.Submission := CommitGolf.Artifact.submission
-
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
-
-end CommitGolf.Challenge
-```
-
-The full `certificate` theorem is still required. Build the correctness and security proofs
-around this value, using symbolic image properties and the decoder's length/index lemmas
-where useful. Maximum-size admission tests use this alias; they do not establish practical
-equality checking against an independently constructed large image. In an independent review,
-`decide +kernel` comparing the same maximum-size code packed in different chunks had not
-finished after 20 minutes. Other proof strategies may work; avoid relying on whole-image
-normalization when designing a large submission.
-
-To generate the same module for local proof development, run from the repository root:
-
-```sh
-python3 scripts/generate_artifact.py
-lake build CommitGolf.Artifact
-# After changing submission/programs.json:
-python3 scripts/generate_artifact.py --refresh
-```
-
-The command uses the verifier's manifest parser and renderer and writes the ignored local
-`CommitGolf/Artifact.lean`. Creating or refreshing it clears its compiled artifacts;
-when content and permissions are already current, it is left in place. Rebuild after refreshing.
-A standalone file importing that module can then be checked with `lake env lean path/to/file.lean`;
-this does not stage the supporting modules under `submission/CommitGolfCandidate/` as a Lake
-library. Do not include the generated module in your submission. Official verification
-regenerates it from the frozen manifest and checks the full certificate and equality again;
-local generation or compilation does not certify a submission.
-
-Classical reasoning in proofs is permitted. The manifest supplies the executable
-even if the proof chooses its equal value noncomputably.
-The accepted score report includes `artifactDigest`, the SHA-256 of the exact manifest
-bytes, including JSON formatting. Re-run verification after changing either the
-manifest or its equality proof.
-
-## Resource proofs for this implementation
-
-[Resources](CommitGolfCandidate/Resources.lean) applies the upstream stage-composition design to
-the included salted Merkle candidate's eight-block leaf. VCVio composes query bounds through intermediate
-results and transfers them to the public oracle; ArkLib supplies the immutable entry
-source, and CompPoly stores its eight blocks without discarding zero padding. The
-candidate [bridge](CommitGolfCandidate/LeafResourceBridge.lean) connects this exact query
-program to the hiding proof's leaf budget. These helpers belong to this submission;
-other submissions may use different constructions and the certificate fields are unchanged.
-
-These are concrete worst-case operation counts. Source/view construction, encoding and
-other pure work are outside that profile. Separate instruction proofs establish machine
-cycles, including the checker leaf segment's 194 cycles and eight public calls under its
-memory and entry conditions. That segment excludes caller preparation and the continuation;
-the full certificate still checks the complete programs' bounds. ArkLib's extractor-specific
-typed paths are available at the pinned revisions; an extraction security contract and
-its efficiency proof remain separate work. The stored-product helper and isolated machine
-segment are compiled supporting lemmas; their imports do not establish separate kernel-replay
-evidence. [ResourceTests](CommitGolfCandidate/ResourceTests.lean), imported by `Solution.lean`,
-checks that seven calls do not suffice and that block order and trailing zero blocks are preserved.
-
-## Initial implementation
-
-This directory contains the initial machine submission and a complete Lean
-`CommitGolf.Challenge.certificate` theorem, including binding and hiding for the
-actual machine-derived scheme. The current claims are 102400 proof bytes,
-3959423012 commitment cycles, and 48670 opening cycles, giving a score of
-**405,449,900,236,800**. The cycle bounds use the exact resource counts already
-proved for the images; tightening these claims does not change the programs.
-Run the verifier below before treating a changed claim as accepted.
-
-On 2026-10-28, the Linux verifier accepted the original complete certificate
-after an isolated rebuild and Lean kernel replay. That historical claim used
-17179869184 commitment cycles and 1048576 opening cycles, scoring
-**1,759,325,978,624,000**. It does not verify the tightened claim or a later checkout.
-
-The construction uses a binary Merkle tree. Each 2048-bit leaf is compressed in eight
-256-bit blocks starting from an independent private 256-bit salt. A proof contains one
-salt and 24 sibling digests for each opened position: 800 bytes per position, or 102400
-bytes for 128 positions. The private trapdoor stores the tree and all salts. The
-implementation uses compression only; access to the permutation remains available.
-
-- `CommitGolfCandidate/Programs.lean`: instruction assembly, three machine images, layout.
-- `CommitGolfCandidate/Model.lean`: reference computation and proved path reconstruction.
-- `CommitGolfCandidate/Binding.lean`: proved collision extraction from conflicting salted-leaf openings, with exact query-trace lengths; `BindingSecurity.lean` completes the probabilistic reduction.
-- `CommitGolfCandidate/Execution.lean`: proved fuel-splitting equivalence, invariance under extra fuel after halting, a public-query count bounded by instruction fuel, and an eight-cycles-per-step bound for coin-free execution. The last two bounds also apply through the real submission ABI; they do not prove termination. This module also proves that oracle reply writes preserve registers and memory outside the written words.
-- `CommitGolfCandidate/Opening.lean`: interpreter proofs checked against the submitted instruction bytes, including memory safety and preservation of unread indices. Setup takes 20 cycles, each position (salt plus 24 siblings) takes 380 cycles, and the successful return costs 10 cycles. The complete position loop is proved under explicit input-buffer invariants.
-- `CommitGolfCandidate/OpeningInput.lean`: proves that the trusted ABI establishes those invariants, including exact deserialization of sorted indices. For every trapdoor and position set, the actual opening image succeeds in `30 + 380 * positions.card` cycles, makes zero queries, and returns exactly `800 * positions.card` bytes. The scored batch therefore uses 48670 cycles and 102400 bytes. This module proves the certificate's full `ProofSize 102400` field and opening-specific termination. The complete three-program termination field is proved in `Machine.lean`; cryptographic security remains separate.
-- `CommitGolfCandidate/Check.lean`: proves the actual checker rejects malformed lengths (including ABI overflow rejection), accepts empty openings, and compares each reconstructed-root word with the supplied root. In-capacity wrong lengths cost 16 cycles; empty acceptance costs 20; four matching root words cost 12. All these paths make zero oracle queries. The length and empty-opening results are connected to the security-game scheme, and any accepted proof must have exactly `800 * positions.card` bytes. The compression blocks are proved to cost 13 cycles and one query, with exact little-endian digest writeback and preservation of memory outside the output scratch words. The full eight-block leaf-hash subroutine is proved to return in 138 instructions, 194 cycles, and eight queries for every oracle reply sequence, under its entry-point, link, scratch, and input-access invariants. Its source pointer advances 256 bytes and the path/proof metadata is preserved. `LeafRefinement.lean` now connects that loop to the mathematical leaf hash; authentication-path execution is in `CheckPath.lean`, and the full checker termination proof is in `CheckInput.lean`.
-- `CommitGolfCandidate/CheckPath.lean`: proves both sibling-ordering branches and the complete 24-level authentication-path execution, under its scratch and readable-input invariants. The loop reaches the root comparison, consumes 768 sibling bytes, preserves the outer checker metadata, and makes 24 queries. Its cost is 648–864 cycles plus four setup cycles, with the exact instruction/cycle count determined by the position bits. This is an execution proof; `PathRefinement.lean` now proves the connection to the reference Merkle-path computation under explicit memory-content and position-bit preconditions. The outer checker loop is proved in `CheckLoop.lean`.
-- `CommitGolfCandidate/CheckLoop.lean`: joins index loading, salt copying, eight leaf compressions, 24 path compressions, root comparison, and the outer loop. A mismatch in any root word halts with failure. Successful comparisons advance all pointers and preserve buffer safety. Every loop execution terminates under its input invariants, with at most 1100 cycles and 32 public queries per position plus three exit cycles.
-- `CommitGolfCandidate/Counting.lean`: proves that coin-free interpreter executions report exactly the number of calls independently accumulated by the security-game oracle runner.
-- `CommitGolfCandidate/CheckInput.lean`: discharges the loop invariants for every actual ABI input, including arbitrary commitments, values, positions, and proof bytes. Proves checker termination in the certificate's probability-one form for every fixed oracle. The actual runner uses at most `1100 * positions.card + 20` cycles and `32 * positions.card` public queries; for 128 positions, those bounds are 140820 cycles and 4096 queries. This does not establish acceptance of honest proofs or the cryptographic security properties.
-- `CommitGolfCandidate/CommitLeaf.lean` and `Commit.lean`: exact instruction proofs for setup, private salt sampling, leaf hashing, digest copying, and one full leaf iteration (159 instructions, 215 cycles, eight queries).
-- `CommitGolfCandidate/CommitLoop.lean`, `CommitParents.lean`, and `CommitTree.lean`: all leaf and internal-node iterations, root output, and successful HALT. After salt/scratch initialization, tree construction takes `169*N + 3` instructions, `232*N - 4` cycles, and `9*N - 1` queries. These are execution proofs for all oracle answers, not tests or a cryptographic refinement proof.
-- `CommitGolfCandidate/CommitInput.lean`: establishes every loop, alignment, and buffer-safety invariant from the actual input loader, for arbitrary messages and salt contents.
-- `CommitGolfCandidate/CommitRuntime.lean`: connects setup, private randomness, tree construction, and the actual submitted instruction allowance. Every commitment succeeds in exactly 3959423012 cycles and records 150994943 public queries in the interpreter. `CountingCoins.lean` and `Budgets.lean` connect this to the independent security-game query counter, including private randomness.
-- `CommitGolfCandidate/Machine.lean`: proves the complete certificate fields `MachineSuccess`, `Termination`, and `ProverCycles 3959423012 48670`, using the real machine-derived scheme and oracle runner. Completeness, binding, and hiding are supplied by their corresponding modules.
-- `CommitGolfCandidate/CountingCoins.lean`: extends the independent counter equality to executions with private randomness.
-- `CommitGolfCandidate/CheckEvaluation.lean`: connects the deterministic checker evaluator to the counted oracle runner and proves the scheme checks use at most 32 queries per opened leaf.
-- `CommitGolfCandidate/Budgets.lean`: proves the complete `HonestBudgets` field: exactly 150994943 commitment queries, zero opening queries, and at most 32 checking queries per opened leaf.
-- `CommitGolfCandidate/Memory.lean`: proves the interpreter’s byte reads recover digest words and combine the two compression-input halves in the intended order.
-- `CommitGolfCandidate/LeafRefinement.lean`: proves that both actual leaf loops compute `leafDigest`, with source-memory alignment, separation, and contents as explicit preconditions. The input-loader refinement is in `BufferRefinement.lean`; `CommitHeap.lean` connects it to the complete leaf/parent construction.
-- `CommitGolfCandidate/PathRefinement.lean`: proves the actual sibling-ordering operations and complete path loop compute `climb`. The loop consumes the specified sibling digests according to the position bits. The constructed heap is covered by `CommitHeap.lean`; `OpeningOutput.lean` and `HonestRecords.lean` connect the actual emitted path bytes to that heap.
-- `CommitGolfCandidate/InputMemory.lean`: proves byte-for-byte correctness of the trusted loader and generic serialization/slicing round trips, including the large private trapdoor.
-- `CommitGolfCandidate/BufferRefinement.lean`: connects message and opened-value blocks, commitments, proof bytes, and private-state digests to actual input memory. Proves that opening receives the same private-state digests produced by commitment, and checking receives the same proof digests returned by opening.
-- `CommitGolfCandidate/HeapModel.lean`: proves that the machine's heap-indexed sibling path reconstructs the root when stored parents equal the compression of their children; also relates heap directions to leaf-index bits.
-- `CommitGolfCandidate/CheckRefinement.lean`: proves a complete checker iteration computes the salted leaf digest followed by all 24 siblings, preserves input buffers, and compares the resulting digest against the original supplied root. Connects this to the heap reconstruction theorem under explicit heap/content invariants.
-- `CommitGolfCandidate/CheckAcceptance.lean`: proves the full checker accepts exactly when the proof length is correct and every position's root comparison succeeds, through both the actual input ABI and the security-game scheme. `Completeness.lean` now supplies that ABI-level composition with commitment and opening.
-- `CommitGolfCandidate/WriteMemory.lean`: proves byte-exact syscall writes and preservation of disjoint buffers.
-- `CommitGolfCandidate/CopyRefinement.lean`: proves complete digest contents and preservation for the actual load/store copy sequence.
-- `CommitGolfCandidate/CommitRefinement.lean`: proves that a complete commitment leaf iteration loads its salt, hashes the original eight message blocks, stores the resulting digest, and preserves disjoint input/output regions.
-- `CommitGolfCandidate/LeafHeap.lean`: lifts that result to every leaf of the actual loop, with explicit non-overlapping input, output, and salt regions.
-- `CommitGolfCandidate/ParentRefinement.lean`: proves the actual descending parent loop constructs every internal node correctly and preserves leaf/salt slots. Paths through the resulting heap reconstruct its root.
-- `CommitGolfCandidate/CommitHeap.lean`: establishes message and salt contents from the real loader and random syscall, then proves the full leaf/parent construction has the correct salted leaves and consistent parents for every message, random reply, and fixed oracle.
-- `CommitGolfCandidate/OpeningRefinement.lean`: proves every sibling record emitted by the actual path loop comes from the original heap, with earlier records preserved by later writes.
-- `CommitGolfCandidate/CommitOutput.lean`: proves the returned commitment equals the constructed heap root and that the final copy preserves the tree and salts.
-- `CommitGolfCandidate/CommitSemantics.lean`: proves the exact sampled commitment distribution and its root/heap invariant for every supported execution result.
-- `CommitGolfCandidate/OpeningRecords.lean`: proves every salt and sibling record in the complete position loop, including preservation by later iterations.
-- `CommitGolfCandidate/OpeningOutput.lean`: carries those records through actual trapdoor serialization, the opening input loader, and returned output memory.
-- `CommitGolfCandidate/HonestRecords.lean`: proves the actual emitted salt and path reconstruct the actual returned commitment for every selected leaf of every supported commitment execution.
-- `CommitGolfCandidate/CheckHonest.lean`: proves the full checker loop accepts correctly encoded records from a consistent heap, including preservation of the remaining inputs between iterations. `Completeness.lean` discharges those preconditions through the actual ABI.
-- `CommitGolfCandidate/InputOrder.lean`: proves the opening indices and dependent checker values use the same sorted order, and proves exact checker index deserialization.
-- `CommitGolfCandidate/Completeness.lean`: joins the actual commitment distribution, emitted opening records, checker ABI, and whole checker loop. Proves the full `submission.scheme.Completeness` certificate field for every oracle, message, and opening set.
-- `CommitGolfCandidate/CheckSound.lean`: proves every record of an accepted checker run reconstructs the supplied root, including adversarial proof bytes.
-- `CommitGolfCandidate/CheckInputSound.lean`: carries checker soundness through the actual input ABI and locates a record for any claimed position.
-- `CommitGolfCandidate/BindingMachine.lean`: extracts a compression collision from any conflicting claim accepted by both actual machine checks, using just two 32-call records.
-- `CommitGolfCandidate/BindingReplay.lean`: implements that replay through the public query interface; proves its exact 64-call overhead and structural bound for arbitrary replies. Record selection depends only on the claim.
-- `CommitGolfCandidate/BindingReduction.lean`: bounds the binding-win probability by the replay collision event, handles large budgets, and proves the 64-call overhead fits the 120-bit target under a 256-bit birthday estimate.
-- `CommitGolfCandidate/QueryBudget.lean`: enforces public-query budgets while forwarding private coins and proves exact preservation of the original event-based budget probability.
-- `CommitGolfCandidate/CompressionROM.lean`: proves an adaptive compression-cache birthday bound with fresh private coins and both directions of any fixed permutation available.
-- `CommitGolfCandidate/CompressionSampling.lean`: proves the lazy compression model and the contract's full-table sampling have the same output distribution, for arbitrary adaptive programs and existing caches.
-- `CommitGolfCandidate/Properties.lean`: proved image admission and static arithmetic.
-- `CommitGolfCandidate/Tests.lean`: small-tree interpreter/reference comparisons and rejection tests.
-
-- `CommitGolfCandidate/BindingProbe.lean`: records actual compression replies, detects the extracted collision in the lazy cache, and bounds the reduction by the adversary budget plus 128 public queries.
-- `CommitGolfCandidate/BindingSecurity.lean`: proves the complete `submission.scheme.Binding` requirement for every adversary and positive query budget, using the actual machine checker and the contract's sampled oracles.
-- `CommitGolfCandidate/HidingTree.lean`: defines the reference salted heap and proves its uniqueness from leaf contents and parent consistency.
-- `CommitGolfCandidate/HidingMachine.lean`: proves that the actual commitment root and every emitted opening byte equal the reference transcript.
-- `CommitGolfCandidate/HidingSalts.lean`: proves that the machine's packed random-bit draw is exactly a vector of independent uniform 256-bit salts.
-- `CommitGolfCandidate/HidingDistribution.lean`: proves equality between the complete machine hiding-game distributions and the reference games, including both adaptive adversary stages and the shared oracle. The required TV distance is therefore exactly the reference-game distance.
-- `CommitGolfCandidate/HidingFreshness.lean`: bounds guesses of fresh salts after an arbitrary randomized first stage, including adaptively chosen prior query sets. The later hiding modules handle queries made after observing the root and opening.
-- `CommitGolfCandidate/HidingQueries.lean`: translates the contract's two-stage hiding budget into structural bounds for both adversary stages, retaining the budget consumed during selection.
-
-## Verification
-
-From the repository root, on Linux with Landlock and user systemd 257 or newer:
-
-```sh
-bash scripts/setup.sh
-python3 scripts/run.py
-```
-
-Keep the checkout and verifier work directory outside `/tmp` and `/var/tmp`, which
-the sandbox hides. The verifier defaults to a fresh directory under `.work/`.
-
-The runner freezes `submission/`, rebuilds its modules in isolation, checks the
-certificate and artifact equality against the trusted challenge, replays the proofs
-in Lean's kernel, and writes the accepted score to `scripts/score.json`. It checks the
-admitted files and permits only `propext`, `Classical.choice`, and `Quot.sound` in the
-checked theorems' axiom dependencies.
-
-For the trusted contract and Python verifier regression tests:
-
-```sh
-lake build CommitGolf CommitGolfTests
-python3 -m unittest discover -s verifier/tests
-```
-
-These commands check trusted definitions and regression tests. They do not compile
-`Solution.lean` or establish submission acceptance; the isolated verifier supplies
-the generated artifact module and checks both submitted theorems.
-
-The hiding proof covers the complete game. `HidingLeafReplacement.lean`
-isolates an unopened leaf while preserving the exact root and proof bytes;
-`HidingCoordinate.lean` bounds one message-coordinate change, and
-`HidingHybrid.lean` composes that bound across all coordinates. Opened coordinates
-are equal in both messages. `HidingGameIntegration.lean` preserves the joint
-first-stage challenge/cache distribution and transfers the observer query bound.
-`HidingSecurity.lean` proves the accumulated loss meets `HIDING_ERROR`, then
-`Solution.lean` assembles all nine fields into the required certificate.
-
-The historical 2026-10-28 accepted run used Ubuntu 26.04 on aarch64, Lean 4.33.1, systemd isolation,
-and compiled Landrun. `scripts/setup.sh` and `scripts/run.py` both exited
-successfully. The verifier regression suite also passed all 21 tests. The
-verified contract commit was `b037ff7cc15b9b8b0b4b9ffc6c4ffac2981e59f6`.
-Rerun verification after changing the submission or contract.
+- Tree, parent loop, opener body, checker and their proofs: blocksek's `746ff19e` (Th0rgal's `2af60a3a`, dadon's
+  `c28dd9ca`, zkfriendly's `1ed6362a`, and the two-permutation lineage of `a6b5adf3`).
+- Counter-mode in-place salts on the binary tree and the `P4*` modules: kaankolcu's `8e6529af` (on blocksek's
+  `04680e02`), with dadon's `2a19be00`.
+- 4,096-leaf period, prefetch tile and their `Grouped*` proofs: kaankolcu's `df0caa4c` (on `606a7986`, `4dbc847a`,
+  `bc5cc89e`, newjordan's `45a3e161`, dadon's `2b2405a1`).
+- This candidate: the composition on our `d047a24e` (image generator with the re-spanned sweep, merge, restored
+  parent-image module, the three `P4*` rewrites, opener prefix relocation, totals).
