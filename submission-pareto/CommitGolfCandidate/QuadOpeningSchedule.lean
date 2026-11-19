@@ -1,0 +1,162 @@
+import CommitGolfCandidate.QOpeningResources
+import CommitGolfCandidate.QOpeningGeometry
+import CommitGolfCandidate.TwoPermutationQuad3Spec
+
+namespace TwoPermutationPrototype.QuadOpening
+open CommitGolf TwoPermutationPrototype.Sampling
+
+/-- Quad3 lower path: level 0 is the level-3 node `(LENGTH + index) / 64`, level `l` is
+`(LENGTH + index) / 2^(l+6)`. -/
+def lowerNode (index : Index) (level : Nat) : Nat := QOpening.lowerNode index (level+6)
+
+theorem lower_node_next (index : Index) (level : Nat) :
+    lowerNode index (level+1) = lowerNode index level / 2 := QOpening.lower_node_next index (level+6)
+
+theorem lower_node_bound (index : Index) (level : Nat) : lowerNode index level < 2 * LENGTH :=
+  QOpening.lower_node_bound index (level+6)
+
+theorem lower_swap_bound (index : Index) (level : Nat) : lowerNode index level ^^^ 1 < 2 * LENGTH :=
+  QOpening.lower_swap_bound index (level+6)
+
+theorem lower_cap_range (index : Index) : 256 ≤ lowerNode index 10 ∧ lowerNode index 10 < 512 :=
+  QOpening.lower_cap_range index
+
+def recordBytes : Nat := 606
+def capacity : Nat := recordBytes * LENGTH + 30*256
+
+theorem capacity_value : capacity = QUAD3_PROOF_CAPACITY := rfl
+
+def proofLength (positions : Positions) : Nat :=
+  recordBytes*positions.card + 30*(QOpening.openingNodes positions).length
+
+/-- Packed frontier emission replaces a 32-byte doubleword copy with 15 pairs of halfword instructions. -/
+def capSubtreeCycles (groups : List Nat) (node : Nat) : Nat → Nat
+  | 0 => if capIsMarked groups node 0 then 5 else 37
+  | height+1 =>
+    if capIsMarked groups node (height+1) then
+      19 + capSubtreeCycles groups (2*node) height + capSubtreeCycles groups (2*node+1) height
+    else 37
+
+theorem cap_cycle_delta (groups : List Nat) (node height : Nat) :
+    capSubtreeCycles groups node height =
+      QOpening.capSubtreeCycles groups node height + 22*(capFrontierNodes groups node height).length := by
+  induction height generalizing node with
+  | zero =>
+    cases marked : capIsMarked groups node 0 <;> simp [capSubtreeCycles, QOpening.capSubtreeCycles, capFrontierNodes, marked]
+  | succ height ih =>
+    cases marked : capIsMarked groups node (height+1)
+    · simp [capSubtreeCycles, QOpening.capSubtreeCycles, capFrontierNodes, marked]
+    · simp only [capSubtreeCycles, QOpening.capSubtreeCycles, capFrontierNodes, marked, ite_true,
+        List.length_append, ih (2*node), ih (2*node+1)]
+      omega
+
+def scheduledCycles (positions : Positions) : Nat :=
+  if positions.card = 0 then 7 else
+    19 + (743*positions.card-1) + 2551 +
+      (capSubtreeCycles (QOpening.groupsBefore positions positions.card) 1 8 + 3) + 4
+
+def siblingWidth (level : Nat) : Nat := if level = 0 then 32 else 30
+
+def siblingOffset (level : Nat) : Nat :=
+  if level = 0 then 304 else 336+30*(level-1)
+
+def recordBase (ordinal : Nat) : Nat := QOpening.proofBase+recordBytes*ordinal
+
+def siblingDestination (ordinal level : Nat) : Nat := recordBase ordinal+siblingOffset level
+
+/-- Record offset of the `j`-th neighbour leaf digest (rotation order, `j < 3`). -/
+def leafOffset (j : Nat) : Nat := 16+32*j
+
+def leafDestination (ordinal j : Nat) : Nat := recordBase ordinal+leafOffset j
+
+theorem even_leaf_destination (ordinal j : Nat) : leafDestination ordinal j % 2 = 0 := by
+  have base : QOpening.proofBase % 2 = 0 := by decide
+  unfold leafDestination recordBase recordBytes leafOffset
+  omega
+
+/-- Record offset of the `j`-th neighbour quad node (rotation order, `j < 3`). -/
+def quadOffset (j : Nat) : Nat := 112+32*j
+
+def quadDestination (ordinal j : Nat) : Nat := recordBase ordinal+quadOffset j
+
+theorem even_quad_destination (ordinal j : Nat) : quadDestination ordinal j % 2 = 0 := by
+  have base : QOpening.proofBase % 2 = 0 := by decide
+  unfold quadDestination recordBase recordBytes quadOffset
+  omega
+
+/-- Record offset of the `j`-th neighbour level-2 node (rotation order, `j < 3`). -/
+def quad2Offset (j : Nat) : Nat := 208+32*j
+
+def quad2Destination (ordinal j : Nat) : Nat := recordBase ordinal+quad2Offset j
+
+theorem even_quad2_destination (ordinal j : Nat) : quad2Destination ordinal j % 2 = 0 := by
+  have base : QOpening.proofBase % 2 = 0 := by decide
+  unfold quad2Destination recordBase recordBytes quad2Offset
+  omega
+
+theorem sibling_offset_next (level : Nat) :
+    siblingOffset (level+1) = siblingOffset level+siblingWidth level := by
+  cases level <;> simp [siblingOffset, siblingWidth, Nat.mul_succ] <;> omega
+
+theorem record_end (ordinal : Nat) :
+    siblingDestination ordinal 10 = recordBase (ordinal+1) := by
+  simp [siblingDestination, recordBase, recordBytes, siblingOffset]
+  omega
+
+theorem even_sibling_destination (ordinal level : Nat) :
+    siblingDestination ordinal level % 2 = 0 := by
+  have base : QOpening.proofBase % 2 = 0 := by decide
+  unfold siblingDestination recordBase recordBytes siblingOffset
+  split <;> omega
+
+theorem proof_fits_every_cardinality (positions : Positions) :
+    proofLength positions ≤ capacity := by
+  have cardinal : positions.card ≤ LENGTH := by
+    simpa [Index] using Finset.card_le_univ positions
+  have nodes := QOpening.opening_nodes_bound positions
+  unfold proofLength capacity recordBytes
+  omega
+
+theorem scheduled_fuel_fits (positions : Positions) : scheduledCycles positions ≤ 17179934720 := by
+  have cardinal : positions.card ≤ 16777216 := by
+    have bound : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
+    exact bound
+  unfold scheduledCycles
+  split
+  · decide
+  · rw [cap_cycle_delta]
+    have counts := QOpening.opening_cap_cycles_bound (QOpening.groupsBefore positions positions.card)
+    have nodes := QOpening.opening_nodes_bound positions
+    simp only [QOpening.openingNodes, ite_eq_right (by assumption)] at nodes
+    omega
+
+theorem scheduled_scored_limits (positions : Positions) (count : positions.card = BATCH) :
+    scheduledCycles positions ≤ 107901 ∧ proofLength positions ≤ 81408 := by
+  have size : positions.card = 128 := count
+  have cap := QOpening.opening_cap_cycles_bound (QOpening.groupsBefore positions positions.card)
+  have bytes := QOpening.opening_nodes_bound positions
+  have positive : positions.card ≠ 0 := by omega
+  rw [scheduledCycles, ite_eq_right positive, cap_cycle_delta]
+  unfold proofLength recordBytes
+  simp only [QOpening.openingNodes, ite_eq_right positive] at bytes ⊢
+  omega
+
+theorem scheduled_scored_attainment :
+    ∃ positions : Positions, positions.card = BATCH ∧ scheduledCycles positions = 107901 ∧
+      proofLength positions = 81408 := by
+  obtain ⟨positions, count, cycles, bytes⟩ := QOpening.opening_scored_attainment
+  have size : positions.card = 128 := count
+  have positive : positions.card ≠ 0 := by omega
+  unfold QOpening.openingMachineCycles at cycles
+  rw [ite_eq_right positive] at cycles
+  have exactCount : (QOpening.openingNodes positions).length = 128 := by
+    unfold QOpening.openingLength at bytes
+    omega
+  refine ⟨positions, count, ?_, ?_⟩
+  · rw [scheduledCycles, ite_eq_right positive, cap_cycle_delta]
+    simp only [QOpening.openingNodes, ite_eq_right positive] at exactCount
+    omega
+  · unfold proofLength recordBytes
+    omega
+
+end TwoPermutationPrototype.QuadOpening
