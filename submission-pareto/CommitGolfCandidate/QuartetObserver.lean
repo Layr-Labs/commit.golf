@@ -1,0 +1,128 @@
+import CommitGolfCandidate.QuartetHiddenFrame
+import CommitGolfCandidate.TaggedPinnedConditionalObserver
+
+namespace TwoPermutationPrototype.Sampling.Quartet
+open CommitGolf OracleComp CommitGolfCandidate
+open scoped ENNReal
+
+set_option maxRecDepth 8192
+set_option maxHeartbeats 1000000
+set_option exponentiation.threshold 2048
+
+local instance QuartetObserverLocalInstance1 {α : Type} : MeasurableSpace α := ⊤
+
+noncomputable def permutationRows (s : ProbComp (BiPermutation Block)) (t : ProbComp (List Row)) :
+    ProbComp (BiPermutation Block × List Row) := do
+  let p ← s
+  let rows ← t
+  pure (p, rows)
+
+def DomainBreak (domain : List Block) (pair : BiPermutation Block × List Row) : Prop :=
+  ∃ x ∈ domain, (pair.1.programRows pair.2).forward x ≠ pair.1.forward x
+
+theorem hidden_program_average {I : Type} [Fintype I] {base : Cache}
+    (cache : PinnedHighCache base) (slot : Nat) (valid : cache.Valid slot)
+    (position : I → Index) (first : I → Block) (message : I → Words 32)
+    (digest : I → BitVec 256) (room : cache.zero.entries.length + Fintype.card I ≤ 2^121)
+    (perms : ProbComp (BiPermutation Block)) (domain : List Block)
+    (isolated : ∀ nonce : I → BitVec 128, ∀ x ∈ domain, ∀ i,
+      x ≠ pinnedPrivateSecond (position i) (first i) (message i) (nonce i))
+    (oldRate : ENNReal)
+    (oldChance : Pr{let p ← perms}[¬ PreservesOldTails cache p domain] ≤ oldRate) :
+    Pr{let pair ← permutationRows perms (samplePinnedHiddenRows cache slot position first message digest)}[DomainBreak domain pair] ≤ oldRate + (domain.length : ENNReal) * ((Fintype.card I : ENNReal)/2^1343) := by
+  classical
+  let pick := samplePinnedHiddenRows cache slot position first message digest
+  let next (p : BiPermutation Block) := pick >>= fun rows => pure (p,rows)
+  let expired (p : BiPermutation Block) := ¬ PreservesOldTails cache p domain
+  have subsequent (p : BiPermutation Block) (_ : p ∈ support perms) (good : ¬ expired p) :
+      Pr{let pair ← next p}[DomainBreak domain pair] ≤
+        (domain.length : ENNReal) * ((Fintype.card I : ENNReal)/2^1343) := by
+    unfold next
+    rw [bind_pure_comp,prEvent_map]
+    exact hidden_program_frame_probability cache slot valid position first message digest room
+      p domain isolated (Classical.not_not.mp good)
+  exact (prEvent_bind_le_prEvent_add_of_support perms next expired (DomainBreak domain) subsequent).trans
+    (add_le_add oldChance le_rfl)
+
+/-- An honest transcript may read any number of points in the frozen domain.
+Only public calls made by the two-message adversary incur the baseline charge. -/
+theorem conditional_reference_with_domain {I Output : Type} [Fintype I] [DecidableEq I]
+    {base : Cache} {count : Nat} (state : PinnedOpenedState base count) [DecidablePred state.isRevealed]
+    (valid : state.high.Valid count) (opened : {i : Fin count // state.isRevealed i} → BitVec 256)
+    (position : I → Index) (unique : Function.Injective position) (first : I → Block) (message : I → Words 32)
+    (room : state.high.zero.entries.length + Fintype.card I ≤ 2^121)
+    (disjoint : ∀ nonce addr, addr ∈ pinnedNonceAddresses position first message nonce → addr ∉ state.opened)
+    (compress : Compression) (domain : List Block)
+    (observer : (I → BitVec 256) → BiPermutation Block → OracleComp World Output)
+    (freeze : ∀ digest p p', (∀ x ∈ domain, p.forward x = p'.forward x) → observer digest p = observer digest p')
+    (budget : Nat) (bounded : ∀ digest p, QueryBounded (observer digest p) budget)
+    (before : base.entries.length ≤ budget) (sites : Fintype.card I ≤ 2^24)
+    (frameRate : ENNReal) (finite : frameRate ≠ ∞) (frame : ∀ digest,
+      Pr{let pair ← permutationRows (samplePinnedBasePermutation state opened) (samplePinnedHiddenRows state.high count position first message digest)}[DomainBreak domain pair] ≤ frameRate) :
+    let execute := fun digest p => fixedOracleRun (fixedOracle compress p) (observer digest p)
+    measureTVDist (pinnedConditionalActual state opened position first message execute)
+      (pinnedConditionalReference state opened execute) ≤ pinnedOneSideCharge budget + frameRate.toReal := by
+  classical
+  let execute := fun digest p => fixedOracleRun (fixedOracle compress p) (observer digest p)
+  let actual := pinnedConditionalActual state opened position first message execute
+  let programmed := pinnedConditionalProgrammed state opened position first message execute
+  let reference := pinnedConditionalReference state opened execute
+  let perms := samplePinnedBasePermutation state opened
+  let rows (d : I → BitVec 256) := samplePinnedHiddenRows state.high count position first message d
+  let altered (d : I → BitVec 256) (pair : BiPermutation Block × List Row) :=
+    execute d (pair.1.programRows pair.2)
+  let frozen (d : I → BitVec 256) (pair : BiPermutation Block × List Row) :=
+    fixedOracleRun (fixedOracle compress (pair.1.programRows pair.2)) (observer d pair.1)
+  let mixed := do
+    let d ← samplePinnedLowFn I
+    let p ← perms
+    let rs ← rows d
+    frozen d (p,rs)
+  have pre : measureTVDist actual programmed ≤ (budget:ℝ)/2^128 :=
+    (pinned_conditional_actual_programmed_distance state opened position first message execute valid unique room disjoint).trans
+      (div_le_div_of_nonneg_right (by exact_mod_cast before) (by positivity))
+  have one (d : I → BitVec 256) :
+      measureTVDist (permutationRows perms (rows d) >>= altered d)
+        (permutationRows perms (rows d) >>= frozen d) ≤ frameRate.toReal := by
+    have compare := measureTVDist_bind_left_le_prEvent_of_evalDistEq (permutationRows perms (rows d))
+      (altered d) (frozen d) (DomainBreak domain) (by
+        intro pair safe
+        have same := freeze d (pair.1.programRows pair.2) pair.1 (fun x h => by
+          by_contra bad
+          exact safe ⟨x, h, bad⟩)
+        unfold altered frozen execute
+        rw [same])
+    exact compare.trans (ENNReal.toReal_mono finite (frame d))
+  have frameCost : measureTVDist programmed mixed ≤ frameRate.toReal := by
+    apply measureTVDist_bind_left_le_of_forall_le (samplePinnedLowFn I) _ _ ENNReal.toReal_nonneg
+    intro d
+    simpa only [permutationRows, bind_assoc, pure_bind, altered, frozen, execute, rows, perms] using one d
+  let rate : ENNReal := (1 : ENNReal)/2^128 + 1/2^128 + (Fintype.card I : ENNReal)/2^1343
+  have rateBound : rate.toReal ≤ (2 : ℝ)/2^128 + 2^25/2^1344 := by
+    unfold rate
+    repeat first
+      | rw [ENNReal.toReal_add (by finiteness) (by finiteness)]
+      | rw [ENNReal.toReal_div]
+      | rw [ENNReal.toReal_pow]
+    simp only [ENNReal.toReal_natCast, ENNReal.toReal_one, ENNReal.toReal_ofNat]
+    have cardBound : (Fintype.card I : ℝ) ≤ 2^24 := by exact_mod_cast sites
+    norm_num
+    linarith
+  have post : measureTVDist mixed reference ≤ (budget : ℝ)*(2/2^128 + 2^25/2^1344) := by
+    rw [measureTVDist_comm]
+    apply measureTVDist_bind_left_le_of_forall_le (samplePinnedLowFn I) _ _ (by positivity)
+    intro d
+    apply measureTVDist_bind_left_le_of_forall_le perms _ _ (by positivity)
+    intro p
+    have payment := pinned_adaptive_programmed_distance (rows d) rate (by unfold rate; finiteness)
+      compress p (observer d p) budget (bounded d p)
+      (fun row => pinned_hidden_rows_hit_le state.high count valid position unique first message d room row)
+    apply payment.trans
+    rw [ENNReal.toReal_mul, ENNReal.toReal_natCast]
+    exact mul_le_mul_of_nonneg_left rateBound (by positivity)
+  have beforeMixed := (measureTVDist_triangle actual programmed mixed).trans (add_le_add pre frameCost)
+  have all := (measureTVDist_triangle actual mixed reference).trans (add_le_add beforeMixed post)
+  unfold pinnedOneSideCharge
+  linarith
+
+end TwoPermutationPrototype.Sampling.Quartet
