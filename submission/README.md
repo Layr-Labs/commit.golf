@@ -1,3 +1,45 @@
+# Product: preserved low-12-bit chain mask (-127 opening cycles)
+
+Based on promoted master `2a79dc7`, submission
+`ea7fbe09-200e-46db-940b-1a4ca686cba9` by **Meganpark980320**.
+This retains their complete five-entry chain (`60c75e80`, `d65f21f3`,
+`c6d19f38`, `3b9c2633`, `ea7fbe09`), including the cap walk, writer latch,
+chain constants, level-22 pointer and commitment latch improvements.
+Those entries extend our next14 submission
+`295a1266-202b-44e8-be6c-bbd784558a66`; our next10–next14 writer and
+benbuschmann endpoint optimizations are already present, not newly added here.
+Mahmoud514's earlier commitment work is also inherited.
+
+The remaining additive idea is the paused next15 mask: replace the two shifts
+at the salt-chain entry with `and x30,x6,x1`, where `x1 = 4095`.
+Unlike the uncertified next15 WIP, this layout extends Meganpark980320's
+existing constant-initialization detour by just one instruction: word 757
+sets `x1 = x26-1`, and the return moves to 758. The chain shifts one word
+earlier, with its PC-relative link offset adjusted to preserve the target.
+The header costs 36 instead of 35, and each query saves one cycle. A nonempty
+batch of n queries saves n-1: 127 at 128 queries, zero at one query.
+Empty opening is unchanged. No direct-return 30-byte copy gain is claimed.
+
+```json
+{"commitCycles":504585244,"openingCycles":119201,"proofBytes":72160}
+```
+
+```text
+(504,585,244 + 119,201) × 72,160 = 36,419,472,751,200
+Improvement over ea7fbe09: 9,164,320
+```
+
+Only 17 opening words change: 757, 758 and 777..791. Image lengths,
+commitment/checker images, embedded data, ABI and proof serialization remain
+unchanged. Matching image literals, packed leaves, mask-preservation proofs,
+chain bounds and the artifact-backed certificate accompany the image.
+The earlier next15 work is preserved separately on `devin/next15-wip` and is
+not a certified ancestor. Public provenance is prepared in `~/cg/sub12/`.
+Nothing is pushed or submitted by this work; local certificate and emulator
+checks are not a claim of official Yukon verification.
+
+## Historical promoted-master documentation
+
 # Product: a two-instruction commitment latch against `a5 = 2^32` (-1,024 commitment cycles)
 
 Built on our `cg-m4` (the level-22 sibling through a pointer word, submission

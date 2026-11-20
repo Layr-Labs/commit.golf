@@ -93,6 +93,7 @@ structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : B
   /-- The salt-chain constants (header rows 755, 756), kept by every position. -/
   gp : s.getReg .x3=374
   sp : s.getReg .x2=4352
+  mask : s.getReg .x1=4095
   /-- The pointer word of every processed position's quartet holds the address of its level-22 sibling node. -/
   pointer : ∀ a<j, memoryView s (pointerWord ((pos p a).val/4))=wordAddress (nodeWordOf ((pos p a).val/4^^^1))
 
@@ -107,7 +108,7 @@ theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (
   have card : p.card≤16777216 := by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
   have ea : indexAt j=wordAddress (1174405636+j) := by unfold indexAt wordAddress;congr 1 <;> omega
   refine ⟨r.toRegisters,by simpa [passPC,Nat.ne_of_lt hj] using r.pc,r.mark,r.heap,r.leaves,r.slots,r.quartet,
-    last_small p j,?_,?_,r.gp,r.sp⟩
+    last_small p j,?_,?_,r.gp,r.sp,r.mask⟩
   · have same := r.frame (1174405636+j) (by omega) (by
       rintro (h|h|h|h|⟨q,hq,m,hm,e⟩)
       all_goals (try omega)
@@ -155,7 +156,7 @@ theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key 
   refine ⟨by simpa only [show p.card-j-1=p.card-(j+1) by omega] using reg,
     ⟨(kp .x8).trans r.indices,(kp .x9).trans r.heap,(kp .x18).trans r.count,
      (kp .x19).trans r.leaves,(kp .x20).trans r.start,(kp .x21).trans r.dest,(kp .x23).trans r.mark,
-     (kp .x24).trans r.slots,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_,(kp .x3).trans r.gp,(kp .x2).trans r.sp,?_⟩
+     (kp .x24).trans r.slots,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_,(kp .x3).trans r.gp,(kp .x2).trans r.sp,(kp .x1).trans r.mask,?_⟩
   · rw [pc];unfold finalPC passPC;split <;> rename_i h <;> simp [show j+1=p.card ↔ p.card-j=1 by omega,h]
   · rw [q4]; simp [lastOf,i]
   · intro w fit away
@@ -233,7 +234,7 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     apply bind_congr;intro t;apply bind_congr;intro z;apply congrArg (fun x : Execution => (pure x : OracleComp World Execution))
     cases z;simp [Execution.charge,passCycles,passCalls] <;> omega
 
-theorem chain_cycles_le (i : Index) : chainCycles i≤297 := by
+theorem chain_cycles_le (i : Index) : chainCycles i≤296 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCycles chainSteps chainCalls; omega
 
@@ -241,8 +242,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 334 cycles per position (new even quartet 25, chain link 33: 297, post ≤ 12) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤334*n+2 := by
+/-- At most 333 cycles per position (new even quartet 25, chain link 33: 296, post ≤ 12) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤333*n+2 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

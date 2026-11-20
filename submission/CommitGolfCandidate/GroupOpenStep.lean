@@ -161,6 +161,7 @@ structure Input (s : MachineState) (i : Index) (ord left last : Nat) extends Reg
   /-- The salt-chain constants set once by the header (rows 755, 756). -/
   gp : s.getReg .x3=374
   sp : s.getReg .x2=4352
+  mask : s.getReg .x1=4095
 
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.getReg_setPC
 attribute [local simp] pc_of_set mem_of_set mem_of_reg mem_of_store open_zero
