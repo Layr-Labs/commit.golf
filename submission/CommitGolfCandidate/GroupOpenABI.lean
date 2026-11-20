@@ -7,7 +7,8 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp S
 open QuartetOpening (proofLength)
 open Opening (groupsBefore openingNodes capDigestAddress)
 
-/-- Wide record copies, 771-cycle cap preparation, and the five-cycle cap advances and root exit. -/
+/-- Wide record copies, 771-cycle cap preparation, the cap walk (three-cycle steps across, four-cycle climbs),
+the one-cycle root exit `jal` and the four-cycle return block. -/
 def wideCycles (positions : Positions) : Nat :=
   if positions.card = 0 then 7 else
     15 + (137*positions.card+copySum positions.card-1) + 770 +
@@ -41,7 +42,7 @@ theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15
   omega
 
 theorem wide_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    wideCycles positions ≤ 77701 ∧ proofLength positions ≤ 72160 := by
+    wideCycles positions ≤ 76936 ∧ proofLength positions ≤ 72160 := by
   have old := QuartetOpening.scored_limits positions count
   have nodes := Opening.opening_nodes_bound positions
   have k : positions.card = 128 := count
@@ -89,6 +90,25 @@ private theorem byte_memory (before after : MachineState) (address : Nat) (fit :
   change extractByte (after.getMem aligned) _ = _
   rw [stable]
   rfl
+
+/-- With at least one opened position the cap root is marked (every cap group lies in `[256, 512)`). -/
+theorem cap_root_marked (positions : Positions) (positive : 0 < positions.card) :
+    capIsMarked (groupsBefore positions positions.card) 1 8 = true := by
+  have size : (groupsBefore positions positions.card).length = positions.card := by
+    simp [groupsBefore]
+  cases hg : groupsBefore positions positions.card with
+  | nil => rw [hg] at size; simp at size; omega
+  | cons g rest =>
+    have member : g ∈ groupsBefore positions positions.card := by rw [hg]; simp
+    unfold groupsBefore at member
+    obtain ⟨index, _, value⟩ := List.mem_map.1 member
+    have bound : index.val < 16777216 := index.isLt
+    have high : g / 2^8 = 1 := by
+      rw [← value]
+      change (16777216+index.val)/65536/256 = 1
+      omega
+    simp only [capIsMarked, List.any_eq_true, beq_iff_eq]
+    exact ⟨g, by simp, high⟩
 
 attribute [local irreducible] execute capPreparation setupPrefix readBuffer
 
@@ -148,9 +168,9 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
       omega
     have above : proofBase ≤ dest := by unfold dest recordBase; omega
     obtain ⟨after, ranCap, afterPC, endPosition, footerFrame, footerBytes⟩ :=
-      cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC
+      cap_root grouped prepared dest root (cap_root_marked positions positive) rootPC
         ((show Opening.proofBase≤proofBase by decide).trans above) aligned room countdown
-    let final := exitPrefix (advancePrefix after 41 1) 3
+    let final := exitPrefix after 3
     let capCost := capWalkCycles grouped 1 8 dest 0
     let recCost := 137*positions.card+copySum positions.card-1
     have charge : wideCycles positions = 15+recCost+771+capCost+5 := by
@@ -162,7 +182,7 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
       exact charged ▸ assembled.run
     have ranPrep : RunsOpeningBlock lower prepared 771 :=
       execute_cap_preparation lower (by simpa using atCap.pc) atCap.marks
-    have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord endPosition.context.one surplus true
+    have ⟨ranExit, finalMem, retLen⟩ := root_exit after afterPC surplus true
     have lowerFrame (address : Nat) (fromProof : proofBase ≤ address) (beforeCap : address < dest) :
         final.getByte (BitVec.ofNat 64 address) = lower.getByte (BitVec.ofNat 64 address) := by
       have byteFit : address < MEMORY_BYTES := by omega
@@ -177,8 +197,8 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
     refine ⟨final,?_,⟨rfl,?_,rfl,rfl,?_,?_⟩⟩
     · have nl : nodes.length = (Sampling.capFrontierNodes grouped 1 8).length := rfl
       rw [show wideCycles positions-15+surplus=
-          recCost+771+capCost+(5+surplus) by omega]
-      rw [((ranRecords.next ranPrep).next ranCap) (5+surplus) true,ranExit]
+          recCost+771+(capCost+1)+(4+surplus) by omega]
+      rw [((ranRecords.next ranPrep).next ranCap) (4+surplus) true,ranExit]
       simp [Execution.charge,final]
       omega
     · change (final.getReg .x11).toNat = _
@@ -264,7 +284,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 77701 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
+    result.cycles ≤ 76936 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
   rw [physical.cycles, physical.length]
   exact wide_scored_limits positions count
 

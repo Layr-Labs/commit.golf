@@ -57,28 +57,25 @@ theorem known_x30 (state : MachineState) (n : Nat) (small : n ≤ 3) :
   rcases sub with rfl|rfl|rfl <;> first | exact bgeu_reg .. | exact jal_reg .. | simp [execInstrBr]
 
 private theorem checks_x30 (state : MachineState) : (afterAdvanceChecks state).getReg .x30=state.getReg .x30 := by
-  have c1 : (capWalkInstructions.drop 41).take 1=[.BEQ .x6 .x23 32] := rfl
-  have c2 : (capWalkInstructions.drop 42).take 2=[.ANDI .x7 .x6 1, .BEQ .x7 .x0 16] := rfl
-  unfold afterAdvanceChecks advancePrefix; rw [c1, c2]
-  rw [instrs_preserve _ _ _ (by
-    intro op hop st; simp only [List.mem_cons, List.not_mem_nil, or_false] at hop
-    rcases hop with rfl|rfl <;> first | exact beq_reg .. | simp [execInstrBr])]
+  have c : (capWalkInstructions.drop 41).take 2=[.ANDI .x7 .x6 1, .BEQ .x7 .x0 8024] := rfl
+  unfold afterAdvanceChecks advancePrefix; rw [c]
   apply instrs_preserve; intro op hop st; simp only [List.mem_cons, List.not_mem_nil, or_false] at hop
-  rcases hop with rfl <;> exact beq_reg ..
+  rcases hop with rfl|rfl <;> first | exact beq_reg .. | simp [execInstrBr]
 
 theorem right_x30 (state : MachineState) : (advanceRight state).getReg .x30=state.getReg .x30 := by
-  have c : (capWalkInstructions.drop 47).take 2=[.ADDI .x6 .x6 1, .JAL .x0 2096964] := rfl
-  unfold advanceRight advancePrefix; rw [c, instrs_preserve _ _ _ (by
-    intro op hop st; simp only [List.mem_cons, List.not_mem_nil, or_false] at hop
-    rcases hop with rfl|rfl <;> first | exact jal_reg .. | simp [execInstrBr])]
-  exact checks_x30 state
+  have step : (advanceRight state).getReg .x30=(afterAdvanceChecks state).getReg .x30 := by
+    simp [advanceRight, advanceRightStep, execInstrBr]
+  exact step.trans (checks_x30 state)
 
 theorem up_x30 (state : MachineState) : (advanceUp state).getReg .x30=state.getReg .x30 := by
-  have c : (capWalkInstructions.drop 44).take 2=[.SRLI .x6 .x6 1, .JAL .x0 2097136] := rfl
+  have c : (capWalkInstructions.drop 43).take 2=[.SRLI .x6 .x6 1, .BNE .x6 .x23 8180] := rfl
   unfold advanceUp advancePrefix; rw [c, instrs_preserve _ _ _ (by
     intro op hop st; simp only [List.mem_cons, List.not_mem_nil, or_false] at hop
-    rcases hop with rfl|rfl <;> first | exact jal_reg .. | simp [execInstrBr])]
+    rcases hop with rfl|rfl <;> first | exact bne_reg2 .. | simp [execInstrBr])]
   exact checks_x30 state
+
+theorem root_x30 (state : MachineState) : (advanceRootExit state).getReg .x30=state.getReg .x30 := by
+  unfold advanceRootExit; rw [MachineState.getReg_setPC]; exact up_x30 state
 
 private theorem lookup_block (groups : List Nat) (state : MachineState) (node height dest : Nat)
     (span : CapSpan node height) (position : CapPosition groups state node dest)
@@ -193,7 +190,7 @@ private theorem walk_unmarked (emit : EmitCap238) (groups : List Nat) (heap : Na
 /-- The cursor emits the subtree's frontier with the T238 countdown, extending the packed cap bytes. -/
 theorem cap_subtree_general (emit : EmitCap238) (groups : List Nat) (heap : Nat → BitVec 256) (capStart : Nat)
     (height : Nat) : ∀ (state : MachineState) (node : Nat) (vs : List (BitVec 256)),
-    CapSpan node height → CapRun groups heap capStart vs state node → state.pc=0x1a54 →
+    1 < node → CapSpan node height → CapRun groups heap capStart vs state node → state.pc=0x1a54 →
     proofBase ≤ capStart → capStart%2=0 →
     capStart+capOffset (vs.length+(capFrontierNodes groups node height).length)+2 ≤ MEMORY_BYTES →
     ∃ after, RunsOpeningBlock state after (capWalkCycles groups node height capStart vs.length) ∧
@@ -203,7 +200,7 @@ theorem cap_subtree_general (emit : EmitCap238) (groups : List Nat) (heap : Nat 
         after.getByte (BitVec.ofNat 64 a)=state.getByte (BitVec.ofNat 64 a)) := by
   induction height with
   | zero =>
-    intro state node vs span run pc separate aligned fits
+    intro state node vs nonroot span run pc separate aligned fits
     cases mark : capIsMarked groups node 0
     · have one : (capFrontierNodes groups node 0)=[node] := by simp [capFrontierNodes, mark]
       rw [one] at fits ⊢
@@ -226,7 +223,7 @@ theorem cap_subtree_general (emit : EmitCap238) (groups : List Nat) (heap : Nat 
       · intro n hn; rw [read_mem m]; exact run.heapRead n hn
       · intro a _ _; exact byte_of_mem m _
   | succ height ih =>
-    intro state node vs span run pc separate aligned fits
+    intro state node vs nonroot span run pc separate aligned fits
     cases mark : capIsMarked groups node (height+1)
     · have one : (capFrontierNodes groups node (height+1))=[node] := by simp [capFrontierNodes, mark]
       rw [one] at fits ⊢
@@ -249,7 +246,7 @@ theorem cap_subtree_general (emit : EmitCap238) (groups : List Nat) (heap : Nat 
         ⟨leftPos,(known_x30 _ 3 (by decide)).trans ((visit_x30 state).trans run.counter),
           (bytes_mem m0 _ _).trans run.bytes,fun n hn => (read_mem m0 _ _).trans (run.heapRead n hn)⟩
       obtain ⟨leftEnd, ranLeft, leftDone, runL, frameL⟩ :=
-        ih _ (2*node) vs leftSpan run0 leftPC separate aligned (by
+        ih _ (2*node) vs (by omega) leftSpan run0 leftPC separate aligned (by
           rw [← hleft]
           have := cap_offset_mono (vs.length+left.length) (vs.length+(left.length+right.length)) (by omega); omega)
       rw [← hleft] at runL frameL
@@ -261,12 +258,12 @@ theorem cap_subtree_general (emit : EmitCap238) (groups : List Nat) (heap : Nat 
           fun n hn => (read_mem memRight _ _).trans (runL.heapRead n hn)⟩
       have e1 : (vs++left.map heap).length=vs.length+left.length := by simp
       obtain ⟨rightEnd, ranRight, rightDone, runRR, frameR⟩ :=
-        ih _ (2*node+1) (vs++left.map heap) rightSpan runR rightPC separate aligned (by
+        ih _ (2*node+1) (vs++left.map heap) (by omega) rightSpan runR rightPC separate aligned (by
           rw [← hright, e1, show vs.length+left.length+right.length=vs.length+(left.length+right.length) by omega]
           exact fits)
       rw [← hright] at runRR frameR
       obtain ⟨up, finalPC, finalPos, memUp⟩ := advance_right_to_parent groups rightEnd node _
-        positive (cap_span_node _ _ rightSpan).2 runRR.position rightDone
+        nonroot (cap_span_node _ _ rightSpan).2 runRR.position rightDone
       have lists : vs++(left++right).map heap=(vs++left.map heap)++right.map heap := by
         rw [List.map_append, List.append_assoc]
       have e2 : vs.length+(left.length+right.length)=(vs++left.map heap).length+right.length := by rw [e1]; omega
@@ -287,24 +284,88 @@ theorem cap_subtree_general (emit : EmitCap238) (groups : List Nat) (heap : Nat 
             · right; omega)]
         exact byte_of_mem m0 _
 
-/-- Root form (no node emitted before, countdown 7): the interface of `cap_subtree` (GroupOpenCapEmit). -/
-theorem cap_subtree_of_emit (emit : EmitCap238) (groups : List Nat) (state : MachineState) (node height dest : Nat)
-    (span : CapSpan node height) (position : CapPosition groups state node dest)
+/-- The root (node 1, marked whenever a position is opened): lookup, descent, both children through
+`cap_subtree_general`, the step across (row 660), and the root exit from its right child (rows 701..705). -/
+theorem cap_root_general (emit : EmitCap238) (groups : List Nat) (heap : Nat → BitVec 256) (capStart : Nat)
+    (height : Nat) (state : MachineState) (vs : List (BitVec 256))
+    (span : CapSpan 1 (height+1)) (run : CapRun groups heap capStart vs state 1) (pc : state.pc=0x1a54)
+    (mark : capIsMarked groups 1 (height+1)=true)
+    (separate : proofBase ≤ capStart) (aligned : capStart%2=0)
+    (fits : capStart+capOffset (vs.length+(capFrontierNodes groups 1 (height+1)).length)+2 ≤ MEMORY_BYTES) :
+    ∃ after, RunsOpeningBlock state after (capWalkCycles groups 1 (height+1) capStart vs.length+1) ∧
+      after.pc=0x1b14 ∧
+      CapRun groups heap capStart (vs++(capFrontierNodes groups 1 (height+1)).map heap) after 1 ∧
+      (∀ a<2^64, a<capStart ∨ capStart+capOffset (vs.length+(capFrontierNodes groups 1 (height+1)).length) ≤ a →
+        after.getByte (BitVec.ofNat 64 a)=state.getByte (BitVec.ofNat 64 a)) := by
+  set left := capFrontierNodes groups (2*1) height with hleft
+  set right := capFrontierNodes groups (2*1+1) height with hright
+  have both : capFrontierNodes groups 1 (height+1)=left++right := by simp [capFrontierNodes, mark, left, right]
+  rw [both] at fits ⊢
+  simp only [List.length_append] at fits ⊢
+  obtain ⟨lookup, branch, looked, mem⟩ := lookup_block groups state 1 (height+1) _ span run.position pc
+  have target : (cursorVisitPrefix state 4).pc=0x1a64 := by simpa [mark] using branch
+  obtain ⟨descend, leftPC, leftPos, memLeft⟩ := cap_descend_step groups _ 1 height _ looked span target
+  obtain ⟨leftSpan, rightSpan⟩ := cap_span_children 1 height span
+  have m0 : (cursorKnownPrefix (cursorVisitPrefix state 4) 3).mem=state.mem := memLeft.trans mem
+  have run0 : CapRun groups heap capStart vs (cursorKnownPrefix (cursorVisitPrefix state 4) 3) (2*1) :=
+    ⟨leftPos,(known_x30 _ 3 (by decide)).trans ((visit_x30 state).trans run.counter),
+      (bytes_mem m0 _ _).trans run.bytes,fun n hn => (read_mem m0 _ _).trans (run.heapRead n hn)⟩
+  obtain ⟨leftEnd, ranLeft, leftDone, runL, frameL⟩ :=
+    cap_subtree_general emit groups heap capStart height _ (2*1) vs (by decide) leftSpan run0 leftPC separate aligned (by
+      rw [← hleft]
+      have := cap_offset_mono (vs.length+left.length) (vs.length+(left.length+right.length)) (by omega); omega)
+  rw [← hleft] at runL frameL
+  obtain ⟨across, rightPC, rightPos, memRight⟩ := advance_left_to_right groups leftEnd 1 _
+    (by decide) (cap_span_node _ _ leftSpan).2 runL.position leftDone
+  have runR : CapRun groups heap capStart (vs++left.map heap) (advanceRight leftEnd) (2*1+1) :=
+    ⟨rightPos,(right_x30 _).trans runL.counter,(bytes_mem memRight _ _).trans runL.bytes,
+      fun n hn => (read_mem memRight _ _).trans (runL.heapRead n hn)⟩
+  have e1 : (vs++left.map heap).length=vs.length+left.length := by simp
+  obtain ⟨rightEnd, ranRight, rightDone, runRR, frameR⟩ :=
+    cap_subtree_general emit groups heap capStart height _ (2*1+1) (vs++left.map heap) (by decide) rightSpan runR
+      rightPC separate aligned (by
+        rw [← hright, e1, show vs.length+left.length+right.length=vs.length+(left.length+right.length) by omega]
+        exact fits)
+  rw [← hright] at runRR frameR
+  obtain ⟨up, finalPC, finalPos, memUp⟩ := advance_right_to_root groups rightEnd _ runRR.position rightDone
+  have lists : vs++(left++right).map heap=(vs++left.map heap)++right.map heap := by
+    rw [List.map_append, List.append_assoc]
+  have e2 : vs.length+(left.length+right.length)=(vs++left.map heap).length+right.length := by rw [e1]; omega
+  rw [lists, e2]
+  refine ⟨advanceRootExit rightEnd, ?_, finalPC, ⟨finalPos,(root_x30 _).trans runRR.counter,
+    (bytes_mem memUp _ _).trans runRR.bytes,fun n hn => (read_mem memUp _ _).trans (runRR.heapRead n hn)⟩, ?_⟩
+  · have trace := ((((lookup.next descend).next ranLeft).next across).next ranRight).next up
+    rw [cap_walk_branch groups 1 height capStart vs.length mark]
+    rw [e1] at trace
+    rw [← hleft]
+    convert trace using 1
+    omega
+  · intro a fit far
+    have mono := cap_offset_mono (vs.length+left.length) ((vs++left.map heap).length+right.length) (by omega)
+    rw [byte_of_mem memUp, frameR a fit far, byte_of_mem memRight, frameL a fit (by
+        rcases far with h|h
+        · exact Or.inl h
+        · right; omega)]
+    exact byte_of_mem m0 _
+
+/-- Root form (no node emitted before, countdown 7): the interface of `cap_root` (GroupOpenCapEmit). -/
+theorem cap_root_of_emit (emit : EmitCap238) (groups : List Nat) (state : MachineState) (dest : Nat)
+    (position : CapPosition groups state 1 dest) (marked : capIsMarked groups 1 8=true)
     (pc : state.pc=0x1a54) (separate : proofBase ≤ dest) (aligned : dest%2=0)
-    (fits : dest+capOffset (capFrontierNodes groups node height).length+2 ≤ MEMORY_BYTES)
+    (fits : dest+capOffset (capFrontierNodes groups 1 8).length+2 ≤ MEMORY_BYTES)
     (counter : state.getReg .x30=7#64) :
-    ∃ after, RunsOpeningBlock state after (capWalkCycles groups node height dest 0) ∧
-      after.pc=0x1af4 ∧
-      CapPosition groups after node (dest+capOffset (capFrontierNodes groups node height).length) ∧
-      (∀ address<2^64, address<dest ∨ dest+capOffset (capFrontierNodes groups node height).length ≤ address →
+    ∃ after, RunsOpeningBlock state after (capWalkCycles groups 1 8 dest 0+1) ∧
+      after.pc=0x1b14 ∧
+      CapPosition groups after 1 (dest+capOffset (capFrontierNodes groups 1 8).length) ∧
+      (∀ address<2^64, address<dest ∨ dest+capOffset (capFrontierNodes groups 1 8).length ≤ address →
         after.getByte (BitVec.ofNat 64 address)=state.getByte (BitVec.ofNat 64 address)) ∧
-      bytesAt after dest (capOffset (capFrontierNodes groups node height).length)=
-        foldNodes ((capFrontierNodes groups node height).map (fun n => readBuffer state (capDigestAddress n) 32)) := by
-  have start : CapRun groups (fun n => readBuffer state (capDigestAddress n) 32) dest [] state node :=
+      bytesAt after dest (capOffset (capFrontierNodes groups 1 8).length)=
+        foldNodes ((capFrontierNodes groups 1 8).map (fun n => readBuffer state (capDigestAddress n) 32)) := by
+  have start : CapRun groups (fun n => readBuffer state (capDigestAddress n) 32) dest [] state 1 :=
     ⟨by simpa [capOffset] using position, by simpa using counter,
       by simp [bytesAt, capOffset, fold_nodes_nil], fun n _ => rfl⟩
-  obtain ⟨after,r,p,run,frame⟩ := cap_subtree_general emit groups _ dest height state node [] span start pc
-    separate aligned (by simpa using fits)
+  obtain ⟨after,r,p,run,frame⟩ := cap_root_general emit groups _ dest 7 state [] Opening.cap_span_root start pc
+    marked separate aligned (by simpa using fits)
   refine ⟨after,?_,p,?_,?_,?_⟩
   · simpa using r
   · simpa using run.position

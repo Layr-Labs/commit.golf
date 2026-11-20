@@ -28,18 +28,20 @@ theorem emit_cap238 : EmitCap238 := by
     · rw [if_neg zero]; exact x30
     · rw [if_neg zero]; exact bytes
 
-theorem cap_subtree (groups : List Nat) (state : MachineState) (node height dest : Nat)
-    (span : Opening.CapSpan node height) (position : CapPosition groups state node dest)
+/-- The whole cap walk from the root: `capWalkCycles` plus the root exit `jal` at 705, ending at the return
+block (709). The root is marked whenever a position is opened. -/
+theorem cap_root (groups : List Nat) (state : MachineState) (dest : Nat)
+    (position : CapPosition groups state 1 dest) (marked : Sampling.capIsMarked groups 1 8=true)
     (pc : state.pc=0x1a54) (separate : Opening.proofBase ≤ dest) (aligned : dest%2=0)
-    (fits : dest+capOffset (Sampling.capFrontierNodes groups node height).length+2 ≤ MEMORY_BYTES)
+    (fits : dest+capOffset (Sampling.capFrontierNodes groups 1 8).length+2 ≤ MEMORY_BYTES)
     (counter : state.getReg .x30=7#64) :
-    ∃ after, RunsOpeningBlock state after (capWalkCycles groups node height dest 0) ∧
-      after.pc=0x1af4 ∧
-      CapPosition groups after node (dest+capOffset (Sampling.capFrontierNodes groups node height).length) ∧
-      (∀ address<2^64, address<dest ∨ dest+capOffset (Sampling.capFrontierNodes groups node height).length ≤ address →
+    ∃ after, RunsOpeningBlock state after (capWalkCycles groups 1 8 dest 0+1) ∧
+      after.pc=0x1b14 ∧
+      CapPosition groups after 1 (dest+capOffset (Sampling.capFrontierNodes groups 1 8).length) ∧
+      (∀ address<2^64, address<dest ∨ dest+capOffset (Sampling.capFrontierNodes groups 1 8).length ≤ address →
         after.getByte (BitVec.ofNat 64 address)=state.getByte (BitVec.ofNat 64 address)) ∧
-      bytesAt after dest (capOffset (Sampling.capFrontierNodes groups node height).length)=
-        foldNodes ((Sampling.capFrontierNodes groups node height).map (fun n => readBuffer state (Opening.capDigestAddress n) 32)) :=
-  cap_subtree_of_emit emit_cap238 groups state node height dest span position pc separate aligned fits counter
+      bytesAt after dest (capOffset (Sampling.capFrontierNodes groups 1 8).length)=
+        foldNodes ((Sampling.capFrontierNodes groups 1 8).map (fun n => readBuffer state (Opening.capDigestAddress n) 32)) :=
+  cap_root_of_emit emit_cap238 groups state dest position marked pc separate aligned fits counter
 
 end TwoPermutationPrototype.GroupedOpening

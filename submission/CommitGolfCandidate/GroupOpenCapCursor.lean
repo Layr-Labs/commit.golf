@@ -4,15 +4,17 @@ namespace TwoPermutationPrototype.GroupedOpening
 set_option maxRecDepth 4096
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 
+/-- Opener rows 660..708. Row 660 is the right-sibling step `addi x6,x6,1`, which falls into the
+lookup at 661; rows 701..705 are the advance block (`GroupOpenCapAdvance`); 706..708 are no longer reached. -/
 def capWalkInstructions : List Instr :=
-  [.ADDI .x6 .x0 1,
+  [.ADDI .x6 .x6 1,
    .SLLI .x7 .x6 3, .ADD .x7 .x26 .x7, .LD .x28 .x7 0, .BEQ .x28 .x0 16,
    .BGEU .x6 .x27 144, .SLLI .x6 .x6 1, .JAL .x0 2097128,
    .SLLI .x7 .x6 5, .ADD .x7 .x25 .x7] ++
   (List.range 15).flatMap (fun j => [copyLoad j, copyStore j]) ++
   [.ADDI .x21 .x21 30,
-   .BEQ .x6 .x23 32, .ANDI .x7 .x6 1, .BEQ .x7 .x0 16,
-   .SRLI .x6 .x6 1, .JAL .x0 2097136, .ADDI .x0 .x0 0, .ADDI .x6 .x6 1, .JAL .x0 2096964]
+   .ANDI .x7 .x6 1, .BEQ .x7 .x0 8024, .SRLI .x6 .x6 1, .BNE .x6 .x23 8180,
+   .JAL .x0 16, .ADDI .x0 .x0 0, .ADDI .x6 .x6 1, .JAL .x0 2096964]
 
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 

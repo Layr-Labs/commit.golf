@@ -4,12 +4,15 @@ import CommitGolfCandidate.K3OpenCapBytes
 namespace TwoPermutationPrototype.GroupedOpening
 open TwoPermutationPrototype.Sampling
 
-/-- Reference subtree charge before the destination-dependent copy savings. -/
+/-- Reference subtree charge before the destination-dependent copy savings. A marked internal node costs
+14: the lookup and descent (7), the step across to its right child (3: parity test and row 660) and the
+climb back from it (4: parity test, `srli`, `bne`). The root's last climb leaves through the `jal` at 705,
+charged as one extra cycle by `cap_root`. -/
 def capSubtreeCycles (groups : List Nat) (node : Nat) : Nat → Nat
   | 0 => if capIsMarked groups node 0 then 5 else 37
   | height+1 =>
     if capIsMarked groups node (height+1) then
-      17 + capSubtreeCycles groups (2*node) height + capSubtreeCycles groups (2*node+1) height
+      14 + capSubtreeCycles groups (2*node) height + capSubtreeCycles groups (2*node+1) height
     else 37
 
 theorem cap_cycles_le_old (groups : List Nat) (node height : Nat) :
@@ -23,10 +26,10 @@ theorem cap_cycles_le_old (groups : List Nat) (node height : Nat) :
     split <;> omega
 
 private def capWorst : Nat → Nat
-  | 0 => 59
-  | height+1 => 17 + 2*capWorst height
+  | 0 => 56
+  | height+1 => 14 + 2*capWorst height
 
-private theorem cap_worst_lower (height : Nat) : 59 ≤ capWorst height := by
+private theorem cap_worst_lower (height : Nat) : 56 ≤ capWorst height := by
   induction height with
   | zero => decide
   | succ height ih => simp only [capWorst]; omega
@@ -47,7 +50,7 @@ private theorem cap_sharp_bound (groups : List Nat) (node height : Nat) :
     split <;> omega
 
 /-- A height-one marked subtree has at least one occupied child; recurse through the eight cap levels. -/
-theorem cap_cycles_bound (groups : List Nat) : capSubtreeCycles groups 1 8 ≤ 9711 :=
+theorem cap_cycles_bound (groups : List Nat) : capSubtreeCycles groups 1 8 ≤ 8946 :=
   cap_sharp_bound groups 1 7
 
 def capCopySaving (dest : Nat) : Nat := 28-CapCopy.cycles dest
@@ -136,7 +139,7 @@ theorem cap_cycles_frontier_lower (groups : List Nat) (node height : Nat) :
 
 private def capControlWorst : Nat → Nat
   | 0 => 5
-  | h+1 => 17+2*capControlWorst h
+  | h+1 => 14+2*capControlWorst h
 
 private theorem cap_control_lower (height : Nat) : 5 ≤ capControlWorst height := by
   induction height with
@@ -194,7 +197,7 @@ theorem cap_walk_unmarked (groups : List Nat) (node height base start : Nat)
 theorem cap_walk_branch (groups : List Nat) (node height base start : Nat)
     (mark : capIsMarked groups node (height+1)=true) :
     capWalkCycles groups node (height+1) base start=
-      17+capWalkCycles groups (2*node) height base start+
+      14+capWalkCycles groups (2*node) height base start+
         capWalkCycles groups (2*node+1) height base (start+(capFrontierNodes groups (2*node) height).length) := by
   have parent := cap_walk_balance groups node (height+1) base start
   have left := cap_walk_balance groups (2*node) height base start
@@ -209,11 +212,11 @@ theorem cap_walk_branch (groups : List Nat) (node height base start : Nat)
   omega
 
 theorem cap_walk_scored_bound (groups : List Nat) (base : Nat) (even : base%2=0)
-    (small : (capFrontierNodes groups 1 8).length ≤ 128) : capWalkCycles groups 1 8 base 0 ≤ 9839 := by
+    (small : (capFrontierNodes groups 1 8).length ≤ 128) : capWalkCycles groups 1 8 base 0 ≤ 9074 := by
   have control := cap_cycles_control_bound groups 1 8
   have lower := cap_savings_lower base (capFrontierNodes groups 1 8).length even
   have balance := cap_walk_balance groups 1 8 base 0
-  have exactControl : capControlWorst 8=5615 := by decide
+  have exactControl : capControlWorst 8=4850 := by decide
   rw [exactControl] at control
   simp only [Nat.zero_add, Nat.zero_div, Nat.sub_zero, capCopySavings] at balance
   omega
