@@ -107,11 +107,15 @@ def pairRows (start : Nat) (src dst : Reg) : List (Nat × Nat) → List Row
 Head paths (rows 740..776): `skip` when `g` equals the previous position's quartet (`x4`); otherwise `x4 := g`, the
 rebuilt block is `B+512`; parity selects the reply (`B+168` even, `B-1056` odd)
 and the address of the level-22 sibling node (`B+136` even, `B-856` odd); the inverse of the reply lands in the
-rebuilt block (call at 772), rows 773..775 restore `x13, x12, x10` and row 776 stores the sibling node's address
+rebuilt block (call at 772), rows 773..774 restore `x13, x12`, row 775 stores the sibling node's address
 in the word after the rebuilt block (`B+712`), where the record writer's level-0 head loads it. Then the chained
 salt generator (777..795, `K3OpenChain`) and the K1 salt rows (796..812). -/
 
-def headRows : List Row := [(740,.LD .x6 .x14 0),(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]
+def headRows : List Row := [(740,.LD .x6 .x14 0),(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 136)]
+/-- Row 776: `addi x10,x0,1024`, shared by the skip path (branch target) and the end of a new quartet's rows. -/
+def loadRow : List Row := [(776,.ADDI .x10 .x0 1024)]
+/-- A repeated quartet: rows 740..742, then 776. -/
+def skipRows : List Row := headRows ++ loadRow
 def newRows : List Row := [(743,.ADDI .x4 .x28 0),(744,.SLLI .x7 .x28 10),(745,.ADD .x7 .x7 .x24),(746,.ADDI .x12 .x7 512),
   (747,.ANDI .x30 .x6 4),(748,.BNE .x30 .x0 84)]
 /-- Even quartet: reply_E at `B+168`, sibling G_O at `B+136`; jump to 771. -/
@@ -122,11 +126,11 @@ def selRows (odd : Bool) : List Row := if odd then oddSel else evenSel
 def callRow : List Row := [(771,.ADDI .x13 .x0 2)]
 /-- A new quartet before its inverse call (row 772). -/
 def preRows (odd : Bool) : List Row := headRows ++ newRows ++ selRows odd ++ callRow
-def restoreRows : List Row := [(773,.ADDI .x13 .x0 1),(774,.ADDI .x12 .x0 1536),(775,.ADDI .x10 .x0 1024)]
+def restoreRows : List Row := [(773,.ADDI .x13 .x0 1),(774,.ADDI .x12 .x0 1536)]
 /-- `sd x30, 712(x7)`: the sibling node's address into word 89 of the quartet block. -/
-def ptrRows : List Row := [(776,.SD .x7 .x30 712)]
+def ptrRows : List Row := [(775,.SD .x7 .x30 712)]
 /-- A new quartet after its inverse call: rows 773..776. -/
-def headPost : List Row := restoreRows ++ ptrRows
+def headPost : List Row := restoreRows ++ ptrRows ++ loadRow
 
 /-- Destination and reply-offset selection by rank class (0, 1, or ≥2).
 Ranks 0 and 1 copy directly from reply-relative offsets. -/
@@ -159,7 +163,7 @@ theorem rows_present (rows : List Row)
   subst p
   exact row_fetch _ (raw ⟨i,hi⟩).1 (raw ⟨i,hi⟩).2
 
-theorem skip_row_fetch : presentRows headRows := by apply rows_present; decide +kernel
+theorem skip_row_fetch : presentRows skipRows := by apply rows_present; decide +kernel
 theorem pre_row_fetch (odd : Bool) : presentRows (preRows odd) := by apply rows_present; revert odd; decide +kernel
 theorem head_post_fetch : presentRows headPost := by apply rows_present; decide +kernel
 theorem post_row_fetch (k : Fin 3) (last : Bool) : presentRows (postRows k last) := by

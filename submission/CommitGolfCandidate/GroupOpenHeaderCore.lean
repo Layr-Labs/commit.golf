@@ -37,9 +37,9 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     rw [eq,MachineState.getReg_setPC]
     simpa [setupPrefix,setupInstructions,execInstrBr,Opening.getReg_setReg,
       MachineState.getReg_setPC,open_zero,beq_iff_eq,nr] using selector0
-  obtain ⟨cp,cm,cb,cr⟩:=config_frame l lpc p base salt marks shiftl nz selector
+  obtain ⟨cp,cm,cb,cr,c10⟩:=config_frame l lpc p base salt marks shiftl nz selector
   have cMem : c.mem=init.mem := cm.trans lm
-  obtain ⟨tpc,tm,keep0⟩:=key_frame c p cp cr
+  obtain ⟨tpc,tm,keep0⟩:=key_frame c p cp cr c10
   let m:=walkRows t markRows
   have quartet : t.getReg .x4=BitVec.ofNat 64 (2^64-1) := by
     rw [keep0 _ (by decide)]
@@ -59,10 +59,10 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     apply legal_append
     · apply legal_append
       · exact legal_append init _ _ (layout_ok init pc nr) (config_ok l lpc)
-      · rw [join];exact key_ok c p cp cr
+      · rw [join];exact key_ok c p cp cr c10
     · rw [join,join];exact mark_ok t tpc
   · rw [header_eq]
-    exact ⟨⟨mpc,⟨(keep _ (by decide)).trans cr.input,(keep _ (by decide)).trans cr.output,
+    exact ⟨⟨mpc,⟨(keep _ (by decide)).trans cr.output,
       (keep _ (by decide)).trans cr.selector,(keep _ (by decide)).trans cr.width,(keep _ (by decide)).trans cr.primitive,
       (keep _ (by decide)).trans cr.index,(keep _ (by decide)).trans cr.endReg,
       (by rw [keep .x25 (by decide) (by decide), cr.shift, keep .x9 (by decide) (by decide)]),

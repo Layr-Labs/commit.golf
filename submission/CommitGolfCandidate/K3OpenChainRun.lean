@@ -20,7 +20,7 @@ theorem chain_run (h : MachineState) (i : Index) (e : ChainEntry h i) (fuel : Na
   have lt := links_lt i
   obtain ⟨preOk,bpc,_,b30,b31,_,bkeep⟩ := chain_before h i e
   have breg (x : Reg) (a : x≠.x7) (b : x≠.x28) (c : x≠.x30) (d : x≠.x31) := bkeep x a b c d
-  rw [show chainSteps i+fuel=chainPreRows.length+((chainEnterRows.length+(chainLinks i+(2+fuel)))+1) by
+  rw [show chainSteps i+fuel=chainPreRows.length+((chainEnterRows.length+(chainLinks i+(1+fuel)))+1) by
       unfold chainSteps; rw [lens.1,lens.2.2.1]; omega,
     walk_rows_run h chainPreRows preOk chain_pre_fetch _ true,
     show walkRows h chainPreRows=chainBefore h from rfl,

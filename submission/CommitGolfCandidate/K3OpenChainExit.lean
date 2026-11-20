@@ -15,14 +15,13 @@ attribute [local simp] chain_zero_reg
 /-! ### Post-state -/
 
 theorem exit_rows (b : MachineState) (pc : b.pc=address linkEnd) :
-    (walkRows b chainExitRows).pc=address 791 ∧ (walkRows b chainExitRows).getReg .x10=1024 ∧
-      (∀ x, x≠.x10 → (walkRows b chainExitRows).getReg x=b.getReg x) ∧
+    (walkRows b chainExitRows).pc=address 791 ∧
+      (∀ x, (walkRows b chainExitRows).getReg x=b.getReg x) ∧
       (walkRows b chainExitRows).mem=b.mem := by
-  refine ⟨?_,?_,?_,exit_rows_mem b⟩
+  refine ⟨?_,?_,exit_rows_mem b⟩
   · simp [chainExitRows,walkRows,execInstrBr,pc,address]
     decide
-  · simp [chainExitRows,walkRows,execInstrBr] <;> decide
-  · intro x hx; simp [chainExitRows,walkRows,execInstrBr,Ne.symm hx]
+  · intro x; simp [chainExitRows,walkRows,execInstrBr]
 
 theorem link_post : ∀ (c : Nat) (s : MachineState), LinkReady s c → c<34 →
     ∀ t ∈ support (linkTrace c s),
@@ -47,7 +46,7 @@ theorem link_post : ∀ (c : Nat) (s : MachineState), LinkReady s c → c<34 →
 
 theorem chain_post (h : MachineState) (i : Index) (e : ChainEntry h i) (t : MachineState)
     (hit : t ∈ support (chainTrace h i)) :
-    t.pc=address (chainStart+14) ∧ t.getReg .x10=1024 ∧ t.getReg .x28=BitVec.ofNat 64 (rank i.val) ∧
+    t.pc=address (chainStart+14) ∧ t.getReg .x28=BitVec.ofNat 64 (rank i.val) ∧
       (∀ r, r≠.x7 → r≠.x10 → r≠.x28 → r≠.x30 → r≠.x31 → t.getReg r=h.getReg r) ∧
       (∀ w, w<2^33 → w≠128 → (w<192 ∨ 217≤w) → memoryView t w=memoryView h w) := by
   have lt := links_lt i
@@ -69,10 +68,10 @@ theorem chain_post (h : MachineState) (i : Index) (e : ChainEntry h i) (t : Mach
       (ekeep _ (by decide) (by decide) (by decide)).trans ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.width),
       (ekeep _ (by decide) (by decide) (by decide)).trans ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.primitive)⟩
   obtain ⟨bpc,bkeep,bmem⟩ := link_post _ _ ready lt b bhit
-  obtain ⟨xpc,x10,xkeep,xmem⟩ := exit_rows b bpc
-  refine ⟨xpc,x10,?_,fun x b1 b2 b3 b4 b5 => ?_,fun w hw w128 out => ?_⟩
-  · exact (xkeep _ (by decide)).trans ((bkeep _).trans ((ekeep _ (by decide) (by decide) (by decide)).trans a28))
-  · exact (xkeep x b2).trans ((bkeep x).trans ((ekeep x b1 b2 b5).trans (akeep x b1 b3 b4 b5)))
+  obtain ⟨xpc,xkeep,xmem⟩ := exit_rows b bpc
+  refine ⟨xpc,?_,fun x b1 b2 b3 b4 b5 => ?_,fun w hw w128 out => ?_⟩
+  · exact (xkeep _).trans ((bkeep _).trans ((ekeep _ (by decide) (by decide) (by decide)).trans a28))
+  · exact (xkeep x).trans ((bkeep x).trans ((ekeep x b1 b2 b5).trans (akeep x b1 b3 b4 b5)))
   · rw [chain_view_of_mem xmem,bmem w hw out,chain_view_of_mem emem]
     exact amem w hw w128 out
 

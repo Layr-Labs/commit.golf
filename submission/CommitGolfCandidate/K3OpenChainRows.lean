@@ -5,14 +5,14 @@ import CommitGolfCandidate.TwoPermutationSyscall
 import CommitGolfCandidate.K6Chain
 
 /-! Opener prefix, salt regeneration of one position on the linked (chain) schedule: rows
-`chainStart .. chainStart+12` (777..789) and the link block at words 896..929, then the exit row 790. The header
+`chainStart .. chainStart+12` (777..789) and the link block at words 896..929, whose `jal` returns to row 791. The header
 sets `x18 = 8192` (row 715), `x3 = 374` (`gp`), `x2 = 4352` (`sp`), and `x1 = 4095` once (rows 755..757); no opener row writes them afterwards. With `n = i % 4096`, `r = n % 11` (rank), `h = n / 11` (head in the tile),
 `j = h % 34` (links after the keyed restart):
 ```
 and x30,x6,x1 ; remu x31,x30,x3 ; divu x30,x31,x29 ; remu x28,x31,x29 ;
 sub x7,x6,x31 ; slli x7,x7,8 ; add x7,x7,x2 ; sd x7,0(x10) ; slli x31,x30,2 ; ecall ;
 sub x7,x18,x31 ; addi x10,x12,0 ; jalr x0,-380(x7) ;
-[896..928: 33 x ecall] ; 929: jal x0,<790> ; 790: addi x10,x0,1024
+[896..928: 33 x ecall] ; 929: jal x0,<791>
 ```
 (the `jalr` enters the unrolled link block `j` words before its end, so link calls cost no ordinary instructions)
 the keyed generator call of head `h - j` (counter = base of its C leaf, K1 input layout at word 128, reply at
@@ -32,8 +32,8 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 abbrev chainStart : Nat := 777
 /-- Links of position `i`: its head is `chainLinks i` heads after the keyed restart. -/
 def chainLinks (i : Index) : Nat := ((i.val%4096)/11)%34
-/-- Steps: 9 counter rows, the keyed call, 3 entry rows, one call per link, the `jal` back and the exit row. -/
-def chainSteps (i : Index) : Nat := 15+chainLinks i
+/-- Steps: 9 counter rows, the keyed call, 3 entry rows, one call per link and the `jal` back to row 791. -/
+def chainSteps (i : Index) : Nat := 14+chainLinks i
 def chainCalls (i : Index) : Nat := 1+chainLinks i
 /-- One `remu`, one `divu`, one `remu` (4 cycles each) and 8 cycles per call. -/
 def chainCycles (i : Index) : Nat := chainSteps i+9+7*chainCalls i
@@ -73,7 +73,7 @@ def chainEnterRows : List Row := [(787,.SUB .x7 .x18 .x31),
   (788,.ADDI .x10 .x12 0),(789,.JALR .x0 .x7 3716)]
 /-- First word after the unrolled link block (the `jal` back to the exit row). -/
 abbrev linkEnd : Nat := 929
-def chainExitRows : List Row := [(929,.JAL .x0 2096596),(790,.ADDI .x10 .x0 1024)]
+def chainExitRows : List Row := [(929,.JAL .x0 2096600)]
 
 /-- `presentRows` for rows anywhere in the opener (`rows_present` stops at 813). -/
 theorem rows_present_any (rows : List Row)
@@ -101,7 +101,7 @@ theorem link_fetch (s : MachineState) (c : Nat) (lo : 0<c) (hc : c<34) (pc : s.p
   rwa [show 896+(33-c)=linkEnd-c by unfold linkEnd; omega] at h
 
 theorem chain_lengths : chainPreRows.length=9 ∧ price chainPreRows=18 ∧
-    chainEnterRows.length=3 ∧ price chainEnterRows=3 ∧ chainExitRows.length=2 ∧ price chainExitRows=2 := by decide
+    chainEnterRows.length=3 ∧ price chainEnterRows=3 ∧ chainExitRows.length=1 ∧ price chainExitRows=1 := by decide
 
 /-! ### Arithmetic of the counter rows -/
 

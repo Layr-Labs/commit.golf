@@ -52,7 +52,7 @@ theorem head_outside (s : MachineState) (i : Index) (ord left last : Nat) (r : I
     memoryView (headed s i last y) w=memoryView s w := by
   have hi : i.val<16777216 := i.isLt
   by_cases same : i.val/4=last
-  · have hd : headed s i last y=walkRows s headRows := by simp [headed,same]
+  · have hd : headed s i last y=walkRows s skipRows := by simp [headed,same]
     rw [hd]; exact view_eq_of_mem (head_skip s i ord left last r same).2.2.1 w
   · have notBlock : ∀ m<26, w≠rebuiltWord (i.val/4)+m := fun m hm e => away ⟨same,m,hm,e⟩
     obtain ⟨a1pc,a17,_,a1view⟩ := called_facts s i ord left last r y same
@@ -134,7 +134,7 @@ theorem post_facts (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) 
       (if left-1=0 then (finishOne u i left).getReg .x9 else BitVec.ofNat 64 (8*((ord+1)+(left-1)))) := by
     change (advanced b left).getReg .x25=_
     rw [hshift', f .x9]
-  refine ⟨⟨(f .x10).trans regs.input,(f .x12).trans regs.output,(f .x5).trans regs.selector,(f .x11).trans regs.width,
+  refine ⟨⟨(f .x12).trans regs.output,(f .x5).trans regs.selector,(f .x11).trans regs.width,
     (f .x13).trans regs.primitive,post.2.2.1,post.2.2.2.1,hshift'',(f .x22).trans regs.salt,(f .x26).trans regs.base,
     (f .x29).trans regs.divReg⟩,post.2.1,?_,fk⟩
   exact post.2.2.2.2.2.trans ((copied_mem a i ar ad).trans (by
@@ -200,14 +200,14 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
       (∀ w, w<2^33 → ¬Writes i last w → memoryView t w=memoryView s w) ∧
       (i.val/4≠last → memoryView t (pointerWord (i.val/4))=wordAddress (nodeWordOf (i.val/4^^^1))) := by
   have ex := head_exit s i ord left last r y
-  obtain ⟨upc,u10,u28,ukeep,uview⟩ := chain_post _ i ex.entry u hu
+  obtain ⟨upc,u28,ukeep,uview⟩ := chain_post _ i ex.entry u hu
   have uk (x : Reg) (h7 : x≠.x7 := by decide) (h10 : x≠.x10 := by decide) (h28 : x≠.x28 := by decide)
       (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) := ukeep x h7 h10 h28 h30 h31
   have hk (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
       (h10 : x≠.x10 := by decide) (h13 : x≠.x13 := by decide) (h28 : x≠.x28 := by decide)
       (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) := ex.keep x h4 h6 h7 h10 h13 h28 h30 h31
   have uregs : Registers u ord left :=
-    ⟨u10,(uk .x12).trans ex.regs.output,(uk .x5).trans ex.regs.selector,(uk .x11).trans ex.regs.width,
+    ⟨(uk .x12).trans ex.regs.output,(uk .x5).trans ex.regs.selector,(uk .x11).trans ex.regs.width,
      (uk .x13).trans ex.regs.primitive,(uk .x14).trans ex.regs.index,(uk .x17).trans ex.regs.endReg,
      (by rw [uk .x25, ex.regs.shift, uk .x9]),
      (uk .x22).trans ex.regs.salt,(uk .x26).trans ex.regs.base,(uk .x29).trans ex.regs.divReg⟩
@@ -307,10 +307,10 @@ private theorem fixed_chain (o : Oracle) (k : BitVec 192) (s : MachineState) (i 
       (∀ j : Fin 25, memoryView u (192+j.val)=replyWords (chainReply o k i) j) := by
   have ex := head_exit s i ord left last r (if inverts i last then fixedInverse o s i else 0)
   have hk := head_keys s i ord left last r (if inverts i last then fixedInverse o s i else 0) k key
-  obtain ⟨upc,u10,u28,ukeep,uview⟩ := chain_post _ i ex.entry _ (chain_state_support o k _ i ex.entry hk)
+  obtain ⟨upc,u28,ukeep,uview⟩ := chain_post _ i ex.entry _ (chain_state_support o k _ i ex.entry hk)
   have uk (x : Reg) (h7 : x≠.x7 := by decide) (h10 : x≠.x10 := by decide) (h28 : x≠.x28 := by decide)
       (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) := ukeep x h7 h10 h28 h30 h31
-  refine ⟨upc,⟨u10,(uk .x12).trans ex.regs.output,(uk .x5).trans ex.regs.selector,(uk .x11).trans ex.regs.width,
+  refine ⟨upc,⟨(uk .x12).trans ex.regs.output,(uk .x5).trans ex.regs.selector,(uk .x11).trans ex.regs.width,
      (uk .x13).trans ex.regs.primitive,(uk .x14).trans ex.regs.index,(uk .x17).trans ex.regs.endReg,
      (by rw [show fixedHead o s i last=headed s i last (if inverts i last then fixedInverse o s i else 0) from rfl, uk .x25, ex.regs.shift, uk .x9]),
      (uk .x22).trans ex.regs.salt,(uk .x26).trans ex.regs.base,(uk .x29).trans ex.regs.divReg⟩,

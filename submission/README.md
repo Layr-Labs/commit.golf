@@ -1,3 +1,79 @@
+# Product: chain exit skips the input-pointer reset (-128 opening cycles)
+
+Built directly on the promoted product record `b2c9f0f8-d23d-474e-9d8e-673290539f88`
+by AvinashNayak27 (master `2913e8d5`), which in turn credits the contributors listed in
+the inherited sections below. All of the construction, the commitment, the record writer
+and nearly all of the certificate are theirs; this entry changes four opening words.
+
+## The change
+
+After every position's salt chain, the link block's `jal` at word 929 returned to word 790,
+`addi a0,zero,1024`, which re-pointed `a0` at the keyed input block before the next
+position. That reset is only needed by the *skip* path (a position in the same quartet
+as its predecessor), because a new quartet already sets `a0 = 1024` in its restore rows.
+
+| Word | Before | After |
+| ---: | --- | --- |
+| 742 | `beq t3,tp,<777>` | `beq t3,tp,<776>` |
+| 775 | `addi a0,zero,1024` | `sd t5,712(t2)` |
+| 776 | `sd t5,712(t2)` | `addi a0,zero,1024` |
+| 929 | `jal zero,<790>` | `jal zero,<791>` |
+
+- New quartet: rows 773..776 still cost 4 (the store and the `a0` reset swap places), and
+  the chain exit no longer executes word 790: **-1 cycle**.
+- Repeated quartet: the skip branch now lands on 776 (`a0 := 1024`, +1) and the chain exit
+  skips 790 (-1): unchanged.
+- Word 790 is now unreachable and left in place; no words are appended, the image stays
+  1,976 words. Commitment/checker images, data, ABI, every oracle call, salt and proof
+  byte are unchanged.
+
+Worst case per position drops from 331 to 330 cycles (`chainCycles <= 294`, new even
+quartet head 25, post 11), so the pass bound is `330*n+2` and
+
+```json
+{"commitCycles":504585244,"openingCycles":118080,"proofBytes":72160}
+```
+
+```text
+(504585244 + 118080) * 72160 = 36419391859840
+Parent b2c9f0f8:  (504585244 + 118208) * 72160 = 36419401096320
+Saving: 128 opening cycles; 9236480 score
+```
+
+## Proof changes
+
+- `GroupOpenWalk`: `headRows` branch offset 136, new `loadRow` (776) and `skipRows`;
+  `restoreRows` is 773..774, `ptrRows` is 775, `headPost = restoreRows ++ ptrRows ++ loadRow`.
+- `GroupOpenStep`: `Registers` no longer carries `x10 = 1024` at the loop head (it is 1536
+  after a chain); `load_row`, `head_skip` (via `head_skip0`) and `head_post` re-proved for
+  the new rows and still deliver `x10 = 1024` at row 777 on both paths.
+- `K3OpenChainRows/Link/Run/Exit/Post`: `chainExitRows` is the single `jal` to 791,
+  `chainSteps = 14 + links`; `chain_post` no longer reports `x10`.
+- `GroupOpenLatch`: skip head is 4 steps/cycles; `GroupOpenEffect`, `GroupOpenHeaderParts`,
+  `GroupOpenHeaderCore` thread the header's `x10 = 1024` only into the key copy.
+- `GroupOpenPass` (`chain_cycles_le 294`, `pass_cycles_bound 330*n+2`), `GroupOpenFull`,
+  `GroupOpenClosing`, `Solution.lean`, `claim.json`; `programs.json`, `K1Manifest` and the
+  `GroupOpenImage` literal/leaf lemmas regenerated from the delivered manifest.
+
+## Evidence
+
+A C RV64IM emulator of the `Riscv.lean` cost model (stand-in oracle) ran the full
+2^24-leaf commitment (504,585,244 cycles, matching the claim) and then the parent and
+this opener on the same trapdoor. Proof bytes are byte-identical on every fixture and the
+checker accepts all of them:
+
+| Fixture | Parent cycles | This entry |
+| --- | ---: | ---: |
+| 128 spread (distinct quartets) | 99,672 | 99,544 |
+| 128 random | 99,463 | 99,335 |
+| 128 consecutive (32 quartets) | 93,603 | 93,571 |
+| single position | 1,914 | 1,913 |
+
+Certification here means the local Lean build of the certificate plus the repository's
+`scripts/run.py` verifier run on this host.
+
+## Inherited documentation
+
 # Product: hoist the quartet source bias (-256 opening cycles)
 
 Based directly on next22 `7110ded12ffb4f8939e89779d93a01d7587e2231`.

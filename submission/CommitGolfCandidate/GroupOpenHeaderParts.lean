@@ -75,14 +75,14 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
     (b : Base s p) (salt : s.getReg .x22=9126809632) (base : s.getReg .x26=4096)
     (shift : s.getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card) (selector : s.getReg .x5=0) :
     let t:=walkRows s configRows
-    t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card := by
+    t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card ∧ t.getReg .x10=1024 := by
   let t:=walkRows s configRows
   have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x4,.x14,.x17,.x25,.x29] : List Reg)) : t.getReg k=s.getReg k := by
     simp only [List.mem_cons,List.not_mem_nil,or_false,not_or] at h
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9⟩ := h
     simp [t,configRows,walkRows,execInstrBr,Ne.symm h1,Ne.symm h2,Ne.symm h3,Ne.symm h4,Ne.symm h5,
       Ne.symm h6,Ne.symm h7,Ne.symm h8,Ne.symm h9]
-  refine ⟨?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_⟩
   · simp [walkRows,configRows,execInstrBr,pc,address]
   · simp [walkRows,configRows,execInstrBr]
   · exact ⟨(keep _ (by decide)).trans b.indices,(keep _ (by decide)).trans b.heap,(keep _ (by decide)).trans b.count,
@@ -92,19 +92,23 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
   · constructor <;> simp [walkRows,configRows,execInstrBr,b.indices,b.count,salt,base,indexAt,countWord,indicesBase,
       trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12,shift,selector,show p.card≠0 by omega] <;>
       first | rfl | (rw [← BitVec.ofNat_add]; try rfl)
+  · simp [walkRows,configRows,execInstrBr,signExtend12]
+    all_goals first | rfl | decide
 
 def keyCopy (s : MachineState) := ((s.setMem 1032 (s.getMem 9126809640)).setMem 1040 (s.getMem 9126809648)).setMem 1048 (s.getMem 9126809656)
 
-theorem key_ok (s : MachineState) (p : Positions) (pc : s.pc=address 733) (r : Registers s 0 p.card) :
+theorem key_ok (s : MachineState) (p : Positions) (pc : s.pc=address 733) (r : Registers s 0 p.card)
+    (x10 : s.getReg .x10=1024) :
     legal keyRows s := by
-  simp [keyRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,r.salt,r.input,pc,address,signExtend12] <;> decide
+  simp [keyRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,r.salt,x10,pc,address,signExtend12] <;> decide
 
-theorem key_frame (s : MachineState) (p : Positions) (pc : s.pc=address 733) (r : Registers s 0 p.card) :
+theorem key_frame (s : MachineState) (p : Positions) (pc : s.pc=address 733) (r : Registers s 0 p.card)
+    (x10 : s.getReg .x10=1024) :
     let t:=walkRows s keyRows
     t.pc=address 739 ∧ t.mem=(keyCopy s).mem ∧ ∀ k, k≠.x31 → t.getReg k=s.getReg k := by
   refine ⟨?_,?_,?_⟩
   · simp [walkRows,keyRows,execInstrBr,pc,address]
-  · simp [walkRows,keyRows,execInstrBr,mem_of_store,keyCopy,r.input,r.salt,signExtend12,
+  · simp [walkRows,keyRows,execInstrBr,mem_of_store,keyCopy,x10,r.salt,signExtend12,
       MachineState.getMem_setMem_ne (by decide : (9126809648#64)≠1032#64),
       MachineState.getMem_setMem_ne (by decide : (9126809656#64)≠1032#64),
       MachineState.getMem_setMem_ne (by decide : (9126809656#64)≠1040#64)]

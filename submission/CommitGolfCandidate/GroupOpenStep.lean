@@ -124,7 +124,6 @@ theorem output_address (i : Index) (two : 2≤rank i.val) :
   rw [if_neg (show rank i.val≠0 by omega),if_neg (show rank i.val≠1 by omega)];congr 1 <;> omega
 
 structure Registers (s : MachineState) (ord left : Nat) : Prop where
-  input : s.getReg .x10=1024
   output : s.getReg .x12=1536
   selector : s.getReg .x5=0
   width : s.getReg .x11=200
@@ -191,11 +190,11 @@ private theorem same_quartet (i : Index) (last : Nat) (small : last<2^64) :
       exact h this
     simp [h, ne]
 
-/-- Rows 740..742 when the quartet repeats: nothing but `x6`, `x28`, then on to row 777. -/
-theorem head_skip (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+/-- Rows 740..742 when the quartet repeats: nothing but `x6`, `x28`, then on to row 776. -/
+theorem head_skip0 (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
     (same : i.val/4=last) :
     let t:=walkRows s headRows
-    legal headRows s ∧ t.pc=address 777 ∧ t.mem=s.mem ∧ t.getReg .x6=BitVec.ofNat 64 i.val ∧
+    legal headRows s ∧ t.pc=address 776 ∧ t.mem=s.mem ∧ t.getReg .x6=BitVec.ofNat 64 i.val ∧
       (∀ k, k≠.x6 → k≠.x28 → t.getReg k=s.getReg k) := by
   have ld := load_ok s i ord left last r
   have eq := same_quartet i last r.small
@@ -203,11 +202,36 @@ theorem head_skip (s : MachineState) (i : Index) (ord left last : Nat) (r : Inpu
   have q := quarter i
   rw [same] at q
   refine ⟨?_,?_,?_,?_,?_⟩
-  · show legal ((740,.LD .x6 .x14 0)::[(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]) s
+  · show legal ((740,.LD .x6 .x14 0)::[(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 136)]) s
     exact ⟨r.pc,plain_step _ _ rfl ld,legal_of_chain _ _ (by decide) (by simp [pcChain,execInstrBr,r.pc,address])⟩
   all_goals simp [headRows,walkRows,execInstrBr,r.pc,r.index,r.loaded,r.quartet,address,
-    q,eq,show signExtend12 0#12=0#64 by decide,show signExtend13 140#13=140#64 by decide]
+    q,eq,show signExtend12 0#12=0#64 by decide,show signExtend13 136#13=136#64 by decide]
   all_goals first | (intro k a b; simp [Ne.symm a,Ne.symm b]) | rfl
+
+/-- Row 776: `addi x10,x0,1024`. -/
+theorem load_row (u : MachineState) (pc : u.pc=address 776) :
+    let v:=walkRows u loadRow
+    legal loadRow u ∧ v.pc=address 777 ∧ v.mem=u.mem ∧ v.getReg .x10=1024 ∧
+      (∀ k, k≠.x10 → v.getReg k=u.getReg k) := by
+  refine ⟨legal_of_chain _ _ (by decide) (by simp [loadRow,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_⟩
+  all_goals simp [loadRow,walkRows,execInstrBr,pc,address,show signExtend12 1024#12=1024#64 by decide]
+  all_goals first | (intro k a; simp [Ne.symm a]) | rfl
+
+/-- The skip path: rows 740..742, then row 776 (`x10 := 1024`), on to row 777. -/
+theorem head_skip (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+    (same : i.val/4=last) :
+    let t:=walkRows s skipRows
+    legal skipRows s ∧ t.pc=address 777 ∧ t.mem=s.mem ∧ t.getReg .x6=BitVec.ofNat 64 i.val ∧
+      t.getReg .x10=1024 ∧ (∀ k, k≠.x6 → k≠.x28 → k≠.x10 → t.getReg k=s.getReg k) := by
+  obtain ⟨l0,pc0,mem0,x60,keep0⟩ := head_skip0 s i ord left last r same
+  obtain ⟨l1,pc1,mem1,x101,keep1⟩ := load_row (walkRows s headRows) pc0
+  have split : walkRows s skipRows=walkRows (walkRows s headRows) loadRow := walk_join _ _ _
+  refine ⟨legal_append _ _ _ l0 l1,?_,?_,?_,?_,?_⟩
+  · rw [split]; exact pc1
+  · rw [split, mem1]; exact mem0
+  · rw [split, keep1 _ (by decide)]; exact x60
+  · rw [split]; exact x101
+  · intro k h6 h28 h10; rw [split, keep1 k h10]; exact keep0 k h6 h28
 
 theorem block_value (i : Index) :
     ((BitVec.ofNat 64 (i.val/4)) <<< (10:Nat))+BitVec.ofNat 64 groupSlots=
@@ -239,7 +263,7 @@ private theorem new_head (s : MachineState) (i : Index) (ord left last : Nat) (r
     simp only [BitVec.toNat_ofNat,Nat.mod_eq_of_lt r.small,Nat.mod_eq_of_lt (show i.val/4<2^64 by omega)] at this
     exact fresh this
   refine ⟨?_,?_,?_,?_,?_,?_⟩
-  · show legal ((740,.LD .x6 .x14 0)::[(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]) s
+  · show legal ((740,.LD .x6 .x14 0)::[(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 136)]) s
     exact ⟨r.pc,plain_step _ _ rfl ld,legal_of_chain _ _ (by decide) (by simp [pcChain,execInstrBr,r.pc,address])⟩
   all_goals simp [headRows,walkRows,execInstrBr,r.pc,r.index,r.loaded,r.quartet,address,
     q,eq,ne,show signExtend12 0#12=0#64 by decide]
@@ -448,11 +472,11 @@ theorem quad_address_node (i : Nat) : quadAddress i=8*nodeWordOf (i/4^^^1) := by
   rw [d,m]
   omega
 
-/-- Row 776: `sd x30, 712(x7)` stores the sibling node's address in the pointer word. -/
-theorem ptr_row (u : MachineState) (q : Nat) (hq : q<4194304) (pc : u.pc=address 776)
+/-- Row 775: `sd x30, 712(x7)` stores the sibling node's address in the pointer word. -/
+theorem ptr_row (u : MachineState) (q : Nat) (hq : q<4194304) (pc : u.pc=address 775)
     (b7 : u.getReg .x7=wordAddress (blockWord q)) :
     let v:=walkRows u ptrRows
-    legal ptrRows u ∧ v.pc=address 777 ∧ (∀ k, v.getReg k=u.getReg k) ∧
+    legal ptrRows u ∧ v.pc=address 776 ∧ (∀ k, v.getReg k=u.getReg k) ∧
       (∀ w, w<2^33 → memoryView v w=writeWord (memoryView u) (pointerWord q) (u.getReg .x30) w) := by
   have ad : u.getReg .x7+signExtend12 712#12=wordAddress (pointerWord q) := by rw [b7]; exact pointer_word_eq q
   have room : pointerWord q<2^33 := by unfold pointerWord rebuiltWord blockWord; omega
@@ -470,7 +494,7 @@ theorem ptr_row (u : MachineState) (q : Nat) (hq : q<4194304) (pc : u.pc=address
     exact memory_at_store (state:=u) (address:=pointerWord q) (index:=w) (value:=u.getReg .x30) (by omega) (by omega)
 
 /-- A new quartet after its inverse reply landed in the rebuilt block: rows 773..776 (`x13 := 1`,
-`x12 := 1536`, `x10 := 1024`, the sibling group's node address to the pointer word). -/
+`x12 := 1536`, the sibling group's node address to the pointer word, `x10 := 1024`). -/
 theorem head_post (a : MachineState) (i : Index) (pc : a.pc=address 773)
     (b7 : a.getReg .x7=wordAddress (blockWord (i.val/4))) :
     let t:=walkRows a headPost
@@ -479,28 +503,32 @@ theorem head_post (a : MachineState) (i : Index) (pc : a.pc=address 773)
       (∀ w, w<2^33 → memoryView t w=writeWord (memoryView a) (pointerWord (i.val/4)) (a.getReg .x30) w) := by
   have hi : i.val<16777216 := i.isLt
   set u:=walkRows a restoreRows with hu
-  have ul : legal restoreRows a ∧ u.pc=address 776 ∧ u.mem=a.mem ∧ u.getReg .x10=1024 ∧ u.getReg .x12=1536 ∧
-      u.getReg .x13=1 ∧ (∀ k, k≠.x10 → k≠.x12 → k≠.x13 → u.getReg k=a.getReg k) := by
-    refine ⟨legal_of_chain _ _ (by decide) (by simp [restoreRows,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_,?_,?_⟩
+  have ul : legal restoreRows a ∧ u.pc=address 775 ∧ u.mem=a.mem ∧ u.getReg .x12=1536 ∧
+      u.getReg .x13=1 ∧ (∀ k, k≠.x12 → k≠.x13 → u.getReg k=a.getReg k) := by
+    refine ⟨legal_of_chain _ _ (by decide) (by simp [restoreRows,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_,?_⟩
     all_goals simp [hu,restoreRows,walkRows,execInstrBr,pc,address,
-      show signExtend12 1024#12=1024#64 by decide,show signExtend12 1536#12=1536#64 by decide,
+      show signExtend12 1536#12=1536#64 by decide,
       show signExtend12 1#12=1#64 by decide]
-    all_goals first | (intro k a b c; simp [Ne.symm a,Ne.symm b,Ne.symm c]) | rfl
-  obtain ⟨ul1,upc,umem,u10,u12,u13,ukeep⟩ := ul
-  obtain ⟨sl,spc,skeep,sview⟩ := ptr_row u (i.val/4) (by omega) upc ((ukeep _ (by decide) (by decide) (by decide)).trans b7)
-  have split : headPost=restoreRows++ptrRows := rfl
-  have at_t : walkRows a headPost=walkRows u ptrRows := by rw [split, walk_join]
+    all_goals first | (intro k a b; simp [Ne.symm a,Ne.symm b]) | rfl
+  obtain ⟨ul1,upc,umem,u12,u13,ukeep⟩ := ul
+  obtain ⟨sl,spc,skeep,sview⟩ := ptr_row u (i.val/4) (by omega) upc ((ukeep _ (by decide) (by decide)).trans b7)
+  set v:=walkRows u ptrRows with hv
+  obtain ⟨ll,lpc,lmem,l10,lkeep⟩ := load_row v spc
+  have split : headPost=restoreRows++ptrRows++loadRow := rfl
+  have at_t : walkRows a headPost=walkRows v loadRow := by rw [split, walk_join, walk_join]
   have view (w : Nat) : memoryView u w=memoryView a w := by unfold memoryView MachineState.getMem; rw [umem]
+  have lview (w : Nat) : memoryView (walkRows v loadRow) w=memoryView v w := by
+    unfold memoryView MachineState.getMem; rw [lmem]
   refine ⟨?_,?_,?_,?_,?_,?_,?_⟩
-  · rw [split]; exact legal_append _ _ _ ul1 sl
-  · rw [at_t]; exact spc
-  · rw [at_t, skeep]; exact u10
-  · rw [at_t, skeep]; exact u12
-  · rw [at_t, skeep]; exact u13
+  · rw [split]; exact legal_append _ _ _ (legal_append _ _ _ ul1 sl) (by rw [walk_join]; exact ll)
+  · rw [at_t]; exact lpc
+  · rw [at_t]; exact l10
+  · rw [at_t, lkeep _ (by decide), skeep]; exact u12
+  · rw [at_t, lkeep _ (by decide), skeep]; exact u13
   · intro k h10 h12 h13
-    rw [at_t, skeep k]; exact ukeep k h10 h12 h13
+    rw [at_t, lkeep k h10, skeep k]; exact ukeep k h12 h13
   · intro w hw
-    rw [at_t, sview w hw, ukeep _ (by decide) (by decide) (by decide)]
+    rw [at_t, lview w, sview w hw, ukeep _ (by decide) (by decide)]
     simp only [writeWord]
     split
     · rfl

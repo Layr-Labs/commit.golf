@@ -188,7 +188,7 @@ def inverts (i : Index) (last : Nat) : Bool := decide (i.val/4≠last)
 
 /-- The head's exit state (row 777); `y` is the inverse reply, used only when `inverts i last`. -/
 def headed (s : MachineState) (i : Index) (last : Nat) (y : BitVec 1600) : MachineState :=
-  if i.val/4=last then walkRows s headRows
+  if i.val/4=last then walkRows s skipRows
   else walkRows (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) headPost
 
 /-- The salt selection, copy and latch after the chain. -/
@@ -206,8 +206,8 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
     let t ← chainTrace (headed s i last 0) i
     return finishOne t i left
 
-def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 17 else 18
-def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 24 else 25
+def headSteps (i : Index) (last : Nat) := if i.val/4=last then 4 else if i.val/4%2=1 then 17 else 18
+def headCycles (i : Index) (last : Nat) := if i.val/4=last then 4 else if i.val/4%2=1 then 24 else 25
 def postSteps (_i : Index) (left : Nat) := 11+2*(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
@@ -274,18 +274,19 @@ private theorem exit_of (s h : MachineState) (i : Index) (ord left last : Nat) (
       (h31 : x≠.x31 := by decide) := keep x h4 h6 h7 h10 h13 h28 h30 h31
   exact ⟨⟨pc,x10,(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x26).trans r.base,
     (k .x29).trans r.divReg,idx,(k .x3).trans r.gp,(k .x2).trans r.sp,(k .x1).trans r.mask,(k .x18).trans r.linkBase⟩,
-    ⟨x10,(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x14).trans r.index,
+    ⟨(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x14).trans r.index,
      (k .x17).trans r.endReg,(by rw [k .x25, r.shift, k .x9]),(k .x22).trans r.salt,(k .x26).trans r.base,(k .x29).trans r.divReg⟩,keep,q⟩
 
 theorem head_exit (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last) (y : BitVec 1600) :
     HeadExit s (headed s i last y) i ord left := by
   by_cases same : i.val/4=last
-  · obtain ⟨_,hpc,_,h6,hkeep⟩ := head_skip s i ord left last r same
-    have hd : headed s i last y=walkRows s headRows := by simp [headed,same]
+  · obtain ⟨_,hpc,_,h6,h10,hkeep⟩ := head_skip s i ord left last r same
+    have hd : headed s i last y=walkRows s skipRows := by simp [headed,same]
     rw [hd]
-    exact exit_of s _ i ord left last r hpc h6 ((hkeep _ (by decide) (by decide)).trans r.input)
-      ((hkeep _ (by decide) (by decide)).trans r.primitive) ((hkeep _ (by decide) (by decide)).trans (by rw [r.quartet, same]))
-      (fun k _ h6 _ _ _ h28 _ _ => hkeep k h6 h28)
+    exact exit_of s _ i ord left last r hpc h6 h10
+      ((hkeep _ (by decide) (by decide) (by decide)).trans r.primitive)
+      ((hkeep _ (by decide) (by decide) (by decide)).trans (by rw [r.quartet, same]))
+      (fun k _ h6 _ h10 _ h28 _ _ => hkeep k h6 h28 h10)
   · obtain ⟨_,apc,_,_,_,_,_,a6,_,a4,a7,akeep⟩ := head_pre s i ord left last r same
     let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
     have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
@@ -322,7 +323,7 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     rw [← hx] at ex
     rw [chain_run h i ex.entry]
     apply bind_congr_of_forall_mem_support; intro t hit
-    obtain ⟨tpc,t10,t28,tkeep,_⟩ := chain_post h i ex.entry t hit
+    obtain ⟨tpc,t28,tkeep,_⟩ := chain_post h i ex.entry t hit
     have tk (x : Reg) (h7 : x≠.x7 := by decide) (h10 : x≠.x10 := by decide) (h28 : x≠.x28 := by decide)
         (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) := tkeep x h7 h10 h28 h30 h31
     rw [post_run t i ord left fuel l hi tpc ((tk .x6).trans ex.entry.idx) t28
@@ -334,18 +335,18 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     apply bind_congr; intro e; apply congrArg pure; rw [charge_comm]; congr 1 <;> omega
   unfold perSteps perTrace
   by_cases same : i.val/4=last
-  · obtain ⟨l1,_,_,_,_⟩ := head_skip s i ord left last r same
+  · obtain ⟨l1,_,_,_,_,_⟩ := head_skip s i ord left last r same
     have inv : inverts i last=false := by simp [inverts,same]
-    have hs : headSteps i last=headRows.length := by simp [headSteps,same]; rfl
-    rw [hs, show headRows.length+(chainSteps i+postSteps i left)+fuel=headRows.length+(chainSteps i+(postSteps i left+fuel)) by omega,
-      walk_rows_run s headRows l1 skip_row_fetch _ true,
-      tail (walkRows s headRows) 0 (by simp [headed,same])]
+    have hs : headSteps i last=skipRows.length := by simp [headSteps,same]; rfl
+    rw [hs, show skipRows.length+(chainSteps i+postSteps i left)+fuel=skipRows.length+(chainSteps i+(postSteps i left+fuel)) by omega,
+      walk_rows_run s skipRows l1 skip_row_fetch _ true,
+      tail (walkRows s skipRows) 0 (by simp [headed,same])]
     simp only [inv,Bool.false_eq_true,ite_false,bind_assoc,pure_bind]
-    have hd : headed s i last 0=walkRows s headRows := by simp [headed,same]
+    have hd : headed s i last 0=walkRows s skipRows := by simp [headed,same]
     rw [hd]
     apply bind_congr; intro t; apply bind_congr; intro e; apply congrArg pure
     rw [charge_comm]; congr 1
-    · simp [perCycles,headCycles,same,show price headRows=3 from rfl] <;> omega
+    · simp [perCycles,headCycles,same,show price skipRows=4 from rfl] <;> omega
     · simp [perCalls,inv]
   · have inv : inverts i last=true := by simp [inverts,same]
     obtain ⟨l1,apc,_,a10,a12,a13,_,_,_,_,a7,akeep⟩ := head_pre s i ord left last r same
