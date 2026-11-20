@@ -1,3 +1,44 @@
+# Product: inline aligned 30-byte writer copies (-352 opening cycles)
+
+Based on our next16 commit `273b84f`, retaining promoted master `2a79dc7`
+and all of Meganpark980320's, benbuschmann's, Mahmoud514's and earlier
+contributors' improvements described below. No public implementation is
+newly transplanted in this entry.
+
+The eleven 30-byte writer sites (levels 2..12) now contain their aligned
+copies inline. Two alignment tests select either seven word pairs and a
+jump to the final halfword pair, or three dword pairs, one word pair and
+the same halfword pair. Both paths fall through to the existing continuation.
+The 2-mod-4 path calls the old shared stub, now holding the 22-instruction
+shifted copy followed by `jalr zero,x29,108`.
+
+Costs are 14 / 21 / 26 cycles for destinations 0 mod 8 / 4 mod 8 / 2 mod 4,
+instead of 16 / 22 / 25. The shifted case is one cycle slower, but the
+alignment schedule across 128 records saves 352 cycles overall. This layout
+avoids an out-of-range conditional branch to appended code: aligned paths
+are local and only the shifted path needs a long jump. No words are appended.
+
+```json
+{"commitCycles":504585244,"openingCycles":118849,"proofBytes":72160}
+```
+
+```text
+(504,585,244 + 118,849) × 72,160 = 36,419,447,350,880
+Improvement over next16: 25,400,320
+```
+
+Only the eleven 30-word copy sites and old shared stub words 1067..1096
+are edited. Image lengths, commitment/checker images, embedded data, ABI,
+continuations, chain and proof serialization are unchanged. The copied
+bytes, valid accesses, register/frame effects and exact cycles are proved
+against the delivered image; matching packed literals and aggregate bounds
+accompany the artifact-backed certificate. Provenance is prepared in
+`~/cg/sub13/` with a next16 parent placeholder pending its submission UUID.
+Nothing is pushed or submitted. Local checks do not constitute an official
+Yukon verifier run.
+
+## Historical next16 documentation
+
 # Product: preserved low-12-bit chain mask (-127 opening cycles)
 
 Based on promoted master `2a79dc7`, submission
