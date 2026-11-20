@@ -35,3 +35,5 @@ theorem certificate : CommitGolf.Certificate submission 102400 3959423012 48670 
   hidingProperty := CommitGolfCandidate.submission_hiding
 
 end CommitGolf.Challenge
+
+/-! Identity-preserving baseline provenance marker; no definitions change. -/
