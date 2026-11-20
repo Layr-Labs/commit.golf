@@ -112,15 +112,34 @@ theorem key_frame (s : MachineState) (p : Positions) (pc : s.pc=address 733) (r 
 
 theorem mark_ok (s : MachineState) (pc : s.pc=address 739) : legal markRows s := by
   simp [markRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
+  all_goals decide
 
-theorem mark_frame (s : MachineState) (pc : s.pc=address 739) :
+theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x26 : s.getReg .x26=4096) :
     let t:=walkRows s markRows
-    t.pc=address 740 ∧ t.mem=s.mem ∧ t.getReg .x4=BitVec.ofNat 64 (2^64-1) ∧ ∀ k, k≠.x4 → t.getReg k=s.getReg k := by
-  refine ⟨?_,?_,?_,?_⟩
+    t.pc=address 740 ∧ t.mem=s.mem ∧ t.getReg .x4=BitVec.ofNat 64 (2^64-1) ∧ t.getReg .x3=374 ∧
+      t.getReg .x2=4352 ∧ ∀ k, k≠.x4 → k≠.x3 → k≠.x2 → t.getReg k=s.getReg k := by
+  refine ⟨?_,?_,?_,?_,?_,?_⟩
   · simp [walkRows,markRows,execInstrBr,pc,address]
+    all_goals decide
+  · -- symbolic offsets: with the concrete `jal` offsets the kernel recurses too deeply
+    have jm (s : MachineState) (offset : BitVec 21) : (execInstrBr s (.JAL .x0 offset)).mem=s.mem := by
+      simp [execInstrBr]
+    have a4 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x4 .x0 imm)).mem=s.mem := by
+      simp [execInstrBr]
+    have a3 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x3 .x0 imm)).mem=s.mem := by
+      simp [execInstrBr]
+    have a2 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x2 .x26 imm)).mem=s.mem := by
+      simp [execInstrBr]
+    change (execInstrBr (execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.JAL .x0 60)) (.ADDI .x4 .x0 (-1)))
+      (.ADDI .x3 .x0 374)) (.ADDI .x2 .x26 256)) (.JAL .x0 2097084)).mem=s.mem
+    rw [jm,a2,a3,a4,jm]
   · simp [walkRows,markRows,execInstrBr]
-  · simp [walkRows,markRows,execInstrBr]; decide
-  · intro k ne;simp [walkRows,markRows,execInstrBr,Ne.symm ne]
+    all_goals decide
+  · simp [walkRows,markRows,execInstrBr]
+    all_goals decide
+  · simp [walkRows,markRows,execInstrBr,x26]
+    all_goals decide
+  · intro k n4 n3 n2;simp [walkRows,markRows,execInstrBr,Ne.symm n4,Ne.symm n3,Ne.symm n2]
 
 theorem low_zero (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (w : Nat) (low : w<1024) :
     memoryView (actual.initialState .opening (td,p)) w=0 := by

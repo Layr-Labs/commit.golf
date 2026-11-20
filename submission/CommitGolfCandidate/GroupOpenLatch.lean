@@ -273,7 +273,7 @@ private theorem exit_of (s h : MachineState) (i : Index) (ord left last : Nat) (
       (h10 : x≠.x10 := by decide) (h13 : x≠.x13 := by decide) (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide)
       (h31 : x≠.x31 := by decide) := keep x h4 h6 h7 h10 h13 h28 h30 h31
   exact ⟨⟨pc,x10,(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x26).trans r.base,
-    (k .x29).trans r.divReg,idx⟩,
+    (k .x29).trans r.divReg,idx,(k .x3).trans r.gp,(k .x2).trans r.sp⟩,
     ⟨x10,(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x14).trans r.index,
      (k .x17).trans r.endReg,(by rw [k .x25, r.shift, k .x9]),(k .x22).trans r.salt,(k .x26).trans r.base,(k .x29).trans r.divReg⟩,keep,q⟩
 
