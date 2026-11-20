@@ -19,7 +19,7 @@ theorem copy_sum_le (n : Nat) : copySum n ≤ 517*n := by
   | zero => rfl
   | succ n ih => have := record_extra_le n; simp only [copySum]; omega
 
-theorem copy_sum_batch : copySum 128 = 49120 := by decide +kernel
+theorem copy_sum_batch : copySum 128 = 49056 := by decide +kernel
 
 theorem wide_cycles_le_old (positions : Positions) :
     wideCycles positions+536*positions.card+(if positions.card = 0 then 0 else 1785) ≤ QuartetOpening.scheduledCycles positions+copySum positions.card := by
@@ -42,7 +42,7 @@ theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15
   omega
 
 theorem wide_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    wideCycles positions ≤ 76138 ∧ proofLength positions ≤ 72160 := by
+    wideCycles positions ≤ 76074 ∧ proofLength positions ≤ 72160 := by
   have old := QuartetOpening.scored_limits positions count
   have nodes := Opening.opening_nodes_bound positions
   have k : positions.card = 128 := count
@@ -56,7 +56,7 @@ theorem wide_scored_limits (positions : Positions) (count : positions.card = BAT
     omega
   have cap := cap_walk_scored_bound (Opening.groupsBefore positions positions.card) (recordBase positions.card) aligned nodes
   rw [k] at cap
-  have c : copySum positions.card = 49120 := by rw [k, copy_sum_batch]
+  have c : copySum positions.card = 49056 := by rw [k, copy_sum_batch]
   refine ⟨?_, old.2⟩
   unfold wideCycles
   rw [if_neg (by omega), c, k]
@@ -284,7 +284,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 76138 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
+    result.cycles ≤ 76074 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
   rw [physical.cycles, physical.length]
   exact wide_scored_limits positions count
 

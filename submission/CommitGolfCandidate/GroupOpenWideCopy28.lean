@@ -9,22 +9,23 @@ set_option maxHeartbeats 2000000
 namespace Writer28
 
 def cycles (target : Nat) : Nat :=
-  if target % 4 = 0 then (if target % 8 = 0 then 14 else 20) else 25
+  if target % 4 = 0 then (if target % 8 = 0 then 12 else 19) else 26
 
 def testState (s : MachineState) (mask : BitVec 12) (off : BitVec 13) : MachineState :=
   execInstrBr (execInstrBr s (.ANDI .x31 .x21 mask)) (.BEQ .x31 .x0 off)
 
-def entered (s : MachineState) := testState s 3 96
-def aligned (s : MachineState) := testState (execInstrBr (entered s) (.JAL .x0 5112)) 7 64
+def entered (s : MachineState) := testState s 3 8
+def aligned (s : MachineState) := testState (entered s) 7 64
 def words (s : MachineState) :=
-  execInstrBr (pairsRun 4 .x7 0 0 0 7 (aligned s)) (.JAL .x0 2091988)
+  execInstrBr (pairsRun 4 .x7 0 0 0 7 (aligned s)) (.JAL .x0 36)
 def dwords (s : MachineState) :=
-  execInstrBr (pairsRun 4 .x7 24 24 0 1 (pairsRun 8 .x7 0 0 0 3 (aligned s))) (.JAL .x0 2091952)
+  pairsRun 4 .x7 24 24 0 1 (pairsRun 8 .x7 0 0 0 3 (aligned s))
+def routed (s : MachineState) := execInstrBr (entered s) (.JAL .x0 5204)
 def chunks (s : MachineState) :=
-  execCode (execCode (execCode (entered s) (Shifted32.chunkCode .x7 0 0))
+  execCode (execCode (execCode (routed s) (Shifted32.chunkCode .x7 0 0))
     (Shifted32.chunkCode .x7 0 8)) (Shifted32.chunkCode .x7 0 16)
 def shifted (s : MachineState) :=
-  execInstrBr (pairsRun 2 .x7 24 24 0 2 (chunks s)) (.JAL .x0 16)
+  execInstrBr (pairsRun 2 .x7 24 24 0 2 (chunks s)) (.JAL .x0 2091964)
 def state (s : MachineState) : MachineState :=
   if (s.getReg .x21).toNat % 4 = 0 then
     if (s.getReg .x21).toNat % 8 = 0 then dwords s else words s
@@ -81,32 +82,32 @@ theorem test (s : MachineState) (T word modulus : Nat) (mask : BitVec 12) (off :
     rw [ofNat_four]
 
 private theorem chunks_code : ∀ k : Fin 3,
-    CodeAt (612+6*k.val) (Shifted32.chunkCode .x7 0 (8*k.val)) := by
+    CodeAt (1913+6*k.val) (Shifted32.chunkCode .x7 0 (8*k.val)) := by
   unfold CodeAt; decide +kernel
 
 theorem shifted_done (s : MachineState) (S T : Nat)
     (src : s.getReg .x7=BitVec.ofNat 64 S) (dst : s.getReg .x21=BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%4=2) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES)
-    (ran : RunsOpeningBlock s (entered s) 2)
-    (epc : (entered s).pc=BitVec.ofNat 64 (4096+4*612))
-    (regs : ∀ r, r ≠ .x31 → (entered s).getReg r=s.getReg r)
-    (mem : (entered s).mem=s.mem) : Done s (shifted s) S T 28 25 638 := by
-  have a := chunk_at 612 (0 : Fin 3) (entered s) S T (chunks_code 0) (by decide) epc
+    (ran : RunsOpeningBlock s (routed s) 3)
+    (epc : (routed s).pc=BitVec.ofNat 64 (4096+4*1913))
+    (regs : ∀ r, r ≠ .x31 → (routed s).getReg r=s.getReg r)
+    (mem : (routed s).mem=s.mem) : Done s (shifted s) S T 28 26 638 := by
+  have a := chunk_at 1913 (0 : Fin 3) (routed s) S T (chunks_code 0) (by decide) epc
     ((regs _ (by decide)).trans src) ((regs _ (by decide)).trans dst) sa ta apart room
-  have b := chunk_at 612 (1 : Fin 3) _ S T (chunks_code 1) (by decide) a.pc
+  have b := chunk_at 1913 (1 : Fin 3) _ S T (chunks_code 1) (by decide) a.pc
     ((a.regs _ (by decide)).trans ((regs _ (by decide)).trans src))
     ((a.regs _ (by decide)).trans ((regs _ (by decide)).trans dst)) sa ta apart room
   have ab := append a b (by omega) (by omega)
-  have c := chunk_at 612 (2 : Fin 3) _ S T (chunks_code 2) (by decide) b.pc
+  have c := chunk_at 1913 (2 : Fin 3) _ S T (chunks_code 2) (by decide) b.pc
     ((ab.regs _ (by decide)).trans ((regs _ (by decide)).trans src))
     ((ab.regs _ (by decide)).trans ((regs _ (by decide)).trans dst)) sa ta apart room
   have abc := append ab c (by omega) (by omega)
-  have d := pairs _ S T 630 24 2 2 (by omega) (by decide +kernel) (by decide) c.pc
+  have d := pairs _ S T 1931 24 2 2 (by omega) (by decide +kernel) (by decide) c.pc
     ((abc.regs _ (by decide)).trans ((regs _ (by decide)).trans src))
     ((abc.regs _ (by decide)).trans ((regs _ (by decide)).trans dst))
     (by omega) (by omega) (by decide) apart (by omega)
   have both := append abc d (by omega) (by omega)
-  exact before ran regs mem (Writer28.jump both 16 (by decide) (by decide +kernel) (by decide))
+  exact before ran regs mem (Writer28.jump both 2091964 (by decide) (by decide +kernel) (by decide))
 
 theorem copy (s : MachineState) (S T : Nat) (pc : s.pc=BitVec.ofNat 64 (4096+4*610))
     (src : s.getReg .x7=BitVec.ofNat 64 S) (dst : s.getReg .x21=BitVec.ofNat 64 T)
@@ -114,43 +115,43 @@ theorem copy (s : MachineState) (S T : Nat) (pc : s.pc=BitVec.ofNat 64 (4096+4*6
     Done s (state s) S T 28 (cycles T) 638 := by
   have fit : T<2^64 := by unfold MEMORY_BYTES at room; omega
   have tn : (s.getReg .x21).toNat=T := by rw [dst, BitVec.toNat_ofNat, Nat.mod_eq_of_lt fit]
-  obtain ⟨ra, pa, ga, ma⟩ := test s T 610 4 3 96 (by decide) pc (by decide +kernel)
+  obtain ⟨ra, pa, ga, ma⟩ := test s T 610 4 3 8 (by decide) pc (by decide +kernel)
     (by decide +kernel) (by decide) (mask_bits s T 3 (by simp) dst fit)
   by_cases four : T%4=0
-  · have pca : (entered s).pc=BitVec.ofNat 64 (4096+4*635) := by
+  · have pca : (entered s).pc=BitVec.ofNat 64 (4096+4*613) := by
       rw [if_pos four] at pa
       exact pa.trans (by decide)
-    let b := execInstrBr (entered s) (.JAL .x0 5112)
-    have rb := run_step (entered s) 635 (.JAL .x0 5112) (by decide) pca (by decide +kernel) rfl rfl
-    have pcb : b.pc=BitVec.ofNat 64 (4096+4*1913) := by
-      change (entered s).pc+signExtend21 5112=_; rw [pca]; decide
-    have gb (r : Reg) (_ : r ≠ .x31) : b.getReg r=(entered s).getReg r := by cases r <;> rfl
-    have mb : b.mem=(entered s).mem := rfl
-    have gr (r : Reg) (h : r ≠ .x31) : b.getReg r=s.getReg r := (gb r h).trans (ga r h)
-    obtain ⟨rc, pc', gc, mc⟩ := test b T 1913 8 7 64 (by decide) pcb (by decide +kernel)
-      (by decide +kernel) (by decide) (mask_bits b T 7 (by simp) ((gr _ (by decide)).trans dst) fit)
-    have sr : (aligned s).getReg .x7=BitVec.ofNat 64 S := (gc _ (by decide)).trans ((gr _ (by decide)).trans src)
-    have dr : (aligned s).getReg .x21=BitVec.ofNat 64 T := (gc _ (by decide)).trans ((gr _ (by decide)).trans dst)
+    obtain ⟨rc, pc', gc, mc⟩ := test (entered s) T 613 8 7 64 (by decide) pca (by decide +kernel)
+      (by decide +kernel) (by decide) (mask_bits (entered s) T 7 (by simp) ((ga _ (by decide)).trans dst) fit)
+    have sr : (aligned s).getReg .x7=BitVec.ofNat 64 S := (gc _ (by decide)).trans ((ga _ (by decide)).trans src)
+    have dr : (aligned s).getReg .x21=BitVec.ofNat 64 T := (gc _ (by decide)).trans ((ga _ (by decide)).trans dst)
     by_cases eight : T%8=0
-    · have dpc : (aligned s).pc=BitVec.ofNat 64 (4096+4*1930) := by
+    · have dpc : (aligned s).pc=BitVec.ofNat 64 (4096+4*630) := by
         rw [if_pos eight] at pc'
         exact pc'.trans (by decide)
-      have a := pairs (aligned s) S T 1930 0 8 3 (by omega) (by decide +kernel) (by decide) dpc sr dr
+      have a := pairs (aligned s) S T 630 0 8 3 (by omega) (by decide +kernel) (by decide) dpc sr dr
         (by omega) (by omega) (by decide) (by omega) (by omega)
-      have d := pairs _ S T 1936 24 4 1 (by omega) (by decide +kernel) (by decide) a.pc
+      have d := pairs _ S T 636 24 4 1 (by omega) (by decide +kernel) (by decide) a.pc
         ((a.regs _ (by decide)).trans sr) ((a.regs _ (by decide)).trans dr)
         (by omega) (by omega) (by decide) apart (by omega)
-      have body := Writer28.jump (append a d (by omega) (by omega)) 2091952 (by decide) (by decide +kernel) (by decide)
-      simpa [state, tn, four, eight, cycles, dwords, aligned, entered, b] using
-        before ra ga ma (before rb gb mb (before rc gc mc body))
-    · have wpc : (aligned s).pc=BitVec.ofNat 64 (4096+4*1915) := by simpa [eight, aligned, b] using pc'
-      have a := pairs (aligned s) S T 1915 0 4 7 (by omega) (by decide +kernel) (by decide) wpc sr dr
+      have body := append a d (by omega) (by omega)
+      simpa [state, tn, four, eight, cycles, dwords, aligned, entered] using
+        before ra ga ma (before rc gc mc body)
+    · have wpc : (aligned s).pc=BitVec.ofNat 64 (4096+4*615) := by simpa [eight, aligned] using pc'
+      have a := pairs (aligned s) S T 615 0 4 7 (by omega) (by decide +kernel) (by decide) wpc sr dr
         (by omega) (by omega) (by decide) apart (by omega)
-      have body := Writer28.jump a 2091988 (by decide) (by decide +kernel) (by decide)
-      simpa [state, tn, four, eight, cycles, words, aligned, entered, b] using
-        before ra ga ma (before rb gb mb (before rc gc mc body))
+      have body := Writer28.jump a 36 (by decide) (by decide +kernel) (by decide)
+      simpa [state, tn, four, eight, cycles, words, aligned, entered] using
+        before ra ga ma (before rc gc mc body)
   · have pca : (entered s).pc=BitVec.ofNat 64 (4096+4*612) := by simpa [entered, four] using pa
-    simpa [state, cycles, tn, four] using shifted_done s S T src dst sa (by omega) apart room ra pca ga ma
+    have rb := run_step (entered s) 612 (.JAL .x0 5204) (by decide) pca (by decide +kernel) rfl rfl
+    have pcb : (routed s).pc=BitVec.ofNat 64 (4096+4*1913) := by
+      change (entered s).pc+signExtend21 5204=_; rw [pca]; decide
+    have gb (r : Reg) (h : r ≠ .x31) : (routed s).getReg r=s.getReg r := by
+      have same : (routed s).getReg r=(entered s).getReg r := by cases r <;> rfl
+      exact same.trans (ga r h)
+    have mb : (routed s).mem=s.mem := ma
+    simpa [state, cycles, tn, four] using shifted_done s S T src dst sa (by omega) apart room (ra.next rb) pcb gb mb
 
 end Writer28
 end TwoPermutationPrototype.GroupedOpening

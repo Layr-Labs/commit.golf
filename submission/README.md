@@ -1,3 +1,48 @@
+# Product: inline aligned 28-byte and A1 copies (-64 opening cycles)
+
+Based on next18 `ee4f0d6258119c7e53dd9ea69b6125cd801276c3`, retaining
+its direct aligned nonce branch and next17's inline 30-byte writers.
+Fetched master `4239e1a` still delivers next16's manifest; no new public
+implementation is transplanted. All inherited contributor credits below apply.
+
+The 28-byte final-level and 32-byte level-1 sibling copies now place both
+aligned paths inline. Their shifted copies move into the old private aligned
+stubs and return with fixed jumps. No words are appended.
+
+| Copy | Alignment | Next18 cycles | Next19 cycles | Copies/batch |
+| --- | --- | ---: | ---: | ---: |
+| 28-byte | 0 mod 8 | 14 | 12 | 32 |
+| 28-byte | 4 mod 8 | 20 | 19 | 32 |
+| 28-byte | 2 mod 4 | 25 | 26 | 64 |
+| A1 | 0 mod 8 | 14 | 12 | 32 |
+| A1 | 4 mod 8 | 22 | 21 | 32 |
+| A1 | 2 mod 4 | 27 | 28 | 64 |
+
+Each writer saves 32 cycles per batch despite the slower shifted path.
+Relative to next17 the combined nonce/28-byte/A1 layout saves 128 cycles;
+the additive saving over next18 is 64 cycles.
+
+```json
+{"commitCycles":504585244,"openingCycles":118721,"proofBytes":72160}
+```
+
+```text
+(504,585,244 + 118,721) × 72,160 = 36,419,438,114,400
+Improvement over next18: 4,618,240
+```
+
+Only opening words within 190..219, 610..637, 1913..1938 and 1948..1975
+change. Commitment/checker images, data, ABI, chain, nonce, 30-byte writers
+and proof serialization are unchanged. The UpperRun proof uses a generic
+one-step unfolding lemma rather than reducing a concrete thirteen-level
+state, avoiding the earlier kernel memory failure. Resource composition
+also rewrites only the cycle equality instead of converting whole states.
+
+Public provenance is in `~/cg/sub15/`, with a next18 parent placeholder.
+Local artifact-backed checks are not an official Yukon verifier run.
+
+## Historical next18 documentation
+
 # Product: direct aligned nonce branch (-64 opening cycles)
 
 Based on our next17 commit `88c395f`, preserving next16 and the complete

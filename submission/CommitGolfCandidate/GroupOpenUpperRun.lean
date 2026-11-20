@@ -24,6 +24,10 @@ def lowerCost (ordinal level : Nat) : Nat → Nat
   | 0 => 0
   | left+1 => siblingCost ordinal level+lowerCost ordinal (level+1) left
 
+theorem lowerRun_succ (level left : Nat) (state : MachineState) (live : level < 14) :
+    lowerRun level (left+1) state = lowerRun (level+1) left (siblingBlock ⟨level, live⟩ state) := by
+  simp only [lowerRun, dif_pos live]
+
 theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 64+levelCopies ordinal+recordCopyCost ordinal := by
   simp [lowerCost, siblingCost, levelCopies]
   omega
@@ -144,7 +148,8 @@ theorem execute_lower_zero (state : MachineState) (index : Index) (ordinal : Nat
   have writeFit : siblingDestination ordinal 0+siblingWidth 0 ≤ 2^64 := by omega
   have data : ByteCopy state middle (siblingAddress index 0) (siblingDestination ordinal 0) (siblingWidth 0) :=
     step.bytes
-  have unfolded : lowerRun 0 13 state = lowerRun 1 12 middle := rfl
+  have unfolded : lowerRun 0 13 state = lowerRun 1 12 middle :=
+    lowerRun_succ 0 12 state (by decide)
   rw [unfolded]
   refine ⟨?_, rest.next,
     fun reg a b c d e => (rest.register reg a b c d e).trans (step.register reg a b c d e),
@@ -418,7 +423,11 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
   · have total := ((((show RunsOpeningBlock state prepared 3 from
       fun fuel coins => execute_sibling_head state level (by simp [level]) start fuel coins).next field.run).next ranLoad).next
       ranFold).next ranTail
-    convert total using 1 <;> simp only [lastCopyCost, dst] <;> omega
+    have cost : 3 + Writer28.cycles dst + 2 + 34 + 3 = 42 + lastCopyCost ordinal := by
+      simp only [lastCopyCost, dst]
+      omega
+    rw [← cost]
+    exact total
   · exact tailPC
   · rw [tailReg .x9 (by decide) (by decide), foldKeep' .x9 (by decide) (by decide) (by decide),
       loadReg .x9 (by decide), keptCopy .x9 (by decide) (by decide)]
