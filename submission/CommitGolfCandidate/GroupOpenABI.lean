@@ -11,7 +11,7 @@ open Opening (groupsBefore openingNodes capDigestAddress)
 the one-cycle root exit `jal` and the four-cycle return block. -/
 def wideCycles (positions : Positions) : Nat :=
   if positions.card = 0 then 7 else
-    15 + (137*positions.card+copySum positions.card-1) + 770 +
+    15 + (135*positions.card+copySum positions.card+1) + 770 +
       (capWalkCycles (Opening.groupsBefore positions positions.card) 1 8 (recordBase positions.card) 0+2) + 4
 
 theorem copy_sum_le (n : Nat) : copySum n ≤ 517*n := by
@@ -42,7 +42,7 @@ theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15
   omega
 
 theorem wide_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    wideCycles positions ≤ 76936 ∧ proofLength positions ≤ 72160 := by
+    wideCycles positions ≤ 76682 ∧ proofLength positions ≤ 72160 := by
   have old := QuartetOpening.scored_limits positions count
   have nodes := Opening.opening_nodes_bound positions
   have k : positions.card = 128 := count
@@ -172,7 +172,7 @@ theorem body_from_boundary (recordsExecute : RecordsExecute) (s : Submission) (a
         ((show Opening.proofBase≤proofBase by decide).trans above) aligned room countdown
     let final := exitPrefix after 3
     let capCost := capWalkCycles grouped 1 8 dest 0
-    let recCost := 137*positions.card+copySum positions.card-1
+    let recCost := 135*positions.card+copySum positions.card+1
     have charge : wideCycles positions = 15+recCost+771+capCost+5 := by
       rw [wideCycles, if_neg empty]
       dsimp only [grouped, capCost, recCost, dest]
@@ -284,7 +284,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 76936 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
+    result.cycles ≤ 76682 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
   rw [physical.cycles, physical.length]
   exact wide_scored_limits positions count
 

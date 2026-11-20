@@ -33,7 +33,11 @@ theorem boundary_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) 
   refine ⟨⟨?_,r.heap,?_,r.salt,r.dest,r.leaves,r.slots,inp,?_,r.base,r.mark,(by rw [r.shift]; simpa using r.heap),r.capLeaves,r.start⟩,?_⟩
   · simpa only [ite_eq_right (Nat.ne_of_lt p0)] using start
   · simpa using r.indices
-  · simpa using r.count
+  · rw [r.endReg]
+    unfold indexAt
+    congr 1
+    have base : indicesBase = 9395245088 := rfl
+    omega
   · intro node hn
     have stable := r.frame (512+node) (by omega) (untouched_low p p.card _ (Or.inr (Or.inr (Or.inl ⟨by omega,by omega⟩))))
     have z := initial_mark_word actual actual_layout image_actual td p node hn

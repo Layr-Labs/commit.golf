@@ -13,11 +13,11 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 @[local simp] private theorem reg_zero (state : MachineState) : state.getReg .x0 = 0#64 := rfl
 
 private theorem tail_register (state : MachineState) (reg : Reg)
-    (temp : reg ≠ .x7) (index : reg ≠ .x8) (remaining : reg ≠ .x18) :
-    (recordTailPrefix state 6).getReg reg = state.getReg reg := by
-  by_cases done : state.getReg .x18 + 18446744073709551615#64 = 0#64 <;>
+    (temp : reg ≠ .x7) (index : reg ≠ .x8) :
+    (recordTailPrefix state 5).getReg reg = state.getReg reg := by
+  by_cases done : state.getReg .x8 + 8#64 = state.getReg .x17 <;>
     simp [recordTailPrefix, recordTailInstructions, Opening.recordTailInstructions, execInstrBr,
-      signExtend12, done, Ne.symm temp, Ne.symm index, Ne.symm remaining]
+      signExtend12, done, Ne.symm temp, Ne.symm index]
 
 attribute [local irreducible] execute recordData recordTailPrefix
 
@@ -28,54 +28,50 @@ private theorem after_latch_register (marked : MachineState) (final : Bool) (r :
     (afterLatch marked final).getReg r = marked.getReg r := by cases final <;> rfl
 
 private theorem record_tail_target (state : MachineState) (pc : state.pc = 0x1a08)
-    (remaining : Word) (last : Prop) [Decidable last]
-    (counter : state.getReg .x18-1 = remaining) (matchEnd : remaining = 0#64 ↔ last) :
-    (recordTailPrefix state 6).pc = (if last then 0x1a24 else 0x1a20) := by
-  rw [(record_tail_post state pc).2.2.2]
+    (last : Prop) [Decidable last]
+    (matchEnd : state.getReg .x8 + 8#64 = state.getReg .x17 ↔ last) :
+    (recordTailPrefix state 5).pc = (if last then 0x1a1c else 0x103c) := by
+  rw [(record_tail_post state pc).2.2]
   by_cases h : last
-  · have zero : state.getReg .x18-1 = 0#64 := Eq.trans counter (matchEnd.mpr h)
-    rw [ite_eq_left zero, ite_eq_left h]
-  · have nonzero : state.getReg .x18-1 ≠ 0#64 := by
-      rw [counter]
-      exact fun z => h (matchEnd.mp z)
-    rw [ite_eq_right nonzero, ite_eq_right h]
+  · rw [ite_eq_left (matchEnd.mpr h), ite_eq_left h]
+  · rw [ite_eq_right (fun z => h (matchEnd.mp z)), ite_eq_right h]
 
 private theorem tail_mark_memory (prepared : MachineState) (final : Bool) (pc : prepared.pc = 0x1a08)
     (address : Word) (target : Opening.recordMarkAddress prepared = address)
     (flag : prepared.getReg .x23 = 1#64) :
-    (afterLatch (recordTailPrefix prepared 6) final).mem = (prepared.setMem address 1#64).mem := by
+    (afterLatch (recordTailPrefix prepared 5) final).mem = (prepared.setMem address 1#64).mem := by
   refine Eq.trans (after_latch_memory _ final) ?_
-  have post : (recordTailPrefix prepared 6).mem =
+  have post : (recordTailPrefix prepared 5).mem =
       (prepared.setMem (Opening.recordMarkAddress prepared) (prepared.getReg .x23)).mem :=
     (record_tail_post prepared pc).1
   rw [post, target, flag]
 
-private def latchCost (final : Bool) : Nat := if final then 6 else 7
+private def latchCost (final : Bool) : Nat := if final then 6 else 5
 
 private theorem run_latch (state : MachineState) (last : Prop) [Decidable last]
-    (run : RunsOpeningBlock state (recordTailPrefix state 6) 6)
-    (pc : (recordTailPrefix state 6).pc = if last then 0x1a24 else 0x1a20) :
-    RunsOpeningBlock state (afterLatch (recordTailPrefix state 6) (decide last)) (latchCost (decide last)) := by
+    (run : RunsOpeningBlock state (recordTailPrefix state 5) 5)
+    (pc : (recordTailPrefix state 5).pc = if last then 0x1a1c else 0x103c) :
+    RunsOpeningBlock state (afterLatch (recordTailPrefix state 5) (decide last)) (latchCost (decide last)) := by
   by_cases h : last
   · have bit : decide last = true := decide_eq_true h
     rw [bit]
-    exact run
+    have jumpPC : (recordTailPrefix state 5).pc = 0x1a1c := pc.trans (ite_eq_left h)
+    have jump : RunsOpeningBlock (recordTailPrefix state 5)
+        ((recordTailPrefix state 5).setPC 0x1a24) 1 := fun fuel coins =>
+      execute_record_final _ jumpPC fuel coins
+    exact run.next jump
   · have bit : decide last = false := decide_eq_false h
     rw [bit]
-    have jumpPC : (recordTailPrefix state 6).pc = 0x1a20 := pc.trans (ite_eq_right h)
-    have jump : RunsOpeningBlock (recordTailPrefix state 6)
-        ((recordTailPrefix state 6).setPC 0x103c) 1 := fun fuel coins =>
-      execute_record_continue _ jumpPC fuel coins
-    exact run.next jump
+    exact run
 
 private theorem latch_target (marked : MachineState) (last : Prop) [Decidable last]
-    (pc : marked.pc = if last then 0x1a24 else 0x1a20) :
+    (pc : marked.pc = if last then 0x1a1c else 0x103c) :
     (afterLatch marked (decide last)).pc = if last then 0x1a24 else 0x103c := by
   by_cases h : last
   · rw [show decide last = true from decide_eq_true h, ite_eq_left h]
-    exact pc.trans (ite_eq_left h)
-  · rw [show decide last = false from decide_eq_false h, ite_eq_right h]
     rfl
+  · rw [show decide last = false from decide_eq_false h, ite_eq_right h]
+    exact pc.trans (ite_eq_right h)
 
 private theorem complete_record_cost (ordinal : Nat) (final : Bool) :
     130+recordExtra ordinal+latchCost final = recordCost ordinal final := by
@@ -87,9 +83,9 @@ private theorem execute_record_with_data (s : Submission)
     (boundary : RecordBoundary s trapdoor positions state ordinal)
     (data : RecordData state prepared (sortedIndex positions ordinal present) ordinal) :
     OneRecord s trapdoor positions state
-      (afterLatch (recordTailPrefix prepared 6) (decide (ordinal+1=positions.card))) ordinal present := by
+      (afterLatch (recordTailPrefix prepared 5) (decide (ordinal+1=positions.card))) ordinal present := by
   let index := sortedIndex positions ordinal present
-  let marked := recordTailPrefix prepared 6
+  let marked := recordTailPrefix prepared 5
   let done := afterLatch marked (decide (ordinal+1=positions.card))
   have sameBase : Opening.trapdoorBase = trapdoorBase := rfl
   let group := Sampling.capGroup index
@@ -114,27 +110,28 @@ private theorem execute_record_with_data (s : Submission)
     · have room : trapdoorBase+8 ≤ MEMORY_BYTES := by decide
       omega
   have post := record_tail_post prepared pc
-  have left : prepared.getReg .x18 = BitVec.ofNat 64 (positions.card-ordinal) :=
-    (data.register .x18 (by decide)).trans boundary.left
-  have nextLeft : prepared.getReg .x18-1 = BitVec.ofNat 64 (positions.card-(ordinal+1)) := by
-    rw [left]
-    change BitVec.ofNat 64 (positions.card-ordinal)-BitVec.ofNat 64 1 = _
-    rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) _ _ (by decide) (by omega)]
+  have pointer : prepared.getReg .x8 = BitVec.ofNat 64 (indicesBase+8*ordinal) :=
+    (data.register .x8 (by decide)).trans boundary.index
+  have finish : prepared.getReg .x17 = BitVec.ofNat 64 (indicesBase+8*positions.card) :=
+    (data.register .x17 (by decide)).trans boundary.endIndex
+  have bumped : prepared.getReg .x8 + 8#64 = BitVec.ofNat 64 (indicesBase+8*(ordinal+1)) := by
+    rw [pointer, ← BitVec.ofNat_add]
     congr 1
-  have nowZero : BitVec.ofNat 64 (positions.card-(ordinal+1)) = 0#64 ↔ ordinal+1=positions.card := by
-    have bound : LENGTH < 2^64 := by decide
+  have nowEnd : prepared.getReg .x8 + 8#64 = prepared.getReg .x17 ↔ ordinal+1=positions.card := by
+    have base : indicesBase = 9395245088 := rfl
+    have length : LENGTH = 16777216 := rfl
+    rw [bumped, finish]
     constructor
     · intro z
-      have eq := nat_address_injective (by omega) (by decide) z
+      have eq := nat_address_injective (by omega) (by omega) z
       omega
     · intro z
-      rw [z, Nat.sub_self]
-  have markPC := record_tail_target prepared pc (BitVec.ofNat 64 (positions.card-(ordinal+1)))
-    (ordinal+1=positions.card) nextLeft nowZero
+      rw [z]
+  have markPC := record_tail_target prepared pc (ordinal+1=positions.card) nowEnd
   have doneMem : done.mem = marked.mem := after_latch_memory marked _
   have doneReg (r : Reg) : done.getReg r = marked.getReg r := after_latch_register marked _ r
-  have saved (r : Reg) (free : r ∉ recordScratch) (b : r ≠ .x7) (e : r ≠ .x8) (f : r ≠ .x18) : done.getReg r=state.getReg r :=
-    (doneReg r).trans ((tail_register prepared r b e f).trans (data.register r free))
+  have saved (r : Reg) (free : r ∉ recordScratch) (b : r ≠ .x7) (e : r ≠ .x8) : done.getReg r=state.getReg r :=
+    (doneReg r).trans ((tail_register prepared r b e).trans (data.register r free))
   have one : prepared.getReg .x23 = 1#64 :=
     (data.register .x23 (by decide)).trans boundary.one
   have store : done.mem = (prepared.setMem (BitVec.ofNat 64 markAddr) 1#64).mem :=
@@ -152,21 +149,22 @@ private theorem execute_record_with_data (s : Submission)
       rw [same, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : markAddr < 2^64)] at aligned
       omega
     simp only [MachineState.getByte, stableWord _ different]
-  have markRun : RunsOpeningBlock prepared marked 6 := fun fuel coins =>
+  have markRun : RunsOpeningBlock prepared marked 5 := fun fuel coins =>
     execute_record_tail prepared pc fuel coins safe
-  have nextPC : (afterLatch (recordTailPrefix prepared 6) (decide (ordinal+1=positions.card))).pc =
+  have nextPC : (afterLatch (recordTailPrefix prepared 5) (decide (ordinal+1=positions.card))).pc =
       (if ordinal+1=positions.card then 0x1a24 else 0x103c) :=
-    @latch_target (recordTailPrefix prepared 6) (ordinal+1=positions.card) (inferInstance) markPC
+    @latch_target (recordTailPrefix prepared 5) (ordinal+1=positions.card) (inferInstance) markPC
   refine ⟨?_, ⟨nextPC,
-    (saved .x9 (by decide) (by decide) (by decide) (by decide)).trans boundary.heap,
-    ?_, (saved .x22 (by decide) (by decide) (by decide) (by decide)).trans boundary.nonce,
-    ?_, (saved .x19 (by decide) (by decide) (by decide) (by decide)).trans boundary.leaves,
-    (saved .x24 (by decide) (by decide) (by decide) (by decide)).trans boundary.slots, ?_, (doneReg .x18).trans (post.2.2.1.trans nextLeft),
-    (saved .x26 (by decide) (by decide) (by decide) (by decide)).trans boundary.marks,
-    (saved .x23 (by decide) (by decide) (by decide) (by decide)).trans boundary.one,
-    (saved .x25 (by decide) (by decide) (by decide) (by decide)).trans boundary.capHeap,
-    (saved .x27 (by decide) (by decide) (by decide) (by decide)).trans boundary.capLeaves,
-    (saved .x20 (by decide) (by decide) (by decide) (by decide)).trans boundary.proofBegin⟩,
+    (saved .x9 (by decide) (by decide) (by decide)).trans boundary.heap,
+    ?_, (saved .x22 (by decide) (by decide) (by decide)).trans boundary.nonce,
+    ?_, (saved .x19 (by decide) (by decide) (by decide)).trans boundary.leaves,
+    (saved .x24 (by decide) (by decide) (by decide)).trans boundary.slots, ?_,
+    (saved .x17 (by decide) (by decide) (by decide)).trans boundary.endIndex,
+    (saved .x26 (by decide) (by decide) (by decide)).trans boundary.marks,
+    (saved .x23 (by decide) (by decide) (by decide)).trans boundary.one,
+    (saved .x25 (by decide) (by decide) (by decide)).trans boundary.capHeap,
+    (saved .x27 (by decide) (by decide) (by decide)).trans boundary.capLeaves,
+    (saved .x20 (by decide) (by decide) (by decide)).trans boundary.proofBegin⟩,
     ?_, ?_, ?_, ?_, ?_⟩
   · have tail : RunsOpeningBlock prepared done (latchCost (decide (ordinal+1=positions.card))) :=
       run_latch prepared (ordinal+1=positions.card) markRun markPC
@@ -180,7 +178,7 @@ private theorem execute_record_with_data (s : Submission)
     rw [← BitVec.ofNat_add]
     congr 1
   · have nextDest := data.cursor.dest.trans (congrArg (BitVec.ofNat 64) (record_end ordinal))
-    exact (doneReg .x21).trans ((tail_register prepared .x21 (by decide) (by decide) (by decide)).trans nextDest)
+    exact (doneReg .x21).trans ((tail_register prepared .x21 (by decide) (by decide)).trans nextDest)
   · intro query above below aligned
     have limit : proofBase < 2^64 := by decide
     have neq : BitVec.ofNat 64 query ≠ BitVec.ofNat 64 markAddr := by
