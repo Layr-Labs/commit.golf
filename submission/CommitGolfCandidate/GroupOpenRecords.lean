@@ -57,11 +57,9 @@ private theorem collected_record (s : Submission) (trapdoor : BitVec (8*s.sizes.
   have baseOrder : trapdoorBase ≤ proofBase := by decide
   have heapSource (level byte : Nat) (hb : byte < 32) :
       trapdoorBase ≤ siblingAddress index level+byte ∧ siblingAddress index level+byte+2 ≤ proofBase := by
-    have bound := upper_swap_bound index level
-    have heapEnd := heap_before_nonces
+    have bound := sibling_address_inside index level
     have tapeEnd := nonces_end_at_indices
     have order := indices_before_records
-    unfold siblingAddress
     omega
   by_cases current : prior = ordinal
   · subst prior

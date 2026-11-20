@@ -23,19 +23,18 @@ theorem pass_end_facts (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.si
   rw [Nat.zero_add] at r seen
   exact ⟨r,seen⟩
 
-/-- The virtual trapdoor of a nonempty opening: heap below level 22 kept; the opened quartets' level-22 siblings
-copied from the group nodes; their rebuilt blocks (`32 L + 512 + 1024 g`) hold the inverses of their group
-replies; the opened salts are the linked salts. -/
+/-- The virtual trapdoor of a nonempty opening: heap below level 22 kept; the opened positions' level-0 sources
+(the commit's nodes of their sibling quartets) kept; their rebuilt blocks (`32 L + 512 + 1024 g`) hold the inverses
+of their group replies; the opened salts are the linked salts. -/
 theorem end_components (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
     (nz : 0<p.card) :
     let t:=virtualTd (passEnd o td p)
     (∀ n, n<4194304 → Opening.trapdoorHeap (s:=actual) t n=Opening.trapdoorHeap (s:=actual) td n) ∧
-    (∀ i∈p, Opening.trapdoorHeap (s:=actual) t (4194304+(i.val/4^^^1))=
-      td.extractLsb' (8*(8*nodeWordOf (i.val/4^^^1)-trapdoorBase)) 256) ∧
+    (∀ i∈p, trapdoorQuad (s:=actual) t i=trapdoorQuad (s:=actual) td i) ∧
     (∀ i∈p, t.extractLsb' (8*(32*LENGTH+512+1024*(i.val/4))) 1600=o.permutation.symm (groupReply td (i.val/4))) ∧
     (∀ i∈p, trapdoorSalt (s:=actual) t i=linkedSalts o (keyOf td) i) := by
   obtain ⟨r,seen⟩ := pass_end_facts hc o td p nz
-  exact ⟨kept_heap td p _ _ r,placed_sibling o td p _ _ seen,placed_block o td p _ _ seen,
+  exact ⟨kept_heap td p _ _ r,fun i _ => kept_quad td p _ _ r i,placed_block o td p _ _ seen,
     selected_salt o _ td p _ seen⟩
 
 /-- The opener's virtual trapdoor (the memory after the prefix pass; `td` itself for an empty opening). -/
@@ -102,7 +101,9 @@ theorem opened_proof (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.size
     have nz : 0<p.card := Finset.card_pos.mpr ⟨i,member⟩
     have ix := i.isLt; change _<16777216 at ix
     have hx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
-    rw [virtual_end o td p nz,(end_components hc o td p nz).2.1 i member,node_slice td _ hx,
+    rw [virtual_end o td p nz,(end_components hc o td p nz).2.1 i member]
+    unfold trapdoorQuad
+    rw [quad_address_node,node_slice td _ hx,
       Quartet.upper_heap_leaf _ _ _ _ (by omega : i.val/4<4194304),replies _ hx]
     rfl
   · intro i member j hj

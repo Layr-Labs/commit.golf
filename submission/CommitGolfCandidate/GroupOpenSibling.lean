@@ -157,7 +157,7 @@ def tailPrefix (state : MachineState) (level : Fin 14) (count : Nat) : MachineSt
 
 set_option maxRecDepth 4096 in
 private theorem head_decode :
-    ∀ (level : Fin 14) (i : Fin 3),
+    ∀ (level : Fin 14) (i : Fin 3), level.val ≠ 0 →
       (openingImage.code[siblingStart level+i.val]?).bind Opening.decodeBase =
         some (headCode[i.val]?.getD .EBREAK) := by decide
 
@@ -176,7 +176,7 @@ private theorem tail_decode :
 private theorem head_range : ∀ level : Fin 14, siblingStart level+3 ≤ 896 := by decide
 private theorem tail_range : ∀ level : Fin 14, siblingEnd level+2 ≤ 896 := by decide
 
-theorem execute_sibling_head (state : MachineState) (level : Fin 14)
+theorem execute_sibling_head (state : MachineState) (level : Fin 14) (nz : level.val ≠ 0)
     (pc : state.pc = BitVec.ofNat 64 (4096+4*siblingStart level)) (fuel : Nat) (coins : Bool) :
     execute openingImage (3+fuel) state coins =
       (do let result ← execute openingImage fuel (headPrefix state 3) coins
@@ -189,7 +189,7 @@ theorem execute_sibling_head (state : MachineState) (level : Fin 14)
           BitVec.ofNat 64 (4096+4*(siblingStart level+i)) := by rw [← BitVec.ofNat_add]; congr 1; omega
       rw [← offset]
       interval_cases i <;> simp [headPrefix, headCode, execInstrBr, pc, BitVec.add_assoc]
-    · exact head_decode level ⟨i,inside⟩
+    · exact head_decode level ⟨i,inside⟩ nz
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
@@ -233,6 +233,17 @@ theorem sibling_tail_post (state : MachineState) (level : Fin 14) :
   simp [tailPrefix, tailCode, execInstrBr, sign, BitVec.add_assoc]
   intro reg a b
   simp [Ne.symm a, Ne.symm b]
+
+/-! ### Level 0 through the prefix's pointer word -/
+
+/-- Level 0's head: load the sibling node's address from the pointer word after the quartet's rebuilt block
+(`x7` holds the quartet block), then jump over the dead row 152 to the wide copy at 153. -/
+def zeroRows : List (Nat × Instr) :=
+  [(150, .LD .x7 .x7 712), (151, .JAL .x0 8)]
+
+theorem zero_code : RowsCode zeroRows := by decide +kernel
+
+theorem zero_final_pc : rowNext zeroRows[1] = BitVec.ofNat 64 (4096+4*153) := by decide +kernel
 
 /-! ### Level 1 through A1 -/
 

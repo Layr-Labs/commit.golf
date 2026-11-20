@@ -30,7 +30,8 @@ theorem boundary_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) 
     have h:=r.frame w wlim (untouched_low p p.card w (Or.inr (Or.inr (Or.inr (Or.inr wlo)))))
     rw [ea];exact h)
   have start : s.pc=0x103c := by simpa [passPC,address] using r.pc
-  refine ⟨⟨?_,r.heap,?_,r.salt,r.dest,r.leaves,r.slots,inp,?_,r.base,r.mark,(by rw [r.shift]; simpa using r.heap),r.capLeaves,r.start⟩,?_⟩
+  refine ⟨⟨?_,r.heap,?_,r.salt,r.dest,r.leaves,r.slots,inp,?_,r.base,r.mark,(by rw [r.shift]; simpa using r.heap),r.capLeaves,r.start,
+    ?_⟩,?_⟩
   · simpa only [ite_eq_right (Nat.ne_of_lt p0)] using start
   · simpa using r.indices
   · rw [r.endReg]
@@ -38,6 +39,16 @@ theorem boundary_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) 
     congr 1
     have base : indicesBase = 9395245088 := rfl
     omega
+  · intro prior present
+    have ix := (sortedIndex p prior present).isLt
+    have facts := pointer_address_inside (sortedIndex p prior present).val ix
+    have order := nonces_end_at_indices
+    have records := indices_before_records
+    rw [← inp (pointerAddress (sortedIndex p prior present).val) facts.2.1 (by omega) facts.1, pointer_address_word,
+      ← pos_present p prior present]
+    change memoryView s _=_
+    rw [r.pointer prior present, quad_address_node]
+    rfl
   · intro node hn
     have stable := r.frame (512+node) (by omega) (untouched_low p p.card _ (Or.inr (Or.inr (Or.inl ⟨by omega,by omega⟩))))
     have z := initial_mark_word actual actual_layout image_actual td p node hn
@@ -73,35 +84,26 @@ theorem pos_of_mem (p : Positions) (idx : Index) (member : idx∈p) : ∃ j, j<p
   have size : j<p.card := by simpa using hj
   exact ⟨j,size,(pos_present p j size).trans hx⟩
 
-/-- The level-22 sibling of an opened quartet, copied from the commit's group node. -/
-theorem placed_sibling (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (k : BitVec 192)
-    (s : MachineState) (seen : Seen o k td p s p.card) (idx : Index) (member : idx∈p) :
-    Opening.trapdoorHeap (s:=actual) (virtualTd s) (4194304+(idx.val/4^^^1))=
-      td.extractLsb' (8*(8*nodeWordOf (idx.val/4^^^1)-trapdoorBase)) 256 := by
-  obtain ⟨j,hj,who⟩ := pos_of_mem p idx member
+/-- The level-0 source of an opened position (the commit's node of the sibling quartet) is untouched by the pass. -/
+theorem kept_quad (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (k : BitVec 192) (s : MachineState)
+    (r : Ready td p k s p.card) (idx : Index) :
+    trapdoorQuad (s:=actual) (virtualTd s) idx=trapdoorQuad (s:=actual) td idx := by
   have ix : idx.val<16777216:=idx.isLt
-  have sib0 := seen.sibling j hj
-  rw [who] at sib0
   set h:=idx.val/4^^^1 with hh
   have hx : h<4194304 := xor_one_lt (idx.val/4) 22 (by omega) (by decide)
   have tb : trapdoorBase=4294971424 := rfl
   have nw : nodeWordOf h=603980292+128*(2*(h/2))+21-4*(h%2) := rfl
+  have q := quad_address_node idx.val
+  rw [← hh] at q
   have n1 : trapdoorBase≤8*nodeWordOf h := by rw [tb,nw]; omega
   have n2 : 8*nodeWordOf h-trapdoorBase+32≤5100273664 := by rw [tb,nw]; omega
-  have n3 : (8*nodeWordOf h)%8=0 := by omega
-  unfold Opening.trapdoorHeap
-  rw [show 256*(4194304+h)=8*(32*(4194304+h)) by omega,
-    show BitVec.extractLsb' (8*(32*(4194304+h))) 256 (virtualTd s)=BitVec.extractLsb' (8*(32*(4194304+h))) (8*32) (virtualTd s) from rfl,
-    show BitVec.extractLsb' (8*(8*nodeWordOf h-trapdoorBase)) 256 td=BitVec.extractLsb' (8*(8*nodeWordOf h-trapdoorBase)) (8*32) td from rfl,
-    virtual_slice s _ 32 (by change _≤5100273664;omega),
-    ←input_trapdoor_slice actual actual_layout td p _ 32 (by change _≤5100273664;omega),
-    show trapdoorBase+(8*nodeWordOf h-trapdoorBase)=8*nodeWordOf h by omega]
-  apply Opening.copied_buffer _ _ (8*nodeWordOf h) _ 4 n3 (by rw [tb]; omega) (by decide)
-  intro c hc
-  have sib := sib0 c hc
-  have e1 : trapdoorBase+32*(4194304+h)+8*c=8*(heapWord (4194304+h)+c) := by rw [tb]; unfold heapWord; omega
-  have e2 : 8*nodeWordOf h+8*c=8*(nodeWordOf h+c) := by omega
-  rw [e1,e2]; exact sib
+  have v := kept_slice td p k s r (8*nodeWordOf h-trapdoorBase) 4 (by decide) (by rw [tb]; omega) (by omega)
+    (fun c hc => by
+      rw [show 536871428+(8*nodeWordOf h-trapdoorBase)/8+c=nodeWordOf h+c by rw [tb]; omega]
+      exact node_untouched p p.card h c hx hc)
+  unfold trapdoorQuad
+  rw [q]
+  exact v
 
 /-- The block rebuilt for an opened quartet: the inverse of its group reply. -/
 theorem placed_block (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (k : BitVec 192)

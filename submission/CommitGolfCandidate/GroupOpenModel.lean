@@ -18,16 +18,21 @@ def trapdoorSalt {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (index : Ind
 def trapdoorLeaf {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (index : Nat) : BitVec 256 :=
   t.extractLsb' (8*(32*LENGTH + 512 + 1024*(index/4) + 72 + 32*(index%4))) 256
 
-/-- One record as the writer leaves it: salt, three mates, levels 0..5 (32, 32, then 30 bytes), and the
-packed levels 6..13 in the folded form. -/
-def physicalRecord (leaf heap : Nat → BitVec 256) (index : Index) (salt : BitVec 128) : Proof :=
+/-- The level-22 node of the sibling quartet of `index`'s quartet where the writer reads it: in the commit's group
+replies (`quadAddress`), not in the heap. -/
+def trapdoorQuad {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (index : Index) : BitVec 256 :=
+  t.extractLsb' (8*(quadAddress index.val-trapdoorBase)) 256
+
+/-- One record as the writer leaves it: salt, three mates, levels 0..5 (32, 32, then 30 bytes; level 0 is the
+sibling quartet's node `quad`), and the packed levels 6..13 in the folded form. -/
+def physicalRecord (leaf heap : Nat → BitVec 256) (quad : BitVec 256) (index : Index) (salt : BitVec 128) : Proof :=
   saltBytes salt ++ ([1,2,3] : List Nat).flatMap (fun j => digestBytes (leaf (index.val ^^^ j))) ++
-    (List.range 6).flatMap (fun l => proofDigestBytes (2 ≤ l) (heap (upperNode index l ^^^ 1))) ++
+    (List.range 6).flatMap (fun l => proofDigestBytes (2 ≤ l) (if l = 0 then quad else heap (upperNode index l ^^^ 1))) ++
     foldPack8 (fun k => heap (upperNode index (6+k) ^^^ 1))
 
 def proofFromTrapdoor {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (positions : Positions) : Proof :=
   (positions.sort (· ≤ ·)).flatMap (fun i => physicalRecord (trapdoorLeaf (s:=s) t) (trapdoorHeap (s:=s) t)
-    i (trapdoorSalt (s:=s) t i)) ++
+    (trapdoorQuad (s:=s) t i) i (trapdoorSalt (s:=s) t i)) ++
   foldNodes ((openingNodes positions).map (trapdoorHeap (s:=s) t))
 
 theorem upper_sibling_bound (i : Index) (l : Nat) :
@@ -169,28 +174,37 @@ decreasing_by simp only [List.length_drop]; omega
 private theorem record_matches (s : Submission) (t : BitVec (8*s.sizes.trapdoor))
     (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape)
     (index : Index) (salt : BitVec 128)
-    (digest : ∀ l < 14, trapdoorHeap (s:=s) t (upperNode index l ^^^ 1) =
+    (digest : ∀ l < 14, 0 < l → trapdoorHeap (s:=s) t (upperNode index l ^^^ 1) =
       upperHeap lookup compress leaves (((4194304 + (index.val/4 ^^^ 1)) / 2^l) ^^^ 1))
+    (quad : trapdoorQuad (s:=s) t index =
+      upperHeap lookup compress leaves (((4194304 + (index.val/4 ^^^ 1)) / 2^0) ^^^ 1))
     (leaf : ∀ j, 0 < j → j < 4 → trapdoorLeaf (s:=s) t (index.val ^^^ j) = leafAt leaves (index.val ^^^ j))
     (stored : trapdoorSalt (s:=s) t index = salt) :
-    physicalRecord (trapdoorLeaf (s:=s) t) (trapdoorHeap (s:=s) t) index (trapdoorSalt (s:=s) t index) =
+    physicalRecord (trapdoorLeaf (s:=s) t) (trapdoorHeap (s:=s) t) (trapdoorQuad (s:=s) t index) index
+        (trapdoorSalt (s:=s) t index) =
       openingRecord leaves (upperHeap lookup compress leaves) index salt := by
-  unfold physicalRecord openingRecord
-  rw [stored]
-  congr 1
-  · congr 1
-    · congr 1
-      apply List.flatMap_congr
-      intro j member
-      have small : 0 < j ∧ j < 4 := by simp only [List.mem_cons, List.not_mem_nil, or_false] at member; omega
-      rw [leaf j small.1 small.2]
-    · apply List.flatMap_congr
-      intro l member
-      have level := List.mem_range.mp member
-      rw [digest l (by omega)]
-  · have same : ∀ k < 8, trapdoorHeap (s:=s) t (upperNode index (6+k) ^^^ 1) =
-        upperHeap lookup compress leaves (upperNode index (6+k) ^^^ 1) := fun k hk => by
-      rw [digest (6+k) (by omega), Sampling.Quartet.flip_start_shift _ _ (by omega), upper_node_heap_index]
+  have mid : (List.range 6).flatMap (fun l => proofDigestBytes (2 ≤ l)
+        (if l = 0 then trapdoorQuad (s:=s) t index else trapdoorHeap (s:=s) t (upperNode index l ^^^ 1))) =
+      (List.range 6).flatMap (fun level => proofDigestBytes (2 ≤ level)
+        (upperHeap lookup compress leaves ((((4194304 + (index.val/4 ^^^ 1)) / 2^level)) ^^^ 1))) := by
+    apply List.flatMap_congr
+    intro l member
+    have level := List.mem_range.mp member
+    by_cases zero : l = 0
+    · subst zero
+      rw [if_pos rfl, quad]
+    · rw [if_neg zero, digest l (by omega) (by omega)]
+  have mates : ([1,2,3] : List Nat).flatMap (fun j => digestBytes (trapdoorLeaf (s:=s) t (index.val ^^^ j))) =
+      ([1,2,3] : List Nat).flatMap (fun j => digestBytes (leafAt leaves (index.val ^^^ j))) := by
+    apply List.flatMap_congr
+    intro j member
+    have small : 0 < j ∧ j < 4 := by simp only [List.mem_cons, List.not_mem_nil, or_false] at member; omega
+    rw [leaf j small.1 small.2]
+  have same : ∀ k < 8, trapdoorHeap (s:=s) t (upperNode index (6+k) ^^^ 1) =
+      upperHeap lookup compress leaves (upperNode index (6+k) ^^^ 1) := fun k hk => by
+    rw [digest (6+k) (by omega) (by omega), Sampling.Quartet.flip_start_shift _ _ (by omega), upper_node_heap_index]
+  have packed : foldPack8 (fun k => trapdoorHeap (s:=s) t (upperNode index (6+k) ^^^ 1)) =
+      packEight ((List.range 8).map (fun k => upperHeap lookup compress leaves ((((4194304 + index.val/4) / 2^(6+k))) ^^^ 1))) := by
     rw [fold_pack8_congr _ _ same]
     rw [fold_pack8 _ (fun k hk => by
       have range := packed_sibling_range index k hk
@@ -199,13 +213,17 @@ private theorem record_matches (s : Submission) (t : BitVec (8*s.sizes.trapdoor)
     apply List.map_congr_left
     intro k _
     rw [upper_node_heap_index]
+  unfold physicalRecord openingRecord
+  rw [stored, mates, mid, packed]
 
 /-- The proof the opener writes from a trapdoor that agrees with the honest heap on the nodes a record
 and the cap read is the builder's proof. -/
 theorem proof_from_trapdoor_matches (s : Submission) (t : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
     (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape) (salts : CompleteSaltTape)
-    (digest : ∀ i ∈ positions, ∀ l < 14, trapdoorHeap (s:=s) t (upperNode i l ^^^ 1) =
+    (digest : ∀ i ∈ positions, ∀ l < 14, 0 < l → trapdoorHeap (s:=s) t (upperNode i l ^^^ 1) =
       upperHeap lookup compress leaves (((4194304 + (i.val/4 ^^^ 1)) / 2^l) ^^^ 1))
+    (quad : ∀ i ∈ positions, trapdoorQuad (s:=s) t i =
+      upperHeap lookup compress leaves (((4194304 + (i.val/4 ^^^ 1)) / 2^0) ^^^ 1))
     (cap : ∀ n ∈ openingNodes positions, trapdoorHeap (s:=s) t n = upperHeap lookup compress leaves n)
     (leaf : ∀ i ∈ positions, ∀ j, 0 < j → j < 4 → trapdoorLeaf (s:=s) t (i.val ^^^ j) = leafAt leaves (i.val ^^^ j))
     (salt : ∀ i ∈ positions, trapdoorSalt (s:=s) t i = salts i) :
@@ -217,7 +235,8 @@ theorem proof_from_trapdoor_matches (s : Submission) (t : BitVec (8*s.sizes.trap
     apply List.flatMap_congr
     intro index _
     exact record_matches s t lookup compress leaves index.val (salts index.val)
-      (digest index.val index.property) (leaf index.val index.property) (salt index.val index.property)
+      (digest index.val index.property) (quad index.val index.property) (leaf index.val index.property)
+      (salt index.val index.property)
   · unfold frontierProof238
     rw [← groups_sorted positions]
     by_cases empty : positions.card = 0
@@ -241,33 +260,27 @@ theorem proof_from_trapdoor_matches (s : Submission) (t : BitVec (8*s.sizes.trap
         (frontier_positive _ 1 8 cap_span_root n inside)
         ((cap_frontier_nodes_small _ 1 8 cap_span_root n inside).trans (by decide))
 
-/-- O2's shape (what the K3-lite virtual trapdoor provides). The heap holds group `g`'s node at
-`2^22 + (g ^^^ 1)`, so the level-22 slot the writer reads for a position of group `g`, `2^22 + (g ^^^ 1)`, must
-hold the builder's heap node `2^22 + g`: the node of group `g ^^^ 1`. -/
+/-- O2's shape (what the K3-lite virtual trapdoor provides). The level-0 sibling the writer reads for a position of
+group `g` (`trapdoorQuad`, the commit's node of group `g ^^^ 1`) must be the builder's heap node `2^22 + g`. -/
 theorem proof_from_trapdoor_matches_virtual (s : Submission) (t : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
     (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape) (salts : CompleteSaltTape)
     (heap : ∀ n, 0 < n → n < 4194304 → trapdoorHeap (s:=s) t n = upperHeap lookup compress leaves n)
-    (sibling : ∀ i ∈ positions, trapdoorHeap (s:=s) t (4194304 + (i.val/4 ^^^ 1)) = upperHeap lookup compress leaves (4194304 + i.val/4))
+    (sibling : ∀ i ∈ positions, trapdoorQuad (s:=s) t i = upperHeap lookup compress leaves (4194304 + i.val/4))
     (leaf : ∀ i ∈ positions, ∀ j < 4, trapdoorLeaf (s:=s) t (4*(i.val/4)+j) = leafAt leaves (4*(i.val/4)+j))
     (salt : ∀ i ∈ positions, trapdoorSalt (s:=s) t i = salts i) :
     proofFromTrapdoor (s:=s) t positions = (builder lookup compress positions (fun i => salts i.val) leaves).2 := by
-  apply proof_from_trapdoor_matches s t positions lookup compress leaves salts _ _ _ salt
-  · intro i member l level
+  have flip : ∀ g : Nat, (4194304 + g) ^^^ 1 = 4194304 + (g ^^^ 1) := by
+    intro g
+    have outer := xor_split (4194304+g) 1 1 (by decide)
+    have inner := xor_split g 1 1 (by decide)
+    have parity : (4194304+g) % 2^1 = g % 2^1 := by omega
+    rw [parity] at outer
+    rw [outer, inner]
+    omega
+  apply proof_from_trapdoor_matches s t positions lookup compress leaves salts _ _ _ _ salt
+  · intro i member l level nonzero
     have hi : i.val < 16777216 := i.isLt
-    have flip : ∀ g : Nat, (4194304 + g) ^^^ 1 = 4194304 + (g ^^^ 1) := by
-      intro g
-      have outer := xor_split (4194304+g) 1 1 (by decide)
-      have inner := xor_split g 1 1 (by decide)
-      have parity : (4194304+g) % 2^1 = g % 2^1 := by omega
-      rw [parity] at outer
-      rw [outer, inner]
-      omega
-    by_cases zero : l = 0
-    · subst zero
-      have node : upperNode i 0 ^^^ 1 = 4194304 + (i.val/4 ^^^ 1) := by
-        rw [upper_node_zero, flip]
-      rw [node, Nat.pow_zero, Nat.div_one, flip, Sampling.Quartet.xor_one_xor_one]
-      exact sibling i member
+    have zero : l ≠ 0 := by omega
     · rw [Sampling.Quartet.flip_start_shift _ _ (by omega), upper_node_heap_index]
       have p1 : 2^l ≤ 8192 := (Nat.pow_le_pow_right (by decide) (show l ≤ 13 by omega)).trans (by decide)
       have p0 : 2 ≤ 2^l := (show 2 ≤ 2^1 by decide).trans (Nat.pow_le_pow_right (by decide) (by omega))
@@ -277,6 +290,9 @@ theorem proof_from_trapdoor_matches_virtual (s : Submission) (t : BitVec (8*s.si
         · rw [Nat.div_lt_iff_lt_mul (by positivity)]; omega
       have side := sibling_range _ range.1
       exact heap _ side.1 (Nat.xor_lt_two_pow (n := 22) (by simpa using range.2) (by decide))
+  · intro i member
+    rw [Nat.pow_zero, Nat.div_one, flip, Sampling.Quartet.xor_one_xor_one]
+    exact sibling i member
   · intro n member
     have nonempty : positions.card ≠ 0 := by
       intro empty

@@ -24,6 +24,16 @@ def groupSlots : Nat := trapdoorBase+32*LENGTH
 def leafAddress (i : Nat) : Nat :=
   groupSlots + 512 + 1024 * (i/4) + 72 + 32 * (i%4)
 
+/-- The commit's level-22 node of the sibling quartet of leaf `i`'s quartet `q = i/4`: inside the group replies of
+the pair `2 (q/2)`, at `B+136` of the even block for even `q` (node of `q+1`) and at `B+168` of the even block for
+odd `q` (node of `q-1`). -/
+def quadAddress (i : Nat) : Nat :=
+  groupSlots + 1024 * (2 * (i/4/2)) + 136 + 32 * (i/4%2)
+
+/-- The pointer word after the rebuilt block of leaf `i`'s quartet (`B_q + 712`). -/
+def pointerAddress (i : Nat) : Nat :=
+  groupSlots + 1024 * (i/4) + 712
+
 def upperNode (index : Index) (level : Nat) : Nat := Opening.lowerNode index (level+2)
 
 theorem upper_node_zero (index : Index) : upperNode index 0 = 4194304+index.val/4 := by
@@ -167,6 +177,33 @@ theorem input_leaf (s : Submission) (layout : OpeningLayout s)
   apply input_trapdoor_slice s layout trapdoor positions
   unfold off trapdoorBytes
   unfold LENGTH LOG_LENGTH at *
+  omega
+
+theorem quad_address_inside (i : Nat) (valid : i < LENGTH) :
+    quadAddress i % 8 = 0 ∧ trapdoorBase ≤ quadAddress i ∧ quadAddress i+32 ≤ nonceBase := by
+  have hb : trapdoorBase % 8 = 0 := by decide
+  unfold quadAddress groupSlots nonceBase
+  unfold LENGTH LOG_LENGTH at *
+  omega
+
+theorem pointer_address_inside (i : Nat) (valid : i < LENGTH) :
+    pointerAddress i % 8 = 0 ∧ trapdoorBase ≤ pointerAddress i ∧ pointerAddress i+8 ≤ nonceBase := by
+  have hb : trapdoorBase % 8 = 0 := by decide
+  unfold pointerAddress groupSlots nonceBase
+  unfold LENGTH LOG_LENGTH at *
+  omega
+
+theorem input_quad (s : Submission) (layout : OpeningLayout s)
+    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
+    (i : Nat) (inside : i<LENGTH) :
+    readBuffer (s.initialState .opening (trapdoor,positions)) (quadAddress i) 32 =
+      trapdoor.extractLsb' (8*(quadAddress i-trapdoorBase)) 256 := by
+  have facts := quad_address_inside i inside
+  have physical : quadAddress i = trapdoorBase+(quadAddress i-trapdoorBase) := by omega
+  rw [physical]
+  rw [show trapdoorBase+(quadAddress i-trapdoorBase)-trapdoorBase=quadAddress i-trapdoorBase by omega]
+  apply input_trapdoor_slice s layout trapdoor positions
+  have n : nonceBase ≤ trapdoorBase+trapdoorBytes := by decide
   omega
 
 end TwoPermutationPrototype.GroupedOpening

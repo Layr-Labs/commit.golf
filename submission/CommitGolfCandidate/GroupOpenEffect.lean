@@ -3,8 +3,8 @@ import CommitGolfCandidate.GroupOpenVirtual
 import CommitGolfCandidate.Machine
 import CommitGolfCandidate.K3OpenReply
 
-/-! K3-lite prefix, one position: the registers after it and its effect on the word view (level-22
-sibling, rebuilt block of a new quartet, generator scratch and counter, salt). -/
+/-! K3-lite prefix, one position: the registers after it and its effect on the word view (rebuilt block
+of a new quartet and the sibling-node pointer after it, generator scratch and counter, salt). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -13,21 +13,38 @@ set_option maxRecDepth 18000
 set_option maxHeartbeats 1500000
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.getReg_setPC
 
-theorem sib_pairs_diag : ∀ p ∈ sibPairs, p.1=p.2 ∧ p.2<4 := by decide
-theorem sib_member (m : Nat) (hm : m<4) : (m,m) ∈ sibPairs := by interval_cases m <;> decide
-
 private theorem view_eq_of_mem {a b : MachineState} (h : a.mem=b.mem) (w : Nat) : memoryView a w=memoryView b w := by
   unfold memoryView MachineState.getMem; rw [h]
 
-/-- Words the head of position `i` may write: the level-22 sibling slot and its quartet's rebuilt block. -/
+/-- Words the head of position `i` may write: its quartet's rebuilt block and the pointer word after it. -/
 def HeadWrites (i : Index) (last : Nat) (w : Nat) : Prop :=
-  i.val/4≠last ∧ ((∃ m<4, w=heapWord (4194304+(i.val/4^^^1))+m) ∨ (∃ m<25, w=rebuiltWord (i.val/4)+m))
+  i.val/4≠last ∧ ∃ m<26, w=rebuiltWord (i.val/4)+m
 
-private theorem sib_away (i : Index) (w : Nat) (h : ∀ m<4, w≠heapWord (4194304+(i.val/4^^^1))+m) :
-    ∀ p ∈ sibPairs, w≠heapWord (4194304+(i.val/4^^^1))+p.2 := by
-  intro p hp
-  have r : p.2<4 := (sib_pairs_diag p hp).2
-  exact h p.2 r
+/-- The state after a new quartet's inverse call, before rows 773..776. -/
+private def called (s : MachineState) (i : Index) (y : BitVec 1600) : MachineState :=
+  writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
+
+private theorem called_facts (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+    (y : BitVec 1600) (fresh : i.val/4≠last) :
+    let a1:=called s i y
+    a1.pc=address 773 ∧ a1.getReg .x7=wordAddress (blockWord (i.val/4)) ∧
+      a1.getReg .x30=wordAddress (nodeWordOf (i.val/4^^^1)) ∧
+      (∀ w, w<2^33 → memoryView a1 w=if h : rebuiltWord (i.val/4)≤w ∧ w<rebuiltWord (i.val/4)+25 then
+        replyWords y ⟨w-rebuiltWord (i.val/4),by omega⟩ else memoryView s w) := by
+  have hi : i.val<16777216 := i.isLt
+  obtain ⟨_,apc,amem,_,_,_,a30,_,_,_,a7,_⟩ := head_pre s i ord left last r fresh
+  have reg1 (x : Reg) : (called s i y).getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
+  refine ⟨?_,(reg1 _).trans a7,(reg1 _).trans a30,?_⟩
+  · rw [show (called s i y).pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+  · intro w fit
+    change memoryView (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) w=_
+    rw [permutation_write_memory _ _ _ _ (by unfold rebuiltWord blockWord; omega) fit,writeWindow]
+    split
+    · rfl
+    · exact view_eq_of_mem amem w
+
+private theorem headed_fresh (s : MachineState) (i : Index) (last : Nat) (y : BitVec 1600) (fresh : i.val/4≠last) :
+    headed s i last y=walkRows (called s i y) headPost := by simp [headed,fresh,called]
 
 /-- Outside its writes and the scratch, the head keeps every word. -/
 theorem head_outside (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
@@ -37,92 +54,44 @@ theorem head_outside (s : MachineState) (i : Index) (ord left last : Nat) (r : I
   by_cases same : i.val/4=last
   · have hd : headed s i last y=walkRows s headRows := by simp [headed,same]
     rw [hd]; exact view_eq_of_mem (head_skip s i ord left last r same).2.2.1 w
-  · have notSib : ∀ m<4, w≠heapWord (4194304+(i.val/4^^^1))+m :=
-      fun m hm e => away ⟨same,Or.inl ⟨m,hm,e⟩⟩
-    have notBlock : ∀ m<25, w≠rebuiltWord (i.val/4)+m := fun m hm e => away ⟨same,Or.inr ⟨m,hm,e⟩⟩
-    obtain ⟨_,apc,amem,_,_,_,a30,_,a28,_,akeep⟩ := head_pre s i ord left last r same
-    let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
-    have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-    have a1pc : a1.pc=address 762 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
-    have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
-        (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
-        (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) : a1.getReg x=s.getReg x :=
-      (reg1 x).trans (akeep x h4 h6 h7 h10 h12 h13 h28 h30)
-    obtain ⟨_,_,_,_,_,_,pview⟩ := head_post a1 i a1pc ((reg1 _).trans a28) ((k .x19).trans r.leaves)
-      ((k .x9).trans r.heap) ((reg1 _).trans a30)
-    have hd : headed s i last y=walkRows a1 headPost := by simp [headed,same,a1]
-    rw [hd, pview w fit, pair_view_outside _ _ _ _ _ _ (sib_away i w notSib)]
-    change memoryView (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) w=_
-    rw [permutation_write_memory _ _ _ _ (by unfold rebuiltWord blockWord; omega) fit,writeWindow,
-      dif_neg (fun h => notBlock (w-rebuiltWord (i.val/4)) (by omega) (by omega))]
-    exact view_eq_of_mem amem w
+  · have notBlock : ∀ m<26, w≠rebuiltWord (i.val/4)+m := fun m hm e => away ⟨same,m,hm,e⟩
+    obtain ⟨a1pc,a17,_,a1view⟩ := called_facts s i ord left last r y same
+    obtain ⟨_,_,_,_,_,_,pview⟩ := head_post (called s i y) i a1pc a17
+    rw [headed_fresh s i last y same, pview w fit]
+    simp only [writeWord, if_neg (notBlock 25 (by omega))]
+    rw [a1view w fit, dif_neg (fun h => notBlock (w-rebuiltWord (i.val/4)) (by omega) (by omega))]
 
-/-- A new quartet's head copies the sibling group's node into its level-22 heap slot. -/
-theorem head_sibling (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
-    (y : BitVec 1600) (fresh : i.val/4≠last) (m : Nat) (hm : m<4) :
-    memoryView (headed s i last y) (heapWord (4194304+(i.val/4^^^1))+m)=memoryView s (nodeWordOf (i.val/4^^^1)+m) := by
+/-- A new quartet's head stores the address of the sibling group's node in the pointer word. -/
+theorem head_pointer (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+    (y : BitVec 1600) (fresh : i.val/4≠last) :
+    memoryView (headed s i last y) (pointerWord (i.val/4))=wordAddress (nodeWordOf (i.val/4^^^1)) := by
   have hi : i.val<16777216 := i.isLt
-  have gx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
-  have member : (m,m) ∈ sibPairs := sib_member m hm
-  have uniq : ∀ p ∈ sibPairs, heapWord (4194304+(i.val/4^^^1))+p.2=heapWord (4194304+(i.val/4^^^1))+m → p.1=m := by
-    intro p hp e
-    have r : p.1=p.2 := (sib_pairs_diag p hp).1
-    omega
-  have fit : heapWord (4194304+(i.val/4^^^1))+m<2^33 := by unfold heapWord; omega
-  obtain ⟨_,apc,amem,_,_,_,a30,_,a28,_,akeep⟩ := head_pre s i ord left last r fresh
-  let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
-  have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-  have a1pc : a1.pc=address 762 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
-  have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
-      (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
-      (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) : a1.getReg x=s.getReg x :=
-    (reg1 x).trans (akeep x h4 h6 h7 h10 h12 h13 h28 h30)
-  obtain ⟨_,_,_,_,_,_,pview⟩ := head_post a1 i a1pc ((reg1 _).trans a28) ((k .x19).trans r.leaves)
-    ((k .x9).trans r.heap) ((reg1 _).trans a30)
-  have hd : headed s i last y=walkRows a1 headPost := by simp [headed,fresh,a1]
-  rw [hd, pview _ fit, pair_view_inside sibPairs _ _ _ _ m m member uniq]
-  have nfit : nodeWordOf (i.val/4^^^1)+m<2^33 := by
-    obtain ⟨d,_⟩ := xor_one (i.val/4); unfold nodeWordOf blockWord; rw [d]; omega
-  change memoryView (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) _=_
-  rw [permutation_write_memory _ _ _ _ (by unfold rebuiltWord blockWord; omega) nfit,writeWindow,dif_neg (by
-    obtain ⟨d,mm⟩ := xor_one (i.val/4); unfold nodeWordOf rebuiltWord blockWord; rw [d,mm]; omega)]
-  exact view_eq_of_mem amem _
+  obtain ⟨a1pc,a17,a130,_⟩ := called_facts s i ord left last r y fresh
+  obtain ⟨_,_,_,_,_,_,pview⟩ := head_post (called s i y) i a1pc a17
+  rw [headed_fresh s i last y fresh, pview _ (by unfold pointerWord rebuiltWord blockWord; omega)]
+  simp only [writeWord, ite_true]
+  exact a130
 
 /-- A new quartet's head leaves the inverse reply `y` in its rebuilt block. -/
 theorem head_block (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
     (y : BitVec 1600) (fresh : i.val/4≠last) (m : Nat) (hm : m<25) :
     memoryView (headed s i last y) (rebuiltWord (i.val/4)+m)=replyWords y ⟨m,hm⟩ := by
   have hi : i.val<16777216 := i.isLt
-  have gx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
-  obtain ⟨_,apc,amem,_,_,_,a30,_,a28,_,akeep⟩ := head_pre s i ord left last r fresh
-  let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
-  have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-  have a1pc : a1.pc=address 762 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
-  have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
-      (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
-      (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) : a1.getReg x=s.getReg x :=
-    (reg1 x).trans (akeep x h4 h6 h7 h10 h12 h13 h28 h30)
-  obtain ⟨_,_,_,_,_,_,pview⟩ := head_post a1 i a1pc ((reg1 _).trans a28) ((k .x19).trans r.leaves)
-    ((k .x9).trans r.heap) ((reg1 _).trans a30)
-  have hd : headed s i last y=walkRows a1 headPost := by simp [headed,fresh,a1]
+  obtain ⟨a1pc,a17,_,a1view⟩ := called_facts s i ord left last r y fresh
+  obtain ⟨_,_,_,_,_,_,pview⟩ := head_post (called s i y) i a1pc a17
   have fit : rebuiltWord (i.val/4)+m<2^33 := by unfold rebuiltWord blockWord; omega
-  rw [hd, pview _ fit]
-  rw [pair_view_outside _ _ _ _ _ _ (fun p hp => by
-    have r : p.2<4 := (sib_pairs_diag p hp).2
-    unfold rebuiltWord blockWord heapWord; omega)]
-  change memoryView (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) _=_
-  rw [permutation_write_memory _ _ _ _ (by unfold rebuiltWord blockWord; omega) fit,writeWindow,dif_pos (by omega)]
+  rw [headed_fresh s i last y fresh, pview _ fit]
+  simp only [writeWord, pointerWord, show rebuiltWord (i.val/4)+m≠rebuiltWord (i.val/4)+25 by omega, ite_false]
+  rw [a1view _ fit, dif_pos (by omega)]
   congr 1; apply Fin.ext; simp
 
 /-- The head of position `i` keeps the generator key words. -/
 theorem head_keys (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
     (y : BitVec 1600) (k : BitVec 192) (key : KeyWords s k) : KeyWords (headed s i last y) k := by
   intro j lo hi
-  rw [head_outside s i ord left last r y (128+j) (by omega) (fun ⟨_,h⟩ => by
+  rw [head_outside s i ord left last r y (128+j) (by omega) (fun ⟨_,m,_,e⟩ => by
     have : i.val<16777216 := i.isLt
-    rcases h with ⟨m,_,e⟩|⟨m,_,e⟩
-    · unfold heapWord at e; omega
-    · unfold rebuiltWord blockWord at e; omega) (Or.inl (by omega))]
+    unfold rebuiltWord blockWord at e; omega) (Or.inl (by omega))]
   exact key j lo hi
 
 /-- Words a position may write: its head's, word 128 (counter), the scratch reply and its salt. -/
@@ -228,7 +197,8 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
     let t:=finishOne u i left
     Registers t (ord+1) (left-1) ∧ t.pc=finalPC left ∧ t.getReg .x4=BitVec.ofNat 64 (i.val/4) ∧
       (∀ k, Saved k → t.getReg k=s.getReg k) ∧
-      (∀ w, w<2^33 → ¬Writes i last w → memoryView t w=memoryView s w) := by
+      (∀ w, w<2^33 → ¬Writes i last w → memoryView t w=memoryView s w) ∧
+      (i.val/4≠last → memoryView t (pointerWord (i.val/4))=wordAddress (nodeWordOf (i.val/4^^^1))) := by
   have ex := head_exit s i ord left last r y
   obtain ⟨upc,u10,u28,ukeep,uview⟩ := chain_post _ i ex.entry u hu
   have uk (x : Reg) (h7 : x≠.x7 := by decide) (h10 : x≠.x10 := by decide) (h28 : x≠.x28 := by decide)
@@ -243,7 +213,7 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
      (uk .x22).trans ex.regs.salt,(uk .x26).trans ex.regs.base,(uk .x29).trans ex.regs.divReg⟩
   have uone : u.getReg .x23=1 := (uk .x23).trans ((hk .x23).trans r.one)
   obtain ⟨pregs,ppc,_,pkeep⟩ := post_facts u i ord left l hi bound upc uregs ((uk .x6).trans ex.entry.idx) u28 uone
-  refine ⟨pregs,ppc,?_,?_,?_⟩
+  refine ⟨pregs,ppc,?_,?_,?_,?_⟩
   · rw [pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide), uk .x4]; exact ex.quartet
   · intro k ⟨h6,h7,h10,h13,h28,h30,h31,h14,h17,h4,h25⟩
     rw [pkeep k h7 h30 h31 h14 h17 h25, ukeep k h7 h10 h28 h30 h31]; exact ex.keep k h4 h6 h7 h10 h13 h28 h30 h31
@@ -257,12 +227,20 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
     rw [post_outside u i ord left l hi bound upc uregs ((uk .x6).trans ex.entry.idx) u28 uone w fit ns,
       uview w fit n128 nsc]
     exact head_outside s i ord left last r y w fit nh nsc
+  · intro fresh
+    have ix : i.val<16777216 := i.isLt
+    have fit : pointerWord (i.val/4)<2^33 := by unfold pointerWord rebuiltWord blockWord; omega
+    rw [post_outside u i ord left l hi bound upc uregs ((uk .x6).trans ex.entry.idx) u28 uone _ fit
+      ⟨by unfold pointerWord rebuiltWord blockWord; omega,by unfold pointerWord rebuiltWord blockWord; omega⟩,
+      uview _ fit (by unfold pointerWord rebuiltWord blockWord; omega) (Or.inr (by unfold pointerWord rebuiltWord blockWord; omega))]
+    exact head_pointer s i ord left last r y fresh
 
 theorem trace_post (s : MachineState) (i : Index) (ord left last : Nat) (l : 0<left) (hi : left≤16777216)
     (bound : ord+left≤16777216) (r : Input s i ord left last) (t : MachineState) (hit : t ∈ support (perTrace s i left last)) :
     Registers t (ord+1) (left-1) ∧ t.pc=finalPC left ∧ t.getReg .x4=BitVec.ofNat 64 (i.val/4) ∧
       (∀ k, Saved k → t.getReg k=s.getReg k) ∧
-      (∀ w, w<2^33 → ¬Writes i last w → memoryView t w=memoryView s w) := by
+      (∀ w, w<2^33 → ¬Writes i last w → memoryView t w=memoryView s w) ∧
+      (i.val/4≠last → memoryView t (pointerWord (i.val/4))=wordAddress (nodeWordOf (i.val/4^^^1))) := by
   unfold perTrace at hit
   split at hit
   · simp only [mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
@@ -384,16 +362,15 @@ theorem fixed_block (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index)
   unfold fixedHead; rw [inv, if_pos rfl, head_block s i ord left last r _ fresh m hm, fixedInverse,
     inverse_query_eq s i ord left last r fresh]
 
-/-- A new quartet: the fixed outcome holds the sibling group's node in its level-22 heap slot. -/
-theorem fixed_sibling (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) (ord left last : Nat)
+/-- A new quartet: the fixed outcome holds the sibling group's node address in its pointer word. -/
+theorem fixed_pointer (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) (ord left last : Nat)
     (l : 0<left) (hi : left≤16777216) (bound : ord+left≤16777216) (r : Input s i ord left last) (key : KeyWords s k)
-    (fresh : i.val/4≠last) (m : Nat) (hm : m<4) :
-    memoryView (fixedOne o s i left last) (heapWord (4194304+(i.val/4^^^1))+m)=
-      memoryView s (nodeWordOf (i.val/4^^^1)+m) := by
+    (fresh : i.val/4≠last) :
+    memoryView (fixedOne o s i left last) (pointerWord (i.val/4))=wordAddress (nodeWordOf (i.val/4^^^1)) := by
   have ix : i.val<16777216 := i.isLt
-  have gx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
-  rw [fixed_outside o k s i ord left last l hi bound r key _ (by unfold heapWord; omega) (by unfold heapWord; omega)
-    (Or.inr (by unfold heapWord; omega)) ⟨by unfold heapWord; omega,by unfold heapWord; omega⟩]
-  unfold fixedHead; exact head_sibling s i ord left last r _ fresh m hm
+  rw [fixed_outside o k s i ord left last l hi bound r key _ (by unfold pointerWord rebuiltWord blockWord; omega)
+    (by unfold pointerWord rebuiltWord blockWord; omega) (Or.inr (by unfold pointerWord rebuiltWord blockWord; omega))
+    ⟨by unfold pointerWord rebuiltWord blockWord; omega,by unfold pointerWord rebuiltWord blockWord; omega⟩]
+  unfold fixedHead; exact head_pointer s i ord left last r _ fresh
 
 end TwoPermutationPrototype.GroupedOpening

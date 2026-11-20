@@ -206,8 +206,8 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
     let t ← chainTrace (headed s i last 0) i
     return finishOne t i left
 
-def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 28 else 29
-def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 35 else 36
+def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 17 else 18
+def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 24 else 25
 def postSteps (i : Index) (left : Nat) := 11+(if kindOf i=0 then 1 else if kindOf i=1 then 1 else 0)+2*(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
@@ -286,25 +286,24 @@ theorem head_exit (s : MachineState) (i : Index) (ord left last : Nat) (r : Inpu
     exact exit_of s _ i ord left last r hpc h6 ((hkeep _ (by decide) (by decide)).trans r.input)
       ((hkeep _ (by decide) (by decide)).trans r.primitive) ((hkeep _ (by decide) (by decide)).trans (by rw [r.quartet, same]))
       (fun k _ h6 _ _ _ h28 _ _ => hkeep k h6 h28)
-  · obtain ⟨_,apc,_,_,_,_,a30,a6,a28,a4,akeep⟩ := head_pre s i ord left last r same
+  · obtain ⟨_,apc,_,_,_,_,_,a6,_,a4,a7,akeep⟩ := head_pre s i ord left last r same
     let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
     have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-    have a1pc : a1.pc=address 762 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+    have a1pc : a1.pc=address 773 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
     have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
         (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
         (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) : a1.getReg x=s.getReg x :=
       (reg1 x).trans (akeep x h4 h6 h7 h10 h12 h13 h28 h30)
-    obtain ⟨_,ppc,p10,p12,p13,pkeep,_⟩ := head_post a1 i a1pc ((reg1 _).trans a28) ((k .x19).trans r.leaves)
-      ((k .x9).trans r.heap) ((reg1 _).trans a30)
+    obtain ⟨_,ppc,p10,p12,p13,pkeep,_⟩ := head_post a1 i a1pc ((reg1 _).trans a7)
     have hd : headed s i last y=walkRows a1 headPost := by simp [headed,same,a1]
     rw [hd]
     exact exit_of s _ i ord left last r ppc
-      ((pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ((reg1 _).trans a6)) p10 p13
-      ((pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ((reg1 _).trans a4))
+      ((pkeep _ (by decide) (by decide) (by decide)).trans ((reg1 _).trans a6)) p10 p13
+      ((pkeep _ (by decide) (by decide) (by decide)).trans ((reg1 _).trans a4))
       (fun x h4 h6 h7 h10 h13 h28 h30 h31 => by
         by_cases h12 : x=.x12
         · subst h12; rw [p12]; exact r.output.symm
-        · exact (pkeep x h10 h12 h13 h28 h31).trans (k x h4 h6 h7 h10 h12 h13 h28 h30))
+        · exact (pkeep x h10 h12 h13).trans (k x h4 h6 h7 h10 h12 h13 h28 h30))
 
 private theorem charge_comm (e : Execution) (a b c d : Nat) :
     (e.charge a c).charge b d=e.charge (b+a) (d+c) := by
@@ -349,7 +348,7 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     · simp [perCycles,headCycles,same,show price headRows=3 from rfl] <;> omega
     · simp [perCalls,inv]
   · have inv : inverts i last=true := by simp [inverts,same]
-    obtain ⟨l1,apc,_,a10,a12,a13,a30,_,a28,_,akeep⟩ := head_pre s i ord left last r same
+    obtain ⟨l1,apc,_,a10,a12,a13,_,_,_,_,a7,akeep⟩ := head_pre s i ord left last r same
     have hs : headSteps i last=(preRows (oddOf i)).length+(headPost.length+1) := by
       rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h <;> simp [headSteps,oddOf,same,h] <;> rfl
     have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
@@ -368,9 +367,8 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     apply bind_congr; intro y
     let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
     have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-    have a1pc : a1.pc=address 762 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
-    have al : legal headPost a1 := (head_post a1 i a1pc ((reg1 _).trans a28) ((reg1 _).trans ((k .x19).trans r.leaves))
-      ((reg1 _).trans ((k .x9).trans r.heap)) ((reg1 _).trans a30)).1
+    have a1pc : a1.pc=address 773 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+    have al : legal headPost a1 := (head_post a1 i a1pc ((reg1 _).trans a7)).1
     have hd : headed s i last y=walkRows a1 headPost := by simp only [headed,if_neg same]; rfl
     rw [walk_rows_run _ headPost al head_post_fetch _ true, tail (walkRows a1 headPost) y hd.symm]
     simp only [bind_assoc,pure_bind]
@@ -379,7 +377,7 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     rw [charge_comm, charge_comm, charge_comm]; congr 1
     · rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h <;>
         simp [perCycles,headCycles,oddOf,same,h,show price (preRows true)=12 from rfl,
-          show price (preRows false)=13 from rfl,show price headPost=15 from rfl] <;> omega
+          show price (preRows false)=13 from rfl,show price headPost=4 from rfl] <;> omega
     · simp [perCalls,inv] <;> omega
 
 end TwoPermutationPrototype.GroupedOpening

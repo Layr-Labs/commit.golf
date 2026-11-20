@@ -24,17 +24,29 @@ structure RecordBoundary (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor
   capHeap : state.getReg .x25 = BitVec.ofNat 64 trapdoorBase
   capLeaves : state.getReg .x27 = 256#64
   proofBegin : state.getReg .x20 = BitVec.ofNat 64 proofBase
+  /-- Every opened quartet's pointer word (written by the prefix pass) holds its sibling node's address. -/
+  pointer : ∀ prior (present : prior < positions.card),
+    (s.initialState .opening (trapdoor, positions)).getMem
+      (BitVec.ofNat 64 (pointerAddress (sortedIndex positions prior present).val)) =
+      BitVec.ofNat 64 (quadAddress (sortedIndex positions prior present).val)
 
 theorem RecordBoundary.start {s : Submission} {trapdoor : BitVec (8*s.sizes.trapdoor)}
     {positions : Positions} {state : MachineState} {ordinal : Nat}
     (boundary : RecordBoundary s trapdoor positions state ordinal)
     (present : ordinal < positions.card) : RecordStart s trapdoor positions state ordinal :=
   ⟨by simpa only [ite_eq_right (show ordinal ≠ positions.card by omega)] using boundary.pc,
-    boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.slots, boundary.input⟩
+    boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.slots, boundary.input,
+    fun present' => by
+      have facts := pointer_address_inside (sortedIndex positions ordinal present').val
+        (sortedIndex positions ordinal present').isLt
+      have order := nonces_end_at_indices
+      have ix := indices_before_records
+      exact (boundary.input (pointerAddress (sortedIndex positions ordinal present').val) facts.2.1 (by omega)
+        facts.1).trans (boundary.pointer ordinal present')⟩
 
 /-- Cycles of record `ordinal` (a nonfinal record loops back with the taken `bne` at 646; the final one also runs
 the `jal` at 647): its four 32-byte and twelve 30-byte wide copies depend on its alignment. -/
-def recordCost (ordinal : Nat) (final : Bool) : Nat := (if final then 136 else 135)+recordExtra ordinal
+def recordCost (ordinal : Nat) (final : Bool) : Nat := (if final then 135 else 134)+recordExtra ordinal
 
 def afterLatch (marked : MachineState) (final : Bool) : MachineState :=
   if final then marked.setPC 0x1a24 else marked
@@ -74,7 +86,7 @@ def copySum : Nat → Nat
 
 theorem records_cost_sum (size : Nat) : ∀ count ordinal, ordinal+count ≤ size →
     recordsCost size ordinal count+copySum ordinal =
-      135*count+copySum (ordinal+count)+(if 0<count ∧ ordinal+count=size then 1 else 0) := by
+      134*count+copySum (ordinal+count)+(if 0<count ∧ ordinal+count=size then 1 else 0) := by
   intro count
   induction count with
   | zero => intro ordinal _; simp [recordsCost]
@@ -101,7 +113,7 @@ theorem records_cost_sum (size : Nat) : ∀ count ordinal, ordinal+count ≤ siz
         omega
 
 theorem records_total (size : Nat) (positive : 0 < size) :
-    recordsCost size 0 size = 135*size+copySum size+1 := by
+    recordsCost size 0 size = 134*size+copySum size+1 := by
   have h := records_cost_sum size size 0 (by omega)
   rw [if_pos ⟨positive, by omega⟩] at h
   simp only [copySum, Nat.zero_add, Nat.mul_zero, Nat.add_zero] at h

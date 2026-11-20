@@ -15,6 +15,10 @@ structure RecordStart (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
   leaves : state.getReg .x19=BitVec.ofNat 64 4194304
   slots : state.getReg .x24=BitVec.ofNat 64 groupSlots
   input : SameOpeningInput (s.initialState .opening (trapdoor,positions)) state
+  /-- The prefix pass's pointer word of the record's quartet: the address of its level-22 sibling node. -/
+  pointer : ∀ present : ordinal<positions.card,
+    state.getMem (BitVec.ofNat 64 (pointerAddress (sortedIndex positions ordinal present).val)) =
+      BitVec.ofNat 64 (quadAddress (sortedIndex positions ordinal present).val)
 
 /-- The registers one record may change. -/
 def recordScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
@@ -23,7 +27,7 @@ def recordScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
 def recordData (s : MachineState) := lastLevel (lowerRun 0 13 (recordPrefix s))
 
 structure RecordData (s u : MachineState) (i : Index) (o : Nat) : Prop where
-  run : RunsOpeningBlock s u (130+recordExtra o)
+  run : RunsOpeningBlock s u (129+recordExtra o)
   cursor : LowerCursor u i o 14
   register : ∀ r, r ∉ recordScratch → u.getReg r = s.getReg r
   input : ∀ a<proofBase, u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a)
@@ -78,10 +82,13 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
     exact input_index s layout t positions o present
   have px : PrefixStart st i o :=
     ⟨atStart.pc,atStart.heap,atStart.slots,atStart.nonce,atStart.leaves,atStart.dest,index,access⟩
-  obtain ⟨run0,cursor,written,kept⟩ := execute_record_prefix st i o (by omega) px
+  obtain ⟨run0,cursor,written,kept,slot⟩ := execute_record_prefix st i o (by omega) px
   let pre := recordPrefix st
   let lowEnd := lowerRun 0 13 pre
-  have low := execute_lower pre i o 0 13 (by omega) (by decide) cursor
+  have ptrFacts := pointer_address_inside i.val i.isLt
+  have ptr : pre.getMem (BitVec.ofNat 64 (pointerAddress i.val)) = BitVec.ofNat 64 (quadAddress i.val) :=
+    (written.input (pointerAddress i.val) (by have := nonces_end_at_indices; omega)).trans (atStart.pointer present)
+  have low := execute_lower_zero pre i o (by omega) cursor slot ptr
   have last := execute_last lowEnd i o (by omega) low.next
   have beginEq : siblingDestination o 0=recordBase o+112 := rfl
   have endFit := all_record_ends_fit o (by omega)
@@ -89,10 +96,8 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
   have end14 : siblingDestination o 14 = recordBase (o+1) := record_end o
   have mono := destination_mono o
   have smallSource (l b : Nat) (hb : b<32) : siblingAddress i l+b < proofBase := by
-    have z := upper_swap_bound i l
-    have p := heap_before_nonces
+    have z := sibling_address_inside i l
     have n := nonces_end_at_indices
-    unfold siblingAddress
     omega
   have base : proofBase≤recordBase o := by unfold recordBase; omega
   have dests (l : Nat) (hl : l ≤ 14) : recordBase o+112 ≤ siblingDestination o l ∧
@@ -126,7 +131,7 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
   show RecordData st (lastLevel lowEnd) i o
   refine ⟨?_, last.next, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have total := (run0.next low.run).next last.run
-    rw [lower_total_cost, show 23+nonceCopyCost o+3*recordCopyCost o+(65+levelCopies o+recordCopyCost o)+(42+lastCopyCost o) = 130+recordExtra o by
+    rw [lower_total_cost, show 23+nonceCopyCost o+3*recordCopyCost o+(64+levelCopies o+recordCopyCost o)+(42+lastCopyCost o) = 129+recordExtra o by
       unfold recordExtra; omega] at total
     exact total
   · intro r free

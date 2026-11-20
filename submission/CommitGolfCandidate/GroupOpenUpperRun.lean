@@ -24,7 +24,7 @@ def lowerCost (ordinal level : Nat) : Nat → Nat
   | 0 => 0
   | left+1 => siblingCost ordinal level+lowerCost ordinal (level+1) left
 
-theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 65+levelCopies ordinal+recordCopyCost ordinal := by
+theorem lower_total_cost (ordinal : Nat) : lowerCost ordinal 0 13 = 64+levelCopies ordinal+recordCopyCost ordinal := by
   simp [lowerCost, siblingCost, levelCopies]
   omega
 
@@ -59,7 +59,7 @@ structure LowerTrace (before after : MachineState) (index : Index) (ordinal firs
       before.getByte (BitVec.ofNat 64 (siblingAddress index level+byte))
 
 theorem execute_lower (state : MachineState) (index : Index) (ordinal first count : Nat)
-    (ordinalBound : ordinal < LENGTH) (limit : first+count ≤ 13)
+    (ordinalBound : ordinal < LENGTH) (limit : first+count ≤ 13) (one : 1 ≤ first)
     (cursor : LowerCursor state index ordinal first) :
     LowerTrace state (lowerRun first count state) index ordinal first count := by
   induction count generalizing first state with
@@ -79,8 +79,9 @@ theorem execute_lower (state : MachineState) (index : Index) (ordinal first coun
     have live : first < 14 := by omega
     let level : Fin 14 := ⟨first,live⟩
     let middle := siblingBlock level state
-    have step := execute_sibling state index ordinal ordinalBound level (by simp [level]; omega) cursor
-    have rest := ih middle (first+1) (by omega) step.next
+    have step := execute_sibling state index ordinal ordinalBound level (by simp [level]; omega)
+      (by simp [level]; omega) cursor
+    have rest := ih middle (first+1) (by omega) (by omega) step.next
     have total : first+(count+1) = first+1+count := by omega
     have width : siblingDestination ordinal (first+1) =
         siblingDestination ordinal first+siblingWidth first := by
@@ -114,15 +115,64 @@ theorem execute_lower (state : MachineState) (index : Index) (ordinal first coun
         exact (rest.frame _ (by omega) (Or.inl left)).trans (data.copied byte valid)
       · have later := rest.fields l (by omega) (by omega) byte valid
         have inputBefore : siblingAddress index l+byte < siblingDestination ordinal first := by
-          have srcBound := upper_swap_bound index l
-          have heapEnd := heap_before_nonces
+          have srcBound := sibling_address_inside index l
           have nonceEnd := nonces_end_at_indices
           have order := indices_before_records
           have small := sibling_width_le l
           have start := sibling_offset_start first
-          unfold siblingAddress siblingDestination recordBase
+          unfold siblingDestination recordBase
           omega
         exact later.trans (field_outside data _ (by omega) writeFit (Or.inl inputBefore))
+
+/-- Levels 0..12 from the record prefix: level 0 through the pointer word, then the generic levels 1..12. -/
+theorem execute_lower_zero (state : MachineState) (index : Index) (ordinal : Nat) (ordinalBound : ordinal < LENGTH)
+    (cursor : LowerCursor state index ordinal 0)
+    (slot : state.getReg .x7 = BitVec.ofNat 64 (groupSlots+1024*(index.val/4)))
+    (pointer : state.getMem (BitVec.ofNat 64 (pointerAddress index.val)) = BitVec.ofNat 64 (quadAddress index.val)) :
+    LowerTrace state (lowerRun 0 13 state) index ordinal 0 13 := by
+  let middle := siblingBlock 0 state
+  have step := execute_sibling_zero state index ordinal ordinalBound cursor slot pointer
+  have rest := execute_lower middle index ordinal 1 12 ordinalBound (by decide) (by decide) step.next
+  have width : siblingDestination ordinal 1 = siblingDestination ordinal 0+siblingWidth 0 := by
+    simp only [siblingDestination, sibling_offset_next 0 (by decide), Nat.add_assoc]
+  have levels := destination_mono ordinal
+  have endFit := all_record_ends_fit ordinal ordinalBound
+  have within (l : Nat) (hl : l ≤ 14) : siblingDestination ordinal l ≤ MEMORY_BYTES := by
+    exact (levels hl).trans ((record_end ordinal).le.trans endFit)
+  have ram : MEMORY_BYTES < 2^64 := by decide
+  have writeEnd := within 1 (by omega)
+  have writeFit : siblingDestination ordinal 0+siblingWidth 0 ≤ 2^64 := by omega
+  have data : ByteCopy state middle (siblingAddress index 0) (siblingDestination ordinal 0) (siblingWidth 0) :=
+    step.bytes
+  have unfolded : lowerRun 0 13 state = lowerRun 1 12 middle := rfl
+  rw [unfolded]
+  refine ⟨?_, rest.next,
+    fun reg a b c d e => (rest.register reg a b c d e).trans (step.register reg a b c d e),
+    fun address below => (rest.input address below).trans (step.input address below), ?_, ?_⟩
+  · have cost : lowerCost ordinal 0 13 = siblingCost ordinal 0+lowerCost ordinal 1 12 := rfl
+    rw [cost]
+    exact step.run.next rest.run
+  · intro address fit outside
+    simp only [Nat.zero_add] at outside
+    have firstBelow := levels (show 0 ≤ 1 by omega)
+    have nextBelow := levels (show 1 ≤ 13 by omega)
+    exact (rest.frame address fit (outside.imp (by omega) id)).trans
+      (field_outside data address fit writeFit (outside.imp id (by omega)))
+  · intro l low hi byte valid
+    by_cases initial : l = 0
+    · subst l
+      have left : siblingDestination ordinal 0+byte < siblingDestination ordinal 1 := by omega
+      exact (rest.frame _ (by omega) (Or.inl left)).trans (data.copied byte valid)
+    · have later := rest.fields l (by omega) (by omega) byte valid
+      have inputBefore : siblingAddress index l+byte < siblingDestination ordinal 0 := by
+        have srcBound := sibling_address_inside index l
+        have nonceEnd := nonces_end_at_indices
+        have order := indices_before_records
+        have small := sibling_width_le l
+        have start := sibling_offset_start 0
+        unfold siblingDestination recordBase
+        omega
+      exact later.trans (field_outside data _ (by omega) writeFit (Or.inl inputBefore))
 
 /-! ### Level 13 and the record fold -/
 
@@ -240,14 +290,11 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
   let src := siblingAddress index 13
   let dst := siblingDestination ordinal 13
   have srcReg : prepared.getReg .x7 = BitVec.ofNat 64 src :=
-    physical_sibling_source state index _ cursor.heap cursor.node
+    physical_sibling_source state index 13 (by decide) cursor.heap cursor.node
   have dstReg : prepared.getReg .x21 = BitVec.ofNat 64 dst :=
     (head.2.2.2 .x21 (by decide)).trans cursor.dest
   have width13 : siblingWidth 13 = 28 := rfl
-  have sa : src%8=0 := by
-    unfold src siblingAddress
-    have : trapdoorBase%8=0 := by decide
-    omega
+  have sa : src%8=0 := (sibling_address_inside index 13).1
   have field := Writer28.copy prepared src dst before srcReg dstReg sa ordinalFit.2.1
     (by have := ordinalFit.2.2.1; rw [width13] at this; exact this)
     (by have := ordinalFit.2.2.2; rw [width13] at this; exact this)
@@ -357,11 +404,10 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
       rw [same] at a1
       omega
   have srcBelow : src+32 ≤ dst := by
-    have a := upper_swap_bound index 13
-    have b := heap_before_nonces
+    have a := sibling_address_inside index 13
     have c := nonces_end_at_indices
     have d := indices_before_records
-    unfold src dst siblingAddress siblingDestination recordBase
+    unfold src dst siblingDestination recordBase
     have := sibling_offset_start 13
     omega
   have xState : x = state.getHalfword (BitVec.ofNat 64 (src+28)) := by
@@ -370,7 +416,7 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
     · exact field_outside copiedBytes _ (by omega) (by omega) (Or.inl (by omega))
   refine ⟨?_, ⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_⟩
   · have total := ((((show RunsOpeningBlock state prepared 3 from
-      fun fuel coins => execute_sibling_head state level start fuel coins).next field.run).next ranLoad).next
+      fun fuel coins => execute_sibling_head state level (by simp [level]) start fuel coins).next field.run).next ranLoad).next
       ranFold).next ranTail
     convert total using 1 <;> simp only [lastCopyCost, dst] <;> omega
   · exact tailPC

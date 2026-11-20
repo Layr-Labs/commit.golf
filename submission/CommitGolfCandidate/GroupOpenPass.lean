@@ -54,10 +54,11 @@ theorem last_lt_top (p : Positions) (j : Nat) (hj : j<p.card) (fresh : (pos p j)
     omega
 
 /-- Words the pass may have changed before ordinal `j`: the generator block, the reply scratch, the level-22
-heap slots, the salt table and the rebuilt blocks of the quartets below `topOf p j`. -/
+heap slots (no longer written; kept as an over-approximation), the salt table and the rebuilt blocks with their
+pointer words of the quartets below `topOf p j`. -/
 def Touched (p : Positions) (j : Nat) (w : Nat) : Prop :=
   (128≤w ∧ w<153) ∨ (192≤w ∧ w<217) ∨ (553648644≤w ∧ w<570425860) ∨ (1140851204≤w ∧ w<1174405636) ∨
-    (∃ q, q<topOf p j ∧ ∃ m<25, w=rebuiltWord q+m)
+    (∃ q, q<topOf p j ∧ ∃ m<26, w=rebuiltWord q+m)
 
 def Preserved (p : Positions) (j : Nat) (u s : MachineState) :=
   ∀ w<2^33, ¬Touched p j w → memoryView s w=memoryView u w
@@ -74,9 +75,7 @@ theorem writes_touched (p : Positions) (j : Nat) (hj : j<p.card) (w : Nat) (wr :
     Touched p (j+1) w := by
   have ix := (pos p j).isLt
   have top : topOf p (j+1)=(pos p j).val/4+1 := by simp [topOf]
-  rcases wr with ⟨_,⟨m,hm,rfl⟩|⟨m,hm,rfl⟩⟩|h|h|h|h
-  · have x := xor_one_lt ((pos p j).val/4) 22 (by change _<16777216 at ix;omega) (by decide)
-    right;right;left;unfold heapWord;constructor <;> omega
+  rcases wr with ⟨_,m,hm,rfl⟩|h|h|h|h
   · right;right;right;right;exact ⟨_,by omega,m,hm,rfl⟩
   · left;omega
   · right;left;exact h
@@ -94,6 +93,8 @@ structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : B
   /-- The salt-chain constants (header rows 755, 756), kept by every position. -/
   gp : s.getReg .x3=374
   sp : s.getReg .x2=4352
+  /-- The pointer word of every processed position's quartet holds the address of its level-22 sibling node. -/
+  pointer : ∀ a<j, memoryView s (pointerWord ((pos p a).val/4))=wordAddress (nodeWordOf ((pos p a).val/4^^^1))
 
 theorem last_small (p : Positions) (j : Nat) : lastOf p j<2^64 := by
   unfold lastOf; split
@@ -119,18 +120,42 @@ theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (
     · omega
     · change _≤2^36;omega
 
+-- ---------------------------------------------------------------- sorted quartets
+theorem quartet_mono (p : Positions) (a b : Nat) (ab : a≤b) (hb : b<p.card) : (pos p a).val/4≤(pos p b).val/4 := by
+  rcases Nat.lt_or_eq_of_le ab with h|h
+  · exact Nat.div_le_div_right (Nat.le_of_lt (pos_lt p a b h hb))
+  · rw [h]
+
+theorem last_pos (p : Positions) (j : Nat) (hj : 0<j) : lastOf p j=(pos p (j-1)).val/4 := by
+  simp [lastOf,Nat.ne_of_gt hj]
+
+/-- A fresh quartet is strictly above every earlier position's quartet. -/
+theorem fresh_above (p : Positions) (j : Nat) (hj : j<p.card) (fresh : (pos p j).val/4≠lastOf p j) (a : Nat) (ha : a<j) :
+    (pos p a).val/4<(pos p j).val/4 := by
+  rw [last_pos p j (by omega)] at fresh
+  have := quartet_mono p a (j-1) (by omega) (by omega)
+  have := quartet_mono p (j-1) j (by omega) hj
+  omega
+
+/-- A repeated quartet repeats the previous position's. -/
+theorem stale_prev (p : Positions) (j : Nat) (hj : j<p.card) (same : (pos p j).val/4=lastOf p j) :
+    0<j ∧ (pos p (j-1)).val/4=(pos p j).val/4 := by
+  by_cases z : j=0
+  · subst z; have := (pos p 0).isLt; change _<16777216 at this; simp [lastOf] at same; omega
+  · exact ⟨by omega,by rw [same,last_pos p j (by omega)]⟩
+
 theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s t : MachineState) (j : Nat) (r : Ready td p key s j) (hj : j<p.card)
     (hit : t∈support (perTrace s (pos p j) (p.card-j) (lastOf p j))) : Ready td p key t (j+1) := by
   let i:=pos p j
   have card : p.card≤16777216:=by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
   have inp:=input_of_ready td p key s j r hj
-  obtain ⟨reg,pc,q4,keep,same⟩:=trace_post s i j _ _ (by omega) (by omega) (by omega) inp t hit
+  obtain ⟨reg,pc,q4,keep,same,ptr⟩:=trace_post s i j _ _ (by omega) (by omega) (by omega) inp t hit
   have kp (a : Reg) (safe : Saved a := by unfold Saved;decide) := keep a safe
   refine ⟨by simpa only [show p.card-j-1=p.card-(j+1) by omega] using reg,
     ⟨(kp .x8).trans r.indices,(kp .x9).trans r.heap,(kp .x18).trans r.count,
      (kp .x19).trans r.leaves,(kp .x20).trans r.start,(kp .x21).trans r.dest,(kp .x23).trans r.mark,
-     (kp .x24).trans r.slots,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_,(kp .x3).trans r.gp,(kp .x2).trans r.sp⟩
+     (kp .x24).trans r.slots,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_,(kp .x3).trans r.gp,(kp .x2).trans r.sp,?_⟩
   · rw [pc];unfold finalPC passPC;split <;> rename_i h <;> simp [show j+1=p.card ↔ p.card-j=1 by omega,h]
   · rw [q4]; simp [lastOf,i]
   · intro w fit away
@@ -138,11 +163,33 @@ theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key 
       (r.frame w fit (fun h => away (touched_mono p j hj w h)))
   · intro k lo hi
     have away : ¬Writes i (lastOf p j) (128+k) := by
-      rintro (⟨_,⟨m,hm,e⟩|⟨m,hm,e⟩⟩|h|h|h|h)
-      · unfold heapWord at e; omega
+      rintro (⟨_,m,hm,e⟩|h|h|h|h)
       · unfold rebuiltWord blockWord at e; omega
       all_goals omega
     exact (same (128+k) (by omega) away).trans (r.keyFrame k lo hi)
+  · intro a ha
+    have keep (b : Nat) (hb : b<j) (stay : ¬HeadWrites i (lastOf p j) (pointerWord ((pos p b).val/4))) :
+        memoryView t (pointerWord ((pos p b).val/4))=wordAddress (nodeWordOf ((pos p b).val/4^^^1)) := by
+      have bv := (pos p b).isLt; change _<16777216 at bv
+      rw [same _ (by unfold pointerWord rebuiltWord blockWord; omega) (by
+        rintro (h|h|h|h|h)
+        · exact stay h
+        all_goals (unfold pointerWord rebuiltWord blockWord at h; omega))]
+      exact r.pointer b hb
+    by_cases eq : a=j
+    · subst eq
+      by_cases fresh : i.val/4≠lastOf p a
+      · exact ptr fresh
+      · have same' : i.val/4=lastOf p a := by omega
+        obtain ⟨_,prev⟩ := stale_prev p a hj same'
+        have k' := keep (a-1) (by omega) (by rintro ⟨f,_⟩; exact f same')
+        rwa [prev] at k'
+    · have lt : a<j := by omega
+      apply keep a lt
+      rintro ⟨fresh,m,hm,e⟩
+      have up := fresh_above p j hj fresh a lt
+      have av := (pos p a).isLt; change _<16777216 at av
+      unfold pointerWord rebuiltWord blockWord at e; omega
 
 def passTrace (p : Positions) : Nat → Nat → MachineState → OracleComp World MachineState
   | 0,_,s => pure s
@@ -194,8 +241,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 345 cycles per position (new even quartet 36, chain link 33: 297, post ≤ 12) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤345*n+2 := by
+/-- At most 334 cycles per position (new even quartet 25, chain link 33: 297, post ≤ 12) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤334*n+2 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

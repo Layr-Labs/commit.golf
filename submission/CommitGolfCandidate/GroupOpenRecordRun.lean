@@ -74,7 +74,7 @@ private theorem latch_target (marked : MachineState) (last : Prop) [Decidable la
     exact pc.trans (ite_eq_right h)
 
 private theorem complete_record_cost (ordinal : Nat) (final : Bool) :
-    130+recordExtra ordinal+latchCost final = recordCost ordinal final := by
+    129+recordExtra ordinal+latchCost final = recordCost ordinal final := by
   cases final <;> simp [recordCost, latchCost] <;> omega
 
 private theorem execute_record_with_data (s : Submission)
@@ -164,7 +164,7 @@ private theorem execute_record_with_data (s : Submission)
     (saved .x23 (by decide) (by decide) (by decide)).trans boundary.one,
     (saved .x25 (by decide) (by decide) (by decide)).trans boundary.capHeap,
     (saved .x27 (by decide) (by decide) (by decide)).trans boundary.capLeaves,
-    (saved .x20 (by decide) (by decide) (by decide)).trans boundary.proofBegin⟩,
+    (saved .x20 (by decide) (by decide) (by decide)).trans boundary.proofBegin, boundary.pointer⟩,
     ?_, ?_, ?_, ?_, ?_⟩
   · have tail : RunsOpeningBlock prepared done (latchCost (decide (ordinal+1=positions.card))) :=
       run_latch prepared (ordinal+1=positions.card) markRun markPC

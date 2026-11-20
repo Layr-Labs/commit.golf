@@ -29,7 +29,8 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
     apply BitVec.eq_of_toNat_eq
     simp [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc]
   obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks shift0 nz mem0
-  refine ⟨valid,⟨regs.r,regs.b,?_,by simpa [lastOf] using regs.quartet,?_,?_,regs.gp,regs.sp⟩⟩
+  refine ⟨valid,⟨regs.r,regs.b,?_,by simpa [lastOf] using regs.quartet,?_,?_,regs.gp,regs.sp,
+    fun _ h => (Nat.not_lt_zero _ h).elim⟩⟩
   · simpa only [passPC,ite_eq_right (Nat.ne_of_lt nz)] using regs.pc
   · intro w fit away
     have guard : w<128 ∨ 153≤w := by

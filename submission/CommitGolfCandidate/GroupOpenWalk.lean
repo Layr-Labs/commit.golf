@@ -106,28 +106,27 @@ def pairRows (start : Nat) (src dst : Reg) : List (Nat × Nat) → List Row
 /-! K3-lite prefix, one position `i` (quartet `g = i >> 2`, block `B = B_g`), rows 740..812.
 Head paths (rows 740..776): `skip` when `g` equals the previous position's quartet (`x4`); otherwise `x4 := g`, the
 rebuilt block is `B+512`; parity selects the reply (`B+168` even, `B-1056` odd)
-and the level-22 sibling node (`B+136` even, `B-856` odd); the inverse of the reply lands in the
-rebuilt block (call at 761), rows 762..764 restore `x13, x12, x10` and rows 765..776 copy the sibling to
-`heap[2^22 + (g ^ 1)]`. Then the chained salt generator (777..795, `K3OpenChain`) and the K1 salt rows (796..812). -/
+and the address of the level-22 sibling node (`B+136` even, `B-856` odd); the inverse of the reply lands in the
+rebuilt block (call at 772), rows 773..775 restore `x13, x12, x10` and row 776 stores the sibling node's address
+in the word after the rebuilt block (`B+712`), where the record writer's level-0 head loads it. Then the chained
+salt generator (777..795, `K3OpenChain`) and the K1 salt rows (796..812). -/
 
 def headRows : List Row := [(740,.LD .x6 .x14 0),(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]
 def newRows : List Row := [(743,.ADDI .x4 .x28 0),(744,.SLLI .x7 .x28 10),(745,.ADD .x7 .x7 .x24),(746,.ADDI .x12 .x7 512),
-  (747,.ANDI .x30 .x6 4),(748,.BNE .x30 .x0 40)]
-/-- Even quartet: reply_E at `B+168`, sibling G_O at `B+136`; jump to 760. -/
-def evenSel : List Row := [(749,.ADDI .x10 .x7 168),(750,.ADDI .x30 .x7 136),(751,.JAL .x0 36)]
+  (747,.ANDI .x30 .x6 4),(748,.BNE .x30 .x0 84)]
+/-- Even quartet: reply_E at `B+168`, sibling G_O at `B+136`; jump to 771. -/
+def evenSel : List Row := [(749,.ADDI .x10 .x7 168),(750,.ADDI .x30 .x7 136),(751,.JAL .x0 80)]
 /-- Odd quartet: reply_O at `B-1056`, sibling G_E at `B-856`. -/
-def oddSel : List Row := [(758,.ADDI .x10 .x7 3040),(759,.ADDI .x30 .x7 3240)]
+def oddSel : List Row := [(769,.ADDI .x10 .x7 3040),(770,.ADDI .x30 .x7 3240)]
 def selRows (odd : Bool) : List Row := if odd then oddSel else evenSel
-def callRow : List Row := [(760,.ADDI .x13 .x0 2)]
-/-- A new quartet before its inverse call (row 761). -/
+def callRow : List Row := [(771,.ADDI .x13 .x0 2)]
+/-- A new quartet before its inverse call (row 772). -/
 def preRows (odd : Bool) : List Row := headRows ++ newRows ++ selRows odd ++ callRow
-def restoreRows : List Row := [(762,.ADDI .x13 .x0 1),(763,.ADDI .x12 .x0 1536),(764,.ADDI .x10 .x0 1024)]
-def sibPairs : List (Nat × Nat) := [(0,0),(1,1),(2,2),(3,3)]
-def sibRows : List Row :=
-  [(765,.XORI .x28 .x28 1),(766,.ADD .x28 .x28 .x19),(767,.SLLI .x28 .x28 5),(768,.ADD .x28 .x28 .x9)] ++
-  pairRows 769 .x30 .x28 sibPairs
-/-- A new quartet after its inverse call: rows 762..776. -/
-def headPost : List Row := restoreRows ++ sibRows
+def restoreRows : List Row := [(773,.ADDI .x13 .x0 1),(774,.ADDI .x12 .x0 1536),(775,.ADDI .x10 .x0 1024)]
+/-- `sd x30, 712(x7)`: the sibling node's address into word 89 of the quartet block. -/
+def ptrRows : List Row := [(776,.SD .x7 .x30 712)]
+/-- A new quartet after its inverse call: rows 773..776. -/
+def headPost : List Row := restoreRows ++ ptrRows
 
 /-- Reply-offset rows by rank class `k` (0: rank 0, 1: rank 1, 2: rank ≥ 2), ending with the salt destination.
 Rank ≥ 2 branches directly to `16*r + 1520`; ranks 0 and 1 select their absolute reply addresses. -/
@@ -161,7 +160,7 @@ theorem head_post_fetch : presentRows headPost := by apply rows_present; decide 
 theorem post_row_fetch (k : Fin 3) (last : Bool) : presentRows (postRows k last) := by
   apply rows_present; revert k last; decide +kernel
 
-theorem inverse_fetch (s : MachineState) (pc : s.pc=address 761) : fetch openingImage s=some (.base .ECALL) :=
-  packed_fetch_base _ 761 _ (by decide) pc (by decide +kernel)
+theorem inverse_fetch (s : MachineState) (pc : s.pc=address 772) : fetch openingImage s=some (.base .ECALL) :=
+  packed_fetch_base _ 772 _ (by decide) pc (by decide +kernel)
 
 end TwoPermutationPrototype.GroupedOpening

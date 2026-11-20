@@ -258,7 +258,7 @@ def recordPrefix (s : MachineState) := quartetExit (groupStep 2 (groupStep 1 (gr
 theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := recordPrefix s
     RunsOpeningBlock s u (23+nonceCopyCost o+3*recordCopyCost o) ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧
-      Keeps s u := by
+      Keeps s u ∧ u.getReg .x7=BitVec.ofNat 64 (groupSlots+1024*(i.val/4)) := by
   have ⟨salt,g0,w0,k0⟩ := run_salt_start s i o fit start
   have ⟨s0,g1,w1,k1⟩ := run_group_step _ i o 0 fit g0
   have ⟨s1,g2,w2,k2⟩ := run_group_step _ i o 1 fit g1
@@ -275,7 +275,7 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
   rw [show (8+nonceCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+3 = 23+nonceCopyCost o+3*recordCopyCost o by omega]
     at total
   refine ⟨total, ⟨?_,?_,?_,?_⟩,
-    writes.move rfl e.2.1,past.next kept⟩
+    writes.move rfl e.2.1,past.next kept,(e.2.2.2.2 .x7 (by decide) (by decide)).trans g3.group⟩
   · change (quartetExit last).pc = _
     rw [e.1,show last.pc = _ from g3.pc]; rfl
   · exact (kept .x9 (by decide)).trans g3.heap

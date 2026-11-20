@@ -1,8 +1,8 @@
 import CommitGolfCandidate.GroupOpenPass
 import CommitGolfCandidate.GroupOpenModel
 
-/-! K3-lite: the prefix pass under a fixed oracle, and what it leaves in memory (salts, level-22 siblings, the
-rebuilt blocks of the opened quartets). -/
+/-! K3-lite: the prefix pass under a fixed oracle, and what it leaves in memory (salts and the rebuilt blocks of
+the opened quartets; the sibling-node pointers are a `Ready` fact). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -42,30 +42,6 @@ theorem fixed_post (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Pos
   | succ n ih =>
     simpa only [fixedPass,show j+(n+1)=(j+1)+n by omega] using ih _ (j+1) (by omega) (next_fixed o td p k s j r (by omega))
 
--- ---------------------------------------------------------------- sorted quartets
-theorem quartet_mono (p : Positions) (a b : Nat) (ab : a≤b) (hb : b<p.card) : (pos p a).val/4≤(pos p b).val/4 := by
-  rcases Nat.lt_or_eq_of_le ab with h|h
-  · exact Nat.div_le_div_right (Nat.le_of_lt (pos_lt p a b h hb))
-  · rw [h]
-
-theorem last_pos (p : Positions) (j : Nat) (hj : 0<j) : lastOf p j=(pos p (j-1)).val/4 := by
-  simp [lastOf,Nat.ne_of_gt hj]
-
-/-- A fresh quartet is strictly above every earlier position's quartet. -/
-theorem fresh_above (p : Positions) (j : Nat) (hj : j<p.card) (fresh : (pos p j).val/4≠lastOf p j) (a : Nat) (ha : a<j) :
-    (pos p a).val/4<(pos p j).val/4 := by
-  rw [last_pos p j (by omega)] at fresh
-  have := quartet_mono p a (j-1) (by omega) (by omega)
-  have := quartet_mono p (j-1) j (by omega) hj
-  omega
-
-/-- A repeated quartet repeats the previous position's. -/
-theorem stale_prev (p : Positions) (j : Nat) (hj : j<p.card) (same : (pos p j).val/4=lastOf p j) :
-    0<j ∧ (pos p (j-1)).val/4=(pos p j).val/4 := by
-  by_cases z : j=0
-  · subst z; have := (pos p 0).isLt; change _<16777216 at this; simp [lastOf] at same; omega
-  · exact ⟨by omega,by rw [same,last_pos p j (by omega)]⟩
-
 theorem xor_inj (a b : Nat) (h : a^^^1=b^^^1) : a=b := by
   have := congrArg (· ^^^ 1) h; simpa [Nat.xor_assoc] using this
 
@@ -90,13 +66,11 @@ theorem salt_word_view (s : MachineState) (i : Index) (j : Fin 2) :
   rw [addr]; rfl
 
 -- ---------------------------------------------------------------- what the pass leaves behind
-/-- After the first `n` positions: their salts are the linked salts, their quartets' level-22 siblings sit in the heap
-slots, and their quartets' rebuilt blocks hold the inverses of their replies. -/
+/-- After the first `n` positions: their salts are the linked salts and their quartets' rebuilt blocks hold the
+inverses of their replies. -/
 structure Seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
     (s : MachineState) (n : Nat) : Prop where
   salt : ∀ a<n, ∀ j : Fin 2, s.getMem (destAt (pos p a)+BitVec.ofNat 64 (8*j.val))=saltWords (linkedSalts o k (pos p a)) j
-  sibling : ∀ a<n, ∀ m<4, memoryView s (heapWord (4194304+((pos p a).val/4^^^1))+m)=
-    memoryView (actual.initialState .opening (td,p)) (nodeWordOf ((pos p a).val/4^^^1)+m)
   block : ∀ a<n, ∀ m (hm : m<25), memoryView s (rebuiltWord ((pos p a).val/4)+m)=
     replyWords (o.permutation.symm (packBuffer (window (memoryView (actual.initialState .opening (td,p)))
       (replyWord ((pos p a).val/4))))) ⟨m,hm⟩
@@ -124,7 +98,7 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
   have view (w : Nat) (fit : w<2^33) (away : ¬Writes i (lastOf p j) w) :=
     step_view o k s i j (p.card-j) (lastOf p j) (by omega) (by omega) (by omega) inp r.keyFrame w fit away
   have qlt : i.val/4<4194304 := by omega
-  refine ⟨?_,?_,?_⟩
+  refine ⟨?_,?_⟩
   · -- salts
     intro a ha jj
     by_cases eq : a=j
@@ -136,45 +110,10 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
       rw [salt_word_view]
       change _<16777216 at av
       rw [view _ (by omega) (by
-        rintro (⟨_,⟨m,hm,e⟩|⟨m,hm,e⟩⟩|h|h|h|h)
-        · have x := xor_one_lt (i.val/4) 22 qlt (by decide)
-          unfold heapWord at e; omega
+        rintro (⟨_,m,hm,e⟩|h|h|h|h)
         · unfold rebuiltWord blockWord at e; omega
         all_goals omega)]
       have := old.salt a lt jj; rwa [salt_word_view] at this
-  · -- level-22 siblings
-    intro a ha m hm
-    have sib (fresh : i.val/4≠lastOf p j) :=
-      fixed_sibling o k s i j (p.card-j) (lastOf p j) (by omega) (by omega) (by omega) inp r.keyFrame fresh m hm
-    have keep (b : Nat) (hb : b<j) (stay : ¬HeadWrites i (lastOf p j) (heapWord (4194304+((pos p b).val/4^^^1))+m)) :
-        memoryView (fixedOne o s i (p.card-j) (lastOf p j)) (heapWord (4194304+((pos p b).val/4^^^1))+m)=
-          memoryView (actual.initialState .opening (td,p)) (nodeWordOf ((pos p b).val/4^^^1)+m) := by
-      have bv := (pos p b).isLt
-      have xb := xor_one_lt ((pos p b).val/4) 22 (by change _<16777216 at bv;omega) (by decide)
-      rw [view _ (by unfold heapWord;omega) (by
-        rintro (h|h|h|h|h)
-        · exact stay h
-        all_goals (unfold heapWord at h; omega))]
-      exact old.sibling b hb m hm
-    by_cases eq : a=j
-    · subst eq
-      by_cases fresh : i.val/4≠lastOf p a
-      · rw [sib fresh]
-        have x := xor_one_lt (i.val/4) 22 qlt (by decide)
-        exact r.frame _ (by unfold nodeWordOf blockWord;omega) (node_untouched p a _ m x hm)
-      · have same : i.val/4=lastOf p a := by omega
-        obtain ⟨pos0,prev⟩ := stale_prev p a hj same
-        have k' := keep (a-1) (by omega) (by rintro ⟨f,_⟩; exact f same)
-        rwa [prev] at k'
-    · have lt : a<j := by omega
-      apply keep a lt
-      rintro ⟨fresh,⟨m',hm',e⟩|⟨m',hm',e⟩⟩
-      · have up := fresh_above p j hj fresh a lt
-        unfold heapWord at e
-        have : (pos p a).val/4^^^1=i.val/4^^^1 := by omega
-        exact absurd (xor_inj _ _ this) (by omega)
-      · have xa := xor_one_lt ((pos p a).val/4) 22 (by have := (pos p a).isLt; change _<16777216 at this; omega) (by decide)
-        unfold heapWord rebuiltWord blockWord at e; omega
   · -- rebuilt blocks
     intro a ha m hm
     have keep (b : Nat) (hb : b<j)
@@ -204,13 +143,10 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
         rwa [prev] at k'
     · have lt : a<j := by omega
       apply keep a lt
-      rintro ⟨fresh,⟨m',hm',e⟩|⟨m',hm',e⟩⟩
-      · have xa := xor_one_lt (i.val/4) 22 qlt (by decide)
-        have av := (pos p a).isLt; change _<16777216 at av
-        unfold heapWord rebuiltWord blockWord at e; omega
-      · have up := fresh_above p j hj fresh a lt
-        have av := (pos p a).isLt; change _<16777216 at av
-        unfold rebuiltWord blockWord at e; omega
+      rintro ⟨fresh,m',hm',e⟩
+      have up := fresh_above p j hj fresh a lt
+      have av := (pos p a).isLt; change _<16777216 at av
+      unfold rebuiltWord blockWord at e; omega
 
 theorem seen_pass (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (k : BitVec 192)
     (s : MachineState) (j n : Nat) (b : j+n≤p.card) (r : Ready td p k s j) (seen : Seen o k td p s j) :
@@ -223,6 +159,6 @@ theorem seen_pass (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Posi
 
 theorem seen_zero (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (s : MachineState) :
     Seen o k td p s 0 :=
-  ⟨fun _ h => (Nat.not_lt_zero _ h).elim,fun _ h => (Nat.not_lt_zero _ h).elim,fun _ h => (Nat.not_lt_zero _ h).elim⟩
+  ⟨fun _ h => (Nat.not_lt_zero _ h).elim,fun _ h => (Nat.not_lt_zero _ h).elim⟩
 
 end TwoPermutationPrototype.GroupedOpening

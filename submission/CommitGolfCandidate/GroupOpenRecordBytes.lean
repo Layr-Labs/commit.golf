@@ -82,13 +82,15 @@ theorem record_bytes (s : Submission) (layout : OpeningLayout s)
     (ordinal : Nat) (present : ordinal < positions.card)
     (contents : CompletedRecords s trapdoor positions state (ordinal+1)) :
     bytesAt state (recordBase ordinal) 534 =
-      physicalRecord (trapdoorLeaf (s:=s) trapdoor) (Opening.trapdoorHeap (s:=s) trapdoor) (sortedIndex positions ordinal present)
+      physicalRecord (trapdoorLeaf (s:=s) trapdoor) (Opening.trapdoorHeap (s:=s) trapdoor)
+        (trapdoorQuad (s:=s) trapdoor (sortedIndex positions ordinal present)) (sortedIndex positions ordinal present)
         (trapdoorSalt (s:=s) trapdoor (sortedIndex positions ordinal present)) := by
   let initial := s.initialState .opening (trapdoor, positions)
   let index := sortedIndex positions ordinal present
   let leaf := trapdoorLeaf (s:=s) trapdoor
   let hash := trapdoorHeap (s := s) trapdoor
   let salt := trapdoorSalt (s := s) trapdoor index
+  let quad := trapdoorQuad (s := s) trapdoor index
   obtain ⟨nonce, path, folds⟩ := contents ordinal present (by omega)
   have serialized : readBuffer state (recordBase ordinal) 16 = salt := by
     have copied : readBuffer state (recordBase ordinal) 16 = readBuffer initial (nonceAddress index) 16 := by
@@ -104,22 +106,29 @@ theorem record_bytes (s : Submission) (layout : OpeningLayout s)
     exact input_nonce s layout trapdoor positions index
   have nonceBytes : bytesAt state (recordBase ordinal) 16 = saltBytes salt :=
     rb_serialized state (recordBase ordinal) 16 salt serialized
-  have source (level : Nat) : readBuffer initial (siblingAddress index level) 32 = hash (upperNode index level ^^^ 1) :=
-    input_digest s layout trapdoor positions _ (upper_swap_bound index level)
-  have sourceAligned (level : Nat) : siblingAddress index level % 32 = 0 := by
-    unfold siblingAddress
-    have base : trapdoorBase % 32 = 0 := by decide
+  have source (level : Nat) : readBuffer initial (siblingAddress index level) 32 =
+      (if level = 0 then quad else hash (upperNode index level ^^^ 1)) := by
+    by_cases zero : level = 0
+    · subst zero
+      rw [if_pos rfl]
+      unfold siblingAddress; rw [if_pos rfl]
+      exact input_quad s layout trapdoor positions _ index.isLt
+    · rw [if_neg zero, sibling_address_upper index level zero]
+      exact input_digest s layout trapdoor positions _ (upper_swap_bound index level)
+  have upper (level : Nat) (nz : level ≠ 0) :
+      (if level = 0 then quad else hash (upperNode index level ^^^ 1)) = hash (upperNode index level ^^^ 1) := by
+    rw [if_neg nz]
+  have sourceAligned (level : Nat) : siblingAddress index level % 2 = 0 := by
+    have := (sibling_address_inside index level).1
     omega
   have sourceFit (level : Nat) : siblingAddress index level+48 ≤ 2^64 := by
-    have bound := upper_swap_bound index level
-    unfold siblingAddress
-    change upperNode index level ^^^ 1 < 2*16777216 at bound
-    have base : trapdoorBase < 2^40 := by decide
+    have bound := (sibling_address_inside index level).2.2
+    have base : nonceBase < 2^40 := by decide
     omega
   -- levels 0..5: whole 32-byte (levels 0, 1) or 30-byte (levels 2..5) copies
   have digest (level : Nat) (live : level < 6) :
       bytesAt state (siblingDestination ordinal level) (siblingWidth level) =
-      proofDigestBytes (decide (2 ≤ level)) (hash (upperNode index level ^^^ 1)) := by
+      proofDigestBytes (decide (2 ≤ level)) (if level = 0 then quad else hash (upperNode index level ^^^ 1)) := by
     have plain : plainWidth level = siblingWidth level := by
       unfold plainWidth folded
       rw [if_neg (by omega)]
@@ -143,16 +152,17 @@ theorem record_bytes (s : Submission) (layout : OpeningLayout s)
       by_cases f : level < 13
       · rw [if_pos ⟨late, f⟩]
       · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)]
+    rw [← upper level (by omega)]
     exact copied_bytes state initial (siblingDestination ordinal level) (siblingAddress index level) 28 _
       (by decide) (source level) (fun byte inside => path level live byte (by rw [plain]; exact inside))
   let block := fun k => hash (upperNode index (6+k) ^^^ 1)
   have foldPair (k : Nat) (small : k < 7) :
       bytesAt state (siblingDestination ordinal (6+k)+28) 2 =
         [(foldHalf (block k) (block 7) k).extractLsb' 0 8, (foldHalf (block k) (block 7) k).extractLsb' 8 8] := by
-    have halfK := half_of_digest initial (siblingAddress index (6+k)) _ (by have := sourceAligned (6+k); omega)
-      (sourceFit (6+k)) (source (6+k))
-    have half13 := half_of_digest initial (siblingAddress index 13) _ (by have := sourceAligned 13; omega)
-      (sourceFit 13) (source 13)
+    have halfK := half_of_digest initial (siblingAddress index (6+k)) _ (sourceAligned (6+k))
+      (sourceFit (6+k)) ((source (6+k)).trans (upper (6+k) (by omega)))
+    have half13 := half_of_digest initial (siblingAddress index 13) _ (sourceAligned 13)
+      (sourceFit 13) ((source 13).trans (upper 13 (by omega)))
     have value : foldValue (initial.getHalfword (BitVec.ofNat 64 (siblingAddress index (6+k)+28)))
         ((initial.getHalfword (BitVec.ofNat 64 (siblingAddress index 13+28))).zeroExtend 64 >>> (2*k)) =
         foldHalf (block k) (block 7) k := by
@@ -230,11 +240,12 @@ theorem record_bytes (s : Submission) (layout : OpeningLayout s)
   have w25 (l : Nat) (lo : 2 ≤ l) (hi : l < 13) : siblingWidth l = 30 := by
     unfold siblingWidth; rw [if_neg (by omega), if_pos hi]
   have lower6 : bytesAt state (recordBase ordinal+112) 184 =
-      (List.range 6).flatMap (fun l => proofDigestBytes (decide (2 ≤ l)) (hash (upperNode index l ^^^ 1))) := by
+      (List.range 6).flatMap (fun l => proofDigestBytes (decide (2 ≤ l))
+        (if l = 0 then quad else hash (upperNode index l ^^^ 1))) := by
     rw [show List.range 6 = [0,1] ++ (List.range 4).map (fun j => j+2) by decide, List.flatMap_append,
       List.flatMap_map]
     rw [show (184:Nat) = 64+30*(List.range 4).length by decide, bytes_at_append]
-    congr 1
+    refine congrArg₂ (· ++ ·) ?_ ?_
     · have d0 := digest 0 (by decide)
       have d1 := digest 1 (by decide)
       rw [at01 0 (by decide), w01 0 (by decide)] at d0
@@ -251,7 +262,7 @@ theorem record_bytes (s : Submission) (layout : OpeningLayout s)
       rw [at25 (j+2) (by omega) (by omega), w25 (j+2) (by omega) (by omega)] at dj
       rw [show recordBase ordinal+112+64+30*j = recordBase ordinal+176+30*(j+2-2) by omega]
       exact dj
-  change bytesAt state (recordBase ordinal) (16+(96+(184+238))) = physicalRecord leaf hash index salt
+  change bytesAt state (recordBase ordinal) (16+(96+(184+238))) = physicalRecord leaf hash quad index salt
   rw [bytes_at_append state _ 16 _, nonceBytes, bytes_at_append state _ 96 _, quartet, bytes_at_append state _ 184 _,
     show recordBase ordinal+16+96 = recordBase ordinal+112 by omega, lower6,
     show recordBase ordinal+112+184 = recordBase ordinal+296 by omega, folded]
