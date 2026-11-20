@@ -141,7 +141,7 @@ theorem c_second_window (regs : Reg → Word) (m : Memory) (i : Index) (h : rank
 /-- The salt a follower stores into `w+7, w+8`. -/
 def followerSalt (regs : Reg → Word) (m : Memory) (i : Nat) : Words 2 := fun d =>
   if rank i≤8 then m (sourceWord i+d.val)
-  else if rank i=9 then (if d.val=0 then regs .x14 else regs .x15)
+  else if rank i=9 then (if d.val=0 then regs .x14 else m (sourceWord i+1))
   else (if d.val=0 then regs .x16 else regs .x17)
 
 theorem source_below (i : Nat) (h0 : rank i≠0) (h1 : rank i≠1) : sourceWord i+2≤msgWord i-4 := by
@@ -255,7 +255,8 @@ theorem follower_mem_salt (o : Oracle) (regs : Reg → Word) (m : Memory) (i : N
     split
     · rw [wd_at,wd_out _ _ _ _ (show sourceWord i+1≠msgWord i+7 by omega),src 1 (by decide)]
     split
-    · rw [wd_at,if_neg (show ¬(1=0) by decide)]
+    · rw [wd_at,wd_out _ _ _ _ (show sourceWord i+1≠msgWord i+7 by omega),src 1 (by decide),
+        if_neg (show ¬(1=0) by decide)]
     · rw [wd_at,if_neg (show ¬(1=0) by decide)]
 
 /-- A follower's window `[w+7, w+32)`. -/

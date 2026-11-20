@@ -17,7 +17,7 @@ set_option maxHeartbeats 1800000
 attribute [local irreducible] execute image GroupedUpper.packedWideCommitImage scan tailBody
 
 /-- Steps of the whole commit run (odd-quartet image). -/
-def commitSteps : Nat := 200290336
+def commitSteps : Nat := 200289312
 
 theorem image_eq_packed : image=GroupedUpper.packedWideCommitImage :=
   exact_image.trans GroupedUpper.packed_manifest_image.symm
@@ -36,11 +36,11 @@ attribute [local irreducible] readyState
 
 theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
     execute image (commitSteps+fuel) s true = commitTrace s := by
-  rw [show commitSteps+fuel=38+(185347071+(6+(14943221+fuel))) by unfold commitSteps;omega,setup_run s e]
+  rw [show commitSteps+fuel=38+(185346047+(6+(14943221+fuel))) by unfold commitSteps;omega,setup_run s e]
   simp only [commitTrace,bind_assoc,pure_bind];apply bind_congr;intro key
   have read := ready_live s e key
   have run := run_scan N 0 _ (by decide) read (6+(14943221+fuel))
-  rw [show S (0+N)-S 0=185347071 by decide,show C (0+N)-C 0=460282879 by decide,
+  rw [show S (0+N)-S 0=185346047 by decide,show C (0+N)-C 0=460281855 by decide,
     show Q (0+N)-Q 0=39276544 by decide] at run
   rw [run];simp only [bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support;intro leaves hit

@@ -8,7 +8,7 @@ set_option maxHeartbeats 1800000
 attribute [local irreducible] execute image writeBits
 def setupOps : List Instr :=
   [.ADDI .x9 .x12 0,.ADDI .x18 .x10 0,.LUI .x19 131072,
-   .ADD .x21 .x9 .x19,.SLLI .x22 .x19 3,.ADD .x24 .x21 .x22,
+   .ADD .x21 .x9 .x19,.SLLI .x15 .x19 3,.ADD .x24 .x21 .x15,
    .ADDI .x20 .x21 2056,.ADDI .x20 .x20 2056,.ADDI .x23 .x20 3872,.ADDI .x25 .x20 3648,
    .ADDI .x5 .x0 2,.ADDI .x10 .x24 8,.ADDI .x11 .x0 24,.ECALL,
    .ADDI .x26 .x20 3424,.ADDI .x5 .x0 0,.ADDI .x11 .x0 200,
@@ -66,6 +66,7 @@ structure SeedRegs (s : MachineState) : Prop where
   slot0 : s.getReg .x20=wordAddress (slotGap 0)
   slot1 : s.getReg .x23=wordAddress (slotGap 1)
   slot2 : s.getReg .x25=wordAddress (slotGap 2)
+  limit : s.getReg .x15=4294967296
 
 private def seedChunk (block : Nat) (s : MachineState) :=
   ((setupOps.drop (4*block)).take (if block<2 then 4 else 5)).foldl execInstrBr s
@@ -92,6 +93,7 @@ private structure Seed2 (s : MachineState) : Prop where
   quartet : s.getReg .x21=wordAddress (qSource 0)
   sentinel : s.getReg .x24=wordAddress (qSource 4194304)
   slot0 : s.getReg .x20=wordAddress (slotGap 0)
+  limit : s.getReg .x15=4294967296
 
 private theorem seedBlock2 (s : MachineState) (h : Seed1 s) : Seed2 (seedChunk 1 s) := by
   constructor <;> dsimp [seedChunk,setupOps,List.drop,List.take,List.foldl,execInstrBr,MachineState.setPC,MachineState.setReg,MachineState.getReg]
@@ -108,7 +110,8 @@ private theorem seedBlock3 (s : MachineState) (h : Seed2 s) : SeedRegs (seedChun
     show s.regs .x19=536870912 from h.stride,
     show s.regs .x21=wordAddress (qSource 0) from h.quartet,
     show s.regs .x24=wordAddress (qSource 4194304) from h.sentinel,
-    show s.regs .x20=wordAddress (slotGap 0) from h.slot0]
+    show s.regs .x20=wordAddress (slotGap 0) from h.slot0,
+    show s.regs .x15=4294967296 from h.limit]
   all_goals rfl
 
 theorem seed_registers (s : MachineState) (entry : CommitEntry s) : SeedRegs (prePrefix s 13) :=
@@ -127,10 +130,11 @@ private theorem post_live_frame (w pre : MachineState) (r : SeedRegs pre)
   have k23 : w.regs .x23=wordAddress (slotGap 1) := (keep .x23).trans r.slot1
   have k25 : w.regs .x25=wordAddress (slotGap 2) := (keep .x25).trans r.slot2
   have k24 : w.regs .x24=wordAddress (qSource 4194304) := (keep .x24).trans r.sentinel
-  refine ⟨⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩,?_⟩
+  have k15 : w.regs .x15=4294967296 := (keep .x15).trans r.limit
+  refine ⟨⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩,?_⟩
   all_goals dsimp only [postPrefix,postOps,setupOps,List.drop,List.take,List.foldl,execInstrBr,
     MachineState.setPC,MachineState.setReg,MachineState.getReg,startPC]
-  all_goals simp (config := {decide := true}) only [k18,k20,k23,k25,k24,pc,↓reduceIte]
+  all_goals simp (config := {decide := true}) only [k18,k20,k23,k25,k24,k15,pc,↓reduceIte]
   all_goals decide
 
 theorem ready_live (s : MachineState) (e : CommitEntry s) (k : Key) : Live (readyState s k) 0 := by

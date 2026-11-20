@@ -1,172 +1,141 @@
-# Product: the level-22 sibling through a pointer word (-1,536 opening cycles)
+# Product: a two-instruction commitment latch against `a5 = 2^32` (-1,024 commitment cycles)
 
-Built on the promoted product best `c6d19f38-4b72-4e7a-908e-8d854bc7e2df` (our `cg-m3`, promoted commit
-`12d186e2604d9e5ee32012245fdb4a6be2a30494`). The opener's prefix pass no longer copies the level-22 sibling node
-into the heap; it leaves the node's address in a spare word of the quartet block, and the record writer's level-0
-head loads that address instead of computing a heap slot. Only opening rows 150..152 and 748..776 change. The
-commitment and checker images, embedded data, the ABI, the proof serialization and every proof byte are unchanged.
+Built on our `cg-m4` (the level-22 sibling through a pointer word, submission
+`3b9c2633-0fe8-40d3-b8f5-4d46b12f587c`, commit `03953bb`), which sits on the promoted product best
+`c6d19f38-4b72-4e7a-908e-8d854bc7e2df` (promoted commit `12d186e2604d9e5ee32012245fdb4a6be2a30494`). Only the
+commitment image changes: setup rows 4..5, the rank-8 / rank-9 salt rows of every 11-leaf group of the body, and
+the latch. The opening and checker images, the salts, every oracle input, the ABI, the proof serialization and every
+proof byte are unchanged.
 
 ## Result
 
-| | `c6d19f38` (base) | This entry |
-| --- | ---: | ---: |
-| proof bytes | 72,160 | 72,160 |
-| commitment cycles | 504,586,268 | 504,586,268 |
-| opening cycles (128 positions, proved bound) | 120,864 | **119,328** |
-| score | 36,419,666,645,120 | **36,419,555,807,360** |
+| | `c6d19f38` | `cg-m4` (base) | This entry |
+| --- | ---: | ---: | ---: |
+| proof bytes | 72,160 | 72,160 | 72,160 |
+| commitment cycles | 504,586,268 | 504,586,268 | **504,585,244** |
+| opening cycles (128 positions, proved bound) | 120,864 | 119,328 | 119,328 |
+| score | 36,419,666,645,120 | 36,419,555,807,360 | **36,419,481,915,520** |
 
-`(504,586,268 + 119,328) × 72,160 = 36,419,555,807,360`, 110,837,760 below the base (1,536 cycles × 72,160 bytes).
+`(504,585,244 + 119,328) × 72,160 = 36,419,481,915,520`, 73,891,840 below `cg-m4` (1,024 cycles × 72,160 bytes).
 
 ## Before
 
-For every newly opened quartet `q` (block `B = groupSlots + 1024 q`) the prefix head selected the group reply and
-the address of the sibling quartet's level-22 node by parity (`x30 = B+136` for even `q`, `B-856` for odd `q`;
-both nodes live inside the commit's group replies of the pair), ran the inverse call into the rebuilt block
-`B+512`, restored `x13, x12, x10`, and then copied the 32-byte node into the heap slot `2^22 + (q ^ 1)`:
+The commitment image is the 38-word setup, the body (rows 38..181,037: four copies of the 45,250-word tile, 16,384
+leaves per pass, 1,024 passes) and the latch
 
 ```
-760 addi x13,x0,2 ; 761 ecall (inverse into B+512) ; 762 addi x13,x0,1 ; 763 addi x12,x0,1536 ; 764 addi x10,x0,1024
-765 xori x28,x28,1 ; 766 add x28,x28,x19 ; 767 slli x28,x28,5 ; 768 add x28,x28,x9     heap slot of 2^22 + (q^1)
-769..776 ld x31,0/8/16/24(x30) ; sd x31,0/8/16/24(x28)                               32-byte copy
+181038 srli a2,a0,32          a2 = a0 >> 32
+181039 bne  a2,zero,<181041>  out after the last pass
+181040 jal  zero,<38>         next pass
 ```
 
-The record writer then rebuilt the same heap address for its level-0 sibling (rows 150..152,
-`xori x7,x6,1 ; slli x7,x7,5 ; add x7,x9,x7`) and copied the 32 bytes into the proof (wide copy at 153). The head
-of a new quartet cost 36 cycles (even) / 35 (odd), the level-0 head 3.
+3 cycles per pass (2 on the final exit). A two-instruction latch needs a register holding a bound for `a0`, but the
+body uses every register: t0, a1, a3 are the oracle selector, width and primitive, a0 and a2 the call pointers, the
+others constants and quartet-block gaps, and a4..a7 carry the salts of ranks 9 and 10 of each group: rank 8 preloads
+them
+(`ld a4,-1848(a0); ld a5,-1840(a0); ld a6,-1832(a0); ld a7,-1824(a0)`), because from those leaves' own `a0` the
+generator reply words lie more than 2 KiB below.
 
 ## The change
 
 ```
-prefix
-748 bne  x30,x0,<769>        odd quartets to the moved select (was <758>)
-749 addi x10,x7,168          even: reply_E                       (unchanged)
-750 addi x30,x7,136          even: sibling node address          (unchanged)
-751 jal  x0,<771>            (was <760>)
-769 addi x10,x7,-1056        odd: reply_O                        (was row 758)
-770 addi x30,x7,-856         odd: sibling node address           (was row 759)
-771 addi x13,x0,2 ; 772 ecall ; 773 addi x13,x0,1 ; 774 addi x12,x0,1536 ; 775 addi x10,x0,1024   (were 760..764)
-776 sd   x30,712(x7)         the address into word 89 of the quartet block, then into the chain block at 777
-758..768                     nop, not reached
+setup
+4   slli a5,s3,3          a5 = 2^29 << 3 = 2^32           (was: slli s6,s3,3)
+5   add  s8,s5,a5         unchanged value                 (was: add s8,s5,s6)
 
-record writer, level 0
-150 ld   x7,712(x7)          x7 = B (from the mate copies) -> the sibling node's address
-151 jal  x0,<153>            the unchanged level-0 wide copy (alignment test at 153)
-152                          nop, not reached
+rank 8 of every group     ld a4,-1848(a0) ; ld a6,-1832(a0) ; ld a7,-1824(a0)     (the a5 load dropped)
+rank 9 of every group     sd a4,0(a0) ; ld a2,-2008(a2) ; sd a2,8(a0)             (was: sd a4,0(a0) ; sd a5,8(a0))
+
+latch
+181038 bgeu a0,a5,<181041>
+181039 jal  zero,<38>
+181040 nop (not reached)
 ```
 
-Word 89 of a quartet block (`B+712`) is the word right after the rebuilt block (`B+512 .. B+712`). Nothing else in
-the opener reads or writes it: the rebuilt blocks are words 64..88, the group replies words 21..45 of an even block
-and 124..127 / 0..20 around an odd one, the level-22 nodes words 17..24 of the even block. The writer's level-0
-source is now the commit's node itself, which the pass never writes, so the proof bytes are the same bytes as
-before for every position set. A later position of the same quartet skips the head (sorted positions) and reads
-the pointer written by the first one. The level-22 heap slots are no longer written by the opener at all.
+- `s6` held `2^32` only between rows 4 and 33 and was read only by row 5; row 33 (`addi s6,s1,112`) still sets
+  its body value, so the setup costs no extra instruction and every other register ends as before.
+- At rank 9's salt rows `a2 = a0 − 88` (its first call's output pointer). The second salt word, word 17 of the
+  group's generator reply, is 2,008 bytes below it, so `ld a2,-2008(a2)` reaches it; the reply stays intact in
+  memory for the whole group (the invariant `MsgGood.group` already holds it for every rank ≥ 1). `a2` is rewritten
+  by the next `add a2,a0,s*` before the second call, as for ranks 2..8.
+- Rank 8 loses a row and rank 9 gains one, so every group, tile and later row keeps its address
+  (`rankPrefix 9 = 98`, was 99); 18,605 image words change, all inside the body, setup rows 4..5 and the latch.
+- `a0` at the latch after pass `k` is `4,152 + 4 MiB · k`: below `2^32` for `k < 1,024`, `2^32 + 4,152` after the
+  last pass. The latch is 2 cycles per pass (`bgeu` not taken, `jal`) and 1 on the final exit.
 
-Per new quartet the head is 25 cycles (even: 12 head rows including the `jal`, the call row, the 8-cycle inverse,
-three restores and the store) or 24 (odd), against 36 / 35. Per record the level-0 head is 2 cycles against 3. The
-writer's row 147 (the third mate copy's exit) and the copy site at 153 are pinned by the wide-copy proofs
-(`site.start + 32`), so the shorter head keeps its jump at 151.
+Per pass the latch saves one cycle, 1,024 in all. Nothing else changes cost.
 
 ## Bound
 
-- `headSteps` 18 / 17 and `headCycles` 25 / 24 for a new even / odd quartet (3 / 3 for a repeated quartet),
-  `price headPost = 4` (rows 773..776).
-- `pass_cycles_bound`: `passCycles p n j ≤ 334·n + 2` (was `345·n + 2`; 25 head + 297 chain + 12 post).
-- `siblingCost` of level 0: `4 + recordCopyCost` (was 5); `lower_total_cost` 64 (was 65); one record 129 + extras
-  (was 130); `recordCost` 135 / 134 (was 136 / 135); `records_total = 134·n + copySum n + 1`;
-  `wide_scored_limits` 76,554 (was 76,682).
-- Opening: `35 + (334·128 + 2) + (76,554 − 15) = 119,328` (base: `35 + (345·128 + 2) + (76,682 − 15) = 120,864`).
-
-The saving is 11 cycles per newly opened quartet and 1 per record, so an opening of `n` positions in `g` distinct
-quartets gains `11 g + n`; the scored bound (128 positions, 128 quartets) drops by 1,536.
+- `edgeCost` 2 / 1 (was 3 / 2); steps per pass `181,002` (was 181,003); `S N − S 0 = 185,346,047`,
+  `C N − C 0 = 460,281,855` (`Q` unchanged at 39,276,544); `commitSteps = 38 + 185,346,047 + 6 + 14,943,221 =
+  200,289,312`.
+- `commitCycles = 41 + 460,281,855 + 6 + 44,303,342 = 504,585,244` (base: `41 + 460,282,879 + 6 + 44,303,342`).
 
 ## Evidence
 
-Memory-backed RV64IM emulator (Riscv.lean cost model, deterministic stand-in oracle replies), base image against
-this image on the same inputs; the base column reproduces the certified 120,864 on its worst set.
+Memory-backed RV64IM emulator (Riscv.lean cost model, stand-in oracle replies, random message), base image and this
+image from the commitment entry through the first full pass (16,384 leaves) to the latch:
 
-| position set | base cycles | this entry | Δ | proof bytes |
-| --- | ---: | ---: | ---: | --- |
-| `{131072·j + 738}`, 128 (the certified worst set) | 120,864 | 119,328 | −1,536 | identical (72,160) |
-| `{131072·j + 739}`, 128 | 120,736 | 119,200 | −1,536 | identical |
-| `{131072·j + 742}`, 128 (odd quartets) | 120,608 | 119,072 | −1,536 | identical |
-| even/odd quartet pairs, 128 | 116,232 | 114,696 | −1,536 | identical |
-| alternating parity, 128 | 120,672 | 119,136 | −1,536 | identical |
-| six random 128-sets | 100,504 .. 102,012 | −1,536 each | −1,536 | identical |
-| `0..127` (32 quartets) | 80,587 | 80,107 | −480 | identical |
-| stride 4, 128 | 92,187 | 90,651 | −1,536 | identical |
-| `{131072·j + 739}`, 127 | 119,826 | 118,302 | −1,524 | identical |
-| 64 clustered | 45,375 | 44,607 | −768 | identical |
-| nine scattered | 7,797 | 7,711 | −86 | identical |
-| two | 2,978 | 2,954 | −24 | identical |
-| one (`5`), one (`2^24−1`) | 1,791 / 2,047 | 1,779 / 2,035 | −12 | identical |
+| | base | this entry |
+| --- | ---: | ---: |
+| cycles to the end of pass 1 | 449,536 | 449,535 |
+| oracle calls | 38,356 | 38,356 |
+| hash of all oracle inputs | `d49c20f672d0b94f` | `d49c20f672d0b94f` |
+| hash of all output pointers | `1c8c0655a3f1c91f` | `1c8c0655a3f1c91f` |
+| next pc / `a0` / `a5` | 38 / 4,198,456 / – | 38 / 4,198,456 / 4,294,967,296 |
 
-All runs halt with success and make the same oracle calls.
+The patcher checks that `a5` is named nowhere else in the image and that exactly 1,488 rank-8 / rank-9 pairs
+(4 tiles × 372 groups) are rewritten.
 
 ## Proofs
 
-- Prefix rows (`GroupOpenWalk`): `newRows` (748 `bne` +84), `evenSel` (751 `jal` +80), `oddSel` (769, 770),
-  `callRow` (771), `restoreRows` (773..775), `ptrRows` (776 `sd x30,712(x7)`), `headPost = restoreRows ++ ptrRows`,
-  `inverse_fetch` (772).
-- `GroupOpenStep`: `head_pre` also returns `x7 = B`; `ptr_row` (the store, its legality and its word view
-  `writeWord … (pointerWord q) x30`); `head_post` (rows 773..776; no register besides `x10, x12, x13` changes);
-  `pointer_address_word`, `quad_address_node` (`quadAddress i = 8·nodeWordOf (i/4 ^ 1)`). The 32-byte copy lemmas
-  `sib_args` / `sib_rows` are gone.
-- `GroupOpenEffect`: `HeadWrites` is the rebuilt block plus the pointer word (`rebuiltWord q + m`, `m < 26`);
-  `head_outside`, `head_block`, new `head_pointer`, `fixed_pointer`; `outcome_facts` / `trace_post` also give the
-  pointer word of a new quartet.
-- `GroupOpenPass`: `Touched` covers `m < 26`; `Ready` carries `pointer` (every processed position's pointer word
-  holds its node's address); `next_ready` proves it (the sorted-quartet lemmas moved here from `GroupOpenFixed`);
-  `pass_cycles_bound` 334. `GroupOpenHeader` starts it empty. `GroupOpenLatch`: head rows, steps and cycles.
-- `GroupOpenFixed`: `Seen` drops the heap-sibling field. `GroupOpenResume`: `boundary_at_end` gives the records the
-  pointer fact; `kept_quad` (the node words are untouched by the pass) replaces `placed_sibling`. `K3OpenFacts`:
-  `end_components` and `opened_proof` use `trapdoorQuad`.
-- Writer: `GroupOpenMemory` (`quadAddress`, `pointerAddress`, `input_quad`), `GroupOpenGeometry` (`siblingAddress`
-  of level 0 is `quadAddress`; `sibling_address_inside`, `sibling_address_upper`), `GroupOpenSibling` (`zeroRows`
-  150..151), `GroupOpenSiblingRun` (`zeroBlock`, `execute_sibling_zero`; `execute_sibling` for levels ≥ 1),
-  `GroupOpenUpperRun` (`execute_lower_zero`; `execute_lower` from level 1), `GroupOpenPrefix` (the record prefix
-  leaves `x7 = B`), `GroupOpenRecordData` / `GroupOpenRecordsAPI` (`RecordStart.pointer`, `RecordBoundary.pointer`,
-  costs), `GroupOpenRecordRun`, `GroupOpenRecords`, `GroupOpenRecordBytes`.
-- Model (`GroupOpenModel`): `trapdoorQuad`; `physicalRecord` takes the level-0 digest separately;
-  `proof_from_trapdoor_matches_virtual` asks for `trapdoorQuad t i = upperHeap … (2^22 + i/4)`, which `opened_proof`
-  gets from the untouched commit node and `node_slice`.
-- `GroupOpenABI` (`wideCycles`, `wide_scored_limits` 76,554), `GroupOpenFull` (119,328), `GroupOpenClosing`,
-  `Solution.lean`, `claim.json`; the image in `programs.json`, `K1Manifest` (three opening chunks),
-  `GroupOpenImage` and `StudyCore`.
+- Image description: `GroupedImageBase` (`saltCode` 8 and 9, `rankPrefix 9 = 98`), `GroupedPacket` (`saltPlan`
+  with `.load .x12 .x12 (-2008) (sourceWord i+1)`; `PacketRegs.limit : x15 = 2^32`). `GroupedPacketDecode` and
+  `GroupedTileCopy` (the tile-0 chunk literals re-rendered from the new image) re-check the image against the packets
+  unchanged in form; `GroupedCommitImage` keeps `packet_length` / `packet_next`.
+- `GroupedPacketRun`: `finish` also keeps x15; `rank9_address` (`w − 4 − 251 = sourceWord + 1`); the walk
+  certificates of ranks 8 and 9.
+- `GroupedContent`: `followerMem` of rank 9 reads its second word from memory; `body_prefetch` / `plan_prefetch`
+  give x14, x16, x17 and keep x15. `GroupedFrame`: `followerSalt` of rank 9, `follower_mem_salt`.
+- `GroupedInvariant`: `MsgGood.prefetched` is x14, x16, x17; the rank-9 salt equality takes word 17 from the reply in
+  memory. `GroupedSeed`: `latch_good`.
+- `GroupedSetup`: `setupOps` rows 4..5, `Seed2.limit`, `SeedRegs.limit`, `post_live_frame` (x15 into `Live`).
+- `GroupedScan`: `edgeCost`, `S`, `latchReg` (writes nothing now), `edge_run` (`bgeu x10,x15,+12` taken iff the
+  last pass; `jal x0` back to 38), `step_live`, `packet_execute`.
+- `GroupedCommit` (`commitSteps`, the scan totals), `GroupedTailEval.commitCycles`, `GroupedChecks`,
+  `GroupOpenClosing.claimCommitCycles`, `Solution.lean`, `claim.json`; `programs.json` and `K1Manifest`
+  (`commitCode_0_*` chunks).
 
 ## Build and verification
 
-Built and verified on a separate Linux build host (r7i.4xlarge, Lean 4.35.0, contract identical to `39c57ab` /
-`12d186e` outside `submission/`). The host's user systemd cannot provide the read-only sandbox, so
-`scripts/run.py` refuses to start there. The verifier used is a box-local copy of `scripts/run.py` /
-`verifier/verify.py` (`scripts/run_local.py`, `verifier/verify_local.py`) with only the systemd sandbox wrapper
-removed: same policy check, same fresh `.work/<id>/project`, same purge of cached candidate and challenge modules,
-same comparator and `verifier/comparator.json`. The same host and script verified `cg-m1`, `cg-m2` and `cg-m3`
-(`c6d19f38`) at their published scores.
+Built and verified on a separate Linux build host (r7i.4xlarge, Lean 4.35.0, contract identical to `12d186e`
+outside `submission/`). The host's user systemd cannot provide the read-only sandbox, so `scripts/run.py` refuses to
+start there. The verifier used is a box-local copy of `scripts/run.py` / `verifier/verify.py`
+(`scripts/run_local.py`, `verifier/verify_local.py`) with only the systemd sandbox wrapper removed: same policy check,
+same fresh `.work/<id>/project`, same purge of cached candidate and challenge modules, same comparator and
+`verifier/comparator.json`. The same host and script verified `cg-m1`..`cg-m4` at their scores.
 
 ```text
-$ git checkout --detach cg-m4-sibling-pointer        # 03953bb
-$ python3 scripts/run_local.py --track product          # 16 min 6 s wall (real 16m5.769s)
-✔ [9869/9871] Built CommitGolfCandidate.GroupOpenClosing (3.5s)
-✔ [9870/9871] Built Solution (3.4s)
+$ git checkout --detach cg-m5-commit-latch           # dc9d936
+$ python3 scripts/run_local.py --track product          # 16 min 7 s wall (real 16m7.229s)
+✔ [9870/9871] Built Solution
 Build completed successfully (9871 jobs).
 Exporting #[Quot, Quot.mk, Quot.lift, Quot.ind, CommitGolf.Challenge.certificate,
-  CommitGolf.Challenge.submission_matches_artifact, propext, Quot.sound, Classical.choice, Nat.add, Nat.sub,
-  Nat.mul, Nat.pow, Nat.gcd, Nat.div, Nat.mod, Nat.beq, Nat.ble, Nat.land, Nat.lor, Nat.xor, Nat.shiftLeft,
-  Nat.shiftRight, String.ofList, Char.ofNat, List, eagerReduce, Nat, String, String.mk, Char, optParam, autoParam,
-  semiOutParam, outParam, CommitGolf.Challenge.submission] from Solution
+  CommitGolf.Challenge.submission_matches_artifact, propext, Quot.sound, Classical.choice, ...] from Solution
 Running Lean default kernel on solution.
 Lean default kernel accepts the solution
 Your solution is okay!
-{"artifact_digest": "ddc0366d842979350e6145ed36b4d4dd17c38c4ecb499b349a29075b8d94e703",
- "claim": {"commitCycles": 504586268, "openingCycles": 119328, "proofBytes": 72160}, "commit": null,
- "contract_commit": "03953bb7ec7e8a922e0a5ccc6fdb7471392fbf6e", "score": 36419555807360, "status": "verified",
+{"artifact_digest": "a97ac9e8dcd4c99f5514bb535a891c22382242e48d57a9196b51a872ab1082fc",
+ "claim": {"commitCycles": 504585244, "openingCycles": 119328, "proofBytes": 72160}, "commit": null,
+ "contract_commit": "dc9d93626ca74e03e5507c2349a20ca2c7f19e27", "score": 36419481915520, "status": "verified",
  "work_created": true}
 RC=0
 
 $ cat scripts/score.json
-{"score": 36419555807360, "metrics": {"commitCycles": 504586268, "openingCycles": 119328, "proofBytes": 72160,
- "proverCycles": 504705596, "contractCommit": "03953bb7ec7e8a922e0a5ccc6fdb7471392fbf6e",
- "artifactDigest": "ddc0366d842979350e6145ed36b4d4dd17c38c4ecb499b349a29075b8d94e703", "verified": true}}
+{"score": 36419481915520, "metrics": {"commitCycles": 504585244, "openingCycles": 119328, "proofBytes": 72160,
+ "proverCycles": 504704572, "contractCommit": "dc9d93626ca74e03e5507c2349a20ca2c7f19e27",
+ "artifactDigest": "a97ac9e8dcd4c99f5514bb535a891c22382242e48d57a9196b51a872ab1082fc", "verified": true}}
 
 #print axioms CommitGolf.Challenge.certificate
   'CommitGolf.Challenge.certificate' depends on axioms: [propext, Classical.choice, Quot.sound]

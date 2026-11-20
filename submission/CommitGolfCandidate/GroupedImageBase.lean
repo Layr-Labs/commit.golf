@@ -11,7 +11,8 @@ the latch, and words 45,591.. the unchanged quartet and parent stages of the rec
 `packet n` is the code of leaf `n` of a tile, in program order.  A pair head (rank 0, the A leaf)
 runs both first calls of its pair, the generator and its own second call; the C leaf (rank 1)
 only runs its second call; a follower (rank ≥ 2) runs both of its calls with its salt copied from
-the generator reply (ranks 9 and 10 through x14..x17, loaded by rank 8).
+the generator reply (rank 10 through x16, x17 and the first word of rank 9 through x14, loaded by rank 8; the
+second word of rank 9 is loaded through x12). x15 holds 2^32 (setup row 4) for the latch.
 -/
 
 namespace TwoPermutationPrototype.Grouped
@@ -75,7 +76,7 @@ def chainedBefore (n : Nat) := (n+10)/11-((n+10)/11+33)/34
 /-- Code words of the ranks `0..r-1` of an 11-leaf group (keyed head), quartet calls excluded. -/
 def rankPrefix (r : Nat) : Nat :=
   if r=0 then 0 else if r=1 then 14 else if r=2 then 18 else if r≤8 then 18+11*(r-2)
-  else if r=9 then 99 else if r=10 then 108 else 117
+  else if r=9 then 98 else if r=10 then 108 else 117
 
 /-- First code word of slot `n ≤ 4096` of the tile body (slot 4096 is the latch): both quartet calls add two words. -/
 def firstWord (n : Nat) := 38+117*(n/11)+rankPrefix (n%11)+2*((n+4)/8)+2*(n/8)-chainedBefore n
@@ -89,8 +90,8 @@ def saltImm (r : Nat) : BitVec 12 := BitVec.ofNat 12 (4152-240*r)
 def saltCode (r : Nat) : List Instr :=
   if r≤8 then
     [.LD .x12 .x10 (saltImm r),.SD .x10 .x12 0,.LD .x12 .x10 (saltImm r+8),.SD .x10 .x12 8] ++
-    (if r=8 then [.LD .x14 .x10 (-1848),.LD .x15 .x10 (-1840),.LD .x16 .x10 (-1832),.LD .x17 .x10 (-1824)] else [])
-  else if r=9 then [.SD .x10 .x14 0,.SD .x10 .x15 8]
+    (if r=8 then [.LD .x14 .x10 (-1848),.LD .x16 .x10 (-1832),.LD .x17 .x10 (-1824)] else [])
+  else if r=9 then [.SD .x10 .x14 0,.LD .x12 .x12 (-2008),.SD .x10 .x12 8]
   else [.SD .x10 .x16 0,.SD .x10 .x17 8]
 
 /-- After the second call: advance x10, or (fourth leaf of a quartet) the quartet call and the restore. -/
