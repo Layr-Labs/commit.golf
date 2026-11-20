@@ -109,10 +109,10 @@ structure PrefixStart (s : MachineState) (i : Index) (o : Nat) : Prop where
   readable : accessValid (s.getReg .x8) 8 = true
 
 structure GroupCursor (s : MachineState) (i : Index) (o j : Nat) : Prop where
-  pc : s.pc=BitVec.ofNat 64 (4096+4*(39+36*j))
+  pc : s.pc=BitVec.ofNat 64 (4096+4*(40+35*j))
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
   groups : s.getReg .x19=BitVec.ofNat 64 4194304
-  group : s.getReg .x7=BitVec.ofNat 64 (groupSlots+1024*(i.val/4))
+  group : s.getReg .x7=BitVec.ofNat 64 (groupSlots+1024*(i.val/4)+584)
   low : s.getReg .x10=BitVec.ofNat 64 (i.val%4)
   index : s.getReg .x6=BitVec.ofNat 64 i.val
   output : s.getReg .x21=BitVec.ofNat 64 (recordBase o+16)
@@ -121,7 +121,7 @@ def saltStart (s : MachineState) : MachineState := slotStart (Writer16.state (no
 
 theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := saltStart s
-    RunsOpeningBlock s u (8+nonceCopyCost o) ∧ GroupCursor u i o 0 ∧ PrefixWrites s u i o 0 16 ∧ Keeps s u := by
+    RunsOpeningBlock s u (9+nonceCopyCost o) ∧ GroupCursor u i o 0 ∧ PrefixWrites s u i o 0 16 ∧ Keeps s u := by
   let t := nonceSetup s
   let v := Writer16.state t
   have h := nonce_setup_post s
@@ -173,7 +173,7 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
   refine ⟨?_, ⟨?_,?_,?_,?_,?_,?_,?_⟩,
     sourceBytes.move h.2.1.symm z.2.1, stable⟩
   · have total := (gate.next nonceRun).next (run_slot v fieldPC)
-    rw [show 3+nonceCopyCost o+5=8+nonceCopyCost o by omega] at total
+    rw [show 3+nonceCopyCost o+6=9+nonceCopyCost o by omega] at total
     exact total
   · change (slotStart v).pc = _
     rw [z.1,fieldPC]; rfl
@@ -181,7 +181,11 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
   · exact (stable .x19 (by decide)).trans start.groups
   · change (slotStart v).getReg .x7 = _
     rw [z.2.2.2.1,rd,masked_group,(fixed .x24 (by decide) (by decide) (by decide)),start.slots,
-      ← BitVec.ofNat_add,Nat.add_comm]
+      ← BitVec.ofNat_add]
+    change BitVec.ofNat 64 (1024*(i.val/4)+groupSlots)+BitVec.ofNat 64 584 = _
+    rw [← BitVec.ofNat_add]
+    congr 1
+    omega
   · change (slotStart v).getReg .x10 = _
     rw [z.2.2.2.2.1,rd,low_selector]
   · exact (z.2.2.2.2.2 .x6 (by decide) (by decide) (by decide)).trans rd
@@ -194,7 +198,7 @@ def groupStep (j : Fin 3) (s : MachineState) : MachineState := copyState (.quart
 theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit : o<LENGTH)
     (start : GroupCursor s i o j.val) :
     let u := groupStep j s
-    RunsOpeningBlock s u (4+recordCopyCost o) ∧ GroupCursor u i o (j.val+1) ∧
+    RunsOpeningBlock s u (3+recordCopyCost o) ∧ GroupCursor u i o (j.val+1) ∧
     PrefixWrites s u i o (16+32*j.val) (16+32*j.val+32) ∧ Keeps s u := by
   let t := quartetHead j s
   let src := leafAddress (i.val ^^^ (j.val+1))
@@ -213,7 +217,7 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
     refine ⟨?_,quartet_physical_source s i j start.group start.low,?_,?_,actualRoom,by change src%2=0; omega,?_,
       fun _ => srcA⟩
     · rw [head.1,start.pc]
-      change BitVec.ofNat 64 _ + BitVec.ofNat 64 16 = _
+      change BitVec.ofNat 64 _ + BitVec.ofNat 64 12 = _
       rw [← BitVec.ofNat_add]
       congr 1
       simp [CopySite.start]; omega
@@ -257,8 +261,8 @@ def recordPrefix (s : MachineState) := quartetExit (groupStep 2 (groupStep 1 (gr
 
 theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := recordPrefix s
-    RunsOpeningBlock s u (23+nonceCopyCost o+3*recordCopyCost o) ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧
-      Keeps s u ∧ u.getReg .x7=BitVec.ofNat 64 (groupSlots+1024*(i.val/4)) := by
+    RunsOpeningBlock s u (21+nonceCopyCost o+3*recordCopyCost o) ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧
+      Keeps s u ∧ u.getReg .x7=BitVec.ofNat 64 (groupSlots+1024*(i.val/4)+584) := by
   have ⟨salt,g0,w0,k0⟩ := run_salt_start s i o fit start
   have ⟨s0,g1,w1,k1⟩ := run_group_step _ i o 0 fit g0
   have ⟨s1,g2,w2,k2⟩ := run_group_step _ i o 1 fit g1
@@ -272,7 +276,7 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
     exact e.2.2.2.2 r free.2.2.2.1 free.1
   have writes : PrefixWrites s last i o 0 112 := (((w0.join w1 (by decide) fit).join w2 (by decide) fit).join w3 (by decide) fit)
   have total := (((salt.next s0).next s1).next s2).next (run_quartet_exit _ g3.pc)
-  rw [show (8+nonceCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+3 = 23+nonceCopyCost o+3*recordCopyCost o by omega]
+  rw [show (9+nonceCopyCost o)+(3+recordCopyCost o)+(3+recordCopyCost o)+(3+recordCopyCost o)+3 = 21+nonceCopyCost o+3*recordCopyCost o by omega]
     at total
   refine ⟨total, ⟨?_,?_,?_,?_⟩,
     writes.move rfl e.2.1,past.next kept,(e.2.2.2.2 .x7 (by decide) (by decide)).trans g3.group⟩

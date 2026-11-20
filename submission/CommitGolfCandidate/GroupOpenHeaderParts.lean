@@ -73,11 +73,11 @@ theorem config_ok (s : MachineState) (pc : s.pc=address 725) : legal configRows 
 
 theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
     (b : Base s p) (salt : s.getReg .x22=9126809632) (base : s.getReg .x26=4096)
-    (shift : s.getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card) :
+    (shift : s.getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card) (selector : s.getReg .x5=0) :
     let t:=walkRows s configRows
     t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card := by
   let t:=walkRows s configRows
-  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x5,.x14,.x17,.x25,.x29] : List Reg)) : t.getReg k=s.getReg k := by
+  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x4,.x14,.x17,.x25,.x29] : List Reg)) : t.getReg k=s.getReg k := by
     simp only [List.mem_cons,List.not_mem_nil,or_false,not_or] at h
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9⟩ := h
     simp [t,configRows,walkRows,execInstrBr,Ne.symm h1,Ne.symm h2,Ne.symm h3,Ne.symm h4,Ne.symm h5,
@@ -90,7 +90,7 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
       (keep _ (by decide)).trans b.mark,(keep _ (by decide)).trans b.slots,
       (keep _ (by decide)).trans b.capLeaves⟩
   · constructor <;> simp [walkRows,configRows,execInstrBr,b.indices,b.count,salt,base,indexAt,countWord,indicesBase,
-      trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12,shift,show p.card≠0 by omega] <;>
+      trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12,shift,selector,show p.card≠0 by omega] <;>
       first | rfl | (rw [← BitVec.ofNat_add]; try rfl)
 
 def keyCopy (s : MachineState) := ((s.setMem 1032 (s.getMem 9126809640)).setMem 1040 (s.getMem 9126809648)).setMem 1048 (s.getMem 9126809656)
@@ -114,7 +114,8 @@ theorem mark_ok (s : MachineState) (pc : s.pc=address 739) : legal markRows s :=
   simp [markRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
   all_goals decide
 
-theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x26 : s.getReg .x26=4096) :
+theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x26 : s.getReg .x26=4096)
+    (quartet : s.getReg .x4=BitVec.ofNat 64 (2^64-1)) :
     let t:=walkRows s markRows
     t.pc=address 740 ∧ t.mem=s.mem ∧ t.getReg .x4=BitVec.ofNat 64 (2^64-1) ∧ t.getReg .x3=374 ∧
       t.getReg .x2=4352 ∧ t.getReg .x1=4095 ∧ ∀ k, k≠.x4 → k≠.x3 → k≠.x2 → k≠.x1 → t.getReg k=s.getReg k := by
@@ -124,18 +125,16 @@ theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x26 : s.getReg .x
   · -- symbolic offsets: with the concrete `jal` offsets the kernel recurses too deeply
     have jm (s : MachineState) (offset : BitVec 21) : (execInstrBr s (.JAL .x0 offset)).mem=s.mem := by
       simp [execInstrBr]
-    have a4 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x4 .x0 imm)).mem=s.mem := by
-      simp [execInstrBr]
     have a3 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x3 .x0 imm)).mem=s.mem := by
       simp [execInstrBr]
     have a2 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x2 .x26 imm)).mem=s.mem := by
       simp [execInstrBr]
     have a1 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x1 .x26 imm)).mem=s.mem := by
       simp [execInstrBr]
-    change (execInstrBr (execInstrBr (execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.JAL .x0 60)) (.ADDI .x4 .x0 (-1)))
+    change (execInstrBr (execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.JAL .x0 64))
       (.ADDI .x3 .x0 374)) (.ADDI .x2 .x26 256)) (.ADDI .x1 .x26 (-1))) (.JAL .x0 2097080)).mem=s.mem
-    rw [jm,a1,a2,a3,a4,jm]
-  · simp [walkRows,markRows,execInstrBr]
+    rw [jm,a1,a2,a3,jm]
+  · simp [walkRows,markRows,execInstrBr,quartet]
     all_goals decide
   · simp [walkRows,markRows,execInstrBr]
     all_goals decide

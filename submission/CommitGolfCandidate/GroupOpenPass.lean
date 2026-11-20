@@ -242,8 +242,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 332 cycles per position (new even quartet 25, chain link 33: 295, post ≤ 12) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤332*n+2 := by
+/-- At most 331 cycles per position (new even quartet 25, chain link 33: 295, post 11) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤331*n+2 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

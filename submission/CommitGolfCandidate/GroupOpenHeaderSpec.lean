@@ -13,13 +13,13 @@ def layoutRows : List Row :=
    (721,.ADDI .x23 .x0 1),(722,.SLLI .x25 .x16 3),(723,.LUI .x26 1),(724,.ADDI .x27 .x0 256)]
 def configRows : List Row :=
   [(725,.ADDI .x10 .x0 1024),(726,.ADDI .x12 .x0 1536),(727,.ADDI .x11 .x0 200),(728,.ADDI .x13 .x0 1),
-   (729,.ADDI .x5 .x0 0),(730,.ADDI .x14 .x8 0),(731,.ADD .x17 .x8 .x25),(732,.ADDI .x29 .x0 11)]
+   (729,.ADDI .x4 .x0 (-1)),(730,.ADDI .x14 .x8 0),(731,.ADD .x17 .x8 .x25),(732,.ADDI .x29 .x0 11)]
 def keyRows : List Row :=
   [(733,.LD .x31 .x22 8),(734,.SD .x10 .x31 8),(735,.LD .x31 .x22 16),(736,.SD .x10 .x31 16),
    (737,.LD .x31 .x22 24),(738,.SD .x10 .x31 24)]
-/-- K3-lite: row 739 jumps to 754..758, which set `x4` = no previous quartet, the salt-chain constants
+/-- K3-lite: row 739 jumps to 755..758, which set the salt-chain constants
 `x3 = 374`, `x2 = x26 + 256 = 4352`, and `x1 = 4095`, and jump back to the first position at 740. -/
-def markRows : List Row := [(739,.JAL .x0 60),(754,.ADDI .x4 .x0 (-1)),(755,.ADDI .x3 .x0 374),
+def markRows : List Row := [(739,.JAL .x0 64),(755,.ADDI .x3 .x0 374),
   (756,.ADDI .x2 .x26 256),(757,.ADDI .x1 .x26 (-1)),(758,.JAL .x0 2097080)]
 def headerRows := layoutRows++configRows++keyRows++markRows
 def header (s : MachineState) := walkRows s headerRows
@@ -36,6 +36,6 @@ theorem nested_slice {n outer width start len : Nat} (word : BitVec n) (bound : 
 structure HeaderFacts : Prop where
   ready : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → Ready td p (keyOf td) (header (actual.initialState .opening (td,p))) 0
   run : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → ∀ fuel, let s:=actual.initialState .opening (td,p)
-    execute openingImage (36+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 36 0)
+    execute openingImage (35+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 35 0)
 
 end TwoPermutationPrototype.GroupedOpening

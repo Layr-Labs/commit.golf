@@ -103,7 +103,7 @@ def Saved (r : Reg) := r≠.x6 ∧ r≠.x7 ∧ r≠.x10 ∧ r≠.x13 ∧ r≠.x2
 /-- The salt rows after the chain: registers of the next ordinal, the salt words installed. -/
 theorem post_facts (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
     (bound : ord+left≤16777216)
-    (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
+    (pc : u.pc=address 791) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
     (sub : u.getReg .x28=BitVec.ofNat 64 (rank i.val)) (one : u.getReg .x23=1) :
     Registers (finishOne u i left) (ord+1) (left-1) ∧ (finishOne u i left).pc=finalPC left ∧
       (finishOne u i left).mem=(installed u i).mem ∧
@@ -111,13 +111,13 @@ theorem post_facts (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) 
         (finishOne u i left).getReg k=u.getReg k) := by
   obtain ⟨ap,ar,ad⟩:=chosen u i pc idx sub one regs.output regs.salt
   let a:=choose u i
-  let b:=copied a
+  let b:=copied a i
   have keep (k : Reg) (h7 : k≠.x7) (h30 : k≠.x30) (h31 : k≠.x31) : b.getReg k=u.getReg k :=
-    (copied_keeps a k h31).trans (choose_keeps u i k h7 h30)
+    (copied_keeps a i k h31).trans (choose_keeps u i k h7 h30)
   have hshift : b.getReg .x25=BitVec.ofNat 64 (8*(ord+left)) := by
     rw [show b.getReg .x25=u.getReg .x25 from keep .x25 (by decide) (by decide) (by decide), regs.shift]
     simp [show left≠0 by omega]
-  have post:=next_ok b ord left (copied_pc a ap) l hi bound ((keep .x14 (by decide) (by decide) (by decide)).trans regs.index)
+  have post:=next_ok b ord left (copied_pc a i ap) l hi bound ((keep .x14 (by decide) (by decide) (by decide)).trans regs.index)
     ((keep .x17 (by decide) (by decide) (by decide)).trans regs.endReg) hshift
   have fk (k : Reg) (h7 : k≠.x7) (h30 : k≠.x30) (h31 : k≠.x31) (h14 : k≠.x14) (h17 : k≠.x17)
       (h25 : k≠.x25) :
@@ -159,7 +159,7 @@ theorem salt_read (u : MachineState) (i : Index) (j : Fin 2) :
 
 /-- The salt words of the position after the salt rows: the selected reply words. -/
 theorem installs_salt (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
-    (bound : ord+left≤16777216) (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
+    (bound : ord+left≤16777216) (pc : u.pc=address 791) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
     (sub : u.getReg .x28=BitVec.ofNat 64 (rank i.val)) (one : u.getReg .x23=1) (j : Fin 2) :
     (finishOne u i left).getMem (destAt i+BitVec.ofNat 64 (8*j.val))=memoryView u (192+selectedWord i j) := by
   have eq := (post_facts u i ord left l hi bound pc regs idx sub one).2.2.1
@@ -175,7 +175,7 @@ theorem salt_words (i : Index) : destAt i=wordAddress (1140851204+2*i.val) ∧
 
 /-- Outside the salt words the salt rows keep the word view. -/
 theorem post_outside (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
-    (bound : ord+left≤16777216) (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
+    (bound : ord+left≤16777216) (pc : u.pc=address 791) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
     (sub : u.getReg .x28=BitVec.ofNat 64 (rank i.val)) (one : u.getReg .x23=1) (w : Nat) (fit : w<2^33)
     (apart : w≠1140851204+2*i.val ∧ w≠1140851204+2*i.val+1) :
     memoryView (finishOne u i left) w=memoryView u w := by
@@ -301,7 +301,7 @@ private theorem fixed_chain (o : Oracle) (k : BitVec 192) (s : MachineState) (i 
     (r : Input s i ord left last) (key : KeyWords s k) :
     let h:=fixedHead o s i last
     let u:=chainState o h i
-    u.pc=address 796 ∧ Registers u ord left ∧ u.getReg .x6=BitVec.ofNat 64 i.val ∧
+    u.pc=address 791 ∧ Registers u ord left ∧ u.getReg .x6=BitVec.ofNat 64 i.val ∧
       u.getReg .x28=BitVec.ofNat 64 (rank i.val) ∧ u.getReg .x23=1 ∧
       (∀ w, w<2^33 → w≠128 → (w<192 ∨ 217≤w) → memoryView u w=memoryView h w) ∧
       (∀ j : Fin 25, memoryView u (192+j.val)=replyWords (chainReply o k i) j) := by

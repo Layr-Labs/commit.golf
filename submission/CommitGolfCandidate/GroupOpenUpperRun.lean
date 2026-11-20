@@ -131,7 +131,7 @@ theorem execute_lower (state : MachineState) (index : Index) (ordinal first coun
 /-- Levels 0..12 from the record prefix: level 0 through the pointer word, then the generic levels 1..12. -/
 theorem execute_lower_zero (state : MachineState) (index : Index) (ordinal : Nat) (ordinalBound : ordinal < LENGTH)
     (cursor : LowerCursor state index ordinal 0)
-    (slot : state.getReg .x7 = BitVec.ofNat 64 (groupSlots+1024*(index.val/4)))
+    (slot : state.getReg .x7 = BitVec.ofNat 64 (groupSlots+1024*(index.val/4)+584))
     (pointer : state.getMem (BitVec.ofNat 64 (pointerAddress index.val)) = BitVec.ofNat 64 (quadAddress index.val)) :
     LowerTrace state (lowerRun 0 13 state) index ordinal 0 13 := by
   let middle := siblingBlock 0 state
@@ -290,7 +290,7 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
   have before : prepared.pc = BitVec.ofNat 64 (4096+4*site.start) := by
     rw [head.1, start]
     change BitVec.ofNat 64 _+BitVec.ofNat 64 12 = _
-    rw [← BitVec.ofNat_add, ← sibling_copy_start level]
+    rw [← BitVec.ofNat_add, ← sibling_copy_start level (by decide)]
     congr 1
   let src := siblingAddress index 13
   let dst := siblingDestination ordinal 13

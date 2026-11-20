@@ -128,20 +128,25 @@ def ptrRows : List Row := [(776,.SD .x7 .x30 712)]
 /-- A new quartet after its inverse call: rows 773..776. -/
 def headPost : List Row := restoreRows ++ ptrRows
 
-/-- Reply-offset rows by rank class `k` (0: rank 0, 1: rank 1, 2: rank ≥ 2), ending with the salt destination.
-Rank ≥ 2 branches directly to `16*r + 1520`; ranks 0 and 1 select their absolute reply addresses. -/
+/-- Destination and reply-offset selection by rank class (0, 1, or ≥2).
+Ranks 0 and 1 copy directly from reply-relative offsets. -/
 def selectRows (k : Fin 3) : List Row :=
-  [(796,.BLTU .x23 .x28 20)] ++
-  (if k.val = 2 then [(801,.SLLI .x7 .x28 4),(802,.ADDI .x7 .x7 1520)] else
-    [(797,.BEQ .x28 .x0 8012)] ++
-    (if k.val = 0 then [(752,.ADDI .x7 .x0 1536),(753,.JAL .x0 200)]
-      else [(798,.ADDI .x7 .x0 1720),(799,.JAL .x0 16)])) ++
-  [(803,.SLLI .x30 .x6 4),(804,.ADD .x30 .x30 .x22)]
-def copyRows : List Row := [(805,.LD .x31 .x7 0),(806,.SD .x30 .x31 0),(807,.LD .x31 .x7 8),(808,.SD .x30 .x31 8)]
+  [(791,.SLLI .x30 .x6 4),(792,.ADD .x30 .x30 .x22),(793,.BLTU .x23 .x28 40)] ++
+  (if k.val = 2 then [(803,.SLLI .x7 .x28 4),(804,.ADDI .x7 .x7 1520)] else
+    [(794,.BEQ .x28 .x0 5032)])
+def copyPC (k : Fin 3) : Nat := if k.val=0 then 4 else if k.val=1 then 795 else 805
+def copyReg (k : Fin 3) : Reg := if k.val=2 then .x7 else .x12
+def copyOffset (k : Fin 3) : Nat := if k.val=1 then 184 else 0
+def copyRows (k : Fin 3) : List Row :=
+  [(copyPC k,.LD .x31 (copyReg k) (BitVec.ofNat 12 (copyOffset k))),
+   (copyPC k+1,.SD .x30 .x31 0),
+   (copyPC k+2,.LD .x31 (copyReg k) (BitVec.ofNat 12 (copyOffset k+8))),
+   (copyPC k+3,.SD .x30 .x31 8)] ++
+  (if k.val=2 then [] else [(copyPC k+4,.JAL .x0 (BitVec.ofNat 21 (4*(809-(copyPC k+4)))))])
 def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.BNE .x14 .x17 7912)] ++
   (if last then [(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] else [])
 
-def postRows (k : Fin 3) (last : Bool) : List Row := selectRows k ++ copyRows ++ nextRows last
+def postRows (k : Fin 3) (last : Bool) : List Row := selectRows k ++ copyRows k ++ nextRows last
 
 private theorem row_fetch (row : Row) (bounded : row.1<813) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
     ∀ st : MachineState, st.pc=address row.1 → fetch openingImage st=some (.base row.2) :=

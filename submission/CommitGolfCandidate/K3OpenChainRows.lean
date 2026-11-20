@@ -5,14 +5,14 @@ import CommitGolfCandidate.TwoPermutationSyscall
 import CommitGolfCandidate.K6Chain
 
 /-! Opener prefix, salt regeneration of one position on the linked (chain) schedule: rows
-`chainStart .. chainStart+12` (777..789) and the link block at words 896..929, then the exit row 795. The header
+`chainStart .. chainStart+12` (777..789) and the link block at words 896..929, then the exit row 790. The header
 sets `x18 = 8192` (row 715), `x3 = 374` (`gp`), `x2 = 4352` (`sp`), and `x1 = 4095` once (rows 755..757); no opener row writes them afterwards. With `n = i % 4096`, `r = n % 11` (rank), `h = n / 11` (head in the tile),
 `j = h % 34` (links after the keyed restart):
 ```
 and x30,x6,x1 ; remu x31,x30,x3 ; divu x30,x31,x29 ; remu x28,x31,x29 ;
 sub x7,x6,x31 ; slli x7,x7,8 ; add x7,x7,x2 ; sd x7,0(x10) ; slli x31,x30,2 ; ecall ;
 sub x7,x18,x31 ; addi x10,x12,0 ; jalr x0,-380(x7) ;
-[896..928: 33 x ecall] ; 929: jal x0,<795> ; 795: addi x10,x0,1024
+[896..928: 33 x ecall] ; 929: jal x0,<790> ; 790: addi x10,x0,1024
 ```
 (the `jalr` enters the unrolled link block `j` words before its end, so link calls cost no ordinary instructions)
 the keyed generator call of head `h - j` (counter = base of its C leaf, K1 input layout at word 128, reply at
@@ -73,7 +73,7 @@ def chainEnterRows : List Row := [(787,.SUB .x7 .x18 .x31),
   (788,.ADDI .x10 .x12 0),(789,.JALR .x0 .x7 3716)]
 /-- First word after the unrolled link block (the `jal` back to the exit row). -/
 abbrev linkEnd : Nat := 929
-def chainExitRows : List Row := [(929,.JAL .x0 2096616),(795,.ADDI .x10 .x0 1024)]
+def chainExitRows : List Row := [(929,.JAL .x0 2096596),(790,.ADDI .x10 .x0 1024)]
 
 /-- `presentRows` for rows anywhere in the opener (`rows_present` stops at 813). -/
 theorem rows_present_any (rows : List Row)
@@ -276,7 +276,7 @@ theorem write_pc {bits : Nat} (s : MachineState) (dst : Word) (z : BitVec bits) 
 def keyedQuery (h : MachineState) := packBuffer (window (memoryView (chainBefore h)) 128)
 
 /-- The block's oracle trace: the keyed call, then `chainLinks i` in-place links; returns the state at
-`chainStart+19`. -/
+`chainStart+14`. -/
 def chainTrace (h : MachineState) (i : Index) : OracleComp World MachineState := do
   let z ← World.query (.inr (.inr (.inl (keyedQuery h))))
   let b ← linkTrace (chainLinks i) (walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainEnterRows)

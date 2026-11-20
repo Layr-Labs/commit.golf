@@ -321,7 +321,7 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
   have before : prepared.pc = BitVec.ofNat 64 (4096+4*site.start) := by
     rw [head.1, start]
     change BitVec.ofNat 64 _+BitVec.ofNat 64 12 = _
-    rw [← BitVec.ofNat_add, ← sibling_copy_start level]
+    rw [← BitVec.ofNat_add, ← sibling_copy_start level nz]
     congr 1
   have srcReg : prepared.getReg .x7 = BitVec.ofNat 64 (siblingAddress index level.val) :=
     physical_sibling_source state index _ nz cursor.heap cursor.node
@@ -447,17 +447,18 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
 /-- Level 0: the head loads the copy source from the pointer word, then the wide copy and the plain tail. -/
 theorem execute_sibling_zero (state : MachineState) (index : Index) (ordinal : Nat) (bounded : ordinal < LENGTH)
     (cursor : LowerCursor state index ordinal 0)
-    (slot : state.getReg .x7 = BitVec.ofNat 64 (groupSlots+1024*(index.val/4)))
+    (slot : state.getReg .x7 = BitVec.ofNat 64 (groupSlots+1024*(index.val/4)+584))
     (pointer : state.getMem (BitVec.ofNat 64 (pointerAddress index.val)) = BitVec.ofNat 64 (quadAddress index.val)) :
     SiblingTrace state (siblingBlock 0 state) index ordinal 0 := by
   let prepared := zeroBlock state
   let copied := copyState (siblingSite 0) prepared
   have ordinalFit := all_sibling_copies_fit index ordinal 0 bounded (by decide)
-  have start : state.pc = BitVec.ofNat 64 (4096+4*150) := cursor.pc
+  have start : state.pc = BitVec.ofNat 64 (4096+4*148) := cursor.pc
   have ptrFacts := pointer_address_inside index.val index.isLt
-  have addr : state.getReg .x7+signExtend12 712#12 = BitVec.ofNat 64 (pointerAddress index.val) := by
-    rw [slot, show signExtend12 712#12 = BitVec.ofNat 64 712 by decide, ← BitVec.ofNat_add]
-    rfl
+  have addr : state.getReg .x7+signExtend12 128#12 = BitVec.ofNat 64 (pointerAddress index.val) := by
+    rw [slot, show signExtend12 128#12 = BitVec.ofNat 64 128 by decide, ← BitVec.ofNat_add]
+    unfold pointerAddress
+    congr 1
   have access : accessValid (BitVec.ofNat 64 (pointerAddress index.val)) 8 = true :=
     Opening.aligned_access _ ptrFacts.1 (by
       have := ptrFacts.2.2

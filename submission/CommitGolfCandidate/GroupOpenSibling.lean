@@ -117,7 +117,7 @@ def siblingSite (level : Fin 14) : CopySite :=
   unfold siblingSite
   split <;> rfl
 
-def siblingStart (level : Fin 14) : Nat := (siblingSite level).start-3
+def siblingStart (level : Fin 14) : Nat := if level.val=0 then 148 else (siblingSite level).start-3
 def siblingEnd (level : Fin 14) : Nat :=
   if level.val = 13 then 638 else if level.val = 1 then 220 else (siblingSite level).start+2*(siblingSite level).halfwords
 
@@ -127,7 +127,7 @@ theorem sibling_width_exact :
       2*(siblingSite level).halfwords = if level.val = 1 then 0 else siblingWidth level.val := by
   decide
 
-theorem sibling_copy_start : ∀ level : Fin 14, siblingStart level+3 = (siblingSite level).start := by
+theorem sibling_copy_start : ∀ level : Fin 14, level.val≠0 → siblingStart level+3 = (siblingSite level).start := by
   decide
 
 theorem sibling_next_all : ∀ level : Fin 13,
@@ -138,7 +138,7 @@ theorem sibling_next (level : Fin 14) (later : level.val+1 < 14) :
     siblingEnd level+2 = siblingStart ⟨level.val+1, later⟩ :=
   sibling_next_all ⟨level.val, by omega⟩
 
-theorem first_sibling_start : siblingStart 0 = 150 := rfl
+theorem first_sibling_start : siblingStart 0 = 148 := rfl
 theorem last_sibling_start : siblingStart 13 = 607 := rfl
 theorem last_sibling_end : siblingEnd 13 = 638 := rfl
 theorem a1_sibling_end : siblingEnd 1 = 220 := rfl
@@ -236,10 +236,9 @@ theorem sibling_tail_post (state : MachineState) (level : Fin 14) :
 
 /-! ### Level 0 through the prefix's pointer word -/
 
-/-- Level 0's head: load the sibling node's address from the pointer word after the quartet's rebuilt block
-(`x7` holds the quartet block), then jump over the dead row 152 to the wide copy at 153. -/
+/-- Level 0's head loads the sibling pointer from the biased quartet base and jumps to the wide copy. -/
 def zeroRows : List (Nat × Instr) :=
-  [(150, .LD .x7 .x7 712), (151, .JAL .x0 8)]
+  [(148, .LD .x7 .x7 128), (149, .JAL .x0 16)]
 
 theorem zero_code : RowsCode zeroRows := by decide +kernel
 

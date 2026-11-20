@@ -5,7 +5,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate T
 set_option maxRecDepth 18000
 set_option maxHeartbeats 1500000
 
-theorem post_parts (k : Fin 3) (last : Bool) : postRows k last=selectRows k++copyRows++nextRows last := rfl
+theorem post_parts (k : Fin 3) (last : Bool) : postRows k last=selectRows k++copyRows k++nextRows last := rfl
 
 /-- Rank class of leaf `i` in the K1 offset map: 0 (rank 0), 1 (rank 1), 2 (rank ≥ 2). -/
 def kindOf (i : Index) : Fin 3 := if rank i.val=0 then 0 else if rank i.val=1 then 1 else 2
@@ -13,12 +13,12 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 attribute [local simp] pc_of_set mem_of_set mem_of_reg open_zero
 attribute [local simp] MachineState.getMem_setPC MachineState.getMem_setReg
 
-@[local simp] theorem select_back_offset : signExtend13 8012#13=(-180 : Word) := by decide
+@[local simp] theorem select_back_offset : signExtend13 5032#13=(-3160 : Word) := by decide
 @[local simp] theorem select_zero_jump : signExtend21 200#21=200#64 := by decide
 @[local simp] theorem select_one_jump : signExtend21 16#21=16#64 := by decide
 @[local simp] theorem select_zero_source : signExtend12 1536#12=1536#64 := by decide
 @[local simp] theorem select_one_source : signExtend12 1720#12=1720#64 := by decide
-@[local simp] theorem select_common_branch : signExtend13 20#13=20#64 := by decide
+@[local simp] theorem select_common_branch : signExtend13 40#13=40#64 := by decide
 
 theorem kind_cases (i : Index) :
     (rank i.val=0 ∧ kindOf i=0) ∨ (rank i.val=1 ∧ kindOf i=1) ∨ (2≤rank i.val ∧ kindOf i=2) := by
@@ -50,7 +50,7 @@ theorem rank_ult (i : Index) (two : 2≤rank i.val) : BitVec.ult 1#64 (BitVec.of
   change 1<rank i.val%2^64
   rw [Nat.mod_eq_of_lt (by omega)];omega
 
-theorem choose_legal (s : MachineState) (i : Index) (pc : s.pc=address 796)
+theorem choose_legal (s : MachineState) (i : Index) (pc : s.pc=address 791)
     (sub : s.getReg .x28=BitVec.ofNat 64 (rank i.val)) (one : s.getReg .x23=1) :
     legal (selectRows (kindOf i)) s := by
   rcases kind_cases i with ⟨r,k⟩|⟨r,k⟩|⟨r,k⟩ <;> rw [k]
@@ -115,20 +115,23 @@ theorem chosen_memory (s : MachineState) (i : Index) : (choose s i).mem=s.mem :=
     simp [selectRows] at h <;> rcases h with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;>
     first | exact bltu_mem .. | exact beq_mem .. | exact jal_mem .. | rfl
 
-theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
+def copySource (s : MachineState) (i : Index) : Word :=
+  s.getReg (copyReg (kindOf i)) + BitVec.ofNat 64 (copyOffset (kindOf i))
+
+theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 791)
     (idx : s.getReg .x6=BitVec.ofNat 64 i.val) (sub : s.getReg .x28=BitVec.ofNat 64 (rank i.val))
     (one : s.getReg .x23=1) (out : s.getReg .x12=1536) (salts : s.getReg .x22=9126809632) :
-    (choose s i).pc=address 805 ∧ (choose s i).getReg .x7=readAt i ∧ (choose s i).getReg .x30=destAt i := by
+    (choose s i).pc=address (copyPC (kindOf i)) ∧ copySource (choose s i) i=readAt i ∧ (choose s i).getReg .x30=destAt i := by
   have dst : BitVec.ofNat 64 i.val <<< (4:Nat)+9126809632#64=destAt i := salt_address i
   rcases kind_cases i with ⟨r,k⟩|⟨r,k⟩|⟨r,k⟩
   · rw [r] at sub
     have e : readAt i=1536#64 := by unfold readAt offAt;rw [if_pos r]
-    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,address,out,salts,e,dst,
+    simp [choose,walkRows,selectRows,copySource,copyPC,copyReg,copyOffset,k,execInstrBr,pc,idx,sub,one,address,out,salts,e,dst,
       show signExtend12 (-1 : BitVec 12)=(-1 : Word) by decide,
       show signExtend12 16#12=16#64 by decide,show signExtend13 8#13=8#64 by decide,
       show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide]
   · rw [r] at sub
-    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,address,out,salts,
+    simp [choose,walkRows,selectRows,copySource,copyPC,copyReg,copyOffset,k,execInstrBr,pc,idx,sub,one,address,out,salts,
       show signExtend12 (-1 : BitVec 12)=(-1 : Word) by decide,
       show signExtend12 184#12=184#64 by decide,show signExtend13 8#13=8#64 by decide,show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,show signExtend12 1520#12=1520#64 by decide,dst]
     have e : readAt i=1720#64 := by unfold readAt offAt;rw [if_neg (by omega),if_pos r]
@@ -144,7 +147,7 @@ theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 796)
       rw [if_neg (show rank i.val≠0 by omega),if_neg (show rank i.val≠1 by omega)]
       congr 1
       omega
-    simp [choose,walkRows,selectRows,k,execInstrBr,pc,idx,sub,one,nz,no,lt,address,out,salts,
+    simp [choose,walkRows,selectRows,copySource,copyPC,copyReg,copyOffset,k,execInstrBr,pc,idx,sub,one,nz,no,lt,address,out,salts,
       show signExtend13 16#13=16#64 by decide,show signExtend21 12#21=12#64 by decide,
       show signExtend12 1520#12=1520#64 by decide,dst,src]
 
@@ -166,27 +169,45 @@ theorem copy_addresses (i : Index) :
     Nat.mod_eq_of_lt (by omega : 9126809632+16*i.val<2^64)] at this
   omega
 
-def copied (s : MachineState) := walkRows s copyRows
+def copied (s : MachineState) (i : Index) := walkRows s (copyRows (kindOf i))
 def installed (s : MachineState) (i : Index) :=
   (s.setMem (destAt i) (s.getMem (readAt i))).setMem (destAt i+8) (s.getMem (readAt i+8))
 
-theorem copy_legal (s : MachineState) (i : Index) (pc : s.pc=address 805) (r : s.getReg .x7=readAt i)
-    (d : s.getReg .x30=destAt i) : legal copyRows s := by
+theorem copy_legal (s : MachineState) (i : Index) (pc : s.pc=address (copyPC (kindOf i))) (r : copySource s i=readAt i)
+    (d : s.getReg .x30=destAt i) : legal (copyRows (kindOf i)) s := by
   obtain ⟨a,b,c,e,_⟩:=copy_addresses i
-  simp [copyRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,r,d,address,a,b,c,e,
-    show signExtend12 8#12=8#64 by decide,show signExtend12 0#12=0#64 by decide] <;> exact ⟨b,e⟩
+  have rn : s.getReg (copyReg (kindOf i)) + BitVec.ofNat 64 (copyOffset (kindOf i)+8)=readAt i+8 := by
+    rw [BitVec.ofNat_add,←BitVec.add_assoc]
+    exact congrArg (fun v : Word => v+8) r
+  rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;>
+    simp [copySource,copyReg,copyOffset,k] at r rn <;>
+    simp [copyPC,k] at pc <;>
+    simp [copyRows,copyPC,copyReg,copyOffset,k,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,d,address,a,b,c,e,
+      show signExtend12 184#12=184#64 by decide,show signExtend12 192#12=192#64 by decide,
+      show signExtend12 8#12=8#64 by decide,show signExtend12 0#12=0#64 by decide,
+      r,rn] <;> first | exact ⟨b,e⟩ | decide
 
-theorem copied_mem (s : MachineState) (i : Index) (r : s.getReg .x7=readAt i) (d : s.getReg .x30=destAt i) :
-    (copied s).mem=(installed s i).mem := by
+theorem copied_mem (s : MachineState) (i : Index) (r : copySource s i=readAt i) (d : s.getReg .x30=destAt i) :
+    (copied s i).mem=(installed s i).mem := by
   obtain ⟨_,_,_,_,ne⟩:=copy_addresses i
   have ne' : readAt i+8#64≠destAt i:=ne
-  simp [copied,walkRows,copyRows,execInstrBr,r,d,installed,MachineState.getMem_setMem_ne ne',mem_of_store,
-    show signExtend12 8#12=8#64 by decide,show signExtend12 0#12=0#64 by decide]
+  have rn : s.getReg (copyReg (kindOf i)) + BitVec.ofNat 64 (copyOffset (kindOf i)+8)=readAt i+8 := by
+    rw [BitVec.ofNat_add,←BitVec.add_assoc]
+    exact congrArg (fun v : Word => v+8) r
+  rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;>
+    simp [copySource,copyReg,copyOffset,k] at r rn <;>
+    simp [copied,walkRows,copyRows,copyPC,copyReg,copyOffset,k,execInstrBr,d,installed,MachineState.getMem_setMem_ne ne',mem_of_store,
+      show signExtend12 184#12=184#64 by decide,show signExtend12 192#12=192#64 by decide,
+      show signExtend12 8#12=8#64 by decide,show signExtend12 0#12=0#64 by decide,
+      r,rn]
 
-theorem copied_keeps (s : MachineState) (r : Reg) (ne : r≠.x31) : (copied s).getReg r=s.getReg r := by
-  simp [copied,walkRows,copyRows,execInstrBr,Ne.symm ne]
+theorem copied_keeps (s : MachineState) (i : Index) (r : Reg) (ne : r≠.x31) : (copied s i).getReg r=s.getReg r := by
+  rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;>
+    simp [copied,walkRows,copyRows,copyReg,copyOffset,copyPC,k,execInstrBr,Ne.symm ne]
 
-theorem copied_pc (s : MachineState) (pc : s.pc=address 805) : (copied s).pc=address 809 := by
-  simp [copied,walkRows,copyRows,execInstrBr,pc,address]
+theorem copied_pc (s : MachineState) (i : Index) (pc : s.pc=address (copyPC (kindOf i))) : (copied s i).pc=address 809 := by
+  rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;>
+    simp [copyPC,k] at pc <;>
+    simp [copied,walkRows,copyRows,copyReg,copyOffset,copyPC,k,execInstrBr,pc,address] <;> decide
 
 end TwoPermutationPrototype.GroupedOpening

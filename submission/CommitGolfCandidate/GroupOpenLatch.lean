@@ -191,8 +191,8 @@ def headed (s : MachineState) (i : Index) (last : Nat) (y : BitVec 1600) : Machi
   if i.val/4=last then walkRows s headRows
   else walkRows (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) headPost
 
-/-- The salt rows after the chain (796..812). -/
-def finishOne (t : MachineState) (i : Index) (left : Nat) := advanced (copied (choose t i)) left
+/-- The salt selection, copy and latch after the chain. -/
+def finishOne (t : MachineState) (i : Index) (left : Nat) := advanced (copied (choose t i) i) left
 
 def inverseQuery (s : MachineState) (i : Index) :=
   packBuffer (window (memoryView (walkRows s (preRows (oddOf i)))) (replyWord (i.val/4)))
@@ -208,13 +208,13 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
 
 def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 17 else 18
 def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 24 else 25
-def postSteps (i : Index) (left : Nat) := 11+(if kindOf i=0 then 1 else if kindOf i=1 then 1 else 0)+2*(if left=1 then 1 else 0)
+def postSteps (_i : Index) (left : Nat) := 11+2*(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
 def perCycles (i : Index) (left last : Nat) := headCycles i last+(chainCycles i+postSteps i left)
 
 private theorem post_length (k : Fin 3) (last : Bool) :
-    (postRows k last).length=11+(if k=0 then 1 else if k=1 then 1 else 0)+2*(if last then 1 else 0) ∧
+    (postRows k last).length=11+2*(if last then 1 else 0) ∧
     price (postRows k last)=(postRows k last).length := by
   revert k last; decide
 
@@ -225,9 +225,9 @@ private theorem post_steps (i : Index) (left : Nat) :
   rw [pl.2,pl.1]; unfold postSteps
   constructor <;> (rcases kind_cases i with ⟨_,k⟩|⟨_,k⟩|⟨_,k⟩ <;> by_cases x : left=1 <;> simp [k,x])
 
-/-- From the chain's exit (row 796): the salt select, the copy and the loop latch. -/
+/-- From the chain's exit (row 791): the salt select, the copy and the loop latch. -/
 theorem post_run (t : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<left) (hi : left≤16777216)
-    (pc : t.pc=address 796) (idx : t.getReg .x6=BitVec.ofNat 64 i.val) (sub : t.getReg .x28=BitVec.ofNat 64 (rank i.val))
+    (pc : t.pc=address 791) (idx : t.getReg .x6=BitVec.ofNat 64 i.val) (sub : t.getReg .x28=BitVec.ofNat 64 (rank i.val))
     (one : t.getReg .x23=1) (out : t.getReg .x12=1536) (salt : t.getReg .x22=9126809632)
     (index : t.getReg .x14=indexAt ord) (endv : t.getReg .x17=indexAt (ord+left))
     (shift : t.getReg .x25=BitVec.ofNat 64 (8*(ord+left)))
@@ -237,10 +237,10 @@ theorem post_run (t : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<lef
   have chooseOk:=choose_legal t i pc sub one
   obtain ⟨ap,ar,ad⟩:=chosen t i pc idx sub one out salt
   let a:=choose t i
-  let b:=copied a
+  let b:=copied a i
   have keep (k : Reg) (h7 : k≠.x7) (h30 : k≠.x30) (h31 : k≠.x31) : b.getReg k=t.getReg k :=
-    (copied_keeps a k h31).trans (choose_keeps t i k h7 h30)
-  have nx:=next_ok b ord left (copied_pc a ap) l hi bound
+    (copied_keeps a i k h31).trans (choose_keeps t i k h7 h30)
+  have nx:=next_ok b ord left (copied_pc a i ap) l hi bound
     ((keep .x14 (by decide) (by decide) (by decide)).trans index)
     ((keep .x17 (by decide) (by decide) (by decide)).trans endv)
     ((keep .x25 (by decide) (by decide) (by decide)).trans shift)

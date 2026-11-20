@@ -27,7 +27,7 @@ def recordScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
 def recordData (s : MachineState) := lastLevel (lowerRun 0 13 (recordPrefix s))
 
 structure RecordData (s u : MachineState) (i : Index) (o : Nat) : Prop where
-  run : RunsOpeningBlock s u (129+recordExtra o)
+  run : RunsOpeningBlock s u (127+recordExtra o)
   cursor : LowerCursor u i o 14
   register : ∀ r, r ∉ recordScratch → u.getReg r = s.getReg r
   input : ∀ a<proofBase, u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a)
@@ -131,7 +131,7 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
   show RecordData st (lastLevel lowEnd) i o
   refine ⟨?_, last.next, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · have total := (run0.next low.run).next last.run
-    rw [lower_total_cost, show 23+nonceCopyCost o+3*recordCopyCost o+(64+levelCopies o+recordCopyCost o)+(42+lastCopyCost o) = 129+recordExtra o by
+    rw [lower_total_cost, show 21+nonceCopyCost o+3*recordCopyCost o+(64+levelCopies o+recordCopyCost o)+(42+lastCopyCost o) = 127+recordExtra o by
       unfold recordExtra; omega] at total
     exact total
   · intro r free

@@ -21,7 +21,7 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     (base0 : Base (setupPrefix init 15) p)
     (salt0 : (setupPrefix init 15).getReg .x22=9126809632) (marks0 : (setupPrefix init 15).getReg .x26=4096)
     (shift0 : (setupPrefix init 15).getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card)
-    (mem0 : (setupPrefix init 15).mem=init.mem) :
+    (mem0 : (setupPrefix init 15).mem=init.mem) (selector0 : init.getReg .x5=0) :
     legal headerRows init ∧ Nonempty (HeaderRegisters (header init) p) ∧ (header init).mem=(keyCopy init).mem := by
   let l:=walkRows init layoutRows
   let c:=walkRows l configRows
@@ -33,11 +33,20 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
   have marks : l.getReg .x26=4096 := by rw [eq,MachineState.getReg_setPC];exact marks0
   have lm : l.mem=init.mem := by rw [eq];exact mem0
   have shiftl : l.getReg .x25=BitVec.ofNat 64 (8*p.card) := by rw [eq,MachineState.getReg_setPC];exact shift0
-  obtain ⟨cp,cm,cb,cr⟩:=config_frame l lpc p base salt marks shiftl nz
+  have selector : l.getReg .x5=0 := by
+    rw [eq,MachineState.getReg_setPC]
+    simpa [setupPrefix,setupInstructions,execInstrBr,Opening.getReg_setReg,
+      MachineState.getReg_setPC,open_zero,beq_iff_eq,nr] using selector0
+  obtain ⟨cp,cm,cb,cr⟩:=config_frame l lpc p base salt marks shiftl nz selector
   have cMem : c.mem=init.mem := cm.trans lm
   obtain ⟨tpc,tm,keep0⟩:=key_frame c p cp cr
   let m:=walkRows t markRows
-  obtain ⟨mpc,mm,m4,m3,m2,m1,mkeep⟩:=mark_frame t tpc ((keep0 _ (by decide)).trans cr.base)
+  have quartet : t.getReg .x4=BitVec.ofNat 64 (2^64-1) := by
+    rw [keep0 _ (by decide)]
+    simp [c,configRows,walkRows,execInstrBr,Opening.getReg_setReg,
+      MachineState.getReg_setPC,open_zero]
+    all_goals decide
+  obtain ⟨mpc,mm,m4,m3,m2,m1,mkeep⟩:=mark_frame t tpc ((keep0 _ (by decide)).trans cr.base) quartet
   have keep (k : Reg) (h31 : k≠.x31) (h4 : k≠.x4 := by decide) (h3 : k≠.x3 := by decide) (h2 : k≠.x2 := by decide)
       (h1 : k≠.x1 := by decide) :
       m.getReg k=c.getReg k := (mkeep k h4 h3 h2 h1).trans (keep0 k h31)

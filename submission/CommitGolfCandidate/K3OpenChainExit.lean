@@ -15,7 +15,7 @@ attribute [local simp] chain_zero_reg
 /-! ### Post-state -/
 
 theorem exit_rows (b : MachineState) (pc : b.pc=address linkEnd) :
-    (walkRows b chainExitRows).pc=address 796 ∧ (walkRows b chainExitRows).getReg .x10=1024 ∧
+    (walkRows b chainExitRows).pc=address 791 ∧ (walkRows b chainExitRows).getReg .x10=1024 ∧
       (∀ x, x≠.x10 → (walkRows b chainExitRows).getReg x=b.getReg x) ∧
       (walkRows b chainExitRows).mem=b.mem := by
   refine ⟨?_,?_,?_,exit_rows_mem b⟩
@@ -47,7 +47,7 @@ theorem link_post : ∀ (c : Nat) (s : MachineState), LinkReady s c → c<34 →
 
 theorem chain_post (h : MachineState) (i : Index) (e : ChainEntry h i) (t : MachineState)
     (hit : t ∈ support (chainTrace h i)) :
-    t.pc=address (chainStart+19) ∧ t.getReg .x10=1024 ∧ t.getReg .x28=BitVec.ofNat 64 (rank i.val) ∧
+    t.pc=address (chainStart+14) ∧ t.getReg .x10=1024 ∧ t.getReg .x28=BitVec.ofNat 64 (rank i.val) ∧
       (∀ r, r≠.x7 → r≠.x10 → r≠.x28 → r≠.x30 → r≠.x31 → t.getReg r=h.getReg r) ∧
       (∀ w, w<2^33 → w≠128 → (w<192 ∨ 217≤w) → memoryView t w=memoryView h w) := by
   have lt := links_lt i
@@ -58,7 +58,7 @@ theorem chain_post (h : MachineState) (i : Index) (e : ChainEntry h i) (t : Mach
   have amem (w : Nat) (hw : w<2^33) (w128 : w≠128) (out : w<192 ∨ 217≤w) : memoryView a w=memoryView h w := by
     rw [reply_outside _ z w hw out,before_view h i e w hw]
     simp [writeWord,w128]
-  show (walkRows b chainExitRows).pc=address 796 ∧ _
+  show (walkRows b chainExitRows).pc=address 791 ∧ _
   obtain ⟨_,epc,e10,ekeep,emem⟩ := enter_rows a (chainLinks i) apc
     (by rw [a31];exact (slli_two (chainLinks i)).symm)
     ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.linkBase) lt

@@ -79,7 +79,7 @@ theorem exit_rows_mem (b : MachineState) : (walkRows b chainExitRows).mem=b.mem 
     simp [execInstrBr]
   have am (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x10 .x0 imm)).mem=s.mem := by
     simp [execInstrBr]
-  change (execInstrBr (execInstrBr b (.JAL .x0 2096616)) (.ADDI .x10 .x0 1024)).mem=b.mem
+  change (execInstrBr (execInstrBr b (.JAL .x0 2096596)) (.ADDI .x10 .x0 1024)).mem=b.mem
   rw [am,jm]
 
 end TwoPermutationPrototype.GroupedOpening

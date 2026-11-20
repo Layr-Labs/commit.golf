@@ -1,4 +1,141 @@
-# Product: constant-base salt-link dispatch (-128 opening cycles)
+# Product: hoist the quartet source bias (-256 opening cycles)
+
+Based directly on next22 `7110ded12ffb4f8939e89779d93a01d7587e2231`.
+Refreshed master `fddf62145814f5cad51fe13f472dde8ec80be4cf` delivers
+exactly next19's manifest. No new public implementation is transplanted.
+
+Each record copies three quartet mates. Previously each source head
+added the same 584-byte leaf bias to its computed address. The slot
+prefix now adds that bias once to `x7`; each mate head only computes
+its XOR lane, shifts it and adds the biased base. Three removed steps
+minus one shared step saves **two cycles per queried record**, including
+partial and single-query openings. Empty openings are unchanged.
+
+The biased base also reaches the level-zero sibling pointer load, whose
+offset changes from 712 to 128. Quartet copy sites move from
+`43 + 36*j` to `43 + 35*j`. Their internal branches and private-stub
+returns target the relocated continuations. The level-zero head moves
+from words 150/151 to 148/149, retaining its two-cycle load/jump cost.
+Exactly **77 existing opening words** change; nothing is appended.
+Commitment/checker images, embedded data, ABI, copy widths, oracle calls
+and proof serialization are unchanged.
+
+```json
+{"commitCycles":504585244,"openingCycles":118208,"proofBytes":72160}
+```
+
+```text
+(504585244 + 118208) * 72160 = 36419401096320
+Next22 score: 36419419569280
+Saving: 256 opening cycles; 18472960 score
+```
+
+`GroupOpenLeafFields` proves the shared bias and three-step source heads;
+`GroupOpenPrefix` carries that bias through all three copies.
+`GroupOpenSibling`/`SiblingRun` prove the adjusted pointer load and PC,
+and `GroupOpenUpperRun` composes them. Record-prefix cost drops from
+23 to 21 ordinary cycles, record-data cost from 129 to 127, and complete
+record base cost from 134/135 to 132/133. `GroupOpenRecordsAPI`,
+`GroupOpenRecordRun`, `GroupOpenABI`, `GroupOpenFull` and the final
+certificate carry the matching aggregate bounds. The scored wide-pass
+bound is 75818; alignment-dependent copy costs remain unchanged.
+
+The exact delivered image is tested against next22 on mixed-oracle,
+patterned rank-0/1/general spread, alternating, clustered, partial127
+and single-query fixtures, comparing all compression inputs, roots,
+trapdoors and proof bytes and requiring checker acceptance. Public
+provenance is under `~/cg/sub19`. Certification here means local
+artifact-backed kernel and emulator checks, not official Yukon success.
+
+## Inherited next22: remove redundant selector initialization (-1 opening cycle)
+
+Based directly on next21 `993e79443dc2c67a6ee5739d3ab39dc0385e19fa`.
+Fetched master remains `80f406650699260a5b72975ff61a6cf39e3bfda5`, whose
+manifest equals next18. No new public implementation is transplanted.
+
+The ABI initializes `x5` to zero. No instruction before header row 729
+writes it, so assigning zero again is redundant. Row 729 instead sets
+the no-previous-quartet marker `x4=-1`. Row 739 jumps directly to 755,
+skipping its old initialization at 754. Every nonempty opening saves
+one ordinary instruction; empty openings bypass the header and retain
+their existing cost. Exactly two words change, **729 and 739**; no words
+are appended. Commitment/checker images, embedded data, ABI, oracle
+calls, salt paths, record writers and proof serialization are unchanged.
+
+```json
+{"commitCycles":504585244,"openingCycles":118464,"proofBytes":72160}
+```
+
+```text
+(504585244 + 118464) * 72160 = 36419419569280
+Next21 score: 36419419641440
+Saving: 1 opening cycle; 72160 score
+```
+
+`GroupOpenHeaderParts.config_frame` carries the incoming zero-selector
+fact and initializes the quartet marker. `GroupOpenHeaderCore` proves
+that setup preserves the selector and that the key copy preserves the
+marker. `GroupOpenHeader.header_valid` discharges the selector premise
+from the actual ABI state. Header cost decreases from 36 to 35; the
+pass and record costs are unchanged. The image literals, packed manifest,
+artifact and certificate match the delivered two-word change.
+
+Full mixed/patterned pipeline comparisons preserve compression traces,
+roots, complete trapdoors and proof bytes, with checker acceptance on
+rank-0, rank-1, rank>=2, alternating, clustered, partial and single-query
+fixtures. Nonempty fixtures save one cycle; empty opening/check and
+invalid checking retain their prior behavior. Public provenance is under
+`~/cg/sub18`. No official Yukon verifier success is claimed; certification
+here means local artifact-backed kernel and emulator checks.
+
+## Inherited next21: reply-relative salt selection (-128 opening cycles)
+
+Based directly on next20 `cdb9137c4a01f3d02cc4ff45942e201955a10a6c`.
+Fetched master `80f406650699260a5b72975ff61a6cf39e3bfda5` delivers exactly
+next18's manifest. No new public implementation is transplanted; inherited
+credits below remain applicable.
+
+Rank-0 and rank-1 salts are copied directly from offsets 0 and 184 of
+`x12=1536`, avoiding temporary source-address selection. Destination
+calculation precedes the rank branches. Rank≥2 retains its old source
+arithmetic and copy body. All three post-chain paths now cost 11 cycles
+before the final-query exit adjustment, replacing 12 for ranks 0/1 and
+11 for other ranks. The pass bound decreases from `332*n+2` to `331*n+2`.
+The chain exit changes location but retains exactly two ordinary steps.
+
+Exactly **18 opening words** change: **4..8, 790..799, 803, 804, 929**.
+The private rank-0 copy uses unreachable old setup space; rank-1 uses
+reclaimed dispatch space. No words are appended. Commitment/checker
+images, embedded data, ABI, chain oracle calls, record writers and proof
+serialization remain unchanged.
+
+```json
+{"commitCycles":504585244,"openingCycles":118465,"proofBytes":72160}
+```
+
+```text
+(504585244 + 118465) * 72160 = 36419419641440
+Next20 score: 36419428877920
+Saving: 128 opening cycles; 9236480 score
+```
+
+Mixed patterned full-pipeline comparisons preserve every compression
+trace, root, complete trapdoor and proof byte. Rank-0 and rank-1 spread
+both reach 118465 cycles, saving 128. Rank≥2 spread is unchanged at
+118465. Alternating parity, clustered, partial127 and single-query cycles
+are 118401/79348/117571/2037, saving 64/24/127/1. Empty opening/check paths
+remain 7/11 cycles; proofless nonempty checking rejects in 9 cycles.
+The saving is rank-dependent, not one cycle for every possible query.
+
+`GroupOpenWalk` defines the exact rank-dependent paths; `GroupOpenSelect`
+proves their effective source addresses, legality, copy and frame effects.
+`GroupOpenLatch` and `GroupOpenEffect` compose the unchanged memory
+semantics with the new paths. The image literals, packed manifest and
+certificate resource accounting match the delivered image. Local evidence
+and public provenance are recorded under `~/cg/sub17`; no official Yukon
+verifier success is claimed for this candidate.
+
+## Inherited next20: constant-base salt-link dispatch
 
 Based on next19 `0428943f868a7b8e9e733a5136ea6a1b73a0e93b`. Refetched
 master `23c6dec30a12b7c19a35161f41bbd290de815d12` delivers exactly next17's
