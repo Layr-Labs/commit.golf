@@ -1,0 +1,116 @@
+import CommitGolfCandidate.K1Manifest
+import CommitGolfCandidate.TwoPermutationManifest
+
+/-!
+# The K1 commit image and its 4096-leaf body
+
+The commit image is `K1Artifact.commitCode`.  Words 0..20 are the prologue (word 20 is
+`addi x10,x18,56`), words 21..43,712 the body for the 4096 leaves of a tile, words 43,713..43,715
+the latch, and words 45,591.. the unchanged quartet and parent stages of the record.
+
+`packet n` is the code of leaf `n` of a tile, in program order.  A pair head (rank 0, the A leaf)
+runs both first calls of its pair, the generator and its own second call; the C leaf (rank 1)
+only runs its second call; a follower (rank ≥ 2) runs both of its calls with its salt copied from
+the generator reply (rank 9's first salt word is loaded from memory, and x15..x17 are loaded by rank 8).
+-/
+
+namespace TwoPermutationPrototype.Grouped
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 TwoPermutationPrototype.RV64
+set_option maxRecDepth 16384
+set_option maxHeartbeats 6000000
+attribute [local irreducible] ArtifactEncoding.decode
+
+def image : Image := ⟨ArtifactEncoding.decode 32 K1Artifact.commitCode, ArtifactEncoding.decode 8 K1Artifact.commitData⟩
+theorem exact_image : image = K1Artifact.submission.image .commit := rfl
+def codeWord (index : Nat) : BitVec 32 :=
+  if inside : index<262039 then K1Artifact.commitCode.get 32 ⟨index,inside⟩ else 0
+def wordPC (index : Nat) : Word := BitVec.ofNat 64 (4096 + 4*index)
+
+theorem fetch_decoded (state : MachineState) (index : Nat)
+    (inCode : index < 262039) (pc : state.pc=BitVec.ofNat 64 (4096+4*index))
+    (instruction : Instr)
+    (decoded : Manifest.decodeBase (codeWord index)=some instruction) :
+    fetch image state=some (.base instruction) := by
+  have address : state.pc.toNat=4096+4*index := by
+    rw [pc,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)]
+  have code : image.code=ArtifactEncoding.decode 32 K1Artifact.commitCode := by
+    simp only [image]
+  have length : index< image.code.length := by
+    rw [code,ArtifactEncoding.length_decode]
+    exact inCode
+  have atIndex : image.code[index]?=some (K1Artifact.commitCode.get 32 ⟨index,inCode⟩) := by
+    rw [List.getElem?_eq_getElem length,←List.getD_eq_getElem _ _ length,code,
+      ArtifactEncoding.getD_decode _ _ _ inCode]
+  rw [fetch,address,ite_eq_left (by omega),show (4096+4*index-4096)/4=index by omega,atIndex]
+  have base : Manifest.decodeBase (K1Artifact.commitCode.get 32 ⟨index,inCode⟩)=some instruction := by
+    simpa only [codeWord,dite_eq_left inCode] using decoded
+  unfold Manifest.decodeBase at base
+  cases result : decodeInstruction (K1Artifact.commitCode.get 32 ⟨index,inCode⟩) with
+  | none => simp [result] at base
+  | some ins => cases ins <;> simp_all
+
+/-- Number of heads among the first n slots of a 4096-leaf period (373 groups: 372 of eleven leaves, one of 4). -/
+def heads (n : Nat) := 373*(n/4096)+((n%4096+10)/11)
+def rank (n : Nat) := (n%4096)%11
+/-- Register holding the constant offset from a salt-first or C leaf's second-call input (`L+56`) to its quartet
+slot (1024-byte quartet blocks, one per 1024 message bytes), by slot in the quartet. -/
+def sreg (n : Nat) : Reg :=
+  if (n/4)%2=0 then (if n%4=0 then .x20 else if n%4=1 then .x23 else if n%4=2 then .x25 else .x26)
+  else (if n%4=0 then .x8 else if n%4=1 then .x9 else if n%4=2 then .x18 else .x19)
+/-- The same for an A leaf, whose second-call input is `B-56`. -/
+def areg (n : Nat) : Reg :=
+  if (n/4)%2=0 then (if n%4=0 then .x27 else if n%4=1 then .x28 else if n%4=2 then .x29 else .x30)
+  else (if n%4=0 then .x21 else if n%4=1 then .x22 else if n%4=2 then .x4 else .x7)
+/-- The next entry is `L+56`: this is an A head (its C leaf follows) or an A head follows. -/
+def near (n : Nat) : Bool := rank n=0 || rank (n+1)=0
+/-- Restore register after the quartet call of slot `n` (`n % 4 = 3`). -/
+def rreg (n : Nat) : Reg := if (n/4)%2=0 then (if near n then .x2 else .x1) else (if near n then .x6 else .x31)
+
+/-- Head `(n%4096)/11` of a tile is keyed (generator on the key block) every 34 heads; the others are
+chained (generator input = the previous head's reply, in place). -/
+def keyed (n : Nat) : Bool := ((n%4096)/11)%34==0
+/-- Chained heads among the first `n ≤ 4096` slots of a tile (one word shorter each). -/
+def chainedBefore (n : Nat) := (n+10)/11-((n+10)/11+33)/34
+
+/-- Code words of the ranks `0..r-1` of an 11-leaf group (keyed head), quartet calls excluded. -/
+def rankPrefix (r : Nat) : Nat :=
+  if r=0 then 0 else if r=1 then 14 else if r=2 then 18 else if r≤8 then 18+11*(r-2)
+  else if r=9 then 98 else if r=10 then 108 else 117
+
+/-- First code word of slot `n ≤ 4096` of the tile body (slot 4096 is the latch): both quartet calls add two words. -/
+def firstWord (n : Nat) := 38+117*(n/11)+rankPrefix (n%11)+2*((n+4)/8)+2*(n/8)-chainedBefore n
+
+/-- Increment of x10 at the end of slot `n` (no quartet call): to the next entry. -/
+def trail (n : Nat) : BitVec 12 := if rank n=0 then 368 else if rank (n+1)=0 then 256 else 200
+
+/-- Load offset (from x10 = entry `L`) of the salt of a follower of rank `r ∈ 2..8`: `112-240 r`. -/
+def saltImm (r : Nat) : BitVec 12 := BitVec.ofNat 12 (4152-240*r)
+
+def saltCode (r : Nat) : List Instr :=
+  if r≤8 then
+    [.LD .x12 .x10 (saltImm r+56),.SD .x10 .x12 56,.LD .x12 .x10 (saltImm r+64),.SD .x10 .x12 64] ++
+    (if r=8 then [.LD .x15 .x10 (-1784),.LD .x16 .x10 (-1776),.LD .x17 .x10 (-1768)] else [])
+  else if r=9 then [.LD .x12 .x10 (-2048),.SD .x10 .x12 56,.SD .x10 .x15 64]
+  else [.SD .x10 .x16 56,.SD .x10 .x17 64]
+
+/-- After the second call: advance x10, or (fourth leaf of a quartet) the quartet call and the restore. -/
+def tailCode (n : Nat) : List Instr :=
+  if n%4=3 then
+    [.ADDI .x10 .x12 (-168),.ECALL,.ADD .x10 .x10 (rreg n)]
+  else [.ADDI .x10 .x10 (trail n)]
+
+def packet (n : Nat) : List Instr :=
+  (if rank n=0 then
+    [.ADDI .x12 .x10 (-256),.ECALL,.ADDI .x10 .x10 200,.ADDI .x12 .x10 (-32),.ECALL] ++
+    (if keyed n then [.SD .x24 .x10 0,.ADDI .x12 .x12 (-96),.ADDI .x10 .x24 0,.ECALL]
+     else [.ADD .x10 .x12 .x3,.ADDI .x12 .x12 (-96),.ECALL]) ++
+    [.ADDI .x10 .x12 (-184),.SD .x10 .x10 16,.ADD .x12 .x10 (areg n),.ECALL]
+  else if rank n=1 then
+    [.SD .x10 .x10 16,.ADD .x12 .x10 (sreg n),.ECALL]
+  else
+    [.ADDI .x12 .x10 (-32),.ECALL] ++ saltCode (rank n) ++
+    [.ADDI .x10 .x10 56,.SD .x10 .x10 16,.ADD .x12 .x10 (sreg n),.ECALL]) ++ tailCode n
+
+def firstWord4 (m : Nat) : Nat := 45250*(m/4096) + firstWord (m%4096)
+
+end TwoPermutationPrototype.Grouped
