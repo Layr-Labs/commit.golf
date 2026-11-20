@@ -119,13 +119,12 @@ def siblingSite (level : Fin 14) : CopySite :=
 
 def siblingStart (level : Fin 14) : Nat := (siblingSite level).start-3
 def siblingEnd (level : Fin 14) : Nat :=
-  if level.val = 13 then 638 else (siblingSite level).start+2*(siblingSite level).halfwords
+  if level.val = 13 then 638 else if level.val = 1 then 220 else (siblingSite level).start+2*(siblingSite level).halfwords
 
-/-- The straight-line copy of a level moves its whole width, except level 1 (whose 16th halfword is
-copied by A1). -/
+/-- The generic straight-line copy moves the whole width except at the dedicated level-1 site. -/
 theorem sibling_width_exact :
     ∀ level : Fin 14, level.val < 13 →
-      2*(siblingSite level).halfwords = if level.val = 1 then 30 else siblingWidth level.val := by
+      2*(siblingSite level).halfwords = if level.val = 1 then 0 else siblingWidth level.val := by
   decide
 
 theorem sibling_copy_start : ∀ level : Fin 14, siblingStart level+3 = (siblingSite level).start := by
@@ -237,15 +236,12 @@ theorem sibling_tail_post (state : MachineState) (level : Fin 14) :
 
 /-! ### Level 1 through A1 -/
 
-/-- Level 1's tail: `jal <A1>`; A1 = `lhu x31,30(x7); sh x31,30(x21); addi x21,x21,32; jal <221>`; then
-`srli x6,x6,1`. -/
+/-- Level 1 advances the cursor and node after copying the whole sibling. -/
 def a1Rows : List (Nat × Instr) :=
-  [(220, .JAL .x0 (BitVec.ofNat 21 (4*(a1Start-220)))), (a1Start, .LHU .x31 .x7 30), (a1Start+1, .SH .x21 .x31 30),
-   (a1Start+2, .ADDI .x21 .x21 32), (a1Start+3, .JAL .x0 (BitVec.ofNat 21 (2^21-4*(a1Start+3-221)))),
-   (221, .SRLI .x6 .x6 1)]
+  [(220, .ADDI .x21 .x21 32), (221, .SRLI .x6 .x6 1)]
 
 theorem a1_code : RowsCode a1Rows := by decide +kernel
 
-theorem a1_final_pc : rowNext a1Rows[5] = BitVec.ofNat 64 (4096+4*222) := by decide +kernel
+theorem a1_final_pc : rowNext a1Rows[1] = BitVec.ofNat 64 (4096+4*222) := by decide +kernel
 
 end TwoPermutationPrototype.GroupedOpening

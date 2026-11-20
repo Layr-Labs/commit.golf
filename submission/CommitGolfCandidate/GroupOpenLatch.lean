@@ -11,177 +11,114 @@ attribute [local simp] mem_of_reg MachineState.getMem_setPC MachineState.getMem_
 def finalPC (left : Nat) := if left=1 then address 15 else address 740
 def advanced (s : MachineState) (left : Nat) := walkRows s (nextRows (decide (left=1)))
 
+private theorem decremented (left : Nat) (l : 0<left) :
+    countWord left+signExtend12 (-1)=countWord (left-1) := by
+  have sub := BitVec.ofNat_sub_ofNat_of_le (w:=64) left 1 (by decide) l
+  rw [BitVec.sub_eq_add_neg] at sub
+  exact sub
+
+private theorem counter_zero (left : Nat) (l : 0<left) (small : left≤16777216) :
+    countWord (left-1)=0#64 ↔ left=1 := by
+  constructor
+  · intro h;have z:=congrArg BitVec.toNat h
+    change (left-1)%2^64=0 at z;omega
+  · intro h;subst left;rfl
+
 private theorem index_bump (ord : Nat) : indexAt ord+signExtend12 8=indexAt (ord+1) := by
   change BitVec.ofNat 64 _+BitVec.ofNat 64 8=_
   rw [←BitVec.ofNat_add];unfold indexAt;congr 1 <;> omega
 
-private theorem index_inj (a b : Nat) (ha : a≤16777216) (hb : b≤16777216) :
-    indexAt a=indexAt b ↔ a=b := by
-  constructor
-  · intro h
-    have hlt : 9395245088+8*a<2^64 := by omega
-    have hlt2 : 9395245088+8*b<2^64 := by omega
-    have z:=congrArg BitVec.toNat h
-    simp only [indexAt,BitVec.toNat_ofNat,Nat.mod_eq_of_lt hlt,Nat.mod_eq_of_lt hlt2] at z
-    omega
-  · intro h;rw [h]
+private def bump (s : MachineState) :=
+  execInstrBr (execInstrBr s (.ADDI .x14 .x14 8)) (.ADDI .x17 .x17 (-1))
 
-private theorem sub_left (ord left : Nat) (h : 1≤left) : (ord+1)+(left-1)=ord+left := by
-  rw [Nat.add_assoc, Nat.add_comm 1 (left-1), Nat.sub_add_cancel h]
+private theorem bump_info (s : MachineState) (ord left : Nat) (l : 0<left)
+    (pc : s.pc=address 809) (idx : s.getReg .x14=indexAt ord) (count : s.getReg .x17=countWord left) :
+    (bump s).pc=address 811 ∧ (bump s).getReg .x14=indexAt (ord+1) ∧
+    (bump s).getReg .x17=countWord (left-1) ∧ (bump s).mem=s.mem := by
+  refine ⟨?_,?_,?_,?_⟩
+  · change s.pc+4+4=_;rw [pc];rfl
+  · change s.getReg .x14+signExtend12 8=_;rw [idx];exact index_bump ord
+  · change s.getReg .x17+signExtend12 (-1)=_;rw [count];exact decremented left l
+  · rfl
 
-private def bump (s : MachineState) := execInstrBr s (.ADDI .x14 .x14 8)
-
-private theorem bump_pc (s : MachineState) (pc : s.pc=address 809) : (bump s).pc=address 810 := by
-  change s.pc+4=_;rw [pc];rfl
-
-private theorem bump_index (s : MachineState) (ord : Nat) (idx : s.getReg .x14=indexAt ord) :
-    (bump s).getReg .x14=indexAt (ord+1) := by
-  change s.getReg .x14+signExtend12 8=_;rw [idx];exact index_bump ord
-
-private theorem bump_x9 (s : MachineState) : (bump s).getReg .x9=s.getReg .x9 := by
-  simp [bump,execInstrBr]
-private theorem bump_x25 (s : MachineState) : (bump s).getReg .x25=s.getReg .x25 := by
-  simp [bump,execInstrBr]
-private theorem bump_x17 (s : MachineState) : (bump s).getReg .x17=s.getReg .x17 := by
-  simp [bump,execInstrBr]
-
-private theorem test_hit (s : MachineState) (pc : s.pc=address 810) (ne : s.getReg .x14≠s.getReg .x17) :
-    execInstrBr s (.BNE .x14 .x17 7912)=s.setPC (address 740) := by
-  have yes : (s.getReg .x14 != s.getReg .x17)=true := by simp [ne]
+private theorem back (s : MachineState) (pc : s.pc=address 811) (nz : s.getReg .x17≠0#64) :
+    execInstrBr s (.BNE .x17 .x0 7908)=s.setPC (address 740) := by
+  have yes : (s.getReg .x17 != s.getReg .x0)=true := by simp [open_zero,nz]
   simp only [execInstrBr,yes,ite_true,pc]
-  exact congrArg s.setPC (by decide : address 810+signExtend13 7912=address 740)
+  exact congrArg s.setPC (by decide : address 811+signExtend13 7908=address 740)
 
-private theorem test_miss (s : MachineState) (pc : s.pc=address 810) (eq : s.getReg .x14=s.getReg .x17) :
-    execInstrBr s (.BNE .x14 .x17 7912)=s.setPC (address 811) := by
-  have no : (s.getReg .x14 != s.getReg .x17)=false := by simp [eq]
-  simp only [execInstrBr,no,ite_false,pc]
-  exact congrArg s.setPC (by decide : address 810+4=address 811)
+private theorem fall (s : MachineState) (pc : s.pc=address 811) (z : s.getReg .x17=0#64) :
+    execInstrBr s (.BNE .x17 .x0 7908)=s.setPC (address 812) := by
+  simp only [execInstrBr,open_zero,z,beq_self_eq_true,ite_true,pc]
+  exact congrArg s.setPC (by decide : address 811+4=address 812)
 
-private theorem step811 (s : MachineState) (pc : s.pc=address 811) :
-    execInstrBr s (.ADDI .x25 .x9 0)=(s.setReg .x25 (s.getReg .x9)).setPC (address 812) := by
-  change (s.setReg .x25 (s.getReg .x9+signExtend12 0)).setPC (s.pc+4)=_
-  rw [pc]
-  have hpc : address 811 + 4 = address 812 := by decide
-  rw [hpc]
-  simp [signExtend12]
-
-private theorem step812 (s : MachineState) (pc : s.pc=address 812) :
+private theorem exit_jump (s : MachineState) (pc : s.pc=address 812) :
     execInstrBr s (.JAL .x0 2093964)=s.setPC (address 15) := by
   change s.setPC (s.pc+signExtend21 2093964)=_
   rw [pc];exact congrArg s.setPC (by decide : address 812+signExtend21 2093964=address 15)
 
-private def lastMoves (last : Bool) : List Row :=
-  if last then [(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] else []
+private def firstMoves : List Row := [(809,.ADDI .x14 .x14 8),(810,.ADDI .x17 .x17 (-1))]
+private def lastMoves (last : Bool) : List Row := if last then [(811,.BNE .x17 .x0 7908),(812,.JAL .x0 2093964)]
+  else [(811,.BNE .x17 .x0 7908)]
 
-private theorem lastMoves_true : lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] := rfl
-private theorem lastMoves_false : lastMoves false=[] := rfl
+private theorem next_parts (last : Bool) : nextRows last=firstMoves++lastMoves last := by cases last <;> rfl
+private theorem first_value (s : MachineState) : walkRows s firstMoves=bump s := rfl
+private theorem first_legal (s : MachineState) (pc : s.pc=address 809) : legal firstMoves s := by
+  refine ⟨pc,rfl,?_,rfl,trivial⟩
+  change s.pc+4=_
+  rw [pc];rfl
 
-private theorem next_parts (last : Bool) :
-    nextRows last=[(809,.ADDI .x14 .x14 8)]++[(810,.BNE .x14 .x17 7912)]++lastMoves last := by
-  cases last <;> rfl
+private theorem last_done (s : MachineState) (pc : s.pc=address 811) (z : s.getReg .x17=0#64) :
+    legal (lastMoves true) s ∧ walkRows s (lastMoves true)=s.setPC (address 15) := by
+  have first:=fall s pc z
+  have atJump:=congrArg MachineState.pc first
+  refine ⟨⟨pc,rfl,atJump,rfl,trivial⟩,?_⟩
+  simp only [lastMoves,ite_true,walkRows,List.foldl_cons,List.foldl_nil,first,exit_jump _ (show (s.setPC (address 812)).pc=address 812 from rfl)]
+  rfl
 
-private theorem first_value (s : MachineState) :
-    walkRows s [(809,.ADDI .x14 .x14 8)]=bump s := rfl
+private theorem last_again (s : MachineState) (pc : s.pc=address 811) (z : s.getReg .x17≠0#64) :
+    legal (lastMoves false) s ∧ walkRows s (lastMoves false)=s.setPC (address 740) :=
+  ⟨⟨pc,rfl,trivial⟩,back s pc z⟩
 
-private theorem test_value (s : MachineState) :
-    walkRows s [(810,.BNE .x14 .x17 7912)]=execInstrBr s (.BNE .x14 .x17 7912) := rfl
+private theorem next_value (s : MachineState) (last : Bool) :
+    walkRows s (nextRows last)=walkRows (bump s) (lastMoves last) := by
+  rw [next_parts,walk_join,first_value]
 
-private theorem first_legal (s : MachineState) (pc : s.pc=address 809) :
-    legal [(809,.ADDI .x14 .x14 8)] s := ⟨pc,rfl,trivial⟩
-
-private theorem last_done (s : MachineState) (pc : s.pc=address 811) :
-    legal (lastMoves true) s ∧
-      walkRows s (lastMoves true)=(s.setReg .x25 (s.getReg .x9)).setPC (address 15) := by
-  refine ⟨⟨pc,rfl,?_,rfl,trivial⟩,?_⟩
-  · change s.pc+4=_;rw [pc];rfl
-  · rw [show lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] from rfl]
-    simp only [walkRows,List.foldl_cons,List.foldl_nil]
-    rw [step811 s pc, step812 _ (by rfl)]
-    rfl
-
-private theorem last_empty (s : MachineState) : walkRows s (lastMoves false)=s := rfl
-
-theorem next_ok (s : MachineState) (ord left : Nat) (pc : s.pc=address 809) (l : 0<left) (hi : left≤16777216)
-    (bound : ord+left≤16777216)
-    (index : s.getReg .x14=indexAt ord) (endv : s.getReg .x17=indexAt (ord+left))
-    (shift : s.getReg .x25=BitVec.ofNat 64 (8*(ord+left))) :
-    legal (nextRows (decide (left=1))) s ∧ (advanced s left).pc=finalPC left ∧
-      (advanced s left).getReg .x14=indexAt (ord+1) ∧
-      (advanced s left).getReg .x17=indexAt ((ord+1)+(left-1)) ∧
-      (advanced s left).getReg .x25=(if left-1=0 then s.getReg .x9
-        else BitVec.ofNat 64 (8*((ord+1)+(left-1)))) ∧
-      (advanced s left).mem=s.mem := by
-  have hle : ord+1≤16777216 := by omega
-  have bpc := bump_pc s pc
-  have b14 := bump_index s ord index
-  have b9 := bump_x9 s
-  have b17 := bump_x17 s
-  have b25 := bump_x25 s
-  have l1 : legal [(809,.ADDI .x14 .x14 8)] s := first_legal s pc
-  by_cases last : left=1
-  · have eql : (bump s).getReg .x14=(bump s).getReg .x17 := by
-      rw [b14,b17,endv]
-      exact (index_inj (ord+1) (ord+left) hle bound).mpr (by omega)
-    have step := test_miss (bump s) bpc eql
-    have ld := last_done ((bump s).setPC (address 811)) rfl
-    have hstep : walkRows (bump s) [(810,.BNE .x14 .x17 7912)]=(bump s).setPC (address 811) :=
-      (test_value (bump s)).trans step
-    have hdec : decide (left=1)=true := decide_eq_true last
-    have ld2 := ld.2
-    rw [show lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] from rfl] at ld2
-    rw [advanced, hdec, next_parts, show lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] from rfl, walk_join, walk_join, first_value, hstep, ld2, finalPC, if_pos last]
-    refine ⟨?_,rfl,b14,?_,?_,?_⟩
-    · apply legal_append _ _ _ l1
-      rw [first_value]
-      refine ⟨bpc,rfl,?_⟩
-      rw [step]
-      simpa [lastMoves] using ld.1
-    · rw [sub_left ord left l];exact endv
-    · rw [show left-1=0 by omega, if_pos rfl]
-      simp [MachineState.getReg_setPC, b9]
-    · rfl
-  · have hl2 : 2≤left := by omega
-    have neq : (bump s).getReg .x14≠(bump s).getReg .x17 := by
-      rw [b14,b17,endv]
-      intro h
-      exact last (by have hh := (index_inj (ord+1) (ord+left) hle bound).mp h; omega)
-    have step := test_hit (bump s) bpc neq
-    have hstep : walkRows (bump s) [(810,.BNE .x14 .x17 7912)]=(bump s).setPC (address 740) :=
-      (test_value (bump s)).trans step
-    have hdec : decide (left=1)=false := decide_eq_false last
-    rw [advanced, hdec, next_parts, show lastMoves false=[] from rfl, walk_join, walk_join, first_value, hstep, finalPC, if_neg last]
-    refine ⟨?_,rfl,b14,?_,?_,?_⟩
-    · apply legal_append _ _ _ l1
-      rw [first_value]
-      exact ⟨bpc,rfl,trivial⟩
-    · rw [sub_left ord left l];exact endv
-    · rw [sub_left ord left l]
-      rw [if_neg (by omega)]
-      exact b25.trans shift
-    · rfl
+private theorem next_legal (s : MachineState) (last : Bool) (pc : s.pc=address 809)
+    (good : legal (lastMoves last) (bump s)) : legal (nextRows last) s := by
+  rw [next_parts];apply legal_append _ _ _ (first_legal s pc);rw [first_value];exact good
 
 attribute [local irreducible] bump walkRows nextRows
+
+theorem next_ok (s : MachineState) (ord left : Nat) (pc : s.pc=address 809) (l : 0<left) (hi : left≤16777216)
+    (index : s.getReg .x14=indexAt ord) (counter : s.getReg .x17=countWord left) :
+    legal (nextRows (decide (left=1))) s ∧ (advanced s left).pc=finalPC left ∧
+      (advanced s left).getReg .x14=indexAt (ord+1) ∧ (advanced s left).getReg .x17=countWord (left-1) ∧
+      (advanced s left).mem=s.mem := by
+  have br:=bump_info s ord left l pc index counter
+  have test : (bump s).getReg .x17=0#64 ↔ left=1 := br.2.2.1 ▸ counter_zero left l hi
+  by_cases last : left=1
+  · have d:=last_done (bump s) br.1 (test.mpr last)
+    rw [decide_eq_true last,advanced,decide_eq_true last,next_value,d.2,finalPC,if_pos last]
+    exact ⟨next_legal s true pc d.1,rfl,br.2.1,br.2.2.1,br.2.2.2⟩
+  · have d:=last_again (bump s) br.1 (mt test.mp last)
+    rw [decide_eq_false last,advanced,decide_eq_false last,next_value,d.2,finalPC,if_neg last]
+    exact ⟨next_legal s false pc d.1,rfl,br.2.1,br.2.2.1,br.2.2.2⟩
+
 attribute [local semireducible] walkRows nextRows
 
 private theorem jump_reg (u : MachineState) (r : Reg) (imm : BitVec 21) :
     (execInstrBr u (.JAL .x0 imm)).getReg r=u.getReg r := MachineState.getReg_setPC ..
 
-private theorem addi_reg (u : MachineState) (rd rs : Reg) (imm : BitVec 12) (r : Reg) (h : r≠rd) :
-    (execInstrBr u (.ADDI rd rs imm)).getReg r=u.getReg r := by
-  simp [execInstrBr, MachineState.getReg_setPC, MachineState.getReg_setReg_ne, Ne.symm h]
-
-theorem next_keeps (s : MachineState) (left : Nat) (r : Reg) (a : r≠.x14) (b : r≠.x17) (c : r≠.x25) :
+theorem next_keeps (s : MachineState) (left : Nat) (r : Reg) (a : r≠.x14) (b : r≠.x17) :
     (advanced s left).getReg r=s.getReg r := by
-  unfold advanced nextRows
-  by_cases tag : (decide (left=1))=true
-  · rw [if_pos tag]
-    change (execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.ADDI .x14 .x14 8))
-      (.BNE .x14 .x17 7912)) (.ADDI .x25 .x9 0)) (.JAL .x0 2093964)).getReg r=s.getReg r
-    rw [jump_reg _ r 2093964, addi_reg _ .x25 .x9 0 r c, bne_reg _ .x14 .x17 r 7912,
-      addi_reg _ .x14 .x14 8 r a]
-  · rw [if_neg tag]
-    change (execInstrBr (execInstrBr s (.ADDI .x14 .x14 8)) (.BNE .x14 .x17 7912)).getReg r=s.getReg r
-    rw [bne_reg _ .x14 .x17 r 7912, addi_reg _ .x14 .x14 8 r a]
+  unfold advanced;apply rows_preserve;intro p h u
+  unfold nextRows at h;cases tag : (decide (left=1)) <;>
+    simp only [tag,Bool.false_eq_true,ite_false,ite_true,List.cons_append,List.nil_append,List.mem_cons,List.not_mem_nil,or_false] at h
+  · rcases h with h|h|h <;> subst p <;> first | exact bne_reg .. | simp [execInstrBr,Ne.symm a,Ne.symm b]
+  · rcases h with h|h|h|h <;> subst p
+    all_goals first | exact bne_reg .. | exact jump_reg u r _ |
+      simp [execInstrBr,Ne.symm a,Ne.symm b]
 
 /-- A new quartet (either parity): its reply is inverted into its rebuilt block. -/
 def inverts (i : Index) (last : Nat) : Bool := decide (i.val/4≠last)
@@ -208,13 +145,13 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
 
 def headSteps (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 28 else 29
 def headCycles (i : Index) (last : Nat) := if i.val/4=last then 3 else if i.val/4%2=1 then 35 else 36
-def postSteps (i : Index) (left : Nat) := 11+(if kindOf i=0 then 1 else if kindOf i=1 then 1 else 0)+2*(if left=1 then 1 else 0)
+def postSteps (i : Index) (left : Nat) := 12+(if kindOf i=0 then 1 else if kindOf i=1 then 1 else 0)+(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
 def perCycles (i : Index) (left last : Nat) := headCycles i last+(chainCycles i+postSteps i left)
 
 private theorem post_length (k : Fin 3) (last : Bool) :
-    (postRows k last).length=11+(if k=0 then 1 else if k=1 then 1 else 0)+2*(if last then 1 else 0) ∧
+    (postRows k last).length=12+(if k=0 then 1 else if k=1 then 1 else 0)+(if last then 1 else 0) ∧
     price (postRows k last)=(postRows k last).length := by
   revert k last; decide
 
@@ -229,9 +166,7 @@ private theorem post_steps (i : Index) (left : Nat) :
 theorem post_run (t : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<left) (hi : left≤16777216)
     (pc : t.pc=address 796) (idx : t.getReg .x6=BitVec.ofNat 64 i.val) (sub : t.getReg .x28=BitVec.ofNat 64 (rank i.val))
     (one : t.getReg .x23=1) (out : t.getReg .x12=1536) (salt : t.getReg .x22=9126809632)
-    (index : t.getReg .x14=indexAt ord) (endv : t.getReg .x17=indexAt (ord+left))
-    (shift : t.getReg .x25=BitVec.ofNat 64 (8*(ord+left)))
-    (bound : ord+left≤16777216) :
+    (index : t.getReg .x14=indexAt ord) (count : t.getReg .x17=countWord left) :
     execute openingImage (postSteps i left+fuel) t true =
       (do let e ← execute openingImage fuel (finishOne t i left) true; return e.charge (postSteps i left) 0) := by
   have chooseOk:=choose_legal t i pc sub one
@@ -240,10 +175,9 @@ theorem post_run (t : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<lef
   let b:=copied a
   have keep (k : Reg) (h7 : k≠.x7) (h30 : k≠.x30) (h31 : k≠.x31) : b.getReg k=t.getReg k :=
     (copied_keeps a k h31).trans (choose_keeps t i k h7 h30)
-  have nx:=next_ok b ord left (copied_pc a ap) l hi bound
+  have nx:=next_ok b ord left (copied_pc a ap) l hi
     ((keep .x14 (by decide) (by decide) (by decide)).trans index)
-    ((keep .x17 (by decide) (by decide) (by decide)).trans endv)
-    ((keep .x25 (by decide) (by decide) (by decide)).trans shift)
+    ((keep .x17 (by decide) (by decide) (by decide)).trans count)
   have ok : legal (postRows (kindOf i) (decide (left=1))) t := by
     rw [post_parts]
     apply legal_append
@@ -275,7 +209,7 @@ private theorem exit_of (s h : MachineState) (i : Index) (ord left last : Nat) (
   exact ⟨⟨pc,x10,(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x26).trans r.base,
     (k .x29).trans r.divReg,idx⟩,
     ⟨x10,(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x14).trans r.index,
-     (k .x17).trans r.endReg,(by rw [k .x25, r.shift, k .x9]),(k .x22).trans r.salt,(k .x26).trans r.base,(k .x29).trans r.divReg⟩,keep,q⟩
+     (k .x17).trans r.leftReg,(k .x22).trans r.salt,(k .x26).trans r.base,(k .x29).trans r.divReg⟩,keep,q⟩
 
 theorem head_exit (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last) (y : BitVec 1600) :
     HeadExit s (headed s i last y) i ord left := by
@@ -312,7 +246,7 @@ private theorem charge_comm (e : Execution) (a b c d : Nat) :
 
 /-- One position: its head, the chained generator and the salt rows. -/
 theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0<left) (hi : left≤16777216)
-    (bound : ord+left≤16777216) (r : Input s i ord left last) : execute openingImage (perSteps i left last+fuel) s true =
+    (r : Input s i ord left last) : execute openingImage (perSteps i left last+fuel) s true =
       (do let t ← perTrace s i left last; let z ← execute openingImage fuel t true
           return z.charge (perCycles i left last) (perCalls i last)) := by
   have tail (h : MachineState) (y : BitVec 1600) (hx : h=headed s i last y) :
@@ -329,8 +263,7 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     rw [post_run t i ord left fuel l hi tpc ((tk .x6).trans ex.entry.idx) t28
       ((tk .x23).trans ((ex.keep _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
         (by decide)).trans r.one)) ((tk .x12).trans ex.regs.output) ((tk .x22).trans ex.regs.salt)
-      ((tk .x14).trans ex.regs.index) ((tk .x17).trans ex.regs.endReg)
-      (by rw [tk .x25, ex.regs.shift]; simp [show ¬(left=0) by omega]) bound]
+      ((tk .x14).trans ex.regs.index) ((tk .x17).trans ex.regs.leftReg)]
     simp only [bind_assoc,pure_bind]
     apply bind_congr; intro e; apply congrArg pure; rw [charge_comm]; congr 1 <;> omega
   unfold perSteps perTrace

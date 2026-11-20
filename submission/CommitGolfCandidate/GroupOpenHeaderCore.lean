@@ -17,7 +17,6 @@ structure HeaderRegisters (s : MachineState) (p : Positions) where
 theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 0) (nr : init.getReg .x16≠0#64)
     (base0 : Base (setupPrefix init 15) p)
     (salt0 : (setupPrefix init 15).getReg .x22=9126809632) (marks0 : (setupPrefix init 15).getReg .x26=4096)
-    (shift0 : (setupPrefix init 15).getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card)
     (mem0 : (setupPrefix init 15).mem=init.mem) :
     legal headerRows init ∧ Nonempty (HeaderRegisters (header init) p) ∧ (header init).mem=(keyCopy init).mem := by
   let l:=walkRows init layoutRows
@@ -29,8 +28,7 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
   have salt : l.getReg .x22=9126809632 := by rw [eq,MachineState.getReg_setPC];exact salt0
   have marks : l.getReg .x26=4096 := by rw [eq,MachineState.getReg_setPC];exact marks0
   have lm : l.mem=init.mem := by rw [eq];exact mem0
-  have shiftl : l.getReg .x25=BitVec.ofNat 64 (8*p.card) := by rw [eq,MachineState.getReg_setPC];exact shift0
-  obtain ⟨cp,cm,cb,cr⟩:=config_frame l lpc p base salt marks shiftl nz
+  obtain ⟨cp,cm,cb,cr⟩:=config_frame l lpc p base salt marks
   have cMem : c.mem=init.mem := cm.trans lm
   obtain ⟨tpc,tm,keep0⟩:=key_frame c p cp cr
   let m:=walkRows t markRows
@@ -50,13 +48,11 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
   · rw [header_eq]
     exact ⟨⟨mpc,⟨(keep _ (by decide)).trans cr.input,(keep _ (by decide)).trans cr.output,
       (keep _ (by decide)).trans cr.selector,(keep _ (by decide)).trans cr.width,(keep _ (by decide)).trans cr.primitive,
-      (keep _ (by decide)).trans cr.index,(keep _ (by decide)).trans cr.endReg,
-      (by rw [keep .x25 (by decide) (by decide), cr.shift, keep .x9 (by decide) (by decide)]),
-      (keep _ (by decide)).trans cr.salt,
+      (keep _ (by decide)).trans cr.index,(keep _ (by decide)).trans cr.leftReg,(keep _ (by decide)).trans cr.salt,
       (keep _ (by decide)).trans cr.base,(keep _ (by decide)).trans cr.divReg⟩,
       ⟨(keep _ (by decide)).trans cb.indices,(keep _ (by decide)).trans cb.heap,(keep _ (by decide)).trans cb.count,
        (keep _ (by decide)).trans cb.leaves,(keep _ (by decide)).trans cb.start,(keep _ (by decide)).trans cb.dest,
-       (keep _ (by decide)).trans cb.mark,(keep _ (by decide)).trans cb.slots,
+       (keep _ (by decide)).trans cb.mark,(keep _ (by decide)).trans cb.slots,(keep _ (by decide)).trans cb.cap,
        (keep _ (by decide)).trans cb.capLeaves⟩,m4⟩⟩
 
 end TwoPermutationPrototype.GroupedOpening

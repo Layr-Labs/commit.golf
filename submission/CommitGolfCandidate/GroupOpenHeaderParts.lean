@@ -72,26 +72,23 @@ theorem config_ok (s : MachineState) (pc : s.pc=address 725) : legal configRows 
   simp [configRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
 
 theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
-    (b : Base s p) (salt : s.getReg .x22=9126809632) (base : s.getReg .x26=4096)
-    (shift : s.getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card) :
+    (b : Base s p) (salt : s.getReg .x22=9126809632) (base : s.getReg .x26=4096) :
     let t:=walkRows s configRows
     t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card := by
   let t:=walkRows s configRows
-  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x5,.x14,.x17,.x25,.x29] : List Reg)) : t.getReg k=s.getReg k := by
+  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x5,.x14,.x17,.x29] : List Reg)) : t.getReg k=s.getReg k := by
     simp only [List.mem_cons,List.not_mem_nil,or_false,not_or] at h
-    obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9⟩ := h
-    simp [t,configRows,walkRows,execInstrBr,Ne.symm h1,Ne.symm h2,Ne.symm h3,Ne.symm h4,Ne.symm h5,
-      Ne.symm h6,Ne.symm h7,Ne.symm h8,Ne.symm h9]
+    simp [t,configRows,walkRows,execInstrBr,Ne.symm h.1,Ne.symm h.2.1,Ne.symm h.2.2.1,Ne.symm h.2.2.2.1,
+      Ne.symm h.2.2.2.2.1,Ne.symm h.2.2.2.2.2.1,Ne.symm h.2.2.2.2.2.2.1,Ne.symm h.2.2.2.2.2.2.2]
   refine ⟨?_,?_,?_,?_⟩
   · simp [walkRows,configRows,execInstrBr,pc,address]
   · simp [walkRows,configRows,execInstrBr]
   · exact ⟨(keep _ (by decide)).trans b.indices,(keep _ (by decide)).trans b.heap,(keep _ (by decide)).trans b.count,
       (keep _ (by decide)).trans b.leaves,(keep _ (by decide)).trans b.start,(keep _ (by decide)).trans b.dest,
-      (keep _ (by decide)).trans b.mark,(keep _ (by decide)).trans b.slots,
+      (keep _ (by decide)).trans b.mark,(keep _ (by decide)).trans b.slots,(keep _ (by decide)).trans b.cap,
       (keep _ (by decide)).trans b.capLeaves⟩
   · constructor <;> simp [walkRows,configRows,execInstrBr,b.indices,b.count,salt,base,indexAt,countWord,indicesBase,
-      trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12,shift,show p.card≠0 by omega] <;>
-      first | rfl | (rw [← BitVec.ofNat_add]; try rfl)
+      trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12] <;> rfl
 
 def keyCopy (s : MachineState) := ((s.setMem 1032 (s.getMem 9126809640)).setMem 1040 (s.getMem 9126809648)).setMem 1048 (s.getMem 9126809656)
 
@@ -148,17 +145,11 @@ theorem original_base (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (n
     let t := setupPrefix (actual.initialState .opening (td,p)) 15
     Base t p ∧ t.getReg .x22=9126809632 ∧ t.getReg .x26=4096 ∧
       t.mem=(actual.initialState .opening (td,p)).mem := by
-  let initial := actual.initialState .opening (td,p)
-  have trapPointer : initial.getReg .x12 = BitVec.ofNat 64 trapdoorBase :=
-    congrArg (BitVec.ofNat 64) actual_layout.trapdoor
-  obtain ⟨proofStart, dest, ordinal, heap, count, size, nonce, slots, one, shift, marks, capLeaves, memory⟩ :=
-    setup_registers initial
-  refine ⟨opening_first_boundary actual actual_layout td p nz, ?_, ?_, ?_⟩
-  · rw [nonce,trapPointer,← BitVec.ofNat_add]; rfl
-  · simpa [Opening.markBase] using marks
-  · exact memory
+  have b:=opening_first_boundary actual actual_layout td p nz
+  exact ⟨⟨b.index,b.heap,b.left,b.leaves,b.proofBegin,b.dest,b.one,b.slots,b.capHeap,b.capLeaves⟩,
+    b.nonce,b.marks,(setup_registers _).2.2.2.2.2.2.2.2.2.2.2.2⟩
 
 theorem base_at_pc (p : Positions) (s : MachineState) (pc : Word) (b : Base s p) : Base (s.setPC pc) p :=
-  ⟨b.indices,b.heap,b.count,b.leaves,b.start,b.dest,b.mark,b.slots,b.capLeaves⟩
+  ⟨b.indices,b.heap,b.count,b.leaves,b.start,b.dest,b.mark,b.slots,b.cap,b.capLeaves⟩
 
 end TwoPermutationPrototype.GroupedOpening

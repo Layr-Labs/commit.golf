@@ -1,9 +1,9 @@
 import CommitGolfCandidate.GroupOpenWideCopy
 import CommitGolfCandidate.GroupOpenShifted30
 
-/-! Inline shifted copies and the shared 30-byte copy stub (opening words 1067..1096) of writer levels 1..12.
+/-! Inline shifted copies and the shared 30-byte copy stub (opening words 1067..1096) of writer levels 2..12.
 
-Rows `190+35k` (`k = 0..11`, the sites `CopySite.sibling k`) test
+Rows `190+35k` (`k = 1..11`, the sites `CopySite.sibling k`) test
 `x21 & 3`: a destination that is 2 mod 4 uses an inline shifted-load path (25 cycles).
 Otherwise a jump enters the shared stub at 1067, which tests `x21 & 7`: 4 mod 8 copies seven words and the last halfword (22 cycles),
 0 mod 8 three dwords, a word and the last halfword (16 cycles). The source (`x7`, a heap node) is 8-aligned. Every
@@ -36,12 +36,12 @@ structure Stub30Code (site : CopySite) : Prop where
   dwordsBack : Decodes (1062+34) (.JALR .x0 .x29 16)
 
 set_option maxHeartbeats 4000000 in
-theorem stub30_code_all : ∀ l : Fin 13, l.val < 12 → Stub30Code (.sibling l) := by
+theorem stub30_code_all : ∀ l : Fin 13, (0 < l.val ∧ l.val < 12) → Stub30Code (.sibling l) := by
   intro l h
   constructor <;> revert l <;> (try unfold Shifted30.CodeAt) <;> decide
 
 theorem wide30_sibling (site : CopySite) (wide : site.wide30 = true) :
-    ∃ l : Fin 13, site = .sibling l ∧ l.val < 12 := by
+    ∃ l : Fin 13, site = .sibling l ∧ (0 < l.val ∧ l.val < 12) := by
   cases site with
   | sibling l =>
     simp only [CopySite.wide30, decide_eq_true_eq] at wide
@@ -65,7 +65,7 @@ structure SiteFacts30 (site : CopySite) : Prop where
   halfwords : site.halfwords = 15
   notWide : site.wide = false
 
-theorem site_facts30_all : ∀ l : Fin 13, l.val < 12 → SiteFacts30 (.sibling l) := by
+theorem site_facts30_all : ∀ l : Fin 13, (0 < l.val ∧ l.val < 12) → SiteFacts30 (.sibling l) := by
   intro l h
   constructor <;> revert l <;> decide
 

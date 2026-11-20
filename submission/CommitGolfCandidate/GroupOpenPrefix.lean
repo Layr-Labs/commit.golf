@@ -117,25 +117,39 @@ structure GroupCursor (s : MachineState) (i : Index) (o j : Nat) : Prop where
   index : s.getReg .x6=BitVec.ofNat 64 i.val
   output : s.getReg .x21=BitVec.ofNat 64 (recordBase o+16)
 
-def saltStart (s : MachineState) : MachineState := slotStart (copyState .nonce (nonceSetup s))
+def saltStart (s : MachineState) : MachineState := slotStart (Writer16.state (nonceSetup s))
 
 theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := saltStart s
-    RunsOpeningBlock s u 24 ∧ GroupCursor u i o 0 ∧ PrefixWrites s u i o 0 16 ∧ Keeps s u := by
+    RunsOpeningBlock s u (8+nonceCopyCost o) ∧ GroupCursor u i o 0 ∧ PrefixWrites s u i o 0 16 ∧ Keeps s u := by
   let t := nonceSetup s
-  let v := copyState .nonce t
+  let v := Writer16.state t
   have h := nonce_setup_post s
   have z := slot_post v
   obtain ⟨srcEven,dstEven,sep,room⟩ := all_nonce_copies_fit i o fit
-  have field : FieldInputs .nonce t (nonceAddress i) (recordBase o) :=
-    ⟨by rw [h.1,start.pc]; rfl,physical_nonce_source s i start.nonce start.index,
-      by simpa [CopySite.destOffset] using (h.2.2.2.2 .x21 (by decide) (by decide)).trans start.output,
-      sep,room,srcEven,dstEven,fun w => by simp [CopySite.wide] at w⟩
-  have fieldPC : v.pc = 4232 := field.final_pc
+  have sa : nonceAddress i%8=0 := by
+    unfold nonceAddress
+    have : nonceBase%8=0 := by decide
+    omega
+  have apart : nonceAddress i+28 ≤ recordBase o := by
+    have bound := i.isLt
+    have tapeEnd := nonces_end_at_indices
+    have indexEnd := indices_before_records
+    have gap : indicesBase+28 ≤ proofBase := by decide
+    unfold nonceAddress recordBase
+    omega
+  have fullRoom : recordBase o+28 ≤ MEMORY_BYTES := by
+    have bound := all_record_ends_fit o fit
+    unfold recordBase recordBytes at *
+    omega
+  have field := Writer16.copy t (nonceAddress i) (recordBase o)
+    (by rw [h.1,start.pc]; rfl) (physical_nonce_source s i start.nonce start.index)
+    ((h.2.2.2.2 .x21 (by decide) (by decide)).trans start.output) sa dstEven apart fullRoom
+  have fieldPC : v.pc = 4232 := field.pc
   have rd : v.getReg .x6 = BitVec.ofNat 64 i.val :=
-    (copy_register .nonce t _ (by decide) (.inl rfl)).trans (h.2.2.2.1.trans start.index)
+    (field.regs _ (by decide)).trans (h.2.2.2.1.trans start.index)
   have fixed (r : Reg) (a : r≠.x31) (b : r≠.x6) (c : r≠.x7) :
-      v.getReg r = s.getReg r := (copy_register .nonce t r a (.inl rfl)).trans (h.2.2.2.2 r b c)
+      v.getReg r = s.getReg r := (field.regs r a).trans (h.2.2.2.2 r b c)
   have stable : Keeps s (slotStart v) := by
     intro r free
     simp only [prefixScratch,List.mem_cons,List.not_mem_nil,or_false,not_or] at free
@@ -144,15 +158,23 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
   have gate : RunsOpeningBlock s t 3 := fun fuel coins => execute_nonce_setup s start.pc start.readable fuel coins
   have sourceBytes : PrefixWrites t v i o 0 16 := by
     apply PrefixWrites.of_copy (src:=nonceAddress i) (count:=16)
-    · change ByteCopy t (copyState .nonce t) (nonceAddress i) (recordBase o+0) 16
+    · change ByteCopy t (Writer16.state t) (nonceAddress i) (recordBase o+0) 16
       exact field.bytes
     · simpa using room
     · intro b hb; simp [firstSource,hb]
     · intro a ha
-      exact field.words_before proofBase a ha (by unfold recordBase; omega) (by decide)
-  have nonceRun : RunsOpeningBlock t v 16 := field.run
-  refine ⟨(gate.next nonceRun).next (run_slot v fieldPC), ⟨?_,?_,?_,?_,?_,?_,?_⟩,
+      apply field.below
+      have proofFit : proofBase<2^64 := by decide
+      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : a<2^64)]
+      have aligned : proofBase%8=0 := by decide
+      unfold recordBase
+      omega
+  have nonceRun : RunsOpeningBlock t v (nonceCopyCost o) := field.run
+  refine ⟨?_, ⟨?_,?_,?_,?_,?_,?_,?_⟩,
     sourceBytes.move h.2.1.symm z.2.1, stable⟩
+  · have total := (gate.next nonceRun).next (run_slot v fieldPC)
+    rw [show 3+nonceCopyCost o+5=8+nonceCopyCost o by omega] at total
+    exact total
   · change (slotStart v).pc = _
     rw [z.1,fieldPC]; rfl
   · exact (stable .x9 (by decide)).trans start.heap
@@ -235,7 +257,7 @@ def recordPrefix (s : MachineState) := quartetExit (groupStep 2 (groupStep 1 (gr
 
 theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let u := recordPrefix s
-    RunsOpeningBlock s u (39+3*recordCopyCost o) ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧
+    RunsOpeningBlock s u (23+nonceCopyCost o+3*recordCopyCost o) ∧ LowerCursor u i o 0 ∧ PrefixWrites s u i o 0 112 ∧
       Keeps s u := by
   have ⟨salt,g0,w0,k0⟩ := run_salt_start s i o fit start
   have ⟨s0,g1,w1,k1⟩ := run_group_step _ i o 0 fit g0
@@ -250,7 +272,7 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
     exact e.2.2.2.2 r free.2.2.2.1 free.1
   have writes : PrefixWrites s last i o 0 112 := (((w0.join w1 (by decide) fit).join w2 (by decide) fit).join w3 (by decide) fit)
   have total := (((salt.next s0).next s1).next s2).next (run_quartet_exit _ g3.pc)
-  rw [show 24+(4+recordCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+3 = 39+3*recordCopyCost o by omega]
+  rw [show (8+nonceCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+(4+recordCopyCost o)+3 = 23+nonceCopyCost o+3*recordCopyCost o by omega]
     at total
   refine ⟨total, ⟨?_,?_,?_,?_⟩,
     writes.move rfl e.2.1,past.next kept⟩

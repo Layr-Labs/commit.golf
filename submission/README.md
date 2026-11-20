@@ -1,3 +1,60 @@
+# Product: master commit optimization + next12 opening pipeline
+
+This candidate combines Mahmoud514's **a8867e15-fdea-4e44-9c5e-f1edc6f35923**
+(promoted master `0e9bc80c58d8e178a9f7d00810362d4c7bb8593c`) with our
+`devin/next12` opening work (`c2bea0363dd88360f720defa3f78410f3f0b757d`).
+The branch is based on master, not on the older next12 commit.
+
+The claim is **504,586,268 commit cycles**, **122,262 opening cycles**, and
+**72,160 proof bytes**:
+
+```text
+(504,586,268 + 122,262) × 72,160 = 36,419,767,524,800
+```
+
+This is **445,588,000** below master's score and **46,254,560** below the
+reported 8003820a comparator (36,419,813,779,360). The latter was validating
+when the public submission listing was retrieved; it is not our verification.
+
+## Integration and provenance
+
+- **Mahmoud514 / a8867e15** receives credit for the 8,619-cycle commit-side
+  improvement. The delivered commit image and every `Grouped*` proof module
+  are unchanged from master: four-tile packet layout, optimized setup/scan,
+  tile copy and relocated upper/tail execution remain intact.
+- **Our own lineage**, including accepted **55e0c64c-6548-44ff-95c9-c49567e3ed0e**
+  (promoted as `829dd8c`), supplies the opening implementation. Next11's
+  alignment-aware nonce saves 320 cycles, and next12's whole-width level-1
+  sibling copy saves 448, taking that accepted 123,030 bound to 122,262.
+  Earlier cap, selector and writer refinements are also retained.
+- **benbuschmann / c4598882-fa8a-43ec-9c00-b628b5e8eea8** is present in master's
+  Git ancestry at `4001469`. Its 122,903-cycle opening snapshot is not used:
+  the later a8867e15 snapshot reverted the opener to the older 128,437 version.
+  This integration takes the complete next12 opening image/proofs instead,
+  rather than transplanting benbuschmann's alternative opening changes.
+  The identifier `40014692...` is a Git commit, not a commit-cycle count.
+- The checker, embedded data, ABI, trapdoor layout and proof serialization are
+  unchanged. `K1Manifest` combines master commit literals with next12 opening
+  literals. `programs.json`, duplicate opening literals, numeric accounting,
+  `claim.json` and `Solution.lean` describe that same combined artifact.
+
+This is a recombination, not an additional instruction optimization over either
+component. Opening-side modules match next12 except for the combined commit
+claim in `GroupOpenClosing`. The earlier entries below are historical records;
+their claims apply to those earlier artifacts, not to this combined candidate.
+
+Validation uses an artifact-backed `lake build Solution` in the external
+verifier-style project, contract/test builds, verifier Python tests, axiom
+inspection, exact source/image/artifact checks and mixed-oracle emulator
+pipelines (root, complete trapdoor, compression trace, proof and checker).
+These are local checks, **not an official Yukon verifier run**. The local
+systemd 249 host is below the verifier's required 257. Nothing is submitted or
+pushed by this integration.
+
+---
+
+## Historical master entry
+
 # Product: optimized grouped commit pipeline (504,586,268 commit cycles)
 
 Stacked on `250e7781` (`657fbda1-62dd-468f-afbc-e8617b60c6c0`). Tightens the grouped
