@@ -60,7 +60,8 @@ theorem chain_post (h : MachineState) (i : Index) (e : ChainEntry h i) (t : Mach
     simp [writeWord,w128]
   show (walkRows b chainExitRows).pc=address 796 ∧ _
   obtain ⟨_,epc,e10,ekeep,emem⟩ := enter_rows a (chainLinks i) apc
-    (by rw [a31];exact (slli_two (chainLinks i)).symm) lt
+    (by rw [a31];exact (slli_two (chainLinks i)).symm)
+    ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.linkBase) lt
   have ready : LinkReady (walkRows a chainEnterRows) (chainLinks i) :=
     ⟨epc,e10.trans ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.output),
       (ekeep _ (by decide) (by decide) (by decide)).trans ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.output),

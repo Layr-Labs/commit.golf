@@ -5,13 +5,13 @@ import CommitGolfCandidate.TwoPermutationSyscall
 import CommitGolfCandidate.K6Chain
 
 /-! Opener prefix, salt regeneration of one position on the linked (chain) schedule: rows
-`chainStart .. chainStart+13` (777..790) and the link block at words 896..929, then the exit row 795. The header
-sets `x3 = 374` (`gp`), `x2 = 4352` (`sp`), and `x1 = 4095` once (rows 755..757); no opener row writes them afterwards. With `n = i % 4096`, `r = n % 11` (rank), `h = n / 11` (head in the tile),
+`chainStart .. chainStart+12` (777..789) and the link block at words 896..929, then the exit row 795. The header
+sets `x18 = 8192` (row 715), `x3 = 374` (`gp`), `x2 = 4352` (`sp`), and `x1 = 4095` once (rows 755..757); no opener row writes them afterwards. With `n = i % 4096`, `r = n % 11` (rank), `h = n / 11` (head in the tile),
 `j = h % 34` (links after the keyed restart):
 ```
 and x30,x6,x1 ; remu x31,x30,x3 ; divu x30,x31,x29 ; remu x28,x31,x29 ;
 sub x7,x6,x31 ; slli x7,x7,8 ; add x7,x7,x2 ; sd x7,0(x10) ; slli x31,x30,2 ; ecall ;
-auipc x7,0 ; sub x7,x7,x31 ; addi x10,x12,0 ; jalr x0,568(x7) ;
+sub x7,x18,x31 ; addi x10,x12,0 ; jalr x0,-380(x7) ;
 [896..928: 33 x ecall] ; 929: jal x0,<795> ; 795: addi x10,x0,1024
 ```
 (the `jalr` enters the unrolled link block `j` words before its end, so link calls cost no ordinary instructions)
@@ -32,8 +32,8 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 abbrev chainStart : Nat := 777
 /-- Links of position `i`: its head is `chainLinks i` heads after the keyed restart. -/
 def chainLinks (i : Index) : Nat := ((i.val%4096)/11)%34
-/-- Steps: 9 counter rows, the keyed call, 4 entry rows, one call per link, the `jal` back and the exit row. -/
-def chainSteps (i : Index) : Nat := 16+chainLinks i
+/-- Steps: 9 counter rows, the keyed call, 3 entry rows, one call per link, the `jal` back and the exit row. -/
+def chainSteps (i : Index) : Nat := 15+chainLinks i
 def chainCalls (i : Index) : Nat := 1+chainLinks i
 /-- One `remu`, one `divu`, one `remu` (4 cycles each) and 8 cycles per call. -/
 def chainCycles (i : Index) : Nat := chainSteps i+9+7*chainCalls i
@@ -57,6 +57,7 @@ structure ChainEntry (h : MachineState) (i : Index) : Prop where
   gp : h.getReg .x3=374
   sp : h.getReg .x2=4352
   mask : h.getReg .x1=4095
+  linkBase : h.getReg .x18=8192
 
 /-- K1 generator input words 129..152 (word 128 is the counter): key words 1..3, then zeros. -/
 def KeyWords (h : MachineState) (k : BitVec 192) : Prop :=
@@ -68,8 +69,8 @@ def chainPreRows : List Row := [(777,.AND .x30 .x6 .x1),
   (778,.REMU .x31 .x30 .x3),(779,.DIVU .x30 .x31 .x29),(780,.REMU .x28 .x31 .x29),
   (781,.SUB .x7 .x6 .x31),(782,.SLLI .x7 .x7 8),(783,.ADD .x7 .x7 .x2),
   (784,.SD .x10 .x7 0),(785,.SLLI .x31 .x30 2)]
-def chainEnterRows : List Row := [(787,.AUIPC .x7 0),(788,.SUB .x7 .x7 .x31),
-  (789,.ADDI .x10 .x12 0),(790,.JALR .x0 .x7 568)]
+def chainEnterRows : List Row := [(787,.SUB .x7 .x18 .x31),
+  (788,.ADDI .x10 .x12 0),(789,.JALR .x0 .x7 3716)]
 /-- First word after the unrolled link block (the `jal` back to the exit row). -/
 abbrev linkEnd : Nat := 929
 def chainExitRows : List Row := [(929,.JAL .x0 2096616),(795,.ADDI .x10 .x0 1024)]
@@ -100,7 +101,7 @@ theorem link_fetch (s : MachineState) (c : Nat) (lo : 0<c) (hc : c<34) (pc : s.p
   rwa [show 896+(33-c)=linkEnd-c by unfold linkEnd; omega] at h
 
 theorem chain_lengths : chainPreRows.length=9 ∧ price chainPreRows=18 ∧
-    chainEnterRows.length=4 ∧ price chainEnterRows=4 ∧ chainExitRows.length=2 ∧ price chainExitRows=2 := by decide
+    chainEnterRows.length=3 ∧ price chainEnterRows=3 ∧ chainExitRows.length=2 ∧ price chainExitRows=2 := by decide
 
 /-! ### Arithmetic of the counter rows -/
 
@@ -298,25 +299,37 @@ theorem after_keyed {bits : Nat} (h : MachineState) (i : Index) (e : ChainEntry 
   refine ⟨?_,fun x a b c d => (regs x).trans (keep x a b c d),(regs _).trans r30,(regs _).trans r28,(regs _).trans r31⟩
   rw [write_pc,pc]; exact address_succ 786
 
-/-- The entry target: `((address 787 + 0) - 4c + 568) & ~1 = address (linkEnd - c)`. -/
+/-- The entry target: `(8192 - 4c - 380) & ~1 = address (linkEnd - c)`. -/
 theorem enter_target (c : Nat) (hc : c<34) :
-    (address 787+(((0#20).zeroExtend 32 <<< 12 : BitVec 32).signExtend 64)-(BitVec.ofNat 64 c <<< (2#6).toNat)
-      +signExtend12 568#12) &&& ~~~1#64=address (linkEnd-c) := by
+    (8192#64-(BitVec.ofNat 64 c <<< (2#6).toNat)
+      +signExtend12 3716#12) &&& ~~~1#64=address (linkEnd-c) := by
   interval_cases c <;> decide
 
+theorem enter_walk (a : MachineState) :
+    walkRows a chainEnterRows =
+      (((a.setReg .x7 (a.getReg .x18-a.getReg .x31)).setReg .x10 (a.getReg .x12+0)).setPC
+        ((a.getReg .x18-a.getReg .x31+signExtend12 3716#12) &&& ~~~1#64)) := rfl
+
 theorem enter_rows (a : MachineState) (c : Nat) (pc : a.pc=address 787)
-    (cnt : a.getReg .x31=BitVec.ofNat 64 c <<< (2#6).toNat) (hc : c<34) :
+    (cnt : a.getReg .x31=BitVec.ofNat 64 c <<< (2#6).toNat) (base : a.getReg .x18=8192) (hc : c<34) :
     legal chainEnterRows a ∧ (walkRows a chainEnterRows).pc=address (linkEnd-c) ∧
       (walkRows a chainEnterRows).getReg .x10=a.getReg .x12 ∧
       (∀ x, x≠.x7 → x≠.x10 → x≠.x31 → (walkRows a chainEnterRows).getReg x=a.getReg x) ∧
       (walkRows a chainEnterRows).mem=a.mem := by
   refine ⟨?_,?_,?_,?_,?_⟩
-  · simp [chainEnterRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
-  · rw [← enter_target c hc]
-    simp [chainEnterRows,walkRows,execInstrBr,pc,cnt,address]
-  · simp [chainEnterRows,walkRows,execInstrBr,show signExtend12 0#12=0#64 by decide]
+  · refine ⟨pc,rfl,?_,rfl,?_,rfl,trivial⟩
+    · change a.pc+4=address 788
+      rw [pc];rfl
+    · change a.pc+4+4=address 789
+      rw [pc];rfl
+  · rw [enter_walk,pc_of_set,base,cnt]
+    exact enter_target c hc
+  · rw [enter_walk]
+    simp
   · intro x h7 h10 h31
-    simp [chainEnterRows,walkRows,execInstrBr,Ne.symm h7,Ne.symm h10,Ne.symm h31]
-  · simp [chainEnterRows,walkRows,execInstrBr]
+    rw [enter_walk]
+    simp [Ne.symm h7,Ne.symm h10]
+  · rw [enter_walk]
+    rfl
 
 end TwoPermutationPrototype.GroupedOpening

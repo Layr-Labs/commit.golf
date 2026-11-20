@@ -1,4 +1,50 @@
-# Product: inline aligned 28-byte and A1 copies (-64 opening cycles)
+# Product: constant-base salt-link dispatch (-128 opening cycles)
+
+Based on next19 `0428943f868a7b8e9e733a5136ea6a1b73a0e93b`. Refetched
+master `23c6dec30a12b7c19a35161f41bbd290de815d12` delivers exactly next17's
+manifest. Its commitment/checker/data/ABI already match next19; no new
+public implementation is transplanted. All inherited credits below apply.
+
+The opener previously copied the query count into `x18`, used it once to
+compute `8*count`, then preserved the otherwise unused count copy. The
+shift now reads the original `x16`; the former copy initializes `x18=8192`
+with `LUI x18,2`, without increasing header length or cost. The salt chain
+replaces `AUIPC; SUB; ADDI; JALR` by `SUB x7,x18,x31; ADDI; JALR -380(x7)`.
+For every link count `c<34`, the jump target is exactly
+`8192-4*c-380 = address (929-c)`. Link queries and all salt bytes are unchanged.
+
+Only opening words **715, 722, 787, 788, 789** change. The old word 790 is
+unreachable from the new entry path and remains unchanged. The image is
+still 1,976 words. No commitment/checker instructions, embedded data, ABI,
+nonce/copy bodies, oracle calls or proof serialization change.
+
+`GroupOpenSetup` and header rows establish the new constant; `Base`,
+`Input`, head execution and `ChainEntry` carry its preservation. Chain
+entry takes three rather than four ordinary steps. The exact chain bound
+drops from 296 to 295 cycles and the pass bound from `333*n+2` to `332*n+2`.
+The full-batch claim is:
+
+```json
+{"commitCycles":504585244,"openingCycles":118593,"proofBytes":72160}
+```
+
+```text
+(504585244 + 118593) * 72160 = 36419428877920
+Next19 score: 36419438114400
+Saving: 128 opening cycles; 9236480 score
+```
+
+Mixed, patterned emulator comparisons use full commitments and compare
+every compression call/input, full root/trapdoor, opening proof bytes and
+checker acceptance. The spread/alternating/clustered/partial127/single
+opening cycles are 118593/118465/79372/117698/2038, respectively; savings
+are 128/128/128/127/1. Empty opening/check paths remain 7/11 cycles;
+nonempty checking without proof rejects in 9 cycles.
+
+Verification evidence and public provenance are recorded under `~/cg/sub16`.
+These are local artifact-backed checks, not an official Yukon verifier run.
+
+## Prior next19: inline aligned 28-byte and A1 copies (-64 opening cycles)
 
 Based on next18 `ee4f0d6258119c7e53dd9ea69b6125cd801276c3`, retaining
 its direct aligned nonce branch and next17's inline 30-byte writers.

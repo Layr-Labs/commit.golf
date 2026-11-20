@@ -34,7 +34,8 @@ theorem chain_run (h : MachineState) (i : Index) (e : ChainEntry h i) (fuel : Na
   apply bind_congr; intro z
   obtain ⟨apc,akeep,a30,_,a31⟩ := after_keyed h i e z
   obtain ⟨ok,epc,e10,ekeep,_⟩ := enter_rows _ (chainLinks i) apc
-    (by rw [a31];exact (slli_two (chainLinks i)).symm) lt
+    (by rw [a31];exact (slli_two (chainLinks i)).symm)
+    ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.linkBase) lt
   rw [walk_rows_run _ chainEnterRows ok chain_enter_fetch _ true]
   have ready : LinkReady (walkRows (writeBits (chainBefore h) (wordAddress 192) z) chainEnterRows) (chainLinks i) :=
     ⟨epc,e10.trans ((akeep _ (by decide) (by decide) (by decide) (by decide)).trans e.output),

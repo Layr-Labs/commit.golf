@@ -64,7 +64,7 @@ theorem opening_first_boundary (s : Submission) (layout : OpeningLayout s)
   obtain ⟨proofStart, dest, ordinal, heap, count, size, nonce, slots, one, shift, marks, capLeaves, memory⟩ :=
     setup_registers initial
   exact ⟨ordinal.trans indexPointer, heap.trans trapPointer,
-    count.trans countValue, by simpa [LENGTH, LOG_LENGTH] using size,
+    count, by simpa [LENGTH, LOG_LENGTH] using size,
     proofStart.trans proofPointer, dest.trans proofPointer, one,
     by rw [slots,trapPointer,← BitVec.ofNat_add]; rfl,
     by simpa [Opening.markBase] using capLeaves⟩

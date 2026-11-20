@@ -140,7 +140,7 @@ structure Registers (s : MachineState) (ord left : Nat) : Prop where
 structure Base (s : MachineState) (p : Positions) : Prop where
   indices : s.getReg .x8=BitVec.ofNat 64 indicesBase
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
-  count : s.getReg .x18=BitVec.ofNat 64 p.card
+  count : s.getReg .x18=8192
   leaves : s.getReg .x19=4194304
   start : s.getReg .x20=BitVec.ofNat 64 proofBase
   dest : s.getReg .x21=BitVec.ofNat 64 proofBase
@@ -162,6 +162,7 @@ structure Input (s : MachineState) (i : Index) (ord left last : Nat) extends Reg
   gp : s.getReg .x3=374
   sp : s.getReg .x2=4352
   mask : s.getReg .x1=4095
+  linkBase : s.getReg .x18=8192
 
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.getReg_setPC
 attribute [local simp] pc_of_set mem_of_set mem_of_reg mem_of_store open_zero

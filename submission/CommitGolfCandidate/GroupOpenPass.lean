@@ -108,7 +108,7 @@ theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (
   have card : p.card≤16777216 := by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
   have ea : indexAt j=wordAddress (1174405636+j) := by unfold indexAt wordAddress;congr 1 <;> omega
   refine ⟨r.toRegisters,by simpa [passPC,Nat.ne_of_lt hj] using r.pc,r.mark,r.heap,r.leaves,r.slots,r.quartet,
-    last_small p j,?_,?_,r.gp,r.sp,r.mask⟩
+    last_small p j,?_,?_,r.gp,r.sp,r.mask,r.count⟩
   · have same := r.frame (1174405636+j) (by omega) (by
       rintro (h|h|h|h|⟨q,hq,m,hm,e⟩)
       all_goals (try omega)
@@ -234,7 +234,7 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     apply bind_congr;intro t;apply bind_congr;intro z;apply congrArg (fun x : Execution => (pure x : OracleComp World Execution))
     cases z;simp [Execution.charge,passCycles,passCalls] <;> omega
 
-theorem chain_cycles_le (i : Index) : chainCycles i≤296 := by
+theorem chain_cycles_le (i : Index) : chainCycles i≤295 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCycles chainSteps chainCalls; omega
 
@@ -242,8 +242,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 333 cycles per position (new even quartet 25, chain link 33: 296, post ≤ 12) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤333*n+2 := by
+/-- At most 332 cycles per position (new even quartet 25, chain link 33: 295, post ≤ 12) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤332*n+2 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

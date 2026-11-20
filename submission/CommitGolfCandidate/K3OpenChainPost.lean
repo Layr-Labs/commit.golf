@@ -71,7 +71,8 @@ theorem before_view (h : MachineState) (i : Index) (e : ChainEntry h i) (w : Nat
   exact memory_at_store (address:=128) (index:=w) (by decide) (by omega)
 
 theorem enter_rows_mem (a : MachineState) : (walkRows a chainEnterRows).mem=a.mem := by
-  simp only [chainEnterRows,walkRows,List.foldl,execInstrBr,mem_of_set,mem_of_reg]
+  rw [enter_walk]
+  rfl
 
 theorem exit_rows_mem (b : MachineState) : (walkRows b chainExitRows).mem=b.mem := by
   have jm (s : MachineState) (offset : BitVec 21) : (execInstrBr s (.JAL .x0 offset)).mem=s.mem := by

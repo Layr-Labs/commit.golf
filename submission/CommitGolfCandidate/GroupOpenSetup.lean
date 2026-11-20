@@ -12,9 +12,9 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 
 def setupInstructions : List Instr :=
   [.ADDI .x20 .x15 0, .ADDI .x21 .x15 0, .BEQ .x16 .x0 2828,
-   .ADDI .x8 .x13 0, .ADDI .x9 .x12 0, .ADDI .x18 .x16 0,
+   .ADDI .x8 .x13 0, .ADDI .x9 .x12 0, .LUI .x18 2,
    .LUI .x19 1024, .LUI .x6 131072, .ADD .x24 .x9 .x6, .SLLI .x6 .x6 3, .ADD .x22 .x24 .x6,
-   .ADDI .x23 .x0 1, .SLLI .x25 .x18 3, .LUI .x26 1, .ADDI .x27 .x0 256]
+   .ADDI .x23 .x0 1, .SLLI .x25 .x16 3, .LUI .x26 1, .ADDI .x27 .x0 256]
 
 def setupPrefix (state : MachineState) (count : Nat) : MachineState :=
   (setupInstructions.take count).foldl execInstrBr state
@@ -25,7 +25,7 @@ theorem setup_registers (state : MachineState) :
     after.getReg .x21 = state.getReg .x15 ∧
     after.getReg .x8 = state.getReg .x13 ∧
     after.getReg .x9 = state.getReg .x12 ∧
-    after.getReg .x18 = state.getReg .x16 ∧
+    after.getReg .x18 = 8192 ∧
     after.getReg .x19 = BitVec.ofNat 64 (LENGTH/4) ∧
     after.getReg .x22 = state.getReg .x12 + BitVec.ofNat 64 (288 * LENGTH) ∧
     after.getReg .x24 = state.getReg .x12 + BitVec.ofNat 64 (32*LENGTH) ∧
