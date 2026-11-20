@@ -2,6 +2,7 @@ import CommitGolfCandidate.Model
 import CommitGolfCandidate.Memory
 import CommitGolfCandidate.CommitLeaf
 import CommitGolfCandidate.CheckEvaluation
+import CommitGolfCandidate.WriteMemory
 
 /-! Refinement of the machine's salted leaf hash to the reference computation. -/
 namespace CommitGolfCandidate
@@ -88,21 +89,27 @@ theorem check_leaf_step_outside (state : MachineState) (answer : BitVec 256)
     exact ⟨outside 4 (by decide), outside 5 (by decide), outside 6 (by decide), outside 7 (by decide)⟩
   · exact ⟨outside 0 (by decide), outside 1 (by decide), outside 2 (by decide), outside 3 (by decide)⟩
 
-/-- Commit and check use the identical leaf copy and compression operations. -/
+/-- Commit and check use the identical leaf copy operation. The compression call site
+now writes the answer directly because its arguments are hoisted out of the loop. -/
 theorem commit_leaf_copy_eq_check (state : MachineState) :
     commitLeafCopyState state = checkLeafCopyState state := rfl
 
-theorem commit_compression_eq_check (state : MachineState) (answer : BitVec 256) :
-    commitCompressionState state answer = checkCompressionState state answer := rfl
-
-/-- The two leaf-step states differ only in their next program counter. -/
-theorem commit_leaf_step_memory (state : MachineState) (answer : BitVec 256) :
-    (commitLeafStepState state answer).mem = (checkLeafStepState state answer).mem := rfl
+theorem commit_compression_memory_outside (state : MachineState) (answer : BitVec 256)
+    (address : Word) (outside : address ≠ 256 ∧ address ≠ 264 ∧ address ≠ 272 ∧ address ≠ 280 ∧
+      address ≠ 288 ∧ address ≠ 296 ∧ address ≠ 304 ∧ address ≠ 312) :
+    (commitCompressionState state answer).getMem address = state.getMem address := by
+  unfold commitCompressionState
+  rw [writeBits_memory_outside]
+  intro i hi
+  change i < 32 at hi
+  interval_cases i <;> norm_num [alignToDword] <;> tauto
 
 theorem commit_leaf_step_digest (state : MachineState) (answer : BitVec 256) :
     readBuffer (commitLeafStepState state answer) 256 32 = answer := by
-  change readBuffer (checkCompressionState (checkLeafCopyState state) answer) 256 32 = answer
-  exact check_compression_digest _ _
+  change readBuffer (commitCompressionState (commitLeafCopyState state) answer) 256 32 = answer
+  unfold commitCompressionState
+  simpa using (write_bits_digest (commitLeafCopyState state) 256 0 answer
+    (by decide) (by decide))
 
 /-- Commitment uses the same input block ordering as checking. -/
 theorem commit_leaf_input (state : MachineState)
@@ -119,8 +126,13 @@ theorem commit_leaf_step_outside (state : MachineState) (answer : BitVec 256)
     (address : Word) (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256 + 8*i)) :
     (commitLeafStepState state answer).getMem address = state.getMem address := by
-  change (checkLeafStepState state answer).getMem address = _
-  exact check_leaf_step_outside state answer address scratch outside
+  change (commitCompressionState (commitLeafCopyState state) answer).getMem address =
+    state.getMem address
+  rw [commit_compression_memory_outside]
+  · apply check_leaf_copy_outside _ _ scratch
+    exact ⟨outside 4 (by decide), outside 5 (by decide), outside 6 (by decide), outside 7 (by decide)⟩
+  · exact ⟨outside 0 (by decide), outside 1 (by decide), outside 2 (by decide), outside 3 (by decide),
+      outside 4 (by decide), outside 5 (by decide), outside 6 (by decide), outside 7 (by decide)⟩
 
 /-- The checker leaf loop computes the reference fold over the message blocks.
 The source region lies above scratch, stays aligned, and does not wrap. -/
@@ -217,7 +229,7 @@ theorem commit_leaf_loop_digest (oracle : Oracle) (state : MachineState)
     let answer := combine oracle.compression (readBuffer state 256 32) (blocks 0)
     let next := commitLeafStepState state answer
     have registers := commit_leaf_block_registers state answer
-    have nextScratch : next.getReg .x21 = 256 := registers.2.2.1.trans scratch
+    have nextScratch : next.getReg .x21 = 256 := registers.2.1.trans scratch
     have nextPointer : next.getReg .x8 = BitVec.ofNat 64 (address + 32) := by
       rw [show next.getReg .x8 = state.getReg .x8 + 32 from registers.1, pointer]
       rw [BitVec.ofNat_add]
@@ -275,7 +287,7 @@ theorem commit_leaf_loop_outside (oracle : Oracle) (state : MachineState) (count
     rw [commitLeafLoop, check_evaluation_public_bind]
     let answer := oracle.compression (readBuffer (commitLeafCopyState state) 256 64)
     change (checkEvaluation oracle (commitLeafLoop (commitLeafStepState state answer) count)).1.getMem address = _
-    rw [ih _ ((commit_leaf_block_registers state answer).2.2.1.trans scratch)]
+    rw [ih _ ((commit_leaf_block_registers state answer).2.1.trans scratch)]
     exact commit_leaf_step_outside state answer address scratch outside
 
 /-- The full checker leaf subroutine hashes exactly the eight message blocks

@@ -34,20 +34,23 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
     ready.getReg .x21 = 256 ∧ ready.getReg .x20 = 0 := by
   dsimp only
   have regs := commit_setup_registers initial
-  have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20) :
+  have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20)
+      (not5 : reg ≠ .x5) (not10 : reg ≠ .x10) (not11 : reg ≠ .x11)
+      (not12 : reg ≠ .x12) (not13 : reg ≠ .x13) :
       (commitReadyState (writeBits (commitSetupState initial)
         ((commitSetupState initial).getReg .x10) answer)).getReg reg =
           (commitSetupState initial).getReg reg := by
-    rw [commit_ready_register _ reg notScratch notCounter, writeBits_register]
+    rw [commit_ready_register _ reg notScratch notCounter not5 not10 not11 not12 not13,
+      writeBits_register]
   have counters := commit_ready_counters (writeBits (commitSetupState initial)
     ((commitSetupState initial).getReg .x10) answer)
-  exact ⟨(readyReg .x8 (by decide) (by decide)).trans regs.2.1,
-    (readyReg .x9 (by decide) (by decide)).trans regs.2.2.1,
-    (readyReg .x18 (by decide) (by decide)).trans regs.2.2.2.2.2.1,
-    (readyReg .x19 (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
-    (readyReg .x23 (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.1,
-    (readyReg .x26 (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.2,
-    counters.1, counters.2⟩
+  exact ⟨(readyReg .x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.1,
+    (readyReg .x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.1,
+    (readyReg .x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.1,
+    (readyReg .x19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
+    (readyReg .x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.1,
+    (readyReg .x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.2,
+    counters.1, counters.2.1⟩
 
 /-- Fixed ABI pointers and loop registers, independent of sampled salt bytes. -/
 theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec bits) :
@@ -70,14 +73,20 @@ theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec
     regs.2.2.2.1, regs.2.2.2.2.1.trans leafPtr, regs.2.2.2.2.2.1.trans outputPtr,
     regs.2.2.2.2.2.2⟩
 
+/-- The compression arguments are installed by the commitment image before the loop. -/
+theorem commit_input_args (message : Message) {bits : Nat} (answer : BitVec bits) :
+    CommitCompressionArgs (commitInputReady message answer) := by
+  dsimp only [commitInputReady]
+  exact (commit_ready_counters _).2.2
+
 /-- The first iteration has space for every remaining message block, salt, and
 leaf digest, for all actual messages and every private random answer. -/
 theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bits) :
     CommitLeavesInvariant (commitInputReady message answer) (2 ^ 24) := by
   have regs := commit_input_registers message answer
-  refine ⟨?_, ?_, ?_, regs.2.2.2.2.2.2.1, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, regs.2.2.2.2.2.2.1, ?_, ?_, ?_, commit_input_args message answer⟩
   · have setupPC := commit_setup_pc (submission.initialState .commit message) rfl
-    change (commitReadyState _).pc = 4256
+    change (commitReadyState _).pc = 4276
     apply commit_ready_pc
     simp only [writeBits, MachineState.setPC]
     rw [setupPC]; rfl

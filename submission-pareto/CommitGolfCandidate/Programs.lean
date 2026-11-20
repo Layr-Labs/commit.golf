@@ -92,6 +92,18 @@ def leafSubroutine : List Asm :=
   copyDigest 8 21 0 32 ++ compressScratch ++
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
+/-- Syscall arguments that are constant for every leaf compression, installed once
+before the leaf loop by the commitment image. -/
+def commitCompressionSetup : List Asm :=
+  [addi 5 0 0, mv 10 21, addi 11 0 64, mv 12 21, addi 13 0 0]
+
+/-- The commitment leaf subroutine relies on x5/x10/x11/x12/x13 set once by
+commitCompressionSetup; each block issues only the syscall and pointer advance. -/
+def commitLeafSubroutine : List Asm :=
+  [.label "leaf", addi 28 0 8] ++
+  (List.range 8).flatMap (fun _ => copyDigest 8 21 0 32 ++ [insn 0x73, addi 8 8 32]) ++
+  [insn 0x00008067]
+
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
@@ -102,14 +114,15 @@ def commitCode (depth : Nat) : List Asm :=
   [regop 18 9 6] ++ li 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
-  li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
+  li 21 256 ++ commitCompressionSetup ++
+  [addi 20 0 0, .label "commit-leaf"] ++
   copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
   [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
    addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
    addi 5 0 0, addi 11 0 64, addi 13 0 0, insn 0x73,
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ leafSubroutine
+     copyDigest 9 26 32 ++ halt true ++ commitLeafSubroutine
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
