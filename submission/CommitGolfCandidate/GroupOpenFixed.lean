@@ -72,13 +72,13 @@ theorem xor_inj (a b : Nat) (h : a^^^1=b^^^1) : a=b := by
 -- ---------------------------------------------------------------- one step's memory effect
 /-- Outside the words the step may write, the fixed outcome keeps the word. -/
 theorem step_view (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) (ord left last : Nat)
-    (l : 0<left) (hi : left≤16777216) (r : Input s i ord left last) (key : KeyWords s k) (w : Nat) (fit : w<2^33)
+    (l : 0<left) (hi : left≤16777216) (bound : ord+left≤16777216) (r : Input s i ord left last) (key : KeyWords s k) (w : Nat) (fit : w<2^33)
     (away : ¬Writes i last w) : memoryView (fixedOne o s i left last) w=memoryView s w := by
   have n128 : w≠128 := fun h => away (Or.inr (Or.inl h))
   have nsc : w<192 ∨ 217≤w := by by_contra h; exact away (Or.inr (Or.inr (Or.inl (by omega))))
   have ns : w≠1140851204+2*i.val ∧ w≠1140851204+2*i.val+1 :=
     ⟨fun h => away (Or.inr (Or.inr (Or.inr (Or.inl h)))),fun h => away (Or.inr (Or.inr (Or.inr (Or.inr h))))⟩
-  rw [fixed_outside o k s i ord left last l hi r key w fit n128 nsc ns]
+  rw [fixed_outside o k s i ord left last l hi bound r key w fit n128 nsc ns]
   exact head_outside s i ord left last r _ w fit (fun h => away (Or.inl h)) nsc
 
 theorem salt_word_view (s : MachineState) (i : Index) (j : Fin 2) :
@@ -122,13 +122,13 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
   have ix : i.val<16777216:=i.isLt
   have inp:=input_of_ready td p k s j r hj
   have view (w : Nat) (fit : w<2^33) (away : ¬Writes i (lastOf p j) w) :=
-    step_view o k s i j (p.card-j) (lastOf p j) (by omega) (by omega) inp r.keyFrame w fit away
+    step_view o k s i j (p.card-j) (lastOf p j) (by omega) (by omega) (by omega) inp r.keyFrame w fit away
   have qlt : i.val/4<4194304 := by omega
   refine ⟨?_,?_,?_⟩
   · -- salts
     intro a ha jj
     by_cases eq : a=j
-    · subst eq; exact fixed_salt o k s i a (p.card-a) (lastOf p a) (by omega) (by omega) inp r.keyFrame jj
+    · subst eq; exact fixed_salt o k s i a (p.card-a) (lastOf p a) (by omega) (by omega) (by omega) inp r.keyFrame jj
     · have lt : a<j := by omega
       have av := (pos p a).isLt
       have dist : (pos p a).val < i.val := pos_lt p a j lt hj
@@ -145,7 +145,7 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
   · -- level-22 siblings
     intro a ha m hm
     have sib (fresh : i.val/4≠lastOf p j) :=
-      fixed_sibling o k s i j (p.card-j) (lastOf p j) (by omega) (by omega) inp r.keyFrame fresh m hm
+      fixed_sibling o k s i j (p.card-j) (lastOf p j) (by omega) (by omega) (by omega) inp r.keyFrame fresh m hm
     have keep (b : Nat) (hb : b<j) (stay : ¬HeadWrites i (lastOf p j) (heapWord (4194304+((pos p b).val/4^^^1))+m)) :
         memoryView (fixedOne o s i (p.card-j) (lastOf p j)) (heapWord (4194304+((pos p b).val/4^^^1))+m)=
           memoryView (actual.initialState .opening (td,p)) (nodeWordOf ((pos p b).val/4^^^1)+m) := by
@@ -192,7 +192,7 @@ theorem next_seen (o : Oracle) (k : BitVec 192) (td : BitVec (8*actual.sizes.tra
     by_cases eq : a=j
     · subst eq
       by_cases fresh : i.val/4≠lastOf p a
-      · rw [fixed_block o k s i a (p.card-a) (lastOf p a) (by omega) (by omega) inp r.keyFrame fresh m hm]
+      · rw [fixed_block o k s i a (p.card-a) (lastOf p a) (by omega) (by omega) (by omega) inp r.keyFrame fresh m hm]
         have hw : (window (memoryView s) (replyWord (i.val/4)) : Words 25)=
             window (memoryView (actual.initialState .opening (td,p))) (replyWord (i.val/4)) := by
           funext w; unfold window

@@ -1,3 +1,43 @@
+# Product: endpoint-controlled opening pass (-127 cycles)
+
+Stacked on `devin/next13` (`476bd57d1374c5c7653648b68e02d01fa0866427`, submitted
+as `ccb3572f-5b46-45a3-95d2-9ed60ee0df4a`). This candidate applies
+**benbuschmann's** endpoint-controlled query loop from
+`c4598882-fa8a-43ec-9c00-b628b5e8eea8`, retained in
+`8003820a-176f-4010-a17c-b1d9711694f7` (promoted master `34ca4f7`).
+Credit for this optimization and its endpoint invariants belongs to benbuschmann.
+
+The opening pass compares its advancing query pointer with a precomputed end
+pointer instead of decrementing a count. This removes one instruction on each
+nonfinal query. The final query restores the cap-heap register at no net saving.
+An n-query nonempty opening saves exactly n-1 cycles: **127 for 128 queries**.
+
+The certified claim is **504,586,268 commit cycles**, **122,135 opening cycles**,
+and **72,160 proof bytes**:
+
+```text
+(504,586,268 + 122,135) × 72,160 = 36,419,758,360,480
+Improvement over next13: 9,164,320
+```
+
+Only opening words **722, 731, 810, 811** change. Image lengths, all other
+opening instructions, the commit/check images, data, ABI and proof serialization
+remain unchanged. Thus next12's nonce/A1 savings and Mahmoud514's commitment
+improvement are retained. The copied endpoint proofs are selected from promoted
+master; the next13 writer proofs and costs remain intact. Combined accounting
+uses the endpoint pass bound `347*n+2` instead of `348*n+1`.
+
+This is an additive integration of the previously excluded benbuschmann opener
+trick, not an independently discovered loop optimization. Prior provenance
+statements below describe the earlier snapshots only. Local validation uses the
+same artifact-backed certificate build, contract/test builds, Python verifier
+tests, axiom inspection, image equality and mixed-oracle emulator comparisons.
+No official Yukon verifier success is claimed; no push or submission is made.
+
+---
+
+## Historical next13 entry
+
 # Product: master commit optimization + next12 opening pipeline
 
 This candidate combines Mahmoud514's **a8867e15-fdea-4e44-9c5e-f1edc6f35923**

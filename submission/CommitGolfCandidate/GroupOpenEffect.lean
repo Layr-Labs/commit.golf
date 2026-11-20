@@ -129,30 +129,46 @@ theorem head_keys (s : MachineState) (i : Index) (ord left last : Nat) (r : Inpu
 def Writes (i : Index) (last : Nat) (w : Nat) : Prop :=
   HeadWrites i last w ∨ w=128 ∨ (192≤w ∧ w<217) ∨ w=1140851204+2*i.val ∨ w=1140851204+2*i.val+1
 
-def Saved (r : Reg) := r≠.x6 ∧ r≠.x7 ∧ r≠.x10 ∧ r≠.x13 ∧ r≠.x28 ∧ r≠.x30 ∧ r≠.x31 ∧ r≠.x14 ∧ r≠.x17 ∧ r≠.x4
+def Saved (r : Reg) := r≠.x6 ∧ r≠.x7 ∧ r≠.x10 ∧ r≠.x13 ∧ r≠.x28 ∧ r≠.x30 ∧ r≠.x31 ∧ r≠.x14 ∧ r≠.x17 ∧ r≠.x4 ∧ r≠.x25
 
 /-- The salt rows after the chain: registers of the next ordinal, the salt words installed. -/
 theorem post_facts (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
+    (bound : ord+left≤16777216)
     (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
     (sub : u.getReg .x28=BitVec.ofNat 64 (rank i.val)) (one : u.getReg .x23=1) :
     Registers (finishOne u i left) (ord+1) (left-1) ∧ (finishOne u i left).pc=finalPC left ∧
       (finishOne u i left).mem=(installed u i).mem ∧
-      (∀ k, k≠.x7 → k≠.x30 → k≠.x31 → k≠.x14 → k≠.x17 → (finishOne u i left).getReg k=u.getReg k) := by
+      (∀ k, k≠.x7 → k≠.x30 → k≠.x31 → k≠.x14 → k≠.x17 → k≠.x25 →
+        (finishOne u i left).getReg k=u.getReg k) := by
   obtain ⟨ap,ar,ad⟩:=chosen u i pc idx sub one regs.output regs.salt
   let a:=choose u i
   let b:=copied a
   have keep (k : Reg) (h7 : k≠.x7) (h30 : k≠.x30) (h31 : k≠.x31) : b.getReg k=u.getReg k :=
     (copied_keeps a k h31).trans (choose_keeps u i k h7 h30)
-  have post:=next_ok b ord left (copied_pc a ap) l hi ((keep .x14 (by decide) (by decide) (by decide)).trans regs.index)
-    ((keep .x17 (by decide) (by decide) (by decide)).trans regs.leftReg)
-  have fk (k : Reg) (h7 : k≠.x7) (h30 : k≠.x30) (h31 : k≠.x31) (h14 : k≠.x14) (h17 : k≠.x17) :
-      (finishOne u i left).getReg k=u.getReg k := (next_keeps b left k h14 h17).trans (keep k h7 h30 h31)
+  have hshift : b.getReg .x25=BitVec.ofNat 64 (8*(ord+left)) := by
+    rw [show b.getReg .x25=u.getReg .x25 from keep .x25 (by decide) (by decide) (by decide), regs.shift]
+    simp [show left≠0 by omega]
+  have post:=next_ok b ord left (copied_pc a ap) l hi bound ((keep .x14 (by decide) (by decide) (by decide)).trans regs.index)
+    ((keep .x17 (by decide) (by decide) (by decide)).trans regs.endReg) hshift
+  have fk (k : Reg) (h7 : k≠.x7) (h30 : k≠.x30) (h31 : k≠.x31) (h14 : k≠.x14) (h17 : k≠.x17)
+      (h25 : k≠.x25) :
+      (finishOne u i left).getReg k=u.getReg k := (next_keeps b left k h14 h17 h25).trans (keep k h7 h30 h31)
   have f (k : Reg) (h7 : k≠.x7 := by decide) (h30 : k≠.x30 := by decide) (h31 : k≠.x31 := by decide)
-      (h14 : k≠.x14 := by decide) (h17 : k≠.x17 := by decide) := fk k h7 h30 h31 h14 h17
+      (h14 : k≠.x14 := by decide) (h17 : k≠.x17 := by decide) (h25 : k≠.x25 := by decide) := fk k h7 h30 h31 h14 h17 h25
+  have hshift' : (advanced b left).getReg .x25=
+      (if left-1=0 then u.getReg .x9 else BitVec.ofNat 64 (8*((ord+1)+(left-1)))) := by
+    rw [post.2.2.2.2.1]
+    by_cases z : left-1=0
+    · rw [if_pos z,if_pos z,show b.getReg .x9=u.getReg .x9 from keep .x9 (by decide) (by decide) (by decide)]
+    · rw [if_neg z,if_neg z]
+  have hshift'' : (finishOne u i left).getReg .x25=
+      (if left-1=0 then (finishOne u i left).getReg .x9 else BitVec.ofNat 64 (8*((ord+1)+(left-1)))) := by
+    change (advanced b left).getReg .x25=_
+    rw [hshift', f .x9]
   refine ⟨⟨(f .x10).trans regs.input,(f .x12).trans regs.output,(f .x5).trans regs.selector,(f .x11).trans regs.width,
-    (f .x13).trans regs.primitive,post.2.2.1,post.2.2.2.1,(f .x22).trans regs.salt,(f .x26).trans regs.base,
+    (f .x13).trans regs.primitive,post.2.2.1,post.2.2.2.1,hshift'',(f .x22).trans regs.salt,(f .x26).trans regs.base,
     (f .x29).trans regs.divReg⟩,post.2.1,?_,fk⟩
-  exact post.2.2.2.2.trans ((copied_mem a i ar ad).trans (by
+  exact post.2.2.2.2.2.trans ((copied_mem a i ar ad).trans (by
     change (installed (choose u i) i).mem=(installed u i).mem
     simp only [installed,MachineState.setMem,MachineState.getMem,chosen_memory u i]))
 
@@ -174,10 +190,10 @@ theorem salt_read (u : MachineState) (i : Index) (j : Fin 2) :
 
 /-- The salt words of the position after the salt rows: the selected reply words. -/
 theorem installs_salt (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
-    (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
+    (bound : ord+left≤16777216) (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
     (sub : u.getReg .x28=BitVec.ofNat 64 (rank i.val)) (one : u.getReg .x23=1) (j : Fin 2) :
     (finishOne u i left).getMem (destAt i+BitVec.ofNat 64 (8*j.val))=memoryView u (192+selectedWord i j) := by
-  have eq := (post_facts u i ord left l hi pc regs idx sub one).2.2.1
+  have eq := (post_facts u i ord left l hi bound pc regs idx sub one).2.2.1
   rw [←salt_read u i j]
   change (finishOne u i left).mem _=_
   rw [eq];unfold installed
@@ -190,12 +206,12 @@ theorem salt_words (i : Index) : destAt i=wordAddress (1140851204+2*i.val) ∧
 
 /-- Outside the salt words the salt rows keep the word view. -/
 theorem post_outside (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
-    (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
+    (bound : ord+left≤16777216) (pc : u.pc=address 796) (regs : Registers u ord left) (idx : u.getReg .x6=BitVec.ofNat 64 i.val)
     (sub : u.getReg .x28=BitVec.ofNat 64 (rank i.val)) (one : u.getReg .x23=1) (w : Nat) (fit : w<2^33)
     (apart : w≠1140851204+2*i.val ∧ w≠1140851204+2*i.val+1) :
     memoryView (finishOne u i left) w=memoryView u w := by
   have ix : i.val<16777216:=i.isLt
-  have fin := (post_facts u i ord left l hi pc regs idx sub one).2.2.1
+  have fin := (post_facts u i ord left l hi bound pc regs idx sub one).2.2.1
   obtain ⟨eq0,eq1⟩ := salt_words i
   have distinct (v : Nat) (hv : v<2^33) (ne : w≠v) : wordAddress w≠wordAddress v :=
     fun h => ne (wordAddress_injective_of_bound (by omega) (by omega) h)
@@ -207,7 +223,7 @@ theorem post_outside (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left
 
 /-- One outcome of a position, for its inverse reply `y` and chain outcome `u`. -/
 theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 0<left) (hi : left≤16777216)
-    (r : Input s i ord left last) (y : BitVec 1600) (u : MachineState)
+    (bound : ord+left≤16777216) (r : Input s i ord left last) (y : BitVec 1600) (u : MachineState)
     (hu : u ∈ support (chainTrace (headed s i last y) i)) :
     let t:=finishOne u i left
     Registers t (ord+1) (left-1) ∧ t.pc=finalPC left ∧ t.getReg .x4=BitVec.ofNat 64 (i.val/4) ∧
@@ -222,14 +238,15 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
       (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) := ex.keep x h4 h6 h7 h10 h13 h28 h30 h31
   have uregs : Registers u ord left :=
     ⟨u10,(uk .x12).trans ex.regs.output,(uk .x5).trans ex.regs.selector,(uk .x11).trans ex.regs.width,
-     (uk .x13).trans ex.regs.primitive,(uk .x14).trans ex.regs.index,(uk .x17).trans ex.regs.leftReg,
+     (uk .x13).trans ex.regs.primitive,(uk .x14).trans ex.regs.index,(uk .x17).trans ex.regs.endReg,
+     (by rw [uk .x25, ex.regs.shift, uk .x9]),
      (uk .x22).trans ex.regs.salt,(uk .x26).trans ex.regs.base,(uk .x29).trans ex.regs.divReg⟩
   have uone : u.getReg .x23=1 := (uk .x23).trans ((hk .x23).trans r.one)
-  obtain ⟨pregs,ppc,_,pkeep⟩ := post_facts u i ord left l hi upc uregs ((uk .x6).trans ex.entry.idx) u28 uone
+  obtain ⟨pregs,ppc,_,pkeep⟩ := post_facts u i ord left l hi bound upc uregs ((uk .x6).trans ex.entry.idx) u28 uone
   refine ⟨pregs,ppc,?_,?_,?_⟩
-  · rw [pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide), uk .x4]; exact ex.quartet
-  · intro k ⟨h6,h7,h10,h13,h28,h30,h31,h14,h17,h4⟩
-    rw [pkeep k h7 h30 h31 h14 h17, ukeep k h7 h10 h28 h30 h31]; exact ex.keep k h4 h6 h7 h10 h13 h28 h30 h31
+  · rw [pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide), uk .x4]; exact ex.quartet
+  · intro k ⟨h6,h7,h10,h13,h28,h30,h31,h14,h17,h4,h25⟩
+    rw [pkeep k h7 h30 h31 h14 h17 h25, ukeep k h7 h10 h28 h30 h31]; exact ex.keep k h4 h6 h7 h10 h13 h28 h30 h31
   · intro w fit away
     have nh : ¬HeadWrites i last w := fun h => away (Or.inl h)
     have n128 : w≠128 := fun h => away (Or.inr (Or.inl h))
@@ -237,12 +254,12 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
       by_contra h; exact away (Or.inr (Or.inr (Or.inl (by omega))))
     have ns : w≠1140851204+2*i.val ∧ w≠1140851204+2*i.val+1 :=
       ⟨fun h => away (Or.inr (Or.inr (Or.inr (Or.inl h)))),fun h => away (Or.inr (Or.inr (Or.inr (Or.inr h))))⟩
-    rw [post_outside u i ord left l hi upc uregs ((uk .x6).trans ex.entry.idx) u28 uone w fit ns,
+    rw [post_outside u i ord left l hi bound upc uregs ((uk .x6).trans ex.entry.idx) u28 uone w fit ns,
       uview w fit n128 nsc]
     exact head_outside s i ord left last r y w fit nh nsc
 
 theorem trace_post (s : MachineState) (i : Index) (ord left last : Nat) (l : 0<left) (hi : left≤16777216)
-    (r : Input s i ord left last) (t : MachineState) (hit : t ∈ support (perTrace s i left last)) :
+    (bound : ord+left≤16777216) (r : Input s i ord left last) (t : MachineState) (hit : t ∈ support (perTrace s i left last)) :
     Registers t (ord+1) (left-1) ∧ t.pc=finalPC left ∧ t.getReg .x4=BitVec.ofNat 64 (i.val/4) ∧
       (∀ k, Saved k → t.getReg k=s.getReg k) ∧
       (∀ w, w<2^33 → ¬Writes i last w → memoryView t w=memoryView s w) := by
@@ -250,10 +267,10 @@ theorem trace_post (s : MachineState) (i : Index) (ord left last : Nat) (l : 0<l
   split at hit
   · simp only [mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
     obtain ⟨y,_,u,hu,rfl⟩ := hit
-    exact outcome_facts s i ord left last l hi r y u hu
+    exact outcome_facts s i ord left last l hi bound r y u hu
   · simp only [mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
     obtain ⟨u,hu,rfl⟩ := hit
-    exact outcome_facts s i ord left last l hi r 0 u hu
+    exact outcome_facts s i ord left last l hi bound r 0 u hu
 
 /-! Fixed oracle: the outcome of a position and its contents. -/
 
@@ -316,7 +333,8 @@ private theorem fixed_chain (o : Oracle) (k : BitVec 192) (s : MachineState) (i 
   have uk (x : Reg) (h7 : x≠.x7 := by decide) (h10 : x≠.x10 := by decide) (h28 : x≠.x28 := by decide)
       (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) := ukeep x h7 h10 h28 h30 h31
   refine ⟨upc,⟨u10,(uk .x12).trans ex.regs.output,(uk .x5).trans ex.regs.selector,(uk .x11).trans ex.regs.width,
-     (uk .x13).trans ex.regs.primitive,(uk .x14).trans ex.regs.index,(uk .x17).trans ex.regs.leftReg,
+     (uk .x13).trans ex.regs.primitive,(uk .x14).trans ex.regs.index,(uk .x17).trans ex.regs.endReg,
+     (by rw [show fixedHead o s i last=headed s i last (if inverts i last then fixedInverse o s i else 0) from rfl, uk .x25, ex.regs.shift, uk .x9]),
      (uk .x22).trans ex.regs.salt,(uk .x26).trans ex.regs.base,(uk .x29).trans ex.regs.divReg⟩,
     (uk .x6).trans ex.entry.idx,u28,(uk .x23).trans ((ex.keep _ (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide)).trans r.one),uview,
@@ -324,7 +342,7 @@ private theorem fixed_chain (o : Oracle) (k : BitVec 192) (s : MachineState) (i 
 
 /-- The fixed outcome's salt words: the linked schedule's salt of `i`. -/
 theorem fixed_salt (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) (ord left last : Nat)
-    (l : 0<left) (hi : left≤16777216) (r : Input s i ord left last) (key : KeyWords s k) (j : Fin 2) :
+    (l : 0<left) (hi : left≤16777216) (bound : ord+left≤16777216) (r : Input s i ord left last) (key : KeyWords s k) (j : Fin 2) :
     (fixedOne o s i left last).getMem (destAt i+BitVec.ofNat 64 (8*j.val))=
       saltWords (Permutation.LinkedSalt.salts (Permutation.LinkedSalt.schedule Permutation.LinkedSalt.period)
         o.permutation k i) j := by
@@ -332,17 +350,17 @@ theorem fixed_salt (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) 
   have jj := j.isLt
   have sel : selectedWord i j<25 := by have:=salt_slot_bound (coord i).2;unfold selectedWord;omega
   unfold fixedOne
-  rw [installs_salt _ i ord left l hi upc uregs u6 u28 u23 j, ureply ⟨selectedWord i j,sel⟩]
+  rw [installs_salt _ i ord left l hi bound upc uregs u6 u28 u23 j, ureply ⟨selectedWord i j,sel⟩]
   exact congrFun (salt_slice_eq (chainReply o k i) (coord i).2) j
 
 /-- The fixed outcome keeps the head's words outside word 128, the scratch and the salt. -/
 theorem fixed_outside (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) (ord left last : Nat)
-    (l : 0<left) (hi : left≤16777216) (r : Input s i ord left last) (key : KeyWords s k) (w : Nat) (fit : w<2^33)
+    (l : 0<left) (hi : left≤16777216) (bound : ord+left≤16777216) (r : Input s i ord left last) (key : KeyWords s k) (w : Nat) (fit : w<2^33)
     (n128 : w≠128) (nsc : w<192 ∨ 217≤w) (ns : w≠1140851204+2*i.val ∧ w≠1140851204+2*i.val+1) :
     memoryView (fixedOne o s i left last) w=memoryView (fixedHead o s i last) w := by
   obtain ⟨upc,uregs,u6,u28,u23,uview,_⟩ := fixed_chain o k s i ord left last r key
   unfold fixedOne
-  rw [post_outside _ i ord left l hi upc uregs u6 u28 u23 w fit ns, uview w fit n128 nsc]
+  rw [post_outside _ i ord left l hi bound upc uregs u6 u28 u23 w fit ns, uview w fit n128 nsc]
 
 theorem inverse_query_eq (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
     (fresh : i.val/4≠last) :
@@ -354,12 +372,12 @@ theorem inverse_query_eq (s : MachineState) (i : Index) (ord left last : Nat) (r
 
 /-- A new quartet: the fixed outcome holds the inverse of its reply in its rebuilt block. -/
 theorem fixed_block (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) (ord left last : Nat)
-    (l : 0<left) (hi : left≤16777216) (r : Input s i ord left last) (key : KeyWords s k)
+    (l : 0<left) (hi : left≤16777216) (bound : ord+left≤16777216) (r : Input s i ord left last) (key : KeyWords s k)
     (fresh : i.val/4≠last) (m : Nat) (hm : m<25) :
     memoryView (fixedOne o s i left last) (rebuiltWord (i.val/4)+m)=
       replyWords (o.permutation.symm (packBuffer (window (memoryView s) (replyWord (i.val/4))))) ⟨m,hm⟩ := by
   have ix : i.val<16777216 := i.isLt
-  rw [fixed_outside o k s i ord left last l hi r key _ (by unfold rebuiltWord blockWord; omega)
+  rw [fixed_outside o k s i ord left last l hi bound r key _ (by unfold rebuiltWord blockWord; omega)
     (by unfold rebuiltWord blockWord; omega) (Or.inr (by unfold rebuiltWord blockWord; omega))
     ⟨by unfold rebuiltWord blockWord; omega,by unfold rebuiltWord blockWord; omega⟩]
   have inv : inverts i last=true := by simp [inverts,fresh]
@@ -368,13 +386,13 @@ theorem fixed_block (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index)
 
 /-- A new quartet: the fixed outcome holds the sibling group's node in its level-22 heap slot. -/
 theorem fixed_sibling (o : Oracle) (k : BitVec 192) (s : MachineState) (i : Index) (ord left last : Nat)
-    (l : 0<left) (hi : left≤16777216) (r : Input s i ord left last) (key : KeyWords s k)
+    (l : 0<left) (hi : left≤16777216) (bound : ord+left≤16777216) (r : Input s i ord left last) (key : KeyWords s k)
     (fresh : i.val/4≠last) (m : Nat) (hm : m<4) :
     memoryView (fixedOne o s i left last) (heapWord (4194304+(i.val/4^^^1))+m)=
       memoryView s (nodeWordOf (i.val/4^^^1)+m) := by
   have ix : i.val<16777216 := i.isLt
   have gx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
-  rw [fixed_outside o k s i ord left last l hi r key _ (by unfold heapWord; omega) (by unfold heapWord; omega)
+  rw [fixed_outside o k s i ord left last l hi bound r key _ (by unfold heapWord; omega) (by unfold heapWord; omega)
     (Or.inr (by unfold heapWord; omega)) ⟨by unfold heapWord; omega,by unfold heapWord; omega⟩]
   unfold fixedHead; exact head_sibling s i ord left last r _ fresh m hm
 
