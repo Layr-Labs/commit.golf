@@ -1,3 +1,44 @@
+# Product: direct aligned nonce branch (-64 opening cycles)
+
+Based on our next17 commit `88c395f`, preserving next16 and the complete
+promoted Meganpark980320, benbuschmann and Mahmoud514 lineage below.
+Refetched master `4239e1a` delivers next16's image; no additional public
+implementation is transplanted for this entry.
+
+The aligned 16-byte nonce copy moves to unused header words 759..767,
+within conditional-branch range of its entry. Its test branches directly
+to four word pairs and a return, eliminating the old intermediate jump.
+Costs are now 11 / 15 cycles for 4-aligned / 2-mod-4 destinations (was
+12 / 15). The 64 aligned records save 64 cycles.
+
+The nonce's shifted path, 28-byte and A1 writers and next17's eleven
+30-byte sites are unchanged. No path is slower in this candidate.
+
+```json
+{"commitCycles":504585244,"openingCycles":118785,"proofBytes":72160}
+```
+
+```text
+(504,585,244 + 118,785) × 72,160 = 36,419,442,732,640
+Improvement over next17: 4,618,240
+```
+
+Only opening words 19 and 759..767 are edited. Image lengths, commitment/checker images,
+embedded data, ABI, continuations, salt chain, next17 30-byte copies and
+proof serialization remain unchanged. Decoded execution, valid accesses,
+byte-copy/register/frame effects and exact cycles are proved against the
+delivered image, with matching packed literals and aggregate accounting.
+Public provenance is prepared under `~/cg/sub14/` with the next17 parent
+UUID intentionally left as a placeholder. Nothing is pushed or submitted;
+local artifact-backed checks are not an official Yukon verifier run.
+
+A separate 128-cycle combined nonce/28-byte/A1 prototype preserved all
+emulated bytes and passed its individual copy proofs, but its downstream
+`GroupOpenUpperRun` build exceeded local memory limits. It is not certified
+or included here; only the direct nonce branch is delivered.
+
+## Historical next17 documentation
+
 # Product: inline aligned 30-byte writer copies (-352 opening cycles)
 
 Based on our next16 commit `273b84f`, retaining promoted master `2a79dc7`

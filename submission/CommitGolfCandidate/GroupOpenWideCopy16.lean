@@ -8,12 +8,12 @@ set_option maxHeartbeats 2000000
 
 namespace Writer16
 
-def cycles (target : Nat) : Nat := if target % 4 = 0 then 12 else 15
+def cycles (target : Nat) : Nat := if target % 4 = 0 then 11 else 15
 
-def entered (s : MachineState) := Writer28.testState s 3 56
-def aligned (s : MachineState) := execInstrBr (entered s) (.JAL .x0 7624)
+def entered (s : MachineState) := Writer28.testState s 3 2960
+def aligned (s : MachineState) := entered s
 def words (s : MachineState) :=
-  execInstrBr (pairsRun 4 .x7 0 0 0 4 (aligned s)) (.JAL .x0 2089500)
+  execInstrBr (pairsRun 4 .x7 0 0 0 4 (aligned s)) (.JAL .x0 2094220)
 def chunks (s : MachineState) :=
   execCode (execCode (entered s) (Shifted32.chunkCode .x7 0 0)) (Shifted32.chunkCode .x7 0 8)
 def shifted (s : MachineState) := execInstrBr (chunks s) (.JAL .x0 8)
@@ -42,23 +42,18 @@ theorem copy (s : MachineState) (S T : Nat) (pc : s.pc=BitVec.ofNat 64 (4096+4*1
     Done s (state s) S T 16 (cycles T) 34 := by
   have fit : T<2^64 := by unfold MEMORY_BYTES at room; omega
   have tn : (s.getReg .x21).toNat=T := by rw [dst, BitVec.toNat_ofNat, Nat.mod_eq_of_lt fit]
-  obtain ⟨ra, pa, ga, ma⟩ := Writer28.test s T 18 4 3 56 (by decide) pc (by decide +kernel)
+  obtain ⟨ra, pa, ga, ma⟩ := Writer28.test s T 18 4 3 2960 (by decide) pc (by decide +kernel)
     (by decide +kernel) (by decide) (mask_bits s T 3 (by simp) dst fit)
   by_cases four : T%4=0
-  · have pca : (entered s).pc=BitVec.ofNat 64 (4096+4*33) := by
+  · have pca : (entered s).pc=BitVec.ofNat 64 (4096+4*759) := by
       rw [if_pos four] at pa
       exact pa.trans (by decide)
-    have rb := run_step (entered s) 33 (.JAL .x0 7624) (by decide) pca (by decide +kernel) rfl rfl
-    have pcb : (aligned s).pc=BitVec.ofNat 64 (4096+4*1939) := by
-      change (entered s).pc+signExtend21 7624=_; rw [pca]; decide
-    have gb (r : Reg) (_ : r ≠ .x31) : (aligned s).getReg r=(entered s).getReg r := by cases r <;> rfl
-    have mb : (aligned s).mem=(entered s).mem := rfl
-    have sr : (aligned s).getReg .x7=BitVec.ofNat 64 S := (gb _ (by decide)).trans ((ga _ (by decide)).trans src)
-    have dr : (aligned s).getReg .x21=BitVec.ofNat 64 T := (gb _ (by decide)).trans ((ga _ (by decide)).trans dst)
-    have a := pairs (aligned s) S T 1939 0 4 4 (by omega) (by decide +kernel) (by decide) pcb sr dr
+    have sr : (aligned s).getReg .x7=BitVec.ofNat 64 S := (ga _ (by decide)).trans src
+    have dr : (aligned s).getReg .x21=BitVec.ofNat 64 T := (ga _ (by decide)).trans dst
+    have a := pairs (aligned s) S T 759 0 4 4 (by omega) (by decide +kernel) (by decide) pca sr dr
       (by omega) (by omega) (by decide) (by omega) (by omega)
-    have body := Writer16.jump a 2089500 (by decide) (by decide +kernel) (by decide)
-    simpa [state, tn, four, cycles, words] using before ra ga ma (before rb gb mb body)
+    have body := Writer16.jump a 2094220 (by decide) (by decide +kernel) (by decide)
+    simpa [state, tn, four, cycles, words, aligned] using before ra ga ma body
   · have pca : (entered s).pc=BitVec.ofNat 64 (4096+4*20) := by simpa [entered, four] using pa
     have mod4 : T%4=2 := by omega
     have a := chunk_at 20 (0 : Fin 3) (entered s) S T (chunks_code 0) (by decide) pca
