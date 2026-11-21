@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The Blacksmith host lacks Landlock. Boot the verifier's supported OS with KVM.
+# The Blacksmith host runs systemd 255; the verifier needs 257. Boot its supported OS with KVM.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 vm="${RUNNER_TEMP:?This entry point runs in GitHub Actions}/commit-verifier-vm"
@@ -32,9 +32,9 @@ packages:
   - curl
   - build-essential
   - python3
-  - golang-go
   - dbus-user-session
   - apparmor
+  - bubblewrap
   - zstd
 CLOUD
     printf 'instance-id: commit-verifier\nlocal-hostname: commit-verifier\n' > "${vm}/meta-data"

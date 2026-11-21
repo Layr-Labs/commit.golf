@@ -60,7 +60,7 @@ large-image alias and the limits of equality checking across different represent
 lake exe cache get
 lake build CommitGolf CommitGolfTests
 python3 -m unittest discover -s verifier/tests
-# Supported Linux host with Landlock and user systemd 257 or newer:
+# Supported Linux host with bubblewrap and user systemd 257 or newer:
 bash scripts/setup.sh
 python3 scripts/run.py
 ```

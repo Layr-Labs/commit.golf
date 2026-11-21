@@ -245,7 +245,7 @@ def frontierProof238 (heap : Nat → BitVec 256) (groups : List Nat) : Proof :=
 def builder : QuartetBuilder :=
   fun lookup compress positions salts leaves =>
     let heap := upperHeap lookup compress leaves
-    let ordered := positions.attach.sort (fun i j => i.val ≤ j.val)
+    let ordered := positions.attach.sort (· ≤ ·)
     let records := ordered.flatMap (fun i => openingRecord leaves heap i.val (salts i))
     (heap 1, records ++ frontierProof238 heap (ordered.map (capGroup ∘ Subtype.val)))
 
@@ -253,7 +253,7 @@ def builder : QuartetBuilder :=
 def builderFrom (quads : Nat → BitVec 256) (compress : Compression) (positions : Positions)
     (salts : OpenedSalts positions) (leaves : DigestTape) : Commitment × Proof :=
   let heap := upperHeapFrom quads compress
-  let ordered := positions.attach.sort (fun i j => i.val ≤ j.val)
+  let ordered := positions.attach.sort (· ≤ ·)
   let records := ordered.flatMap (fun i => openingRecord leaves heap i.val (salts i))
   (heap 1, records ++ frontierProof238 heap (ordered.map (capGroup ∘ Subtype.val)))
 
@@ -290,7 +290,7 @@ theorem frontier_proof238_bound (heap : Nat → BitVec 256) (groups : List Nat) 
 theorem transcript_128 (lookup : Nat → BitVec 1024 → BitVec 256) (compress : Compression) (positions : Positions)
     (salts : OpenedSalts positions) (leaves : DigestTape) (count : positions.card = 128) :
     (builder lookup compress positions salts leaves).2.length ≤ 72160 := by
-  let ordered := positions.attach.sort (fun i j => i.val ≤ j.val)
+  let ordered := positions.attach.sort (· ≤ ·)
   let heap := upperHeap lookup compress leaves
   have boundary := frontier_proof238_bound heap (ordered.map (capGroup ∘ Subtype.val))
   have cardinal : ordered.length = 128 := by simp [ordered, count]

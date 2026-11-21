@@ -43,8 +43,7 @@ class ArtifactPipelineTests(unittest.TestCase):
         return args, raw
 
     def execute(self, args, checked, policy=check):
-        tools = {'COMPARATOR_BIN': '/unused/comparator', 'COMPARATOR_LEAN4EXPORT': '/unused/export',
-                 'COMPARATOR_LANDRUN': '/unused/landrun'}
+        tools = {'COMPARATOR_BWRAP': '/unused/bwrap'}
         with patch('verify.platform.system', return_value='Darwin'), \
              patch('verify.tools_env', return_value=tools), \
              patch('verify.subprocess.run', return_value=SimpleNamespace(stdout='a' * 40)), \
@@ -58,6 +57,9 @@ class ArtifactPipelineTests(unittest.TestCase):
             args, raw = self.fixture(Path(directory))
 
             def inspect(command, project, env, log):
+                # Outside Linux, the development mode runs the judge without its sandbox.
+                self.assertEqual(command[:3], ['lake', 'comparator', '--inadvisably-no-sandbox'])
+                self.assertEqual(command[-2], '--config')
                 config = json.loads(Path(command[-1]).read_text())
                 self.assertIn('CommitGolf.Challenge.submission_matches_artifact', config['theorem_names'])
                 self.assertEqual(config['definition_names'], ['CommitGolf.Challenge.submission'])

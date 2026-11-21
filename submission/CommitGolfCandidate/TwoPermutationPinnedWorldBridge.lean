@@ -99,7 +99,10 @@ theorem pinned_closed_restricted_world_near {α : Type} (base : Cache) (position
       (LENGTH : ℝ) * ((maximum : ℝ) / 2^1343) := by
     unfold pinnedClosedRestrictedWorld pinnedCommonFull
     change measureTVDist (prepared >>= _) (prepared >>= _) ≤ _
-    apply pinned_restricted_bind_support_le prepared _ _ _ (by positivity)
+    -- Spell `prepared` out so that `reached` matches `frame` exactly. Since mathlib4#41506, Lean's kernel
+    -- can run the sampler when it compares two spellings of a `support` membership.
+    apply pinned_restricted_bind_support_le
+      (runPinnedFull base [] (pinnedConstantPlans (pinnedFirstAddresses left right))) _ _ _ (by positivity)
     intro a reached
     have facts := frame a reached
     let upper := pinnedBoundedHigh front a.2

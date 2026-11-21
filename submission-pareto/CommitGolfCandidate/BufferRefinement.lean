@@ -145,7 +145,7 @@ theorem check_input_value_byte (input : CheckInput) (ordinal offset : Nat)
     (present : ordinal < input.positions.card) (inside : offset < 256) :
     (submission.initialState .check input).getByte
       (BitVec.ofNat 64 (submission.layout.values+256*ordinal+offset)) =
-      (input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
+      (input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by
         simpa using present))).extractLsb' (8*offset) 8 := by
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte submission .check input _ (by
@@ -180,10 +180,10 @@ theorem check_input_value_block (input : CheckInput) (ordinal block : Nat)
     (present : ordinal < input.positions.card) (inside : block < 8) :
     readBuffer (submission.initialState .check input)
       (submission.layout.values+256*ordinal+32*block) 32 =
-      (input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
+      (input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by
         simpa using present))).extractLsb' (256*block) 256 := by
   have decoded := read_serialized_slice (submission.initialState .check input)
-    (input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
+    (input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by
       simpa using present))) (submission.layout.values+256*ordinal+32*block) (32*block) 32 (by
       intro j hj
       simpa only [Nat.add_assoc] using check_input_value_byte input ordinal (32*block+j) present (by omega))

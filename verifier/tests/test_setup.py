@@ -44,7 +44,7 @@ class SetupTests(unittest.TestCase):
             (project / 'scripts').mkdir()
             (project / 'verifier').mkdir()
             shutil.copy2(ROOT / 'scripts/setup.sh', project / 'scripts/setup.sh')
-            (project / 'lean-toolchain').write_text('leanprover/lean4:v4.35.0\n')
+            (project / 'lean-toolchain').write_text('leanprover/lean4:v4.36.0\n')
             (project / 'verifier/setup_tools.sh').write_text(
                 'printf "tools\\n" >> "$SETUP_TEST_LOG"\n')
             log, installed, ready = (project / name for name in ('calls', 'installed', 'ready'))
@@ -77,9 +77,9 @@ class SetupTests(unittest.TestCase):
         status, calls = self.run_setup('missing')
         self.assertEqual(status, 0)
         self.assertEqual(calls[:3], [
-            'elan run leanprover/lean4:v4.35.0 lean --version',
-            'elan toolchain install leanprover/lean4:v4.35.0',
-            'elan run leanprover/lean4:v4.35.0 lean --version'])
+            'elan run leanprover/lean4:v4.36.0 lean --version',
+            'elan toolchain install leanprover/lean4:v4.36.0',
+            'elan run leanprover/lean4:v4.36.0 lean --version'])
         self.assert_build_finished(calls)
 
     def test_install_failure_stops_setup(self):

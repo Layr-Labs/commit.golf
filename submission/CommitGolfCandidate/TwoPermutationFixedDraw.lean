@@ -32,12 +32,21 @@ theorem counted_commit_trace (oracle : Oracle) (s : MachineState) :
   exact counted_draw oracle (fun p => commitBody s p) (fun st => ⟨.success,st,691142677,50331647⟩)
     50331647 (counted_commit_body oracle s)
 
+/-- `commit_machine_resources` for a salt of `bits` bits. The width stays abstract: since `Set`
+became a structure (Mathlib #41506), Lean's kernel can evaluate `2 ^ width` when it compares
+memberships in two different supports, and it refuses that evaluation for the actual width. -/
+private theorem commit_trace_of_resources (s : MachineState) (bits : Nat) {res : Execution}
+    (hit : res ∈ support (commitTraceOf s bits)) :
+    res.exit=.success ∧ res.cycles=691142677 ∧ res.oracleCalls=50331647 := by
+  simp only [commitTraceOf,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
+  obtain ⟨_,_,_,_,rfl⟩ := hit
+  exact ⟨rfl,rfl,rfl⟩
+
 theorem commit_machine_resources (candidate : Submission) (abi : CommitABI candidate) (msg : Message)
     {res : Execution} (hit : res ∈ support (candidate.run .commit msg)) :
     res.exit=.success ∧ res.cycles=691142677 ∧ res.oracleCalls=50331647 := by
-  rw [submission_commit_run candidate abi msg] at hit
-  simp only [commitTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
-  obtain ⟨_,_,_,_,rfl⟩ := hit
-  exact ⟨rfl,rfl,rfl⟩
+  rw [submission_commit_run candidate abi msg, commitTrace] at hit
+  generalize 8*((initialPrefix (candidate.initialState .commit msg) 11).getReg .x11).toNat = bits at hit
+  exact commit_trace_of_resources _ bits hit
 
 end TwoPermutationPrototype.RV64

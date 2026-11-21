@@ -82,10 +82,19 @@ private theorem opening_runs (hc : HeaderFacts) (td : BitVec (8*actual.sizes.tra
   exact ⟨exit, succeeded, fun batch => ⟨(bounds batch).1.trans (by norm_num),
     (bounds batch).2.trans (by norm_num)⟩, calls⟩
 
+/-- `GroupedChecks.resources`, stated for this namespace's `actual`. Both name `K1Artifact.submission`,
+but since mathlib4#41506 Lean's kernel can run the commit when it compares two spellings of a
+`support` membership. -/
+private theorem commit_resources (message : Message) (result : Execution)
+    (hit : result ∈ support (actual.run .commit message)) :
+    result.exit = .success ∧ result.cycles = claimCommitCycles ∧ result.oracleCalls ≤ COMMIT_BUDGET := by
+  rw [show actual = GroupedChecks.actual from rfl] at hit
+  exact GroupedChecks.resources message result hit
+
 theorem grouped_certificate (hc : HeaderFacts) :
     Certificate actual claimProofBytes claimCommitCycles claimOpeningCycles :=
   QuartetCounterCertificate.certificate_of_facts
-    GroupedChecks.resources GroupedChecks.admitted
+    commit_resources GroupedChecks.admitted
     ⟨opening_runs hc, grouped_refines hc⟩ GroupedChecks.checker_facts
     (Quartet.scheme_hiding_of_linked QuartetCounterCertificate.linkedSchedule actual.scheme (grouped_refines hc))
 

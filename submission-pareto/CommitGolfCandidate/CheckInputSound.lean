@@ -12,7 +12,7 @@ def recordIndex (input : CheckInput) (ordinal : Nat) : Index :=
 /-- Value at a proof-record ordinal. Out-of-range ordinals are irrelevant to acceptance. -/
 def recordValue (input : CheckInput) (ordinal : Nat) : Entry :=
   if present : ordinal < input.positions.card then
-    input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present))
+    input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by simpa using present))
   else 0
 
 /-- Salt parsed from the same proof bytes loaded by the checker. -/
@@ -87,7 +87,7 @@ theorem record_for_position (input : CheckInput) (index : Index) (member : index
     ∃ ordinal, ordinal < input.positions.card ∧ recordIndex input ordinal = index ∧
       recordValue input ordinal = input.values ⟨index, member⟩ := by
   have inList : (⟨index, member⟩ : {i // i ∈ input.positions}) ∈
-      input.positions.attach.sort (fun i j => i.val ≤ j.val) := by simp
+      input.positions.attach.sort (· ≤ ·) := by simp
   obtain ⟨ordinal, bound, same⟩ := List.mem_iff_getElem.mp inList
   have present : ordinal < input.positions.card := by simpa using bound
   have indexSame : recordIndex input ordinal = index := by

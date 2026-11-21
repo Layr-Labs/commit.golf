@@ -12,6 +12,7 @@ birthday exponent at 238 bits), `1 - exp(-s) ≤ 255·q/2^128` for every `1 ≤ 
   `exp(-t) ≥ (1 - t/16)^16 ≥ 1 - (255/256)·a` (exact rational checks, `t238_budget.py` part 2).
 -/
 
+set_option maxRecDepth 8192
 namespace CommitGolfCandidate
 
 set_option exponentiation.threshold 600

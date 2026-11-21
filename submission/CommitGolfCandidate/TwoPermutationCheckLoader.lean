@@ -160,7 +160,7 @@ theorem check_input_value_byte (input : CheckInput) (ordinal offset : Nat)
     (present : ordinal < input.positions.card) (inside : offset < 256) :
     (QAssembly.submission.initialState .check input).getByte
       (BitVec.ofNat 64 (QAssembly.submission.layout.values+256*ordinal+offset)) =
-      (input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
+      (input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by
         simpa using present))).extractLsb' (8*offset) 8 := by
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte QAssembly.submission .check input _ (by
@@ -194,9 +194,9 @@ theorem check_input_value (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) :
     readBuffer (QAssembly.submission.initialState .check input)
       (QAssembly.submission.layout.values + 256*ordinal) 256 =
-      input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
+      input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by
         simpa using present)) := by
-  let value := input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
+  let value := input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by
     simpa using present))
   have decoded := read_serialized_slice (QAssembly.submission.initialState .check input)
     value (QAssembly.submission.layout.values + 256*ordinal) 0 256 (by
@@ -206,7 +206,7 @@ theorem check_input_value (input : CheckInput) (ordinal : Nat)
 
 theorem check_input_value_index (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) :
-    ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val =
+    ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by simpa using present)).val =
     (input.positions.sort (· ≤ ·))[ordinal]'(by simpa using present) := by
   apply Fin.ext
   simpa only [openingIndex, dite_eq_left present] using

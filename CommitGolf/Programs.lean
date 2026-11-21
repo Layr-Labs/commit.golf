@@ -64,7 +64,7 @@ def positionsBuffer (address : Nat) (positions : Positions) : InputBuffer :=
     | some i => BitVec.ofNat 8 (i.val / 2 ^ (8 * (j % 8)))⟩
 
 def valuesBuffer (address : Nat) (positions : Positions) (values : Values positions) : InputBuffer :=
-  let indices := positions.attach.sort (fun i j => i.val ≤ j.val)
+  let indices := positions.attach.sort (· ≤ ·)
   ⟨address, (LEAF_SIZE / 8) * indices.length, fun j =>
     match indices[j / (LEAF_SIZE / 8)]? with
     | none => 0

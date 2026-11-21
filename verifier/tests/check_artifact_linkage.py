@@ -96,16 +96,20 @@ end CommitGolf.Challenge
 
 
 def case_passes(case, report, full_log):
-    """Recognize the pinned compiler/exporter's specific boundary rejection, not generic failure.
+    """Recognize the judge's specific boundary rejection, not generic failure.
 
     verify's `rejected` status includes subprocess failures. The fixed fixtures must instead
     reach the expected equality error (or the exact missing exported target). Unknown diagnostics
-    fail closed and require review when the Lean/exporter pin changes.
+    fail closed and require review when the Lean release changes. `lake comparator` reports a
+    failed sandboxed step as `error: Child exited with N`. Its own progress lines are buffered and
+    can follow that report, so the checks compare the set of `error:` lines, not their position.
     """
     if report.get('status') != case.expected:
         return False
     if case.expected == 'verified':
         return True
+    if 'Your solution is okay!' in full_log:
+        return False
     if re.search(r'\b(?:OOM|SIGKILL|killed)\b|out[- ]of[- ]memory|missing dependency|'
                  r'no such file|object file .+ does not exist|failed to load|unknown module prefix|'
                  r'(?:exit(?:ed)?(?: with)?|code)\s*127\b', full_log, re.IGNORECASE):
@@ -114,15 +118,15 @@ def case_passes(case, report, full_log):
     errors = [line for line in lines if line.startswith('error: ')]
     panics = [line for line in lines if line.startswith('PANIC ')]
     if case.name == 'missing_equality':
-        target = re.compile(r'PANIC at dumpConstant Export:[0-9]+:[0-9]+: Constant ' +
-                            re.escape(MATCHES) + r' not found in environment\.')
-        return (not errors and len(panics) == 1 and target.fullmatch(panics[0]) is not None and
+        target = re.compile(r'PANIC at LeanExport\.dumpConstant LeanExport\.Basic:[0-9]+:[0-9]+: '
+                            r'Constant ' + re.escape(MATCHES) + r' not found in environment\.')
+        return (len(panics) == 1 and target.fullmatch(panics[0]) is not None and
                 re.search(r'Build completed successfully \([0-9]+ jobs\)\.\n' +
                           re.escape(panics[0]), full_log) is not None and
-                # The pinned exporter ended with 134 in focused development runs and 139 in
-                # supported Linux CI. The exact missing-target diagnostic remains mandatory.
-                lines[-1] in ('uncaught exception: Child exited with 134',
-                              'uncaught exception: Child exited with 139'))
+                # The bundled exporter ended with 139 in local runs of Lean v4.36.0; the standalone
+                # exporter before it ended with 134 or 139. The exact missing-target diagnostic
+                # remains mandatory.
+                errors in (['error: Child exited with 134'], ['error: Child exited with 139']))
     if case.name not in ('instruction', 'embedded_data', 'layout', 'capacity', 'fuel'):
         return False
     theorem_lines = [(i, line) for i, line in enumerate(case.source.splitlines(), 1)
@@ -133,8 +137,8 @@ def case_passes(case, report, full_log):
     header = f'error: Solution.lean:{line}:{source.index("rfl")}: Tactic `rfl` failed: The left-hand side'
     mismatch = (header + '\n  submission\nis not definitionally equal to the right-hand side\n'
                 '  Artifact.submission\n\n⊢ submission = Artifact.submission\n')
-    return (not panics and errors == [header, 'error: build failed'] and
-            mismatch in full_log and lines[-1] == 'uncaught exception: Child exited with 1')
+    return (not panics and mismatch in full_log and
+            errors == [header, 'error: build failed', 'error: Child exited with 1'])
 
 
 def remove_owned(path, owner):

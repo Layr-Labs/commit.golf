@@ -8,9 +8,9 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 /-- Removing membership proofs from the sorted value indices gives the opening's
 sorted position list. -/
 theorem sorted_value_indices (positions : Positions) :
-    (positions.attach.sort (fun i j => i.val ≤ j.val)).map Subtype.val =
+    (positions.attach.sort (· ≤ ·)).map Subtype.val =
       positions.sort (· ≤ ·) := by
-  have mapped := Finset.map_sort (r := fun i j : {i // i ∈ positions} => i.val ≤ j.val)
+  have mapped := Finset.map_sort (r := fun i j : {i // i ∈ positions} => i ≤ j)
     (r' := fun i j : Index => i ≤ j) (f := Function.Embedding.subtype (· ∈ positions))
     (s := positions.attach) (by intro a _ b _; rfl)
   simpa only [Finset.attach_map_val, Function.Embedding.coe_subtype] using mapped
@@ -19,9 +19,9 @@ theorem sorted_value_indices (positions : Positions) :
 ordinal by the submitted opening image. -/
 theorem sorted_value_index (positions : Positions) (ordinal : Nat)
     (present : ordinal < positions.card) :
-    (((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val).val =
+    (((positions.attach.sort (· ≤ ·))[ordinal]'(by simpa using present)).val).val =
       openingIndex positions ordinal := by
-  have attachedBound : ordinal < (positions.attach.sort (fun i j => i.val ≤ j.val)).length := by
+  have attachedBound : ordinal < (positions.attach.sort (· ≤ ·)).length := by
     simpa using present
   have positionBound : ordinal < (positions.sort (· ≤ ·)).length := by simpa using present
   have same := congrArg (fun list : List Index => list[ordinal]?) (sorted_value_indices positions)

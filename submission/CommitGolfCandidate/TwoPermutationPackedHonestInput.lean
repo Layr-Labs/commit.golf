@@ -26,7 +26,7 @@ def honestHeap (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) 
     (honestLeaves oracle message salts)
 
 def honestOrder (positions : Positions) : List {index // index ∈ positions} :=
-  positions.attach.sort (fun i j => i.val ≤ j.val)
+  positions.attach.sort (· ≤ ·)
 
 theorem honest_order_length (positions : Positions) : (honestOrder positions).length = positions.card := by
   simp [honestOrder]
