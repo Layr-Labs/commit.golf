@@ -20,7 +20,7 @@ def packRows (l : Nat) : List Instr :=
   [.LHU .x31 .x7 28] ++
   (if l=6 then [.SLLI .x29 .x10 14] else
     [.SRLI .x29 .x10 (BitVec.ofNat 6 (2*(l-6))),.SLLI .x29 .x29 14]) ++
-  [.OR .x31 .x31 .x29,.SH .x21 .x31 28]
+  [.OR .x31 .x31 .x29,.SH .x21 .x31 (BitVec.ofNat 12 (siblingOffset l+28))]
 
 def pack (l : Nat) (s : MachineState) := if folded l then execCode s (packRows l) else s
 def packCost (l : Nat) := if folded l then (packRows l).length else 0
@@ -76,7 +76,7 @@ structure PackResult (c l S T : Nat) (s u : MachineState) : Prop where
   regs : ∀ r, r≠.x31 → r≠.x29 → u.getReg r=s.getReg r
 
 theorem pack_result (c : Fin 4) (l : Fin 14) (s : MachineState) (S T : Nat)
-    (pc : s.pc=pcAt (packStart c l)) (sr : s.getReg .x7=BitVec.ofNat 64 S) (dr : s.getReg .x21=BitVec.ofNat 64 T)
+    (pc : s.pc=pcAt (packStart c l)) (sr : s.getReg .x7=BitVec.ofNat 64 S) (dr : s.getReg .x21+BitVec.ofNat 64 (siblingOffset l)=BitVec.ofNat 64 T)
     (sa : S%8=0) (even : T%2=0) (sf : S+32≤MEMORY_BYTES) (room : folded l → T+30≤MEMORY_BYTES) :
     PackResult c l S T s (pack l s) := by
   by_cases fold : folded l
@@ -85,13 +85,13 @@ theorem pack_result (c : Fin 4) (l : Fin 14) (s : MachineState) (S T : Nat)
     have sw : (BitVec.ofNat 6 (2*(l.val-6))).toNat=2*(l.val-6) := by rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt short]
     have src : s.getReg .x7+signExtend12 (28#12)=BitVec.ofNat 64 (S+28) := by
       rw [sr,show signExtend12 (28#12)=BitVec.ofNat 64 28 from rfl,←BitVec.ofNat_add]
-    have dst : s.getReg .x21+signExtend12 (28#12)=BitVec.ofNat 64 (T+28) := by
-      rw [dr,show signExtend12 (28#12)=BitVec.ofNat 64 28 from rfl,←BitVec.ofNat_add]
+    have dst : s.getReg .x21+signExtend12 (BitVec.ofNat 12 (siblingOffset l+28))=BitVec.ofNat 64 (T+28) := by
+      rw [sign12 _ (by have := sibling_offset_le l (by omega);omega),BitVec.ofNat_add,←BitVec.add_assoc,dr,←BitVec.ofNat_add]
     have ls:=half_access (S+28) (by omega) (by omega)
     have ts:=room fold
     have st:=half_access (T+28) (by omega) (by omega)
     have ready : Ready s (packRows l) := by
-      by_cases six : l.val=6 <;> simp [packRows,six,Ready,memoryArgumentsValid,memAccess,execInstrBr,src,dst,ls,st]
+      by_cases six : l.val=6 <;> (try rw [six] at dst) <;> simp [packRows,six,Ready,memoryArgumentsValid,memAccess,execInstrBr,src,dst,ls,st]
     have ran:=code_run (packRows l) (packStart c l) s (by have := pack_fit c l;simpa [packCost,fold] using this.le)
       (codeOfSlice (pack_code c l fold)) ready pc
       (by intro op m; by_cases six : l.val=6 <;> simp [packRows,six] at m <;> rcases m with rfl|rfl|rfl|rfl|rfl <;> rfl)
@@ -106,7 +106,7 @@ theorem pack_result (c : Fin 4) (l : Fin 14) (s : MachineState) (S T : Nat)
         change s.pc+4+4+4+4+4=_
         rw [pc];simp only [BitVec.add_assoc];exact ofNat_step _ 5
     · simp only [pack,if_pos fold]
-      by_cases six : l.val=6 <;>
+      by_cases six : l.val=6 <;> (try rw [six] at dst) <;>
         simp [packRows,six,execCode,execInstrBr,tag,foldValue,src,dst,sw] <;>
         apply half_mem_congr <;> simp
     · intro r a b; simp only [pack,if_pos fold]

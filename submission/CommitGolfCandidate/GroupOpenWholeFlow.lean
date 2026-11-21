@@ -54,21 +54,51 @@ def topRows : List Instr :=
   [.SRLI .x29 .x6 13,.XORI .x29 .x29 1,.SLLI .x29 .x29 5,.ADD .x29 .x9 .x29,.LHU .x10 .x29 28]
 def preload (s : MachineState) := execCode s topRows
 
-theorem prefix_code (c : Fin 4) : Slice (row c 1) slotCode ∧ Slice (row c 5) quartetExitCode ∧
+@[local simp] private theorem fixed_pc (s : MachineState) (v : Word) : (s.setPC v).pc=v := rfl
+@[local simp] private theorem fixed_mem (s : MachineState) (v : Word) : (s.setPC v).mem=s.mem := rfl
+@[local simp] private theorem fixed_reg_mem (s : MachineState) (r : Reg) (v : Word) : (s.setReg r v).mem=s.mem := by cases r <;> rfl
+
+def fixedSlotCode : List Instr :=
+  [.SLLI .x7 .x6 8, .ANDI .x7 .x7 3072, .ADD .x7 .x7 .x24, .ANDI .x10 .x6 3,
+   .ADDI .x7 .x7 584]
+
+def fixedExitCode : List Instr := [.SRLI .x6 .x6 2,.ADD .x6 .x6 .x19]
+def fixedSlot (s : MachineState) := execCode s fixedSlotCode
+def fixedExit (s : MachineState) := execCode s fixedExitCode
+theorem fixedSlot_post (s : MachineState) :
+    let u := fixedSlot s
+    u.pc=s.pc+20 ∧ u.mem=s.mem ∧ u.getReg .x21=s.getReg .x21 ∧
+    u.getReg .x7 = (((s.getReg .x6 <<< 8) &&& (3072#12).signExtend 64) + s.getReg .x24) + 584 ∧
+    u.getReg .x10 = s.getReg .x6 &&& 3 ∧
+    ∀ r, r ≠ .x21 → r ≠ .x7 → r ≠ .x10 → u.getReg r = s.getReg r := by
+  simp [fixedSlot,execCode,fixedSlotCode,execInstrBr,signExtend12,BitVec.add_assoc]
+  intro r a b c
+  simp [Ne.symm a,Ne.symm b,Ne.symm c]
+
+theorem fixedExit_post (s : MachineState) :
+    let u := fixedExit s
+    u.pc=s.pc+8 ∧ u.mem=s.mem ∧ u.getReg .x21=s.getReg .x21 ∧
+    u.getReg .x6=(s.getReg .x6 >>> 2)+s.getReg .x19 ∧
+    ∀ r, r ≠ .x21 → r ≠ .x6 → u.getReg r = s.getReg r := by
+  simp [fixedExit,execCode,fixedExitCode,execInstrBr,signExtend12,BitVec.add_assoc]
+  intro r a b
+  simp [Ne.symm a, Ne.symm b]
+
+theorem prefix_code (c : Fin 4) : Slice (row c 1) fixedSlotCode ∧ Slice (row c 5) fixedExitCode ∧
     Slice (row c 6) topRows ∧ ∀ j : Fin 3, Slice (row c (2+j.val)) (quartetHeadCode j) := by
   revert c; decide +kernel
 
 theorem prefix_layout (c : Fin 4) :
-    rawStart c 0+(shape c 0).cycles=row c 1 ∧ row c 1+6=row c 2 ∧
-    row c 5+3=row c 6 ∧ row c 6+5=row c 7 ∧ row c 7<6144 ∧
+    rawStart c 0+(shape c 0).cycles=row c 1 ∧ row c 1+5=row c 2 ∧
+    row c 5+2=row c 6 ∧ row c 6+5=row c 7 ∧ row c 7<6144 ∧
     ∀ j : Fin 3, rawStart c (1+j.val)=row c (2+j.val)+3 ∧
       rawStart c (1+j.val)+(shape c (1+j.val)).cycles=row c (3+j.val) ∧
       row c (2+j.val)≤row c (3+j.val) ∧ row c (3+j.val)≤row c 5 := by
   revert c; decide
 
 theorem slot_run (c : Fin 4) (s : MachineState) (pc : s.pc=pcAt (row c 1)) :
-    RunsOpeningBlock s (slotStart s) 6 :=
-  pure_run s _ slotCode (prefix_code c).1 ((show ∀ a : Fin 4, row a 1+6≤6144 from by decide) c) pc (by decide)
+    RunsOpeningBlock s (fixedSlot s) 5 :=
+  pure_run s _ fixedSlotCode (prefix_code c).1 ((show ∀ a : Fin 4, row a 1+5≤6144 from by decide) c) pc (by decide)
 
 theorem mate_run (c : Fin 4) (j : Fin 3) (s : MachineState) (pc : s.pc=pcAt (row c (2+j.val))) :
     RunsOpeningBlock s (quartetHead j s) 3 := by
@@ -77,8 +107,8 @@ theorem mate_run (c : Fin 4) (j : Fin 3) (s : MachineState) (pc : s.pc=pcAt (row
     (by intro i hi; simp only [quartetHeadCode,List.mem_cons,List.not_mem_nil,or_false] at hi;rcases hi with rfl|rfl|rfl <;> rfl)
 
 theorem exit_run (c : Fin 4) (s : MachineState) (pc : s.pc=pcAt (row c 5)) :
-    RunsOpeningBlock s (quartetExit s) 3 :=
-  pure_run s _ quartetExitCode (prefix_code c).2.1 (by have := prefix_layout c;change _+3≤_;omega) pc (by decide)
+    RunsOpeningBlock s (fixedExit s) 2 :=
+  pure_run s _ fixedExitCode (prefix_code c).2.1 (by have := prefix_layout c;change _+2≤_;omega) pc (by decide)
 
 private theorem shift13 (i : Index) :
     BitVec.ofNat 64 (upperNode i 0) >>> 13 = BitVec.ofNat 64 (upperNode i 13) := by

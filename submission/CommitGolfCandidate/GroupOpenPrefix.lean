@@ -117,7 +117,7 @@ structure GroupCursor (s : MachineState) (i : Index) (o j : Nat) : Prop where
   group : s.getReg .x7=BitVec.ofNat 64 (groupSlots+1024*(i.val/4)+584)
   low : s.getReg .x10=BitVec.ofNat 64 (i.val%4)
   index : s.getReg .x6=BitVec.ofNat 64 i.val
-  output : s.getReg .x21=BitVec.ofNat 64 (recordBase o+16)
+  output : s.getReg .x21=BitVec.ofNat 64 (recordBase o)
 
 theorem Whole.beforeProof {s u : MachineState} {S T n cost word : Nat}
     (d : CapCopy.Done s u S T n cost word) (a : Nat) (low : a<proofBase) (bound : proofBase≤T) :
@@ -126,7 +126,7 @@ theorem Whole.beforeProof {s u : MachineState} {S T n cost word : Nat}
   have al : proofBase%8=0 := by decide
   rw [BitVec.toNat_ofNat]; have := Nat.mod_le a (2^64);omega
 
-def saltStart (c : Nat) (s : MachineState) := slotStart (Whole.copy c 0 (Whole.dispatch (nonceSetup s)))
+def saltStart (c : Nat) (s : MachineState) := Whole.fixedSlot (Whole.copy c 0 (Whole.dispatch (nonceSetup s)))
 
 theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let c := Whole.pageClass o
@@ -138,7 +138,7 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
   let t := Whole.dispatch n
   let v := Whole.copy c 0 t
   have h:=nonce_setup_post s
-  have z:=slot_post v
+  have z:=Whole.fixedSlot_post v
   have shape:=Whole.prefix_layout c
   obtain ⟨_,_,apart,room⟩ := all_nonce_copies_fit i o fit
   have sa : nonceAddress i%8=0 := by
@@ -161,7 +161,7 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
     ((keepT _ (by decide) (by decide)).trans (h.2.2.2.1.trans start.index))
   have fixed (r : Reg) (a : r≠.x31) (b : r≠.x29) (cc : r≠.x6) (d : r≠.x7) : v.getReg r=s.getReg r :=
     (field.regs r a).trans ((keepT r a b).trans (h.2.2.2.2 r cc d))
-  have stable : Keeps s (slotStart v) := by
+  have stable : Keeps s (Whole.fixedSlot v) := by
     intro r free
     apply (z.2.2.2.2.2 r ?_ ?_ ?_).trans (fixed r ?_ ?_ ?_ ?_)
     all_goals intro e;subst r; simp [prefixScratch] at free
@@ -171,28 +171,27 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
     · intro b hb; simp [firstSource,hb]
     · intro a ha;exact Whole.beforeProof field a ha (by unfold recordBase;omega)
   have total := ((gate.next dispatch).next field.run).next (Whole.slot_run c v fieldPC)
-  have eq : 3+6+(Whole.shape c 0).cycles+6=9+(Whole.row c 2-Whole.row c 0) := by
-    have t : ∀ c : Fin 4, 3+6+(Whole.shape c 0).cycles+6=9+(Whole.row c 2-Whole.row c 0) := by decide
+  have eq : 3+6+(Whole.shape c 0).cycles+5=9+(Whole.row c 2-Whole.row c 0) := by
+    have t : ∀ c : Fin 4, 3+6+(Whole.shape c 0).cycles+5=9+(Whole.row c 2-Whole.row c 0) := by decide
     exact t c
-  change RunsOpeningBlock s (slotStart v) (3+6+(Whole.shape c 0).cycles+6) at total
+  change RunsOpeningBlock s (Whole.fixedSlot v) (3+6+(Whole.shape c 0).cycles+5) at total
   rw [eq] at total
   refine ⟨total,⟨?_,(stable .x9 (by decide)).trans start.heap,(stable .x19 (by decide)).trans start.groups,
     ?_,?_,?_,?_⟩,sourceBytes.move (memT.trans h.2.1).symm z.2.1,stable⟩
-  · change (slotStart v).pc=_
-    rw [z.1,fieldPC]; exact (ofNat_step _ 6).trans (congrArg pcAt shape.2.1)
-  · change (slotStart v).getReg .x7=_
-    rw [show (slotStart v).getReg .x7=_ from z.2.2.2.1,rd,masked_group,
+  · change (Whole.fixedSlot v).pc=_
+    rw [z.1,fieldPC]; exact (ofNat_step _ 5).trans (congrArg pcAt shape.2.1)
+  · change (Whole.fixedSlot v).getReg .x7=_
+    rw [show (Whole.fixedSlot v).getReg .x7=_ from z.2.2.2.1,rd,masked_group,
       (fixed .x24 (by decide) (by decide) (by decide) (by decide)),start.slots,←BitVec.ofNat_add]
     change BitVec.ofNat 64 (1024*(i.val/4)+groupSlots)+BitVec.ofNat 64 584=_
     rw [←BitVec.ofNat_add,Nat.add_comm (1024*(i.val/4))]
-  · change (slotStart v).getReg .x10=_
-    rw [show (slotStart v).getReg .x10=_ from z.2.2.2.2.1,rd,low_selector]
+  · change (Whole.fixedSlot v).getReg .x10=_
+    rw [show (Whole.fixedSlot v).getReg .x10=_ from z.2.2.2.2.1,rd,low_selector]
   · exact (z.2.2.2.2.2 _ (by decide) (by decide) (by decide)).trans rd
-  · change (slotStart v).getReg .x21=_
+  · change (Whole.fixedSlot v).getReg .x21=_
     have dv : v.getReg .x21=BitVec.ofNat 64 (recordBase o) :=
       (field.regs _ (by decide)).trans ((keepT _ (by decide) (by decide)).trans output)
-    rw [z.2.2.1,dv]
-    exact (BitVec.ofNat_add (n:=64) (recordBase o) 16).symm
+    exact z.2.2.1.trans dv
 
 def groupStep (c : Nat) (j : Fin 3) (s : MachineState) := Whole.copy c (1+j.val) (quartetHead j s)
 
@@ -216,8 +215,8 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
   have room : T+32≤MEMORY_BYTES := by unfold T recordBase recordBytes at *;omega
   have srcBound : S+32≤nonceBase := bounds.2.2
   have apart : S+32≤T := by unfold T recordBase;omega
-  have specs : Whole.source f=.x28 ∧ Whole.offset f=32*j.val ∧ Whole.width f=32 ∧ Whole.destResidue c f=2*c.val := by
-    have tab : ∀ a : Fin 4, ∀ j : Fin 3, Whole.source (1+j.val)=.x28 ∧ Whole.offset (1+j.val)=32*j.val ∧
+  have specs : Whole.source f=.x28 ∧ Whole.offset f=16+32*j.val ∧ Whole.width f=32 ∧ Whole.destResidue c f=2*c.val := by
+    have tab : ∀ a : Fin 4, ∀ j : Fin 3, Whole.source (1+j.val)=.x28 ∧ Whole.offset (1+j.val)=16+32*j.val ∧
       Whole.width (1+j.val)=32 ∧ Whole.destResidue a (1+j.val)=2*a.val := by decide
     exact tab c j
   have pos:=(Whole.prefix_layout c).2.2.2.2.2 j
@@ -226,7 +225,7 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
   have src : t.getReg (Whole.source f)=BitVec.ofNat 64 S := by
     rw [specs.1];exact quartet_physical_source s i j start.group start.low
   have dst : t.getReg .x21+BitVec.ofNat 64 (Whole.offset f)=BitVec.ofNat 64 T := by
-    rw [specs.2.1,head.2.2.2 .x21 (by decide),start.output,←BitVec.ofNat_add];simp [T,Nat.add_assoc]
+    rw [specs.2.1,head.2.2.2 .x21 (by decide),start.output,←BitVec.ofNat_add]
   have rr : T%8=Whole.destResidue c f := by
     rw [specs.2.2.2];have q:=Whole.class_residue o;unfold T;change _=2*Whole.pageClass o;omega
   have copy:=Whole.field_copy c f t S T pc src dst bounds.1 rr (specs.2.2.1 ▸ apart) (specs.2.2.1 ▸ room)
@@ -253,13 +252,13 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
     apply stable r <;> intro e <;> subst r <;> simp [prefixScratch] at free
 
 def recordPrefix (c : Nat) (s : MachineState) :=
-  Whole.preload (quartetExit (groupStep c 2 (groupStep c 1 (groupStep c 0 (saltStart c s)))))
+  Whole.preload (Whole.fixedExit (groupStep c 2 (groupStep c 1 (groupStep c 0 (saltStart c s)))))
 
 structure WholeCursor (s : MachineState) (i : Index) (o l : Nat) : Prop where
   pc : s.pc=(if l=14 then pcAt 642 else pcAt (Whole.row (Whole.pageClass o) (7+l)))
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
   node : s.getReg .x6=BitVec.ofNat 64 (upperNode i l)
-  dest : s.getReg .x21=BitVec.ofNat 64 (siblingDestination o l)
+  dest : s.getReg .x21=BitVec.ofNat 64 (recordBase o + (if l=14 then 534 else 0))
 
 theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let c:=Whole.pageClass o
@@ -274,8 +273,8 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
   have ⟨s1,g2,w2,k2⟩ := run_group_step _ i o 1 fit g1
   have ⟨s2,g3,w3,k3⟩ := run_group_step _ i o 2 fit g2
   let last:=groupStep c 2 (groupStep c 1 (groupStep c 0 (saltStart c s)))
-  let ex:=quartetExit last
-  have e:=quartet_exit_post last
+  let ex:=Whole.fixedExit last
+  have e:=Whole.fixedExit_post last
   have past : Keeps s last := ((k0.next k1).next k2).next k3
   have kept : Keeps last ex := by
     intro r free;apply e.2.2.2.2 <;> intro h <;> subst r <;> simp [prefixScratch] at free
@@ -283,7 +282,7 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
   have pos:=Whole.prefix_layout c
   have atExit : last.pc=pcAt (Whole.row c 5) := g3.pc
   have pcEx : ex.pc=pcAt (Whole.row c 6) := by
-    rw [show ex.pc=_ from e.1,atExit];exact (ofNat_step _ 3).trans (congrArg pcAt pos.2.2.1)
+    rw [show ex.pc=_ from e.1,atExit];exact (ofNat_step _ 2).trans (congrArg pcAt pos.2.2.1)
   have heap : ex.getReg .x9=BitVec.ofNat 64 trapdoorBase := (kept _ (by decide)).trans g3.heap
   have node : ex.getReg .x6=BitVec.ofNat 64 (upperNode i 0) := by
     rw [show ex.getReg .x6=_ from e.2.2.2.1,show last.getReg .x6=_ from g3.index,quarter_shift,
@@ -293,16 +292,13 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
     intro r free;apply regEnd <;> intro h <;> subst r <;> simp [prefixScratch] at free
   have all := (((((salt.next s0).next s1).next s2).next (Whole.exit_run c last atExit)).next top)
   have price : ∀ c : Fin 4, 9+(Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+
-      (Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+3+5=9+(Whole.row c 7-Whole.row c 0) := by decide
-  change RunsOpeningBlock s (recordPrefix c s) (9+(Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+(Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+3+5) at all
+      (Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+2+5=9+(Whole.row c 7-Whole.row c 0) := by decide
+  change RunsOpeningBlock s (recordPrefix c s) (9+(Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+(Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+2+5) at all
   rw [price c] at all
   refine ⟨all,⟨pcEnd,(regEnd _ (by decide) (by decide)).trans heap,(regEnd _ (by decide) (by decide)).trans node,?_⟩,
     writes.move rfl (memEnd.trans e.2.1), (past.next kept).next finalKeep,
     (regEnd _ (by decide) (by decide)).trans ((e.2.2.2.2 _ (by decide) (by decide)).trans g3.group),?_⟩
-  · change (Whole.preload ex).getReg .x21=_
-    rw [regEnd .x21 (by decide) (by decide),show ex.getReg .x21=_ from e.2.2.1,show last.getReg .x21=_ from g3.output]
-    change BitVec.ofNat 64 (recordBase o+16)+BitVec.ofNat 64 96=BitVec.ofNat 64 (recordBase o+112)
-    rw [←BitVec.ofNat_add,Nat.add_assoc]
+  · exact (regEnd .x21 (by decide) (by decide)).trans (e.2.2.1.trans g3.output)
   · change (Whole.preload ex).getReg .x10=_
     exact loaded.trans (congrArg (BitVec.zeroExtend 64) (get_half_congr memEnd _).symm)
 

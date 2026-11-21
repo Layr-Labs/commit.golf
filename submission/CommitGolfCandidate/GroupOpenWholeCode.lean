@@ -36,6 +36,10 @@ theorem pairsOfSlice {w n width p dst : Nat} {src : Reg} (h : Slice w (pairRows 
   · simpa [show 2*j%2=0 by omega,show 2*j/2=j by omega] using a
   · simpa [show (2*j+1)%2=1 by omega,show (2*j+1)/2=j by omega,Nat.add_assoc] using b
 
+def sixRows (src : Reg) (off p : Nat) : List Instr :=
+  [.LD .x31 src (BitVec.ofNat 12 p),.SH .x21 .x31 (BitVec.ofNat 12 (off+p)),
+   .SRLI .x31 .x31 16,.SW .x21 .x31 (BitVec.ofNat 12 (off+p+2))]
+
 def RawCode (q : Shape) (w : Nat) (src : Reg) (off : Nat) : Prop := match q with
   | .d16 => Slice (w+0) (pairRows 2 8 src 0 (off+0))
   | .w16 => Slice (w+0) (pairRows 4 4 src 0 (off+0))
@@ -45,7 +49,7 @@ def RawCode (q : Shape) (w : Nat) (src : Reg) (off : Nat) : Prop := match q with
   | .s28 => Slice (w+0) (Shifted32.chunkCode src off 0) ∧ Slice (w+6) (Shifted32.chunkCode src off 8) ∧ Slice (w+12) (Shifted32.chunkCode src off 16) ∧ Slice (w+18) (pairRows 2 2 src 24 (off+24))
   | .d30 => Slice (w+0) (pairRows 3 8 src 0 (off+0)) ∧ Slice (w+6) (pairRows 1 4 src 24 (off+24)) ∧ Slice (w+8) (pairRows 1 2 src 28 (off+28))
   | .w30 => Slice (w+0) (pairRows 7 4 src 0 (off+0)) ∧ Slice (w+14) (pairRows 1 2 src 28 (off+28))
-  | .s30 => src=.x7 ∧ off=0 ∧ (∀ j : Fin 4, Slice (w+6*j.val) (chunkCode (8*j.val) (decide (j.val=3))))
+  | .s30 => Slice (w+0) (Shifted32.chunkCode src off 0) ∧ Slice (w+6) (Shifted32.chunkCode src off 8) ∧ Slice (w+12) (Shifted32.chunkCode src off 16) ∧ Slice (w+18) (sixRows src off 24)
   | .d32 => Slice (w+0) (pairRows 4 8 src 0 (off+0))
   | .w32 => Slice (w+0) (pairRows 8 4 src 0 (off+0))
   | .s32 => Slice (w+0) (Shifted32.chunkCode src off 0) ∧ Slice (w+6) (Shifted32.chunkCode src off 8) ∧ Slice (w+12) (Shifted32.chunkCode src off 16) ∧ Slice (w+18) (Shifted32.chunkCode src off 24)
@@ -65,7 +69,7 @@ def rawState (q : Shape) (src : Reg) (off : Nat) (s : MachineState) : MachineSta
   | .s28 => (pairsRun 2 src 24 (off+24) 0 2 (execCode (execCode (execCode s (Shifted32.chunkCode src off 0)) (Shifted32.chunkCode src off 8)) (Shifted32.chunkCode src off 16)))
   | .d30 => (pairsRun 2 src 28 (off+28) 0 1 (pairsRun 4 src 24 (off+24) 0 1 (pairsRun 8 src 0 (off+0) 0 3 s)))
   | .w30 => (pairsRun 2 src 28 (off+28) 0 1 (pairsRun 4 src 0 (off+0) 0 7 s))
-  | .s30 => (copy30 s)
+  | .s30 => (execCode (execCode (execCode (execCode s (Shifted32.chunkCode src off 0)) (Shifted32.chunkCode src off 8)) (Shifted32.chunkCode src off 16)) (sixRows src off 24))
   | .d32 => (pairsRun 8 src 0 (off+0) 0 4 s)
   | .w32 => (pairsRun 4 src 0 (off+0) 0 8 s)
   | .s32 => (execCode (execCode (execCode (execCode s (Shifted32.chunkCode src off 0)) (Shifted32.chunkCode src off 8)) (Shifted32.chunkCode src off 16)) (Shifted32.chunkCode src off 24))

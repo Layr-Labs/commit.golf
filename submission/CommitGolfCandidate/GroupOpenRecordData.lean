@@ -109,7 +109,7 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
     fun a ha => (result.input a ha).trans (writes.input a ha),?_,?_,?_,?_⟩
   · have chain:=run0.next result.run
     have price : ∀ c : Fin 4, (9+(Whole.row c 7-Whole.row c 0))+
-        (Whole.point c (0+14)-Whole.point c 0)=127+(Whole.row c 22-Whole.row c 0-116) := by decide
+        (Whole.point c (0+14)-Whole.point c 0)=127+(Whole.row c 22-Whole.row c 0-118) := by decide
     change RunsOpeningBlock st u (127+recordExtra o)
     rw [show 127+recordExtra o=(9+(Whole.row c 7-Whole.row c 0))+(Whole.point c (0+14)-Whole.point c 0) from (price c).symm]
     exact chain

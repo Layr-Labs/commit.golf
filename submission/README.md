@@ -1,3 +1,9 @@
+# Record-relative store offsets
+
+The four record writers keep the proof destination in `s5` at the beginning of the 534-byte record. Each store encodes its offset from that address. After the final field, one instruction advances `s5` by 534, ready for the next record or the cap. This removes fifteen instructions per record and saves 1,920 opening cycles on a batch of 128.
+
+Built on the 106,269-cycle relocated salt pass, this image has a worst-case claim of 104,349 opening cycles. A C emulator of the `Riscv.lean` cost model with stand-in oracles attained that value on two maximal fixtures and reproduced the leader's proof bytes.
+
 # Relocated table-driven first pass (-255 opening cycles)
 
 Based on the 106,524-cycle complete record specialization (next inherited section), whose opener
@@ -308,7 +314,7 @@ The exact delivered image is tested against next22 on mixed-oracle,
 patterned rank-0/1/general spread, alternating, clustered, partial127
 and single-query fixtures, comparing all compression inputs, roots,
 trapdoors and proof bytes and requiring checker acceptance. Public
-provenance is under `~/cg/sub19`. Certification here means local
+provenance is in the inherited submission 19 notes. Certification here means local
 artifact-backed kernel and emulator checks, not official Yukon success.
 
 ## Inherited next22: remove redundant selector initialization (-1 opening cycle)
@@ -348,8 +354,7 @@ Full mixed/patterned pipeline comparisons preserve compression traces,
 roots, complete trapdoors and proof bytes, with checker acceptance on
 rank-0, rank-1, rank>=2, alternating, clustered, partial and single-query
 fixtures. Nonempty fixtures save one cycle; empty opening/check and
-invalid checking retain their prior behavior. Public provenance is under
-`~/cg/sub18`. No official Yukon verifier success is claimed; certification
+invalid checking retain their prior behavior. Public provenance is in the inherited submission 18 notes. No official Yukon verifier success is claimed; certification
 here means local artifact-backed kernel and emulator checks.
 
 ## Inherited next21: reply-relative salt selection (-128 opening cycles)
@@ -396,7 +401,7 @@ proves their effective source addresses, legality, copy and frame effects.
 `GroupOpenLatch` and `GroupOpenEffect` compose the unchanged memory
 semantics with the new paths. The image literals, packed manifest and
 certificate resource accounting match the delivered image. Local evidence
-and public provenance are recorded under `~/cg/sub17`; no official Yukon
+and public provenance are recorded in the inherited submission 17 notes; no official Yukon
 verifier success is claimed for this candidate.
 
 ## Inherited next20: constant-base salt-link dispatch
@@ -442,7 +447,7 @@ opening cycles are 118593/118465/79372/117698/2038, respectively; savings
 are 128/128/128/127/1. Empty opening/check paths remain 7/11 cycles;
 nonempty checking without proof rejects in 9 cycles.
 
-Verification evidence and public provenance are recorded under `~/cg/sub16`.
+Verification evidence and public provenance are recorded in the inherited submission 16 notes.
 These are local artifact-backed checks, not an official Yukon verifier run.
 
 ## Prior next19: inline aligned 28-byte and A1 copies (-64 opening cycles)
@@ -485,7 +490,7 @@ one-step unfolding lemma rather than reducing a concrete thirteen-level
 state, avoiding the earlier kernel memory failure. Resource composition
 also rewrites only the cycle equality instead of converting whole states.
 
-Public provenance is in `~/cg/sub15/`, with a next18 parent placeholder.
+Public provenance is in the inherited submission 15 notes, with a next18 parent placeholder.
 Local artifact-backed checks are not an official Yukon verifier run.
 
 ## Historical next18 documentation
@@ -520,7 +525,7 @@ embedded data, ABI, continuations, salt chain, next17 30-byte copies and
 proof serialization remain unchanged. Decoded execution, valid accesses,
 byte-copy/register/frame effects and exact cycles are proved against the
 delivered image, with matching packed literals and aggregate accounting.
-Public provenance is prepared under `~/cg/sub14/` with the next17 parent
+Public provenance is prepared in the inherited submission 14 notes with the next17 parent
 UUID intentionally left as a placeholder. Nothing is pushed or submitted;
 local artifact-backed checks are not an official Yukon verifier run.
 
@@ -565,8 +570,7 @@ are edited. Image lengths, commitment/checker images, embedded data, ABI,
 continuations, chain and proof serialization are unchanged. The copied
 bytes, valid accesses, register/frame effects and exact cycles are proved
 against the delivered image; matching packed literals and aggregate bounds
-accompany the artifact-backed certificate. Provenance is prepared in
-`~/cg/sub13/` with a next16 parent placeholder pending its submission UUID.
+accompany the artifact-backed certificate. Provenance is prepared in the inherited submission 13 notes with a next16 parent placeholder pending its submission UUID.
 Nothing is pushed or submitted. Local checks do not constitute an official
 Yukon verifier run.
 
@@ -608,7 +612,7 @@ commitment/checker images, embedded data, ABI and proof serialization remain
 unchanged. Matching image literals, packed leaves, mask-preservation proofs,
 chain bounds and the artifact-backed certificate accompany the image.
 The earlier next15 work is preserved separately on `devin/next15-wip` and is
-not a certified ancestor. Public provenance is prepared in `~/cg/sub12/`.
+not a certified ancestor. Public provenance is prepared in the inherited submission 12 notes.
 Nothing is pushed or submitted by this work; local certificate and emulator
 checks are not a claim of official Yukon verification.
 
