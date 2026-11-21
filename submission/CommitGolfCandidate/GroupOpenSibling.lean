@@ -157,7 +157,7 @@ def tailPrefix (state : MachineState) (level : Fin 14) (count : Nat) : MachineSt
 
 set_option maxRecDepth 4096 in
 private theorem head_decode :
-    ∀ (level : Fin 14) (i : Fin 3), level.val ≠ 0 →
+    ∀ (level : Fin 14) (i : Fin 3), level.val ≠ 0 → level.val ≠ 2 →
       (openingImage.code[siblingStart level+i.val]?).bind Opening.decodeBase =
         some (headCode[i.val]?.getD .EBREAK) := by decide
 
@@ -176,7 +176,7 @@ private theorem tail_decode :
 private theorem head_range : ∀ level : Fin 14, siblingStart level+3 ≤ 896 := by decide
 private theorem tail_range : ∀ level : Fin 14, siblingEnd level+2 ≤ 896 := by decide
 
-theorem execute_sibling_head (state : MachineState) (level : Fin 14) (nz : level.val ≠ 0)
+theorem execute_sibling_head (state : MachineState) (level : Fin 14) (nz : level.val ≠ 0) (old : level.val ≠ 2)
     (pc : state.pc = BitVec.ofNat 64 (4096+4*siblingStart level)) (fuel : Nat) (coins : Bool) :
     execute openingImage (3+fuel) state coins =
       (do let result ← execute openingImage fuel (headPrefix state 3) coins
@@ -189,7 +189,7 @@ theorem execute_sibling_head (state : MachineState) (level : Fin 14) (nz : level
           BitVec.ofNat 64 (4096+4*(siblingStart level+i)) := by rw [← BitVec.ofNat_add]; congr 1; omega
       rw [← offset]
       interval_cases i <;> simp [headPrefix, headCode, execInstrBr, pc, BitVec.add_assoc]
-    · exact head_decode level ⟨i,inside⟩ nz
+    · exact head_decode level ⟨i,inside⟩ nz old
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 

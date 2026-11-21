@@ -23,7 +23,7 @@ structure Done (s t : MachineState) (S T n cycles word : Nat) : Prop where
 
 theorem pairs (s : MachineState) (S T word load width n : Nat)
     (hw : width = 2 ∨ width = 4 ∨ width = 8)
-    (code : PairsAt word n width .x7 load load) (bound : word+2*n ≤ 1976)
+    (code : PairsAt word n width .x7 load load) (bound : word+2*n ≤ 6144)
     (pc : s.pc = BitVec.ofNat 64 (4096+4*word))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
     (sa : (S+load)%width=0) (ta : (T+load)%width=0)
@@ -45,7 +45,7 @@ private theorem chunks_code : ∀ k : Fin 3,
 
 theorem chunk_at_width (word width : Nat) (k : Fin width) (s : MachineState) (S T : Nat)
     (code : CodeAt (word+6*k.val) (Shifted32.chunkCode .x7 0 (8*k.val)))
-    (bound : word+6*width ≤ 1976) (small : width ≤ 4)
+    (bound : word+6*width ≤ 6144) (small : width ≤ 4)
     (pc : s.pc = BitVec.ofNat 64 (4096+4*(word+6*k.val)))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%4=2) (apart : S+8*width ≤ T) (room : T+8*width ≤ MEMORY_BYTES) :
@@ -73,7 +73,7 @@ theorem chunk_at_width (word width : Nat) (k : Fin width) (s : MachineState) (S 
 
 theorem chunk_at (word : Nat) (k : Fin 3) (s : MachineState) (S T : Nat)
     (code : CodeAt (word+6*k.val) (Shifted32.chunkCode .x7 0 (8*k.val)))
-    (bound : word+18 ≤ 1976)
+    (bound : word+18 ≤ 6144)
     (pc : s.pc = BitVec.ofNat 64 (4096+4*(word+6*k.val)))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%4=2) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
@@ -99,7 +99,7 @@ theorem append {s t u : MachineState} {S T n m c d word next : Nat}
   rw [last.below q (by omega), first.below q low]
 
 theorem jump {s t : MachineState} {S T n c word targetWord : Nat} (copy : Done s t S T n c word)
-    (off : BitVec 21) (bound : word<1976) (code : Decodes word (.JAL .x0 off))
+    (off : BitVec 21) (bound : word<6144) (code : Decodes word (.JAL .x0 off))
     (target : BitVec.ofNat 64 (4096+4*word)+signExtend21 off=BitVec.ofNat 64 (4096+4*targetWord)) :
     Done s (execInstrBr t (.JAL .x0 off)) S T n (c+1) targetWord := by
   have mem : (execInstrBr t (.JAL .x0 off)).mem=t.mem := rfl
@@ -159,7 +159,7 @@ theorem before {s e t : MachineState} {S T n c d word : Nat}
   intro q low; exact (copy.below q low).trans (getMem_congr mem q)
 
 theorem test (s : MachineState) (T word modulus : Nat) (mask : BitVec 12) (off : BitVec 13)
-    (bound : word+1<1976) (pc : s.pc=BitVec.ofNat 64 (4096+4*word))
+    (bound : word+1<6144) (pc : s.pc=BitVec.ofNat 64 (4096+4*word))
     (code1 : Decodes word (.ANDI .x31 .x21 mask))
     (code2 : Decodes (word+1) (.BNE .x31 .x0 off))
     (small : 0<modulus ∧ modulus ≤ 8) (bits : s.getReg .x21 &&& signExtend12 mask=BitVec.ofNat 64 (T%modulus)) :

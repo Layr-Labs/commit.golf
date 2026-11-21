@@ -1,3 +1,13 @@
+# Complete record specialization with inline 238-bit packing
+
+Based on the 110,940-cycle four-class record implementation. The opener dispatches once per record after loading its index and salt address. Four straight-line record writers specialize every copy. Each of seven packed siblings copies its first 28 bytes, combines its last halfword with two bits of the terminal sibling, and stores that halfword once. A single terminal-halfword preload supplies all seven fields. The final sibling copies 28 bytes and rejoins the original record latch.
+
+The worst-case candidate claim is 106,524 opening cycles. The 128-record batch saves 4,416 cycles compared with the first-stage record specialization. The commitment remains 504,585,244 cycles, with a 72,160-byte proof bound.
+
+# Alignment-specialized 30-byte record fields
+
+Based on the merged 116,028-cycle table-driven salt pass and packed cap emitter. Four straight-line writers cover the same eleven 30-byte siblings. A single per-record selector at word 222 enters the appropriate writer, and every path rejoins at word 607. The 128-record batch includes 32 of each alignment. The measured and claimed improvement is 5,088 cycles, giving a bound of 110,940. The product is 36,418,876,637,440.
+
 # Product: table-driven first pass plus cap emission (-2,052 opening cycles)
 
 Built on the promoted product record `0259c643` (0andadream), which credits the contributors

@@ -421,7 +421,7 @@ theorem execute_last (state : MachineState) (index : Index) (ordinal : Nat) (bou
     · exact field_outside copiedBytes _ (by omega) (by omega) (Or.inl (by omega))
   refine ⟨?_, ⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_⟩
   · have total := ((((show RunsOpeningBlock state prepared 3 from
-      fun fuel coins => execute_sibling_head state level (by simp [level]) start fuel coins).next field.run).next ranLoad).next
+      fun fuel coins => execute_sibling_head state level (by simp [level]) (by decide) start fuel coins).next field.run).next ranLoad).next
       ranFold).next ranTail
     have cost : 3 + Writer28.cycles dst + 2 + 34 + 3 = 42 + lastCopyCost ordinal := by
       simp only [lastCopyCost, dst]

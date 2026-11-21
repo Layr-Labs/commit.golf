@@ -303,10 +303,10 @@ theorem stub_code (site : CopySite) (wide : site.wide = true) : StubCode site :=
 /-! ### One step -/
 
 def stepKind : Instr → Bool
-  | .SRLI .. | .LHU .. | .SH .. | .LW .. | .SW .. | .LD .. | .SD .. | .ADDI .. | .ANDI .. | .BEQ .. | .BNE .. | .JAL .. | .JALR .. => true
+  | .OR .. | .LUI .. | .XORI .. | .SLLI .. | .ADD .. | .SRLI .. | .LHU .. | .SH .. | .LW .. | .SW .. | .LD .. | .SD .. | .ADDI .. | .ANDI .. | .BEQ .. | .BNE .. | .JAL .. | .JALR .. => true
   | _ => false
 
-theorem run_step (s : MachineState) (word : Nat) (i : Instr) (bounded : word < 1976)
+theorem run_step (s : MachineState) (word : Nat) (i : Instr) (bounded : word < 6144)
     (pc : s.pc = BitVec.ofNat 64 (4096+4*word)) (dec : Decodes word i) (kind : stepKind i = true)
     (valid : memoryArgumentsValid s i = true) : RunsOpeningBlock s (execInstrBr s i) 1 := by
   intro fuel coins
@@ -510,7 +510,7 @@ theorem run_zero (s : MachineState) : RunsOpeningBlock s s 0 := by
 
 theorem run_pairs (width : Nat) (hw : width = 2 ∨ width = 4 ∨ width = 8) (src : Reg) (st : src ≠ .x31)
     (word load store S T : Nat) (sa : (S+load) % width = 0) (ta : T % width = 0) :
-    ∀ (n j : Nat) (s : MachineState), PairsAt word (j+n) width src load store → word+2*(j+n) ≤ 1976 →
+    ∀ (n j : Nat) (s : MachineState), PairsAt word (j+n) width src load store → word+2*(j+n) ≤ 6144 →
       s.pc = BitVec.ofNat 64 (4096+4*(word+2*j)) →
       s.getReg src = BitVec.ofNat 64 S → s.getReg .x21 + BitVec.ofNat 64 store = BitVec.ofNat 64 T →
       load + width*(j+n) ≤ 2048 → store + width*(j+n) ≤ 2048 →

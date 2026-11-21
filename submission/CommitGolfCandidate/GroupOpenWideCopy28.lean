@@ -32,7 +32,7 @@ def state (s : MachineState) : MachineState :=
   else shifted s
 
 theorem jump {s t : MachineState} {S T n c word : Nat} (copy : Done s t S T n c word)
-    (off : BitVec 21) (bound : word<1976) (code : Decodes word (.JAL .x0 off))
+    (off : BitVec 21) (bound : word<6144) (code : Decodes word (.JAL .x0 off))
     (target : BitVec.ofNat 64 (4096+4*word)+signExtend21 off=BitVec.ofNat 64 (4096+4*638)) :
     Done s (execInstrBr t (.JAL .x0 off)) S T n (c+1) 638 := by
   have mem : (execInstrBr t (.JAL .x0 off)).mem=t.mem := rfl
@@ -45,7 +45,7 @@ theorem jump {s t : MachineState} {S T n c word : Nat} (copy : Done s t S T n c 
   · intro q low; exact (getMem_congr mem q).trans (copy.below q low)
 
 theorem test (s : MachineState) (T word modulus : Nat) (mask : BitVec 12) (off : BitVec 13)
-    (bound : word+1<1976) (pc : s.pc=BitVec.ofNat 64 (4096+4*word))
+    (bound : word+1<6144) (pc : s.pc=BitVec.ofNat 64 (4096+4*word))
     (code1 : Decodes word (.ANDI .x31 .x21 mask))
     (code2 : Decodes (word+1) (.BEQ .x31 .x0 off))
     (small : 0<modulus ∧ modulus ≤ 8)

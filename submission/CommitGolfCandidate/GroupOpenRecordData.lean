@@ -1,4 +1,4 @@
-import CommitGolfCandidate.GroupOpenPrefix
+import CommitGolfCandidate.GroupOpenWholeRecords
 import CommitGolfCandidate.TwoPermutationOpeningRecordStart
 
 namespace TwoPermutationPrototype.GroupedOpening
@@ -24,7 +24,9 @@ structure RecordStart (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
 def recordScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
 
 /-- One record's data: the prefix (salt and mates), levels 0..12, then level 13 with the fold. -/
-def recordData (s : MachineState) := lastLevel (lowerRun 0 13 (recordPrefix s))
+def recordData (s : MachineState) :=
+  let c := (s.getReg .x21).toNat%8/2
+  Whole.runNodes c 0 14 (recordPrefix c s)
 
 structure RecordData (s u : MachineState) (i : Index) (o : Nat) : Prop where
   run : RunsOpeningBlock s u (127+recordExtra o)
@@ -82,138 +84,57 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
     exact input_index s layout t positions o present
   have px : PrefixStart st i o :=
     ⟨atStart.pc,atStart.heap,atStart.slots,atStart.nonce,atStart.leaves,atStart.dest,index,access⟩
-  obtain ⟨run0,cursor,written,kept,slot⟩ := execute_record_prefix st i o (by omega) px
-  let pre := recordPrefix st
-  let lowEnd := lowerRun 0 13 pre
-  have ptrFacts := pointer_address_inside i.val i.isLt
-  have ptr : pre.getMem (BitVec.ofNat 64 (pointerAddress i.val)) = BitVec.ofNat 64 (quadAddress i.val) :=
-    (written.input (pointerAddress i.val) (by have := nonces_end_at_indices; omega)).trans (atStart.pointer present)
-  have low := execute_lower_zero pre i o (by omega) cursor slot ptr
-  have last := execute_last lowEnd i o (by omega) low.next
-  have beginEq : siblingDestination o 0=recordBase o+112 := rfl
-  have endFit := all_record_ends_fit o (by omega)
-  have endEq : recordBase (o+1) = recordBase o+534 := by unfold recordBase recordBytes; omega
-  have end14 : siblingDestination o 14 = recordBase (o+1) := record_end o
-  have mono := destination_mono o
-  have smallSource (l b : Nat) (hb : b<32) : siblingAddress i l+b < proofBase := by
-    have z := sibling_address_inside i l
-    have n := nonces_end_at_indices
-    omega
-  have base : proofBase≤recordBase o := by unfold recordBase; omega
-  have dests (l : Nat) (hl : l ≤ 14) : recordBase o+112 ≤ siblingDestination o l ∧
-      siblingDestination o l ≤ recordBase o+534 := by
-    have a := sibling_offset_start l
-    have b := sibling_offset_le l hl
-    unfold siblingDestination
-    omega
-  -- the fold bytes sit at bytes 28, 29 of the folded slots
-  have foldAt (k : Nat) (hk : k < 7) : siblingDestination o (6+k)+30 = siblingDestination o (7+k) := by
-    have := sibling_offset_next (6+k) (by omega)
-    unfold siblingDestination
-    rw [show 7+k = 6+k+1 by omega, this]
-    unfold siblingWidth
-    rw [if_neg (by omega), if_pos (by omega)]
-    omega
-  have awayFold (a : Nat) (h : ∀ k < 7, ¬ (siblingDestination o (6+k)+28 ≤ a ∧ a < siblingDestination o (6+k)+30)) :
-      ∀ k < 7, a ≠ siblingDestination o (6+k)+28 ∧ a ≠ siblingDestination o (6+k)+29 := by
-    intro k hk
-    have := h k hk
-    constructor <;> intro e <;> apply this <;> omega
-  have lowFrame : ∀ a < 2^64, a < siblingDestination o 0 ∨ siblingDestination o 13 ≤ a →
-      lowEnd.getByte (BitVec.ofNat 64 a) = pre.getByte (BitVec.ofNat 64 a) := low.frame
-  have lowFields : ∀ l < 13, ∀ b < siblingWidth l,
-      lowEnd.getByte (BitVec.ofNat 64 (siblingDestination o l+b)) =
-        pre.getByte (BitVec.ofNat 64 (siblingAddress i l+b)) :=
-    fun l hl b hb => low.fields l (Nat.zero_le _) (by omega) b hb
-  have lowSrc (q : Nat) (hq : q < proofBase) : lowEnd.getByte (BitVec.ofNat 64 q) = st.getByte (BitVec.ofNat 64 q) := by
-    have below : q < siblingDestination o 0 := by rw [beginEq]; omega
-    exact (lowFrame q (by omega) (Or.inl below)).trans (written.frame q (by omega) (Or.inl (by omega)))
-  show RecordData st (lastLevel lowEnd) i o
-  refine ⟨?_, last.next, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · have total := (run0.next low.run).next last.run
-    rw [lower_total_cost, show 21+nonceCopyCost o+3*recordCopyCost o+(64+levelCopies o+recordCopyCost o)+(42+lastCopyCost o) = 127+recordExtra o by
-      unfold recordExtra; omega] at total
-    exact total
+  let c : Fin 4:=⟨Whole.pageClass o,Whole.class_lt o⟩
+  let pre:=recordPrefix c st
+  let u:=Whole.runNodes c 0 14 pre
+  have cEq : (st.getReg .x21).toNat%8/2=c.val := by
+    rw [atStart.dest,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (show recordBase o<2^64 by
+      have := all_record_ends_fit o (by omega)
+      have ram : MEMORY_BYTES<2^64 := by decide
+      unfold recordBase recordBytes at *;omega)]
+    rfl
+  obtain ⟨run0,cur,writes,kept,slot,loaded⟩:=execute_record_prefix st i o (by omega) px
+  have facts:=pointer_address_inside i.val i.isLt
+  have ptr : pre.getMem (BitVec.ofNat 64 (pointerAddress i.val))=BitVec.ofNat 64 (quadAddress i.val) :=
+    (writes.input _ (by have:=nonces_end_at_indices;omega)).trans (atStart.pointer present)
+  have result:=Whole.run_nodes pre i o 0 14 (by omega) (by decide) cur (fun _ => ⟨slot,ptr⟩)
+  have eq : recordData st=u := by unfold recordData;rw [cEq]
+  rw [eq]
+  have d0 : siblingDestination o 0=recordBase o+112 := rfl
+  have end14 : siblingDestination o 14=recordBase (o+1) := record_end o
+  have endEq : recordBase (o+1)=recordBase o+534 := by unfold recordBase recordBytes;omega
+  have fit:=all_record_ends_fit o (by omega)
+  have before : ∀ l, siblingAddress i l+32<proofBase := by intro l;have h:=(sibling_address_inside i l).2.2; exact lt_of_le_of_lt h (by decide : nonceBase<proofBase)
+  refine ⟨?_,⟨result.next.pc,result.next.heap,result.next.node,result.next.dest⟩,?_,
+    fun a ha => (result.input a ha).trans (writes.input a ha),?_,?_,?_,?_⟩
+  · have chain:=run0.next result.run
+    have price : ∀ c : Fin 4, (9+(Whole.row c 7-Whole.row c 0))+
+        (Whole.point c (0+14)-Whole.point c 0)=127+(Whole.row c 22-Whole.row c 0-116) := by decide
+    change RunsOpeningBlock st u (127+recordExtra o)
+    rw [show 127+recordExtra o=(9+(Whole.row c 7-Whole.row c 0))+(Whole.point c (0+14)-Whole.point c 0) from (price c).symm]
+    exact chain
   · intro r free
-    simp only [recordScratch, List.mem_cons, List.not_mem_nil, or_false, not_or] at free
-    have keptFree : r ∉ prefixScratch := by
-      simp only [prefixScratch, List.mem_cons, List.not_mem_nil, or_false, not_or]
-      exact ⟨free.1, free.2.1, free.2.2.1, free.2.2.2.1, free.2.2.2.2.1, free.2.2.2.2.2.1, free.2.2.2.2.2.2⟩
-    exact (last.register r free.1 free.2.1 free.2.2.2.1 free.2.2.2.2.1 free.2.2.2.2.2.1 free.2.2.2.2.2.2).trans
-      ((low.register r free.1 free.2.1 free.2.2.2.1 free.2.2.2.2.2.2 free.2.2.2.2.2.1).trans (kept r keptFree))
-  · intro a ha
-    exact (last.input a ha).trans ((low.input a ha).trans (written.input a ha))
-  · intro a fit outside
-    have d13 := dests 13 (by omega)
-    have stepLast := last.frame a fit (by
-      rcases outside with h | h
-      · exact Or.inl (by omega)
-      · exact Or.inr (by rw [end14]; exact h)) (awayFold a (fun k hk => by
-        have := dests (6+k) (by omega); have := dests (7+k) (by omega); have := foldAt k hk; omega))
-    have stepLow := lowFrame a fit (by
-      rcases outside with h | h
-      · exact Or.inl (by rw [beginEq]; omega)
-      · exact Or.inr (by have := mono (show 13 ≤ 14 by omega); omega))
-    exact stepLast.trans (stepLow.trans (written.frame a fit (outside.imp (by omega) (by omega))))
+    refine (result.kept r ?_ ?_ ?_ ?_ ?_).trans (kept r free)
+    all_goals intro eq; subst r; exact free (by decide)
+  · intro a afit outside
+    exact (result.frame a afit (by change a<siblingDestination o 0 ∨ siblingDestination o 14≤a;rw [d0,end14];omega)).trans
+      (writes.frame a afit (by omega))
   · intro b hb
-    have d6 := dests 6 (by omega)
-    have stepLast := last.frame (recordBase o+b) (by omega) (Or.inl (by have := dests 13 (by omega); omega))
-      (awayFold _ (fun k hk => by have := mono (show 6 ≤ 6+k by omega); omega))
-    exact stepLast.trans ((lowFrame (recordBase o+b) (by omega) (Or.inl (by rw [beginEq]; omega))).trans
-      (written.bytes b (by omega) hb))
+    exact (result.frame _ (by omega) (Or.inl (by rw [d0];omega))).trans (writes.bytes b (by omega) hb)
   · intro l hl b hb
-    have src := smallSource l b (by have := plain_width_le l; have := sibling_width_le l; omega)
-    by_cases thirteen : l = 13
-    · subst l
-      have b28 : b < 28 := by simpa [plainWidth, folded, siblingWidth] using hb
-      exact (last.copied b b28).trans (lowSrc _ src)
-    · have inner : l < 13 := by omega
-      have wide : b < siblingWidth l := by have := plain_width_le l; omega
-      have dl := dests l (by omega)
-      have dnext := mono (show l+1 ≤ 13 by omega)
-      have stepNext : siblingDestination o (l+1) = siblingDestination o l+siblingWidth l := by
-        unfold siblingDestination; rw [sibling_offset_next l (by omega)]; omega
-      have stepLast := last.frame (siblingDestination o l+b) (by have := dests 13 (by omega); omega)
-        (Or.inl (by have := sibling_width_le l; omega))
-        (awayFold _ (fun k hk => by
-          have a1 := foldAt k hk
-          by_cases same : 6+k = l
-          · subst same
-            have narrow : b < 28 := by simpa [plainWidth, folded, show 6 ≤ 6+k by omega, show 6+k < 13 by omega] using hb
-            omega
-          · by_cases lower : 6+k < l
-            · have := mono (show 7+k ≤ l by omega); omega
-            · have := mono (show l+1 ≤ 6+k by omega); omega))
-      exact stepLast.trans ((lowFields l inner b wide).trans
-        (written.frame _ (by omega) (Or.inl (by omega))))
+    have h:=result.fields l (by omega) hl b (lt_of_lt_of_le hb (plain_width_le l))
+    have raw : ¬(folded l ∧ 28≤b) := by intro ⟨f,g⟩;unfold plainWidth at hb;rw [if_pos f] at hb;omega
+    rw [Whole.payload,if_neg raw] at h
+    exact h.trans (Whole.byte_from_words writes.input _ (by have:=before l;have:=sibling_width_le l;have:=plain_width_le l;omega))
   · intro k hk b hb
-    have d := dests (6+k) (by omega)
-    have dn := dests (7+k) (by omega)
-    have fa := foldAt k hk
-    have destEven := even_sibling_destination o (6+k)
-    have srcFit := (all_sibling_copies_fit i o (6+k) (by omega) (by omega))
-    have width : siblingWidth (6+k) = 30 := by unfold siblingWidth; rw [if_neg (by omega), if_pos (by omega)]
-    have slotHalf : lowEnd.getHalfword (BitVec.ofNat 64 (siblingDestination o (6+k)+28)) =
-        st.getHalfword (BitVec.ofNat 64 (siblingAddress i (6+k)+28)) := by
-      apply halfword_transfer st lowEnd _ _ (by omega) (by have := srcFit.1; omega) (by omega)
-        (by have := smallSource (6+k) 29 (by omega); omega)
-      · refine (lowFields (6+k) (by omega) 28 (by omega)).trans ?_
-        exact written.frame _ (by have := smallSource (6+k) 28 (by omega); omega)
-          (Or.inl (by have := smallSource (6+k) 28 (by omega); omega))
-      · show lowEnd.getByte (BitVec.ofNat 64 (siblingDestination o (6+k)+29)) =
-          st.getByte (BitVec.ofNat 64 (siblingAddress i (6+k)+29))
-        refine (lowFields (6+k) (by omega) 29 (by omega)).trans ?_
-        exact written.frame _ (by have := smallSource (6+k) 29 (by omega); omega)
-          (Or.inl (by have := smallSource (6+k) 29 (by omega); omega))
-    have src13 := all_sibling_copies_fit i o 13 (by omega) (by omega)
-    have topHalf : lowEnd.getHalfword (BitVec.ofNat 64 (siblingAddress i 13+28)) =
-        st.getHalfword (BitVec.ofNat 64 (siblingAddress i 13+28)) := by
-      apply halfword_transfer st lowEnd _ _ (by have := src13.1; omega) (by have := src13.1; omega)
-        (by have := smallSource 13 29 (by omega); omega) (by have := smallSource 13 29 (by omega); omega)
-      · exact lowSrc _ (smallSource 13 28 (by omega))
-      · show lowEnd.getByte (BitVec.ofNat 64 (siblingAddress i 13+29)) =
-          st.getByte (BitVec.ofNat 64 (siblingAddress i 13+29))
-        exact lowSrc _ (smallSource 13 29 (by omega))
-    rw [last.folds k hk b hb, slotHalf, topHalf]
+    have f : folded (6+k) := by unfold folded;omega
+    have wid : siblingWidth (6+k)=30 := by unfold siblingWidth;rw [if_neg (by omega),if_pos (by omega)]
+    have h:=result.fields (6+k) (by omega) (by omega) (28+b) (by rw [wid];omega)
+    have direct : (6+k)-6=k := by omega
+    rw [Whole.payload,if_pos ⟨f,by omega⟩,Whole.tag,show 28+b-28=b by omega,direct] at h
+    rw [show pre.getReg .x10=_ from loaded,
+      Whole.half_from_words writes.input (siblingAddress i (6+k)+28) (by have:=before (6+k);omega),
+      Whole.half_from_words writes.input (siblingAddress i 13+28) (by have:=before 13;omega)] at h
+    simpa only [Nat.add_assoc] using h
 
 end TwoPermutationPrototype.GroupedOpening

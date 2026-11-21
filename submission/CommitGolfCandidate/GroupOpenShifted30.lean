@@ -186,7 +186,7 @@ def CodeAt (word : Nat) (code : List Instr) : Prop :=
   ∀ j : Fin code.length, Decodes (word+j.val) code[j]
 
 theorem code_run (code : List Instr) : ∀ (word : Nat) (s : MachineState),
-    word+code.length ≤ 1976 → CodeAt word code → Ready s code →
+    word+code.length ≤ 6144 → CodeAt word code → Ready s code →
     s.pc = BitVec.ofNat 64 (4096+4*word) →
     (∀ i ∈ code, stepKind i = true) →
     (∀ u i, i ∈ code → (execInstrBr u i).pc = u.pc+4) →
@@ -259,7 +259,7 @@ structure ChunkDone (s t : MachineState) (S T word size : Nat) : Prop where
   below : ∀ q : Word, q.toNat < T-T%8 → t.getMem q = s.getMem q
 
 theorem chunk_done (word : Nat) (k : Fin 4) (s : MachineState) (S T : Nat)
-    (bounded : word+22 ≤ 1913)
+    (bounded : word+22 ≤ 6144)
     (decoded : CodeAt (word+6*k.val) (chunkCode (8*k.val) (decide (k.val=3))))
     (pc : s.pc = BitVec.ofNat 64 (4096+4*(word+6*k.val)))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
@@ -313,7 +313,7 @@ structure CopyDone (s t : MachineState) (S T word : Nat) : Prop where
   below : ∀ q : Word, q.toNat < T-T%8 → t.getMem q = s.getMem q
 
 theorem copy30_done (word : Nat) (s : MachineState) (S T : Nat)
-    (bounded : word+22 ≤ 1913)
+    (bounded : word+22 ≤ 6144)
     (decoded : ∀ k : Fin 4, CodeAt (word+6*k.val) (chunkCode (8*k.val) (decide (k.val=3))))
     (pc : s.pc = BitVec.ofNat 64 (4096+4*word))
     (src : s.getReg .x7 = BitVec.ofNat 64 S) (dst : s.getReg .x21 = BitVec.ofNat 64 T)
