@@ -7,7 +7,7 @@ set_option maxRecDepth 22000
 set_option maxHeartbeats 2000000
 
 def layoutRows : List Row :=
-  [(0,.ADDI .x20 .x15 0),(1,.ADDI .x21 .x15 0),(2,.BEQ .x16 .x0 2828),(3,.JAL .x0 2840),
+  [(0,.ADDI .x20 .x15 0),(1,.ADDI .x21 .x15 0),(2,.BNE .x16 .x0 2844),
    (713,.ADDI .x8 .x13 0),(714,.ADDI .x9 .x12 0),(715,.LUI .x18 2),(716,.LUI .x19 1024),
    (717,.LUI .x6 131072),(718,.ADD .x24 .x9 .x6),(719,.SLLI .x6 .x6 3),(720,.ADD .x22 .x24 .x6),
    (721,.ADDI .x23 .x0 1),(722,.SLLI .x25 .x16 3),(723,.LUI .x26 1),(724,.ADDI .x27 .x0 256)]
@@ -36,6 +36,6 @@ theorem nested_slice {n outer width start len : Nat} (word : BitVec n) (bound : 
 structure HeaderFacts : Prop where
   ready : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → Ready td p (keyOf td) (header (actual.initialState .opening (td,p))) 0
   run : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → ∀ fuel, let s:=actual.initialState .opening (td,p)
-    execute openingImage (35+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 35 0)
+    execute openingImage (34+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 34 0)
 
 end TwoPermutationPrototype.GroupedOpening

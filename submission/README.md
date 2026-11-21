@@ -1,3 +1,36 @@
+# Combined product candidate: branch directly into the nonempty opener
+
+The base for this archive is 0xplemonade's submitted cap writer
+`15f4f81f-1001-49ac-b210-d81b03b30954`, commit `551b90ba01d6de97e1715234e1d2b4a3088886ba`.
+Its cap instructions, 8,818-cycle cap-walk bound and proof of the 256-cycle
+batch saving belong to that submission. The header change was developed
+directly on 0andadream's `0259c643-d6d4-453b-8a2c-3e30615d3917` (`dc339c9`).
+Both sources are credited. Relative to the cap-writer archive only
+opening words 2 and 3 change:
+
+* `0x300806e3` → `0x30081ee3`: replace `beq a6,zero,<709>` with `bne a6,zero,<713>`.
+* `0x3190006f` → `0x3090006f`: change the fallback `jal zero` target from word 713 to 709.
+
+A nonempty opening now enters the setup continuation in one branch instead of
+a branch and a jump; the same registers, memory and PC reach word 713.
+The empty path takes an additional jump and still produces zero proof bytes.
+There is no change to the oracle calls, checker, commitment, proof serialization
+or security games. The nonempty header costs 34 rather than 35 cycles.
+The resulting claim is `(504585244 + 117823) * 72160 = 36419373314720`.
+
+With positions `131072*j + 368` for `j=0..127`, each position takes the
+longest 33-link salt chain and starts a new even quartet. The cap has one
+marked leaf per sibling pair and emits 128 nodes. Sparse-memory RV64IM
+replay on the exact images, zero trapdoor and identity permutation: 118,080
+cycles on `0259c643`, 117,824 on `15f4f81f`, 117,823 on this archive;
+all returned the same 72,160 bytes with 4,480 public calls. The empty case
+took 7, 7 and 8 cycles respectively. These are machine-model replays,
+not a report from the protected Linux verifier.
+
+Manifest SHA-256: `21989510f9c5cd5d8f52e7c90d537cd3e17a63841f23d4997348568990872f73`.
+
+## Inherited cap-writer documentation
+
 # Cap emission saves two cycles per frontier node
 
 Based on the product leader 0259c643. The packed opening format and all copy widths are identical to the parent. Both aligned cap copy paths share their last four-byte load and store at words 694–695. The freed words let all three alignment paths load the final halfword at 696 and select the folded path with one branch at 697. Plain slots fall through to the traversal. Folded slots advance by 28 in one instruction at 894 and jump to the traversal at 701.

@@ -57,8 +57,8 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
 
 theorem header_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) (fuel : Nat) :
     let s:=actual.initialState .opening (td,p)
-    execute openingImage (35+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 35 0) := by
-  simpa only [header,show headerRows.length=35 by decide,show price headerRows=35 by decide] using
+    execute openingImage (34+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 34 0) := by
+  simpa only [header,show headerRows.length=34 by decide,show price headerRows=34 by decide] using
     walk_rows_run _ headerRows (header_valid td p nz).1 header_fetch fuel true
 
 theorem certifiedHeader : HeaderFacts :=

@@ -18,7 +18,7 @@ attribute [local simp] mem_of_reg MachineState.getMem_setPC MachineState.getMem_
 theorem layout_ok (s : MachineState) (pc : s.pc=address 0) (nz : s.getReg .x16≠0#64) :
     legal layoutRows s := by
   simp [layoutRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address,beq_iff_eq,nz,
-    show signExtend21 2840#21=2840#64 by decide]
+    show signExtend13 2844#13=2844#64 by decide]
 
 private def tailOps := setupInstructions.drop 3
 
@@ -58,15 +58,15 @@ private theorem instructions_of_rows (s : MachineState) (rows : List Row) :
 theorem layout_sem (s : MachineState) (pc : s.pc=address 0) (nz : s.getReg .x16≠0#64) :
     walkRows s layoutRows=(setupPrefix s 15).setPC (address 725) := by
   let before:=setupPrefix s 3
-  have here : before.pc=address 3 := by
-    simp [before,setupPrefix,setupInstructions,execInstrBr,pc,address,beq_iff_eq,nz]
-  have jump : execInstrBr before (.JAL .x0 2840)=before.setPC (address 713) := by
-    change before.setPC (before.pc+signExtend21 2840)=_;rw [here];rfl
-  have first : layoutRows.map Prod.snd=setupInstructions.take 3++[.JAL .x0 2840]++tailOps := rfl
+  let entry : List Instr := [.ADDI .x20 .x15 0,.ADDI .x21 .x15 0,.BNE .x16 .x0 2844]
+  have branch : entry.foldl execInstrBr s=before.setPC (address 713) := by
+    simp [entry,before,setupPrefix,setupInstructions,execInstrBr,pc,address,beq_iff_eq,nz,
+      signExtend13] <;> rfl
+  have first : layoutRows.map Prod.snd=entry++tailOps := rfl
   have original : setupInstructions.take 15=setupInstructions.take 3++tailOps := rfl
   rw [instructions_of_rows,first,setupPrefix,original]
-  simp only [List.foldl_append,List.foldl_cons,List.foldl_nil]
-  exact (congrArg (List.foldl execInstrBr · tailOps) jump).trans (moved_tail before)
+  simp only [List.foldl_append]
+  exact (congrArg (List.foldl execInstrBr · tailOps) branch).trans (moved_tail before)
 
 theorem config_ok (s : MachineState) (pc : s.pc=address 725) : legal configRows s := by
   simp [configRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
