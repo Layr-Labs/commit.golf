@@ -96,13 +96,14 @@ def linux_command(cmd: list[str], project: Path, env: dict[str, str], hidden: li
     # The comparator's bwrap sandbox gives each step a new network namespace and brings up its
     # loopback device, which needs an AF_INET socket (glibc's interface lookup) and an AF_NETLINK
     # socket. The unit therefore runs in its own network namespace, with only a loopback device,
-    # and AF_UNIX stays unavailable, so no host socket is reachable.
+    # and AF_UNIX stays unavailable, so no host socket is reachable. bwrap also reads
+    # /proc/sys/kernel/overflowuid, which ProcSubset=pid would hide, so /proc stays complete.
     properties = [f'MemoryMax={MEMORY_BYTES}', 'MemorySwapMax=0', f'RuntimeMaxSec={WALL_SECONDS}',
                   f'CPUAffinity={" ".join(map(str, cpus))}',
                   'KillMode=control-group', 'TimeoutStopSec=5', 'SendSIGKILL=yes', 'TasksMax=512',
                   'PrivateNetwork=yes', 'RestrictAddressFamilies=AF_INET AF_NETLINK',
                   'NoNewPrivileges=yes', 'ProtectSystem=strict',
-                  f'ReadWritePaths={project / ".lake"}', 'PrivateTmp=yes', 'PrivatePIDs=yes', 'ProcSubset=pid',
+                  f'ReadWritePaths={project / ".lake"}', 'PrivateTmp=yes', 'PrivatePIDs=yes',
                   'InaccessiblePaths=/sys',
                   'InaccessiblePaths=' + ' '.join(f'-{p}' for p in ['/etc/commit-golf', *hidden]),
                   'PrivateDevices=yes', 'TemporaryFileSystem=/dev/shm', 'PrivateIPC=yes',

@@ -76,6 +76,11 @@ class SandboxUnitTests(unittest.TestCase):
             self.assertTrue(any(prop.startswith('SystemCallFilter=~') and blocked in prop.split()
                                 for prop in properties), blocked)
 
+    def test_proc_stays_complete_for_bwrap(self):
+        properties, _ = self.unit()
+        self.assertIn('PrivatePIDs=yes', properties)
+        self.assertFalse(any(prop.startswith('ProcSubset=') for prop in properties))
+
     def test_judge_runs_through_the_isolation_check_with_the_pinned_sandbox(self):
         _, command = self.unit()
         self.assertEqual(command[:2], ['/usr/bin/env', '-i'])
