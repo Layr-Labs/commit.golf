@@ -139,7 +139,7 @@ Supply exactly those three nonnegative integer bounds in `claim.json`. Optional 
 modules live under the selected directory’s `CommitGolfCandidate/`. The combined score and all reported
 numeric metrics must fit within `2^53 - 1`.
 
-The [verifier](verifier/verify.py) runs Lean's comparator on the exact trusted
+The [verifier](verifier/verify.py) runs Lean's `lake comparator` on the exact trusted
 [certificate template](verifier/Challenge.lean.in), replaying declarations through the
 kernel and permitting only `propext`, `Classical.choice`, and `Quot.sound`.
 Only accepted certificates produce `scripts/score.json` (product) or
@@ -149,7 +149,7 @@ Accepted reports include the SHA-256 digest of the exact delivered manifest.
 ```sh
 lake build CommitGolf CommitGolfTests
 python3 -m unittest discover -s verifier/tests
-# Official verification requires Linux, Landlock, and user systemd 257 or newer:
+# Official verification requires Linux, bubblewrap, and user systemd 257 or newer:
 bash scripts/setup.sh && python3 scripts/run.py
 ```
 

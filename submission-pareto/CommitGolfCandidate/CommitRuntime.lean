@@ -48,13 +48,18 @@ theorem commit_after_random (message : Message) {bits : Nat} (answer : BitVec bi
     (commit_input_leaves message answer) (commit_input_registers message answer).2.2.2.1
     (commit_input_parents message answer) root.1 root.2 fuel
 
-/-- Exact distribution of the actual commitment machine, including private salts. -/
-def commitExecution (message : Message) : OracleComp World Execution := do
-  let setup := commitSetupState (submission.initialState .commit message)
-  let answer ← liftM ($ᵗ BitVec (8 * (setup.getReg .x11).toNat) :
-    ProbComp (BitVec (8 * (setup.getReg .x11).toNat)))
+/-- The commitment machine's distribution for a private salt of `bits` bits. -/
+def commitExecutionOf (bits : Nat) (message : Message) : OracleComp World Execution := do
+  let answer ← liftM ($ᵗ BitVec bits : ProbComp (BitVec bits))
   let finished ← commitBody (commitInputReady message answer) (2 ^ 24)
   return ⟨.success, finished, 236 * 2 ^ 24 + 36, 9 * 2 ^ 24 - 1⟩
+
+/-- Exact distribution of the actual commitment machine, including private salts. The salt width
+is kept as the argument of `commitExecutionOf`, so proofs about every width never make Lean's
+kernel evaluate `2 ^ width` for the actual 2^32-bit salt. -/
+def commitExecution (message : Message) : OracleComp World Execution :=
+  commitExecutionOf
+    (8 * ((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat) message
 
 set_option maxRecDepth 4096 in
 /-- Exact execution from the real ABI, including salt generation and all setup.
@@ -76,7 +81,7 @@ theorem commit_execute (message : Message) (fuel : Nat) :
     rfl
   rw [show 169 * 2 ^ 24 + 43 + fuel = 35 + (1 + (4 + (169 * 2 ^ 24 + 3 + fuel))) by omega,
     commit_setup _ rfl, commit_random setup setupPC regs.1 valid]
-  simp only [commitExecution, bind_assoc]
+  simp only [commitExecution, commitExecutionOf, bind_assoc]
   apply bind_congr_of_forall_mem_support
   intro answer _
   rw [commit_after_random message answer fuel]
@@ -99,14 +104,27 @@ theorem commit_execution (message : Message) : submission.run .commit message = 
   have allowance : submission.steps .commit = 169 * 2 ^ 24 + 43 + 5754586069 := by decide
   rw [allowance, commit_execute]
 
+/-- Resources of every outcome of `commitExecutionOf`, for any salt width. -/
+private theorem commitExecutionOf_resources (bits : Nat) (message : Message) (result : Execution)
+    (reachable : result ∈ support (commitExecutionOf bits message)) :
+    result.exit = .success ∧ result.cycles = 3959423012 ∧ result.oracleCalls = 150994943 := by
+  simp only [commitExecutionOf, mem_support_bind_iff, support_pure, Set.mem_singleton_iff]
+    at reachable
+  obtain ⟨answer, _, finished, _, rfl⟩ := reachable
+  exact ⟨rfl, rfl, rfl⟩
+
 /-- Exact machine resources for every commitment, before interpreting oracle calls.
 These counts include the private-randomness syscall's work. -/
 theorem commit_input_resources (message : Message) (result : Execution)
     (reachable : result ∈ support (submission.run .commit message)) :
     result.exit = .success ∧ result.cycles = 3959423012 ∧ result.oracleCalls = 150994943 := by
-  rw [commit_execution] at reachable
-  simp only [commitExecution, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
-  obtain ⟨answer, _, finished, _, rfl⟩ := reachable
-  exact ⟨rfl, rfl, rfl⟩
+  -- Rewrite with equation lemmas and generalize the width, so that no step asks the kernel to
+  -- compare different terms under `∈`. Since `Set` became a structure (Mathlib #41506), such a
+  -- comparison makes the kernel evaluate the computation, including `2 ^ width` for the 2^32-bit
+  -- salt, which it refuses.
+  rw [commit_execution, commitExecution] at reachable
+  generalize 8 * ((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat =
+    bits at reachable
+  exact commitExecutionOf_resources bits message result reachable
 
 end CommitGolfCandidate

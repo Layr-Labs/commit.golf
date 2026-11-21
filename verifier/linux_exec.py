@@ -8,10 +8,10 @@ import socket
 import sys
 
 
-def pid_namespace() -> str | None:
-    """This process's PID namespace, or None when /proc cannot tell."""
+def namespace(kind: str) -> str | None:
+    """This process's namespace of the given kind, or None when /proc cannot tell."""
     try:
-        return str(os.stat("/proc/self/ns/pid").st_ino)
+        return str(os.stat(f"/proc/self/ns/{kind}").st_ino)
     except OSError:
         return None
 
@@ -29,7 +29,7 @@ def isolation_check() -> None:
         if not os.statvfs(path).f_flag & os.ST_RDONLY:
             raise RuntimeError(f"systemd failed to mount {path} read-only; refusing to compile")
     host_pidns = os.environ.get("COMMIT_VERIFIER_HOST_PIDNS")
-    if not host_pidns or pid_namespace() in (None, host_pidns):
+    if not host_pidns or namespace("pid") in (None, host_pidns):
         raise RuntimeError("systemd failed to give the job its own PID namespace; refusing to compile")
     try:
         list(Path("/sys/kernel").iterdir())
@@ -44,16 +44,36 @@ def isolation_check() -> None:
             pass
         else:
             raise RuntimeError("systemd failed to hide /etc/commit-golf; refusing to compile")
+    # The comparator's bwrap sandbox needs AF_INET and AF_NETLINK sockets to bring up loopback
+    # devices. They are harmless only inside a private network namespace with no other device.
+    host_netns = os.environ.get("COMMIT_VERIFIER_HOST_NETNS")
+    if not host_netns or namespace("net") in (None, host_netns):
+        raise RuntimeError("systemd failed to give the job its own network namespace; refusing to compile")
+    try:
+        devices = [name for _, name in socket.if_nameindex()]
+    except OSError as exc:
+        raise RuntimeError(f"cannot list network devices ({exc}); refusing to compile") from exc
+    if devices != ["lo"]:
+        raise RuntimeError("the job's network namespace has devices besides loopback; refusing to compile")
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Connecting a UDP socket only selects a route; it sends nothing.
+        probe.connect(("192.0.2.1", 9))
+    except OSError:
+        pass
+    else:
+        raise RuntimeError("the job can route beyond loopback; refusing to compile")
+    finally:
+        probe.close()
     for family, kind in ((socket.AF_UNIX, socket.SOCK_STREAM),
-                         (socket.AF_INET, socket.SOCK_STREAM),
-                         (socket.AF_INET, socket.SOCK_DGRAM),
+                         (socket.AF_UNIX, socket.SOCK_DGRAM),
                          (socket.AF_INET6, socket.SOCK_STREAM)):
         try:
             sock = socket.socket(family, kind)
         except OSError:
             continue
         sock.close()
-        raise RuntimeError("systemd failed to disable networking; refusing to compile")
+        raise RuntimeError("systemd failed to restrict socket families; refusing to compile")
     try:
         # A zero signal is harmless, but uses the same syscall that could terminate a
         # same-UID worker. The supervisor lives outside this filter and can still kill us.

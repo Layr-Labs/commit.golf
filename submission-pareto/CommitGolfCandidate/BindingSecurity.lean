@@ -26,7 +26,7 @@ theorem detector_birthday_le_binding_target (budget : Nat)
     _ = _ := by
       change (budget : ENNReal) * 2 ^ 136 / 2 ^ 256 = (budget : ENNReal) / 2 ^ 120
       rw [show (2 : ENNReal) ^ 256 = 2 ^ 120 * 2 ^ 136 by rw [← pow_add]]
-      exact ENNReal.mul_div_mul_right _ _ (by positivity) (by finiteness)
+      exact ENNReal.mul_div_mul_right _ _ (by positivity) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)
 
 /-- Bound the detector for every fixed permutation; its inverse remains
 available, as do unrestricted private coins. -/

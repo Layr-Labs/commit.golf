@@ -85,7 +85,7 @@ theorem commit_run_distribution (oracle : Oracle) (message : Message) :
     oracle.run (submission.run .commit message) =
       (commitSaltCoins message >>= fun answer => pure (commitFinalResult oracle message answer)) := by
   rw [commit_execution]
-  unfold commitExecution commitSaltCoins commitFinalResult packCommitResult
+  unfold commitExecution commitExecutionOf commitSaltCoins commitFinalResult packCommitResult
   rw [oracle_run_coins_bind]
   simp only [oracle_run_bind, commit_body_deterministic, pure_bind, oracle_run_pure, Nat.add_zero]
   rfl

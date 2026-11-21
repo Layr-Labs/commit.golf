@@ -2,12 +2,12 @@
 """Check one frozen submission using a trusted challenge and an isolated comparator.
 
 Local mode is for development only. Linux refuses to compile untrusted code without the
-systemd + Landlock sandbox; the checker is never given the GitHub token.
+systemd unit around `lake comparator` and the comparator's own bwrap sandbox inside it; the
+checker is never given the GitHub token.
 """
 from __future__ import annotations
 
 import argparse
-import ctypes
 import json
 import os
 import platform
@@ -46,10 +46,10 @@ def tools_env(root: Path) -> dict[str, str]:
         if line.startswith('export ') and '=' in line:
             name, value = line[7:].split('=', 1)
             values[name] = value.strip().strip('"')
-    for name in ('COMPARATOR_BIN', 'COMPARATOR_LEAN4EXPORT', 'COMPARATOR_LANDRUN'):
-        file = Path(values.get(name, ''))
+    if platform.system() == 'Linux':
+        file = Path(values.get('COMPARATOR_BWRAP', ''))
         if not file.is_absolute() or not file.is_file() or not os.access(file, os.X_OK):
-            raise VerifyError(f'{name} must point to an installed executable')
+            raise VerifyError('COMPARATOR_BWRAP must point to an installed executable')
     return values
 
 
@@ -81,18 +81,10 @@ def linux_preflight(env: dict[str, str]) -> None:
     if os.geteuid() == 0:
         raise VerifyError('refusing to compile candidate code as root')
     linux_systemd_preflight()
-    lsm = Path('/sys/kernel/security/lsm')
-    if not lsm.is_file() or 'landlock' not in lsm.read_text().strip().split(','):
-        raise VerifyError('Landlock is not enabled')
-    if Path(env['COMPARATOR_LANDRUN']).open('rb').read(4) != b'\x7fELF':
-        raise VerifyError('a compiled Landrun binary is required on Linux')
+    if Path(env['COMPARATOR_BWRAP']).open('rb').read(4) != b'\x7fELF':
+        raise VerifyError('a compiled bwrap binary is required on Linux')
     if platform.machine() not in {'x86_64', 'aarch64', 'riscv64'}:
         raise VerifyError('unsupported Linux architecture')
-    libc = ctypes.CDLL(None, use_errno=True)
-    libc.syscall.restype = ctypes.c_long
-    abi = int(libc.syscall(ctypes.c_long(444), ctypes.c_void_p(), ctypes.c_size_t(0), ctypes.c_uint(1)))
-    if abi < 3:
-        raise VerifyError('Landlock ABI 3 or newer is required')
 
 
 def linux_command(cmd: list[str], project: Path, env: dict[str, str], hidden: list[Path]) -> tuple[list[str], dict[str, str]]:
@@ -101,22 +93,28 @@ def linux_command(cmd: list[str], project: Path, env: dict[str, str], hidden: li
     # verification cgroup has only 24 GiB. Keep large independent Lean modules from
     # collectively exhausting that memory limit.
     cpus = sorted(os.sched_getaffinity(0))[:2]
+    # The comparator's bwrap sandbox gives each step a new network namespace and brings up its
+    # loopback device, which needs an AF_INET socket (glibc's interface lookup) and an AF_NETLINK
+    # socket. The unit therefore runs in its own network namespace, with only a loopback device,
+    # and AF_UNIX stays unavailable, so no host socket is reachable. bwrap also reads
+    # /proc/sys/kernel/overflowuid, which ProcSubset=pid would hide, so /proc stays complete.
     properties = [f'MemoryMax={MEMORY_BYTES}', 'MemorySwapMax=0', f'RuntimeMaxSec={WALL_SECONDS}',
                   f'CPUAffinity={" ".join(map(str, cpus))}',
                   'KillMode=control-group', 'TimeoutStopSec=5', 'SendSIGKILL=yes', 'TasksMax=512',
-                  'RestrictAddressFamilies=~AF_UNIX', 'NoNewPrivileges=yes', 'ProtectSystem=strict',
-                  f'ReadWritePaths={project / ".lake"}', 'PrivateTmp=yes', 'PrivatePIDs=yes', 'ProcSubset=pid',
+                  'PrivateNetwork=yes', 'RestrictAddressFamilies=AF_INET AF_NETLINK',
+                  'NoNewPrivileges=yes', 'ProtectSystem=strict',
+                  f'ReadWritePaths={project / ".lake"}', 'PrivateTmp=yes', 'PrivatePIDs=yes',
                   'InaccessiblePaths=/sys',
                   'InaccessiblePaths=' + ' '.join(f'-{p}' for p in ['/etc/commit-golf', *hidden]),
                   'PrivateDevices=yes', 'TemporaryFileSystem=/dev/shm', 'PrivateIPC=yes',
                   'SystemCallErrorNumber=EPERM',
-                  'SystemCallFilter=~@network-io @debug ptrace process_vm_readv process_vm_writev '
+                  'SystemCallFilter=~@debug ptrace process_vm_readv process_vm_writev '
                   'pidfd_getfd kill tkill tgkill pidfd_send_signal']
     clean = {'PATH': f'{Path.home() / ".elan/bin"}:{os.environ.get("PATH", "/usr/bin:/bin")}',
              'HOME': str(Path.home()), 'LANG': 'C.UTF-8',
-             'COMPARATOR_LANDRUN': env['COMPARATOR_LANDRUN'],
-             'COMPARATOR_LEAN4EXPORT': env['COMPARATOR_LEAN4EXPORT'],
+             'COMPARATOR_BWRAP': env['COMPARATOR_BWRAP'],
              'COMMIT_VERIFIER_HOST_DEV': str(Path('/dev').stat().st_dev),
+             'COMMIT_VERIFIER_HOST_NETNS': str(Path('/proc/self/ns/net').stat().st_ino),
              'COMMIT_VERIFIER_HOST_PIDNS': str(Path('/proc/self/ns/pid').stat().st_ino),
              'COMMIT_VERIFIER_HOST_SHM_DEV': str(Path('/dev/shm').stat().st_dev)}
     command = ['/usr/bin/env', '-i', *[f'{k}={v}' for k, v in clean.items()],
@@ -246,13 +244,15 @@ def verify(args: argparse.Namespace) -> dict:
                     stale.unlink()
             for stale in (folder / 'CommitGolf').glob('Challenge.*'):
                 stale.unlink()
-        command = ['lake', 'env', env['COMPARATOR_BIN'], str(args.trusted / 'verifier' / 'comparator.json')]
+        config = ['--config', str(args.trusted / 'verifier' / 'comparator.json')]
         clean_env = {'PATH': f'{Path.home() / ".elan/bin"}:{os.environ.get("PATH", "/usr/bin:/bin")}',
-                     'HOME': str(Path.home()), 'LANG': 'C.UTF-8',
-                     'COMPARATOR_LANDRUN': env['COMPARATOR_LANDRUN'],
-                     'COMPARATOR_LEAN4EXPORT': env['COMPARATOR_LEAN4EXPORT']}
+                     'HOME': str(Path.home()), 'LANG': 'C.UTF-8'}
         if platform.system() == 'Linux':
-            command, clean_env = linux_command(command, project, env, [work / 'source', *args.hide])
+            command, clean_env = linux_command(['lake', 'comparator', *config], project, env,
+                                               [work / 'source', *args.hide])
+        else:
+            # bwrap needs Linux namespaces. This development mode is not a sandbox.
+            command = ['lake', 'comparator', '--inadvisably-no-sandbox', *config]
         exit_code, timeout = run_checked(command, project, clean_env, log)
         if timeout:
             result['status'] = 'timeout'

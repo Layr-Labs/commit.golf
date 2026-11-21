@@ -24,16 +24,16 @@ def proofFromTrapdoor {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (positi
     i (trapdoorSalt (s:=s) t i)) ++
   (openingNodes positions).flatMap (fun n => proofDigestBytes true (trapdoorHeap (s:=s) t n))
 private theorem sorted_value_indices (positions : Positions) :
-    (positions.attach.sort (fun i j => i.val ≤ j.val)).map Subtype.val =
+    (positions.attach.sort (· ≤ ·)).map Subtype.val =
       positions.sort (· ≤ ·) := by
-  have mapped := Finset.map_sort (r := fun i j : {i // i ∈ positions} => i.val ≤ j.val)
+  have mapped := Finset.map_sort (r := fun i j : {i // i ∈ positions} => i ≤ j)
     (r' := fun i j : Index => i ≤ j) (f := Function.Embedding.subtype (· ∈ positions))
     (s := positions.attach) (by intro a _ b _; rfl)
   simpa only [Finset.attach_map_val, Function.Embedding.coe_subtype] using mapped
 
 private theorem grouping_sorted (positions : Positions) :
     groupsBefore positions positions.card =
-      (positions.attach.sort (fun i j => i.val ≤ j.val)).map (capGroup ∘ Subtype.val) := by
+      (positions.attach.sort (· ≤ ·)).map (capGroup ∘ Subtype.val) := by
   unfold groupsBefore
   have size : (positions.sort (· ≤ ·)).length = positions.card := by simp
   rw [← size, List.take_length, ← sorted_value_indices positions, List.map_map]

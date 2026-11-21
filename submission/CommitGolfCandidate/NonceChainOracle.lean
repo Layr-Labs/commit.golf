@@ -24,7 +24,7 @@ theorem tv_le_of_events {α : Type} (mx my : ProbComp α) (ε : ℝ) (nonneg : 0
     measureTVDist mx my ≤ ε := by
   rw [measureTVDist_eq_toReal_measureETVDist]
   apply ENNReal.toReal_le_of_le_ofReal nonneg
-  rw [measureETVDist, MeasureTheory.Measure.etvDist]
+  rw [measureETVDist, MeasureTheory.Measure.statEDist]
   refine iSup_le fun set => ?_
   have left := prEvent_eq_evalDist_of_discrete mx (fun value => value ∈ set.1)
   have right := prEvent_eq_evalDist_of_discrete my (fun value => value ∈ set.1)

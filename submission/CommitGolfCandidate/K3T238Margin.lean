@@ -10,7 +10,7 @@ over `2^1600 - calls ≥ 2^1599`. The same argument at `q / 2^124` is `replay_ex
 
 namespace TwoPermutationPrototype.Sampling
 open CommitGolf CommitGolfCandidate CommitGolfCandidate.Permutation OracleComp OracleComp.DeferredSampling
-set_option maxRecDepth 8192
+set_option maxRecDepth 16384
 set_option exponentiation.threshold 2100
 
 /-- Margin of a union bound on the full 1600-bit state at `q/2^130` (unary count up to `2^1400`). -/

@@ -23,6 +23,7 @@ probed leaves with `q + 2 e ≤ 2^128`, it is at most `(q + 2 e)^2 / 2^256 + q /
 needs Mathlib only.
 -/
 
+set_option maxRecDepth 8192
 set_option exponentiation.threshold 2100
 
 namespace CommitGolfCandidate.Permutation
