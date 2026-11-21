@@ -123,9 +123,10 @@ theorem mark_ok (s : MachineState) (pc : s.pc=address 739) : legal markRows s :=
 
 theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x1 : s.getReg .x1=65536) :
     let t:=walkRows s markRows
-    t.pc=address 740 ∧ t.mem=s.mem ∧ t.getReg .x1=65520 ∧ ∀ k, k≠.x1 → t.getReg k=s.getReg k := by
+    t.pc=address 3077 ∧ t.mem=s.mem ∧ t.getReg .x1=65520 ∧ ∀ k, k≠.x1 → t.getReg k=s.getReg k := by
   refine ⟨?_,?_,?_,?_⟩
   · simp [walkRows,markRows,execInstrBr,pc,address]
+    all_goals decide
   · simp [walkRows,markRows,execInstrBr]
   · simp [walkRows,markRows,execInstrBr,x1]
     all_goals decide

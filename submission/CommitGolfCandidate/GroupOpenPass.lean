@@ -83,7 +83,7 @@ theorem writes_touched (p : Positions) (j : Nat) (hj : j<p.card) (w : Nat) (wr :
   · right;right;right;left;change _<16777216 at ix;omega
   · right;right;right;left;change _<16777216 at ix;omega
 
-def passPC (p : Positions) (j : Nat) := if j=p.card then address 15 else address 740
+def passPC (p : Positions) (j : Nat) := if j=p.card then address 15 else address 3077
 
 structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : BitVec 192)
     (s : MachineState) (j : Nat) : Prop extends Registers s j (p.card-j), Base s p where
@@ -240,7 +240,7 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     apply bind_congr;intro t;apply bind_congr;intro z;apply congrArg (fun x : Execution => (pure x : OracleComp World Execution))
     cases z;simp [Execution.charge,passCycles,passCalls] <;> omega
 
-theorem chain_cycles_le (i : Index) : chainCycles i≤284 := by
+theorem chain_cycles_le (i : Index) : chainCycles i≤280 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCycles chainSteps chainCalls; omega
 
@@ -248,8 +248,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 316 cycles per position (new even quartet 25, chain link 33: 284, post 7) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤316*n+2 := by
+/-- At most 314 cycles per position (new quartet 27, chain link 33: 280, post 7) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤314*n+2 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

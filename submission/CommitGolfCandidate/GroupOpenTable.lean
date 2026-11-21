@@ -5,9 +5,11 @@ import CommitGolfCandidate.TwoPermutationMemoryBridge
 `dataBase openingImage = tableBase = 2^36 - 65536`, which the ABI leaves in `sp`.
 
 Entry `e` (the tile offset `e = i % 4096` of position `i`) sits at `tableBase + 16 e`:
-- dword 0: `tabT e | tabS e << 16`, where `tabT e` is the byte address of link-block word
-  `929 - (e % 374) / 11` (the chain entry of the position) and `tabS e = 1536 + tabOff (e % 11)` is the
-  address of the salt in the generator reply (rank `e % 11`);
+- dword 0: `tabT e | tabS e << 16 | tabR e << 32 | tabG e << 48`, where `tabT e` is the byte address of
+  link-block word `3139 - (e % 374) / 11` (the chain entry of the position), `tabS e = 1536 + tabOff (e % 11)`
+  is the address of the salt in the generator reply (rank `e % 11`), and `tabR e`, `tabG e` are the signed
+  16-bit offsets from a quartet block to its reply and to the sibling quartet's node (`168, 136` for even
+  quartets `e / 4`, `-1056, -856` for odd ones);
 - dword 1: `tabD e = 4352 - 256 (e % 374)` modulo `2^64`, so that `256 i + tabD e` is the keyed
   generator's counter.
 
@@ -22,14 +24,19 @@ abbrev tableWord (e : Nat) : Nat := 8589926400 + 2*e
 
 /-- Byte offset of the salt of rank `r` in the K1 generator reply (`offAt`). -/
 def tabOff (r : Nat) : Nat := if r=0 then 0 else if r=1 then 184 else 16*(r-1)
-/-- Chain entry: byte address of word `929 - (e % 374) / 11`. -/
-def tabT (e : Nat) : Nat := 4096 + 4*(929 - (e%374)/11)
+/-- Chain entry: byte address of word `3139 - (e % 374) / 11`. -/
+def tabT (e : Nat) : Nat := 4096 + 4*(3139 - (e%374)/11)
 /-- Salt source address in the reply at 1536. -/
 def tabS (e : Nat) : Nat := 1536 + tabOff (e%11)
 /-- Counter offset `4352 - 256 (e % 374)` as a 64-bit two's-complement value. -/
 def tabD (e : Nat) : Nat := (18446744073709551616 + 4352 - 256*(e%374)) % 18446744073709551616
+/-- Reply offset from the quartet block, as a 16-bit two's-complement value (`168` / `-1056`). -/
+def tabR (e : Nat) : Nat := if e/4%2=1 then 64480 else 168
+/-- Sibling-node offset from the quartet block, 16-bit two's complement (`136` / `-856`). -/
+def tabG (e : Nat) : Nat := if e/4%2=1 then 64680 else 136
 /-- Dword `h` (0 or 1) of entry `e`. -/
-def tabEntry (e h : Nat) : Nat := if h=0 then tabT e + 65536*tabS e else tabD e
+def tabEntry (e h : Nat) : Nat :=
+  if h=0 then tabT e + 65536*tabS e + 4294967296*tabR e + 281474976710656*tabG e else tabD e
 /-- Byte `k` of the table. -/
 def tableByte (k : Nat) : Nat := tabEntry (k/16) (k/8%2) / 2^(8*(k%8)) % 256
 
@@ -98,7 +105,7 @@ theorem table_data (k : Nat) (hk : k < 65536) :
   rw [pget_get, BitVec.toNat_ofNat, all_bytes k hk, Nat.mod_eq_of_lt (table_byte_lt k)]
 
 theorem tab_entry_lt (e h : Nat) : tabEntry e h < 2^64 := by
-  unfold tabEntry tabT tabS tabOff tabD
+  unfold tabEntry tabT tabS tabOff tabD tabR tabG
   split_ifs <;> omega
 
 /-- The table is in place: both dwords of every entry. -/
@@ -160,21 +167,39 @@ theorem table_half (s : MachineState) (w j : Nat) (fit : 8*w+8 ≤ 2^64) (hj : j
   rw [table_align_eq _ (by omega), table_offset_nat _ (by omega),
     show 8*w+2*j - (8*w+2*j)%8 = 8*w by omega, show (8*w+2*j)%8/2 = j by omega]
 
-/-- The two halfwords of dword 0. -/
-theorem low_half (v : Nat) (s : Nat) (hv : v < 65536) (_hs : s < 65536) :
-    ((BitVec.ofNat 64 (v + 65536*s) >>> (0*16)).truncate 16).zeroExtend 64 = BitVec.ofNat 64 v := by
+/-- The four halfwords of dword 0. -/
+theorem half0 (v s r g : Nat) (hv : v < 65536) (_hs : s < 65536) (_hr : r < 65536) (_hg : g < 65536) :
+    ((BitVec.ofNat 64 (v + 65536*s + 4294967296*r + 281474976710656*g) >>> (0*16)).truncate 16).zeroExtend 64 =
+      BitVec.ofNat 64 v := by
   apply BitVec.eq_of_toNat_eq
   simp [Nat.shiftRight_eq_div_pow]
   omega
 
-theorem high_half (v : Nat) (s : Nat) (hv : v < 65536) (hs : s < 65536) :
-    ((BitVec.ofNat 64 (v + 65536*s) >>> (1*16)).truncate 16).zeroExtend 64 = BitVec.ofNat 64 s := by
+theorem half1 (v s r g : Nat) (hv : v < 65536) (hs : s < 65536) (hr : r < 65536) (hg : g < 65536) :
+    ((BitVec.ofNat 64 (v + 65536*s + 4294967296*r + 281474976710656*g) >>> (1*16)).truncate 16).zeroExtend 64 =
+      BitVec.ofNat 64 s := by
+  apply BitVec.eq_of_toNat_eq
+  simp [Nat.shiftRight_eq_div_pow]
+  omega
+
+theorem half2 (v s r g : Nat) (hv : v < 65536) (hs : s < 65536) (hr : r < 65536) (hg : g < 65536) :
+    ((BitVec.ofNat 64 (v + 65536*s + 4294967296*r + 281474976710656*g) >>> (2*16)).truncate 16) =
+      BitVec.ofNat 16 r := by
+  apply BitVec.eq_of_toNat_eq
+  simp [Nat.shiftRight_eq_div_pow]
+  omega
+
+theorem half3 (v s r g : Nat) (hv : v < 65536) (hs : s < 65536) (hr : r < 65536) (hg : g < 65536) :
+    ((BitVec.ofNat 64 (v + 65536*s + 4294967296*r + 281474976710656*g) >>> (3*16)).truncate 16) =
+      BitVec.ofNat 16 g := by
   apply BitVec.eq_of_toNat_eq
   simp [Nat.shiftRight_eq_div_pow]
   omega
 
 theorem tab_t_lt (e : Nat) : tabT e < 65536 := by unfold tabT; omega
 theorem tab_s_lt (e : Nat) : tabS e < 65536 := by unfold tabS tabOff; split_ifs <;> omega
+theorem tab_r_lt (e : Nat) : tabR e < 65536 := by unfold tabR; split_ifs <;> omega
+theorem tab_g_lt (e : Nat) : tabG e < 65536 := by unfold tabG; split_ifs <;> omega
 
 /-- Accesses inside the table are valid. -/
 theorem table_access (q n : Nat) (al : q % n = 0) (room : q+n ≤ 2^36) :

@@ -8,7 +8,7 @@ set_option maxHeartbeats 1800000
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.getReg_setPC pc_of_set mem_of_set open_zero
 attribute [local simp] mem_of_reg MachineState.getMem_setPC MachineState.getMem_setReg
 
-def finalPC (left : Nat) := if left=1 then address 15 else address 740
+def finalPC (left : Nat) := if left=1 then address 15 else address 3077
 def advanced (s : MachineState) (left : Nat) := walkRows s (nextRows (decide (left=1)))
 
 private theorem index_bump (ord : Nat) : indexAt ord+signExtend12 8=indexAt (ord+1) := by
@@ -31,7 +31,7 @@ private theorem sub_left (ord left : Nat) (h : 1≤left) : (ord+1)+(left-1)=ord+
 
 private def bump (s : MachineState) := execInstrBr s (.ADDI .x14 .x14 8)
 
-private theorem bump_pc (s : MachineState) (pc : s.pc=address 809) : (bump s).pc=address 810 := by
+private theorem bump_pc (s : MachineState) (pc : s.pc=address 3144) : (bump s).pc=address 3145 := by
   change s.pc+4=_;rw [pc];rfl
 
 private theorem bump_index (s : MachineState) (ord : Nat) (idx : s.getReg .x14=indexAt ord) :
@@ -45,63 +45,63 @@ private theorem bump_x25 (s : MachineState) : (bump s).getReg .x25=s.getReg .x25
 private theorem bump_x17 (s : MachineState) : (bump s).getReg .x17=s.getReg .x17 := by
   simp [bump,execInstrBr]
 
-private theorem test_hit (s : MachineState) (pc : s.pc=address 810) (ne : s.getReg .x14≠s.getReg .x17) :
-    execInstrBr s (.BNE .x14 .x17 7912)=s.setPC (address 740) := by
+private theorem test_hit (s : MachineState) (pc : s.pc=address 3145) (ne : s.getReg .x14≠s.getReg .x17) :
+    execInstrBr s (.BNE .x14 .x17 7920)=s.setPC (address 3077) := by
   have yes : (s.getReg .x14 != s.getReg .x17)=true := by simp [ne]
   simp only [execInstrBr,yes,ite_true,pc]
-  exact congrArg s.setPC (by decide : address 810+signExtend13 7912=address 740)
+  exact congrArg s.setPC (by decide : address 3145+signExtend13 7920=address 3077)
 
-private theorem test_miss (s : MachineState) (pc : s.pc=address 810) (eq : s.getReg .x14=s.getReg .x17) :
-    execInstrBr s (.BNE .x14 .x17 7912)=s.setPC (address 811) := by
+private theorem test_miss (s : MachineState) (pc : s.pc=address 3145) (eq : s.getReg .x14=s.getReg .x17) :
+    execInstrBr s (.BNE .x14 .x17 7920)=s.setPC (address 3146) := by
   have no : (s.getReg .x14 != s.getReg .x17)=false := by simp [eq]
   simp only [execInstrBr,no,ite_false,pc]
-  exact congrArg s.setPC (by decide : address 810+4=address 811)
+  exact congrArg s.setPC (by decide : address 3145+4=address 3146)
 
-private theorem step811 (s : MachineState) (pc : s.pc=address 811) :
-    execInstrBr s (.ADDI .x25 .x9 0)=(s.setReg .x25 (s.getReg .x9)).setPC (address 812) := by
+private theorem step2045 (s : MachineState) (pc : s.pc=address 3146) :
+    execInstrBr s (.ADDI .x25 .x9 0)=(s.setReg .x25 (s.getReg .x9)).setPC (address 3147) := by
   change (s.setReg .x25 (s.getReg .x9+signExtend12 0)).setPC (s.pc+4)=_
   rw [pc]
-  have hpc : address 811 + 4 = address 812 := by decide
+  have hpc : address 3146 + 4 = address 3147 := by decide
   rw [hpc]
   simp [signExtend12]
 
-private theorem step812 (s : MachineState) (pc : s.pc=address 812) :
-    execInstrBr s (.JAL .x0 2093964)=s.setPC (address 15) := by
-  change s.setPC (s.pc+signExtend21 2093964)=_
-  rw [pc];exact congrArg s.setPC (by decide : address 812+signExtend21 2093964=address 15)
+private theorem step2046 (s : MachineState) (pc : s.pc=address 3147) :
+    execInstrBr s (.JAL .x0 2084624)=s.setPC (address 15) := by
+  change s.setPC (s.pc+signExtend21 2084624)=_
+  rw [pc];exact congrArg s.setPC (by decide : address 3147+signExtend21 2084624=address 15)
 
 private def lastMoves (last : Bool) : List Row :=
-  if last then [(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] else []
+  if last then [(3146,.ADDI .x25 .x9 0),(3147,.JAL .x0 2084624)] else []
 
-private theorem lastMoves_true : lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] := rfl
+private theorem lastMoves_true : lastMoves true=[(3146,.ADDI .x25 .x9 0),(3147,.JAL .x0 2084624)] := rfl
 private theorem lastMoves_false : lastMoves false=[] := rfl
 
 private theorem next_parts (last : Bool) :
-    nextRows last=[(809,.ADDI .x14 .x14 8)]++[(810,.BNE .x14 .x17 7912)]++lastMoves last := by
+    nextRows last=[(3144,.ADDI .x14 .x14 8)]++[(3145,.BNE .x14 .x17 7920)]++lastMoves last := by
   cases last <;> rfl
 
 private theorem first_value (s : MachineState) :
-    walkRows s [(809,.ADDI .x14 .x14 8)]=bump s := rfl
+    walkRows s [(3144,.ADDI .x14 .x14 8)]=bump s := rfl
 
 private theorem test_value (s : MachineState) :
-    walkRows s [(810,.BNE .x14 .x17 7912)]=execInstrBr s (.BNE .x14 .x17 7912) := rfl
+    walkRows s [(3145,.BNE .x14 .x17 7920)]=execInstrBr s (.BNE .x14 .x17 7920) := rfl
 
-private theorem first_legal (s : MachineState) (pc : s.pc=address 809) :
-    legal [(809,.ADDI .x14 .x14 8)] s := ⟨pc,rfl,trivial⟩
+private theorem first_legal (s : MachineState) (pc : s.pc=address 3144) :
+    legal [(3144,.ADDI .x14 .x14 8)] s := ⟨pc,rfl,trivial⟩
 
-private theorem last_done (s : MachineState) (pc : s.pc=address 811) :
+private theorem last_done (s : MachineState) (pc : s.pc=address 3146) :
     legal (lastMoves true) s ∧
       walkRows s (lastMoves true)=(s.setReg .x25 (s.getReg .x9)).setPC (address 15) := by
   refine ⟨⟨pc,rfl,?_,rfl,trivial⟩,?_⟩
   · change s.pc+4=_;rw [pc];rfl
-  · rw [show lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] from rfl]
+  · rw [show lastMoves true=[(3146,.ADDI .x25 .x9 0),(3147,.JAL .x0 2084624)] from rfl]
     simp only [walkRows,List.foldl_cons,List.foldl_nil]
-    rw [step811 s pc, step812 _ (by rfl)]
+    rw [step2045 s pc, step2046 _ (by rfl)]
     rfl
 
 private theorem last_empty (s : MachineState) : walkRows s (lastMoves false)=s := rfl
 
-theorem next_ok (s : MachineState) (ord left : Nat) (pc : s.pc=address 809) (l : 0<left) (hi : left≤16777216)
+theorem next_ok (s : MachineState) (ord left : Nat) (pc : s.pc=address 3144) (l : 0<left) (hi : left≤16777216)
     (bound : ord+left≤16777216)
     (index : s.getReg .x14=indexAt ord) (endv : s.getReg .x17=indexAt (ord+left))
     (shift : s.getReg .x25=BitVec.ofNat 64 (8*(ord+left))) :
@@ -117,19 +117,19 @@ theorem next_ok (s : MachineState) (ord left : Nat) (pc : s.pc=address 809) (l :
   have b9 := bump_x9 s
   have b17 := bump_x17 s
   have b25 := bump_x25 s
-  have l1 : legal [(809,.ADDI .x14 .x14 8)] s := first_legal s pc
+  have l1 : legal [(3144,.ADDI .x14 .x14 8)] s := first_legal s pc
   by_cases last : left=1
   · have eql : (bump s).getReg .x14=(bump s).getReg .x17 := by
       rw [b14,b17,endv]
       exact (index_inj (ord+1) (ord+left) hle bound).mpr (by omega)
     have step := test_miss (bump s) bpc eql
-    have ld := last_done ((bump s).setPC (address 811)) rfl
-    have hstep : walkRows (bump s) [(810,.BNE .x14 .x17 7912)]=(bump s).setPC (address 811) :=
+    have ld := last_done ((bump s).setPC (address 3146)) rfl
+    have hstep : walkRows (bump s) [(3145,.BNE .x14 .x17 7920)]=(bump s).setPC (address 3146) :=
       (test_value (bump s)).trans step
     have hdec : decide (left=1)=true := decide_eq_true last
     have ld2 := ld.2
-    rw [show lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] from rfl] at ld2
-    rw [advanced, hdec, next_parts, show lastMoves true=[(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] from rfl, walk_join, walk_join, first_value, hstep, ld2, finalPC, if_pos last]
+    rw [show lastMoves true=[(3146,.ADDI .x25 .x9 0),(3147,.JAL .x0 2084624)] from rfl] at ld2
+    rw [advanced, hdec, next_parts, show lastMoves true=[(3146,.ADDI .x25 .x9 0),(3147,.JAL .x0 2084624)] from rfl, walk_join, walk_join, first_value, hstep, ld2, finalPC, if_pos last]
     refine ⟨?_,rfl,b14,?_,?_,?_⟩
     · apply legal_append _ _ _ l1
       rw [first_value]
@@ -146,7 +146,7 @@ theorem next_ok (s : MachineState) (ord left : Nat) (pc : s.pc=address 809) (l :
       intro h
       exact last (by have hh := (index_inj (ord+1) (ord+left) hle bound).mp h; omega)
     have step := test_hit (bump s) bpc neq
-    have hstep : walkRows (bump s) [(810,.BNE .x14 .x17 7912)]=(bump s).setPC (address 740) :=
+    have hstep : walkRows (bump s) [(3145,.BNE .x14 .x17 7920)]=(bump s).setPC (address 3077) :=
       (test_value (bump s)).trans step
     have hdec : decide (left=1)=false := decide_eq_false last
     rw [advanced, hdec, next_parts, show lastMoves false=[] from rfl, walk_join, walk_join, first_value, hstep, finalPC, if_neg last]
@@ -176,12 +176,12 @@ theorem next_keeps (s : MachineState) (left : Nat) (r : Reg) (a : r≠.x14) (b :
   by_cases tag : (decide (left=1))=true
   · rw [if_pos tag]
     change (execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.ADDI .x14 .x14 8))
-      (.BNE .x14 .x17 7912)) (.ADDI .x25 .x9 0)) (.JAL .x0 2093964)).getReg r=s.getReg r
-    rw [jump_reg _ r 2093964, addi_reg _ .x25 .x9 0 r c, bne_reg _ .x14 .x17 r 7912,
+      (.BNE .x14 .x17 7920)) (.ADDI .x25 .x9 0)) (.JAL .x0 2084624)).getReg r=s.getReg r
+    rw [jump_reg _ r 2084624, addi_reg _ .x25 .x9 0 r c, bne_reg _ .x14 .x17 r 7920,
       addi_reg _ .x14 .x14 8 r a]
   · rw [if_neg tag]
-    change (execInstrBr (execInstrBr s (.ADDI .x14 .x14 8)) (.BNE .x14 .x17 7912)).getReg r=s.getReg r
-    rw [bne_reg _ .x14 .x17 r 7912, addi_reg _ .x14 .x14 8 r a]
+    change (execInstrBr (execInstrBr s (.ADDI .x14 .x14 8)) (.BNE .x14 .x17 7920)).getReg r=s.getReg r
+    rw [bne_reg _ .x14 .x17 r 7920, addi_reg _ .x14 .x14 8 r a]
 
 /-- A new quartet (either parity): its reply is inverted into its rebuilt block. -/
 def inverts (i : Index) (last : Nat) : Bool := decide (i.val/4≠last)
@@ -189,13 +189,13 @@ def inverts (i : Index) (last : Nat) : Bool := decide (i.val/4≠last)
 /-- The head's exit state (row 777); `y` is the inverse reply, used only when `inverts i last`. -/
 def headed (s : MachineState) (i : Index) (last : Nat) (y : BitVec 1600) : MachineState :=
   if i.val/4=last then walkRows s skipRows
-  else walkRows (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) headPost
+  else walkRows (writeBits (walkRows s preRows) (wordAddress (rebuiltWord (i.val/4))) y) headPost
 
 /-- The salt selection, copy and latch after the chain. -/
 def finishOne (t : MachineState) (i : Index) (left : Nat) := advanced (copied (choose t i) i) left
 
 def inverseQuery (s : MachineState) (i : Index) :=
-  packBuffer (window (memoryView (walkRows s (preRows (oddOf i)))) (replyWord (i.val/4)))
+  packBuffer (window (memoryView (walkRows s preRows)) (replyWord (i.val/4)))
 
 def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World MachineState :=
   if inverts i last then do
@@ -206,8 +206,8 @@ def perTrace (s : MachineState) (i : Index) (left last : Nat) : OracleComp World
     let t ← chainTrace (headed s i last 0) i
     return finishOne t i left
 
-def headSteps (i : Index) (last : Nat) := if i.val/4=last then 4 else if i.val/4%2=1 then 17 else 18
-def headCycles (i : Index) (last : Nat) := if i.val/4=last then 4 else if i.val/4%2=1 then 24 else 25
+def headSteps (i : Index) (last : Nat) := if i.val/4=last then 7 else 20
+def headCycles (i : Index) (last : Nat) := if i.val/4=last then 7 else 27
 def postSteps (_i : Index) (left : Nat) := 7+2*(if left=1 then 1 else 0)
 def perSteps (i : Index) (left last : Nat) := headSteps i last+(chainSteps i+postSteps i left)
 def perCalls (i : Index) (last : Nat) := (if inverts i last then 1 else 0)+chainCalls i
@@ -225,9 +225,9 @@ private theorem post_steps (i : Index) (left : Nat) :
   rw [pl.2,pl.1]; unfold postSteps
   constructor <;> (by_cases x : left=1 <;> simp [x])
 
-/-- From the chain's exit (row 804): the salt destination, the copy and the loop latch. -/
+/-- From the end of the link block (row 3139): the salt destination, the copy and the loop latch. -/
 theorem post_run (t : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<left) (hi : left≤16777216)
-    (pc : t.pc=address 804) (x3 : t.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat)) (src : t.getReg .x28=readAt i)
+    (pc : t.pc=address 3139) (x3 : t.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat)) (src : t.getReg .x28=readAt i)
     (salt : t.getReg .x22=9126809632)
     (index : t.getReg .x14=indexAt ord) (endv : t.getReg .x17=indexAt (ord+left))
     (shift : t.getReg .x25=BitVec.ofNat 64 (8*(ord+left)))
@@ -261,19 +261,20 @@ theorem post_run (t : MachineState) (i : Index) (ord left fuel : Nat) (l : 0<lef
 structure HeadExit (s h : MachineState) (i : Index) (ord left : Nat) : Prop where
   entry : ChainEntry h i
   regs : Registers h ord left
-  keep : ∀ k, k≠.x4 → k≠.x6 → k≠.x7 → k≠.x10 → k≠.x13 → k≠.x28 → k≠.x30 → k≠.x31 → h.getReg k=s.getReg k
+  keep : ∀ k, k≠.x4 → k≠.x6 → k≠.x7 → k≠.x10 → k≠.x13 → k≠.x28 → k≠.x30 → k≠.x31 → k≠.x3 → h.getReg k=s.getReg k
   quartet : h.getReg .x4=BitVec.ofNat 64 (i.val/4)
 
 private theorem exit_of (s h : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
-    (pc : h.pc=address 777) (idx : h.getReg .x6=BitVec.ofNat 64 i.val) (x10 : h.getReg .x10=1024) (x13 : h.getReg .x13=1)
-    (q : h.getReg .x4=BitVec.ofNat 64 (i.val/4)) (tab : TableAt h)
-    (keep : ∀ k, k≠.x4 → k≠.x6 → k≠.x7 → k≠.x10 → k≠.x13 → k≠.x28 → k≠.x30 → k≠.x31 → h.getReg k=s.getReg k) :
+    (pc : h.pc=address 3097) (idx : h.getReg .x6=BitVec.ofNat 64 i.val) (x10 : h.getReg .x10=1024) (x13 : h.getReg .x13=1)
+    (q : h.getReg .x4=BitVec.ofNat 64 (i.val/4)) (x3 : h.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat))
+    (x30 : h.getReg .x30=wordAddress (tableWord (i.val%4096))) (tab : TableAt h)
+    (keep : ∀ k, k≠.x4 → k≠.x6 → k≠.x7 → k≠.x10 → k≠.x13 → k≠.x28 → k≠.x30 → k≠.x31 → k≠.x3 → h.getReg k=s.getReg k) :
     HeadExit s h i ord left := by
   have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
       (h10 : x≠.x10 := by decide) (h13 : x≠.x13 := by decide) (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide)
-      (h31 : x≠.x31 := by decide) := keep x h4 h6 h7 h10 h13 h28 h30 h31
+      (h31 : x≠.x31 := by decide) (h3 : x≠.x3 := by decide) := keep x h4 h6 h7 h10 h13 h28 h30 h31 h3
   exact ⟨⟨pc,x10,(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,
-    idx,(k .x2).trans r.sp,(k .x1).trans r.mask,tab⟩,
+    idx,x3,x30,tab⟩,
     ⟨(k .x12).trans r.output,(k .x5).trans r.selector,(k .x11).trans r.width,x13,(k .x14).trans r.index,
      (k .x17).trans r.endReg,(by rw [k .x25, r.shift, k .x9]),(k .x22).trans r.salt,(k .x26).trans r.base⟩,keep,q⟩
 
@@ -290,10 +291,10 @@ theorem head_table (s : MachineState) (i : Index) (ord left last : Nat) (r : Inp
   · have hd : headed s i last y=walkRows s skipRows := by simp [headed,same]
     rw [hd, latch_view_of_mem (head_skip s i ord left last r same).2.2.1]
     exact r.table e he h hh
-  · obtain ⟨_,apc,amem,_,_,_,_,_,_,_,a7,_⟩ := head_pre s i ord left last r same
-    let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
-    have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-    have a1pc : a1.pc=address 773 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+  · obtain ⟨_,apc,amem,_,_,_,_,_,_,_,a7,_,_,_⟩ := head_pre s i ord left last r same
+    let a1:=writeBits (walkRows s preRows) (wordAddress (rebuiltWord (i.val/4))) y
+    have reg1 (x : Reg) : a1.getReg x=(walkRows s preRows).getReg x := writeBits_register ..
+    have a1pc : a1.pc=address 3093 := by rw [show a1.pc=(walkRows s preRows).pc+4 from reply_pc ..,apc]; rfl
     obtain ⟨_,_,_,_,_,_,pview⟩ := head_post a1 i a1pc ((reg1 _).trans a7)
     have hd : headed s i last y=walkRows a1 headPost := by simp [headed,same,a1]
     rw [hd, pview _ fit]
@@ -307,34 +308,31 @@ theorem head_table (s : MachineState) (i : Index) (ord left last : Nat) (r : Inp
 theorem head_exit (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last) (y : BitVec 1600) :
     HeadExit s (headed s i last y) i ord left := by
   by_cases same : i.val/4=last
-  · obtain ⟨_,hpc,_,h6,h10,hkeep⟩ := head_skip s i ord left last r same
+  · obtain ⟨_,hpc,_,h6,h10,h3,h30,hkeep⟩ := head_skip s i ord left last r same
     have hd : headed s i last y=walkRows s skipRows := by simp [headed,same]
-    rw [hd]
     have tab := head_table s i ord left last r y
-    rw [hd] at tab
+    rw [hd] at tab ⊢
     exact exit_of s _ i ord left last r hpc h6 h10
-      ((hkeep _ (by decide) (by decide) (by decide)).trans r.primitive)
-      ((hkeep _ (by decide) (by decide) (by decide)).trans (by rw [r.quartet, same])) tab
-      (fun k _ h6 _ h10 _ h28 _ _ => hkeep k h6 h28 h10)
-  · obtain ⟨_,apc,_,_,_,_,_,a6,_,a4,a7,akeep⟩ := head_pre s i ord left last r same
-    let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
-    have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-    have a1pc : a1.pc=address 773 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
-    have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
-        (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
-        (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) : a1.getReg x=s.getReg x :=
-      (reg1 x).trans (akeep x h4 h6 h7 h10 h12 h13 h28 h30)
+      ((hkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans r.primitive)
+      ((hkeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans (by rw [r.quartet, same])) h3 h30 tab
+      (fun k _ h6 _ h10 _ h28 h30 _ h3 => hkeep k h6 h28 h10 h3 h30)
+  · obtain ⟨_,apc,_,_,_,_,_,a6,_,a4,a7,a3,a30,akeep⟩ := head_pre s i ord left last r same
+    let a1:=writeBits (walkRows s preRows) (wordAddress (rebuiltWord (i.val/4))) y
+    have reg1 (x : Reg) : a1.getReg x=(walkRows s preRows).getReg x := writeBits_register ..
+    have a1pc : a1.pc=address 3093 := by rw [show a1.pc=(walkRows s preRows).pc+4 from reply_pc ..,apc]; rfl
     obtain ⟨_,ppc,p10,p12,p13,pkeep,_⟩ := head_post a1 i a1pc ((reg1 _).trans a7)
     have hd : headed s i last y=walkRows a1 headPost := by simp [headed,same,a1]
     have tab := head_table s i ord left last r y
     rw [hd] at tab ⊢
     exact exit_of s _ i ord left last r ppc
       ((pkeep _ (by decide) (by decide) (by decide)).trans ((reg1 _).trans a6)) p10 p13
-      ((pkeep _ (by decide) (by decide) (by decide)).trans ((reg1 _).trans a4)) tab
-      (fun x h4 h6 h7 h10 h13 h28 h30 h31 => by
+      ((pkeep _ (by decide) (by decide) (by decide)).trans ((reg1 _).trans a4))
+      ((pkeep _ (by decide) (by decide) (by decide)).trans ((reg1 _).trans a3))
+      ((pkeep _ (by decide) (by decide) (by decide)).trans ((reg1 _).trans a30)) tab
+      (fun x h4 h6 h7 h10 h13 h28 h30 h31 h3 => by
         by_cases h12 : x=.x12
         · subst h12; rw [p12]; exact r.output.symm
-        · exact (pkeep x h10 h12 h13).trans (k x h4 h6 h7 h10 h12 h13 h28 h30))
+        · exact (pkeep x h10 h12 h13).trans ((reg1 x).trans (akeep x h4 h6 h7 h10 h12 h13 h28 h30 h31 h3)))
 
 private theorem charge_comm (e : Execution) (a b c d : Nat) :
     (e.charge a c).charge b d=e.charge (b+a) (d+c) := by
@@ -375,29 +373,30 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     rw [hd]
     apply bind_congr; intro t; apply bind_congr; intro e; apply congrArg pure
     rw [charge_comm]; congr 1
-    · simp [perCycles,headCycles,same,show price skipRows=4 from rfl] <;> omega
+    · simp [perCycles,headCycles,same,show price skipRows=7 from rfl] <;> omega
     · simp [perCalls,inv]
   · have inv : inverts i last=true := by simp [inverts,same]
-    obtain ⟨l1,apc,_,a10,a12,a13,_,_,_,_,a7,akeep⟩ := head_pre s i ord left last r same
-    have hs : headSteps i last=(preRows (oddOf i)).length+(headPost.length+1) := by
-      rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h <;> simp [headSteps,oddOf,same,h] <;> rfl
+    obtain ⟨l1,apc,_,a10,a12,a13,_,_,_,_,a7,_,_,akeep⟩ := head_pre s i ord left last r same
+    have hs : headSteps i last=preRows.length+(headPost.length+1) := by
+      simp [headSteps,same]; rfl
     have k (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
         (h10 : x≠.x10 := by decide) (h12 : x≠.x12 := by decide) (h13 : x≠.x13 := by decide)
-        (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) := akeep x h4 h6 h7 h10 h12 h13 h28 h30
+        (h28 : x≠.x28 := by decide) (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide)
+        (h3 : x≠.x3 := by decide) := akeep x h4 h6 h7 h10 h12 h13 h28 h30 h31 h3
     have hix : i.val<16777216 := i.isLt
     have src : replyWord (i.val/4)+25≤2^33 := by unfold replyWord blockWord; omega
     have dst : rebuiltWord (i.val/4)+25≤2^33 := by unfold rebuiltWord blockWord; omega
-    rw [hs, show (preRows (oddOf i)).length+(headPost.length+1)+(chainSteps i+postSteps i left)+fuel=
-      (preRows (oddOf i)).length+((headPost.length+(chainSteps i+(postSteps i left+fuel)))+1) by omega,
-      walk_rows_run s _ l1 (pre_row_fetch _) _ true,
-      execute_inverse_call openingImage _ (walkRows s (preRows (oddOf i))) true (replyWord (i.val/4))
+    rw [hs, show preRows.length+(headPost.length+1)+(chainSteps i+postSteps i left)+fuel=
+      preRows.length+((headPost.length+(chainSteps i+(postSteps i left+fuel)))+1) by omega,
+      walk_rows_run s _ l1 pre_row_fetch _ true,
+      execute_inverse_call openingImage _ (walkRows s preRows) true (replyWord (i.val/4))
         (rebuiltWord (i.val/4)) src dst a10 a12 ((k .x5).trans r.selector) ((k .x11).trans r.width) a13
         (inverse_fetch _ apc)]
     simp only [inv,ite_true,bind_assoc,pure_bind]
     apply bind_congr; intro y
-    let a1:=writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
-    have reg1 (x : Reg) : a1.getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
-    have a1pc : a1.pc=address 773 := by rw [show a1.pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+    let a1:=writeBits (walkRows s preRows) (wordAddress (rebuiltWord (i.val/4))) y
+    have reg1 (x : Reg) : a1.getReg x=(walkRows s preRows).getReg x := writeBits_register ..
+    have a1pc : a1.pc=address 3093 := by rw [show a1.pc=(walkRows s preRows).pc+4 from reply_pc ..,apc]; rfl
     have al : legal headPost a1 := (head_post a1 i a1pc ((reg1 _).trans a7)).1
     have hd : headed s i last y=walkRows a1 headPost := by simp only [headed,if_neg same]; rfl
     rw [walk_rows_run _ headPost al head_post_fetch _ true, tail (walkRows a1 headPost) y hd.symm]
@@ -405,9 +404,7 @@ theorem per_run (s : MachineState) (i : Index) (ord left last fuel : Nat) (l : 0
     rw [hd]
     apply bind_congr; intro t; apply bind_congr; intro e; apply congrArg pure
     rw [charge_comm, charge_comm, charge_comm]; congr 1
-    · rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h <;>
-        simp [perCycles,headCycles,oddOf,same,h,show price (preRows true)=12 from rfl,
-          show price (preRows false)=13 from rfl,show price headPost=4 from rfl] <;> omega
+    · simp [perCycles,headCycles,same,show price preRows=15 from rfl,show price headPost=4 from rfl] <;> omega
     · simp [perCalls,inv] <;> omega
 
 end TwoPermutationPrototype.GroupedOpening

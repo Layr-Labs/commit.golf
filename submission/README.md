@@ -1,3 +1,77 @@
+# Relocated table-driven first pass (-255 opening cycles)
+
+Based on the 106,524-cycle complete record specialization (next inherited section), whose opener
+carries the table-driven first pass, the cap emitter and the four straight-line record writers. This
+entry moves the whole first pass into 71 words of the unused gap after the record-writer selector and
+removes the two jumps that remained per opened position.
+
+## The change
+
+- Word 740 (the old first-pass loop head, reached from the header) becomes `jal zero,<3077>`. The header is
+  32 cycles.
+- Words 3077..3147, inside the NOP run 3077..4095 that follows the selector's `jalr` at 3076 and that no
+  branch or jump targets, hold the first pass as one straight path per position:
+
+```text
+3077 ld t1,0(a4) ; srli t3,t1,2 ; slli gp,t1,4 ; and t5,gp,ra ; add t5,t5,sp ; beq t3,tp,<3096>
+3083 addi tp,t3,0 ; slli t2,t3,10 ; add t2,t2,s8 ; addi a2,t2,512
+3087 lh a0,4(t5) ; add a0,a0,t2 ; lh t6,6(t5) ; add t6,t6,t2 ; addi a3,zero,2 ; ecall (inverse)
+3093 addi a3,zero,1 ; addi a2,zero,1536 ; sd t6,712(t2)
+3096 addi a0,zero,1024
+3097 ld t2,8(t5) ; slli t6,gp,4 ; add t2,t2,t6 ; sd t2,0(a0) ; lhu t3,2(t5) ; lhu t2,0(t5) ; ecall (keyed)
+3104 addi a0,a2,0 ; jalr zero,t2,0
+3106..3138 33 x ecall (links), falling through into
+3139 add t5,gp,s6 ; ld t6,0(t3) ; sd t6,0(t5) ; ld t6,8(t3) ; sd t6,8(t5) ; addi a4,a4,8 ; bne a4,a7,<3077>
+3146 addi s9,s1,0 ; jal zero,<15>
+```
+
+- The 64 KiB table keeps its layout. Dword 0 of each entry also carries, in its upper half, the two signed
+  quartet offsets: the reply (`168` for even quartets, `-1056` for odd ones) and the sibling node (`136` /
+  `-856`). Bit 2 of `i` equals bit 2 of `i % 4096`, so the head needs no parity branch and no `jal` on either
+  path. The link block ends right before the salt rows, so the chain-exit `jal` is gone too. The chain
+  entry `T` now addresses word `3139 - q`.
+- Per position: 316 -> 314 cycles (new quartet 27, chain `16 + 8q <= 280`, salt rows 7). Pass bound `314*n+2`.
+- The old first-pass words 741..812 and link block 896..929 become unreachable and are left in place. The
+  image keeps its 6,144 words and the record writers are untouched.
+
+```json
+{"commitCycles":504585244,"openingCycles":106269,"proofBytes":72160}
+```
+
+```text
+32 + (314*128 + 2) + (66058 - 15) = 106269
+(504585244 + 106269) * 72160 = 36418539578080
+Parent (106,524):  (504585244 + 106524) * 72160 = 36418557978880
+Saving: 255 opening cycles; 18400800 score
+```
+
+## Proof changes
+
+- `GroupOpenTable`: `tabR`, `tabG`, four-halfword entries and `tabT` for the link end at 3139. The kernel byte
+  check covers the new data.
+- `GroupOpenWalk`: the relocated rows and `packed_fetch_far` (fetch anywhere below 6,144 words).
+- `GroupOpenStep`: one head path (`head_entry`, `head_skip0`, `head_pre` with `reply_offset`/`node_offset`
+  from the table's signed halfwords). The sibling pointer comes from `x31`.
+- `K3OpenChainRows`, `K3OpenChainLink`, `K3OpenChainRun`, `K3OpenChainExit`, `K3OpenChainPost`: `ChainEntry`
+  takes `x3 = 16 i` and the entry address from the head; six counter/table rows; no exit rows;
+  `chainSteps = 9 + links`.
+- `GroupOpenSelect`, `GroupOpenLatch`, `GroupOpenEffect`, `GroupOpenPass`, `GroupOpenHeaderSpec`,
+  `GroupOpenHeaderParts`, `GroupOpenHeaderCore`, `GroupOpenHeader`, `GroupOpenFull`, `GroupOpenClosing`,
+  `Solution.lean`, `claim.json`. `programs.json`, `K1Manifest` and the `GroupOpenImage` literal/leaf lemmas
+  are regenerated from the delivered manifest. The record-writer modules are unchanged.
+
+## Evidence
+
+A C emulator of the `Riscv.lean` cost model with stand-in oracles ran one full 2^24-leaf commitment, then the
+original leader, the 106,524-cycle parent and this opener on the same trapdoor, on 35 position sets (sizes
+0..129, spread, random, runs and tile/segment boundaries) plus a tampered proof. Proof bytes, proof hash and
+checker acceptance are identical on every set, and the opening oracle trace equals the parent's. The
+two worst-case fixtures each take 106,269 cycles (parent 106,524). The tampered proof is rejected.
+
+Certification here means a local Lean build of the certificate; the official verifier was not run.
+
+## Inherited documentation
+
 # Complete record specialization with inline 238-bit packing
 
 Based on the 110,940-cycle four-class record implementation. The opener dispatches once per record after loading its index and salt address. Four straight-line record writers specialize every copy. Each of seven packed siblings copies its first 28 bytes, combines its last halfword with two bits of the terminal sibling, and stores that halfword once. A single terminal-halfword preload supplies all seven fields. The final sibling copies 28 bytes and rejoins the original record latch.

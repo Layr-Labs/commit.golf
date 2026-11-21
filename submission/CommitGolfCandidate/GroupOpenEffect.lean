@@ -20,24 +20,24 @@ private theorem view_eq_of_mem {a b : MachineState} (h : a.mem=b.mem) (w : Nat) 
 def HeadWrites (i : Index) (last : Nat) (w : Nat) : Prop :=
   i.val/4≠last ∧ ∃ m<26, w=rebuiltWord (i.val/4)+m
 
-/-- The state after a new quartet's inverse call, before rows 773..776. -/
+/-- The state after a new quartet's inverse call, before rows 3093..3096. -/
 private def called (s : MachineState) (i : Index) (y : BitVec 1600) : MachineState :=
-  writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y
+  writeBits (walkRows s preRows) (wordAddress (rebuiltWord (i.val/4))) y
 
 private theorem called_facts (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
     (y : BitVec 1600) (fresh : i.val/4≠last) :
     let a1:=called s i y
-    a1.pc=address 773 ∧ a1.getReg .x7=wordAddress (blockWord (i.val/4)) ∧
-      a1.getReg .x30=wordAddress (nodeWordOf (i.val/4^^^1)) ∧
+    a1.pc=address 3093 ∧ a1.getReg .x7=wordAddress (blockWord (i.val/4)) ∧
+      a1.getReg .x31=wordAddress (nodeWordOf (i.val/4^^^1)) ∧
       (∀ w, w<2^33 → memoryView a1 w=if h : rebuiltWord (i.val/4)≤w ∧ w<rebuiltWord (i.val/4)+25 then
         replyWords y ⟨w-rebuiltWord (i.val/4),by omega⟩ else memoryView s w) := by
   have hi : i.val<16777216 := i.isLt
-  obtain ⟨_,apc,amem,_,_,_,a30,_,_,_,a7,_⟩ := head_pre s i ord left last r fresh
-  have reg1 (x : Reg) : (called s i y).getReg x=(walkRows s (preRows (oddOf i))).getReg x := writeBits_register ..
+  obtain ⟨_,apc,amem,_,_,_,a30,_,_,_,a7,_,_,_⟩ := head_pre s i ord left last r fresh
+  have reg1 (x : Reg) : (called s i y).getReg x=(walkRows s preRows).getReg x := writeBits_register ..
   refine ⟨?_,(reg1 _).trans a7,(reg1 _).trans a30,?_⟩
-  · rw [show (called s i y).pc=(walkRows s (preRows (oddOf i))).pc+4 from reply_pc ..,apc]; rfl
+  · rw [show (called s i y).pc=(walkRows s preRows).pc+4 from reply_pc ..,apc]; rfl
   · intro w fit
-    change memoryView (writeBits (walkRows s (preRows (oddOf i))) (wordAddress (rebuiltWord (i.val/4))) y) w=_
+    change memoryView (writeBits (walkRows s preRows) (wordAddress (rebuiltWord (i.val/4))) y) w=_
     rw [permutation_write_memory _ _ _ _ (by unfold rebuiltWord blockWord; omega) fit,writeWindow]
     split
     · rfl
@@ -104,7 +104,7 @@ def Saved (r : Reg) := r≠.x6 ∧ r≠.x7 ∧ r≠.x10 ∧ r≠.x13 ∧ r≠.x2
 /-- The salt rows after the chain: registers of the next ordinal, the salt words installed. -/
 theorem post_facts (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
     (bound : ord+left≤16777216)
-    (pc : u.pc=address 804) (regs : Registers u ord left) (x3 : u.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat))
+    (pc : u.pc=address 3139) (regs : Registers u ord left) (x3 : u.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat))
     (src : u.getReg .x28=readAt i) :
     Registers (finishOne u i left) (ord+1) (left-1) ∧ (finishOne u i left).pc=finalPC left ∧
       (finishOne u i left).mem=(installed u i).mem ∧
@@ -160,7 +160,7 @@ theorem salt_read (u : MachineState) (i : Index) (j : Fin 2) :
 
 /-- The salt words of the position after the salt rows: the selected reply words. -/
 theorem installs_salt (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
-    (bound : ord+left≤16777216) (pc : u.pc=address 804) (regs : Registers u ord left)
+    (bound : ord+left≤16777216) (pc : u.pc=address 3139) (regs : Registers u ord left)
     (x3 : u.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat)) (src : u.getReg .x28=readAt i) (j : Fin 2) :
     (finishOne u i left).getMem (destAt i+BitVec.ofNat 64 (8*j.val))=memoryView u (192+selectedWord i j) := by
   have eq := (post_facts u i ord left l hi bound pc regs x3 src).2.2.1
@@ -176,7 +176,7 @@ theorem salt_words (i : Index) : destAt i=wordAddress (1140851204+2*i.val) ∧
 
 /-- Outside the salt words the salt rows keep the word view. -/
 theorem post_outside (u : MachineState) (i : Index) (ord left : Nat) (l : 0<left) (hi : left≤16777216)
-    (bound : ord+left≤16777216) (pc : u.pc=address 804) (regs : Registers u ord left)
+    (bound : ord+left≤16777216) (pc : u.pc=address 3139) (regs : Registers u ord left)
     (x3 : u.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat)) (src : u.getReg .x28=readAt i) (w : Nat) (fit : w<2^33)
     (apart : w≠1140851204+2*i.val ∧ w≠1140851204+2*i.val+1) :
     memoryView (finishOne u i left) w=memoryView u w := by
@@ -207,7 +207,8 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
     ukeep x h3 h7 h10 h28 h30 h31
   have hk (x : Reg) (h4 : x≠.x4 := by decide) (h6 : x≠.x6 := by decide) (h7 : x≠.x7 := by decide)
       (h10 : x≠.x10 := by decide) (h13 : x≠.x13 := by decide) (h28 : x≠.x28 := by decide)
-      (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) := ex.keep x h4 h6 h7 h10 h13 h28 h30 h31
+      (h30 : x≠.x30 := by decide) (h31 : x≠.x31 := by decide) (h3 : x≠.x3 := by decide) :=
+    ex.keep x h4 h6 h7 h10 h13 h28 h30 h31 h3
   have uregs : Registers u ord left :=
     ⟨(uk .x12).trans ex.regs.output,(uk .x5).trans ex.regs.selector,(uk .x11).trans ex.regs.width,
      (uk .x13).trans ex.regs.primitive,(uk .x14).trans ex.regs.index,(uk .x17).trans ex.regs.endReg,
@@ -218,7 +219,7 @@ theorem outcome_facts (s : MachineState) (i : Index) (ord left last : Nat) (l : 
   refine ⟨pregs,ppc,?_,?_,?_,?_⟩
   · rw [pkeep _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide), uk .x4]; exact ex.quartet
   · intro k ⟨h6,h7,h10,h13,h28,h30,h31,h14,h17,h4,h25,h3⟩
-    rw [pkeep k h7 h30 h31 h14 h17 h25, ukeep k h3 h7 h10 h28 h30 h31]; exact ex.keep k h4 h6 h7 h10 h13 h28 h30 h31
+    rw [pkeep k h7 h30 h31 h14 h17 h25, ukeep k h3 h7 h10 h28 h30 h31]; exact ex.keep k h4 h6 h7 h10 h13 h28 h30 h31 h3
   · intro w fit away
     have nh : ¬HeadWrites i last w := fun h => away (Or.inl h)
     have n128 : w≠128 := fun h => away (Or.inr (Or.inl h))
@@ -303,7 +304,7 @@ private theorem fixed_chain (o : Oracle) (k : BitVec 192) (s : MachineState) (i 
     (r : Input s i ord left last) (key : KeyWords s k) :
     let h:=fixedHead o s i last
     let u:=chainState o h i
-    u.pc=address 804 ∧ Registers u ord left ∧ u.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat) ∧
+    u.pc=address 3139 ∧ Registers u ord left ∧ u.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat) ∧
       u.getReg .x28=readAt i ∧
       (∀ w, w<2^33 → w≠128 → (w<192 ∨ 217≤w) → memoryView u w=memoryView h w) ∧
       (∀ j : Fin 25, memoryView u (192+j.val)=replyWords (chainReply o k i) j) := by

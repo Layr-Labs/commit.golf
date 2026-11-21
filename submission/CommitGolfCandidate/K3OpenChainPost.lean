@@ -74,10 +74,6 @@ theorem enter_rows_mem (a : MachineState) : (walkRows a chainEnterRows).mem=a.me
   rw [enter_walk]
   rfl
 
-theorem exit_rows_mem (b : MachineState) : (walkRows b chainExitRows).mem=b.mem := by
-  have jm (s : MachineState) (offset : BitVec 21) : (execInstrBr s (.JAL .x0 offset)).mem=s.mem := by
-    simp [execInstrBr]
-  change (execInstrBr b (.JAL .x0 2096652)).mem=b.mem
-  rw [jm]
+theorem exit_rows_mem (b : MachineState) : (walkRows b chainExitRows).mem=b.mem := rfl
 
 end TwoPermutationPrototype.GroupedOpening

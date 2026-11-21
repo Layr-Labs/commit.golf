@@ -1,6 +1,6 @@
 import CommitGolfCandidate.K3OpenChainPost
 
-/-! Opener chain block (rows 777..788 and the link block 896..929), exit row and post-state: `chain_post`. Owner: C2 (draft by S9-L2). -/
+/-! Opener chain block (rows 3097..3105 and the link block 3106..3138), exit row and post-state: `chain_post`. Owner: C2 (draft by S9-L2). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -15,13 +15,10 @@ attribute [local simp] chain_zero_reg
 /-! ### Post-state -/
 
 theorem exit_rows (b : MachineState) (pc : b.pc=address linkEnd) :
-    (walkRows b chainExitRows).pc=address 804 ∧
+    (walkRows b chainExitRows).pc=address 3139 ∧
       (∀ x, (walkRows b chainExitRows).getReg x=b.getReg x) ∧
-      (walkRows b chainExitRows).mem=b.mem := by
-  refine ⟨?_,?_,exit_rows_mem b⟩
-  · simp [chainExitRows,walkRows,execInstrBr,pc,address]
-    decide
-  · intro x; simp [chainExitRows,walkRows,execInstrBr]
+      (walkRows b chainExitRows).mem=b.mem :=
+  ⟨pc,fun _ => rfl,rfl⟩
 
 theorem link_post : ∀ (c : Nat) (s : MachineState), LinkReady s c → c<34 →
     ∀ t ∈ support (linkTrace c s),
@@ -46,19 +43,20 @@ theorem link_post : ∀ (c : Nat) (s : MachineState), LinkReady s c → c<34 →
 
 theorem chain_post (h : MachineState) (i : Index) (e : ChainEntry h i) (t : MachineState)
     (hit : t ∈ support (chainTrace h i)) :
-    t.pc=address 804 ∧ t.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
+    t.pc=address 3139 ∧ t.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
       t.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat) ∧
       (∀ r, r≠.x3 → r≠.x7 → r≠.x10 → r≠.x28 → r≠.x30 → r≠.x31 → t.getReg r=h.getReg r) ∧
       (∀ w, w<2^33 → w≠128 → (w<192 ∨ 217≤w) → memoryView t w=memoryView h w) := by
   have lt := links_lt i
   simp only [chainTrace,mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at hit
-  obtain ⟨z,_,b,bhit,rfl⟩ := hit
+  obtain ⟨z,_,b,bhit,hb⟩ := hit
+  have ht : t=b := by rw [hb]; rfl
+  subst ht
   obtain ⟨apc,akeep,a28,a7,a3⟩ := after_keyed h i e z
   let a:=writeBits (chainBefore h) (wordAddress 192) z
   have amem (w : Nat) (hw : w<2^33) (w128 : w≠128) (out : w<192 ∨ 217≤w) : memoryView a w=memoryView h w := by
     rw [reply_outside _ z w hw out,before_view h i e w hw]
     simp [writeWord,w128]
-  show (walkRows b chainExitRows).pc=address 804 ∧ _
   obtain ⟨_,epc,e10,ekeep,emem⟩ := enter_rows a (chainLinks i) apc (by rw [a7,tab_t_links]) lt
   have ready : LinkReady (walkRows a chainEnterRows) (chainLinks i) :=
     ⟨epc,e10.trans ((akeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans e.output),
@@ -66,13 +64,13 @@ theorem chain_post (h : MachineState) (i : Index) (e : ChainEntry h i) (t : Mach
       (ekeep _ (by decide)).trans ((akeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans e.selector),
       (ekeep _ (by decide)).trans ((akeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans e.width),
       (ekeep _ (by decide)).trans ((akeep _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans e.primitive)⟩
-  obtain ⟨bpc,bkeep,bmem⟩ := link_post _ _ ready lt b bhit
-  obtain ⟨xpc,xkeep,xmem⟩ := exit_rows b bpc
+  obtain ⟨bpc,bkeep,bmem⟩ := link_post _ _ ready lt t bhit
+  obtain ⟨xpc,xkeep,xmem⟩ := exit_rows t bpc
   refine ⟨xpc,?_,?_,fun x b0 b1 b2 b3 b4 b5 => ?_,fun w hw w128 out => ?_⟩
   · exact (xkeep _).trans ((bkeep _).trans ((ekeep _ (by decide)).trans a28))
   · exact (xkeep _).trans ((bkeep _).trans ((ekeep _ (by decide)).trans a3))
   · exact (xkeep x).trans ((bkeep x).trans ((ekeep x b2).trans (akeep x b0 b1 b3 b4 b5)))
-  · rw [chain_view_of_mem xmem,bmem w hw out,chain_view_of_mem emem]
+  · rw [bmem w hw out,chain_view_of_mem emem]
     exact amem w hw w128 out
 
 end TwoPermutationPrototype.GroupedOpening

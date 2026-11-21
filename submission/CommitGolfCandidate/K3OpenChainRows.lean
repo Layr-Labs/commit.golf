@@ -6,21 +6,19 @@ import CommitGolfCandidate.K6Chain
 import CommitGolfCandidate.GroupOpenTable
 
 /-! Opener prefix, salt regeneration of one position on the linked (chain) schedule: rows
-`chainStart .. chainStart+11` (777..788) and the link block at words 896..929, whose `jal` returns to row 804.
-The header sets `x1 = 65520` (rows 732, 739); `x2 = tableBase` is the ABI's `sp`, the embedded table
-(`GroupOpenTable`). With `e = i % 4096`, entry `e` gives the counter offset `tabD e`, the chain entry
-`tabT e` (link-block word `929 - j`, `j = (e % 374) / 11` links after the keyed restart) and the salt
-source `tabS e = readAt i`:
+`chainStart .. chainStart+8` (3097..3105) and the link block at words 3106..3138, after which the salt rows
+follow directly (3139). The head left `x3 = 16 i` and `x30 =` the table entry of `e = i % 4096`
+(`GroupOpenTable`): it gives the counter offset `tabD e`, the chain entry `tabT e` (link-block word
+`3139 - j`, `j = (e % 374) / 11` links after the keyed restart) and the salt source `tabS e = readAt i`:
 ```
-slli x3,x6,4 ; and x30,x3,x1 ; add x30,x30,x2 ; ld x7,8(x30) ; slli x31,x3,4 ; add x7,x7,x31 ;
-sd x7,0(x10) ; lhu x28,2(x30) ; lhu x7,0(x30) ; ecall ; addi x10,x12,0 ; jalr x0,0(x7) ;
-[896..928: 33 x ecall] ; 929: jal x0,<804>
+ld x7,8(x30) ; slli x31,x3,4 ; add x7,x7,x31 ; sd x7,0(x10) ; lhu x28,2(x30) ; lhu x7,0(x30) ; ecall ;
+addi x10,x12,0 ; jalr x0,0(x7) ; [3106..3138: 33 x ecall]
 ```
-(the `jalr` enters the unrolled link block `j` words before its end, so link calls cost no ordinary instructions)
-the keyed generator call of head `h - j` (counter = base of its C leaf, K1 input layout at word 128, reply at
-`[1536, 1736)`), then `j` in-place links on `[1536, 1736)`. `x3 = 16 i` survives for the salt rows.
-The counter arithmetic and the reply of the restart-plus-links walk are S9-K6P's
-`K6Chain.restart_counter` / `K6Chain.opener_chain`. -/
+(the `jalr` enters the unrolled link block `j` words before its end, so link calls cost no ordinary instructions
+and the last one falls through to the salt rows) the keyed generator call of head `h - j` (counter = base of its
+C leaf, K1 input layout at word 128, reply at `[1536, 1736)`), then `j` in-place links on `[1536, 1736)`.
+The counter arithmetic and the reply of the restart-plus-links walk are S9-K6P's `K6Chain.restart_counter` /
+`K6Chain.opener_chain`. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -32,11 +30,11 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
 @[local simp] theorem chain_zero_reg (state : MachineState) : state.getReg .x0=0#64 := rfl
 
 /-- First row of the chain block (the `remu x28,x6,x26`). -/
-abbrev chainStart : Nat := 777
+abbrev chainStart : Nat := 3097
 /-- Links of position `i`: its head is `chainLinks i` heads after the keyed restart. -/
 def chainLinks (i : Index) : Nat := ((i.val%4096)/11)%34
-/-- Steps: 9 table/counter rows, the keyed call, 2 entry rows, one call per link and the `jal` back to row 804. -/
-def chainSteps (i : Index) : Nat := 13+chainLinks i
+/-- Steps: 6 table/counter rows, the keyed call, 2 entry rows and one call per link. -/
+def chainSteps (i : Index) : Nat := 9+chainLinks i
 def chainCalls (i : Index) : Nat := 1+chainLinks i
 /-- One cycle per ordinary row and 8 cycles per call. -/
 def chainCycles (i : Index) : Nat := chainSteps i+7*chainCalls i
@@ -55,8 +53,8 @@ structure ChainEntry (h : MachineState) (i : Index) : Prop where
   width : h.getReg .x11=200
   primitive : h.getReg .x13=1
   idx : h.getReg .x6=BitVec.ofNat 64 i.val
-  sp : h.getReg .x2=BitVec.ofNat 64 tableBase
-  mask : h.getReg .x1=65520
+  x3 : h.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat)
+  entry : h.getReg .x30=wordAddress (tableWord (i.val%4096))
   table : TableAt h
 
 /-- K1 generator input words 129..152 (word 128 is the counter): key words 1..3, then zeros. -/
@@ -65,41 +63,41 @@ def KeyWords (h : MachineState) (k : BitVec 192) : Prop :=
 
 /-! ### Rows -/
 
-def chainPreRows : List Row := [(777,.SLLI .x3 .x6 4),(778,.AND .x30 .x3 .x1),(779,.ADD .x30 .x30 .x2),
-  (780,.LD .x7 .x30 8),(781,.SLLI .x31 .x3 4),(782,.ADD .x7 .x7 .x31),(783,.SD .x10 .x7 0),
-  (784,.LHU .x28 .x30 2),(785,.LHU .x7 .x30 0)]
-def chainEnterRows : List Row := [(787,.ADDI .x10 .x12 0),(788,.JALR .x0 .x7 0)]
-/-- First word after the unrolled link block (the `jal` back to the salt rows). -/
-abbrev linkEnd : Nat := 929
-def chainExitRows : List Row := [(929,.JAL .x0 2096652)]
+def chainPreRows : List Row := [(3097,.LD .x7 .x30 8),(3098,.SLLI .x31 .x3 4),(3099,.ADD .x7 .x7 .x31),
+  (3100,.SD .x10 .x7 0),(3101,.LHU .x28 .x30 2),(3102,.LHU .x7 .x30 0)]
+def chainEnterRows : List Row := [(3104,.ADDI .x10 .x12 0),(3105,.JALR .x0 .x7 0)]
+/-- First word after the unrolled link block: the salt rows. -/
+abbrev linkEnd : Nat := 3139
+/-- No exit rows: the link block falls through to the salt rows. -/
+def chainExitRows : List Row := []
 
-/-- `presentRows` for rows anywhere in the opener (`rows_present` stops at 813). -/
+/-- `presentRows` for rows anywhere in the opener. -/
 theorem rows_present_any (rows : List Row)
-    (raw : ∀ i : Fin rows.length, rows[i].1<1062 ∧ (openingImage.code[rows[i].1]?).bind Opening.decodeBase=some rows[i].2) :
+    (raw : ∀ i : Fin rows.length, rows[i].1<6144 ∧ (openingImage.code[rows[i].1]?).bind Opening.decodeBase=some rows[i].2) :
     presentRows rows := by
   intro p hp;obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp hp
   subst p
-  exact fun st pc => packed_fetch_base_any st _ _ (raw ⟨i,hi⟩).1 pc (raw ⟨i,hi⟩).2
+  exact fun st pc => packed_fetch_far st _ _ (raw ⟨i,hi⟩).1 pc (raw ⟨i,hi⟩).2
 
 theorem chain_pre_fetch : presentRows chainPreRows := by apply rows_present; decide +kernel
 theorem chain_enter_fetch : presentRows chainEnterRows := by apply rows_present; decide +kernel
-theorem chain_exit_fetch : presentRows chainExitRows := by apply rows_present_any; decide +kernel
+theorem chain_exit_fetch : presentRows chainExitRows := by intro p hp; simp [chainExitRows] at hp
 
-theorem keyed_fetch (s : MachineState) (pc : s.pc=address 786) : fetch openingImage s=some (.base .ECALL) :=
-  packed_fetch_base _ 786 _ (by decide) pc (by decide +kernel)
+theorem keyed_fetch (s : MachineState) (pc : s.pc=address 3103) : fetch openingImage s=some (.base .ECALL) :=
+  packed_fetch_far _ 3103 _ (by decide) pc (by decide +kernel)
 
 private theorem link_words : ∀ k : Fin 33,
-    (openingImage.code[896+k.val]?).bind Opening.decodeBase=some .ECALL := by decide +kernel
+    (openingImage.code[3106+k.val]?).bind Opening.decodeBase=some .ECALL := by decide +kernel
 
 /-- Words `linkEnd-c` (`1 ≤ c ≤ 33`) of the link block are `ecall`s. -/
 theorem link_fetch (s : MachineState) (c : Nat) (lo : 0<c) (hc : c<34) (pc : s.pc=address (linkEnd-c)) :
     fetch openingImage s=some (.base .ECALL) := by
-  refine packed_fetch_base_any _ (linkEnd-c) _ (by unfold linkEnd; omega) pc ?_
+  refine packed_fetch_far _ (linkEnd-c) _ (by unfold linkEnd; omega) pc ?_
   have h := link_words ⟨33-c,by omega⟩
-  rwa [show 896+(33-c)=linkEnd-c by unfold linkEnd; omega] at h
+  rwa [show 3106+(33-c)=linkEnd-c by unfold linkEnd; omega] at h
 
-theorem chain_lengths : chainPreRows.length=9 ∧ price chainPreRows=9 ∧
-    chainEnterRows.length=2 ∧ price chainEnterRows=2 ∧ chainExitRows.length=1 ∧ price chainExitRows=1 := by decide
+theorem chain_lengths : chainPreRows.length=6 ∧ price chainPreRows=6 ∧
+    chainEnterRows.length=2 ∧ price chainEnterRows=2 ∧ chainExitRows.length=0 ∧ price chainExitRows=0 := by decide
 
 /-! ### Arithmetic of the counter rows -/
 
@@ -229,33 +227,16 @@ theorem counter_table (i : Index) :
   simp only [BitVec.toNat_add, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.shiftLeft_eq, tabD]
   omega
 
-private def preA : List Row := [(777,.SLLI .x3 .x6 4),(778,.AND .x30 .x3 .x1),(779,.ADD .x30 .x30 .x2)]
-private def preB : List Row := [(780,.LD .x7 .x30 8),(781,.SLLI .x31 .x3 4),(782,.ADD .x7 .x7 .x31),
-  (783,.SD .x10 .x7 0)]
-private def preC : List Row := [(784,.LHU .x28 .x30 2),(785,.LHU .x7 .x30 0)]
-private theorem pre_split : chainPreRows=preA++preB++preC := rfl
+private def preB : List Row := [(3097,.LD .x7 .x30 8),(3098,.SLLI .x31 .x3 4),(3099,.ADD .x7 .x7 .x31),
+  (3100,.SD .x10 .x7 0)]
+private def preC : List Row := [(3101,.LHU .x28 .x30 2),(3102,.LHU .x7 .x30 0)]
+private theorem pre_split : chainPreRows=preB++preC := rfl
 
-private theorem pre_a (h : MachineState) (i : Index) (e : ChainEntry h i) :
-    let a:=walkRows h preA
-    legal preA h ∧ a.pc=address 780 ∧ a.mem=h.mem ∧ a.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat) ∧
-      a.getReg .x30=wordAddress (tableWord (i.val%4096)) ∧ (∀ r, r≠.x3 → r≠.x30 → a.getReg r=h.getReg r) := by
-  have pc0 : h.pc=address 777 := e.pc
-  have hi : i.val<16777216 := i.isLt
-  refine ⟨legal_of_chain _ _ (by decide) (by simp [preA,pcChain,execInstrBr,pc0,address]),?_,?_,?_,?_,?_⟩
-  · simp [preA,walkRows,execInstrBr,pc0,address]
-  · simp [preA,walkRows,execInstrBr]
-  · simp [preA,walkRows,execInstrBr,e.idx]
-  · simp only [preA,walkRows,List.foldl_cons,List.foldl_nil,execInstrBr,MachineState.getReg_setPC,
-      Opening.getReg_setReg,e.idx,e.mask,e.sp]
-    simp
-    rw [tile16 i, entry_address _ (by omega)]
-  · intro r a b; simp [preA,walkRows,execInstrBr,Ne.symm a,Ne.symm b]
-
-private theorem pre_b (a : MachineState) (i : Index) (pc : a.pc=address 780)
+private theorem pre_b (a : MachineState) (i : Index) (pc : a.pc=address 3097)
     (x3 : a.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat)) (x30 : a.getReg .x30=wordAddress (tableWord (i.val%4096)))
     (x10 : a.getReg .x10=1024) (d : a.getMem (wordAddress (tableWord (i.val%4096)+1))=BitVec.ofNat 64 (tabD (i.val%4096))) :
     let b:=walkRows a preB
-    legal preB a ∧ b.pc=address 784 ∧
+    legal preB a ∧ b.pc=address 3101 ∧
       b.mem=(a.setMem 1024 (Permutation.CounterSalt.ctr (K6Chain.restart (coord i).1))).mem ∧
       b.getReg .x3=a.getReg .x3 ∧ b.getReg .x30=a.getReg .x30 ∧
       (∀ r, r≠.x7 → r≠.x31 → b.getReg r=a.getReg r) := by
@@ -284,11 +265,11 @@ theorem half_setPC (s : MachineState) (p a : Word) : (s.setPC p).getHalfword a=s
 theorem half_setReg (s : MachineState) (r : Reg) (v a : Word) : (s.setReg r v).getHalfword a=s.getHalfword a := by
   cases r <;> rfl
 
-private theorem pre_c (b : MachineState) (i : Index) (pc : b.pc=address 784)
+private theorem pre_c (b : MachineState) (i : Index) (pc : b.pc=address 3101)
     (x30 : b.getReg .x30=wordAddress (tableWord (i.val%4096)))
     (w0 : b.getMem (wordAddress (tableWord (i.val%4096)))=BitVec.ofNat 64 (tabEntry (i.val%4096) 0)) :
     let c:=walkRows b preC
-    legal preC b ∧ c.pc=address 786 ∧ c.mem=b.mem ∧ c.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
+    legal preC b ∧ c.pc=address 3103 ∧ c.mem=b.mem ∧ c.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
       c.getReg .x7=BitVec.ofNat 64 (tabT (i.val%4096)) ∧ (∀ r, r≠.x7 → r≠.x28 → c.getReg r=b.getReg r) := by
   have hi : i.val<16777216 := i.isLt
   have fit : 8*tableWord (i.val%4096)+8 ≤ 2^64 := by simp only [tableWord]; omega
@@ -296,19 +277,20 @@ private theorem pre_c (b : MachineState) (i : Index) (pc : b.pc=address 784)
     rw [show signExtend12 2#12=BitVec.ofNat 64 2 by decide]; unfold wordAddress; rw [← BitVec.ofNat_add]
   have a0 : wordAddress (tableWord (i.val%4096))+signExtend12 0#12=BitVec.ofNat 64 (8*tableWord (i.val%4096)+2*0) := by
     rw [show signExtend12 0#12=BitVec.ofNat 64 0 by decide]; unfold wordAddress; rw [← BitVec.ofNat_add]
-  have low : tabEntry (i.val%4096) 0=tabT (i.val%4096)+65536*tabS (i.val%4096) := by simp [tabEntry]
+  have low : tabEntry (i.val%4096) 0=tabT (i.val%4096)+65536*tabS (i.val%4096)+4294967296*tabR (i.val%4096)+
+      281474976710656*tabG (i.val%4096) := by simp [tabEntry]
   have h28 : (b.getHalfword (wordAddress (tableWord (i.val%4096))+signExtend12 2#12)).zeroExtend 64=
       BitVec.ofNat 64 (tabS (i.val%4096)) := by
     rw [a2, table_half b _ 1 fit (by decide)]
     change ((b.getMem (wordAddress (tableWord (i.val%4096))) >>> (1*16)).truncate 16).zeroExtend 64=_
     rw [w0, low]
-    exact high_half _ _ (tab_t_lt _) (tab_s_lt _)
+    exact half1 _ _ _ _ (tab_t_lt _) (tab_s_lt _) (tab_r_lt _) (tab_g_lt _)
   have h7 : (b.getHalfword (wordAddress (tableWord (i.val%4096))+signExtend12 0#12)).zeroExtend 64=
       BitVec.ofNat 64 (tabT (i.val%4096)) := by
     rw [a0, table_half b _ 0 fit (by decide)]
     change ((b.getMem (wordAddress (tableWord (i.val%4096))) >>> (0*16)).truncate 16).zeroExtend 64=_
     rw [w0, low]
-    exact low_half _ _ (tab_t_lt _) (tab_s_lt _)
+    exact half0 _ _ _ _ (tab_t_lt _) (tab_s_lt _) (tab_r_lt _) (tab_g_lt _)
   have v2 : accessValid (wordAddress (tableWord (i.val%4096))+signExtend12 2#12) 2=true := by
     rw [a2]; exact table_access _ 2 (by omega) (by simp only [tableWord]; omega)
   have v0 : accessValid (wordAddress (tableWord (i.val%4096))+signExtend12 0#12) 2=true := by
@@ -325,7 +307,7 @@ private theorem pre_c (b : MachineState) (i : Index) (pc : b.pc=address 784)
 
 theorem chain_before (h : MachineState) (i : Index) (e : ChainEntry h i) :
     let t:=chainBefore h
-    legal chainPreRows h ∧ t.pc=address 786 ∧ t.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
+    legal chainPreRows h ∧ t.pc=address 3103 ∧ t.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
       t.getReg .x7=BitVec.ofNat 64 (tabT (i.val%4096)) ∧
       t.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat) ∧
       t.mem=(h.setMem 1024 (Permutation.CounterSalt.ctr (K6Chain.restart (coord i).1))).mem ∧
@@ -333,42 +315,38 @@ theorem chain_before (h : MachineState) (i : Index) (e : ChainEntry h i) :
   dsimp only
   have hi : i.val<16777216 := i.isLt
   have he : i.val%4096<4096 := Nat.mod_lt _ (by decide)
-  obtain ⟨la,apc,amem,a3,a30,akeep⟩ := pre_a h i e
-  have av (w : Nat) : memoryView (walkRows h preA) w=memoryView h w := by
-    unfold memoryView MachineState.getMem; rw [amem]
-  have d : (walkRows h preA).getMem (wordAddress (tableWord (i.val%4096)+1))=BitVec.ofNat 64 (tabD (i.val%4096)) := by
+  have d : h.getMem (wordAddress (tableWord (i.val%4096)+1))=BitVec.ofNat 64 (tabD (i.val%4096)) := by
     have t1 := e.table _ he 1 (by decide)
     simp only [tabEntry, show (1:Nat)≠0 by decide, if_false] at t1
-    rw [← t1, ← av]; rfl
-  obtain ⟨lb,bpc,bmem,b3,b30,bkeep⟩ := pre_b (walkRows h preA) i apc a3 a30
-    ((akeep _ (by decide) (by decide)).trans e.input) d
+    exact t1
+  obtain ⟨lb,bpc,bmem,b3,b30,bkeep⟩ := pre_b h i e.pc e.x3 e.entry e.input d
   have ne : wordAddress (tableWord (i.val%4096))≠(1024 : Word) := by
     intro eq
     have := wordAddress_injective_of_bound (a:=tableWord (i.val%4096)) (b:=128) (by simp only [tableWord]; omega)
       (by decide) eq
     simp only [tableWord] at this; omega
-  have w0 : (walkRows (walkRows h preA) preB).getMem (wordAddress (tableWord (i.val%4096)))=
+  have w0 : (walkRows h preB).getMem (wordAddress (tableWord (i.val%4096)))=
       BitVec.ofNat 64 (tabEntry (i.val%4096) 0) := by
-    change (walkRows (walkRows h preA) preB).mem _=_
+    change (walkRows h preB).mem _=_
     rw [bmem]
-    change ((walkRows h preA).setMem 1024 _).getMem _=_
+    change (h.setMem 1024 _).getMem _=_
     rw [MachineState.getMem_setMem_ne ne]
     have t0 := e.table _ he 0 (by decide)
     rw [Nat.add_zero] at t0
-    rw [← t0, ← av]; rfl
-  obtain ⟨lc,cpc,cmem,c28,c7,ckeep⟩ := pre_c (walkRows (walkRows h preA) preB) i bpc (b30.trans a30) w0
-  have split : chainBefore h=walkRows (walkRows (walkRows h preA) preB) preC := by
-    unfold chainBefore; rw [pre_split, walk_join, walk_join]
+    exact t0
+  obtain ⟨lc,cpc,cmem,c28,c7,ckeep⟩ := pre_c (walkRows h preB) i bpc (b30.trans e.entry) w0
+  have split : chainBefore h=walkRows (walkRows h preB) preC := by
+    unfold chainBefore; rw [pre_split, walk_join]
   refine ⟨?_,?_,?_,?_,?_,?_,?_⟩
   · rw [pre_split]
-    exact legal_append _ _ _ (legal_append _ _ _ la lb) (by rw [walk_join]; exact lc)
+    exact legal_append _ _ _ lb lc
   · rw [split]; exact cpc
   · rw [split]; exact c28
   · rw [split]; exact c7
-  · rw [split, ckeep _ (by decide) (by decide), b3]; exact a3
-  · rw [split, cmem, bmem]; simp only [MachineState.setMem, amem]
+  · rw [split, ckeep _ (by decide) (by decide), b3]; exact e.x3
+  · rw [split, cmem, bmem]
   · intro r r3 r7 r28 r30 r31
-    rw [split, ckeep r r7 r28, bkeep r r7 r31, akeep r r3 r30]
+    rw [split, ckeep r r7 r28, bkeep r r7 r31]
 
 /-! ### The link loop -/
 
@@ -427,36 +405,36 @@ noncomputable def chainState (o : Oracle) (h : MachineState) (i : Index) : Machi
 
 theorem after_keyed {bits : Nat} (h : MachineState) (i : Index) (e : ChainEntry h i) (z : BitVec bits) :
     let a:=writeBits (chainBefore h) (wordAddress 192) z
-    a.pc=address 787 ∧ (∀ x, x≠.x3 → x≠.x7 → x≠.x28 → x≠.x30 → x≠.x31 → a.getReg x=h.getReg x) ∧
+    a.pc=address 3104 ∧ (∀ x, x≠.x3 → x≠.x7 → x≠.x28 → x≠.x30 → x≠.x31 → a.getReg x=h.getReg x) ∧
       a.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧ a.getReg .x7=BitVec.ofNat 64 (tabT (i.val%4096)) ∧
       a.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat) := by
   obtain ⟨_,pc,r28,r7,r3,_,keep⟩ := chain_before h i e
   have regs (x : Reg) : (writeBits (chainBefore h) (wordAddress 192) z).getReg x=(chainBefore h).getReg x :=
     writeBits_register ..
   refine ⟨?_,fun x a b c d f => (regs x).trans (keep x a b c d f),(regs _).trans r28,(regs _).trans r7,(regs _).trans r3⟩
-  rw [write_pc,pc]; exact address_succ 786
+  rw [write_pc,pc]; exact address_succ 3103
 
 /-- The entry target: `tabT e & ~1 = address (linkEnd - c)`. -/
 theorem enter_target (c : Nat) (hc : c<34) :
-    (BitVec.ofNat 64 (4096+4*(929-c))+signExtend12 0#12) &&& ~~~1#64=address (linkEnd-c) := by
+    (BitVec.ofNat 64 (4096+4*(3139-c))+signExtend12 0#12) &&& ~~~1#64=address (linkEnd-c) := by
   interval_cases c <;> decide
 
-theorem tab_t_links (i : Index) : tabT (i.val%4096)=4096+4*(929-chainLinks i) := by
+theorem tab_t_links (i : Index) : tabT (i.val%4096)=4096+4*(3139-chainLinks i) := by
   unfold tabT chainLinks; congr 2; omega
 
 theorem enter_walk (a : MachineState) :
     walkRows a chainEnterRows =
       ((a.setReg .x10 (a.getReg .x12+0)).setPC ((a.getReg .x7+signExtend12 0#12) &&& ~~~1#64)) := rfl
 
-theorem enter_rows (a : MachineState) (c : Nat) (pc : a.pc=address 787)
-    (target : a.getReg .x7=BitVec.ofNat 64 (4096+4*(929-c))) (hc : c<34) :
+theorem enter_rows (a : MachineState) (c : Nat) (pc : a.pc=address 3104)
+    (target : a.getReg .x7=BitVec.ofNat 64 (4096+4*(3139-c))) (hc : c<34) :
     legal chainEnterRows a ∧ (walkRows a chainEnterRows).pc=address (linkEnd-c) ∧
       (walkRows a chainEnterRows).getReg .x10=a.getReg .x12 ∧
       (∀ x, x≠.x10 → (walkRows a chainEnterRows).getReg x=a.getReg x) ∧
       (walkRows a chainEnterRows).mem=a.mem := by
   refine ⟨?_,?_,?_,?_,?_⟩
   · refine ⟨pc,rfl,?_,rfl,trivial⟩
-    change a.pc+4=address 788
+    change a.pc+4=address 3105
     rw [pc];rfl
   · rw [enter_walk,pc_of_set,target]
     exact enter_target c hc

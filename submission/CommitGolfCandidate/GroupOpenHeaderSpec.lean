@@ -17,9 +17,9 @@ def configRows : List Row :=
 def keyRows : List Row :=
   [(733,.LD .x31 .x22 8),(734,.SD .x10 .x31 8),(735,.LD .x31 .x22 16),(736,.SD .x10 .x31 16),
    (737,.LD .x31 .x22 24),(738,.SD .x10 .x31 24)]
-/-- Row 739 completes the table-entry mask `x1 = 65536 - 16 = 65520` (row 732 set `x1 = 65536`) and falls
-through to the first position at 740. `x2` keeps the ABI's `sp`, the table base. -/
-def markRows : List Row := [(739,.ADDI .x1 .x1 (-16))]
+/-- Row 739 completes the table-entry mask `x1 = 65536 - 16 = 65520` (row 732 set `x1 = 65536`) and row 740
+jumps to the first position of the relocated first pass (3077). `x2` keeps the ABI's `sp`, the table base. -/
+def markRows : List Row := [(739,.ADDI .x1 .x1 (-16)),(740,.JAL .x0 9348)]
 def headerRows := layoutRows++configRows++keyRows++markRows
 def header (s : MachineState) := walkRows s headerRows
 
@@ -35,6 +35,6 @@ theorem nested_slice {n outer width start len : Nat} (word : BitVec n) (bound : 
 structure HeaderFacts : Prop where
   ready : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → Ready td p (keyOf td) (header (actual.initialState .opening (td,p))) 0
   run : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → ∀ fuel, let s:=actual.initialState .opening (td,p)
-    execute openingImage (31+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 31 0)
+    execute openingImage (32+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 32 0)
 
 end TwoPermutationPrototype.GroupedOpening

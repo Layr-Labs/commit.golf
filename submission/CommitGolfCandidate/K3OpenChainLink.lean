@@ -12,24 +12,18 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.
   mem_of_reg
 attribute [local simp] chain_zero_reg
 
-/-- The `jal` back from `linkEnd` is a legal ordinary step. -/
-theorem exit_legal (b : MachineState) (pc : b.pc=address linkEnd) : legal chainExitRows b := by
-  simp [chainExitRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
-  decide
+/-- The (empty) exit rows are legal. -/
+theorem exit_legal (b : MachineState) (_pc : b.pc=address linkEnd) : legal chainExitRows b := trivial
 
-/-- `c` links (one `ecall` per word up to `linkEnd`), then the `jal` back to row 791. -/
+/-- `c` links (one `ecall` per word up to `linkEnd`), falling through to the salt rows. -/
 theorem link_run : ∀ (c : Nat) (s : MachineState), LinkReady s c → c<34 → ∀ fuel,
-    execute openingImage (c+(1+fuel)) s true =
+    execute openingImage (c+fuel) s true =
       (do let t ← linkTrace c s; let z ← execute openingImage fuel (walkRows t chainExitRows) true
-          return z.charge (8*c+1) c)
-  | 0,s,r,_,fuel => by
-    have lens := chain_lengths
-    have pc : s.pc=address linkEnd := by simpa using r.pc
-    rw [show 0+(1+fuel)=chainExitRows.length+fuel by rw [lens.2.2.2.2.1]; omega,
-      walk_rows_run _ chainExitRows (exit_legal s pc) chain_exit_fetch _ true]
-    simp [linkTrace,Execution.charge,lens.2.2.2.2.2]
+          return z.charge (8*c) c)
+  | 0,s,_,_,fuel => by
+    simp [linkTrace,chainExitRows,walkRows,Execution.charge]
   | c+1,s,r,hc,fuel => by
-    rw [show c+1+(1+fuel)=(c+(1+fuel))+1 by omega,
+    rw [show c+1+fuel=(c+fuel)+1 by omega,
       execute_permutation_call openingImage _ s true 192 192 (by decide) (by decide) r.input r.output r.selector
         r.width r.primitive (link_fetch _ (c+1) (by omega) hc r.pc)]
     simp only [linkTrace,bind_assoc,pure_bind]

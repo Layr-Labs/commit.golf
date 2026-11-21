@@ -1,6 +1,6 @@
 import CommitGolfCandidate.K3OpenChainLink
 
-/-! Opener chain block (rows 777..788 and the link block 896..929), execution: `chain_run`. -/
+/-! Opener chain block (rows 3097..3105 and the link block 3106..3138), execution: `chain_run`. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -20,7 +20,7 @@ theorem chain_run (h : MachineState) (i : Index) (e : ChainEntry h i) (fuel : Na
   have lt := links_lt i
   obtain ⟨preOk,bpc,_,_,_,_,bkeep⟩ := chain_before h i e
   have breg (x : Reg) (a : x≠.x3) (b : x≠.x7) (c : x≠.x28) (d : x≠.x30) (f : x≠.x31) := bkeep x a b c d f
-  rw [show chainSteps i+fuel=chainPreRows.length+((chainEnterRows.length+(chainLinks i+(1+fuel)))+1) by
+  rw [show chainSteps i+fuel=chainPreRows.length+((chainEnterRows.length+(chainLinks i+fuel))+1) by
       unfold chainSteps; rw [lens.1,lens.2.2.1]; omega,
     walk_rows_run h chainPreRows preOk chain_pre_fetch _ true,
     show walkRows h chainPreRows=chainBefore h from rfl,

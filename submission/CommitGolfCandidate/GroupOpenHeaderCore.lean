@@ -9,7 +9,7 @@ set_option maxHeartbeats 2000000
 attribute [local irreducible] setupPrefix walkRows keyCopy header
 
 structure HeaderRegisters (s : MachineState) (p : Positions) where
-  pc : s.pc=address 740
+  pc : s.pc=address 3077
   r : Registers s 0 p.card
   b : Base s p
   quartet : s.getReg .x4=BitVec.ofNat 64 (2^64-1)

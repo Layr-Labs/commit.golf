@@ -1,6 +1,6 @@
 import CommitGolfCandidate.GroupOpenStep
 
-/-! Salt rows of the first pass (804..808): the destination `16 i + x22` from `x3 = 16 i`, then a two-dword
+/-! Salt rows of the first pass (3139..3143): the destination `16 i + x22` from `x3 = 16 i`, then a two-dword
 copy from the reply address `x28 = readAt i` that the table entry supplied, for every rank. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
@@ -18,7 +18,7 @@ theorem tab_s_read (i : Index) : BitVec.ofNat 64 (tabS (i.val%4096))=readAt i :=
   unfold tabS tabOff readAt offAt rank
   congr 1
 
-theorem choose_legal (s : MachineState) (i : Index) (pc : s.pc=address 804) :
+theorem choose_legal (s : MachineState) (i : Index) (pc : s.pc=address 3139) :
     legal selectRows s := legal_of_chain _ _ (by decide) (by simp [selectRows,pcChain,execInstrBr,pc,address])
 
 def choose (s : MachineState) (_i : Index) := walkRows s selectRows
@@ -66,10 +66,10 @@ theorem chosen_memory (s : MachineState) (i : Index) : (choose s i).mem=s.mem :=
 
 def copySource (s : MachineState) (_i : Index) : Word := s.getReg .x28
 
-theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 804)
+theorem chosen (s : MachineState) (i : Index) (pc : s.pc=address 3139)
     (x3 : s.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat)) (src : s.getReg .x28=readAt i)
     (salts : s.getReg .x22=9126809632) :
-    (choose s i).pc=address 805 ∧ copySource (choose s i) i=readAt i ∧ (choose s i).getReg .x30=destAt i := by
+    (choose s i).pc=address 3140 ∧ copySource (choose s i) i=readAt i ∧ (choose s i).getReg .x30=destAt i := by
   have dst : BitVec.ofNat 64 i.val <<< (4:Nat)+9126809632#64=destAt i := salt_address i
   refine ⟨?_,?_,?_⟩
   · simp [choose,selectRows,walkRows,execInstrBr,pc,address]
@@ -103,7 +103,7 @@ private theorem source_next (s : MachineState) (i : Index) (r : copySource s i=r
   unfold copySource at r
   rw [r]; rfl
 
-theorem copy_legal (s : MachineState) (i : Index) (pc : s.pc=address 805) (r : copySource s i=readAt i)
+theorem copy_legal (s : MachineState) (i : Index) (pc : s.pc=address 3140) (r : copySource s i=readAt i)
     (d : s.getReg .x30=destAt i) : legal copyRows s := by
   obtain ⟨a,b,c,e,_⟩:=copy_addresses i
   have r0 : s.getReg .x28=readAt i := r
@@ -124,7 +124,7 @@ theorem copied_mem (s : MachineState) (i : Index) (r : copySource s i=readAt i) 
 theorem copied_keeps (s : MachineState) (i : Index) (r : Reg) (ne : r≠.x31) : (copied s i).getReg r=s.getReg r := by
   simp [copied,walkRows,copyRows,execInstrBr,Ne.symm ne]
 
-theorem copied_pc (s : MachineState) (i : Index) (pc : s.pc=address 805) : (copied s i).pc=address 809 := by
+theorem copied_pc (s : MachineState) (i : Index) (pc : s.pc=address 3140) : (copied s i).pc=address 3144 := by
   simp [copied,walkRows,copyRows,execInstrBr,pc,address]
 
 end TwoPermutationPrototype.GroupedOpening
