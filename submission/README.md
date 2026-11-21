@@ -1,35 +1,98 @@
-# Combined product candidate: branch directly into the nonempty opener
+# Product: table-driven first pass plus cap emission (-2,052 opening cycles)
 
-The base for this archive is 0xplemonade's submitted cap writer
-`15f4f81f-1001-49ac-b210-d81b03b30954`, commit `551b90ba01d6de97e1715234e1d2b4a3088886ba`.
-Its cap instructions, 8,818-cycle cap-walk bound and proof of the 256-cycle
-batch saving belong to that submission. The header change was developed
-directly on 0andadream's `0259c643-d6d4-453b-8a2c-3e30615d3917` (`dc339c9`).
-Both sources are credited. Relative to the cap-writer archive only
-opening words 2 and 3 change:
+Built on the promoted product record `0259c643` (0andadream), which credits the contributors
+listed in the inherited sections below, and combined with the cap-emission change documented in the
+next inherited section (two cycles per emitted cap node, opening words 671, 673, 680..699, 894, 895,
+1912). The two word sets are disjoint. The construction, the commitment, the
+record writer and nearly all of the certificate are theirs. This entry gives the opening image
+a 64 KiB embedded `data` table and changes 17 opening words. It is the first delivered image
+that uses embedded data.
 
-* `0x300806e3` → `0x30081ee3`: replace `beq a6,zero,<709>` with `bne a6,zero,<713>`.
-* `0x3190006f` → `0x3090006f`: change the fallback `jal zero` target from word 713 to 709.
+## The change
 
-A nonempty opening now enters the setup continuation in one branch instead of
-a branch and a jump; the same registers, memory and PC reach word 713.
-The empty path takes an additional jump and still produces zero proof bytes.
-There is no change to the oracle calls, checker, commitment, proof serialization
-or security games. The nonempty header costs 34 rather than 35 cycles.
-The resulting claim is `(504585244 + 117823) * 72160 = 36419373314720`.
+Every opened position `i` used to run `remu`, `divu`, `remu` (12 cycles) on `p = i & 4095` to get
+the 374-leaf segment offset `t = p mod 374`, the link count `q = t / 11` and the rank `r = t mod 11`.
+It then computed the keyed generator's counter and the chain entry, and afterwards dispatched on
+`r` to find where the salt sits in the reply. The table holds all of this per tile offset `p`:
 
-With positions `131072*j + 368` for `j=0..127`, each position takes the
-longest 33-link salt chain and starts a new even quartet. The cap has one
-marked leaf per sibling pair and emits 128 nodes. Sparse-memory RV64IM
-replay on the exact images, zero trapdoor and identity permutation: 118,080
-cycles on `0259c643`, 117,824 on `15f4f81f`, 117,823 on this archive;
-all returned the same 72,160 bytes with 4,480 public calls. The empty case
-took 7, 7 and 8 cycles respectively. These are machine-model replays,
-not a report from the protected Linux verifier.
+```text
+data[16p .. 16p+16)   (data is loaded at dataBase = 2^36 - 65536, which the ABI puts in sp)
+  dword 0 = T | S << 16      T = byte address of link word 929 - q (the jalr target)
+                             S = 1536 + reply offset of the rank-r salt (0, 184 or 16(r-1))
+  dword 1 = 4352 - 256 t     (mod 2^64), so counter = 256 i + dword 1
+```
 
-Manifest SHA-256: `21989510f9c5cd5d8f52e7c90d537cd3e17a63841f23d4997348568990872f73`.
+| Word | Before | After |
+| ---: | --- | --- |
+| 732 | `addi t4,zero,11` | `lui ra,16` |
+| 739 | `jal zero,<755>` | `addi ra,ra,-16` (`ra` = 65520, falls into 740) |
+| 777..785 | `and; remu; divu; remu; sub; slli; add; sd; slli` | `slli gp,t1,4; and t5,gp,ra; add t5,t5,sp; ld t2,8(t5); slli t6,gp,4; add t2,t2,t6; sd t2,0(a0); lhu t3,2(t5); lhu t2,0(t5)` |
+| 786 | `ecall` | unchanged |
+| 787, 788 | `sub t2,s2,t6; addi a0,a2,0` | `addi a0,a2,0; jalr zero,t2,0` |
+| 804, 805, 807 | rank>=2 copy | `add t5,gp,s6; ld t6,0(t3); ld t6,8(t3)` (806 and 808 already store) |
+| 929 | `jal zero,<791>` | `jal zero,<804>` |
 
-## Inherited cap-writer documentation
+- Header: `sp` keeps the ABI's `dataBase`, `gp = 374` and `sp = 4352` are gone, and the mask is set in
+  two words already on the path. The detour through 755..758 is gone: 35 -> 31 cycles.
+- Chain prefix 777..789: 29 -> 19 cycles. `gp = 16 i` survives the link calls and gives the salt
+  destination `16 i + s6` in one `add`.
+- Salt rows: one path for every rank, falling through into the latch. 11 -> 7 cycles.
+- Per position 330 -> 316 (`chainCycles <= 284`, head 25, post 7). Pass bound `316*n+2`.
+- Unreachable and left in place: 4..8, 755..758, 789..803 (the old rank paths and dispatch).
+  No words are appended. The image stays 1,976 words plus 65,536 bytes of data.
+- Commitment/checker images, ABI, every oracle call and its input, salt and proof byte are unchanged.
+
+This entry alone saves 1,796 cycles (claim 116,284); with the cap change (-256, scored walk bound
+8,818, `GroupOpenABI` wide bound 75,562) the claim is:
+
+```json
+{"commitCycles":504585244,"openingCycles":116028,"proofBytes":72160}
+```
+
+```text
+(504585244 + 116028) * 72160 = 36419243787520
+Parent 0259c643:  (504585244 + 118080) * 72160 = 36419391859840
+Saving: 2052 opening cycles; 148072320 score
+```
+
+## Proof changes
+
+- New `GroupOpenTable`: the table (`tabT`, `tabS`, `tabD`, `tableByte`), `table_data` (each of
+  the 65,536 delivered bytes equals `tableByte`, by four `decide +kernel` checks of a Nat-indexed
+  lookup in the `Packed` literal; no native code), `table_base_eq`, `TableAt`, halfword and
+  alignment lemmas.
+- New `GroupOpenTableInit`: `initial_table`, the trusted loader leaves the table at `dataBase`
+  for every trapdoor and position set.
+- `K3OpenChainRows`: new `ChainEntry` (`sp = tableBase`, `ra = 65520`, `TableAt`), new rows, the
+  table reads, `counter_table` (`256 i + tabD = ctr`), the entry target `tabT`; `chainSteps = 13 + links`,
+  `chainCycles = chainSteps + 7*chainCalls`. `K3OpenChainRun/Exit/Post`: the new rows; `chain_post`
+  returns `x28 = tabS` and `x3 = 16 i`.
+- `GroupOpenWalk`, `GroupOpenSelect`: one salt path (`selectRows`, `copyRows`, no rank classes).
+- `GroupOpenStep`: `Input` carries `sp`, `ra = 65520` and `TableAt`; `Registers` drops `x29 = 11`.
+  `GroupOpenLatch`: `head_table` (the head keeps the table), `postSteps = 7 + 2*last`.
+  `GroupOpenEffect`: `Saved` excludes `x3`; the salt-row lemmas take the table's source.
+- `GroupOpenPass`: `Ready` carries `sp`/`ra`; the table follows from the pass frame and
+  `initial_table`; `chain_cycles_le 284`, `pass_cycles_bound 316*n+2`.
+- `GroupOpenHeaderSpec/Parts/Core`, `GroupOpenHeader`: the 31-row header, `sp` kept from the ABI.
+- `GroupOpenInitial`, `GroupOpenHeaderParts.low_zero`: `dataBase openingImage = 2^36 - 65536`.
+- `GroupOpenFull`, `GroupOpenClosing`, `Solution.lean`, `claim.json`; `programs.json`,
+  `K1Manifest` and the `GroupOpenImage` literal/leaf lemmas regenerated from the delivered manifest.
+- From the cap-emission change: `GroupOpenABI` (wide bound 75,562), `GroupOpenCapCopy`, `GroupOpenCapCost`,
+  `GroupOpenCapEmitFold`, `GroupOpenCapEmitPlain`, `GroupOpenCapEmitPrefix`, `GroupOpenCapSubtree`, `K3OpenCapSpec`,
+  and its `GroupOpenImage` rows; `StudyCore` aliases `GroupedOpening.openingImage` (both changes need it).
+  `GroupOpenFull` combines the 31-cycle header and `316*n+2` pass with the cap bound: `31 + 40450 + 75547 = 116028`.
+
+## Evidence
+
+A C emulator of the `Riscv.lean` cost model with stand-in oracles ran one full
+2^24-leaf commitment, then the parent, the table-only opener, the cap-only opener and this merged opener on the
+same trapdoor, 28 position sets plus two tampered proofs: proof bytes, proof hash, the opening oracle trace and
+checker acceptance are identical on every set, the two savings add exactly, and tampered proofs are rejected.
+Worst-case fixture `spread:128:363`: parent 118,080 (its certified bound), this opener 116,028.
+
+Certification here means a local Lean build of the certificate; the official verifier was not run.
+
+## Inherited documentation
 
 # Cap emission saves two cycles per frontier node
 

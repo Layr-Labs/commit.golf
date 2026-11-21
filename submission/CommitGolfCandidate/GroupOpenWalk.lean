@@ -109,7 +109,7 @@ rebuilt block is `B+512`; parity selects the reply (`B+168` even, `B-1056` odd)
 and the address of the level-22 sibling node (`B+136` even, `B-856` odd); the inverse of the reply lands in the
 rebuilt block (call at 772), rows 773..774 restore `x13, x12`, row 775 stores the sibling node's address
 in the word after the rebuilt block (`B+712`), where the record writer's level-0 head loads it. Then the chained
-salt generator (777..795, `K3OpenChain`) and the K1 salt rows (796..812). -/
+salt generator (777..788 and the link block, `K3OpenChain`) and the salt rows (804..812). -/
 
 def headRows : List Row := [(740,.LD .x6 .x14 0),(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 136)]
 /-- Row 776: `addi x10,x0,1024`, shared by the skip path (branch target) and the end of a new quartet's rows. -/
@@ -132,25 +132,15 @@ def ptrRows : List Row := [(775,.SD .x7 .x30 712)]
 /-- A new quartet after its inverse call: rows 773..776. -/
 def headPost : List Row := restoreRows ++ ptrRows ++ loadRow
 
-/-- Destination and reply-offset selection by rank class (0, 1, or ≥2).
-Ranks 0 and 1 copy directly from reply-relative offsets. -/
-def selectRows (k : Fin 3) : List Row :=
-  [(791,.SLLI .x30 .x6 4),(792,.ADD .x30 .x30 .x22),(793,.BLTU .x23 .x28 40)] ++
-  (if k.val = 2 then [(803,.SLLI .x7 .x28 4),(804,.ADDI .x7 .x7 1520)] else
-    [(794,.BEQ .x28 .x0 5032)])
-def copyPC (k : Fin 3) : Nat := if k.val=0 then 4 else if k.val=1 then 795 else 805
-def copyReg (k : Fin 3) : Reg := if k.val=2 then .x7 else .x12
-def copyOffset (k : Fin 3) : Nat := if k.val=1 then 184 else 0
-def copyRows (k : Fin 3) : List Row :=
-  [(copyPC k,.LD .x31 (copyReg k) (BitVec.ofNat 12 (copyOffset k))),
-   (copyPC k+1,.SD .x30 .x31 0),
-   (copyPC k+2,.LD .x31 (copyReg k) (BitVec.ofNat 12 (copyOffset k+8))),
-   (copyPC k+3,.SD .x30 .x31 8)] ++
-  (if k.val=2 then [] else [(copyPC k+4,.JAL .x0 (BitVec.ofNat 21 (4*(809-(copyPC k+4)))))])
+/-- Salt rows: the destination `x30 := 16 i + x22` (row 804; `x3 = 16 i` from the chain rows), then two
+dword copies from the reply address `x28` the table supplied (rows 805..808), falling through to the latch. -/
+def selectRows : List Row := [(804,.ADD .x30 .x3 .x22)]
+def copyRows : List Row :=
+  [(805,.LD .x31 .x28 0),(806,.SD .x30 .x31 0),(807,.LD .x31 .x28 8),(808,.SD .x30 .x31 8)]
 def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.BNE .x14 .x17 7912)] ++
   (if last then [(811,.ADDI .x25 .x9 0),(812,.JAL .x0 2093964)] else [])
 
-def postRows (k : Fin 3) (last : Bool) : List Row := selectRows k ++ copyRows k ++ nextRows last
+def postRows (last : Bool) : List Row := selectRows ++ copyRows ++ nextRows last
 
 private theorem row_fetch (row : Row) (bounded : row.1<813) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
     ∀ st : MachineState, st.pc=address row.1 → fetch openingImage st=some (.base row.2) :=
@@ -166,8 +156,8 @@ theorem rows_present (rows : List Row)
 theorem skip_row_fetch : presentRows skipRows := by apply rows_present; decide +kernel
 theorem pre_row_fetch (odd : Bool) : presentRows (preRows odd) := by apply rows_present; revert odd; decide +kernel
 theorem head_post_fetch : presentRows headPost := by apply rows_present; decide +kernel
-theorem post_row_fetch (k : Fin 3) (last : Bool) : presentRows (postRows k last) := by
-  apply rows_present; revert k last; decide +kernel
+theorem post_row_fetch (last : Bool) : presentRows (postRows last) := by
+  apply rows_present; revert last; decide +kernel
 
 theorem inverse_fetch (s : MachineState) (pc : s.pc=address 772) : fetch openingImage s=some (.base .ECALL) :=
   packed_fetch_base _ 772 _ (by decide) pc (by decide +kernel)

@@ -2,6 +2,7 @@ import CommitGolfCandidate.K3OpenCopy
 import CommitGolfCandidate.K3OpenCall
 import CommitGolfCandidate.K1OpenSalt
 import CommitGolfCandidate.GroupOpenMemory
+import CommitGolfCandidate.GroupOpenTable
 
 /-! K3-lite prefix, one position: addresses, entry registers and the head paths (rows 740..751, 769..776). -/
 namespace TwoPermutationPrototype.GroupedOpening
@@ -133,7 +134,6 @@ structure Registers (s : MachineState) (ord left : Nat) : Prop where
   shift : s.getReg .x25=if left=0 then s.getReg .x9 else BitVec.ofNat 64 (8*(ord+left))
   salt : s.getReg .x22=9126809632
   base : s.getReg .x26=4096
-  divReg : s.getReg .x29=11
 
 /-- Entry of position `i` at ordinal `ord` (`left` to go), `x4` = the previous position's quartet `last`. -/
 structure Base (s : MachineState) (p : Positions) : Prop where
@@ -157,11 +157,11 @@ structure Input (s : MachineState) (i : Index) (ord left last : Nat) extends Reg
   small : last<2^64
   loaded : s.getMem (indexAt ord)=BitVec.ofNat 64 i.val
   access : accessValid (indexAt ord) 8=true
-  /-- The salt-chain constants set once by the header (rows 755, 756). -/
-  gp : s.getReg .x3=374
-  sp : s.getReg .x2=4352
-  mask : s.getReg .x1=4095
-  linkBase : s.getReg .x18=8192
+  /-- The table base (the ABI's `sp`) and the entry mask set once by the header (rows 732, 739). -/
+  sp : s.getReg .x2=BitVec.ofNat 64 tableBase
+  mask : s.getReg .x1=65520
+  /-- The embedded table is in place. -/
+  table : TableAt s
 
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.getReg_setPC
 attribute [local simp] pc_of_set mem_of_set mem_of_reg mem_of_store open_zero

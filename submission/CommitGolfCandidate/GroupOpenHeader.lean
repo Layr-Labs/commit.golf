@@ -28,8 +28,9 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
     rw [h25, show init.getReg .x16 = BitVec.ofNat 64 p.card from rfl]
     apply BitVec.eq_of_toNat_eq
     simp [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc]
-  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks shift0 nz mem0 rfl
-  refine ⟨valid,⟨regs.r,regs.b,?_,by simpa [lastOf] using regs.quartet,?_,?_,regs.gp,regs.sp,regs.mask,
+  have sp0 : init.getReg .x2=BitVec.ofNat 64 tableBase := by rw [← actual_data_base]; rfl
+  obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks shift0 nz mem0 rfl sp0
+  refine ⟨valid,⟨regs.r,regs.b,?_,by simpa [lastOf] using regs.quartet,?_,?_,regs.sp,regs.mask,
     fun _ h => (Nat.not_lt_zero _ h).elim⟩⟩
   · simpa only [passPC,ite_eq_right (Nat.ne_of_lt nz)] using regs.pc
   · intro w fit away
@@ -57,8 +58,8 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
 
 theorem header_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) (fuel : Nat) :
     let s:=actual.initialState .opening (td,p)
-    execute openingImage (34+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 34 0) := by
-  simpa only [header,show headerRows.length=34 by decide,show price headerRows=34 by decide] using
+    execute openingImage (31+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 31 0) := by
+  simpa only [header,show headerRows.length=31 by decide,show price headerRows=31 by decide] using
     walk_rows_run _ headerRows (header_valid td p nz).1 header_fetch fuel true
 
 theorem certifiedHeader : HeaderFacts :=

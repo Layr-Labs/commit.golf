@@ -24,8 +24,8 @@ theorem initial_mark_word (s : Submission) (layout : OpeningLayout s)
       unfold indicesBase
       omega
     have beforeData : ¬dataBase openingImage ≤ markBase + 8 * node + j := by
-      change ¬ MEMORY_BYTES ≤ markBase+8*node+j
-      norm_num [MEMORY_BYTES, markBase]
+      rw [table_base_eq]
+      simp only [tableBase, markBase]
       omega
     simp only [inputByte, Submission.inputBuffers, List.find?_cons, fixedBuffer, positionsBuffer,
       layout.trapdoor, layout.indices, before, beforeIndices, false_and, decide_false,

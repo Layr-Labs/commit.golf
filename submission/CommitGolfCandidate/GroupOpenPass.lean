@@ -3,6 +3,7 @@ import CommitGolfCandidate.GroupOpenLatch
 import CommitGolfCandidate.GroupOpenInitial
 import CommitGolfCandidate.GroupOpenRecordRun
 import CommitGolfCandidate.GroupOpenRecords
+import CommitGolfCandidate.GroupOpenTableInit
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
@@ -90,10 +91,9 @@ structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : B
   quartet : s.getReg .x4=BitVec.ofNat 64 (lastOf p j)
   frame : Preserved p j (actual.initialState .opening (td,p)) s
   keyFrame : KeyWords s key
-  /-- The salt-chain constants (header rows 755, 756), kept by every position. -/
-  gp : s.getReg .x3=374
-  sp : s.getReg .x2=4352
-  mask : s.getReg .x1=4095
+  /-- The table base (the ABI's `sp`) and the entry mask (header rows 732, 739), kept by every position. -/
+  sp : s.getReg .x2=BitVec.ofNat 64 tableBase
+  mask : s.getReg .x1=65520
   /-- The pointer word of every processed position's quartet holds the address of its level-22 sibling node. -/
   pointer : ∀ a<j, memoryView s (pointerWord ((pos p a).val/4))=wordAddress (nodeWordOf ((pos p a).val/4^^^1))
 
@@ -108,7 +108,7 @@ theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (
   have card : p.card≤16777216 := by change p.card≤LENGTH;simpa [Index] using Finset.card_le_univ p
   have ea : indexAt j=wordAddress (1174405636+j) := by unfold indexAt wordAddress;congr 1 <;> omega
   refine ⟨r.toRegisters,by simpa [passPC,Nat.ne_of_lt hj] using r.pc,r.mark,r.heap,r.leaves,r.slots,r.quartet,
-    last_small p j,?_,?_,r.gp,r.sp,r.mask,r.count⟩
+    last_small p j,?_,?_,r.sp,r.mask,?_⟩
   · have same := r.frame (1174405636+j) (by omega) (by
       rintro (h|h|h|h|⟨q,hq,m,hm,e⟩)
       all_goals (try omega)
@@ -120,6 +120,12 @@ theorem input_of_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (
   · unfold indexAt;apply Opening.aligned_access
     · omega
     · change _≤2^36;omega
+  · intro e he half hh
+    have same := r.frame (tableWord e+half) (by simp only [tableWord]; omega) (by
+      rintro (h|h|h|h|⟨q,hq,m,hm,eq⟩)
+      all_goals (try (simp only [tableWord] at h; omega))
+      unfold rebuiltWord blockWord at eq; have := top_le p j; simp only [tableWord] at eq; omega)
+    rw [same]; exact initial_table td p e he half hh
 
 -- ---------------------------------------------------------------- sorted quartets
 theorem quartet_mono (p : Positions) (a b : Nat) (ab : a≤b) (hb : b<p.card) : (pos p a).val/4≤(pos p b).val/4 := by
@@ -156,7 +162,7 @@ theorem next_ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key 
   refine ⟨by simpa only [show p.card-j-1=p.card-(j+1) by omega] using reg,
     ⟨(kp .x8).trans r.indices,(kp .x9).trans r.heap,(kp .x18).trans r.count,
      (kp .x19).trans r.leaves,(kp .x20).trans r.start,(kp .x21).trans r.dest,(kp .x23).trans r.mark,
-     (kp .x24).trans r.slots,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_,(kp .x3).trans r.gp,(kp .x2).trans r.sp,(kp .x1).trans r.mask,?_⟩
+     (kp .x24).trans r.slots,(kp .x27).trans r.capLeaves⟩,?_,?_,?_,?_,(kp .x2).trans r.sp,(kp .x1).trans r.mask,?_⟩
   · rw [pc];unfold finalPC passPC;split <;> rename_i h <;> simp [show j+1=p.card ↔ p.card-j=1 by omega,h]
   · rw [q4]; simp [lastOf,i]
   · intro w fit away
@@ -234,7 +240,7 @@ theorem pass_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : 
     apply bind_congr;intro t;apply bind_congr;intro z;apply congrArg (fun x : Execution => (pure x : OracleComp World Execution))
     cases z;simp [Execution.charge,passCycles,passCalls] <;> omega
 
-theorem chain_cycles_le (i : Index) : chainCycles i≤294 := by
+theorem chain_cycles_le (i : Index) : chainCycles i≤284 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCycles chainSteps chainCalls; omega
 
@@ -242,8 +248,8 @@ theorem chain_calls_le (i : Index) : chainCalls i≤34 := by
   have : chainLinks i<34 := by unfold chainLinks; omega
   unfold chainCalls; omega
 
-/-- At most 330 cycles per position (new even quartet 25, chain link 33: 294, post 11) plus the exit jump. -/
-theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤330*n+2 := by
+/-- At most 316 cycles per position (new even quartet 25, chain link 33: 284, post 7) plus the exit jump. -/
+theorem pass_cycles_bound (p : Positions) (n j : Nat) (bound : j+n≤p.card) : passCycles p n j≤316*n+2 := by
   induction n generalizing j with
   | zero => simp [passCycles]
   | succ n ih =>

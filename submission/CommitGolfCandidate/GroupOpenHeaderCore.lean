@@ -13,15 +13,15 @@ structure HeaderRegisters (s : MachineState) (p : Positions) where
   r : Registers s 0 p.card
   b : Base s p
   quartet : s.getReg .x4=BitVec.ofNat 64 (2^64-1)
-  gp : s.getReg .x3=374
-  sp : s.getReg .x2=4352
-  mask : s.getReg .x1=4095
+  sp : s.getReg .x2=BitVec.ofNat 64 tableBase
+  mask : s.getReg .x1=65520
 
 theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 0) (nr : init.getReg .x16≠0#64)
     (base0 : Base (setupPrefix init 15) p)
     (salt0 : (setupPrefix init 15).getReg .x22=9126809632) (marks0 : (setupPrefix init 15).getReg .x26=4096)
     (shift0 : (setupPrefix init 15).getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card)
-    (mem0 : (setupPrefix init 15).mem=init.mem) (selector0 : init.getReg .x5=0) :
+    (mem0 : (setupPrefix init 15).mem=init.mem) (selector0 : init.getReg .x5=0)
+    (sp0 : init.getReg .x2=BitVec.ofNat 64 tableBase) :
     legal headerRows init ∧ Nonempty (HeaderRegisters (header init) p) ∧ (header init).mem=(keyCopy init).mem := by
   let l:=walkRows init layoutRows
   let c:=walkRows l configRows
@@ -37,7 +37,7 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     rw [eq,MachineState.getReg_setPC]
     simpa [setupPrefix,setupInstructions,execInstrBr,Opening.getReg_setReg,
       MachineState.getReg_setPC,open_zero,beq_iff_eq,nr] using selector0
-  obtain ⟨cp,cm,cb,cr,c10⟩:=config_frame l lpc p base salt marks shiftl nz selector
+  obtain ⟨cp,cm,cb,cr,c10,c1,c2⟩:=config_frame l lpc p base salt marks shiftl nz selector
   have cMem : c.mem=init.mem := cm.trans lm
   obtain ⟨tpc,tm,keep0⟩:=key_frame c p cp cr c10
   let m:=walkRows t markRows
@@ -46,10 +46,15 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     simp [c,configRows,walkRows,execInstrBr,Opening.getReg_setReg,
       MachineState.getReg_setPC,open_zero]
     all_goals decide
-  obtain ⟨mpc,mm,m4,m3,m2,m1,mkeep⟩:=mark_frame t tpc ((keep0 _ (by decide)).trans cr.base) quartet
-  have keep (k : Reg) (h31 : k≠.x31) (h4 : k≠.x4 := by decide) (h3 : k≠.x3 := by decide) (h2 : k≠.x2 := by decide)
-      (h1 : k≠.x1 := by decide) :
-      m.getReg k=c.getReg k := (mkeep k h4 h3 h2 h1).trans (keep0 k h31)
+  obtain ⟨mpc,mm,m1,mkeep⟩:=mark_frame t tpc ((keep0 _ (by decide)).trans c1)
+  have keep (k : Reg) (h31 : k≠.x31) (h1 : k≠.x1 := by decide) :
+      m.getReg k=c.getReg k := (mkeep k h1).trans (keep0 k h31)
+  have m4 : m.getReg .x4=BitVec.ofNat 64 (2^64-1) := (mkeep _ (by decide)).trans quartet
+  have setupSp : (setupPrefix init 15).getReg .x2=init.getReg .x2 := by
+    by_cases empty : init.getReg .x16=0#64 <;>
+      simp [setupPrefix,setupInstructions,execInstrBr,Opening.getReg_setReg,MachineState.getReg_setPC,beq_iff_eq,empty,open_zero]
+  have m2 : m.getReg .x2=BitVec.ofNat 64 tableBase := by
+    rw [keep _ (by decide), c2, eq, MachineState.getReg_setPC, setupSp, sp0]
   have mem : m.mem=(keyCopy init).mem := mm.trans (tm.trans (by simp only [keyCopy,MachineState.setMem,MachineState.getMem,cMem]))
   have join (s : MachineState) (xs ys : List Row) : walkRows s (xs++ys)=walkRows (walkRows s xs) ys := by
     simp only [walkRows,List.foldl_append]
@@ -65,12 +70,12 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     exact ⟨⟨mpc,⟨(keep _ (by decide)).trans cr.output,
       (keep _ (by decide)).trans cr.selector,(keep _ (by decide)).trans cr.width,(keep _ (by decide)).trans cr.primitive,
       (keep _ (by decide)).trans cr.index,(keep _ (by decide)).trans cr.endReg,
-      (by rw [keep .x25 (by decide) (by decide), cr.shift, keep .x9 (by decide) (by decide)]),
+      (by rw [keep .x25 (by decide), cr.shift, keep .x9 (by decide)]),
       (keep _ (by decide)).trans cr.salt,
-      (keep _ (by decide)).trans cr.base,(keep _ (by decide)).trans cr.divReg⟩,
+      (keep _ (by decide)).trans cr.base⟩,
       ⟨(keep _ (by decide)).trans cb.indices,(keep _ (by decide)).trans cb.heap,(keep _ (by decide)).trans cb.count,
        (keep _ (by decide)).trans cb.leaves,(keep _ (by decide)).trans cb.start,(keep _ (by decide)).trans cb.dest,
        (keep _ (by decide)).trans cb.mark,(keep _ (by decide)).trans cb.slots,
-       (keep _ (by decide)).trans cb.capLeaves⟩,m4,m3,m2,m1⟩⟩
+       (keep _ (by decide)).trans cb.capLeaves⟩,m4,m2,m1⟩⟩
 
 end TwoPermutationPrototype.GroupedOpening

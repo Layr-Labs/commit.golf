@@ -18,7 +18,7 @@ attribute [local simp] mem_of_reg MachineState.getMem_setPC MachineState.getMem_
 theorem layout_ok (s : MachineState) (pc : s.pc=address 0) (nz : s.getReg .x16≠0#64) :
     legal layoutRows s := by
   simp [layoutRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address,beq_iff_eq,nz,
-    show signExtend13 2844#13=2844#64 by decide]
+    show signExtend21 2840#21=2840#64 by decide]
 
 private def tailOps := setupInstructions.drop 3
 
@@ -58,15 +58,15 @@ private theorem instructions_of_rows (s : MachineState) (rows : List Row) :
 theorem layout_sem (s : MachineState) (pc : s.pc=address 0) (nz : s.getReg .x16≠0#64) :
     walkRows s layoutRows=(setupPrefix s 15).setPC (address 725) := by
   let before:=setupPrefix s 3
-  let entry : List Instr := [.ADDI .x20 .x15 0,.ADDI .x21 .x15 0,.BNE .x16 .x0 2844]
-  have branch : entry.foldl execInstrBr s=before.setPC (address 713) := by
-    simp [entry,before,setupPrefix,setupInstructions,execInstrBr,pc,address,beq_iff_eq,nz,
-      signExtend13] <;> rfl
-  have first : layoutRows.map Prod.snd=entry++tailOps := rfl
+  have here : before.pc=address 3 := by
+    simp [before,setupPrefix,setupInstructions,execInstrBr,pc,address,beq_iff_eq,nz]
+  have jump : execInstrBr before (.JAL .x0 2840)=before.setPC (address 713) := by
+    change before.setPC (before.pc+signExtend21 2840)=_;rw [here];rfl
+  have first : layoutRows.map Prod.snd=setupInstructions.take 3++[.JAL .x0 2840]++tailOps := rfl
   have original : setupInstructions.take 15=setupInstructions.take 3++tailOps := rfl
   rw [instructions_of_rows,first,setupPrefix,original]
-  simp only [List.foldl_append]
-  exact (congrArg (List.foldl execInstrBr · tailOps) branch).trans (moved_tail before)
+  simp only [List.foldl_append,List.foldl_cons,List.foldl_nil]
+  exact (congrArg (List.foldl execInstrBr · tailOps) jump).trans (moved_tail before)
 
 theorem config_ok (s : MachineState) (pc : s.pc=address 725) : legal configRows s := by
   simp [configRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
@@ -75,14 +75,15 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
     (b : Base s p) (salt : s.getReg .x22=9126809632) (base : s.getReg .x26=4096)
     (shift : s.getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card) (selector : s.getReg .x5=0) :
     let t:=walkRows s configRows
-    t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card ∧ t.getReg .x10=1024 := by
+    t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card ∧ t.getReg .x10=1024 ∧ t.getReg .x1=65536 ∧
+      t.getReg .x2=s.getReg .x2 := by
   let t:=walkRows s configRows
-  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x4,.x14,.x17,.x25,.x29] : List Reg)) : t.getReg k=s.getReg k := by
+  have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x4,.x14,.x17,.x25,.x1] : List Reg)) : t.getReg k=s.getReg k := by
     simp only [List.mem_cons,List.not_mem_nil,or_false,not_or] at h
     obtain ⟨h1,h2,h3,h4,h5,h6,h7,h8,h9⟩ := h
     simp [t,configRows,walkRows,execInstrBr,Ne.symm h1,Ne.symm h2,Ne.symm h3,Ne.symm h4,Ne.symm h5,
       Ne.symm h6,Ne.symm h7,Ne.symm h8,Ne.symm h9]
-  refine ⟨?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,keep _ (by decide)⟩
   · simp [walkRows,configRows,execInstrBr,pc,address]
   · simp [walkRows,configRows,execInstrBr]
   · exact ⟨(keep _ (by decide)).trans b.indices,(keep _ (by decide)).trans b.heap,(keep _ (by decide)).trans b.count,
@@ -93,6 +94,8 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
       trapdoorBase,trapdoorBytes,LENGTH,LOG_LENGTH,signExtend12,shift,selector,show p.card≠0 by omega] <;>
       first | rfl | (rw [← BitVec.ofNat_add]; try rfl)
   · simp [walkRows,configRows,execInstrBr,signExtend12]
+    all_goals first | rfl | decide
+  · simp [walkRows,configRows,execInstrBr]
     all_goals first | rfl | decide
 
 def keyCopy (s : MachineState) := ((s.setMem 1032 (s.getMem 9126809640)).setMem 1040 (s.getMem 9126809648)).setMem 1048 (s.getMem 9126809656)
@@ -118,35 +121,15 @@ theorem mark_ok (s : MachineState) (pc : s.pc=address 739) : legal markRows s :=
   simp [markRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
   all_goals decide
 
-theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x26 : s.getReg .x26=4096)
-    (quartet : s.getReg .x4=BitVec.ofNat 64 (2^64-1)) :
+theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x1 : s.getReg .x1=65536) :
     let t:=walkRows s markRows
-    t.pc=address 740 ∧ t.mem=s.mem ∧ t.getReg .x4=BitVec.ofNat 64 (2^64-1) ∧ t.getReg .x3=374 ∧
-      t.getReg .x2=4352 ∧ t.getReg .x1=4095 ∧ ∀ k, k≠.x4 → k≠.x3 → k≠.x2 → k≠.x1 → t.getReg k=s.getReg k := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_⟩
+    t.pc=address 740 ∧ t.mem=s.mem ∧ t.getReg .x1=65520 ∧ ∀ k, k≠.x1 → t.getReg k=s.getReg k := by
+  refine ⟨?_,?_,?_,?_⟩
   · simp [walkRows,markRows,execInstrBr,pc,address]
-    all_goals decide
-  · -- symbolic offsets: with the concrete `jal` offsets the kernel recurses too deeply
-    have jm (s : MachineState) (offset : BitVec 21) : (execInstrBr s (.JAL .x0 offset)).mem=s.mem := by
-      simp [execInstrBr]
-    have a3 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x3 .x0 imm)).mem=s.mem := by
-      simp [execInstrBr]
-    have a2 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x2 .x26 imm)).mem=s.mem := by
-      simp [execInstrBr]
-    have a1 (s : MachineState) (imm : BitVec 12) : (execInstrBr s (.ADDI .x1 .x26 imm)).mem=s.mem := by
-      simp [execInstrBr]
-    change (execInstrBr (execInstrBr (execInstrBr (execInstrBr (execInstrBr s (.JAL .x0 64))
-      (.ADDI .x3 .x0 374)) (.ADDI .x2 .x26 256)) (.ADDI .x1 .x26 (-1))) (.JAL .x0 2097080)).mem=s.mem
-    rw [jm,a1,a2,a3,jm]
-  · simp [walkRows,markRows,execInstrBr,quartet]
-    all_goals decide
   · simp [walkRows,markRows,execInstrBr]
+  · simp [walkRows,markRows,execInstrBr,x1]
     all_goals decide
-  · simp [walkRows,markRows,execInstrBr,x26]
-    all_goals decide
-  · simp [walkRows,markRows,execInstrBr,x26]
-    all_goals decide
-  · intro k n4 n3 n2 n1;simp [walkRows,markRows,execInstrBr,Ne.symm n4,Ne.symm n3,Ne.symm n2,Ne.symm n1]
+  · intro k n1;simp [walkRows,markRows,execInstrBr,Ne.symm n1]
 
 theorem low_zero (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (w : Nat) (low : w<1024) :
     memoryView (actual.initialState .opening (td,p)) w=0 := by
@@ -155,8 +138,8 @@ theorem low_zero (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (w : Na
   have zero (j : Nat) (hj : j<8) : inputByte actual .opening (td,p) (8*w+j)=0 := by
     have lo : ¬actual.layout.trapdoor≤8*w+j := by change ¬4294971424≤_;omega
     have ix : ¬actual.layout.indices≤8*w+j := by change ¬9395245088≤_;omega
-    have img : (actual.image .opening).data=[]:=rfl
-    simp [inputByte,Submission.inputBuffers,fixedBuffer,positionsBuffer,lo,ix,img]
+    have nd : ¬dataBase (actual.image .opening)≤8*w+j := by rw [actual_data_base]; simp only [tableBase]; omega
+    simp [inputByte,Submission.inputBuffers,fixedBuffer,positionsBuffer,lo,ix,nd]
   rw [Finset.sum_eq_zero (fun j hj => by rw [zero _ (Finset.mem_range.mp hj)];simp)];rfl
 
 theorem key_words (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (j : Fin 3) :
