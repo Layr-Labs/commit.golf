@@ -98,10 +98,10 @@ theorem append {s t u : MachineState} {S T n m c d word next : Nat}
   intro q low
   rw [last.below q (by omega), first.below q low]
 
-theorem jump {s t : MachineState} {S T n c word : Nat} (copy : Done s t S T n c word)
+theorem jump {s t : MachineState} {S T n c word targetWord : Nat} (copy : Done s t S T n c word)
     (off : BitVec 21) (bound : word<1976) (code : Decodes word (.JAL .x0 off))
-    (target : BitVec.ofNat 64 (4096+4*word)+signExtend21 off=BitVec.ofNat 64 (4096+4*698)) :
-    Done s (execInstrBr t (.JAL .x0 off)) S T n (c+1) 698 := by
+    (target : BitVec.ofNat 64 (4096+4*word)+signExtend21 off=BitVec.ofNat 64 (4096+4*targetWord)) :
+    Done s (execInstrBr t (.JAL .x0 off)) S T n (c+1) targetWord := by
   have mem : (execInstrBr t (.JAL .x0 off)).mem=t.mem := rfl
   refine ⟨copy.run.next (run_step t word _ bound copy.pc code rfl rfl), ?_, ?_,
     copy_congr_mem mem copy.bytes, ?_⟩
@@ -112,11 +112,11 @@ theorem jump {s t : MachineState} {S T n c word : Nat} (copy : Done s t S T n c 
   · intro q low; exact (getMem_congr mem q).trans (copy.below q low)
 
 theorem word_path (s : MachineState) (S T : Nat)
-    (pc : s.pc=BitVec.ofNat 64 (4096+4*684))
+    (pc : s.pc=BitVec.ofNat 64 (4096+4*682))
     (src : s.getReg .x7=BitVec.ofNat 64 S) (dst : s.getReg .x21=BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%4=0) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
-    ∃ t, Done s t S T 28 14 698 := by
-  have h := pairs s S T 684 0 4 7 (by omega) (by decide +kernel) (by decide) pc src dst
+    ∃ t, Done s t S T 28 14 696 := by
+  have h := pairs s S T 682 0 4 7 (by omega) (by decide +kernel) (by decide) pc src dst
     (by omega) (by omega) (by decide) apart (by omega)
   exact ⟨_, by simpa using h⟩
 
@@ -124,20 +124,20 @@ theorem dword_path (s : MachineState) (S T : Nat)
     (pc : s.pc=BitVec.ofNat 64 (4096+4*674))
     (src : s.getReg .x7=BitVec.ofNat 64 S) (dst : s.getReg .x21=BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%8=0) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
-    ∃ t, Done s t S T 28 9 698 := by
+    ∃ t, Done s t S T 28 9 696 := by
   have a := pairs s S T 674 0 8 3 (by omega) (by decide +kernel) (by decide) pc src dst
     (by omega) (by omega) (by decide) (by omega) (by omega)
-  have b := pairs _ S T 680 24 4 1 (by omega) (by decide +kernel) (by decide) a.pc
-    ((a.regs _ (by decide)).trans src) ((a.regs _ (by decide)).trans dst)
+  have landed := jump (targetWord := 694) a 56 (by decide) (by decide +kernel) (by decide)
+  have b := pairs _ S T 694 24 4 1 (by omega) (by decide +kernel) (by decide) landed.pc
+    ((landed.regs _ (by decide)).trans src) ((landed.regs _ (by decide)).trans dst)
     (by omega) (by omega) (by decide) apart (by omega)
-  have both := append a b (by omega) (by omega)
-  exact ⟨_, by simpa using jump both 64 (by decide) (by decide +kernel) (by decide)⟩
+  exact ⟨_, by simpa using append landed b (by omega) (by omega)⟩
 
 theorem shifted_path (s : MachineState) (S T : Nat)
     (pc : s.pc=BitVec.ofNat 64 (4096+4*1890))
     (src : s.getReg .x7=BitVec.ofNat 64 S) (dst : s.getReg .x21=BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%4=2) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
-    ∃ t, Done s t S T 28 23 698 := by
+    ∃ t, Done s t S T 28 23 696 := by
   have a := chunk (0 : Fin 3) s S T pc src dst sa ta apart room
   have b := chunk (1 : Fin 3) _ S T a.pc
     ((a.regs _ (by decide)).trans src) ((a.regs _ (by decide)).trans dst) sa ta apart room
@@ -149,7 +149,7 @@ theorem shifted_path (s : MachineState) (S T : Nat)
     ((abc.regs _ (by decide)).trans src) ((abc.regs _ (by decide)).trans dst)
     (by omega) (by omega) (by decide) apart (by omega)
   have both := append abc d (by omega) (by omega)
-  exact ⟨_, by simpa using jump both 2092296 (by decide) (by decide +kernel) (by decide)⟩
+  exact ⟨_, by simpa using jump (targetWord := 696) both 2092288 (by decide) (by decide +kernel) (by decide)⟩
 
 theorem before {s e t : MachineState} {S T n c d word : Nat}
     (run : RunsOpeningBlock s e c) (regs : ∀ r, r ≠ .x31 → e.getReg r=s.getReg r)
@@ -204,13 +204,13 @@ theorem mask_bits (s : MachineState) (T mask : Nat) (hmask : mask=3 ∨ mask=7)
 theorem copy (s : MachineState) (S T : Nat) (pc : s.pc=BitVec.ofNat 64 (4096+4*670))
     (src : s.getReg .x7=BitVec.ofNat 64 S) (dst : s.getReg .x21=BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : T%2=0) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
-    ∃ t, Done s t S T 28 (cycles T) 698 := by
+    ∃ t, Done s t S T 28 (cycles T) 696 := by
   have fit : T<2^64 := by unfold MEMORY_BYTES at room; omega
-  obtain ⟨a, ra, pa, ga, ma⟩ := test s T 670 4 3 48 (by decide) pc (by decide +kernel)
+  obtain ⟨a, ra, pa, ga, ma⟩ := test s T 670 4 3 40 (by decide) pc (by decide +kernel)
     (by decide +kernel) (by decide) (mask_bits s T 3 (by simp) dst fit)
   by_cases four : T%4=0
   · have pca : a.pc=BitVec.ofNat 64 (4096+4*672) := by simpa [four] using pa
-    obtain ⟨b, rb, pb, gb, mb⟩ := test a T 672 8 7 44 (by decide) pca (by decide +kernel)
+    obtain ⟨b, rb, pb, gb, mb⟩ := test a T 672 8 7 36 (by decide) pca (by decide +kernel)
       (by decide +kernel) (by decide) (mask_bits a T 7 (by simp) ((ga _ (by decide)).trans dst) fit)
     by_cases eight : T%8=0
     · obtain ⟨t, body⟩ := dword_path b S T (by simpa [eight] using pb)
@@ -221,11 +221,11 @@ theorem copy (s : MachineState) (S T : Nat) (pc : s.pc=BitVec.ofNat 64 (4096+4*6
         ((gb _ (by decide)).trans ((ga _ (by decide)).trans src))
         ((gb _ (by decide)).trans ((ga _ (by decide)).trans dst)) sa four apart room
       exact ⟨t, by simpa [cycles, four, eight] using before ra ga ma (before rb gb mb body)⟩
-  · have pca : a.pc=BitVec.ofNat 64 (4096+4*683) := by rw [if_neg four] at pa; exact pa.trans (by decide)
-    let b := execInstrBr a (.JAL .x0 4828)
-    have rb := run_step a 683 (.JAL .x0 4828) (by decide) pca (by decide +kernel) rfl rfl
+  · have pca : a.pc=BitVec.ofNat 64 (4096+4*681) := by rw [if_neg four] at pa; exact pa.trans (by decide)
+    let b := execInstrBr a (.JAL .x0 4836)
+    have rb := run_step a 681 (.JAL .x0 4836) (by decide) pca (by decide +kernel) rfl rfl
     have pcb : b.pc=BitVec.ofNat 64 (4096+4*1890) := by
-      change a.pc+signExtend21 4828=_; rw [pca]; decide
+      change a.pc+signExtend21 4836=_; rw [pca]; decide
     have gb (r : Reg) (_ : r ≠ .x31) : b.getReg r=a.getReg r := by cases r <;> rfl
     have mb : b.mem=a.mem := rfl
     obtain ⟨t, body⟩ := shifted_path b S T pcb

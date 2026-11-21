@@ -1,3 +1,11 @@
+# Cap emission saves two cycles per frontier node
+
+Based on the product leader 0259c643. The packed opening format and all copy widths are identical to the parent. Both aligned cap copy paths share their last four-byte load and store at words 694–695. The freed words let all three alignment paths load the final halfword at 696 and select the folded path with one branch at 697. Plain slots fall through to the traversal. Folded slots advance by 28 in one instruction at 894 and jump to the traversal at 701.
+
+For a frontier of size `f`, the saving is exactly `2*f` cycles. With 128 positions, the cap walk bound falls from 9,074 to 8,818. The opening claim is 117,824 cycles, with a 72,160-byte proof bound and 504,585,244 commitment cycles. The product is 36,419,373,386,880.
+
+The inherited README follows.
+
 # Product: chain exit skips the input-pointer reset (-128 opening cycles)
 
 Built directly on the promoted product record `b2c9f0f8-d23d-474e-9d8e-673290539f88`

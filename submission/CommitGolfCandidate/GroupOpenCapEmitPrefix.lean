@@ -148,11 +148,11 @@ theorem cap_position_kept {groups : List Nat} {before after : MachineState} {nod
       omega
     exact words _ below
 
-/-- Rows 668..699: source pointer, 14 halfword copies, `lhu x31,28(x7)`, `jal` to WK. -/
+/-- Compute the source pointer, copy 28 bytes and load the final halfword at word 696. -/
 theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : Nat)
     (bounded : node < 512) (position : CapPosition groups state node dest) (pc : state.pc = 0x1a70)
     (separate : Opening.proofBase ≤ dest) (aligned : dest % 2 = 0) (fits : dest+30 ≤ MEMORY_BYTES) :
-    ∃ mid, RunsOpeningBlock state mid (CapCopy.cycles dest+4) ∧ mid.pc = BitVec.ofNat 64 (4096+4*855) ∧
+    ∃ mid, RunsOpeningBlock state mid (CapCopy.cycles dest+3) ∧ mid.pc = BitVec.ofNat 64 (4096+4*697) ∧
       mid.getReg .x21 = BitVec.ofNat 64 dest ∧
       mid.getReg .x31 = (halfAt state (capDigestAddress node+28)).zeroExtend 64 ∧
       (∀ r, r ≠ .x7 → r ≠ .x31 → mid.getReg r = state.getReg r) ∧
@@ -191,26 +191,23 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
   have addr3 : s2.getReg .x7 + signExtend12 (28#12) = BitVec.ofNat 64 (capDigestAddress node+28) := by
     rw [reg2 .x7 (by decide), source, show signExtend12 (28#12) = BitVec.ofNat 64 28 by decide,
       ← BitVec.ofNat_add]
-  have step3 := row_step s2 698 (.LHU .x31 .x7 28#12) (by decide) pc2 (by decide +kernel) rfl
+  have step3 := row_step s2 696 (.LHU .x31 .x7 28#12) (by decide) pc2 (by decide +kernel) rfl
     (by change accessValid (s2.getReg .x7 + signExtend12 (28#12)) 2 = true
         rw [addr3]; exact half_access _ (by omega) (by omega))
   let s3 := execInstrBr s2 (.LHU .x31 .x7 28#12)
-  have pc3 : s3.pc = BitVec.ofNat 64 (4096+4*699) := step3.2
-  have step4 := row_step s3 699 (.JAL .x0 624#21) (by decide) pc3 (by decide +kernel) rfl rfl
-  let s4 := execInstrBr s3 (.JAL .x0 624#21)
-  have mem4 : s4.mem = s2.mem := by simp [s4, s3, execInstrBr]
-  have reg4 (r : Reg) (keep : r ≠ .x31) : s4.getReg r = s2.getReg r := by
-    simp [s4, s3, execInstrBr, Ne.symm keep]
-  have top4 : s4.getReg .x31 = (s2.getHalfword (BitVec.ofNat 64 (capDigestAddress node+28))).zeroExtend 64 := by
+  have mem4 : s3.mem = s2.mem := by simp [s3, execInstrBr]
+  have reg4 (r : Reg) (keep : r ≠ .x31) : s3.getReg r = s2.getReg r := by
+    simp [s3, execInstrBr, Ne.symm keep]
+  have top4 : s3.getReg .x31 = (s2.getHalfword (BitVec.ofNat 64 (capDigestAddress node+28))).zeroExtend 64 := by
     rw [← addr3]
-    simp [s4, s3, execInstrBr]
+    simp [s3, execInstrBr]
   have half2 : s2.getHalfword (BitVec.ofNat 64 (capDigestAddress node+28)) = halfAt state (capDigestAddress node+28) := by
     rw [← half_at_eq s2 (capDigestAddress node+28) (by omega) (by omega)]
     unfold halfAt
     rw [frame2 (capDigestAddress node+28+1) (by omega) (Or.inl (by omega)),
       frame2 (capDigestAddress node+28) (by omega) (Or.inl (by omega))]
-  refine ⟨s4, ?_, step4.2.trans (by decide +kernel), ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · convert ((setupRun.next capRun).next step3.1).next step4.1 using 1 <;> omega
+  refine ⟨s3, ?_, step3.2, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · convert (setupRun.next capRun).next step3.1 using 1 <;> omega
   · rw [reg4 .x21 (by decide), reg2 .x21 (by decide), destination]
   · rw [top4, half2]
   · intro r a b
@@ -229,7 +226,7 @@ theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : 
         have : Opening.proofBase%8=0 := by decide
         omega)
     have m1 : s1.mem = state.mem := initial.2.1
-    calc s4.getMem (BitVec.ofNat 64 a) = s2.getMem (BitVec.ofNat 64 a) := by
+    calc s3.getMem (BitVec.ofNat 64 a) = s2.getMem (BitVec.ofNat 64 a) := by
           simp only [MachineState.getMem, mem4]
       _ = s1.getMem (BitVec.ofNat 64 a) := stable
       _ = state.getMem (BitVec.ofNat 64 a) := by simp only [MachineState.getMem, m1]

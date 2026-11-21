@@ -42,7 +42,7 @@ theorem wide_cycles_le (p : Positions) (nz : p.card ≠ 0) : wideCycles p ≤ 15
   omega
 
 theorem wide_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    wideCycles positions ≤ 75818 ∧ proofLength positions ≤ 72160 := by
+    wideCycles positions ≤ 75562 ∧ proofLength positions ≤ 72160 := by
   have old := QuartetOpening.scored_limits positions count
   have nodes := Opening.opening_nodes_bound positions
   have k : positions.card = 128 := count
@@ -284,7 +284,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 75818 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
+    result.cycles ≤ 75562 ∧ (result.state.getReg .x11).toNat ≤ 72160 := by
   rw [physical.cycles, physical.length]
   exact wide_scored_limits positions count
 

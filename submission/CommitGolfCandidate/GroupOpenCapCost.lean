@@ -160,12 +160,12 @@ theorem cap_cycles_control_bound (groups : List Nat) (node height : Nat) :
 /-- Exact subtree charge: reference traversal and folds, minus the telescoping copy potential. -/
 def capWalkCycles (groups : List Nat) (node height base start : Nat) : Nat :=
   let count := (capFrontierNodes groups node height).length
-  capSubtreeCycles groups node height+4*count+34*((start+count)/8-start/8)-
+  capSubtreeCycles groups node height+2*count+34*((start+count)/8-start/8)-
     (capCopySavings base (start+count)-capCopySavings base start)
 
 theorem cap_walk_balance (groups : List Nat) (node height base start : Nat) :
     capWalkCycles groups node height base start+capCopySavings base (start+(capFrontierNodes groups node height).length)=
-      capSubtreeCycles groups node height+4*(capFrontierNodes groups node height).length+
+      capSubtreeCycles groups node height+2*(capFrontierNodes groups node height).length+
         34*((start+(capFrontierNodes groups node height).length)/8-start/8)+capCopySavings base start := by
   have := cap_cycles_frontier_lower groups node height
   have := cap_savings_segment base start (capFrontierNodes groups node height).length
@@ -182,7 +182,7 @@ theorem cap_walk_le_old (groups : List Nat) (node height base : Nat) :
 
 theorem cap_walk_unmarked (groups : List Nat) (node height base start : Nat)
     (mark : capIsMarked groups node height=false) :
-    capWalkCycles groups node height base start=CapCopy.cycles (base+capOffset start)+13+
+    capWalkCycles groups node height base start=CapCopy.cycles (base+capOffset start)+11+
       34*((start+1)/8-start/8) := by
   have count : (capFrontierNodes groups node height).length=1 := by
     cases height <;> simp [capFrontierNodes, mark]
@@ -212,7 +212,7 @@ theorem cap_walk_branch (groups : List Nat) (node height base start : Nat)
   omega
 
 theorem cap_walk_scored_bound (groups : List Nat) (base : Nat) (even : base%2=0)
-    (small : (capFrontierNodes groups 1 8).length ≤ 128) : capWalkCycles groups 1 8 base 0 ≤ 9074 := by
+    (small : (capFrontierNodes groups 1 8).length ≤ 128) : capWalkCycles groups 1 8 base 0 ≤ 8818 := by
   have control := cap_cycles_control_bound groups 1 8
   have lower := cap_savings_lower base (capFrontierNodes groups 1 8).length even
   have balance := cap_walk_balance groups 1 8 base 0

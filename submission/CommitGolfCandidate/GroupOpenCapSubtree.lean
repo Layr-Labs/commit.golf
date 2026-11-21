@@ -130,7 +130,7 @@ private theorem walk_unmarked (emit : EmitCap238) (groups : List Nat) (heap : Na
     (run : CapRun groups heap capStart vs state node) (pc : state.pc=0x1a54)
     (mark : capIsMarked groups node height=false) (separate : proofBase ≤ capStart) (aligned : capStart%2=0)
     (fits : capStart+capOffset (vs.length+1)+2 ≤ MEMORY_BYTES) :
-    ∃ after, RunsOpeningBlock state after (CapCopy.cycles (capStart+capOffset vs.length)+13+
+    ∃ after, RunsOpeningBlock state after (CapCopy.cycles (capStart+capOffset vs.length)+11+
         34*((vs.length+1)/8-vs.length/8)) ∧ after.pc=0x1af4 ∧
       CapRun groups heap capStart (vs++[heap node]) after node ∧
       (∀ a<2^64, a<capStart ∨ capStart+capOffset (vs.length+1) ≤ a →
@@ -150,9 +150,9 @@ private theorem walk_unmarked (emit : EmitCap238) (groups : List Nat) (heap : Na
   have zero : (7-vs.length%8=0) ↔ vs.length%8=7 := by omega
   have width : capStart+capOffset vs.length+(if 7-vs.length%8=0 then 28 else 30)=capStart+capOffset (vs.length+1) := by
     rw [succ]; by_cases h : vs.length%8=7 <;> simp [h, zero] <;> omega
-  have cost : (if 7-vs.length%8=0 then CapCopy.cycles (capStart+capOffset vs.length)+43
-      else CapCopy.cycles (capStart+capOffset vs.length)+9)=
-        CapCopy.cycles (capStart+capOffset vs.length)+9+34*((vs.length+1)/8-vs.length/8) := by
+  have cost : (if 7-vs.length%8=0 then CapCopy.cycles (capStart+capOffset vs.length)+41
+      else CapCopy.cycles (capStart+capOffset vs.length)+7)=
+        CapCopy.cycles (capStart+capOffset vs.length)+7+34*((vs.length+1)/8-vs.length/8) := by
     by_cases h : vs.length%8=7
     · rw [if_pos (by omega)]; omega
     · rw [if_neg (by omega)]; omega

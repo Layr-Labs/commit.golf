@@ -1,8 +1,6 @@
 import CommitGolfCandidate.GroupOpenCapEmitPrefix
 
-/-! T238 cap emit, plain node (`count ≠ 0`): after the shared prefix, WK (word 855) `beq x30,x0` falls through,
-`addi x30,x30,-1; sh x31,28(x21)` stores halfword 14 of the node, `jal` back to word 700, `addi x21,x21,30`;
-`CapCopy.cycles dest+9` cycles, one 30-byte slot. -/
+/-! An ordinary cap slot falls through words 697–700. The branch, countdown decrement, halfword store and cursor advance cost four cycles. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (capDigestAddress cap_digest_bounds)
@@ -34,14 +32,6 @@ private theorem succ_word (n : Nat) : BitVec.ofNat 64 (n+1) = BitVec.ofNat 64 n+
   rw [BitVec.ofNat_add]
   rfl
 
-private theorem jal_zero_mem (s : MachineState) (offset : BitVec 21) :
-    (execInstrBr s (.JAL .x0 offset)).mem = s.mem := by
-  simp [execInstrBr]
-
-private theorem jal_zero_reg (s : MachineState) (offset : BitVec 21) (r : Reg) :
-    (execInstrBr s (.JAL .x0 offset)).getReg r = s.getReg r := by
-  simp [execInstrBr]
-
 private theorem minus_one_word (c : Nat) (small : c+1 < 2^64) :
     BitVec.ofNat 64 (c+1) + signExtend12 (4095#12) = BitVec.ofNat 64 c := by
   apply BitVec.eq_of_toNat_eq
@@ -53,7 +43,7 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
     (bounded : node < 512) (position : CapPosition groups state node dest)
     (counter : state.getReg .x30 = BitVec.ofNat 64 count) (positive : 0 < count) (small : count ≤ 7)
     (pc : state.pc = 0x1a70) (separate : Opening.proofBase ≤ dest) (aligned : dest%2=0) (fits : dest+30 ≤ MEMORY_BYTES) :
-    ∃ after, RunsOpeningBlock state after (CapCopy.cycles dest+9) ∧ after.pc = 0x1af4 ∧
+    ∃ after, RunsOpeningBlock state after (CapCopy.cycles dest+7) ∧ after.pc = 0x1af4 ∧
       CapPosition groups after node (dest+30) ∧
       after.getReg .x30 = BitVec.ofNat 64 (count-1) ∧
       (∀ b<30, after.getByte (BitVec.ofNat 64 (dest+b)) =
@@ -74,22 +64,22 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
   have cond : (mid.getReg .x30 == mid.getReg .x0) = false := by
     rw [x30Mid]
     exact beq_false_of_ne ne0
-  -- 855 `beq x30,x0,+16`, not taken
-  have run5 := beq_step mid 855 .x30 .x0 16#13 (by decide) pcMid (by decide +kernel)
-  let s5 := execInstrBr mid (.BEQ .x30 .x0 16#13)
+  -- The countdown branch falls through.
+  have run5 := beq_step mid 697 .x30 .x0 648#13 (by decide) pcMid (by decide +kernel)
+  let s5 := execInstrBr mid (.BEQ .x30 .x0 648#13)
   have e5 : s5 = mid.setPC (mid.pc + 4) := by
     simp only [s5, execInstrBr, cond, Bool.false_eq_true, ↓reduceIte]
-  have pc5 : s5.pc = BitVec.ofNat 64 (4096+4*856) := by
+  have pc5 : s5.pc = BitVec.ofNat 64 (4096+4*698) := by
     rw [e5]
     change mid.pc + 4 = _
     rw [pcMid]
     decide +kernel
   have mem5 : s5.mem = mid.mem := by rw [e5]; rfl
   have regs5 (r : Reg) : s5.getReg r = mid.getReg r := by rw [e5]; exact MachineState.getReg_setPC ..
-  -- 856 `addi x30,x30,-1`
-  have step6 := row_step s5 856 (.ADDI .x30 .x30 4095#12) (by decide) pc5 (by decide +kernel) rfl rfl
+  -- 698 `addi x30,x30,-1`
+  have step6 := row_step s5 698 (.ADDI .x30 .x30 4095#12) (by decide) pc5 (by decide +kernel) rfl rfl
   let s6 := execInstrBr s5 (.ADDI .x30 .x30 4095#12)
-  have pc6 : s6.pc = BitVec.ofNat 64 (4096+4*857) := step6.2
+  have pc6 : s6.pc = BitVec.ofNat 64 (4096+4*699) := step6.2
   have mem6 : s6.mem = mid.mem := by simp [s6, execInstrBr, mem5]
   have reg6 (r : Reg) (other : r ≠ .x30) : s6.getReg r = s5.getReg r := by
     simp [s6, execInstrBr, Ne.symm other]
@@ -99,15 +89,15 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
     obtain ⟨c, rfl⟩ : ∃ c, count = c+1 := ⟨count-1, by omega⟩
     rw [Nat.add_sub_cancel]
     exact minus_one_word c (by omega)
-  -- 857 `sh x31,28(x21)`
+  -- 699 `sh x31,28(x21)`
   have x21_6 : s6.getReg .x21 = BitVec.ofNat 64 dest := by rw [reg6 .x21 (by decide), regs5, x21Mid]
   have addr7 : s6.getReg .x21 + signExtend12 (28#12) = BitVec.ofNat 64 (dest+28) := by
     rw [x21_6, show signExtend12 (28#12) = BitVec.ofNat 64 28 by decide +kernel, ← BitVec.ofNat_add]
-  have step7 := row_step s6 857 (.SH .x21 .x31 28#12) (by decide) pc6 (by decide +kernel) rfl
+  have step7 := row_step s6 699 (.SH .x21 .x31 28#12) (by decide) pc6 (by decide +kernel) rfl
     (by change accessValid (s6.getReg .x21 + signExtend12 (28#12)) 2 = true
         rw [addr7]; exact half_access _ (by omega) (by omega))
   let s7 := execInstrBr s6 (.SH .x21 .x31 28#12)
-  have pc7 : s7.pc = BitVec.ofNat 64 (4096+4*858) := step7.2
+  have pc7 : s7.pc = BitVec.ofNat 64 (4096+4*700) := step7.2
   have top6 : (s6.getReg .x31).truncate 16 = halfAt state (capDigestAddress node+28) := by
     rw [reg6 .x31 (by decide), regs5, topMid]
     exact trunc_ext _
@@ -115,22 +105,14 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
     show (s6.setHalfword (s6.getReg .x21 + signExtend12 (28#12)) ((s6.getReg .x31).truncate 16)).mem = _
     rw [addr7, top6]
   have reg7 (r : Reg) : s7.getReg r = s6.getReg r := by simp [s7, execInstrBr]
-  -- 858 `jal x0,-632` to word 700
-  have step8 := row_step s7 858 (.JAL .x0 2096520#21) (by decide) pc7 (by decide +kernel) rfl rfl
-  let s8 := execInstrBr s7 (.JAL .x0 2096520#21)
-  have pc8 : s8.pc = BitVec.ofNat 64 (4096+4*700) := step8.2.trans (by decide +kernel)
-  -- 700 `addi x21,x21,30`
-  have step9 := row_step s8 700 (.ADDI .x21 .x21 30#12) (by decide) pc8 (by decide +kernel) rfl rfl
-  let s9 := execInstrBr s8 (.ADDI .x21 .x21 30#12)
-  have mem8 : s8.mem = s7.mem := jal_zero_mem s7 _
-  have reg8 (r : Reg) : s8.getReg r = s7.getReg r := jal_zero_reg s7 _ r
-  have mem9 : s9.mem = s7.mem := by simp [s9, execInstrBr, mem8]
+  have step9 := row_step s7 700 (.ADDI .x21 .x21 30#12) (by decide) pc7 (by decide +kernel) rfl rfl
+  let s9 := execInstrBr s7 (.ADDI .x21 .x21 30#12)
+  have mem9 : s9.mem = s7.mem := rfl
   have reg9 (r : Reg) (other : r ≠ .x21) : s9.getReg r = s7.getReg r := by
-    simp [s9, execInstrBr, Ne.symm other, reg8]
+    simp [s9, execInstrBr, Ne.symm other]
   have x21_9 : s9.getReg .x21 = BitVec.ofNat 64 (dest+30) := by
-    have e : s9.getReg .x21 = s8.getReg .x21 + signExtend12 (30#12) := by simp [s9, execInstrBr]
-    have f : s8.getReg .x21 = s7.getReg .x21 := reg8 .x21
-    rw [e, f, reg7, x21_6, show signExtend12 (30#12) = BitVec.ofNat 64 30 by decide +kernel, ← BitVec.ofNat_add]
+    have e : s9.getReg .x21 = s7.getReg .x21 + signExtend12 (30#12) := by simp [s9, execInstrBr]
+    rw [e, reg7, x21_6, show signExtend12 (30#12) = BitVec.ofNat 64 30 by decide +kernel, ← BitVec.ofNat_add]
   have evenW : (BitVec.ofNat 64 (dest+28)).toNat % 2 = 0 := by
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show dest+28 < 2^64 by omega)]
     omega
@@ -141,7 +123,7 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
     exact away.2 (Opening.nat_address_injective qsmall (by omega) e)
   refine ⟨s9, ?_,
     step9.2.trans (by decide +kernel), ?_, ?_, ?_, ?_⟩
-  · exact ((((run.next run5).next step6.1).next step7.1).next step8.1).next step9.1
+  · exact (((run.next run5).next step6.1).next step7.1).next step9.1
   · apply cap_position_kept position
     · intro r h7 h21 _ _ h30 h31
       rw [reg9 r h21, reg7, reg6 r h30, regs5]

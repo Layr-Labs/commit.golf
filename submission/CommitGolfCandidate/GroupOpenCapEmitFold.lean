@@ -2,12 +2,7 @@ import CommitGolfCandidate.GroupOpenCapEmitPrefix
 import CommitGolfCandidate.GroupOpenFoldRun
 import CommitGolfCandidate.K3OpenPack238
 
-/-! # T238 cap emit: the eighth node of a group (`count = 0`)
-
-After the shared alignment-dispatched prefix (the node's first 28 bytes and its halfword 14 in `x31`, then the jump
-to WK), word 855 `beq x30,x0` sends `x30 = 0` to WS: 859 `addi x30,x0,7`, the seven folds 860..893 (halfword 14 of
-slot `k` of the group OR'd with bits `2k, 2k+1` of `x31` in bits 14, 15), 894 `addi x21,x21,-2`, 895 `jal` to 700,
-700 `addi x21,x21,30`: `CapCopy.cycles dest+43` cycles, the cursor 28 bytes on, the countdown back at 7. -/
+/-! On each eighth slot, word 697 branches to word 859. The fold updates the seven preceding slots, advances the cursor by 28 bytes and resumes the traversal at word 701. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (capDigestAddress)
@@ -15,12 +10,11 @@ open Opening (capDigestAddress)
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1600000
 
-private theorem fold_pc859 : BitVec.ofNat 64 (4096+4*855) + signExtend13 16 = BitVec.ofNat 64 (4096+4*859) := by
+private theorem fold_pc859 : BitVec.ofNat 64 (4096+4*697) + signExtend13 648 = BitVec.ofNat 64 (4096+4*859) := by
   decide
-private theorem fold_pc700 : BitVec.ofNat 64 (4096+4*895) + signExtend21 0x1ffcf4 = BitVec.ofNat 64 (4096+4*700) := by
+private theorem fold_pc701 : BitVec.ofNat 64 (4096+4*895) + signExtend21 0x1ffcf8 = BitVec.ofNat 64 (4096+4*701) := by
   decide
 private theorem fold_seven : (0 : Word) + signExtend12 7 = BitVec.ofNat 64 7 := by decide
-private theorem fold_back : (signExtend12 0xffe : Word) + signExtend12 30 = BitVec.ofNat 64 28 := by decide
 
 private theorem fold_byte_of_mem {s t : MachineState} (same : s.mem = t.mem) (q : Word) : s.getByte q = t.getByte q := by
   unfold MachineState.getByte MachineState.getMem
@@ -50,7 +44,7 @@ theorem emit_cap238_fold (groups : List Nat) (state : MachineState) (node dest :
     (bounded : node < 512) (position : CapPosition groups state node dest)
     (counter : state.getReg .x30 = BitVec.ofNat 64 0) (pc : state.pc = 0x1a70)
     (separate : Opening.proofBase+210 ≤ dest) (aligned : dest%2=0) (fits : dest+30 ≤ MEMORY_BYTES) :
-    ∃ after, RunsOpeningBlock state after (CapCopy.cycles dest+43) ∧ after.pc = 0x1af4 ∧
+    ∃ after, RunsOpeningBlock state after (CapCopy.cycles dest+41) ∧ after.pc = 0x1af4 ∧
       CapPosition groups after node (dest+28) ∧
       after.getReg .x30 = BitVec.ofNat 64 7 ∧
       (∀ b<28, after.getByte (BitVec.ofNat 64 (dest+b)) = state.getByte (BitVec.ofNat 64 (capDigestAddress node+b))) ∧
@@ -63,12 +57,12 @@ theorem emit_cap238_fold (groups : List Nat) (state : MachineState) (node dest :
   obtain ⟨mid, run0, pc0, x21m, x31m, regsm, bytesm, framem, lowm⟩ :=
     cap_emit_prefix groups state node dest bounded position pc (by omega) aligned fits
   let x := halfAt state (capDigestAddress node+28)
-  -- 855 `beq x30,x0,+16`: taken
+  -- The countdown branch is taken.
   have x30m : mid.getReg .x30 = BitVec.ofNat 64 0 := (regsm .x30 (by decide) (by decide)).trans counter
-  let m1 := execInstrBr mid (.BEQ .x30 .x0 16)
-  have run1 : RunsOpeningBlock mid m1 1 := beq_step mid 855 .x30 .x0 16 (by decide) pc0 rfl
+  let m1 := execInstrBr mid (.BEQ .x30 .x0 648)
+  have run1 : RunsOpeningBlock mid m1 1 := beq_step mid 697 .x30 .x0 648 (by decide) pc0 rfl
   have shape1 : m1 = mid.setPC (BitVec.ofNat 64 (4096+4*859)) := by
-    show (if mid.getReg .x30 == mid.getReg .x0 then mid.setPC (mid.pc + signExtend13 16)
+    show (if mid.getReg .x30 == mid.getReg .x0 then mid.setPC (mid.pc + signExtend13 648)
       else mid.setPC (mid.pc + 4)) = _
     rw [x30m, show mid.getReg .x0 = 0 from rfl, if_pos (by decide), pc0, fold_pc859]
   have m1reg (r : Reg) : m1.getReg r = mid.getReg r := by rw [shape1, MachineState.getReg_setPC]
@@ -91,26 +85,25 @@ theorem emit_cap238_fold (groups : List Nat) (state : MachineState) (node dest :
     fold_up_to (wsStart+1) codes m2 dest x low (by omega) aligned pc2 pointer2 top2 7 (by omega)
   let m3 := foldUpTo (wsStart+1) 7 m2
   have pc3' : m3.pc = BitVec.ofNat 64 (4096+4*894) := pc3
-  -- 894 `addi x21,x21,-2`; 895 `jal` to 700; 700 `addi x21,x21,30`
-  let m4 := execInstrBr m3 (.ADDI .x21 .x21 0xffe)
-  have step4 := row_step m3 894 (.ADDI .x21 .x21 0xffe) (by decide) pc3' rfl rfl rfl
-  let m5 := execInstrBr m4 (.JAL .x0 0x1ffcf4)
-  have step5 := row_step m4 895 (.JAL .x0 0x1ffcf4) (by decide) step4.2 rfl rfl rfl
-  have pc5 : m5.pc = BitVec.ofNat 64 (4096+4*700) := step5.2.trans fold_pc700
-  let after := execInstrBr m5 (.ADDI .x21 .x21 30)
-  have step6 := row_step m5 700 (.ADDI .x21 .x21 30) (by decide) pc5 rfl rfl rfl
+  -- Advance by the folded width and resume at the parity test.
+  let m4 := execInstrBr m3 (.ADDI .x21 .x21 28)
+  have step4 := row_step m3 894 (.ADDI .x21 .x21 28) (by decide) pc3' rfl rfl rfl
+  let m5 := execInstrBr m4 (.JAL .x0 0x1ffcf8)
+  have step5 := row_step m4 895 (.JAL .x0 0x1ffcf8) (by decide) step4.2 rfl rfl rfl
+  have pc5 : m5.pc = BitVec.ofNat 64 (4096+4*701) := step5.2.trans fold_pc701
+  let after := m5
   have afterMem : after.mem = m3.mem := rfl
   have reg3 (r : Reg) (a : r ≠ .x28) (b : r ≠ .x29) (c : r ≠ .x31) : m3.getReg r = m2.getReg r := keepf r a b c
   have regAfter (r : Reg) (other : r ≠ .x21) : after.getReg r = m3.getReg r :=
-    (fold_addi_reg m5 .x21 .x21 30 r other).trans ((fold_jal_reg m4 0x1ffcf4 r).trans (fold_addi_reg m3 .x21 .x21 0xffe r other))
+    (fold_jal_reg m4 0x1ffcf8 r).trans (fold_addi_reg m3 .x21 .x21 28 r other)
   -- the bytes the folds leave alone
   have byteFold (q : Nat) (qfit : q+8 ≤ 2^64) (away : ∀ j < 7, q ≠ foldAddress dest j ∧ q ≠ foldAddress dest j+1) :
       m3.getByte (BitVec.ofNat 64 q) = m2.getByte (BitVec.ofNat 64 q) :=
     fold_frame_bytes (wsStart+1) codes m2 dest x low (by omega) aligned pc2 pointer2 top2 q qfit away
   refine ⟨after, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · have chain := ((((((run0.next run1).next step2.1).next run3).next step4.1).next step5.1).next step6.1)
+  · have chain := ((((run0.next run1).next step2.1).next run3).next step4.1).next step5.1
     exact chain
-  · exact step6.2
+  · exact pc5
   · apply cap_position_kept position
     · intro r a b c d e f
       rw [regAfter r b, reg3 r c d f, m2reg r e]
@@ -130,8 +123,8 @@ theorem emit_cap238_fold (groups : List Nat) (state : MachineState) (node dest :
       have m2m : m2.getMem (BitVec.ofNat 64 a) = mid.getMem (BitVec.ofNat 64 a) := by
         unfold MachineState.getMem; rw [m2mem]
       exact m3m.trans (m2m.trans (lowm a inside))
-    · rw [fold_addi_reg_self m5 .x21 .x21 30 (by decide), fold_jal_reg m4 0x1ffcf4 .x21,
-        fold_addi_reg_self m3 .x21 .x21 0xffe (by decide), x21f, BitVec.add_assoc, fold_back, ← BitVec.ofNat_add]
+    · rw [fold_jal_reg m4 0x1ffcf8 .x21,
+        fold_addi_reg_self m3 .x21 .x21 28 (by decide), x21f, show signExtend12 28 = BitVec.ofNat 64 28 from rfl, ← BitVec.ofNat_add]
   · rw [regAfter .x30 (by decide), reg3 .x30 (by decide) (by decide) (by decide)]
     exact m2x30
   · intro b inside
