@@ -45,41 +45,45 @@ private theorem context_memory {groups : List Nat} {before after : MachineState}
     (memory : after.mem = before.mem) : CapContext groups after :=
   context.of_preserved register (fun n _ _ => congrFun memory (BitVec.ofNat 64 (markBase+8*n)))
 
-/-- A marked leaf emits no bytes and goes straight to its own advance label. -/
-theorem cap_prune_step (groups : List Nat) (state : MachineState) (node dest : Nat)
-    (position : CapPosition groups state node dest) (span : CapSpan node 0)
-    (pc : state.pc = 0x1a64) :
-    RunsOpeningBlock state (cursorKnownPrefix state 1) 1 ∧
-    (cursorKnownPrefix state 1).pc = 0x1af4 ∧
-    CapPosition groups (cursorKnownPrefix state 1) node dest ∧
-    (cursorKnownPrefix state 1).mem = state.mem := by
-  have leaf := cap_span_is_leaf node span
-  have bounded := (cap_span_node node 0 span).2
-  have comparison : BitVec.ult (state.getReg .x6) (state.getReg .x27) = false := by
-    rw [position.nodeWord, position.context.capLeavesWord, BitVec.ult_eq_decide]
+/-- A marked level-5 node (`x16 = 8 node ≥ 256`) leaves the walk for the chunk jump at 708. -/
+theorem cap_chunk_step (groups : List Nat) (state : MachineState) (node dest : Nat)
+    (position : CapPosition groups state node dest) (span : CapSpan node 3)
+    (level : state.getReg .x16 = BitVec.ofNat 64 (8 * node)) (pc : state.pc = 0x1a64) :
+    RunsOpeningBlock state (state.setPC 0x1b10) 1 ∧
+    CapPosition groups (state.setPC 0x1b10) node dest ∧
+    (state.setPC 0x1b10).getReg .x16 = BitVec.ofNat 64 (8 * node) := by
+  have bounded := (cap_span_node node 3 span).2
+  have low := span.start
+  have comparison : BitVec.ult (state.getReg .x16) (state.getReg .x27) = false := by
+    rw [level, position.context.capLeavesWord, BitVec.ult_eq_decide]
     simp only [BitVec.toNat_ofNat]
-    rw [Nat.mod_eq_of_lt (by omega : node < 2 ^ 64)]
-    simp [show ¬ node < 256 by omega]
-  have next := cursor_prune_post state pc comparison
-  refine ⟨fun fuel coins => execute_cursor_prune _ pc fuel coins, ?_⟩
-  rw [next]
-  exact ⟨rfl, ⟨context_memory position.context (fun _ _ => rfl) rfl,
-    position.nodeWord, position.destWord⟩, rfl⟩
+    rw [Nat.mod_eq_of_lt (by omega : 8 * node < 2 ^ 64)]
+    simp only [decide_eq_false_iff_not, Nat.reducePow, Nat.reduceMod] at low ⊢
+    omega
+  have next := cursor_chunk_post state pc comparison
+  refine ⟨fun fuel coins => by rw [← next]; exact execute_cursor_chunk _ pc fuel coins, ?_, level⟩
+  exact ⟨context_memory position.context (fun _ _ => rfl) rfl, position.nodeWord, position.destWord⟩
 
 /-- A marked internal node descends to the left child with no output. -/
 theorem cap_descend_step (groups : List Nat) (state : MachineState) (node height dest : Nat)
-    (position : CapPosition groups state node dest) (span : CapSpan node (height + 1))
-    (pc : state.pc = 0x1a64) :
+    (position : CapPosition groups state node dest) (span : CapSpan node (height + 4))
+    (level : state.getReg .x16 = BitVec.ofNat 64 (8 * node)) (pc : state.pc = 0x1a64) :
     RunsOpeningBlock state (cursorKnownPrefix state 3) 3 ∧
     (cursorKnownPrefix state 3).pc = 0x1a54 ∧
     CapPosition groups (cursorKnownPrefix state 3) (2 * node) dest ∧
     (cursorKnownPrefix state 3).mem = state.mem := by
-  have internal := cap_span_is_internal node height span
-  have comparison : BitVec.ult (state.getReg .x6) (state.getReg .x27) = true := by
-    rw [position.nodeWord, position.context.capLeavesWord, BitVec.ult_eq_decide]
+  have high : node < 32 := by
+    have finish := span.finish
+    have pow : 16 ≤ 2 ^ (height + 4) := by
+      rw [pow_add]; have := Nat.one_le_two_pow (n := height); norm_num; omega
+    have : (node + 1) * 16 ≤ (node + 1) * 2 ^ (height + 4) := Nat.mul_le_mul_left _ pow
+    omega
+  have comparison : BitVec.ult (state.getReg .x16) (state.getReg .x27) = true := by
+    rw [level, position.context.capLeavesWord, BitVec.ult_eq_decide]
     simp only [BitVec.toNat_ofNat]
-    rw [Nat.mod_eq_of_lt (by omega : node < 2 ^ 64)]
-    simp [internal]
+    rw [Nat.mod_eq_of_lt (by omega : 8 * node < 2 ^ 64)]
+    simp only [decide_eq_true_eq, Nat.reducePow, Nat.reduceMod]
+    omega
   have ⟨target, nodeAfter, destAfter, memAfter⟩ := cursor_descend_post state pc comparison
   refine ⟨fun fuel coins => execute_cursor_descend _ pc fuel coins comparison, target, ⟨?_, ?_, ?_⟩, memAfter⟩
   · apply context_memory position.context _ memAfter
@@ -92,30 +96,30 @@ theorem cap_descend_step (groups : List Nat) (state : MachineState) (node height
   · exact destAfter.trans position.destWord
 
 private theorem parity_check_mem (state : MachineState) :
-    (advancePrefix state 41 2).mem = state.mem := by
+    (advancePrefix state 43 2).mem = state.mem := by
   by_cases even : state.getReg .x6 &&& 1#64 = 0#64 <;>
     simp [advancePrefix, advanceCode, execInstrBr, signExtend12, even]
   all_goals rfl
 
 private theorem parity_check_reg (state : MachineState) (reg : Reg) (distinct : reg ≠ .x7) :
-    (advancePrefix state 41 2).getReg reg = state.getReg reg := by
+    (advancePrefix state 43 2).getReg reg = state.getReg reg := by
   by_cases even : state.getReg .x6 &&& 1#64 = 0#64 <;>
     simp [advancePrefix, advanceCode, execInstrBr, signExtend12, even, Ne.symm distinct]
 
 private theorem up_reg (state : MachineState) (reg : Reg) (different : reg ≠ .x6) :
-    (advancePrefix state 43 2).getReg reg = state.getReg reg := by
+    (advancePrefix state 45 2).getReg reg = state.getReg reg := by
   by_cases taken : state.getReg .x6 >>> 1 = state.getReg .x23 <;>
     simp [advancePrefix, advanceCode, execInstrBr, signExtend13, taken, Ne.symm different]
 
-/-- The parity test at 701/702 (two cycles); there is no root test on entry. -/
+/-- The parity test at 703/704 (two cycles); there is no root test on entry. -/
 def afterAdvanceChecks (state : MachineState) : MachineState :=
-  advancePrefix state 41 2
+  advancePrefix state 43 2
 
 theorem advance_checks (groups : List Nat) (state : MachineState) (node dest : Nat)
     (position : CapPosition groups state node dest) (bounded : node < 512)
-    (pc : state.pc = 0x1af4) :
+    (pc : state.pc = 0x1afc) :
     RunsOpeningBlock state (afterAdvanceChecks state) 2 ∧
-    (afterAdvanceChecks state).pc = (if node % 2 = 0 then 0x1a50 else 0x1afc) ∧
+    (afterAdvanceChecks state).pc = (if node % 2 = 0 then 0x1a50 else 0x1b04) ∧
     CapPosition groups (afterAdvanceChecks state) node dest ∧
     (afterAdvanceChecks state).mem = state.mem := by
   have memory : (afterAdvanceChecks state).mem = state.mem := parity_check_mem state
@@ -151,11 +155,11 @@ def advanceRight (state : MachineState) : MachineState :=
 
 /-- An odd node climbs to its parent (four cycles in all). -/
 def advanceUp (state : MachineState) : MachineState :=
-  advancePrefix (afterAdvanceChecks state) 43 2
+  advancePrefix (afterAdvanceChecks state) 45 2
 
 theorem advance_left_to_right (groups : List Nat) (state : MachineState) (parent dest : Nat)
     (positive : 0 < parent) (bounded : 2 * parent < 512)
-    (position : CapPosition groups state (2 * parent) dest) (pc : state.pc = 0x1af4) :
+    (position : CapPosition groups state (2 * parent) dest) (pc : state.pc = 0x1afc) :
     RunsOpeningBlock state (advanceRight state) 3 ∧
     (advanceRight state).pc = 0x1a54 ∧
     CapPosition groups (advanceRight state) (2 * parent + 1) dest ∧
@@ -180,17 +184,17 @@ private theorem climb_word (parent : Nat) (bounded : 2 * parent + 1 < 512) :
   rw [Nat.mod_eq_of_lt (by omega : 2*parent+1 < 2^64), Nat.mod_eq_of_lt (by omega : parent < 2^64)]
   omega
 
-/-- The climb at 703/704 from an odd node `2·parent+1`: back to 701 unless the parent is the root. -/
+/-- The climb at 705/706 from an odd node `2·parent+1`: back to 703 unless the parent is the root. -/
 private theorem advance_climb (groups : List Nat) (state : MachineState) (parent dest : Nat)
     (bounded : 2 * parent + 1 < 512)
-    (position : CapPosition groups state (2 * parent + 1) dest) (pc : state.pc = 0x1af4) :
+    (position : CapPosition groups state (2 * parent + 1) dest) (pc : state.pc = 0x1afc) :
     RunsOpeningBlock state (advanceUp state) 4 ∧
-    (advanceUp state).pc = (if parent = 1 then 0x1b04 else 0x1af4) ∧
+    (advanceUp state).pc = (if parent = 1 then 0x1b0c else 0x1afc) ∧
     CapPosition groups (advanceUp state) parent dest ∧
     (advanceUp state).mem = state.mem := by
   have ⟨checks, target, pos, memory⟩ :=
     advance_checks groups state (2*parent+1) dest position bounded pc
-  have up : (afterAdvanceChecks state).pc = 0x1afc := by
+  have up : (afterAdvanceChecks state).pc = 0x1b04 := by
     simpa [show (2 * parent + 1) % 2 ≠ 0 by omega] using target
   have ⟨nextPC, nextNode, nextDest, nextMem⟩ := advance_up_post _ up
   have half : (afterAdvanceChecks state).getReg .x6 >>> 1 = BitVec.ofNat 64 parent := by
@@ -205,7 +209,7 @@ private theorem advance_climb (groups : List Nat) (state : MachineState) (parent
       rw [h]
   refine ⟨checks.next (fun fuel coins => execute_advance_up _ up fuel coins), ?_,
     ⟨?_, ?_, nextDest.trans pos.destWord⟩, nextMem.trans memory⟩
-  · change (advancePrefix (afterAdvanceChecks state) 43 2).pc = _
+  · change (advancePrefix (afterAdvanceChecks state) 45 2).pc = _
     rw [nextPC]
     by_cases root : parent = 1
     · rw [if_pos (rootTest.mpr root), if_pos root]
@@ -214,33 +218,33 @@ private theorem advance_climb (groups : List Nat) (state : MachineState) (parent
     intro reg member
     have different : reg ≠ .x6 := by intro same; subst reg; simp at member
     exact up_reg _ reg different
-  · change (advancePrefix (afterAdvanceChecks state) 43 2).getReg .x6 = _
+  · change (advancePrefix (afterAdvanceChecks state) 45 2).getReg .x6 = _
     rw [nextNode]
     exact half
 
 theorem advance_right_to_parent (groups : List Nat) (state : MachineState) (parent dest : Nat)
     (nonroot : 1 < parent) (bounded : 2 * parent + 1 < 512)
-    (position : CapPosition groups state (2 * parent + 1) dest) (pc : state.pc = 0x1af4) :
+    (position : CapPosition groups state (2 * parent + 1) dest) (pc : state.pc = 0x1afc) :
     RunsOpeningBlock state (advanceUp state) 4 ∧
-    (advanceUp state).pc = 0x1af4 ∧
+    (advanceUp state).pc = 0x1afc ∧
     CapPosition groups (advanceUp state) parent dest ∧
     (advanceUp state).mem = state.mem := by
   have ⟨ran, target, pos, memory⟩ := advance_climb groups state parent dest bounded position pc
   exact ⟨ran, by rw [target, if_neg (show ¬ parent = 1 by omega)], pos, memory⟩
 
-/-- The root's right child (node 3) climbs to the root and leaves through the `jal` at 705. -/
+/-- The root's right child (node 3) climbs to the root and leaves through the `jal` at 707. -/
 def advanceRootExit (state : MachineState) : MachineState :=
   (advanceUp state).setPC 0x1b14
 
 theorem advance_right_to_root (groups : List Nat) (state : MachineState) (dest : Nat)
-    (position : CapPosition groups state 3 dest) (pc : state.pc = 0x1af4) :
+    (position : CapPosition groups state 3 dest) (pc : state.pc = 0x1afc) :
     RunsOpeningBlock state (advanceRootExit state) 5 ∧
     (advanceRootExit state).pc = 0x1b14 ∧
     CapPosition groups (advanceRootExit state) 1 dest ∧
     (advanceRootExit state).mem = state.mem := by
   have ⟨ran, target, pos, memory⟩ :=
     advance_climb groups state 1 dest (by decide) position pc
-  have exitPC : (advanceUp state).pc = 0x1b04 := by rw [target, if_pos rfl]
+  have exitPC : (advanceUp state).pc = 0x1b0c := by rw [target, if_pos rfl]
   refine ⟨ran.next (fun fuel coins => execute_advance_exit _ exitPC fuel coins), rfl,
     ⟨?_, pos.nodeWord, pos.destWord⟩, memory⟩
   exact context_memory (after := advanceRootExit state) pos.context (fun _ _ => rfl) rfl

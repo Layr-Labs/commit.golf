@@ -49,7 +49,8 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
       (∀ b<30, after.getByte (BitVec.ofNat 64 (dest+b)) =
         state.getByte (BitVec.ofNat 64 (capDigestAddress node+b))) ∧
       (∀ a<2^64, ¬EmitTouched dest count a →
-        after.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a)) := by
+        after.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a)) ∧
+      (∀ r, r ≠ .x7 → r ≠ .x21 → r ≠ .x28 → r ≠ .x29 → r ≠ .x30 → r ≠ .x31 → after.getReg r = state.getReg r) := by
   have ram : MEMORY_BYTES < 2^64 := by decide
   obtain ⟨srcAlign, srcBelow⟩ := cap_digest_bounds node bounded
   obtain ⟨mid, run, pcMid, x21Mid, topMid, regsMid, bytesMid, frameMid, wordsMid⟩ :=
@@ -121,13 +122,15 @@ theorem emit_cap238_plain (groups : List Nat) (state : MachineState) (node dest 
     refine ⟨fun e => away.1 (Opening.nat_address_injective qsmall (by omega) e), fun e => ?_⟩
     rw [← succ_word] at e
     exact away.2 (Opening.nat_address_injective qsmall (by omega) e)
+  have keep (r : Reg) (h7 : r ≠ .x7) (h21 : r ≠ .x21) (_h28 : r ≠ .x28) (_h29 : r ≠ .x29) (h30 : r ≠ .x30)
+      (h31 : r ≠ .x31) : s9.getReg r = state.getReg r := by
+    rw [reg9 r h21, reg7, reg6 r h30, regs5]
+    exact regsMid r h7 h31
   refine ⟨s9, ?_,
-    step9.2.trans (by decide +kernel), ?_, ?_, ?_, ?_⟩
+    step9.2.trans (by decide +kernel), ?_, ?_, ?_, ?_, keep⟩
   · exact (((run.next run5).next step6.1).next step7.1).next step9.1
   · apply cap_position_kept position
-    · intro r h7 h21 _ _ h30 h31
-      rw [reg9 r h21, reg7, reg6 r h30, regs5]
-      exact regsMid r h7 h31
+    · exact keep
     · intro a below
       calc s9.getMem (BitVec.ofNat 64 a)
           = (s6.setHalfword (BitVec.ofNat 64 (dest+28)) (halfAt state (capDigestAddress node+28))).getMem

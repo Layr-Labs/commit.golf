@@ -2,7 +2,7 @@ import CommitGolfCandidate.GroupOpenCapMoves
 import CommitGolfCandidate.TwoPermutationOpeningCapWrites
 import CommitGolfCandidate.GroupOpenCapCopy
 
-/-! Each cap emit copies the first 28 digest bytes. Word 697 tests the countdown. A plain emit writes the last halfword and advances by 30 bytes. Every eighth emit folds its high bits into the previous seven slots and advances by 28 bytes. -/
+/-! Each cap emit copies the first 28 digest bytes and keeps every register but x7, x21 and x28..x31. Word 697 tests the countdown. A plain emit writes the last halfword and advances by 30 bytes. Every eighth emit folds its high bits into the previous seven slots and advances by 28 bytes. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (capDigestAddress proofBase)
@@ -28,6 +28,7 @@ def EmitCap238 : Prop :=
         after.getByte (BitVec.ofNat 64 (dest+b))=state.getByte (BitVec.ofNat 64 (capDigestAddress node+b))) ∧
       (count=0 → ∀ k<7, halfAt after (dest-182+30*k)=
         (halfAt state (dest-182+30*k) ||| ((halfAt state (capDigestAddress node+28) >>> (2*k)) <<< 14))) ∧
-      (∀ a<2^64, ¬EmitTouched dest count a → after.getByte (BitVec.ofNat 64 a)=state.getByte (BitVec.ofNat 64 a))
+      (∀ a<2^64, ¬EmitTouched dest count a → after.getByte (BitVec.ofNat 64 a)=state.getByte (BitVec.ofNat 64 a)) ∧
+      (∀ r, r ≠ .x7 → r ≠ .x21 → r ≠ .x28 → r ≠ .x29 → r ≠ .x30 → r ≠ .x31 → after.getReg r = state.getReg r)
 
 end TwoPermutationPrototype.GroupedOpening

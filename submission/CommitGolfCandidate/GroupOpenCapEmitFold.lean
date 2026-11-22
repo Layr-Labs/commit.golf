@@ -50,7 +50,8 @@ theorem emit_cap238_fold (groups : List Nat) (state : MachineState) (node dest :
       (∀ b<28, after.getByte (BitVec.ofNat 64 (dest+b)) = state.getByte (BitVec.ofNat 64 (capDigestAddress node+b))) ∧
       (∀ k<7, halfAt after (dest-182+30*k) =
         (halfAt state (dest-182+30*k) ||| ((halfAt state (capDigestAddress node+28) >>> (2*k)) <<< 14))) ∧
-      (∀ a<2^64, ¬EmitTouched dest 0 a → after.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a)) := by
+      (∀ a<2^64, ¬EmitTouched dest 0 a → after.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a)) ∧
+      (∀ r, r ≠ .x7 → r ≠ .x21 → r ≠ .x28 → r ≠ .x29 → r ≠ .x30 → r ≠ .x31 → after.getReg r = state.getReg r) := by
   have ram : MEMORY_BYTES < 2^64 := by decide
   have small : MEMORY_BYTES = 2^36 := rfl
   have low : 182 ≤ dest := by omega
@@ -100,14 +101,16 @@ theorem emit_cap238_fold (groups : List Nat) (state : MachineState) (node dest :
   have byteFold (q : Nat) (qfit : q+8 ≤ 2^64) (away : ∀ j < 7, q ≠ foldAddress dest j ∧ q ≠ foldAddress dest j+1) :
       m3.getByte (BitVec.ofNat 64 q) = m2.getByte (BitVec.ofNat 64 q) :=
     fold_frame_bytes (wsStart+1) codes m2 dest x low (by omega) aligned pc2 pointer2 top2 q qfit away
-  refine ⟨after, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  have keep (r : Reg) (a : r ≠ .x7) (b : r ≠ .x21) (c : r ≠ .x28) (d : r ≠ .x29) (e : r ≠ .x30)
+      (f : r ≠ .x31) : after.getReg r = state.getReg r := by
+    rw [regAfter r b, reg3 r c d f, m2reg r e]
+    exact regsm r a f
+  refine ⟨after, ?_, ?_, ?_, ?_, ?_, ?_, ?_, keep⟩
   · have chain := ((((run0.next run1).next step2.1).next run3).next step4.1).next step5.1
     exact chain
   · exact pc5
   · apply cap_position_kept position
-    · intro r a b c d e f
-      rw [regAfter r b, reg3 r c d f, m2reg r e]
-      exact regsm r a f
+    · exact keep
     · intro a inside
       change after.mem (BitVec.ofNat 64 a) = state.mem (BitVec.ofNat 64 a)
       rw [afterMem]

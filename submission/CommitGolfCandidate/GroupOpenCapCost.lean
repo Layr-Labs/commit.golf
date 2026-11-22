@@ -1,5 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedOpeningSchedule
 import CommitGolfCandidate.K3OpenCapBytes
+import CommitGolfCandidate.GroupOpenCapChunkFrontier
 
 namespace TwoPermutationPrototype.GroupedOpening
 open TwoPermutationPrototype.Sampling
@@ -219,6 +220,208 @@ theorem cap_walk_scored_bound (groups : List Nat) (base : Nat) (even : base%2=0)
   have exactControl : capControlWorst 8=4850 := by decide
   rw [exactControl] at control
   simp only [Nat.zero_add, Nat.zero_div, Nat.sub_zero, capCopySavings] at balance
+  omega
+
+/-! ### The chunked walk
+
+DFS over heights 8..3 (levels 0..5); a marked level-5 node hands its depth-3 subtree to the chunk code, which
+emits the frontier from the block of its leaf mask. -/
+
+/-- Words of the block entry for relative frontier node `r`: `addi`, `srli` unless `r` is a leaf, `jal x18`. -/
+def entryLen (r : Nat) : Nat := if depthOf r = 3 then 2 else 3
+
+/-- Reference charge of one block entry: its words, the emit block (28 assumed for the copy, +7) and the return
+`jalr`, less the 2 that `capWalkB` adds back per node. -/
+def entryCycles (r : Nat) : Nat := entryLen r+34
+
+/-- Reference charge of a marked level-5 subtree: the lookup (4), the level branch and the chunk jump (2), the
+mask build and dispatch (28), the block exit (2) and one entry per frontier node. -/
+def chunkControl (mask : Nat) : Nat := 36+((chunkEntries mask).map entryCycles).sum
+
+/-- Reference charge of the chunked walk of a subtree of height `k+3`. A DFS emit costs 39: the lookup (4), the
+stub (1), the emit block (28+7) and the return (1), less 2. A marked node above level 5 costs 14 as before. -/
+def capSubtreeB (groups : List Nat) (node : Nat) : Nat → Nat
+  | 0 => if capIsMarked groups node 3 then chunkControl (leafMask groups node) else 39
+  | k+1 =>
+    if capIsMarked groups node (k+4) then
+      14+capSubtreeB groups (2*node) k+capSubtreeB groups (2*node+1) k
+    else 39
+
+/-- Exact chunked walk charge: reference charge and folds, minus the telescoping copy potential. -/
+def capWalkB (groups : List Nat) (node k base start : Nat) : Nat :=
+  let count := (capFrontierNodes groups node (k+3)).length
+  capSubtreeB groups node k+2*count+34*((start+count)/8-start/8)-
+    (capCopySavings base (start+count)-capCopySavings base start)
+
+theorem entry_cycles_lower (r : Nat) : 36 ≤ entryCycles r := by
+  unfold entryCycles entryLen; split <;> omega
+
+private theorem sum_lower (rs : List Nat) : 36*rs.length ≤ (rs.map entryCycles).sum := by
+  induction rs with
+  | nil => simp
+  | cons r rest ih => have := entry_cycles_lower r; simp only [List.map_cons, List.sum_cons, List.length_cons]; omega
+
+theorem chunk_count (groups : List Nat) (node : Nat) :
+    (capFrontierNodes groups node 3).length=(chunkEntries (leafMask groups node)).length := by
+  rw [chunk_frontier, List.length_map]
+
+theorem cap_b_frontier_lower (groups : List Nat) (node k : Nat) :
+    36*(capFrontierNodes groups node (k+3)).length ≤ capSubtreeB groups node k := by
+  induction k generalizing node with
+  | zero =>
+    simp only [capSubtreeB, Nat.zero_add]
+    split
+    · rw [chunk_count]; have := sum_lower (chunkEntries (leafMask groups node)); unfold chunkControl; omega
+    · rename_i h; simp [capFrontierNodes, h]
+  | succ k ih =>
+    have left := ih (2*node)
+    have right := ih (2*node+1)
+    rw [show k+1+3=(k+3)+1 by omega, capFrontierNodes]
+    simp only [capSubtreeB, show k+3+1=k+4 by omega]
+    split <;> simp only [List.length_append, List.length_singleton] <;> omega
+
+theorem cap_b_balance (groups : List Nat) (node k base start : Nat) :
+    capWalkB groups node k base start+capCopySavings base (start+(capFrontierNodes groups node (k+3)).length)=
+      capSubtreeB groups node k+2*(capFrontierNodes groups node (k+3)).length+
+        34*((start+(capFrontierNodes groups node (k+3)).length)/8-start/8)+capCopySavings base start := by
+  have := cap_b_frontier_lower groups node k
+  have := cap_savings_segment base start (capFrontierNodes groups node (k+3)).length
+  unfold capWalkB
+  dsimp only
+  omega
+
+theorem cap_walk_b_unmarked (groups : List Nat) (node k base start : Nat)
+    (mark : capIsMarked groups node (k+3)=false) :
+    capWalkB groups node k base start=CapCopy.cycles (base+capOffset start)+13+34*((start+1)/8-start/8) := by
+  have count : (capFrontierNodes groups node (k+3)).length=1 := by
+    rw [show k+3=(k+2)+1 by omega]; simp [capFrontierNodes, show k+2+1=k+3 by omega, mark]
+  have old : capSubtreeB groups node k=39 := by
+    cases k with
+    | zero =>
+      have m : capIsMarked groups node 3=false := mark
+      simp [capSubtreeB, m]
+    | succ k =>
+      have m : capIsMarked groups node (k+4)=false := mark
+      simp [capSubtreeB, m]
+  have balance := cap_b_balance groups node k base start
+  rw [count, old, capCopySavings] at balance
+  have := cap_copy_cycles_bounds (base+capOffset start)
+  unfold capCopySaving at balance
+  omega
+
+theorem cap_walk_b_branch (groups : List Nat) (node k base start : Nat)
+    (mark : capIsMarked groups node (k+4)=true) :
+    capWalkB groups node (k+1) base start=
+      14+capWalkB groups (2*node) k base start+
+        capWalkB groups (2*node+1) k base (start+(capFrontierNodes groups (2*node) (k+3)).length) := by
+  have parent := cap_b_balance groups node (k+1) base start
+  have left := cap_b_balance groups (2*node) k base start
+  have right := cap_b_balance groups (2*node+1) k base
+    (start+(capFrontierNodes groups (2*node) (k+3)).length)
+  have frontier : capFrontierNodes groups node (k+1+3)=
+      capFrontierNodes groups (2*node) (k+3)++capFrontierNodes groups (2*node+1) (k+3) := by
+    rw [show k+1+3=(k+3)+1 by omega]; simp [capFrontierNodes, show k+3+1=k+4 by omega, mark]
+  rw [frontier] at parent
+  simp only [capSubtreeB, mark, ite_true, List.length_append] at parent
+  have m1 : start/8 ≤ (start+(capFrontierNodes groups (2*node) (k+3)).length)/8 := Nat.div_le_div_right (by omega)
+  have m2 : (start+(capFrontierNodes groups (2*node) (k+3)).length)/8 ≤
+      (start+(capFrontierNodes groups (2*node) (k+3)).length+(capFrontierNodes groups (2*node+1) (k+3)).length)/8 :=
+    Nat.div_le_div_right (by omega)
+  simp only [Nat.add_assoc] at parent left right m2
+  omega
+
+/-- Exact charge of the block entries for frontier nodes `rs`, the first written as cap node number `start`. -/
+def entriesCycles : List Nat → Nat → Nat → Nat
+  | [], _, _ => 0
+  | r :: rest, base, start =>
+    entryLen r+8+CapCopy.cycles (base+capOffset start)+34*((start+1)/8-start/8)+entriesCycles rest base (start+1)
+
+theorem entries_balance (base : Nat) : ∀ (rs : List Nat) (start : Nat),
+    entriesCycles rs base start+capCopySavings base (start+rs.length)=
+      (rs.map entryCycles).sum+2*rs.length+34*((start+rs.length)/8-start/8)+capCopySavings base start
+  | [], start => by simp [entriesCycles]
+  | r :: rest, start => by
+    have ih := entries_balance base rest (start+1)
+    have bounds := cap_copy_cycles_bounds (base+capOffset start)
+    have step : capCopySavings base (start+1)=capCopySavings base start+capCopySaving (base+capOffset start) := rfl
+    have m1 : start/8 ≤ (start+1)/8 := Nat.div_le_div_right (by omega)
+    have m2 : (start+1)/8 ≤ (start+1+rest.length)/8 := Nat.div_le_div_right (by omega)
+    simp only [entriesCycles, List.map_cons, List.sum_cons, List.length_cons, entryCycles]
+    rw [show start+(rest.length+1)=start+1+rest.length by omega]
+    unfold capCopySaving at step
+    omega
+
+theorem cap_walk_b_chunk (groups : List Nat) (node base start : Nat)
+    (mark : capIsMarked groups node 3=true) :
+    capWalkB groups node 0 base start=36+entriesCycles (chunkEntries (leafMask groups node)) base start := by
+  have balance := cap_b_balance groups node 0 base start
+  have entries := entries_balance base (chunkEntries (leafMask groups node)) start
+  rw [chunk_count] at balance
+  simp only [capSubtreeB, mark, ite_true, chunkControl] at balance
+  omega
+
+private def capControlB : Nat → Nat
+  | 0 => 38
+  | k+1 => 14+2*capControlB k
+
+private theorem cap_control_b_lower (k : Nat) : 38 ≤ capControlB k := by
+  induction k with
+  | zero => rfl
+  | succ k ih => simp only [capControlB]; omega
+
+/-- Every block charges at most 38 plus 36 per frontier node (checked for all 256 masks). -/
+theorem chunk_control_bound : ∀ mask < 256, chunkControl mask ≤ 38+36*(chunkEntries mask).length := by
+  decide +kernel
+
+theorem cap_b_control_bound (groups : List Nat) (node k : Nat) :
+    capSubtreeB groups node k ≤ capControlB k+36*(capFrontierNodes groups node (k+3)).length := by
+  induction k generalizing node with
+  | zero =>
+    simp only [capSubtreeB, capControlB, Nat.zero_add]
+    split
+    · rw [chunk_count]; exact chunk_control_bound _ (leaf_mask_lt groups node)
+    · rename_i h; simp [capFrontierNodes, h]
+  | succ k ih =>
+    have left := ih (2*node)
+    have right := ih (2*node+1)
+    have low := cap_control_b_lower k
+    rw [show k+1+3=(k+3)+1 by omega, capFrontierNodes]
+    simp only [capSubtreeB, capControlB, show k+3+1=k+4 by omega]
+    split <;> simp only [List.length_append, List.length_singleton] <;> omega
+
+theorem cap_walk_b_scored_bound (groups : List Nat) (base : Nat) (even : base%2=0)
+    (small : (capFrontierNodes groups 1 8).length ≤ 128) : capWalkB groups 1 5 base 0 ≤ 6130 := by
+  have control := cap_b_control_bound groups 1 5
+  have lower := cap_savings_lower base (capFrontierNodes groups 1 8).length even
+  have balance := cap_b_balance groups 1 5 base 0
+  have exactControl : capControlB 5=1650 := by decide
+  rw [exactControl] at control
+  simp only [show (5:Nat)+3=8 from rfl] at control balance
+  simp only [Nat.zero_add, Nat.zero_div, Nat.sub_zero, capCopySavings] at balance
+  omega
+
+theorem cap_frontier_length_le (groups : List Nat) (node h : Nat) :
+    (capFrontierNodes groups node h).length ≤ 2^h := by
+  induction h generalizing node with
+  | zero => simp only [capFrontierNodes]; split <;> simp
+  | succ h ih =>
+    have left := ih (2*node)
+    have right := ih (2*node+1)
+    have one := Nat.one_le_two_pow (n := h)
+    rw [capFrontierNodes]
+    split <;> simp only [List.length_append, List.length_singleton, pow_succ] <;> omega
+
+/-- A crude bound for every position set (the fuel allowance). -/
+theorem cap_walk_b_bound (groups : List Nat) (base : Nat) (even : base%2=0) : capWalkB groups 1 5 base 0 ≤ 12498 := by
+  have control := cap_b_control_bound groups 1 5
+  have lower := cap_savings_lower base (capFrontierNodes groups 1 8).length even
+  have balance := cap_b_balance groups 1 5 base 0
+  have count := cap_frontier_length_le groups 1 8
+  have exactControl : capControlB 5=1650 := by decide
+  rw [exactControl] at control
+  simp only [show (5:Nat)+3=8 from rfl] at control balance
+  simp only [Nat.zero_add, Nat.zero_div, Nat.sub_zero, capCopySavings] at balance
+  norm_num at count
   omega
 
 end TwoPermutationPrototype.GroupedOpening

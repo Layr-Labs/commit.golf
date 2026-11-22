@@ -29,12 +29,18 @@ private theorem visit_memory (state : MachineState) :
     simp [cursorMarkAddress] at zero <;>
     simp [cursorVisitPrefix, capWalkInstructions, execInstrBr, signExtend12, zero]
 
-private theorem visit_register (state : MachineState) (r : Reg) (a : r ≠ .x7) (b : r ≠ .x28) :
+theorem visit_register (state : MachineState) (r : Reg) (a : r ≠ .x7) (b : r ≠ .x28) (c : r ≠ .x16) :
     (cursorVisitPrefix state 4).getReg r = state.getReg r := by
   by_cases zero : state.getMem (cursorMarkAddress state) = 0#64 <;>
     simp [cursorMarkAddress] at zero <;>
     simp [cursorVisitPrefix, capWalkInstructions, execInstrBr, signExtend12, zero,
-      Ne.symm a, Ne.symm b]
+      Ne.symm a, Ne.symm b, Ne.symm c]
+
+private theorem visit_level (state : MachineState) :
+    (cursorVisitPrefix state 4).getReg .x16 = state.getReg .x6 <<< 3 := by
+  by_cases zero : state.getMem (cursorMarkAddress state) = 0#64 <;>
+    simp [cursorMarkAddress] at zero <;>
+    simp [cursorVisitPrefix, capWalkInstructions, execInstrBr, signExtend12, zero]
 
 theorem cap_mark_address (state : MachineState) (node : Nat)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase)
@@ -50,18 +56,19 @@ private theorem mark_word_zero (groups : List Nat) (node height : Nat)
   rw [markWord, cap_span_height node height span]
   cases capIsMarked groups node height <;> decide
 
-/-- The four-cycle lookup dispatches to exactly the branch in the pure frontier. -/
+/-- The four-cycle lookup dispatches to exactly the branch in the pure frontier and leaves `x16 = 8 node`. -/
 theorem cap_lookup (state : MachineState) (groups : List Nat) (node height fuel : Nat)
     (allowCoins : Bool) (span : CapSpan node height) (context : CapContext groups state)
     (pc : state.pc = 0x1a54) (nodeWord : state.getReg .x6 = BitVec.ofNat 64 node) :
     execute openingImage (4 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (cursorVisitPrefix state 4) allowCoins
           return result.charge 4 0) ∧
-    (cursorVisitPrefix state 4).pc = (if capIsMarked groups node height then 0x1a64 else 0x1a70) ∧
+    (cursorVisitPrefix state 4).pc = (if capIsMarked groups node height then 0x1a64 else 0x1af8) ∧
     (cursorVisitPrefix state 4).getReg .x6 = state.getReg .x6 ∧
     (cursorVisitPrefix state 4).getReg .x21 = state.getReg .x21 ∧
     (cursorVisitPrefix state 4).mem = state.mem ∧
-    CapContext groups (cursorVisitPrefix state 4) := by
+    CapContext groups (cursorVisitPrefix state 4) ∧
+    (cursorVisitPrefix state 4).getReg .x16 = BitVec.ofNat 64 (8 * node) := by
   have ⟨positive, bounded⟩ := cap_span_node node height span
   have markAddr := cap_mark_address state node context.markBaseWord nodeWord
   have safe : accessValid (cursorMarkAddress state) 8 = true := by
@@ -73,8 +80,8 @@ theorem cap_lookup (state : MachineState) (groups : List Nat) (node height fuel 
     rw [markAddr]
     exact context.markValue node positive bounded
   refine ⟨execute_cursor_visit state pc fuel allowCoins safe, ?_,
-    visit_register state .x6 (by decide) (by decide),
-    visit_register state .x21 (by decide) (by decide), visit_memory state, ?_⟩
+    visit_register state .x6 (by decide) (by decide) (by decide),
+    visit_register state .x21 (by decide) (by decide) (by decide), visit_memory state, ?_, ?_⟩
   · rw [cursor_visit_pc state pc, raw]
     cases mark : capIsMarked groups node height
     · have empty := (mark_word_zero groups node height span).mpr mark
@@ -88,8 +95,11 @@ theorem cap_lookup (state : MachineState) (groups : List Nat) (node height fuel 
   · apply context.of_preserved
     · intro r member
       simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-      rcases member with rfl | rfl | rfl | rfl | rfl <;> exact visit_register state _ (by decide) (by decide)
+      rcases member with rfl | rfl | rfl | rfl | rfl <;> exact visit_register state _ (by decide) (by decide) (by decide)
     · intro target _ _
       exact congrFun (visit_memory state) (BitVec.ofNat 64 (markBase + 8 * target))
+  · rw [visit_level, nodeWord, BitVec.shiftLeft_eq_mul_twoPow]
+    change BitVec.ofNat 64 node * BitVec.ofNat 64 8 = _
+    rw [← BitVec.ofNat_mul, Nat.mul_comm node]
 
 end TwoPermutationPrototype.GroupedOpening

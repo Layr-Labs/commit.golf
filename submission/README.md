@@ -1,3 +1,84 @@
+# Chunked cap walk (-2,688 opening cycles)
+
+Based on the 100,379-cycle carried record writers (next inherited section). The cap walk no longer descends below
+level 5. A marked level-5 node hands its depth-3 subtree, its eight cap leaves, to straight-line code chosen
+by the byte of their marks. The frontier of the subtree is then emitted without any cursor moves.
+
+## The change
+
+- Lookup (661..665): `slli a6,t1,3; add t2,s10,a6; ld t3,0(t2); beq t3,zero,<702>; bgeu a6,s11,<708>`. The lookup
+  keeps `a6 = 8 t1`. An unmarked node goes to the emit stub. A marked node with `8 t1 >= 256` (levels
+  5..8; the walk only reaches level 5) goes to the chunk jump, and any other marked node descends as before.
+- 701 `jalr zero,s2,0` returns from the emit block (668..700, unchanged). 702 `jal s2,<668>` is the DFS emit
+  stub, so a DFS emit returns to the advance block. The advance block moves from 701..705 to 703..707,
+  with the root exit at 707. 708 `jal zero,<8192>`.
+- Chunk code (8192..8219): read the eight leaf marks of node `n = a6/8` (dwords at `s10 + 64 n`), form the
+  mask byte `m`, and jump to block `m` at word `8224 + 16 m`.
+- Blocks (8224..12319, 16 words each): block `m` emits the frontier of the depth-3 subtree with leaf mask `m`
+  in DFS order. Per frontier node `n*2^d + o` it runs `addi t1,a6,o<<(3-d)`, `srli t1,t1,3-d` (left out for a
+  leaf) and `jal s2,<668>`. The block ends with `srli t1,a6,3; jal zero,<703>`, which resumes the advance
+  from `n`.
+- Words 7872..8191 are NOPs (nothing reaches them). The data table is unchanged. The record writers
+  (the writers at 6144..7871 included), the marks, the prep and the emit block are untouched.
+
+Cost: a marked level-5 node costs 36 cycles (lookup 4, level branch 1, chunk jump 1, chunk code 28, block exit 2)
+plus 2 or 3 words, the emit block and the return per frontier node. A DFS emit costs 2 more than before
+(stub and return). The worst case over all 128-position sets moves from walk 8,818 to 6,130. A dynamic
+program outside Lean first found this maximum. The Lean proof establishes the same bound on its own, and one
+marked leaf in each half of every level-5 subtree, e.g. leaves 0 and 4, attains it: frontier 128 with two inner
+nodes per block.
+
+```json
+{"commitCycles":504585244,"openingCycles":97691,"proofBytes":72160}
+```
+
+```text
+30 + (314*128 + 2) + (57482 - 15) = 97691          (wide bound 60170 - 8818 + 6130 = 57482)
+(504585244 + 97691) * 72160 = 36417920589600
+Parent (100,379):  (504585244 + 100379) * 72160 = 36418114555680
+Saving: 2,688 opening cycles; 193966080 score
+```
+
+## Proof changes
+
+- `GroupOpenCapChunkFrontier` (new, no image dependency): the frontier of a depth-3 subtree from its leaf mask
+  (`chunk_frontier : capFrontierNodes groups n 3 = (chunkEntries (leafMask groups n)).map (chunkNode n)`).
+- `GroupOpenCapChunkCode` (new): the block code generated from `chunkEntries`, one kernel pass comparing the
+  4,096 decoded block words with it (`block_table_code`), the chunk rows and `mask_combine`.
+- `GroupOpenCapNode` (new): `CapRun`, `emit_node` (one emit block entered at 668, leaving at 701 with the
+  registers it keeps), and the DFS emit through the stub (`walk_unmarked`).
+- `GroupOpenCapChunkRun` (new): the chunk code (`chunk_code_run`), the block entries (`entries_run`, by induction
+  on the frontier list) and `chunk_run`.
+- `GroupOpenCapSubtree`: induction over heights 8..3 with the chunk at height 3; root form `cap_root_of_emit`.
+- `GroupOpenCapCost`: `capSubtreeB`/`capWalkB` with the chunk charge `chunkControl`, the balance lemmas and
+  `cap_walk_b_scored_bound : capWalkB groups 1 5 base 0 ≤ 6130` (control bound `capControlB 5 + 36 * count`,
+  `capControlB 0 = 38`, checked over all 256 masks).
+- `K3OpenCapSpec`, `GroupOpenCapEmitPlain`, `GroupOpenCapEmitFold`, `GroupOpenCapEmit`: `EmitCap238` also states
+  that the emit block keeps every register but x7, x21 and x28..x31.
+- `GroupOpenCapCursor`, `GroupOpenCapAdvance`, `GroupOpenCapFlow`, `GroupOpenCapMoves`: rows 660..708 (lookup
+  with `x16 = 8 node`, level branch, return, stub, advance at 703..707, chunk jump).
+- `GroupOpenABI`: `wideCycles` with `capWalkB`, wide bound 57,482, `wide_cycles_le` proved directly from
+  `cap_walk_b_bound`; `GroupOpenFull`, `GroupOpenClosing`, `Solution.lean`, `claim.json`: 97,691.
+  `programs.json`, `K1Manifest` and `GroupOpenImage` are regenerated for the 12,320-word image (words
+  7872..8191 are NOPs; 193 packed leaves). No writer or record module changes.
+
+## Evidence
+
+A C emulator of the `Riscv.lean` cost model with stand-in oracles ran one full 2^24-leaf commitment, then the
+original leader, the 100,379-cycle parent and this opener on the same trapdoor, on 69 position sets: the 35
+general sets (sizes 0..129, spread, random, runs, tile and segment boundaries), frontiers of 1, 2, 127 and
+128 nodes, single and full chunks, ten fixed leaf masks, all 255 non-zero leaf masks spread over nine sets,
+clustered and spread sets, and the two worst-case shapes. A tampered proof was also run. Proof bytes, proof
+hash and checker acceptance are identical on every set, and the opening oracle trace equals the parent's.
+Every non-empty set is faster: the 128-position sets save between 2 cycles (all positions in a few cap
+groups) and 2,752. The worst case of this opener, one marked leaf in each half of every level-5 subtree at the
+deepest salt-chain offset, takes exactly 97,691 cycles. The parent's worst fixtures take 97,627 here. The
+tampered proof is rejected.
+
+Certification here means a local Lean build of the certificate; the official verifier was not run.
+
+## Inherited documentation
+
 # Carry-chained copies in the record writers
 
 The four writers emit 16-, 28-, 30- and 32-byte fields. Where the destination is two or six modulo eight, each writer emits a short prefix, then builds aligned doublewords from two consecutive source loads. The low and high parts meet in registers before each aligned eight-byte store. The tail uses halfword and word stores confined to the field. The 28-byte field at residue two finishes with three halfword stores.
