@@ -7,7 +7,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
 
-/-- `packed_fetch_all` for every row of the image, including the relocated first pass (3077..3147). -/
+/-- `packed_fetch_all` for every row of the image below word 6144 (the V2a pass phases sit at 3078..3387). -/
 theorem packed_fetch_far (state : MachineState) (index : Nat) (instruction : Instr)
     (bounded : index < 6144) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
     (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
@@ -126,42 +126,6 @@ def pairRows (start : Nat) (src dst : Reg) : List (Nat × Nat) → List Row
   | (a,b)::rest => (start,.LD .x31 src (BitVec.ofNat 12 (8*a))) :: (start+1,.SD dst .x31 (BitVec.ofNat 12 (8*b))) ::
       pairRows (start+2) src dst rest
 
-/-! First pass, one position `i` (quartet `g = i >> 2`, block `B = B_g`), rows 3077..3147 (inside the NOP gap after the record-writer selector).
-Head (rows 3077..3096): `x3 := 16 i` and `x30 :=` the table entry of `i % 4096` (`GroupOpenTable`); `skip` to
-row 3096 when `g` equals the previous position's quartet (`x4`); otherwise `x4 := g`, the rebuilt block is
-`B+512`, the entry's signed offsets give the reply (`B+168` even, `B-1056` odd) and the address of the sibling
-group's node (`B+136` even, `B-856` odd), the inverse of the reply lands in the rebuilt block (call at 3092),
-rows 3093..3094 restore `x13, x12`, row 3095 stores the sibling node's address in the word after the rebuilt
-block (`B+712`), where the record writer's level-0 head loads it. Then the chained salt generator (3097..3105
-and the link block 3106..3138, `K3OpenChain`) and the salt rows (3139..3147). -/
-
-def headRows : List Row := [(3077,.LD .x6 .x14 0),(3078,.SRLI .x28 .x6 2),(3079,.SLLI .x3 .x6 4),
-  (3080,.AND .x30 .x3 .x1),(3081,.ADD .x30 .x30 .x2),(3082,.BEQ .x28 .x4 56)]
-/-- Row 3096: `addi x10,x0,1024`, shared by the skip path (branch target) and the end of a new quartet's rows. -/
-def loadRow : List Row := [(3096,.ADDI .x10 .x0 1024)]
-/-- A repeated quartet: rows 3077..3082, then 3096. -/
-def skipRows : List Row := headRows ++ loadRow
-/-- A new quartet before its inverse call (row 3092). -/
-def newRows : List Row := [(3083,.ADDI .x4 .x28 0),(3084,.SLLI .x7 .x28 10),(3085,.ADD .x7 .x7 .x24),
-  (3086,.ADDI .x12 .x7 512),(3087,.LH .x10 .x30 4),(3088,.ADD .x10 .x10 .x7),(3089,.LH .x31 .x30 6),
-  (3090,.ADD .x31 .x31 .x7),(3091,.ADDI .x13 .x0 2)]
-def preRows : List Row := headRows ++ newRows
-def restoreRows : List Row := [(3093,.ADDI .x13 .x0 1),(3094,.ADDI .x12 .x0 1536)]
-/-- `sd x31, 712(x7)`: the sibling node's address into word 89 of the quartet block. -/
-def ptrRows : List Row := [(3095,.SD .x7 .x31 712)]
-/-- A new quartet after its inverse call: rows 3093..3096. -/
-def headPost : List Row := restoreRows ++ ptrRows ++ loadRow
-
-/-- Salt rows: the destination `x30 := 16 i + x22` (row 3139, right after the link block), then two dword
-copies from the reply address `x28` the table supplied (rows 3140..3143), falling through to the latch. -/
-def selectRows : List Row := [(3139,.ADD .x30 .x3 .x22)]
-def copyRows : List Row :=
-  [(3140,.LD .x31 .x28 0),(3141,.SD .x30 .x31 0),(3142,.LD .x31 .x28 8),(3143,.SD .x30 .x31 8)]
-def nextRows (last : Bool) : List Row := [(3144,.ADDI .x14 .x14 8),(3145,.BNE .x14 .x17 7920)] ++
-  (if last then [(3146,.ADDI .x25 .x9 0),(3147,.JAL .x0 2084624)] else [])
-
-def postRows (last : Bool) : List Row := selectRows ++ copyRows ++ nextRows last
-
 private theorem row_fetch (row : Row) (bounded : row.1<6144) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
     ∀ st : MachineState, st.pc=address row.1 → fetch openingImage st=some (.base row.2) :=
   fun st pc => packed_fetch_far st _ _ (by omega) pc dec
@@ -172,14 +136,5 @@ theorem rows_present (rows : List Row)
   intro p hp;obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp hp
   subst p
   exact row_fetch _ (raw ⟨i,hi⟩).1 (raw ⟨i,hi⟩).2
-
-theorem skip_row_fetch : presentRows skipRows := by apply rows_present; decide +kernel
-theorem pre_row_fetch : presentRows preRows := by apply rows_present; decide +kernel
-theorem head_post_fetch : presentRows headPost := by apply rows_present; decide +kernel
-theorem post_row_fetch (last : Bool) : presentRows (postRows last) := by
-  apply rows_present; revert last; decide +kernel
-
-theorem inverse_fetch (s : MachineState) (pc : s.pc=address 3092) : fetch openingImage s=some (.base .ECALL) :=
-  packed_fetch_far _ 3092 _ (by decide) pc (by decide +kernel)
 
 end TwoPermutationPrototype.GroupedOpening

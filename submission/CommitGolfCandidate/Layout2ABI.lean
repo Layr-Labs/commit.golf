@@ -3,18 +3,20 @@ import CommitGolfCandidate.GroupOpenFinish
 import CommitGolfCandidate.QuartetOpeningSchedule
 import CommitGolfCandidate.GroupOpenCopy
 
-/-! Layout 2 opener after the pass: the record loop (`records_run`), the 770-cycle cap preparation, the chunked
+/-! Layout 2 V2a opener after the pass: the record loop (`records_run`), the 770-cycle cap preparation, the chunked
 cap walk (`capWalkB`) with the root exit `jal`, and the four-cycle return block. The result (`L2OpenPhysical`)
-holds the Layout 2 record blocks, the flush bytes and the unchanged cap footer at `recordBase k`. -/
+holds the V2a record blocks (relative to the state `pass` the pass left), the flush bytes and the unchanged cap
+footer at `recordBase k`. -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate Sampling
-open CommitGolfCandidate.Layout2Phase (stride PhaseFacts writerByte)
+open CommitGolfCandidate.Layout2Phase (stride writerByte)
+open CommitGolfCandidate.Layout2Phase2 (PhaseFacts)
 open QuartetOpening (proofLength)
 open Opening (groupsBefore openingNodes capDigestAddress)
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
 
-/-- Opening cycles after the 30-cycle header and the pass, with the same `+15` convention as today's
+/-- Opening cycles after the 31-cycle header and the pass, with the same `+15` convention as today's
 `wideCycles`: the record loop, the cap preparation, the cap walk with the root `jal`, and the return block. -/
 def l2WideCycles (positions : Positions) : Nat :=
   if positions.card=0 then 7 else
@@ -30,12 +32,12 @@ structure L2ABI (s : Submission) extends OpeningLayout s where
 /-- The opener's result: success, length, no oracle call, exact cycles, the Layout 2 record blocks and flush
 bytes, and the cap footer. -/
 structure L2OpenPhysical (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
-    (positions : Positions) (result : Execution) : Prop where
+    (positions : Positions) (pass : MachineState) (result : Execution) : Prop where
   success : result.exit = .success
   length : (result.state.getReg .x11).toNat = proofLength positions
   noCalls : result.oracleCalls = 0
   cycles : result.cycles = l2WideCycles positions
-  lower : L2Bytes (s.initialState .opening (trapdoor, positions)) positions result.state positions.card
+  lower : L2Bytes (s.initialState .opening (trapdoor, positions)) pass positions result.state positions.card
   flush : ∀ b<flushLen ((positions.card+3)%4), result.state.getByte (BitVec.ofNat 64 (destOf positions.card+b))=
     (carryAt (s.initialState .opening (trapdoor, positions)) positions positions.card).extractLsb' (8*b) 8
   footer : bytesAt result.state (recordBase positions.card) (capOffset (openingNodes positions).length) =
@@ -76,7 +78,7 @@ theorem cap_root_marked (positions : Positions) (positive : 0 < positions.card) 
 
 theorem l2_wide_cycles_batch (positions : Positions) (count : positions.card = BATCH)
     (nodes : (capFrontierNodes (groupsBefore positions positions.card) 1 8).length ≤ 128) :
-    l2WideCycles positions ≤ 15+30820+769+6130+6 := by
+    l2WideCycles positions ≤ 15+26081+769+6130+6 := by
   have k : positions.card = 128 := count
   have aligned : (recordBase positions.card)%2=0 := by
     have : proofBase%2=0 := by decide
@@ -89,13 +91,13 @@ theorem l2_wide_cycles_batch (positions : Positions) (count : positions.card = B
 
 attribute [local irreducible] execute capPreparation readBuffer
 
-/-- The record loop and the cap walk from the state at word 15. -/
+/-- The record loop and the cap walk from the state at word 4096 (the end of the pass). -/
 theorem l2_body (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submission) (abi : L2ABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState)
     (positive : 0<positions.card) (ready : L2Start s trapdoor positions begin) (surplus : Nat) :
     ∃ final, execute openingImage (l2WideCycles positions-15+surplus) begin true =
         pure ⟨.success,final,l2WideCycles positions-15,0⟩ ∧
-      L2OpenPhysical s trapdoor positions ⟨.success,final,l2WideCycles positions,0⟩ := by
+      L2OpenPhysical s trapdoor positions begin ⟨.success,final,l2WideCycles positions,0⟩ := by
   let initial := s.initialState .opening (trapdoor, positions)
   have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
   have allFit := (Nat.add_le_add_left (QuartetOpening.capacity_all positions) _).trans packed_proof_memory

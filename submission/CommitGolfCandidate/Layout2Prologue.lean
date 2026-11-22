@@ -15,7 +15,7 @@ structure Normalized (τ : Tables) (s t : MachineState) (k : Nat) : Prop where
   memory : Writes s t proofBase (534*k) (resultByte τ s k)
 
 private theorem guard_hop {I} (program : Program I) (s : MachineState) (k len : Nat)
-    (here : s.pc=pc 0) (args : Input s k len) :
+    (here : s.pc=pc 786) (args : Input s k len) :
     ∃ t, Runs I s t 4 7 ∧ t.mem=s.mem ∧ Kept temps s t ∧ t.pc=if len<534*k then pc 364 else pc 708 := by
   have e:=move program .entry s here trivial
   let a:=after .entry s
@@ -35,7 +35,7 @@ private theorem guard_hop {I} (program : Program I) (s : MachineState) (k len : 
 
 
 theorem short_run {I} (program : Program I) (s : MachineState) (k len : Nat)
-    (here : s.pc=pc 0) (args : Input s k len) (short : len<534*k) :
+    (here : s.pc=pc 786) (args : Input s k len) (short : len<534*k) :
     ∃ t, Runs I s t 4 7 ∧ t.pc=pc 364 := by
   obtain ⟨t,run,_,_,dest⟩:=guard_hop program s k len here args
   exact ⟨t,run,by simpa [short] using dest⟩
@@ -43,7 +43,7 @@ theorem short_run {I} (program : Program I) (s : MachineState) (k len : Nat)
 /-- All admitted, sufficiently long inputs reach the original word 1 with the converted
 record prefix. Only the preexisting proof bytes were read, including for partial blocks. -/
 theorem prologue {I τ} (program : Program I) (wf : WellFormed τ) (s : MachineState) (k len : Nat)
-    (here : s.pc=pc 0) (args : Input s k len) (long : 534*k≤len) (tables : TablesAt τ s)
+    (here : s.pc=pc 786) (args : Input s k len) (long : 534*k≤len) (tables : TablesAt τ s)
     (clean : ∀ j, j<2136 → byte s (scratchBase+j)=0) :
     ∃ t, Runs I s t (prologueSteps k) (prologueSteps k+3) ∧ Normalized τ s t k := by
   obtain ⟨g,guard,memG,keepG,pcG⟩:=guard_hop program s k len here args

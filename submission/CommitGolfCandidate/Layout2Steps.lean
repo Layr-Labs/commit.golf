@@ -1,10 +1,11 @@
 import CommitGolfCandidate.Layout2Loop
 
-/-! Layout 2 opener: the effect of the loop code around the phase writers (first record entry, per-phase header,
+/-! Layout 2 V2a opener: the effect of the loop code around the phase writers (per-phase header,
 per-phase tail, exit stubs), each as a `RunsOpeningBlock` with its register, memory and byte effects. -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
-open CommitGolfCandidate.Layout2Phase (stride phaseBase bodyWord bodyLen tailWord)
+open CommitGolfCandidate.Layout2Phase (stride phaseBase)
+open CommitGolfCandidate.Layout2Phase2 (bodyWord bodyLen tailWord)
 set_option maxRecDepth 16000
 set_option maxHeartbeats 3200000
 
@@ -29,44 +30,36 @@ theorem shift_four (pos : Nat) (small : pos<16777216) :
 private theorem z12 : signExtend12 0#12=0#64 := by decide
 private theorem e12 : signExtend12 8#12=8#64 := by decide
 
-/-- A record header at word `w`: `ld t1,0(s0); slli t2,t1,4; add t2,s6,t2`. -/
+/-- A record header at word `w`: `ld t1,0(s0)`. -/
 theorem hdr_at_step (w : Nat) (code : presentRows (hdrRowsAt w)) (st : MachineState) (X pos : Nat)
     (pc : st.pc=address w)
     (idx : st.getReg .x8=BitVec.ofNat 64 X) (al : X%8=0) (fit : X+8 ≤ MEMORY_BYTES)
-    (val : st.getMem (BitVec.ofNat 64 X)=BitVec.ofNat 64 pos) (small : pos<16777216)
-    (nonce : st.getReg .x22=BitVec.ofNat 64 nonceBase) :
-    RunsOpeningBlock st (walkRows st (hdrRowsAt w)) 3 ∧ (walkRows st (hdrRowsAt w)).pc=address (w+3) ∧
+    (val : st.getMem (BitVec.ofNat 64 X)=BitVec.ofNat 64 pos) :
+    RunsOpeningBlock st (walkRows st (hdrRowsAt w)) 1 ∧ (walkRows st (hdrRowsAt w)).pc=address (w+1) ∧
       (walkRows st (hdrRowsAt w)).getReg .x6=BitVec.ofNat 64 pos ∧
-      (walkRows st (hdrRowsAt w)).getReg .x7=BitVec.ofNat 64 (nonceBase+16*pos) ∧
       (walkRows st (hdrRowsAt w)).mem=st.mem ∧
-      (∀ r, r ≠ .x6 → r ≠ .x7 → (walkRows st (hdrRowsAt w)).getReg r=st.getReg r) := by
+      (∀ r, r ≠ .x6 → (walkRows st (hdrRowsAt w)).getReg r=st.getReg r) := by
   have valid : accessValid (BitVec.ofNat 64 X) 8=true := Opening.aligned_access X al fit
-  refine ⟨rows_block _ _ ?_ code 3 (by simp [hdrRowsAt]) (by simp [hdrRowsAt, price]; rfl), ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨rows_block _ _ ?_ code 1 (by simp [hdrRowsAt]) (by simp [hdrRowsAt, price]; rfl), ?_, ?_, ?_, ?_⟩
   · simp only [hdrRowsAt, legal]
-    refine ⟨pc, ?_, ?_, rfl, ?_, rfl, trivial⟩
-    · simp [ordinaryStep, memoryArgumentsValid, memAccess, z12, idx, valid]
-    · show st.pc+4=address (w+1); rw [pc, address_succ]
-    · show st.pc+4+4=address (w+2); rw [pc, address_succ, address_succ]
-  · show st.pc+4+4+4=_; rw [pc, address_succ, address_succ, address_succ]
+    refine ⟨pc, ?_, trivial⟩
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, z12, idx, valid]
+  · show st.pc+4=_; rw [pc, address_succ]
   · simp [walkRows, hdrRowsAt, execInstrBr, z12, idx, val]
-  · simp [walkRows, hdrRowsAt, execInstrBr, z12, idx, val, nonce]
-    exact shift_four pos small
   · simp [walkRows, hdrRowsAt, execInstrBr]
-  · intro r h6 h7; simp [walkRows, hdrRowsAt, execInstrBr, Ne.symm h6, Ne.symm h7]
+  · intro r h6; simp [walkRows, hdrRowsAt, execInstrBr, Ne.symm h6]
 
 /-- A phase header. -/
 theorem hdr_step (p : Nat) (hp : p<4) (st : MachineState) (X pos : Nat) (pc : st.pc=address (hdrWord p))
     (idx : st.getReg .x8=BitVec.ofNat 64 X) (al : X%8=0) (fit : X+8 ≤ MEMORY_BYTES)
-    (val : st.getMem (BitVec.ofNat 64 X)=BitVec.ofNat 64 pos) (small : pos<16777216)
-    (nonce : st.getReg .x22=BitVec.ofNat 64 nonceBase) :
-    RunsOpeningBlock st (walkRows st (hdrRows p)) 3 ∧ (walkRows st (hdrRows p)).pc=address (bodyWord p) ∧
+    (val : st.getMem (BitVec.ofNat 64 X)=BitVec.ofNat 64 pos) :
+    RunsOpeningBlock st (walkRows st (hdrRows p)) 1 ∧ (walkRows st (hdrRows p)).pc=address (bodyWord p) ∧
       (walkRows st (hdrRows p)).getReg .x6=BitVec.ofNat 64 pos ∧
-      (walkRows st (hdrRows p)).getReg .x7=BitVec.ofNat 64 (nonceBase+16*pos) ∧
       (walkRows st (hdrRows p)).mem=st.mem ∧
-      (∀ r, r ≠ .x6 → r ≠ .x7 → (walkRows st (hdrRows p)).getReg r=st.getReg r) := by
-  have hw : bodyWord p=hdrWord p+3 := by unfold hdrWord; interval_cases p <;> decide
+      (∀ r, r ≠ .x6 → (walkRows st (hdrRows p)).getReg r=st.getReg r) := by
+  have hw : bodyWord p=hdrWord p+1 := by unfold hdrWord; interval_cases p <;> decide
   rw [hw]
-  exact hdr_at_step (hdrWord p) (hdr_present p hp) st X pos pc idx al fit val small nonce
+  exact hdr_at_step (hdrWord p) (hdr_present p hp) st X pos pc idx al fit val
 
 private theorem half_node (pos : Nat) (small : pos<16777216) :
     BitVec.ofNat 64 (512+pos/32768) >>> 1=BitVec.ofNat 64 (256+pos/65536) := by
@@ -203,7 +196,7 @@ private theorem low_half_byte (a : Word) (c : Nat) (hc : c<2) : (a.truncate 16).
 @[local simp] private theorem se4h : signExtend12 4#12=4#64 := rfl
 @[local simp] private theorem se6h : signExtend12 6#12=6#64 := rfl
 
-private theorem jump_back (w : Nat) (hw : w ∈ [4338, 4583, 4828, 5070]) :
+private theorem jump_back (w : Nat) (hw : w ∈ [4301, 4509, 4717, 4922]) :
     address w+signExtend21 (jumpTo w 1097)=address 1097 := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hw
   rcases hw with rfl|rfl|rfl|rfl <;> decide
@@ -270,7 +263,7 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
         exact away.2 this
   interval_cases p
   · -- six bytes: sw, srli, sh, addi, jal
-    have hpc : st.pc=address 4334 := pc
+    have hpc : st.pc=address 4297 := pc
     let s1 := execInstrBr st (.SW .x21 .x11 0)
     have b1 (x : Word) : s1.getByte x=(st.setWord32 (BitVec.ofNat 64 D) (a.truncate 32)).getByte x := by
       show ((st.setWord32 (st.getReg .x21+signExtend12 0) ((st.getReg .x11).truncate 32)).setPC (st.pc+4)).getByte x=_
@@ -283,7 +276,7 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
     have b3 (x : Word) : s3.getByte x=(s2.setHalfword (BitVec.ofNat 64 (D+4)) ((a >>> 32).truncate 16)).getByte x := by
       show ((s2.setHalfword (s2.getReg .x21+signExtend12 4) ((s2.getReg .x11).truncate 16)).setPC (s2.pc+4)).getByte x=_
       rw [se4, d2, d4, r2]; rfl
-    have whole : walkRows st (exitRows 0)=execInstrBr (execInstrBr s3 (.ADDI .x21 .x21 6)) (.JAL .x0 (jumpTo 4338 1097)) := rfl
+    have whole : walkRows st (exitRows 0)=execInstrBr (execInstrBr s3 (.ADDI .x21 .x21 6)) (.JAL .x0 (jumpTo 4301 1097)) := rfl
     have bAll (x : Word) : (walkRows st (exitRows 0)).getByte x=s3.getByte x := by
       rw [whole]; simp only [execInstrBr]; exact byteSet _ _ _ _ x
     refine ⟨rows_block _ _ ?_ (exit_present 0 (by decide)) 5 rfl rfl, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -295,9 +288,9 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
       · simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, dest, d4, vh4]
       · show st.pc+4+4+4=_; rw [hpc, address_succ, address_succ, address_succ]
       · show st.pc+4+4+4+4=_; rw [hpc, address_succ, address_succ, address_succ, address_succ]
-    · show st.pc+4+4+4+4+signExtend21 (jumpTo 4338 1097)=_
+    · show st.pc+4+4+4+4+signExtend21 (jumpTo 4301 1097)=_
       rw [hpc, address_succ, address_succ, address_succ, address_succ]
-      exact jump_back 4338 (by simp)
+      exact jump_back 4301 (by simp)
     · have d3 : s3.getReg .x21=BitVec.ofNat 64 D := by
         show ((s2.setHalfword _ _).setPC _).getReg .x21=_; simp [d2]
       rw [whole]; simp [execInstrBr, d3, flushLen]
@@ -329,14 +322,14 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
     · intro r h21 h11
       simp [walkRows, exitRows, execInstrBr, Ne.symm h21, Ne.symm h11]
   · -- four bytes: sw, addi, jal
-    have hpc : st.pc=address 4581 := pc
+    have hpc : st.pc=address 4507 := pc
     let s1 := execInstrBr st (.SW .x21 .x11 0)
     have b1 (x : Word) : s1.getByte x=(st.setWord32 (BitVec.ofNat 64 D) (a.truncate 32)).getByte x := by
       show ((st.setWord32 (st.getReg .x21+signExtend12 0) ((st.getReg .x11).truncate 32)).setPC (st.pc+4)).getByte x=_
       rw [se0, z, carry]; rfl
     have d1 : s1.getReg .x21=BitVec.ofNat 64 D := by
       show ((st.setWord32 _ _).setPC _).getReg .x21=_; simp [dest]
-    have whole : walkRows st (exitRows 1)=execInstrBr (execInstrBr s1 (.ADDI .x21 .x21 4)) (.JAL .x0 (jumpTo 4583 1097)) := rfl
+    have whole : walkRows st (exitRows 1)=execInstrBr (execInstrBr s1 (.ADDI .x21 .x21 4)) (.JAL .x0 (jumpTo 4509 1097)) := rfl
     have bAll (x : Word) : (walkRows st (exitRows 1)).getByte x=s1.getByte x := by
       rw [whole]; simp only [execInstrBr]; exact byteSet _ _ _ _ x
     refine ⟨rows_block _ _ ?_ (exit_present 1 (by decide)) 3 rfl rfl, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -345,9 +338,9 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
       · simp [ordinaryStep, memoryArgumentsValid, memAccess, dest, vw]
       · show st.pc+4=_; rw [hpc, address_succ]
       · show st.pc+4+4=_; rw [hpc, address_succ, address_succ]
-    · show st.pc+4+4+signExtend21 (jumpTo 4583 1097)=_
+    · show st.pc+4+4+signExtend21 (jumpTo 4509 1097)=_
       rw [hpc, address_succ, address_succ]
-      exact jump_back 4583 (by simp)
+      exact jump_back 4509 (by simp)
     · rw [whole]; simp [execInstrBr, d1, flushLen]
       rw [show (4#64 : Word)=BitVec.ofNat 64 4 from rfl, ← BitVec.ofNat_add]
     · intro b hb
@@ -367,14 +360,14 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
     · intro r h21 h11
       simp [walkRows, exitRows, execInstrBr, Ne.symm h21, Ne.symm h11]
   · -- two bytes: sh, addi, jal
-    have hpc : st.pc=address 4826 := pc
+    have hpc : st.pc=address 4715 := pc
     let s1 := execInstrBr st (.SH .x21 .x11 0)
     have b1 (x : Word) : s1.getByte x=(st.setHalfword (BitVec.ofNat 64 D) (a.truncate 16)).getByte x := by
       show ((st.setHalfword (st.getReg .x21+signExtend12 0) ((st.getReg .x11).truncate 16)).setPC (st.pc+4)).getByte x=_
       rw [se0, z, carry]; rfl
     have d1 : s1.getReg .x21=BitVec.ofNat 64 D := by
       show ((st.setHalfword _ _).setPC _).getReg .x21=_; simp [dest]
-    have whole : walkRows st (exitRows 2)=execInstrBr (execInstrBr s1 (.ADDI .x21 .x21 2)) (.JAL .x0 (jumpTo 4828 1097)) := rfl
+    have whole : walkRows st (exitRows 2)=execInstrBr (execInstrBr s1 (.ADDI .x21 .x21 2)) (.JAL .x0 (jumpTo 4717 1097)) := rfl
     have bAll (x : Word) : (walkRows st (exitRows 2)).getByte x=s1.getByte x := by
       rw [whole]; simp only [execInstrBr]; exact byteSet _ _ _ _ x
     refine ⟨rows_block _ _ ?_ (exit_present 2 (by decide)) 3 rfl rfl, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -383,9 +376,9 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
       · simp [ordinaryStep, memoryArgumentsValid, memAccess, dest, vh]
       · show st.pc+4=_; rw [hpc, address_succ]
       · show st.pc+4+4=_; rw [hpc, address_succ, address_succ]
-    · show st.pc+4+4+signExtend21 (jumpTo 4828 1097)=_
+    · show st.pc+4+4+signExtend21 (jumpTo 4717 1097)=_
       rw [hpc, address_succ, address_succ]
-      exact jump_back 4828 (by simp)
+      exact jump_back 4717 (by simp)
     · rw [whole]; simp [execInstrBr, d1, flushLen]
       rw [show (2#64 : Word)=BitVec.ofNat 64 2 from rfl, ← BitVec.ofNat_add]
     · intro b hb
@@ -405,11 +398,11 @@ theorem exit_step (p : Nat) (hp : p<4) (st : MachineState) (D : Nat) (a : Word) 
     · intro r h21 h11
       simp [walkRows, exitRows, execInstrBr, Ne.symm h21, Ne.symm h11]
   · -- nothing to flush: jal
-    have hpc : st.pc=address 5070 := pc
-    have whole : walkRows st (exitRows 3)=execInstrBr st (.JAL .x0 (jumpTo 5070 1097)) := rfl
+    have hpc : st.pc=address 4922 := pc
+    have whole : walkRows st (exitRows 3)=execInstrBr st (.JAL .x0 (jumpTo 4922 1097)) := rfl
     refine ⟨rows_block _ _ ?_ (exit_present 3 (by decide)) 1 rfl rfl, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [exitRows, legal]; exact ⟨hpc, rfl, trivial⟩
-    · rw [whole]; show st.pc+signExtend21 (jumpTo 5070 1097)=_; rw [hpc]; exact jump_back 5070 (by simp)
+    · rw [whole]; show st.pc+signExtend21 (jumpTo 4922 1097)=_; rw [hpc]; exact jump_back 4922 (by simp)
     · rw [whole]; simp [execInstrBr, dest, flushLen]
     · intro b hb; simp [flushLen] at hb
     · intro x _ _; rw [whole]; simp only [execInstrBr]; exact byteSet _ _ _ _ _

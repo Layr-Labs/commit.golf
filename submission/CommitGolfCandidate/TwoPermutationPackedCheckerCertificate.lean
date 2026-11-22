@@ -28,7 +28,7 @@ theorem executable_converted_observation (τ : CommitGolfCandidate.Layout2.Table
     (wf : CommitGolfCandidate.Layout2.WellFormed τ)
     (physical : ∀ k, k<85440 → GroupedOpening.pget K1Artifact.checkData k=CommitGolfCandidate.Layout2.tableByte τ k)
     (oracle : Oracle) (input : CheckInput) :
-    CheckerObservationFacts oracle (CommitGolfCandidate.Layout2.converted τ input)
+    CheckerObservationFacts oracle (CommitGolfCandidate.Layout2.converted τ (CommitGolfCandidate.Layout2.Quartet.prepared input))
       (TwoPermutationPrototype.Checker.checkObservation K1Artifact.submission oracle input) :=
   converted_observation τ wf physical (joinedRecord RecordLeaf.block lowerStep)
     (joined_record_refines RecordLeaf.block lowerStep RecordLeaf.actual_leaf_block lower_step_refines)

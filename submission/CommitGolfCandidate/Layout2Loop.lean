@@ -1,16 +1,17 @@
-import CommitGolfCandidate.Layout2Phase
+import CommitGolfCandidate.Layout2Phase2
 import CommitGolfCandidate.GroupOpenWalk
 import CommitGolfCandidate.GroupOpenMemory
 import CommitGolfCandidate.GroupOpenCapEmitPrefix
 import CommitGolfCandidate.GroupOpenTable
 
-/-! Layout 2 opener, record loop code around the phase writers: the first record's header (words 15..17) with the
-entry jump (18) and the entry stub (5071, 5072), the per-phase header (`hdrWord p`, 3 words), the per-phase tail
-(`tailWord p`, 7 words: stride, mark of the cap leaf, index advance, latch) and the exit stubs (`exitWord p`:
-flush of the 6/4/2/0 pending stream bytes and the jump to the cap preparation at 1097). -/
+/-! Layout 2 V2a opener, record loop code around the phase writers: the per-phase header (`hdrWord p`, 1 word,
+`ld t1,0(s0)`; the pass jumps straight to phase 0's header at word 4096), the per-phase tail (`tailWord p`, 7 words:
+stride, mark of the cap leaf, index advance, latch) and the exit stubs (`exitWord p`: flush of the 6/4/2/0 pending
+stream bytes and the jump to the cap preparation at 1097). The geometry is `Layout2Phase2`'s. -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
-open CommitGolfCandidate.Layout2Phase (stride phaseBase bodyWord bodyLen tailWord)
+open CommitGolfCandidate.Layout2Phase (stride phaseBase)
+open CommitGolfCandidate.Layout2Phase2 (bodyWord bodyLen tailWord)
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
 
@@ -21,7 +22,7 @@ theorem record_base0 : Layout2Phase.recordBase0=proofBase := by decide
 theorem word_address (i : Nat) : Layout2Phase.wordAddress i=address i := rfl
 
 /-- First word of phase `p`'s header and of its exit stub. -/
-def hdrWord (p : Nat) : Nat := bodyWord p-3
+def hdrWord (p : Nat) : Nat := bodyWord p-1
 def exitWord (p : Nat) : Nat := tailWord p+7
 /-- Bytes the exit stub of phase `p` flushes (the pending stream bits of `a1`). -/
 def flushLen (p : Nat) : Nat := if p=0 then 6 else if p=1 then 4 else if p=2 then 2 else 0
@@ -32,13 +33,9 @@ def exitCost (p : Nat) : Nat := if p=0 then 5 else if p=3 then 1 else 3
 def jumpTo (w t : Nat) : BitVec 21 := BitVec.ofNat 21 ((2097152+4*t-4*w)%2097152)
 def branchTo (w t : Nat) : BitVec 13 := BitVec.ofNat 13 ((8192+4*t-4*w)%8192)
 
-/-- A record header at word `w`: `ld t1,0(s0); slli t2,t1,4; add t2,s6,t2`. -/
-def hdrRowsAt (w : Nat) : List Row := [(w,.LD .x6 .x8 0),(w+1,.SLLI .x7 .x6 4),(w+2,.ADD .x7 .x22 .x7)]
+/-- A record header at word `w`: `ld t1,0(s0)`. -/
+def hdrRowsAt (w : Nat) : List Row := [(w,.LD .x6 .x8 0)]
 def hdrRows (p : Nat) : List Row := hdrRowsAt (hdrWord p)
-/-- Word 18 and the entry stub: `jal <5071>`, `addi s2,s8,584`, `jal <4099>`. -/
-def jumpRows : List Row := [(18,.JAL .x0 (jumpTo 18 5071)),(5071,.ADDI .x18 .x24 584),(5072,.JAL .x0 (jumpTo 5072 4099))]
-/-- Words 15..18 and the entry stub. -/
-def firstRows : List Row := hdrRowsAt 15++jumpRows
 
 def tailRows (p : Nat) : List Row :=
   [(tailWord p,.ADDI .x21 .x21 (BitVec.ofNat 12 (stride p))),(tailWord p+1,.SRLI .x6 .x6 1),
@@ -46,14 +43,12 @@ def tailRows (p : Nat) : List Row :=
    (tailWord p+5,.ADDI .x8 .x8 8),(tailWord p+6,.BNE .x8 .x17 (branchTo (tailWord p+6) (hdrWord ((p+1)%4))))]
 
 def exitRows (p : Nat) : List Row :=
-  if p=0 then [(4334,.SW .x21 .x11 0),(4335,.SRLI .x11 .x11 32),(4336,.SH .x21 .x11 4),(4337,.ADDI .x21 .x21 6),
-    (4338,.JAL .x0 (jumpTo 4338 1097))]
-  else if p=1 then [(4581,.SW .x21 .x11 0),(4582,.ADDI .x21 .x21 4),(4583,.JAL .x0 (jumpTo 4583 1097))]
-  else if p=2 then [(4826,.SH .x21 .x11 0),(4827,.ADDI .x21 .x21 2),(4828,.JAL .x0 (jumpTo 4828 1097))]
-  else [(5070,.JAL .x0 (jumpTo 5070 1097))]
+  if p=0 then [(4297,.SW .x21 .x11 0),(4298,.SRLI .x11 .x11 32),(4299,.SH .x21 .x11 4),(4300,.ADDI .x21 .x21 6),
+    (4301,.JAL .x0 (jumpTo 4301 1097))]
+  else if p=1 then [(4507,.SW .x21 .x11 0),(4508,.ADDI .x21 .x21 4),(4509,.JAL .x0 (jumpTo 4509 1097))]
+  else if p=2 then [(4715,.SH .x21 .x11 0),(4716,.ADDI .x21 .x21 2),(4717,.JAL .x0 (jumpTo 4717 1097))]
+  else [(4922,.JAL .x0 (jumpTo 4922 1097))]
 
-theorem first_hdr_present : presentRows (hdrRowsAt 15) := by apply rows_present; decide +kernel
-theorem jump_present : presentRows jumpRows := by apply rows_present; decide +kernel
 theorem hdr_present (p : Nat) (hp : p<4) : presentRows (hdrRows p) := by
   apply rows_present; revert p; decide +kernel
 theorem tail_present (p : Nat) (hp : p<4) : presentRows (tailRows p) := by

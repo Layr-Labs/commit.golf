@@ -1,49 +1,38 @@
-import CommitGolfCandidate.GroupOpenResume
-import CommitGolfCandidate.GroupOpenHeaderSpec
+import CommitGolfCandidate.Layout2PassHeader
+import CommitGolfCandidate.Layout2V2Ref
 import CommitGolfCandidate.K3OpenReply
 
-/-! K3-lite opener facts: what the virtual trapdoor (the memory after the prefix pass) holds, and the opened proof. -/
-namespace TwoPermutationPrototype.GroupedOpening
+/-! Layout 2 V2a opener facts: the pass under a fixed oracle and what it leaves (`passEnd`, `pass_end_facts`), and the
+old opener's proof of the reference trapdoor (`opened_proof`: today's builder proof on an honest trapdoor). -/
+namespace TwoPermutationPrototype.GroupedOpening.Layout2V2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
+open TwoPermutationPrototype.GroupedOpening
 open TwoPermutationPrototype.Sampling
 set_option maxRecDepth 20000
 set_option maxHeartbeats 1400000
 
-/-- The prefix pass's end state for a nonempty opening. -/
-noncomputable def passEnd (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) : MachineState :=
-  fixedPass o p (keyOf td) p.card 0 (header (actual.initialState .opening (td,p)))
+/-- The V2a header facts: the ready state for ordinal 0 and the header's 31 cycles. -/
+structure HeaderFacts : Prop where
+  ready : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card →
+    Ready td p (keyOf td) (header2 (actual.initialState .opening (td,p))) 0
+  run : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → ∀ fuel,
+    let s:=actual.initialState .opening (td,p)
+    execute openingImage (31+fuel) s true=(do let z ←execute openingImage fuel (header2 s) true;return z.charge 31 0)
 
-theorem pass_end_facts (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
-    (nz : 0<p.card) :
+theorem certifiedHeader : HeaderFacts := ⟨fun td p nz => (header_valid td p nz).2, header_run⟩
+
+/-- The pass's end state under a fixed oracle. -/
+noncomputable def passEnd (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) : MachineState :=
+  fixedPass o p (keyOf td) p.card 0 (header2 (actual.initialState .opening (td,p)))
+
+theorem pass_end_facts (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) :
     Ready td p (keyOf td) (passEnd o td p) p.card ∧ Seen o (keyOf td) td p (passEnd o td p) p.card := by
-  let s0:=header (actual.initialState .opening (td,p))
-  have r0 := hc.ready td p nz
+  let s0:=header2 (actual.initialState .opening (td,p))
+  have r0 := certifiedHeader.ready td p nz
   have r := fixed_post o td p (keyOf td) s0 0 p.card (by omega) r0
   have seen := seen_pass o td p (keyOf td) s0 0 p.card (by omega) r0 (seen_zero o (keyOf td) td p s0)
   rw [Nat.zero_add] at r seen
   exact ⟨r,seen⟩
-
-/-- The virtual trapdoor of a nonempty opening: heap below level 22 kept; the opened positions' level-0 sources
-(the commit's nodes of their sibling quartets) kept; their rebuilt blocks (`32 L + 512 + 1024 g`) hold the inverses
-of their group replies; the opened salts are the linked salts. -/
-theorem end_components (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
-    (nz : 0<p.card) :
-    let t:=virtualTd (passEnd o td p)
-    (∀ n, n<4194304 → Opening.trapdoorHeap (s:=actual) t n=Opening.trapdoorHeap (s:=actual) td n) ∧
-    (∀ i∈p, trapdoorQuad (s:=actual) t i=trapdoorQuad (s:=actual) td i) ∧
-    (∀ i∈p, t.extractLsb' (8*(32*LENGTH+512+1024*(i.val/4))) 1600=o.permutation.symm (groupReply td (i.val/4))) ∧
-    (∀ i∈p, trapdoorSalt (s:=actual) t i=linkedSalts o (keyOf td) i) := by
-  obtain ⟨r,seen⟩ := pass_end_facts hc o td p nz
-  exact ⟨kept_heap td p _ _ r,fun i _ => kept_quad td p _ _ r i,placed_block o td p _ _ seen,
-    selected_salt o _ td p _ seen⟩
-
-/-- The opener's virtual trapdoor (the memory after the prefix pass; `td` itself for an empty opening). -/
-noncomputable def virtualFor (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) :=
-  if p.card=0 then td else virtualTd (fixedPass o p (keyOf td) p.card 0 (header (actual.initialState .opening (td,p))))
-
-theorem virtual_end (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) :
-    virtualFor o td p=virtualTd (passEnd o td p) := by
-  simp [virtualFor,passEnd,Nat.ne_of_gt nz]
 
 /-- The group node a level-22 sibling copy reads: the parity slice of the group reply. -/
 theorem node_slice (td : BitVec (8*actual.sizes.trapdoor)) (h : Nat) (hh : h<4194304) :
@@ -80,37 +69,31 @@ theorem payload_leaf (leaves : DigestTape) (g j : Nat) (hj : j<4) :
   · simp only [show ¬ (576+256*3+b-576 < 256) by omega, show ¬ (576+256*3+b-576-256 < 256) by omega,
       show ¬ (576+256*3+b-576-256-256 < 256) by omega, ite_false, show 576+256*3+b-576-256-256-256 = b by omega]
 
-/-- The opener's proof from the commit's trapdoor is the builder's proof. The writer reads every leaf digest of
-an opened quartet from its rebuilt block, so no hypothesis on the trapdoor's original leaf slots is needed. -/
-theorem opened_proof (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
+/-- The old opener's proof from the reference trapdoor of the commit's trapdoor is the builder's proof. -/
+theorem opened_proof (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions)
     (leaves : DigestTape)
     (heap : ∀ n, 0<n → n<4194304 → Opening.trapdoorHeap (s:=actual) td n =
       Quartet.upperHeap (Quartet.quartetLookup (BiPermutation.equiv Block o.permutation)) o.compression leaves n)
     (replies : ∀ g<4194304, groupReply td g=o.permutation (quartetEncode (Quartet.quartetPayload leaves g))) :
-    proofFromTrapdoor (s:=actual) (virtualFor o td p) p =
+    proofFromTrapdoor (s:=actual) (refTd o td p) p =
       (Quartet.builder (Quartet.quartetLookup (BiPermutation.equiv Block o.permutation)) o.compression p
         (fun i => Permutation.LinkedSalt.salts (Permutation.LinkedSalt.schedule Permutation.LinkedSalt.period)
           o.permutation (keyOf td) i.val) leaves).2 := by
-  apply proof_from_trapdoor_matches_virtual actual (virtualFor o td p) p _ o.compression leaves
+  apply proof_from_trapdoor_matches_virtual actual (refTd o td p) p _ o.compression leaves
     (fun i => linkedSalts o (keyOf td) i)
   · intro n pos hn
-    by_cases empty : p.card=0
-    · simp only [virtualFor,empty,ite_true]; exact heap n pos hn
-    · rw [virtual_end o td p (by omega),(end_components hc o td p (by omega)).1 n hn]; exact heap n pos hn
+    rw [ref_heap o td p n hn]; exact heap n pos hn
   · intro i member
-    have nz : 0<p.card := Finset.card_pos.mpr ⟨i,member⟩
     have ix := i.isLt; change _<16777216 at ix
     have hx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
-    rw [virtual_end o td p nz,(end_components hc o td p nz).2.1 i member]
+    rw [ref_quad o td p i]
     unfold trapdoorQuad
     rw [quad_address_node,node_slice td _ hx,
       Quartet.upper_heap_leaf _ _ _ _ (by omega : i.val/4<4194304),replies _ hx]
     rfl
   · intro i member j hj
-    have nz : 0<p.card := Finset.card_pos.mpr ⟨i,member⟩
     have ix := i.isLt; change _<16777216 at ix
-    have block := (end_components hc o td p nz).2.2.1 i member
-    rw [virtual_end o td p nz]
+    have block := ref_rebuilt o td p i member
     unfold trapdoorLeaf
     rw [show 8*(32*LENGTH+512+1024*((4*(i.val/4)+j)/4)+72+32*((4*(i.val/4)+j)%4))=
         8*(32*LENGTH+512+1024*(i.val/4))+(576+256*j) by unfold LENGTH LOG_LENGTH; omega,
@@ -118,7 +101,6 @@ theorem opened_proof (hc : HeaderFacts) (o : Oracle) (td : BitVec (8*actual.size
     simp only [Equiv.symm_apply_apply]
     exact payload_leaf leaves (i.val/4) j hj
   · intro i member
-    have nz : 0<p.card := Finset.card_pos.mpr ⟨i,member⟩
-    rw [virtual_end o td p nz]; exact (end_components hc o td p nz).2.2.2 i member
+    exact ref_salt_slice o td p i member
 
-end TwoPermutationPrototype.GroupedOpening
+end TwoPermutationPrototype.GroupedOpening.Layout2V2

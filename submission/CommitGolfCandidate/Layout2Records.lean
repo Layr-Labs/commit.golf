@@ -1,14 +1,15 @@
 import CommitGolfCandidate.Layout2First
 import CommitGolfCandidate.TwoPermutationOpeningRecordGroups
 
-/-! Layout 2 opener: the record loop by induction over the records, against the phase-writer guarantee
-`PhaseFacts openingImage p` as a hypothesis. Record `j` is written by phase `j % 4` at `destOf j`; its block is
-`writerByte (j%4) (srcAt loaded positions j) (carryAt loaded positions j)`, where the sources are read from the
-loaded state and the carry chains through the records. -/
+/-! Layout 2 V2a opener: the record loop by induction over the records, against the V2a phase-writer guarantee
+`Layout2Phase2.PhaseFacts openingImage p` as a hypothesis. Record `j` is written by phase `j % 4` at `destOf j`. Its
+written dwords hold V1's writer dwords (`writtenByte (j%4) (srcAt loaded positions j) (carryAt loaded positions j)`),
+with the sources read from the loaded state and the carry chaining through the records; its retained bytes (salt,
+three mates) are those the pass left (`pass`). -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
-open CommitGolfCandidate.Layout2Phase (stride phaseBase bodyWord bodyLen tailWord PhaseFacts PhaseEntry writerByte
-  writerCarry recordSource streamRun)
+open CommitGolfCandidate.Layout2Phase (stride phaseBase writerByte writerCarry recordSource streamRun)
+open CommitGolfCandidate.Layout2Phase2 (bodyWord bodyLen tailWord PhaseFacts PhaseEntry written writtenByte)
 open Opening (sortedIndex RecordMarks groupsBefore machineMarks)
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
@@ -29,20 +30,25 @@ def carryAt (loaded : MachineState) (positions : Positions) : Nat → Word
   | 0 => 0
   | j+1 => writerCarry (j%4) (srcAt loaded positions j) (carryAt loaded positions j)
 
-/-- The blocks of the first `count` records. -/
-def L2Bytes (loaded : MachineState) (positions : Positions) (state : MachineState) (count : Nat) : Prop :=
-  ∀ j<count, ∀ b<stride (j%4), state.getByte (BitVec.ofNat 64 (destOf j+b))=
-    writerByte (j%4) (srcAt loaded positions j) (carryAt loaded positions j) b
+/-- Byte `b` of record `i`'s block after the record loop: a written dword holds the writer's V1 dword, a
+retained byte (salt, mates) the byte the pass left there. -/
+def v2Byte (loaded pass : MachineState) (positions : Positions) (i b : Nat) : Byte :=
+  if written ((posAt positions i).val%4) (b/8) then writtenByte (i%4) (srcAt loaded positions i) (carryAt loaded positions i) b
+  else pass.getByte (BitVec.ofNat 64 (destOf i+b))
 
-/-- Cycles of the loop body for the first `j` records (`bodyLen + 7` each). -/
+/-- The blocks of the first `count` records. -/
+def L2Bytes (loaded pass : MachineState) (positions : Positions) (state : MachineState) (count : Nat) : Prop :=
+  ∀ j<count, ∀ b<stride (j%4), state.getByte (BitVec.ofNat 64 (destOf j+b))=v2Byte loaded pass positions j b
+
+/-- Cycles of the loop for the first `j` records (header 1, body `bodyLen`, tail 7). -/
 def loopCost : Nat → Nat
   | 0 => 0
-  | j+1 => loopCost j+bodyLen (j%4)+7
+  | j+1 => loopCost j+bodyLen (j%4)+8
 
-/-- Cycles of the whole record loop from word 15 to the cap preparation, for `k ≥ 1` records. -/
-def l2RecordsCost (k : Nat) : Nat := 6+3*(k-1)+loopCost k+exitCost ((k+3)%4)
+/-- Cycles of the whole record loop from word 4096 to the cap preparation, for `k ≥ 1` records. -/
+def l2RecordsCost (k : Nat) : Nat := loopCost k+exitCost ((k+3)%4)
 
-theorem records_cost_batch : l2RecordsCost 128=30820 := by decide
+theorem records_cost_batch : l2RecordsCost 128=26081 := by decide
 
 /-! ### Phase 0 ignores the incoming carry -/
 
@@ -57,6 +63,10 @@ theorem writer_byte_phase0 (src : Nat → Byte) (c c' : Word) (j : Nat) :
 
 theorem writer_carry_phase0 (src : Nat → Byte) (c c' : Word) : writerCarry 0 src c=writerCarry 0 src c' := by
   simp only [writerCarry, stream_phase0 src c c']
+
+theorem written_byte_phase0 (src : Nat → Byte) (c c' : Word) (j : Nat) :
+    writtenByte 0 src c j=writtenByte 0 src c' j := by
+  simp only [writtenByte, Layout2Phase.writerDwords, stream_phase0 src c c']
 
 /-! ### Geometry -/
 
@@ -126,16 +136,16 @@ theorem source_from_input (before after : MachineState) (input : SameOpeningInpu
 
 /-! ### The loop frame -/
 
-/-- What holds at every record boundary from record `j` on: the fixed registers, input agreement, the
-pointer words, the marks and the blocks of the records before `j`. -/
+/-- What holds at every record boundary from record `j` on: the fixed registers, input agreement, the blocks of the
+records from `j` on as the pass left them (with their saved pointers), the marks and the blocks of the records
+before `j`. -/
 structure L2Frame (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
-    (state : MachineState) (j : Nat) : Prop where
+    (pass state : MachineState) (j : Nat) : Prop where
   heap : state.getReg .x9=BitVec.ofNat 64 trapdoorBase
   index : state.getReg .x8=BitVec.ofNat 64 (indicesBase+8*j)
   nonce : state.getReg .x22=BitVec.ofNat 64 nonceBase
   leaves : state.getReg .x19=BitVec.ofNat 64 4194304
   slots : state.getReg .x24=BitVec.ofNat 64 groupSlots
-  stash : state.getReg .x18=BitVec.ofNat 64 (groupSlots+584)
   endIndex : state.getReg .x17=BitVec.ofNat 64 (indicesBase+8*positions.card)
   marks : state.getReg .x26=BitVec.ofNat 64 Opening.markBase
   one : state.getReg .x23=1#64
@@ -143,12 +153,12 @@ structure L2Frame (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor)) (pos
   capLeaves : state.getReg .x27=256#64
   proofBegin : state.getReg .x20=BitVec.ofNat 64 proofBase
   input : SameOpeningInput (s.initialState .opening (trapdoor, positions)) state
-  pointer : ∀ prior (present : prior<positions.card),
-    (s.initialState .opening (trapdoor, positions)).getMem
-      (BitVec.ofNat 64 (pointerAddress (sortedIndex positions prior present).val)) =
-      BitVec.ofNat 64 (quadAddress (sortedIndex positions prior present).val)
+  ahead : ∀ a, j ≤ a → a<positions.card → ∀ x<stride (a%4),
+    state.getByte (BitVec.ofNat 64 (destOf a+x))=pass.getByte (BitVec.ofNat 64 (destOf a+x))
+  pointer : ∀ a, j ≤ a → a<positions.card →
+    state.getMem (BitVec.ofNat 64 (destOf a+16))=BitVec.ofNat 64 (quadAddress (posAt positions a).val)
   marked : RecordMarks positions state j
-  bytes : L2Bytes (s.initialState .opening (trapdoor, positions)) positions state j
+  bytes : L2Bytes (s.initialState .opening (trapdoor, positions)) pass positions state j
 
 theorem pos_at_lt (positions : Positions) (j : Nat) : (posAt positions j).val<16777216 := (posAt positions j).isLt
 
@@ -220,6 +230,10 @@ theorem writer_byte_congr {src src' : Nat → Byte} (h : ∀ k<560, src k=src' k
     writerByte p src c b=writerByte p src' c b := by
   unfold writerByte; rw [writer_congr h p c]
 
+theorem written_byte_congr' {src src' : Nat → Byte} (h : ∀ k<560, src k=src' k) (p : Nat) (c : Word) (b : Nat) :
+    writtenByte p src c b=writtenByte p src' c b := by
+  unfold writtenByte; rw [writer_congr h]
+
 theorem writer_carry_congr {src src' : Nat → Byte} (h : ∀ k<560, src k=src' k) (p : Nat) (c : Word) :
     writerCarry p src c=writerCarry p src' c := by
   unfold writerCarry; rw [stream_congr h p c]
@@ -246,13 +260,12 @@ theorem card_bound (positions : Positions) : positions.card ≤ 16777216 := by
 
 /-- One record from its body entry: the phase writer, then the tail with the mark and the latch. -/
 theorem body_and_tail (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submission)
-    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (e : MachineState) (j : Nat)
-    (hj : j<positions.card) (fr : L2Frame s trapdoor positions e j) (pc : e.pc=address (bodyWord (j%4)))
+    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (pass e : MachineState) (j : Nat)
+    (hj : j<positions.card) (fr : L2Frame s trapdoor positions pass e j) (pc : e.pc=address (bodyWord (j%4)))
     (dest : e.getReg .x21=BitVec.ofNat 64 (destOf j))
     (x6 : e.getReg .x6=BitVec.ofNat 64 (posAt positions j).val)
-    (x7 : e.getReg .x7=BitVec.ofNat 64 (nonceBase+16*(posAt positions j).val))
     (carry : j%4 ≠ 0 → e.getReg .x11=carryAt (s.initialState .opening (trapdoor, positions)) positions j) :
-    ∃ u, RunsOpeningBlock e u (bodyLen (j%4)+7) ∧ L2Frame s trapdoor positions u (j+1) ∧
+    ∃ u, RunsOpeningBlock e u (bodyLen (j%4)+7) ∧ L2Frame s trapdoor positions pass u (j+1) ∧
       u.pc=address (if j+1=positions.card then exitWord (j%4) else hdrWord ((j+1)%4)) ∧
       u.getReg .x21=BitVec.ofNat 64 (destOf (j+1)) ∧
       ((j+1)%4 ≠ 0 → u.getReg .x11=carryAt (s.initialState .opening (trapdoor, positions)) positions (j+1)) := by
@@ -261,27 +274,15 @@ theorem body_and_tail (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submiss
   have card := card_bound positions
   have bound := dest_bound j
   have quad := quad_address_inside (posAt positions j).val (by unfold LENGTH LOG_LENGTH; omega)
-  have ptr := pointer_address_inside (posAt positions j).val (by unfold LENGTH LOG_LENGTH; omega)
-  have order1 := nonces_end_at_indices
-  have order2 := indices_before_records
-  have pointerE : e.getMem (BitVec.ofNat 64 (Layout2Phase.slotBase+1024*((posAt positions j).val/4)+712))=
-      BitVec.ofNat 64 (quadAddress (posAt positions j).val) := by
-    have eq : Layout2Phase.slotBase+1024*((posAt positions j).val/4)+712=pointerAddress (posAt positions j).val := by
-      unfold pointerAddress; rw [slot_base]
-    rw [eq, fr.input _ ptr.2.1 (by omega) ptr.1]
-    have h := fr.pointer j hj
-    rw [← pos_at_eq positions j hj] at h
-    exact h
   have mem36 : proofBase+534*(j+1) ≤ MEMORY_BYTES := by
     have : proofBase+534*16777216 ≤ 68719476736 := by decide
     unfold MEMORY_BYTES; omega
   have entry : PhaseEntry e (j%4) (posAt positions j).val (destOf j) (quadAddress (posAt positions j).val)
       (e.getReg .x11) :=
-    { phase := hp4, pc := pc, index := posLt, posReg := x6,
-      salt := by rw [x7, salt_base], dest := dest, aligned := dest_aligned j,
+    { phase := hp4, pc := pc, index := posLt, posReg := x6, dest := dest, aligned := dest_aligned j,
       room := ⟨by rw [record_base0]; exact bound.1, by omega⟩,
-      carry := rfl, heap := by rw [fr.heap, heap_base], slots := by rw [fr.stash, slot_base],
-      leaves := fr.leaves, pointer := pointerE,
+      carry := rfl, heap := by rw [fr.heap, heap_base], leaves := fr.leaves,
+      pointer := fr.pointer j (Nat.le_refl j) hj,
       quad := ⟨quad.1, by rw [heap_base]; exact quad.2.1, by rw [salt_base]; exact quad.2.2⟩ }
   obtain ⟨t, runT, pcT, bytesT, carryT, x6T, keepT, frameT, rawT⟩ :=
     phases (j%4) hp4 e (posAt positions j).val (destOf j) (quadAddress (posAt positions j).val) _ entry
@@ -303,9 +304,7 @@ theorem body_and_tail (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submiss
   have ku (r : Reg) (a : r ≠ .x21) (b : r ≠ .x6) (c : r ≠ .x7) (d : r ≠ .x8) (h10 : r ≠ .x10) (h11 : r ≠ .x11)
       (h28 : r ≠ .x28) (h31 : r ≠ .x31) : u.getReg r=e.getReg r :=
     (keepU r a b c d).trans (kt r b c h10 h11 h28 h31)
-  have g := 256+(posAt positions j).val/65536
   have gLt : 256+(posAt positions j).val/65536<512 := by omega
-  -- memory facts of `u`
   have memAt (q : Word) : u.getMem q=(t.setMem (BitVec.ofNat 64 (Opening.markBase+8*(256+(posAt positions j).val/65536))) 1#64).getMem q :=
     mem_reads _ _ memU q
   have srcEq : ∀ k<560, recordSource e (quadAddress (posAt positions j).val) (posAt positions j).val k=
@@ -318,7 +317,13 @@ theorem body_and_tail (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submiss
     by_cases z : j%4=0
     · rw [z]; exact writer_carry_phase0 _ _ _
     · rw [carry z]
-  refine ⟨u, runT'.next runU, ⟨?_, x8U, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, fr.pointer, ?_, ?_⟩, pcU, ?_, ?_⟩
+  have pb : proofBase+534*16777216<2^64 := by decide
+  -- bytes beyond record `j`'s block are untouched
+  have later (x : Nat) (hx : destOf j+stride (j%4) ≤ x) (fx : x<2^64) :
+      u.getByte (BitVec.ofNat 64 x)=e.getByte (BitVec.ofNat 64 x) := by
+    rw [byte_reads u _ memU, byte_after_mark t _ _ gLt (by omega) fx]
+    exact frameT _ fx (by omega)
+  refine ⟨u, runT'.next runU, ⟨?_, x8U, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, pcU, ?_, ?_⟩
   · rw [ku .x9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
     exact fr.heap
   · rw [ku .x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
@@ -327,8 +332,6 @@ theorem body_and_tail (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submiss
     exact fr.leaves
   · rw [ku .x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
     exact fr.slots
-  · rw [ku .x18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
-    exact fr.stash
   · rw [ku .x17 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
     exact fr.endIndex
   · rw [ku .x26 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
@@ -348,6 +351,22 @@ theorem body_and_tail (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submiss
     rw [memAt, MachineState.getMem_setMem_ne (mark_key_ne _ a gLt lo fa),
       rawT _ (Or.inl (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt fa]; omega))]
     exact fr.input a lo hi al
+  · -- the blocks ahead
+    intro a ha hk x hx
+    have mono := dest_mono j a (by omega)
+    have bd := dest_bound a
+    rw [later _ (by omega) (by omega)]
+    exact fr.ahead a (by omega) hk x hx
+  · -- their pointers
+    intro a ha hk
+    have mono := dest_mono j a (by omega)
+    have bd := dest_bound a
+    have pb' : proofBase=13824430176 := by decide
+    have fa : destOf a+16<2^64 := by omega
+    have tb : trapdoorBase ≤ proofBase := by decide
+    rw [memAt, MachineState.getMem_setMem_ne (mark_key_ne _ _ gLt (by omega) fa),
+      rawT _ (Or.inr (by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt fa]; omega))]
+    exact fr.pointer a (by omega) hk
   · -- marks
     intro node bounded
     have fm : Opening.markBase+8*node<2^64 := by unfold Opening.markBase; omega
@@ -372,20 +391,23 @@ theorem body_and_tail (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submiss
       simp [List.mem_append, same]
   · -- bytes
     intro i hi b hb
-    have pb : proofBase+534*16777216<2^64 := by decide
     have fx : destOf i+b<2^64 := by have := dest_bound i; omega
     have above : proofBase ≤ destOf i+b := by have := dest_bound i; omega
     rw [byte_reads u _ memU, byte_after_mark t _ _ gLt above fx]
     by_cases older : i<j
     · have mono := dest_mono i j older
-      rw [frameT _ fx (Or.inl (by omega))]
+      rw [frameT _ fx (fun h => by have h1 := h.1; omega)]
       exact fr.bytes i older b hb
     · have same : i=j := by omega
       subst same
-      rw [bytesT b hb, writer_byte_congr srcEq]
-      by_cases z : i%4=0
-      · rw [z]; exact writer_byte_phase0 _ _ _ _
-      · rw [carry z]
+      unfold v2Byte
+      by_cases hw : written ((posAt positions i).val%4) (b/8)=true
+      · rw [if_pos hw, bytesT b hb hw, written_byte_congr' srcEq]
+        by_cases z : i%4=0
+        · rw [z]; exact written_byte_phase0 _ _ _ _
+        · rw [carry z]
+      · rw [if_neg hw, frameT _ fx (fun h => hw (by rw [show destOf i+b-destOf i=b by omega] at h; exact h.2.2))]
+        exact fr.ahead i (Nat.le_refl i) hj b hb
   · -- x21
     rw [x21U, dest_next]
   · -- carry
@@ -407,100 +429,53 @@ theorem index_word (s : Submission) (layout : OpeningLayout s) (trapdoor : BitVe
     pos_at_eq positions j hj]
   rfl
 
-/-- A header leaves the loop frame (only `x6`, `x7` change). -/
+/-- A header leaves the loop frame (only `x6` changes). -/
 theorem frame_of_regs {s : Submission} {trapdoor : BitVec (8*s.sizes.trapdoor)} {positions : Positions}
-    {st e : MachineState} {j : Nat} (fr : L2Frame s trapdoor positions st j)
-    (keep : ∀ r, r ≠ .x6 → r ≠ .x7 → e.getReg r=st.getReg r) (mem : e.mem=st.mem) :
-    L2Frame s trapdoor positions e j := by
-  have k (r : Reg) (a : r ≠ .x6) (b : r ≠ .x7) := keep r a b
-  refine ⟨(k .x9 (by decide) (by decide)).trans fr.heap, (k .x8 (by decide) (by decide)).trans fr.index,
-    (k .x22 (by decide) (by decide)).trans fr.nonce, (k .x19 (by decide) (by decide)).trans fr.leaves,
-    (k .x24 (by decide) (by decide)).trans fr.slots, (k .x18 (by decide) (by decide)).trans fr.stash,
-    (k .x17 (by decide) (by decide)).trans fr.endIndex, (k .x26 (by decide) (by decide)).trans fr.marks,
-    (k .x23 (by decide) (by decide)).trans fr.one, (k .x25 (by decide) (by decide)).trans fr.capHeap,
-    (k .x27 (by decide) (by decide)).trans fr.capLeaves, (k .x20 (by decide) (by decide)).trans fr.proofBegin,
-    fun a lo hi al => (mem_reads e st mem _).trans (fr.input a lo hi al), fr.pointer, ?_, ?_⟩
+    {pass st e : MachineState} {j : Nat} (fr : L2Frame s trapdoor positions pass st j)
+    (keep : ∀ r, r ≠ .x6 → e.getReg r=st.getReg r) (mem : e.mem=st.mem) :
+    L2Frame s trapdoor positions pass e j := by
+  have k (r : Reg) (a : r ≠ .x6) := keep r a
+  refine ⟨(k .x9 (by decide)).trans fr.heap, (k .x8 (by decide)).trans fr.index,
+    (k .x22 (by decide)).trans fr.nonce, (k .x19 (by decide)).trans fr.leaves,
+    (k .x24 (by decide)).trans fr.slots,
+    (k .x17 (by decide)).trans fr.endIndex, (k .x26 (by decide)).trans fr.marks,
+    (k .x23 (by decide)).trans fr.one, (k .x25 (by decide)).trans fr.capHeap,
+    (k .x27 (by decide)).trans fr.capLeaves, (k .x20 (by decide)).trans fr.proofBegin,
+    fun a lo hi al => (mem_reads e st mem _).trans (fr.input a lo hi al),
+    fun a ha hk x hx => (byte_reads e st mem _).trans (fr.ahead a ha hk x hx),
+    fun a ha hk => (mem_reads e st mem _).trans (fr.pointer a ha hk), ?_, ?_⟩
   · intro node bounded; unfold machineMarks; rw [mem_reads e st mem]; exact fr.marked node bounded
   · intro i hi b hb; rw [byte_reads e st mem]; exact fr.bytes i hi b hb
 
-/-- A record after the first: its header, body and tail. -/
+/-- A record: its header, body and tail. -/
 theorem record_step (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submission) (layout : OpeningLayout s)
-    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (st : MachineState) (j : Nat)
-    (hj : j<positions.card) (fr : L2Frame s trapdoor positions st j) (pc : st.pc=address (hdrWord (j%4)))
+    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (pass st : MachineState) (j : Nat)
+    (hj : j<positions.card) (fr : L2Frame s trapdoor positions pass st j) (pc : st.pc=address (hdrWord (j%4)))
     (dest : st.getReg .x21=BitVec.ofNat 64 (destOf j))
     (carry : j%4 ≠ 0 → st.getReg .x11=carryAt (s.initialState .opening (trapdoor, positions)) positions j) :
-    ∃ u, RunsOpeningBlock st u (3+(bodyLen (j%4)+7)) ∧ L2Frame s trapdoor positions u (j+1) ∧
+    ∃ u, RunsOpeningBlock st u (1+(bodyLen (j%4)+7)) ∧ L2Frame s trapdoor positions pass u (j+1) ∧
       u.pc=address (if j+1=positions.card then exitWord (j%4) else hdrWord ((j+1)%4)) ∧
       u.getReg .x21=BitVec.ofNat 64 (destOf (j+1)) ∧
       ((j+1)%4 ≠ 0 → u.getReg .x11=carryAt (s.initialState .opening (trapdoor, positions)) positions (j+1)) := by
   have card := card_bound positions
   have order := indices_before_records
   have ib : indicesBase%8=0 := by decide
-  obtain ⟨r1, p1, x6, x7, m1, k1⟩ := hdr_step (j%4) (Nat.mod_lt _ (by decide)) st (indicesBase+8*j)
+  obtain ⟨r1, p1, x6, m1, k1⟩ := hdr_step (j%4) (Nat.mod_lt _ (by decide)) st (indicesBase+8*j)
     (posAt positions j).val pc fr.index (by omega)
     (by have : indicesBase+8*16777216+8 ≤ MEMORY_BYTES := by decide
         omega)
-    (index_word s layout trapdoor positions st fr.input j hj) (pos_at_lt positions j) fr.nonce
+    (index_word s layout trapdoor positions st fr.input j hj)
   have fe := frame_of_regs fr k1 m1
-  obtain ⟨u, r2, fu, pu, du, cu⟩ := body_and_tail phases s trapdoor positions _ j hj fe p1
-    ((k1 .x21 (by decide) (by decide)).trans dest) x6 x7
-    (fun z => (k1 .x11 (by decide) (by decide)).trans (carry z))
+  obtain ⟨u, r2, fu, pu, du, cu⟩ := body_and_tail phases s trapdoor positions pass _ j hj fe p1
+    ((k1 .x21 (by decide)).trans dest) x6
+    (fun z => (k1 .x11 (by decide)).trans (carry z))
   exact ⟨u, r1.next r2, fu, pu, du, cu⟩
 
-/-- The state at word 15 when the records begin. -/
+/-- The state at word 4096 when the records begin (the pass has just ended in `state`). -/
 structure L2Start (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
     (state : MachineState) : Prop where
-  pc : state.pc=address 15
-  heap : state.getReg .x9=BitVec.ofNat 64 trapdoorBase
-  index : state.getReg .x8=BitVec.ofNat 64 indicesBase
-  nonce : state.getReg .x22=BitVec.ofNat 64 nonceBase
+  pc : state.pc=address 4096
   dest : state.getReg .x21=BitVec.ofNat 64 proofBase
-  leaves : state.getReg .x19=BitVec.ofNat 64 4194304
-  slots : state.getReg .x24=BitVec.ofNat 64 groupSlots
-  endIndex : state.getReg .x17=BitVec.ofNat 64 (indicesBase+8*positions.card)
-  marks : state.getReg .x26=BitVec.ofNat 64 Opening.markBase
-  one : state.getReg .x23=1#64
-  capHeap : state.getReg .x25=BitVec.ofNat 64 trapdoorBase
-  capLeaves : state.getReg .x27=256#64
-  proofBegin : state.getReg .x20=BitVec.ofNat 64 proofBase
-  input : SameOpeningInput (s.initialState .opening (trapdoor, positions)) state
-  pointer : ∀ prior (present : prior<positions.card),
-    (s.initialState .opening (trapdoor, positions)).getMem
-      (BitVec.ofNat 64 (pointerAddress (sortedIndex positions prior present).val)) =
-      BitVec.ofNat 64 (quadAddress (sortedIndex positions prior present).val)
-  marked : RecordMarks positions state 0
-
-/-- The first record: words 15..18, the entry stub, the phase-0 body and its tail. -/
-theorem first_record (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submission) (layout : OpeningLayout s)
-    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState)
-    (positive : 0<positions.card) (start : L2Start s trapdoor positions begin) :
-    ∃ u, RunsOpeningBlock begin u (6+(bodyLen 0+7)) ∧ L2Frame s trapdoor positions u 1 ∧
-      u.pc=address (if 1=positions.card then exitWord 0 else hdrWord 1) ∧
-      u.getReg .x21=BitVec.ofNat 64 (destOf 1) ∧
-      (1%4 ≠ 0 → u.getReg .x11=carryAt (s.initialState .opening (trapdoor, positions)) positions 1) := by
-  have w0 := index_word s layout trapdoor positions begin start.input 0 positive
-  simp only [Nat.mul_zero, Nat.add_zero] at w0
-  obtain ⟨r1, p1, x6, x7, x18, m1, k1⟩ := first_step begin (posAt positions 0).val start.pc start.index w0
-    (pos_at_lt positions 0) start.nonce start.slots
-  let e := walkRows begin firstRows
-  have k (r : Reg) (a : r ≠ .x6) (b : r ≠ .x7) (c : r ≠ .x18) : e.getReg r=begin.getReg r := k1 r a b c
-  have fe : L2Frame s trapdoor positions e 0 :=
-    ⟨(k .x9 (by decide) (by decide) (by decide)).trans start.heap,
-     by rw [k .x8 (by decide) (by decide) (by decide), start.index]; rfl,
-     (k .x22 (by decide) (by decide) (by decide)).trans start.nonce,
-     (k .x19 (by decide) (by decide) (by decide)).trans start.leaves,
-     (k .x24 (by decide) (by decide) (by decide)).trans start.slots, x18,
-     (k .x17 (by decide) (by decide) (by decide)).trans start.endIndex,
-     (k .x26 (by decide) (by decide) (by decide)).trans start.marks,
-     (k .x23 (by decide) (by decide) (by decide)).trans start.one,
-     (k .x25 (by decide) (by decide) (by decide)).trans start.capHeap,
-     (k .x27 (by decide) (by decide) (by decide)).trans start.capLeaves,
-     (k .x20 (by decide) (by decide) (by decide)).trans start.proofBegin,
-     fun a lo hi al => (mem_reads e begin m1 _).trans (start.input a lo hi al), start.pointer,
-     fun node bounded => by unfold machineMarks; rw [mem_reads e begin m1]; exact start.marked node bounded,
-     fun i hi => absurd hi (by omega)⟩
-  obtain ⟨u, r2, fu, pu, du, cu⟩ := body_and_tail phases s trapdoor positions e 0 positive fe p1
-    (by rw [k .x21 (by decide) (by decide) (by decide), start.dest]; rfl) x6 x7 (fun z => absurd rfl z)
-  exact ⟨u, r1.next r2, fu, pu, du, cu⟩
+  frame : L2Frame s trapdoor positions state state 0
 
 end TwoPermutationPrototype.GroupedOpening.Layout2

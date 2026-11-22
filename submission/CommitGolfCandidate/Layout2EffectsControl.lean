@@ -12,8 +12,8 @@ theorem effects_entry (s : MachineState) (here : s.pc=pc Block.entry.start) :
     (∀ r, (after .entry s).getReg r=regOut s r .entry) ∧
     (after .entry s).mem=(memOut s .entry).mem ∧
     (after .entry s).pc=pcOut s .entry ∧ (Ready s Block.entry.ops ↔ accessible s .entry) := by
-  have hpc0 : s.pc=pc 0 := here
-  let u1 := execInstrBr s (.JAL .x0 2820)
+  have hpc0 : s.pc=pc 786 := here
+  let u1 := execInstrBr s (.JAL .x0 2096828)
   have hr1 (r : Reg) : u1.getReg r=s.getReg r := by
     simp +contextual [u1,execInstrBr,getReg_setReg,MachineState.getByte,MachineState.getHalfword,MachineState.getMem,MachineState.setByte,MachineState.setMem,signExtend12,signExtend13,signExtend21,pc,hpc0,BitVec.add_assoc] <;> try rfl
   have hm1 : u1.mem=s.mem := by
@@ -21,7 +21,7 @@ theorem effects_entry (s : MachineState) (here : s.pc=pc Block.entry.start) :
   have hpc1 : u1.pc=(pc 705) := by
     simp +contextual [u1,execInstrBr,getReg_setReg,MachineState.getByte,MachineState.getHalfword,MachineState.getMem,MachineState.setByte,MachineState.setMem,signExtend12,signExtend13,signExtend21,pc,hpc0,BitVec.add_assoc] <;> try rfl
   refine ⟨hr1,hm1,hpc1,?_⟩
-  change (memoryArgumentsValid s (.JAL .x0 2820)=true ∧ True) ↔ _
+  change (memoryArgumentsValid s (.JAL .x0 2096828)=true ∧ True) ↔ _
   simp only [accessible,true_and,and_true] <;> simp [memoryArgumentsValid,memAccess]
 
 theorem effects_guard (s : MachineState) (here : s.pc=pc Block.guard.start) :

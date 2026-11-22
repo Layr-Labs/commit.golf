@@ -1,3 +1,102 @@
+# Layout 2 V2a: direct salts and direct quartet replies (-4,994 opening cycles)
+
+Based on Layout 2 V1 (77,949 opening cycles, next inherited section). The first pass now writes each position's salt
+and its quartet's inverse reply straight into the record block. The record writers keep the three quartet mates
+where the reply put them and replace the opened leaf's own slot with the level-22 sibling. The checker rearranges
+those 23 dwords of every record back to V1's layout before V1's bit tables and checker run. The proof keeps its
+length for each position set, with a proved bound of 72,160 bytes for 128 positions. Its cap bytes are unchanged.
+
+## The change
+
+- Layout: as V1, except inside each record's window of 23 dwords at block offsets 16..199. That window now holds
+  level 1 (16..47) and the first 24 bytes of level 2 (48..71), then the four leaf slots of the quartet
+  (`72 + 32 s`). Slot `q = position mod 4` holds the level-22 sibling; the other slots hold the three mates. V1 had
+  the mates, level 22, level 1 and the level-2 head in that order. The rearrangement depends only on the sorted
+  positions (Astra's `Layout2.Quartet.transform`), and `Quartet.encoder p = transform true k (selectors p) ∘ convert
+  encTables k`.
+- Opener:
+  - Word 739 jumps to 3078 (`addi t4,s5,0`).
+  - The first pass is four 80-word phases at 3079, 3159, 3239 and 3319. Phase `p` writes the inverse quartet
+    reply to the block at `t4` (200 bytes), the level-22 pointer to `t4+16` and the salt to `t4+0..15`, then
+    advances `t4` by 528 or 536 bytes. It enters its copy of the salt chain with `jalr t2, 320 p` and exits from
+    the last position to word 4096. There is no reply cache, so every position makes its own inverse call.
+  - The record pass has a one-word header per phase and bodies of 193, 197, 197 and 196 instructions. The
+    tails and exits work as in V1.
+  - Unreachable leftovers of the base image remain at words 18, 3072..3075, 4923..5065, 5120..5533 and
+    5632..6089.
+  - The cap preparation and the chunked cap walk are unchanged.
+- Checker (Astra): word 0 enters a traversal at 787..1000 that rearranges each record's window with four
+  46-instruction aligned rotations. Word 786 then jumps into V1's prologue at 705. Words 1..785 and the
+  85,440 data bytes are V1's.
+
+```json
+{"commitCycles":504585244,"openingCycles":72955,"proofBytes":72160}
+```
+
+```text
+31 + (312*128 + 2) + (33001 - 15) = 72955          (wide: 15 + 26081 + 769 + 6130 + 6 = 33001)
+records: sum over 128 records of (1 + body + 7) + exit 1 = 26081
+(504585244 + 72955) * 72160 = 36416135639840
+Parent (77,949):  (504585244 + 77949) * 72160 = 36416496006880
+Saving: 4,994 opening cycles; 360,367,040 score
+```
+
+## Proof changes
+
+- `Layout2Phase2` (shared with Astra): the V2a cut, the written dwords and their V1 indices (`written`,
+  `v1Dword`), and the per-phase guarantee `PhaseFacts`. `Layout2Writer2*` (Astra) prove it for the four bodies.
+- First pass:
+  - `K3OpenChain*` take a phase offset (rows at `+80 ph`, entry `jalr` immediate `320 ph`).
+  - `Layout2PassRows`, `Layout2PassStep` and `Layout2Pass` cover one position, the pass invariant `Ready`,
+    the cycle and call bounds and, under a fixed oracle, what the blocks hold (`Seen`).
+  - `Layout2PassHeader` is the 31-cycle header.
+  - `GroupOpenHeaderSpec/Parts/Core` jump to 3078. `GroupOpenWalk` and `GroupOpenStep` lose V1's pass rows.
+- Record loop (`Layout2Loop/Steps/First/Records/Run`, `Layout2ABI`, `Layout2ProofBytes`):
+  - one-word header and no entry stub;
+  - the frame keeps the blocks ahead as the pass left them;
+  - the result is `l2ProofFromPass` of the trapdoor and the pass's end state.
+- Bridge:
+  - `Layout2V2Ref` builds the reference trapdoor, which holds the opened salts and the opened quartets'
+    inverse replies where V1's pass put them.
+  - `Layout2V2Bridge.pass_proof_eq` shows that the V2a proof is `Quartet.transform true` of V1's proof of that
+    trapdoor.
+  - `Layout2V2Facts` proves that on an honest trapdoor the old proof of the reference trapdoor is today's
+    builder proof.
+  - V1's `Layout2Area.l2_proof_convert` then gives `Quartet.encoder p` of the honest proof.
+- `Layout2Full` (72,955, `fixed_open`) and `Layout2Closing` (`l2_certificate`, `layout2_certificate` with
+  `layout2_writer2_facts` and `K1Check.v2a_checker_facts`), `Solution.lean`, `claim.json`.
+- Checker (Astra): `Layout2Quartet*` and `Layout2V2CheckerFacts`, plus replaced `K1CheckFacts`, `Layout2Blocks`,
+  `Layout2EffectsControl`, `Layout2Observation`, `Layout2Prologue`, `TwoPermutationPackedCheckerCertificate` and
+  `TwoPermutationPackedImage`.
+- Removed (V1's pass with its reply cache and trapdoor rebuild, and V1's writer and checker facts):
+  `GroupOpenEffect`, `GroupOpenFixed`, `GroupOpenHeader`, `GroupOpenLatch`, `GroupOpenPass`, `GroupOpenResume`,
+  `GroupOpenSelect`, `K3OpenFacts`, `Layout2V1CheckerFacts`, `Layout2WriterFacts`, `Layout2WriterRun`,
+  `Layout2WriterStep`.
+
+## Evidence
+
+A C emulator of the `Riscv.lean` cost model with stand-in oracles ran one full 2^24-leaf commitment. It then ran
+Layout 2 V1 and this tree on the same trapdoor, over 100 honest cases covering 92 distinct position sets and 6 tampered proofs. The cases are
+V1's: sizes 0 to 1,000, spread, random, runs, frontier and chunk shapes, and V1's worst fixtures.
+- Honest sets:
+  - both checkers accept, and the proof lengths are equal;
+  - every non-empty set is faster;
+  - every 128-position set is faster by exactly 4,994 − 20·r cycles, where r counts the positions whose quartet
+    repeats the previous position's quartet (V1 skipped those inverse calls);
+  - the opening makes exactly r more oracle calls than V1.
+- The worst case is V1's worst fixture, at exactly 72,955 cycles (77,949 for V1).
+- On all 87 cases with saved proofs, covering 79 distinct position sets, the V2a proof is byte for byte `Quartet.transform true k (selectors p)`
+  of V1's proof, and `transform false` maps it back.
+- The six tampered proofs are rejected by both checkers.
+
+Astra's separate checker battery on this manifest matched an independent reference checker on 273 paired cases.
+
+The repository verifier (`python3 scripts/run.py`) accepted this tree in a local KVM guest set up like the official one
+(Ubuntu 26.04, systemd 259, Landlock, a non-root account): status verified, score 36,416,135,639,840, artifact digest
+`b0be540d30339751…`, in 86 minutes on two CPUs.
+
+## Inherited documentation
+
 # Layout 2 record encoding (-19,742 opening cycles)
 
 Based on the 97,691-cycle chunked cap walk (next inherited section). The opener writes the record area in a

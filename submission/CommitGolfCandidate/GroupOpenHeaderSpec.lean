@@ -1,4 +1,7 @@
-import CommitGolfCandidate.GroupOpenPass
+import CommitGolfCandidate.GroupOpenStep
+import CommitGolfCandidate.GroupOpenVirtual
+import CommitGolfCandidate.GroupOpenInitial
+import CommitGolfCandidate.GroupOpenTableInit
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
@@ -17,9 +20,9 @@ def configRows : List Row :=
 def keyRows : List Row :=
   [(733,.LD .x31 .x22 8),(734,.SD .x10 .x31 8),(735,.LD .x31 .x22 16),(736,.SD .x10 .x31 16),
    (737,.LD .x31 .x22 24),(738,.SD .x10 .x31 24)]
-/-- Row 739 jumps to the first position of the relocated first pass (3077). Row 732 already set the table-entry
-mask `x1 = (2^64 - 1) >>> 48 = 65535` from `x4 = -1`; `x2` keeps the ABI's `sp`, the table base. -/
-def markRows : List Row := [(739,.JAL .x0 9352)]
+/-- Row 739 jumps to the V2a pass entry (3078, `addi x29,x21,0`, then phase 0 at 3079). Row 732 already set the
+table-entry mask `x1 = (2^64 - 1) >>> 48 = 65535` from `x4 = -1`; `x2` keeps the ABI's `sp`, the table base. -/
+def markRows : List Row := [(739,.JAL .x0 9356)]
 def headerRows := layoutRows++configRows++keyRows++markRows
 def header (s : MachineState) := walkRows s headerRows
 
@@ -31,10 +34,5 @@ theorem nested_slice {n outer width start len : Nat} (word : BitVec n) (bound : 
   intro j hj
   have mid : start+j<width := by omega
   simp [mid,hj,Nat.add_assoc]
-
-structure HeaderFacts : Prop where
-  ready : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → Ready td p (keyOf td) (header (actual.initialState .opening (td,p))) 0
-  run : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → ∀ fuel, let s:=actual.initialState .opening (td,p)
-    execute openingImage (30+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 30 0)
 
 end TwoPermutationPrototype.GroupedOpening

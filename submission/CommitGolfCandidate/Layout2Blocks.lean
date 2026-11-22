@@ -7,7 +7,7 @@ inductive Block where
   | entry | guard | empty | init | choose | full | next | tail | one | two | three | pair | single | callTail | clearHead | clearCell | restore | copyHead | copyByte | writeHead | byteHead | bitStep | emitByte | ret
 
 def Block.start : Block → Nat
-  | .entry => 0
+  | .entry => 786
   | .guard => 705
   | .empty => 708
   | .init => 709
@@ -33,7 +33,7 @@ def Block.start : Block → Nat
   | .ret => 785
 
 def Block.ops : Block → List Instr
-  | .entry => [.JAL .x0 2820]
+  | .entry => [.JAL .x0 2096828]
   | .guard => [.ADDI .x6 .x0 534, .MUL .x6 .x16 .x6, .BLTU .x17 .x6 6820]
   | .empty => [.BEQ .x16 .x0 148]
   | .init => [.ADDI .x8 .x15 0, .ADDI .x9 .x16 0, .ADDI .x20 .x0 4, .ADDI .x21 .x0 8]

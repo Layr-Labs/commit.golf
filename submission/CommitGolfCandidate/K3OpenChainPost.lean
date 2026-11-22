@@ -29,9 +29,9 @@ theorem link_fixed (o : Oracle) : ∀ (c : Nat) (s : MachineState),
     simp only [pure_bind,linkStep,Nat.add_comm 1 c]
     rfl
 
-theorem chain_fixed (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index) (e : ChainEntry h i)
+theorem chain_fixed (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index) (ph : Nat) (e : ChainEntry h i ph)
     (key : KeyWords h k) :
-    o.run (chainTrace h i)=pure (chainState o h i,chainCalls i) := by
+    o.run (chainTrace h i ph)=pure (chainState o h i ph,chainCalls i) := by
   rw [chainTrace,oracle_run_public_bind]
   simp only [answer_forward]
   unfold chainState chainCalls
@@ -63,14 +63,14 @@ theorem reply_inside (s : MachineState) (z : BitVec PERMUTATION_WIDTH) (m : Fin 
   simp
 
 /-- After the counter rows, the view differs from the entry view only at the counter word 128. -/
-theorem before_view (h : MachineState) (i : Index) (e : ChainEntry h i) (w : Nat) (hw : w<2^33) :
+theorem before_view (h : MachineState) (i : Index) (ph : Nat) (e : ChainEntry h i ph) (w : Nat) (hw : w<2^33) :
     memoryView (chainBefore h) w=
       writeWord (memoryView h) 128 (Permutation.CounterSalt.ctr (K6Chain.restart (coord i).1)) w := by
-  obtain ⟨_,_,_,_,_,mem,_⟩ := chain_before h i e
+  obtain ⟨_,_,_,_,_,mem,_⟩ := chain_before h i ph e
   rw [chain_view_of_mem mem]
   exact memory_at_store (address:=128) (index:=w) (by decide) (by omega)
 
-theorem enter_rows_mem (a : MachineState) : (walkRows a chainEnterRows).mem=a.mem := by
+theorem enter_rows_mem (a : MachineState) (ph : Nat) : (walkRows a (chainEnterRows ph)).mem=a.mem := by
   rw [enter_walk]
   rfl
 
