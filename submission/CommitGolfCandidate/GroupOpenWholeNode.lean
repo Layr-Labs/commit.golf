@@ -101,7 +101,7 @@ private theorem finish_result (c : Fin 4) (l : Fin 14) (s : MachineState)
 structure NodeResult (s u : MachineState) (i : Index) (o : Nat) (l : Fin 14) : Prop where
   run : RunsOpeningBlock s u (point (pageClass o) (l.val+1)-point (pageClass o) l)
   next : WholeCursor u i o (l.val+1)
-  kept : ∀ r, r≠.x6 → r≠.x7 → r≠.x21 → r≠.x31 → r≠.x29 → u.getReg r=s.getReg r
+  kept : ∀ r, r≠.x6 → r≠.x7 → r≠.x21 → r≠.x31 → r≠.x29 → r≠.x11 → u.getReg r=s.getReg r
   input : ∀ a<proofBase, u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a)
   frame : ∀ a<2^64, a<siblingDestination o l ∨ siblingDestination o (l.val+1)≤a →
     u.getByte (BitVec.ofNat 64 a)=s.getByte (BitVec.ofNat 64 a)
@@ -142,24 +142,24 @@ theorem node_result (s : MachineState) (i : Index) (o : Nat) (l : Fin 14) (bound
   have field:=field_copy c f h S T pcH (by rw [src];exact srcH)
     (by rw [off,show h.getReg .x21=_ from keepH .x21 (by decide)];exact addr)
     srcBounds.1 (sibling_residue o l l.isLt)
-    (by change S+width (4+l.val)≤T;rw [size];have:=fits.2.2.1;omega)
+    (by omega)
     (by change T+width (4+l.val)≤MEMORY_BYTES;rw [size];have:=fits.2.2.2;omega)
   have inM (a : Nat) (lo : a<proofBase) : m.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a) :=
     (Whole.beforeProof field a lo base).trans (by simp only [MachineState.getMem,memH,h])
-  have regM (r : Reg) (a : r≠.x31) (b : r≠.x7) : m.getReg r=s.getReg r :=
-    (field.regs r a).trans (keepH r b)
+  have regM (r : Reg) (a : r≠.x31) (b : r≠.x7) (d : r≠.x29) (e : r≠.x11) : m.getReg r=s.getReg r :=
+    (field.regs r ⟨a,d,e⟩).trans (keepH r b)
   have full (fold : folded l) : siblingWidth l=30 := by unfold folded at fold; simp [siblingWidth,show ¬l.val<2 by omega, show l.val<13 by omega]
   have pRes:=pack_result c l m S T field.pc ((field.regs _ (by decide)).trans srcH)
-    (by rw [regM _ (by decide) (by decide)];exact addr) srcBounds.1 fits.2.1 srcFit
+    (by rw [regM _ (by decide) (by decide) (by decide) (by decide)];exact addr) srcBounds.1 fits.2.1 srcFit
     (by intro fld;have := fits.2.2.2;rw [full fld] at this;exact this)
   obtain ⟨runU,pcU,memU,destU,nodeU,keepU⟩:=finish_result c l p pRes.pc
-  have kept (r : Reg) (a : r≠.x6) (b : r≠.x7) (cc : r≠.x21) (d : r≠.x31) (e : r≠.x29) : u.getReg r=s.getReg r :=
-    (keepU r cc a).trans ((pRes.regs r d e).trans (regM r d b))
-  have tagEq : tag m S l=tag s S l := by unfold tag;rw [half_from_words inM _ (by omega),regM _ (by decide) (by decide)]
+  have kept (r : Reg) (a : r≠.x6) (b : r≠.x7) (cc : r≠.x21) (d : r≠.x31) (e : r≠.x29) (f : r≠.x11) : u.getReg r=s.getReg r :=
+    (keepU r cc a).trans ((pRes.regs r d e).trans (regM r d b e f))
+  have tagEq : tag m S l=tag s S l := by unfold tag;rw [half_from_words inM _ (by omega),regM _ (by decide) (by decide) (by decide) (by decide)]
   have mem : u.mem=if folded l then (m.setHalfword (BitVec.ofNat 64 (T+28)) (tag s S l)).mem else m.mem := by
     rw [←tagEq];exact memU.trans pRes.mem
   have tf : T+siblingWidth l≤MEMORY_BYTES:=fits.2.2.2
-  refine ⟨?_,⟨pcU,(kept _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans cur.heap,?_,?_⟩,
+  refine ⟨?_,⟨pcU,(kept _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans cur.heap,?_,?_⟩,
     kept,?_,?_,?_⟩
   · have total:=((runH.next field.run).next pRes.run).next runU
     change RunsOpeningBlock s u ((headLen l+(shape c (4+l.val)).cycles+packCost l)+(if l.val=13 then 2 else 1)) at total
@@ -167,11 +167,11 @@ theorem node_result (s : MachineState) (i : Index) (o : Nat) (l : Fin 14) (bound
     rw [price];simpa only [Nat.add_assoc] using total
   · change u.getReg .x6=_
     have before : p.getReg .x6=BitVec.ofNat 64 (upperNode i l) :=
-      (pRes.regs .x6 (by decide) (by decide)).trans ((regM .x6 (by decide) (by decide)).trans cur.node)
+      (pRes.regs .x6 (by decide) (by decide)).trans ((regM .x6 (by decide) (by decide) (by decide) (by decide)).trans cur.node)
     exact nodeU.trans ((congrArg (fun x : Word => x >>> (1:Nat)) before).trans (node_shift i l))
   · change u.getReg .x21=_
     have before : p.getReg .x21=BitVec.ofNat 64 (recordBase o) :=
-      (pRes.regs .x21 (by decide) (by decide)).trans ((regM .x21 (by decide) (by decide)).trans baseReg)
+      (pRes.regs .x21 (by decide) (by decide)).trans ((regM .x21 (by decide) (by decide) (by decide) (by decide)).trans baseReg)
     rw [show u.getReg .x21=_ from destU,before,←BitVec.ofNat_add]
     by_cases last : l.val=13 <;> simp [last,show l.val+1=14 ↔ l.val=13 by omega]
   · intro a lo

@@ -22,112 +22,43 @@ private theorem pairPart (s : MachineState) (w n size : Nat) (src : Reg) (off p 
   obtain ⟨ran,next,regs,bytes,below⟩ := result
   exact ⟨ran,by simpa using next,regs,by simpa using bytes,below⟩
 
-private theorem shiftPart (s : MachineState) (w : Nat) (src : Reg) (off p S T : Nat)
-    (code : Slice w (Shifted32.chunkCode src off p)) (bound : w+6≤7872)
-    (pc : s.pc=pcAt w) (sr : s.getReg src=BitVec.ofNat 64 S)
-    (dr : s.getReg .x21+BitVec.ofNat 64 off=BitVec.ofNat 64 T)
-    (sa : (S+p)%8=0) (ta : (T+p)%4=2) (imm : off+p+6<2048)
-    (apart : S+p+8≤T) (room : T+p+8≤MEMORY_BYTES) :
-    Done s (execCode s (Shifted32.chunkCode src off p)) (S+p) (T+p) 8 6 (w+6) := by
-  have source : s.getReg src+BitVec.ofNat 64 p=BitVec.ofNat 64 (S+p) := by rw [sr,←BitVec.ofNat_add]
-  have dest : s.getReg .x21+BitVec.ofNat 64 (off+p)=BitVec.ofNat 64 (T+p) := by
-    rw [BitVec.ofNat_add,←BitVec.add_assoc,dr,←BitVec.ofNat_add]
-  have mem := Shifted32.chunk_memory s src off _ _ _ source dest imm
-  have ran := code_run (Shifted32.chunkCode src off p) w s bound (codeOfSlice code)
-    (Shifted32.chunk_ready s _ _ _ _ _ source dest sa ta (by omega) room imm) pc
-    (by intro i hi; simp only [Shifted32.chunkCode,List.mem_cons,List.not_mem_nil,or_false] at hi
-        rcases hi with rfl|rfl|rfl|rfl|rfl|rfl <;> rfl)
-    (by intro u i hi; simp only [Shifted32.chunkCode,List.mem_cons,List.not_mem_nil,or_false] at hi
-        rcases hi with rfl|rfl|rfl|rfl|rfl|rfl <;> rfl)
-  refine ⟨ran,?_,Shifted32.chunk_regs s _ _ _,
-    copy_congr_mem mem (chunk_copy s _ _ false sa ta (by omega)
-      (by unfold MEMORY_BYTES at room;omega) (by unfold MEMORY_BYTES at room;omega)),?_⟩
-  · rw [Shifted32.chunk_pc,pc]; exact ofNat_step _ 6
-  · intro q low; rw [getMem_congr mem]
-    exact chunk_below s _ _ false q (by unfold MEMORY_BYTES at room;omega) low
+structure RawDone (s t : MachineState) (S T n cost word : Nat) : Prop where
+  run : RunsOpeningBlock s t cost
+  pc : t.pc=pcAt word
+  regs : ∀ r, Carry.Free r → t.getReg r=s.getReg r
+  bytes : ByteCopy s t S T n
+  below : ∀ q : Word, q.toNat<T-T%8 → t.getMem q=s.getMem q
 
-private theorem six_memory (s : MachineState) (source : Reg) (store S T offset : Nat)
-    (src : s.getReg source + BitVec.ofNat 64 offset = BitVec.ofNat 64 S)
-    (dst : s.getReg .x21 + BitVec.ofNat 64 (store+offset) = BitVec.ofNat 64 T)
-    (small : store+offset+6 < 2048) :
-    (execCode s (sixRows source store offset)).mem = (chunkMemory s S T true).mem := by
-  have addr (k : Nat) (h : k ≤ 6) :
-      s.getReg .x21 + signExtend12 (BitVec.ofNat 12 (store+offset+k)) = BitVec.ofNat 64 (T+k) := by
-    rw [sign12 _ (by omega), BitVec.ofNat_add, ← BitVec.add_assoc, dst, ← BitVec.ofNat_add]
-  have sourceAddr : s.getReg source + signExtend12 (BitVec.ofNat 12 offset) = BitVec.ofNat 64 S := by
-    rw [sign12 _ (by omega), src]
-  have dst0 : s.getReg .x21 + signExtend12 (BitVec.ofNat 12 (store+offset)) = BitVec.ofNat 64 T := by
-    simpa using addr 0 (by omega)
-  simp only [execCode, sixRows, chunkMemory, ite_true,
-    List.foldl_cons, List.foldl_nil, execInstrBr,
-    MachineState.getReg_setPC, MachineState.getReg_setReg_eq (by decide : Reg.x31 ≠ .x0),
-    MachineState.getReg_setReg_ne _ .x31 .x21 _ (by decide),
-    reg_setHalfword, reg_setWord32, sourceAddr, dst0, addr 2 (by omega), addr 6 (by omega),
-    show (16#6).toNat = 16 from rfl, show (32#6).toNat = 32 from rfl, shift_twice, mem_pc]
-  simp only [MachineState.setHalfword, MachineState.setWord32, MachineState.setMem,
-    MachineState.getMem, mem_pc, mem_reg]
-  rfl
+private theorem widen {s t S T n cost word} (done : Done s t S T n cost word) :
+    RawDone s t S T n cost word :=
+  ⟨done.run,done.pc,fun r free => done.regs r free.1,done.bytes,done.below⟩
 
-private theorem six_regs (s : MachineState) (source : Reg) (store offset : Nat) (r : Reg) (h : r ≠ .x31) :
-    (execCode s (sixRows source store offset)).getReg r = s.getReg r := by
-  simp [execCode, sixRows, execInstrBr,
-    MachineState.getReg_setReg_ne _ .x31 r _ (Ne.symm h), reg_setHalfword, reg_setWord32]
-
-private theorem six_pc (s : MachineState) (source : Reg) (store offset : Nat) :
-    (execCode s (sixRows source store offset)).pc = s.pc+16 := by
-  simp [execCode, sixRows, execInstrBr, MachineState.setPC, BitVec.add_assoc]
-
-private theorem six_ready (s : MachineState) (source : Reg) (store S T offset : Nat)
-    (src : s.getReg source + BitVec.ofNat 64 offset = BitVec.ofNat 64 S)
-    (dst : s.getReg .x21 + BitVec.ofNat 64 (store+offset) = BitVec.ofNat 64 T)
-    (sa : S % 8 = 0) (ta : T % 4 = 2) (sf : S+8 ≤ MEMORY_BYTES)
-    (tf : T+6 ≤ MEMORY_BYTES) (small : store+offset+6 < 2048) : Ready s (sixRows source store offset) := by
-  have addr (k : Nat) (h : k ≤ 6) :
-      s.getReg .x21 + signExtend12 (BitVec.ofNat 12 (store+offset+k)) = BitVec.ofNat 64 (T+k) := by
-    rw [sign12 _ (by omega), BitVec.ofNat_add, ← BitVec.add_assoc, dst, ← BitVec.ofNat_add]
-  have dst0 : s.getReg .x21 + signExtend12 (BitVec.ofNat 12 (store+offset)) = BitVec.ofNat 64 T := by
-    simpa using addr 0 (by omega)
-  have sourceAddr : s.getReg source + signExtend12 (BitVec.ofNat 12 offset) = BitVec.ofNat 64 S := by
-    rw [sign12 _ (by omega), src]
-  have v0 := access_ok S 8 sa sf
-  have v1 := access_ok T 2 (by omega) (by omega : T+2 ≤ MEMORY_BYTES)
-  have v2 := access_ok (T+2) 4 (by omega) (by omega : T+2+4 ≤ MEMORY_BYTES)
-  simp only [sixRows, Ready, memoryArgumentsValid, memAccess, execInstrBr, MachineState.getReg_setPC,
-    MachineState.getReg_setReg_eq (by decide : Reg.x31 ≠ .x0),
-    MachineState.getReg_setReg_ne _ .x31 .x21 _ (by decide), reg_setHalfword, reg_setWord32,
-    sourceAddr, dst0, addr 2 (by omega), addr 6 (by omega), v0, v1, v2, and_self]
-
-private theorem shortPart (s : MachineState) (w : Nat) (src : Reg) (off p S T : Nat)
-    (code : Slice w (sixRows src off p)) (bound : w+4≤7872)
-    (pc : s.pc=pcAt w) (sr : s.getReg src=BitVec.ofNat 64 S)
-    (dr : s.getReg .x21+BitVec.ofNat 64 off=BitVec.ofNat 64 T)
-    (sa : (S+p)%8=0) (ta : (T+p)%4=2) (imm : off+p+6<2048)
-    (apart : S+p+8≤T+p) (room : T+p+6≤MEMORY_BYTES) :
-    Done s (execCode s (sixRows src off p)) (S+p) (T+p) 6 4 (w+4) := by
-  have source : s.getReg src+BitVec.ofNat 64 p=BitVec.ofNat 64 (S+p) := by rw [sr,←BitVec.ofNat_add]
-  have dest : s.getReg .x21+BitVec.ofNat 64 (off+p)=BitVec.ofNat 64 (T+p) := by
-    rw [BitVec.ofNat_add,←BitVec.add_assoc,dr,←BitVec.ofNat_add]
-  have mem := six_memory s src off _ _ _ source dest imm
-  have ran := code_run (sixRows src off p) w s bound (codeOfSlice code)
-    (six_ready s _ _ _ _ _ source dest sa ta (by omega) room imm) pc
-    (by intro i hi; simp only [sixRows,List.mem_cons,List.not_mem_nil,or_false] at hi
-        rcases hi with rfl|rfl|rfl|rfl <;> rfl)
-    (by intro u i hi; simp only [sixRows,List.mem_cons,List.not_mem_nil,or_false] at hi
-        rcases hi with rfl|rfl|rfl|rfl <;> rfl)
-  refine ⟨ran,?_,six_regs s _ _ _,
-    copy_congr_mem mem (chunk_copy s _ _ true sa ta (by omega)
-      (by unfold MEMORY_BYTES at room;omega) (by unfold MEMORY_BYTES at room;omega)),?_⟩
-  · rw [six_pc,pc]; exact ofNat_step _ 4
-  · intro q low; rw [getMem_congr mem]
-    exact chunk_below s _ _ true q (by unfold MEMORY_BYTES at room;omega) low
+private theorem carry_run (ops : List Carry.Op) (s : MachineState) (w : Nat) (src : Reg)
+    (off S T n price : Nat) (cfg : Carry.Bounds s S T n src off)
+    (code : Slice w (Carry.rows src off 0 ops)) (cycles : (Carry.rows src off 0 ops).length=price)
+    (bound : w+price≤7872) (pc : s.pc=pcAt w)
+    (valid : ∀ D v, Carry.Valid D (T%8) n 0 v ops) :
+    RawDone s (execCode s (Carry.rows src off 0 ops)) S T n price (w+price) := by
+  let v : Carry.Values := fun t => s.getReg t.reg
+  have initial : Carry.Track s s S T 0 v := ⟨fun _=>rfl,fun _ _=>rfl,copy_zero s S T,fun _ _=>rfl⟩
+  have ⟨ready,u,done,p⟩:=Carry.block cfg ops s 0 v initial (valid _ _)
+  have simple:=Carry.rows_simple src off 0 ops
+  refine ⟨?_,?_,done.fixed,done.copy,done.below⟩
+  · rw [←cycles] at bound ⊢
+    exact code_run _ w s bound (codeOfSlice code) ready pc (fun i h=>(simple i h).1)
+      (fun m i h=>(simple i h).2 m)
+  · rw [p,pc,cycles];exact ofNat_step _ _
 
 theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : Nat)
     (code : RawCode q w src off) (bound : w+q.cycles≤7872) (pc : s.pc=pcAt w)
-    (notTemp : src≠.x31) (sr : s.getReg src=BitVec.ofNat 64 S)
+    (free : Carry.Free src) (sr : s.getReg src=BitVec.ofNat 64 S)
     (dr : s.getReg .x21+BitVec.ofNat 64 off=BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : TargetAligned q T) (imm : off+32≤2048)
-    (apart : S+q.size≤T) (room : T+q.size≤MEMORY_BYTES) :
-    Done s (rawState q src off s) S T q.size q.cycles (w+q.cycles) := by
+    (apart32 : S+32≤T) (room : T+q.size≤MEMORY_BYTES) :
+    RawDone s (rawState q src off s) S T q.size q.cycles (w+q.cycles) := by
+  have notTemp:=free.1
+  have small : q.size≤32 := by cases q <;> decide
+  have apart : S+q.size≤T := by omega
   cases q with
   | d16 =>
     change w+4≤7872 at bound
@@ -137,7 +68,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h0 := pairPart s (w+0) 2 8 src off 0 S T (by decide) notTemp code (by omega) pc
       sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc0 := h0
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc0)
   | w16 =>
     change w+8≤7872 at bound
     change S+16≤T at apart
@@ -146,20 +77,13 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h0 := pairPart s (w+0) 4 4 src off 0 S T (by decide) notTemp code (by omega) pc
       sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc0 := h0
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
-  | s16 =>
-    change w+12≤7872 at bound
-    change S+16≤T at apart
-    change T+16≤MEMORY_BYTES at room
-    change T%4=2 at ta
-    obtain ⟨code0,code1⟩ := code
-    have h0 := shiftPart s (w+0) src off 0 S T code0 (by omega) pc
-      sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc0 := h0
-    have h1 := shiftPart _ (w+6) src off 8 S T code1 (by omega) h0.pc
-      ((acc0.regs _ notTemp).trans sr) (by rw [acc0.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc1 := append acc0 h1 (by omega) (by omega)
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc1
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc0)
+  | s16r2 =>
+    exact carry_run Carry.s16r2 s w src off S T 16 11 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=2 at ta; rw [ta];exact Carry.s16r2_valid)
+  | s16r6 =>
+    exact carry_run Carry.s16r6 s w src off S T 16 11 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=6 at ta; rw [ta];exact Carry.s16r6_valid)
   | d28 =>
     change w+8≤7872 at bound
     change S+28≤T at apart
@@ -172,7 +96,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h1 := pairPart _ (w+6) 1 4 src off 24 S T (by decide) notTemp code1 (by omega) h0.pc
       ((acc0.regs _ notTemp).trans sr) (by rw [acc0.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc1 := append acc0 h1 (by omega) (by omega)
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc1
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc1)
   | w28 =>
     change w+14≤7872 at bound
     change S+28≤T at apart
@@ -181,26 +105,13 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h0 := pairPart s (w+0) 7 4 src off 0 S T (by decide) notTemp code (by omega) pc
       sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc0 := h0
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
-  | s28 =>
-    change w+22≤7872 at bound
-    change S+28≤T at apart
-    change T+28≤MEMORY_BYTES at room
-    change T%4=2 at ta
-    obtain ⟨code0,code1,code2,code3⟩ := code
-    have h0 := shiftPart s (w+0) src off 0 S T code0 (by omega) pc
-      sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc0 := h0
-    have h1 := shiftPart _ (w+6) src off 8 S T code1 (by omega) h0.pc
-      ((acc0.regs _ notTemp).trans sr) (by rw [acc0.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc1 := append acc0 h1 (by omega) (by omega)
-    have h2 := shiftPart _ (w+12) src off 16 S T code2 (by omega) h1.pc
-      ((acc1.regs _ notTemp).trans sr) (by rw [acc1.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc2 := append acc1 h2 (by omega) (by omega)
-    have h3 := pairPart _ (w+18) 2 2 src off 24 S T (by decide) notTemp code3 (by omega) h2.pc
-      ((acc2.regs _ notTemp).trans sr) (by rw [acc2.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc3 := append acc2 h3 (by omega) (by omega)
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc3
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc0)
+  | s28r2 =>
+    exact carry_run Carry.s28r2 s w src off S T 28 20 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=2 at ta; rw [ta];exact Carry.s28r2_valid)
+  | s28r6 =>
+    exact carry_run Carry.s28r6 s w src off S T 28 19 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=6 at ta; rw [ta];exact Carry.s28r6_valid)
   | d30 =>
     change w+10≤7872 at bound
     change S+30≤T at apart
@@ -216,7 +127,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h2 := pairPart _ (w+8) 1 2 src off 28 S T (by decide) notTemp code2 (by omega) h1.pc
       ((acc1.regs _ notTemp).trans sr) (by rw [acc1.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc2 := append acc1 h2 (by omega) (by omega)
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc2
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc2)
   | w30 =>
     change w+16≤7872 at bound
     change S+30≤T at apart
@@ -229,26 +140,13 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h1 := pairPart _ (w+14) 1 2 src off 28 S T (by decide) notTemp code1 (by omega) h0.pc
       ((acc0.regs _ notTemp).trans sr) (by rw [acc0.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc1 := append acc0 h1 (by omega) (by omega)
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc1
-  | s30 =>
-    change w+22≤7872 at bound
-    change S+30≤T at apart
-    change T+30≤MEMORY_BYTES at room
-    change T%4=2 at ta
-    obtain ⟨code0,code1,code2,code3⟩ := code
-    have h0 := shiftPart s (w+0) src off 0 S T code0 (by omega) pc
-      sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc0 := h0
-    have h1 := shiftPart _ (w+6) src off 8 S T code1 (by omega) h0.pc
-      ((acc0.regs _ notTemp).trans sr) (by rw [acc0.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc1 := append acc0 h1 (by omega) (by omega)
-    have h2 := shiftPart _ (w+12) src off 16 S T code2 (by omega) h1.pc
-      ((acc1.regs _ notTemp).trans sr) (by rw [acc1.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc2 := append acc1 h2 (by omega) (by omega)
-    have h3 := shortPart _ (w+18) src off 24 S T code3 (by omega) h2.pc
-      ((acc2.regs _ notTemp).trans sr) (by rw [acc2.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc3 := append acc2 h3 (by omega) (by omega)
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc3
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc1)
+  | s30r2 =>
+    exact carry_run Carry.s30r2 s w src off S T 30 19 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=2 at ta; rw [ta];exact Carry.s30r2_valid)
+  | s30r6 =>
+    exact carry_run Carry.s30r6 s w src off S T 30 19 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=6 at ta; rw [ta];exact Carry.s30r6_valid)
   | d32 =>
     change w+8≤7872 at bound
     change S+32≤T at apart
@@ -257,7 +155,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h0 := pairPart s (w+0) 4 8 src off 0 S T (by decide) notTemp code (by omega) pc
       sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc0 := h0
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc0)
   | w32 =>
     change w+16≤7872 at bound
     change S+32≤T at apart
@@ -266,36 +164,22 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have h0 := pairPart s (w+0) 8 4 src off 0 S T (by decide) notTemp code (by omega) pc
       sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
     have acc0 := h0
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
-  | s32 =>
-    change w+24≤7872 at bound
-    change S+32≤T at apart
-    change T+32≤MEMORY_BYTES at room
-    change T%4=2 at ta
-    obtain ⟨code0,code1,code2,code3⟩ := code
-    have h0 := shiftPart s (w+0) src off 0 S T code0 (by omega) pc
-      sr dr (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc0 := h0
-    have h1 := shiftPart _ (w+6) src off 8 S T code1 (by omega) h0.pc
-      ((acc0.regs _ notTemp).trans sr) (by rw [acc0.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc1 := append acc0 h1 (by omega) (by omega)
-    have h2 := shiftPart _ (w+12) src off 16 S T code2 (by omega) h1.pc
-      ((acc1.regs _ notTemp).trans sr) (by rw [acc1.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc2 := append acc1 h2 (by omega) (by omega)
-    have h3 := shiftPart _ (w+18) src off 24 S T code3 (by omega) h2.pc
-      ((acc2.regs _ notTemp).trans sr) (by rw [acc2.regs .x21 (by decide)];exact dr) (by omega) (by omega) (by omega) (by omega) (by omega)
-    have acc3 := append acc2 h3 (by omega) (by omega)
-    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc3
-
+    simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using (widen acc0)
+  | s32r2 =>
+    exact carry_run Carry.s32r2 s w src off S T 32 21 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=2 at ta; rw [ta];exact Carry.s32r2_valid)
+  | s32r6 =>
+    exact carry_run Carry.s32r6 s w src off S T 32 21 ⟨sr,dr,free,sa,apart32,room,small,imm⟩
+      code rfl bound pc (by change T%8=6 at ta; rw [ta];exact Carry.s32r6_valid)
 
 theorem field_copy (c : Fin 4) (f : Fin 18) (s : MachineState) (S T : Nat)
     (pc : s.pc=pcAt (rawStart c f)) (sr : s.getReg (source f)=BitVec.ofNat 64 S)
     (dr : s.getReg .x21+BitVec.ofNat 64 (offset f)=BitVec.ofNat 64 T)
     (sa : S%8=0) (r : T%8=destResidue c f)
-    (apart : S+width f≤T) (room : T+width f≤MEMORY_BYTES) :
-    Done s (rawState (shape c f) (source f) (offset f) s) S T (width f) (shape c f).cycles (rawStart c f+(shape c f).cycles) := by
+    (apart : S+32≤T) (room : T+width f≤MEMORY_BYTES) :
+    RawDone s (rawState (shape c f) (source f) (offset f) s) S T (width f) (shape c f).cycles (rawStart c f+(shape c f).cycles) := by
   obtain ⟨bound,len,tmp,imm⟩ := placed c f
-  rw [← len] at apart room ⊢
+  rw [← len] at room ⊢
   exact raw_run _ s _ _ _ S T (raw_code c f) bound pc tmp sr dr sa (target_aligned c f T r) imm apart room
 
 def copy (c f : Nat) (s : MachineState) := rawState (shape c f) (source f) (offset f) s

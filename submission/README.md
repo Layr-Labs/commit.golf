@@ -1,3 +1,9 @@
+# Carry-chained copies in the record writers
+
+The four writers emit 16-, 28-, 30- and 32-byte fields. Where the destination is two or six modulo eight, each writer emits a short prefix, then builds aligned doublewords from two consecutive source loads. The low and high parts meet in registers before each aligned eight-byte store. The tail uses halfword and word stores confined to the field. The 28-byte field at residue two finishes with three halfword stores.
+
+The four record alignments save 16, 32, 16 and 32 instructions respectively. Each occurs 32 times in a scored batch. Compared with the 103,451-cycle parent, the opening saves 3,072 cycles and reaches 100,379. The proof occupies at most 72,160 bytes and the commitment costs 504,585,244 cycles. A C emulator of the `Riscv.lean` cost model with stand-in oracles reproduced the proof bytes and attained both scored bounds on two maximal fixtures.
+
 # Directly chained record writers
 
 The four record writers branch directly to the next alignment class. Each writer loads its index on entry, advances the proof cursor by 534 bytes, marks the cap group and branches on the end of the index buffer. A finished batch enters the cap at word 1097. The initial record still arrives through word 15 from the relocated salt pass.

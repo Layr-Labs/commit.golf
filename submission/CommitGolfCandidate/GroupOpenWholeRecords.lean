@@ -26,7 +26,7 @@ private theorem payload_stable {s t : MachineState} (i : Index) (l b : Nat) (sma
 structure RangeResult (s u : MachineState) (i : Index) (o first n : Nat) : Prop where
   run : RunsOpeningBlock s u (point (pageClass o) (first+n)-point (pageClass o) first)
   next : WholeCursor u i o (first+n)
-  kept : ∀ r,r≠.x6 → r≠.x7 → r≠.x21 → r≠.x31 → r≠.x29 → u.getReg r=s.getReg r
+  kept : ∀ r,r≠.x6 → r≠.x7 → r≠.x21 → r≠.x31 → r≠.x29 → r≠.x11 → u.getReg r=s.getReg r
   input : ∀ a<proofBase,u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a)
   frame : ∀ a<2^64, a<siblingDestination o first ∨ siblingDestination o (first+n)≤a →
     u.getByte (BitVec.ofNat 64 a)=s.getByte (BitVec.ofNat 64 a)
@@ -39,7 +39,7 @@ theorem run_nodes (s : MachineState) (i : Index) (o first n : Nat) (oBound : o<L
   let c : Fin 4:=⟨pageClass o,class_lt o⟩
   induction n generalizing s first with
   | zero =>
-    refine ⟨?_,cursor,fun _ _ _ _ _ _ => rfl,fun _ _ => rfl,fun _ _ _ => rfl,?_⟩
+    refine ⟨?_,cursor,fun _ _ _ _ _ _ _ => rfl,fun _ _ => rfl,fun _ _ _ => rfl,?_⟩
     · simpa [runNodes] using run_zero s
     · intro l hl hh;omega
   | succ n ih =>
@@ -60,7 +60,7 @@ theorem run_nodes (s : MachineState) (i : Index) (o first n : Nat) (oBound : o<L
         rw [len];omega
       rw [←eq];exact chain
     simp only [runNodes,dif_pos live]
-    refine ⟨stay,by rw [len];exact b.next,fun r h1 h2 h3 h4 h5 => (b.kept r h1 h2 h3 h4 h5).trans (a.kept r h1 h2 h3 h4 h5),
+    refine ⟨stay,by rw [len];exact b.next,fun r h1 h2 h3 h4 h5 h6 => (b.kept r h1 h2 h3 h4 h5 h6).trans (a.kept r h1 h2 h3 h4 h5 h6),
       fun q lo => (b.input q lo).trans (a.input q lo),?_,?_⟩
     · intro q fit outer
       rw [len] at outer
@@ -75,6 +75,6 @@ theorem run_nodes (s : MachineState) (i : Index) (o first n : Nat) (oBound : o<L
         have ram : MEMORY_BYTES<2^64 := by decide
         exact (b.frame _ (by have:=f.2.2.2;omega) (Or.inl (by omega))).trans (a.bytes byte inside)
       · exact (b.fields lev (by omega) (by omega) byte inside).trans
-          (payload_stable i lev byte inside a.input (a.kept _ (by decide) (by decide) (by decide) (by decide) (by decide)))
+          (payload_stable i lev byte inside a.input (a.kept _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)))
 
 end TwoPermutationPrototype.GroupedOpening.Whole

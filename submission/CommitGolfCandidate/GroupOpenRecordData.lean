@@ -21,7 +21,7 @@ structure RecordStart (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
       BitVec.ofNat 64 (quadAddress (sortedIndex positions ordinal present).val)
 
 /-- The registers one record may change. -/
-def recordScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
+def recordScratch : List Reg := [.x6,.x7,.x10,.x11,.x21,.x28,.x29,.x31]
 
 /-- One record's data: the prefix (salt and mates), levels 0..12, then level 13 with the fold. -/
 def recordData (s : MachineState) :=
@@ -115,7 +115,7 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
     rw [show 127+recordExtra o=((3+Whole.firstCost o)+(Whole.row c 7-Whole.row c 0))+(Whole.point c (0+14)-Whole.point c 0) from (price c ⟨_,k⟩).symm]
     exact chain
   · intro r free
-    refine (result.kept r ?_ ?_ ?_ ?_ ?_).trans (kept r free)
+    refine (result.kept r ?_ ?_ ?_ ?_ ?_ ?_).trans (kept r free)
     all_goals intro eq; subst r; exact free (by decide)
   · intro a afit outside
     exact (result.frame a afit (by change a<siblingDestination o 0 ∨ siblingDestination o 14≤a;rw [d0,end14];omega)).trans

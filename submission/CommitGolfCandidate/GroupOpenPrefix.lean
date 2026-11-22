@@ -91,7 +91,7 @@ theorem PrefixWrites.move {s u s' u' : MachineState} {i : Index} {o a b : Nat}
   · intro j below
     simpa only [MachineState.getMem,initial,final] using writes.input j below
 
-def prefixScratch : List Reg := [.x6,.x7,.x10,.x21,.x28,.x29,.x31]
+def prefixScratch : List Reg := [.x6,.x7,.x10,.x11,.x21,.x28,.x29,.x31]
 
 def Keeps (s u : MachineState) : Prop := ∀ r, r ∉ prefixScratch → u.getReg r=s.getReg r
 
@@ -120,7 +120,7 @@ structure GroupCursor (s : MachineState) (i : Index) (o j : Nat) : Prop where
   output : s.getReg .x21=BitVec.ofNat 64 (recordBase o)
 
 theorem Whole.beforeProof {s u : MachineState} {S T n cost word : Nat}
-    (d : CapCopy.Done s u S T n cost word) (a : Nat) (low : a<proofBase) (bound : proofBase≤T) :
+    (d : Whole.RawDone s u S T n cost word) (a : Nat) (low : a<proofBase) (bound : proofBase≤T) :
     u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a) := by
   apply d.below
   have al : proofBase%8=0 := by decide
@@ -152,15 +152,19 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
   have field:=Whole.field_copy c 0 t (nonceAddress i) (recordBase o) pcT
     ((keepT _ (by decide) (by decide)).trans (physical_nonce_source s i start.nonce start.index))
     (by change t.getReg .x21+BitVec.ofNat 64 0=_;rw [show t.getReg .x21=_ from keepT .x21 (by decide) (by decide),output,←BitVec.ofNat_add];rfl)
-    sa rr apart room
+    sa rr (by
+      have x:=i.isLt
+      have space : nonceBase+16*LENGTH+16≤proofBase := by decide
+      unfold recordBase nonceAddress
+      omega) room
   have fieldPC : v.pc=pcAt (Whole.row c 1) := by rw [←shape.1];exact field.pc
   have rd : v.getReg .x6=BitVec.ofNat 64 i.val := (field.regs _ (by decide)).trans
     ((keepT _ (by decide) (by decide)).trans (h.2.2.2.1.trans start.index))
-  have fixed (r : Reg) (a : r≠.x31) (b : r≠.x29) (cc : r≠.x6) (d : r≠.x7) : v.getReg r=s.getReg r :=
-    (field.regs r a).trans ((keepT r a b).trans (h.2.2.2.2 r cc d))
+  have fixed (r : Reg) (a : r≠.x31) (b : r≠.x29) (cc : r≠.x6) (d : r≠.x7) (e : r≠.x11) : v.getReg r=s.getReg r :=
+    (field.regs r ⟨a,b,e⟩).trans ((keepT r a b).trans (h.2.2.2.2 r cc d))
   have stable : Keeps s (Whole.fixedSlot v) := by
     intro r free
-    apply (z.2.2.2.2.2 r ?_ ?_ ?_).trans (fixed r ?_ ?_ ?_ ?_)
+    apply (z.2.2.2.2.2 r ?_ ?_ ?_).trans (fixed r ?_ ?_ ?_ ?_ ?_)
     all_goals intro e;subst r; simp [prefixScratch] at free
   have sourceBytes : PrefixWrites t v i o 0 16 := by
     apply PrefixWrites.of_copy (src:=nonceAddress i) (count:=16) field.bytes (by simpa using room)
@@ -176,7 +180,7 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
     rw [z.1,fieldPC]; exact (ofNat_step _ 5).trans (congrArg pcAt shape.2.1)
   · change (Whole.fixedSlot v).getReg .x7=_
     rw [show (Whole.fixedSlot v).getReg .x7=_ from z.2.2.2.1,rd,masked_group,
-      (fixed .x24 (by decide) (by decide) (by decide) (by decide)),start.slots,←BitVec.ofNat_add]
+      (fixed .x24 (by decide) (by decide) (by decide) (by decide) (by decide)),start.slots,←BitVec.ofNat_add]
     change BitVec.ofNat 64 (1024*(i.val/4)+groupSlots)+BitVec.ofNat 64 584=_
     rw [←BitVec.ofNat_add,Nat.add_comm (1024*(i.val/4))]
   · change (Whole.fixedSlot v).getReg .x10=_
@@ -222,10 +226,10 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
     rw [specs.2.1,head.2.2.2 .x21 (by decide),start.output,←BitVec.ofNat_add]
   have rr : T%8=Whole.destResidue c f := by
     rw [specs.2.2.2];have q:=Whole.class_residue o;unfold T;change _=2*Whole.pageClass o;omega
-  have copy:=Whole.field_copy c f t S T pc src dst bounds.1 rr (specs.2.2.1 ▸ apart) (specs.2.2.1 ▸ room)
+  have copy:=Whole.field_copy c f t S T pc src dst bounds.1 rr apart (specs.2.2.1 ▸ room)
   have headRun:=Whole.mate_run c j s start.pc
-  have stable (r : Reg) (a : r≠.x31) (b : r≠.x28) :
-      (groupStep c j s).getReg r=s.getReg r := (copy.regs r a).trans (head.2.2.2 r b)
+  have stable (r : Reg) (a : r≠.x31) (b : r≠.x28) (d : r≠.x29) (e : r≠.x11) :
+      (groupStep c j s).getReg r=s.getReg r := (copy.regs r ⟨a,d,e⟩).trans (head.2.2.2 r b)
   have writes : PrefixWrites t (groupStep c j s) i o (16+32*j.val) (16+32*j.val+32) := by
     apply PrefixWrites.of_copy (src:=S) (count:=32) (by have bb:=copy.bytes;rw [specs.2.2.1] at bb;exact bb) room (source_quartet i j)
     intro a ha; exact Whole.beforeProof copy a ha (by unfold T recordBase;omega)
@@ -234,9 +238,9 @@ theorem run_group_step (s : MachineState) (i : Index) (o : Nat) (j : Fin 3) (fit
     change 3+(Whole.shape c (1+j.val)).cycles=_
     omega
   rw [eq] at total
-  refine ⟨total, ⟨?_,(stable _ (by decide) (by decide)).trans start.heap,(stable _ (by decide) (by decide)).trans start.groups,
-    (stable _ (by decide) (by decide)).trans start.group,(stable _ (by decide) (by decide)).trans start.low,
-    (stable _ (by decide) (by decide)).trans start.index,(stable _ (by decide) (by decide)).trans start.output⟩,
+  refine ⟨total, ⟨?_,(stable _ (by decide) (by decide) (by decide) (by decide)).trans start.heap,(stable _ (by decide) (by decide) (by decide) (by decide)).trans start.groups,
+    (stable _ (by decide) (by decide) (by decide) (by decide)).trans start.group,(stable _ (by decide) (by decide) (by decide) (by decide)).trans start.low,
+    (stable _ (by decide) (by decide) (by decide) (by decide)).trans start.index,(stable _ (by decide) (by decide) (by decide) (by decide)).trans start.output⟩,
     writes.move head.2.1.symm rfl,?_⟩
   · change (groupStep c j s).pc=_
     have dstpc:=copy.pc
