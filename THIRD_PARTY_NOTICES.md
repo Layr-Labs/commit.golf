@@ -4,7 +4,7 @@ The Lean project uses [VCVio](https://github.com/Verified-zkEVM/VCVio) for proba
 
 The repository layout and the style of the rules and statements follow [sig.golf](https://github.com/leanEthereum/sig.golf-submissions).
 
-`verifier/`, `scripts/` and `.github/workflows/benchmark.yml` are adapted from sig.golf's verifier (Apache-2.0). The verifier builds Lean's [comparator](https://github.com/leanprover/comparator), [lean4export](https://github.com/leanprover/lean4export) and, on Linux, [landrun](https://github.com/Zouuup/landrun) at pinned revisions; their licenses remain in those repositories.
+`verifier/`, `scripts/` and `.github/workflows/benchmark.yml` are adapted from sig.golf's verifier (Apache-2.0). The verifier runs `lake comparator`, which ships with the Lean release in `lean-toolchain` and succeeds the standalone [comparator](https://github.com/leanprover/comparator). On Linux, it sandboxes the build with the distribution's [bubblewrap](https://github.com/containers/bubblewrap).
 
 `CommitGolf/Riscv.lean` restores and adapts the sig.golf-derived RV64IM interpreter
 from commit.golf's own history. Instruction semantics and decoding use the pinned

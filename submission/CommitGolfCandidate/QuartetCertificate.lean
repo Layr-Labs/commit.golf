@@ -189,6 +189,16 @@ private theorem honest_check_event (scheme : Scheme) (oracle : Oracle) (message 
     fixed_oracle_run_pure,map_bind,map_pure]
   simp only [fixedOracleRun,bind_map_left]
 
+/-- `mem_support_bind_iff`, spelled as `prEvent_eq_one_iff` spells the support below: `support` at
+`OracleComp unifSpec` and `bind` at `ProbComp`. Since mathlib4#41506, Lean's kernel can run a
+computation when it compares two spellings of a `support` membership, and `mem_support_bind_iff`
+spells `bind` at `OracleComp unifSpec`. -/
+private theorem support_bind_iff {α β : Type} (computation : ProbComp α) (continuation : α → ProbComp β)
+    (value : β) :
+    value ∈ @support (OracleComp unifSpec) β _ (@bind ProbComp _ α β computation continuation) ↔
+      ∃ a ∈ support computation, value ∈ support (continuation a) :=
+  mem_support_bind_iff computation continuation value
+
 set_option linter.constructorNameAsVariable false in
 theorem completeness (opens : OpeningFacts s) (checks : CheckerFacts s) : s.scheme.Completeness := by
   intro oracle message positions
@@ -196,8 +206,10 @@ theorem completeness (opens : OpeningFacts s) (checks : CheckerFacts s) : s.sche
   rw [(opens.refines oracle message positions).prEvent_eq]
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro view reached
-  simp only [mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reached
-  obtain ⟨salts,_,rfl⟩ := reached
+  rw [support_bind_iff] at reached
+  obtain ⟨salts,_,reached⟩ := reached
+  simp only [support_pure,Set.mem_singleton_iff] at reached
+  rw [reached]
   let input := honestCheckInput oracle message positions salts
   change (oracle.eval (s.scheme.check input.commitment input.positions input.values input.proof)).1 = true
   rw [scheme_check_observation]

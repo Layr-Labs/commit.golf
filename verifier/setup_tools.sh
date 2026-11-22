@@ -1,80 +1,93 @@
 #!/usr/bin/env bash
-# Build the verification tools next to the project: comparator, lean4export and (on Linux) landrun.
+# Prepare and test the judge: Lake's built-in `lake comparator` and, on Linux, its bwrap sandbox.
 #
-#   verifier/setup_tools.sh          # builds into verifier/.tools/ and runs comparator's test suite
+#   verifier/setup_tools.sh          # writes verifier/.tools/env.sh after an acceptance test
 #
-# Policy: the judge must be compiled with the project's exact Lean release, because it replays the
-# export through the kernel it was compiled with and lean4export reads the project's .olean files.
-# We therefore pin the comparator revision whose declared toolchain has the SAME MINOR VERSION as
-# ours and override only the patch digit. Anything else (different minor, or patching comparator's
-# checks) is refused here on purpose.
+# Policy: the judge must come from the project's exact Lean release, because it replays the
+# export through that release's kernel and the bundled exporter reads the project's .olean files.
+# `lake comparator` ships with every Lean release from v4.35.0, so the toolchain in
+# `lean-toolchain` supplies the judge, the exporter and the kernel checker together.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tools="${root}/verifier/.tools"
 export PATH="${HOME}/.elan/bin:${PATH}"
 
-# Upstream Lean 4.35.0 release bump (#106), including its matching lean4export pin.
-readonly comparator_rev="e3dcf3083fc53d44b27a4431fabf7d43181583f5"
-# Zouuup/landrun (Linux only)
-readonly landrun_rev="811cfff51ceaf3d9843708aa6d22e9b84ccac8b4"
-
-minor() { sed -E 's/^leanprover\/lean4:v([0-9]+\.[0-9]+)\..*$/\1/' "$1"; }
-
 if ! command -v elan >/dev/null 2>&1; then
-  echo "elan is required; install and verify it before bootstrapping the pinned verification tools" >&2
+  echo "elan is required; install and verify it before preparing the verification tools" >&2
   exit 1
 fi
-
-clone_at() {  # url rev dest
-  if [[ ! -d "$3/.git" ]]; then
-    git clone --filter=blob:none --no-checkout "$1" "$3"
-  fi
-  git -C "$3" fetch --depth=1 origin "$2"
-  git -C "$3" checkout --detach --force "$2"
-  # Old untracked source files must not become inputs to the pinned build. Ignored build
-  # caches remain, and Lake checks their source hashes before reusing them.
-  git -C "$3" clean -ffd
-  [[ "$(git -C "$3" rev-parse HEAD)" == "$2" ]]
-  [[ -z "$(git -C "$3" status --porcelain --untracked-files=no)" ]] || { echo "dirty checkout: $3" >&2; exit 1; }
-}
-
-mkdir -p "${tools}"
-clone_at https://github.com/leanprover/comparator.git "${comparator_rev}" "${tools}/comparator"
-
-ours="$(minor "${root}/lean-toolchain")"
-theirs="$(minor "${tools}/comparator/lean-toolchain")"
-if [[ "${ours}" != "${theirs}" ]]; then
-  echo "refusing: project toolchain minor ${ours} differs from comparator's declared ${theirs}" >&2
-  exit 1
-fi
-echo "comparator declares $(cat "${tools}/comparator/lean-toolchain"); building with $(cat "${root}/lean-toolchain")"
-cp "${root}/lean-toolchain" "${tools}/comparator/lean-toolchain"
-( cd "${tools}/comparator" && lake build lean4export comparator )
-
-lean4export_bin="${tools}/comparator/.lake/packages/lean4export/.lake/build/bin/lean4export"
-comparator_bin="${tools}/comparator/.lake/build/bin/comparator"
-[[ -x "${lean4export_bin}" && -x "${comparator_bin}" ]]
+toolchain="$(tr -d '[:space:]' < "${root}/lean-toolchain")"
+elan run "${toolchain}" lake comparator --help >/dev/null
 
 if [[ "$(uname -s)" == Linux ]]; then
-  command -v go >/dev/null 2>&1 || { echo "Go 1.24+ is required to build landrun" >&2; exit 1; }
-  clone_at https://github.com/Zouuup/landrun.git "${landrun_rev}" "${tools}/landrun"
-  ( cd "${tools}/landrun" && go build -trimpath -o landrun ./cmd/landrun )
-  landrun_bin="${tools}/landrun/landrun"
+  bwrap_bin="$(command -v bwrap || true)"
+  if [[ -z "${bwrap_bin}" ]]; then
+    echo "bubblewrap (bwrap) is required to sandbox the comparator on Linux" >&2
+    exit 1
+  fi
+  echo "sandbox: $("${bwrap_bin}" --version) at ${bwrap_bin}"
+  sandbox_flags=()
 else
-  echo "non-Linux host: landrun not built; local runs use comparator's fake-landrun shim (NOT a sandbox)" >&2
-  landrun_bin="${tools}/comparator/scripts/fake-landrun.sh"
+  echo "non-Linux host: lake comparator runs WITHOUT a sandbox; this mode is for development only" >&2
+  bwrap_bin=""
+  sandbox_flags=(--inadvisably-no-sandbox)
 fi
 
-# Acceptance: comparator's own test suite must pass on this toolchain.
-echo "running comparator's test suite"
-( cd "${tools}/comparator" && \
-  COMPARATOR_LANDRUN="${landrun_bin}" COMPARATOR_LEAN4EXPORT="${lean4export_bin}" lean --run runtests.lean )
+# Acceptance: the judge must accept a matching proof and reject a mismatched statement on this
+# host, with the sandbox it will use for submissions.
+fixture="$(mktemp -d)"
+trap 'rm -rf "${fixture}"' EXIT
+judge() {  # solution source; prints the judge's exit status
+  rm -rf "${fixture}/project"
+  mkdir -p "${fixture}/project"
+  cp "${root}/lean-toolchain" "${fixture}/project/lean-toolchain"
+  cat > "${fixture}/project/lakefile.toml" <<'TOML'
+name = "fixture"
 
+[[lean_lib]]
+name = "Challenge"
+
+[[lean_lib]]
+name = "Solution"
+TOML
+  cat > "${fixture}/project/comparator.json" <<'JSON'
+{"challenge_module": "Challenge", "solution_module": "Solution", "theorem_names": ["fixture"],
+ "permitted_axioms": ["propext", "Quot.sound", "Classical.choice"]}
+JSON
+  echo 'theorem fixture : 2 + 2 = 4 := sorry' > "${fixture}/project/Challenge.lean"
+  printf '%s\n' "$1" > "${fixture}/project/Solution.lean"
+  # The comparator needs a manifest; this trusted fixture has no dependencies to resolve.
+  ( cd "${fixture}/project" && lake build Challenge >/dev/null )
+  local status=0
+  ( cd "${fixture}/project" && COMPARATOR_BWRAP="${bwrap_bin}" \
+      lake comparator "${sandbox_flags[@]}" --config comparator.json ) \
+    > "${fixture}/log" 2>&1 || status=$?
+  echo "${status}"
+}
+accepted="$(judge 'theorem fixture : 2 + 2 = 4 := rfl')"
+if [[ "${accepted}" != 0 ]] || ! grep -qx 'Your solution is okay!' "${fixture}/log"; then
+  cat "${fixture}/log" >&2
+  echo "acceptance test failed: the comparator did not accept a matching proof" >&2
+  exit 1
+fi
+reject() {  # solution source, expected diagnostic, description
+  local status
+  status="$(judge "$1")"
+  if [[ "${status}" != 1 ]] || ! grep -qxF "error: $2" "${fixture}/log" ||
+      grep -q 'Your solution is okay!' "${fixture}/log"; then
+    cat "${fixture}/log" >&2
+    echo "acceptance test failed: the comparator did not reject $3" >&2
+    exit 1
+  fi
+}
+reject 'theorem fixture : 2 + 2 = 4 ∨ False := .inl rfl' \
+  "Challenge and solution theorem statement do not match: 'fixture'" 'a mismatched statement'
+reject 'theorem fixture : 2 + 2 = 4 := sorry' \
+  "Illegal axiom detected: 'sorryAx'" 'a proof that uses sorry'
+
+mkdir -p "${tools}"
 cat > "${tools}/env.sh" <<ENV
-export COMPARATOR_BIN="${comparator_bin}"
-export COMPARATOR_LEAN4EXPORT="${lean4export_bin}"
-export COMPARATOR_LANDRUN="${landrun_bin}"
+export COMPARATOR_BWRAP="${bwrap_bin}"
 ENV
-echo "tools ready; source ${tools}/env.sh"
-echo "  lean4export rev: $(python3 -c "import json;print([p['rev'] for p in json.load(open('${tools}/comparator/lake-manifest.json'))['packages'] if p['name']=='lean4export'][0])")"
+echo "tools ready; judge: lake comparator from ${toolchain}"

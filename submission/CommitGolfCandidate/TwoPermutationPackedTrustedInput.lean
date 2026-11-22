@@ -85,7 +85,7 @@ theorem check_input_proof_byte (input : CheckInput) (valid : input.proof.length 
 
 theorem check_input_value (input : CheckInput) (ordinal : Nat) (present : ordinal < input.positions.card) :
     readBuffer (submission.initialState .check input) (submission.layout.values + 256*ordinal) 256 =
-      input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)) := by
+      input.values ((input.positions.attach.sort (· ≤ ·))[ordinal]'(by simpa using present)) := by
   rw [initial_state]
   exact Checker.check_input_value input ordinal present
 

@@ -38,6 +38,23 @@ theorem oracle_run_map (oracle : Oracle) {α β : Type} (f : α → β)
   simp only [Function.comp_apply, oracle_run_pure, pure_bind, Nat.add_zero]
   simp only [map_eq_bind_pure_comp, Function.comp_def]
 
+/-- Every counted result of a mapped computation comes from a counted result of the computation.
+
+Proofs about the submitted machine use this lemma and the other support lemmas stated for an
+abstract computation, instead of rewriting their hypotheses. Since `Set` became a structure
+(Mathlib #41506), Lean's kernel can reduce both sides of a comparison `x ∈ support a =?= x ∈ support b`
+when `a` and `b` differ syntactically, and this reduction runs the computations. For the commitment
+run, it evaluates `2 ^ width` for the 2^32-bit salt, which the kernel refuses. Applied to the actual
+run, the hypothesis of such a lemma matches the caller's hypothesis syntactically. -/
+theorem oracle_run_map_support (oracle : Oracle) {α β : Type} (f : α → β)
+    (computation : OracleComp World α) (result : β × Nat)
+    (reachable : result ∈ support (oracle.run (f <$> computation))) :
+    ∃ counted ∈ support (oracle.run computation), result = (f counted.1, counted.2) := by
+  rw [oracle_run_map] at reachable
+  simp only [support_map, Set.mem_image] at reachable
+  obtain ⟨counted, reached, rfl⟩ := reachable
+  exact ⟨counted, reached, rfl⟩
+
 /-- A public query contributes exactly one call before continuing. -/
 theorem oracle_run_public_bind (oracle : Oracle) {α : Type} (query : PublicSpec.Domain)
     (continuation : PublicSpec.Range query → OracleComp World α) :

@@ -12,13 +12,17 @@ from check_artifact_linkage import case_passes, linkage_config, make_cases, remo
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# The diagnostic body comes from independent Lean 4.35.0 comparator runs. Coordinates follow
-# the fixed generated fixture as its trusted representation evolves.
+# The diagnostic bodies come from Lean v4.36.0 `lake comparator` runs of these fixtures, with
+# build paths and the backtrace elided. Coordinates follow the fixed generated fixture as its
+# trusted representation evolves. The judge's buffered progress line can follow its exit report.
 _direct_source = make_cases(json.dumps(manifest()).encode())[0].source.splitlines()
 _proof_line = next(i for i, line in enumerate(_direct_source, 1)
                    if line.startswith('theorem submission_matches_artifact '))
 _proof_column = _direct_source[_proof_line - 1].index('rfl')
-RFL_FAILURE = f'''error: Solution.lean:{_proof_line}:{_proof_column}: Tactic `rfl` failed: The left-hand side
+RFL_FAILURE = f'''Building Solution
+✖ [6520/6522] Building Solution (6.4s)
+trace: .> LEAN_PATH=build-paths-placeholder
+error: Solution.lean:{_proof_line}:{_proof_column}: Tactic `rfl` failed: The left-hand side
   submission
 is not definitionally equal to the right-hand side
   Artifact.submission
@@ -27,13 +31,15 @@ is not definitionally equal to the right-hand side
 Some required targets logged failures:
 - Solution
 error: build failed
-uncaught exception: Child exited with 1
+error: Child exited with 1
 '''
-MISSING_TARGET = '''Build completed successfully (3216 jobs).
-PANIC at dumpConstant Export:237:48: Constant CommitGolf.Challenge.submission_matches_artifact not found in environment.
+MISSING_TARGET = '''Building Solution
+Build completed successfully (6522 jobs).
+PANIC at LeanExport.dumpConstant LeanExport.Basic:254:48: Constant CommitGolf.Challenge.submission_matches_artifact not found in environment.
 backtrace:
 exporter-backtrace-placeholder
-uncaught exception: Child exited with 134
+error: Child exited with 139
+Exporting #[CommitGolf.Challenge.submission_matches_artifact] from Solution
 '''
 
 
@@ -75,7 +81,7 @@ class LinkageHarnessTests(unittest.TestCase):
             self.assertFalse(case_passes(negative, {'status': status}, RFL_FAILURE))
         self.assertFalse(case_passes(positive, {'status': 'rejected'}, RFL_FAILURE))
         for diagnostic in ('OOM killed compiler', "error: object file 'Dependency.olean' does not exist",
-                           'uncaught exception: Child exited with 127',
+                           'error: Child exited with 127',
                            'error: Solution.lean:1:0: unknown identifier unrelated', ''):
             self.assertFalse(case_passes(negative, {'status': 'rejected', 'reason': diagnostic}, diagnostic))
 
@@ -87,32 +93,37 @@ class LinkageHarnessTests(unittest.TestCase):
                            'error: Dependency.lean:1:0: missing declaration\n' + RFL_FAILURE,
                            'OOM killed unrelated job\n' + RFL_FAILURE,
                            RFL_FAILURE.replace('Child exited with 1', 'Child exited with 127'),
+                           RFL_FAILURE.replace('Child exited with 1', 'Child exited with 2'),
+                           RFL_FAILURE + 'Your solution is okay!\n',
                            'PANIC at unrelated location\n' + RFL_FAILURE):
             self.assertFalse(case_passes(negative, {'status': 'rejected'}, diagnostic))
 
     def test_missing_equality_requires_the_exact_missing_export_target(self):
         missing = make_cases(json.dumps(manifest()).encode())[-1]
         self.assertTrue(case_passes(missing, {'status': 'rejected'}, MISSING_TARGET))
-        for diagnostic in ('PANIC at unrelated location\nuncaught exception: Child exited with 134\n',
+        for diagnostic in ('PANIC at unrelated location\nerror: Child exited with 139\n',
                            MISSING_TARGET.replace('submission_matches_artifact', 'unrelated_target'),
-                           MISSING_TARGET.replace('Child exited with 134', 'Child exited with 127'),
+                           MISSING_TARGET.replace('Child exited with 139', 'Child exited with 127'),
                            'error: Dependency.lean:1:0: failed to load dependency\n' + MISSING_TARGET,
-                           MISSING_TARGET.replace('Build completed successfully (3216 jobs).\n', ''),
-                           MISSING_TARGET + 'PANIC at unrelated location\n'):
+                           MISSING_TARGET.replace('Build completed successfully (6522 jobs).\n', ''),
+                           MISSING_TARGET + 'PANIC at unrelated location\n',
+                           MISSING_TARGET + 'Your solution is okay!\n'):
             self.assertFalse(case_passes(missing, {'status': 'rejected'}, diagnostic))
 
-    def test_official_missing_target_exit_requires_the_same_specific_rejection(self):
+    def test_missing_target_accepts_only_the_exporter_abort_codes(self):
         missing = make_cases(json.dumps(manifest()).encode())[-1]
-        official = MISSING_TARGET.replace('Child exited with 134', 'Child exited with 139')
-        self.assertTrue(case_passes(missing, {'status': 'rejected'}, official))
-        for diagnostic in ('uncaught exception: Child exited with 139\n',
-                           official.replace('submission_matches_artifact', 'unrelated_target'),
-                           official.replace('PANIC at dumpConstant Export:237:48: Constant '
-                                            'CommitGolf.Challenge.submission_matches_artifact '
-                                            'not found in environment.\n', ''),
-                           'error: Dependency.lean:1:0: missing declaration\n' + official,
-                           'PANIC at unrelated location\n' + official,
-                           official.replace('Child exited with 139', 'Child exited with 140')):
+        for code in ('134', '139'):
+            with self.subTest(code=code):
+                self.assertTrue(case_passes(missing, {'status': 'rejected'},
+                                            MISSING_TARGET.replace('139', code)))
+        for diagnostic in ('error: Child exited with 139\n',
+                           MISSING_TARGET.replace('Child exited with 139', 'Child exited with 140'),
+                           MISSING_TARGET.replace('error: Child exited with 139\n', ''),
+                           MISSING_TARGET.replace('PANIC at LeanExport.dumpConstant LeanExport.Basic:254:48: '
+                                                  'Constant CommitGolf.Challenge.submission_matches_artifact '
+                                                  'not found in environment.\n', ''),
+                           MISSING_TARGET + 'error: Child exited with 134\n',
+                           'PANIC at unrelated location\n' + MISSING_TARGET):
             self.assertFalse(case_passes(missing, {'status': 'rejected'}, diagnostic))
 
     def test_cleanup_is_limited_to_owned_direct_children(self):

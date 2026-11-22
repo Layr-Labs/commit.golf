@@ -31,7 +31,7 @@ theorem cap_check_input_proof_byte (input : CheckInput) (offset : Nat)
     omega
   have outsideValues : ¬ (capProgram.layout.values ≤ capProgram.layout.proof + offset ∧
       capProgram.layout.proof + offset < capProgram.layout.values +
-        (LEAF_SIZE/8) * (input.positions.attach.sort (fun i j => i.val ≤ j.val)).length) := by
+        (LEAF_SIZE/8) * (input.positions.attach.sort (· ≤ ·)).length) := by
     rw [Finset.length_sort, Finset.card_attach]
     norm_num [capProgram, capExperimental, candidate, layout, trapdoorBytes,
       LENGTH, LOG_LENGTH, LEAF_SIZE, DIGEST_BYTES] at cardinal ⊢

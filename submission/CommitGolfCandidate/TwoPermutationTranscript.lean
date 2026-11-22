@@ -57,7 +57,7 @@ def frontierProof (packed : Bool) (heap : Nat → BitVec 256) (groups : List Nat
 def transcriptBuilder (packed : Bool) : TranscriptBuilder :=
   fun compress positions salts leaves =>
     let heap := transcriptHeap packed compress leaves
-    let ordered := positions.attach.sort (fun i j => i.val ≤ j.val)
+    let ordered := positions.attach.sort (· ≤ ·)
     let path := ordered.flatMap (fun index => lowerRecord packed heap index.val (salts index))
     let footer := frontierProof packed heap (ordered.map (capGroup ∘ Subtype.val))
     (heap 1, path ++ footer)
@@ -122,7 +122,7 @@ theorem frontier_proof_bound (packed : Bool) (heap : Nat → BitVec 256) (groups
 theorem transcript_128_size (packed : Bool) (compress : Compression) (positions : Positions)
     (salts : OpenedSalts positions) (leaves : DigestTape) (count : positions.card = 128) :
     (transcriptBuilder packed compress positions salts leaves).2.length ≤ if packed then 67584 else 71680 := by
-  let sorted := positions.attach.sort (fun i j => i.val ≤ j.val)
+  let sorted := positions.attach.sort (· ≤ ·)
   let heap := transcriptHeap packed compress leaves
   have countProof := frontier_proof_bound packed heap (sorted.map (capGroup ∘ Subtype.val))
   have ordered : sorted.length = 128 := by simp [sorted, count]

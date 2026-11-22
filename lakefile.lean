@@ -8,13 +8,13 @@ require «riscv-zkvm» from git
   "https://github.com/Verified-zkEVM/riscv-zkvm" @ "4634e41b229da4256e4a1f1688b94133fffa4af0"
 
 require Arklib from git
-  "https://github.com/Verified-zkEVM/ArkLib" @ "3b2ff0cc6938d7a8032afde7502b6080b5420eea"
+  "https://github.com/Verified-zkEVM/ArkLib" @ "608f550b89b881cc1c9c6c32825fcc61b53c96ab"
 
 require CompPoly from git
-  "https://github.com/Verified-zkEVM/CompPoly" @ "e28da34817c3775cfb935376acf5d416f555d64f"
+  "https://github.com/Verified-zkEVM/CompPoly" @ "afb9b1363984a70f10e24bd597f6ff40ebc8afbb"
 
 require VCVio from git
-  "https://github.com/Verified-zkEVM/VCVio" @ "9054989327a7185ff19ef9ff0f119cccea479501"
+  "https://github.com/Verified-zkEVM/VCVio" @ "f1e63c780de398fb62206dd5890f27e1ad64e0e6"
 
 -- The contract: parameters, oracle, scheme syntax, games, and the statements a certificate proves.
 @[default_target] lean_lib CommitGolf

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from verify import VerifyError, linux_preflight, linux_systemd_preflight, main
+from verify import VerifyError, linux_command, linux_preflight, linux_systemd_preflight, main
 
 
 class SystemdPreflightTests(unittest.TestCase):
@@ -54,6 +54,41 @@ class SystemdPreflightTests(unittest.TestCase):
                 patch('verify.linux_systemd_preflight', side_effect=VerifyError('version guard')), \
                 self.assertRaisesRegex(VerifyError, 'version guard'):
             linux_preflight({})
+
+
+class SandboxUnitTests(unittest.TestCase):
+    def unit(self):
+        with patch('verify.os.sched_getaffinity', return_value={0, 1, 2}):
+            command, _ = linux_command(['lake', 'comparator', '--config', '/trusted/comparator.json'],
+                                       Path('/work/project'), {'COMPARATOR_BWRAP': '/usr/bin/bwrap'},
+                                       [Path('/work/source')])
+        separator = command.index('--')
+        properties = [command[i + 1] for i in range(separator) if command[i] == '-p']
+        return properties, command[separator + 1:]
+
+    def test_network_is_a_private_loopback_namespace_without_unix_sockets(self):
+        properties, _ = self.unit()
+        self.assertIn('PrivateNetwork=yes', properties)
+        self.assertIn('RestrictAddressFamilies=AF_INET AF_NETLINK', properties)
+        self.assertFalse(any(prop.startswith('RestrictAddressFamilies=') and 'AF_UNIX' in prop
+                             for prop in properties))
+        for blocked in ('ptrace', 'kill', 'tkill', 'tgkill', 'pidfd_send_signal', 'pidfd_getfd'):
+            self.assertTrue(any(prop.startswith('SystemCallFilter=~') and blocked in prop.split()
+                                for prop in properties), blocked)
+
+    def test_proc_stays_complete_for_bwrap(self):
+        properties, _ = self.unit()
+        self.assertIn('PrivatePIDs=yes', properties)
+        self.assertFalse(any(prop.startswith('ProcSubset=') for prop in properties))
+
+    def test_judge_runs_through_the_isolation_check_with_the_pinned_sandbox(self):
+        _, command = self.unit()
+        self.assertEqual(command[:2], ['/usr/bin/env', '-i'])
+        self.assertIn('COMPARATOR_BWRAP=/usr/bin/bwrap', command)
+        self.assertTrue(any(arg.startswith('COMMIT_VERIFIER_HOST_NETNS=') for arg in command))
+        launcher = next(i for i, arg in enumerate(command) if arg.endswith('linux_exec.py'))
+        self.assertEqual(command[launcher + 1:],
+                         ['lake', 'comparator', '--config', '/trusted/comparator.json'])
 
 
 class WorkDirectoryTests(unittest.TestCase):

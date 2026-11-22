@@ -7,7 +7,7 @@ import VCVio.OracleComp.QueryTracking.QueryBound
 including one chosen adaptively through both public directions. -/
 namespace TwoPermutationPrototype.Sampling
 open CommitGolf OracleComp MeasureTheory
-set_option maxRecDepth 8192
+set_option maxRecDepth 16384
 set_option exponentiation.threshold 2048
 
 theorem remaining_input_count {α : Type} [Fintype α] [DecidableEq α] (table : List (α × α))

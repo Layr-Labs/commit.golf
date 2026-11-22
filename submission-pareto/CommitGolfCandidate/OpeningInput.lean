@@ -237,6 +237,24 @@ theorem opening_scheme_execution (trapdoor : BitVec (8 * submission.sizes.trapdo
   rw [scheme_opening_eq_map, opening_execution]
   simp
 
+/-- Every result of the honest game comes from a counted commitment and a counted opening of the
+same scheme. The scheme is abstract for the reason given at `oracle_run_map_support`. -/
+theorem honest_support (scheme : Scheme) (oracle : Oracle) (message : Message)
+    (positions : Positions) (result : Scheme.HonestResult)
+    (reachable : result ∈ support (scheme.honest oracle message positions)) :
+    ∃ committed ∈ support (oracle.run (scheme.commit message)),
+      ∃ opened ∈ support (oracle.run (scheme.opening committed.1.2 positions)),
+        result =
+          { accepted := (oracle.eval (scheme.check committed.1.1 positions
+              (message.restrict positions) opened.1)).1
+            commitCalls := committed.2, openCalls := opened.2
+            checkCalls := (oracle.eval (scheme.check committed.1.1 positions
+              (message.restrict positions) opened.1)).2
+            proofBytes := opened.1.length } := by
+  simp only [Scheme.honest, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
+  obtain ⟨⟨⟨root, trapdoor⟩, commitCalls⟩, committed, ⟨proof, openCalls⟩, opened, rfl⟩ := reachable
+  exact ⟨_, committed, _, opened, rfl⟩
+
 private theorem oracle_run_pure (oracle : Oracle) {α : Type} (value : α) :
     oracle.run (pure value : OracleComp World α) = pure (value, 0) := by
   simp [Oracle.run]

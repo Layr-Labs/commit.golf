@@ -36,7 +36,8 @@ theorem binding_large_budget (adversary : Scheme.Adversary) (queryBudget : Nat)
     (large : 2 ^ BINDING_SECURITY_BITS ≤ queryBudget) :
     (prEvent ((fun (oracle, claim, calls) => submission.scheme.Breaks oracle claim ∧ calls ≤ queryBudget) <$> (Scheme.bindingGame adversary))) ≤ (queryBudget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
   apply le_trans (prEvent_le_one _)
-  apply (ENNReal.le_div_iff_mul_le (Or.inl (by positivity)) (Or.inl (by finiteness))).mpr
+  apply (ENNReal.le_div_iff_mul_le (Or.inl (by positivity))
+    (Or.inl (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))).mpr
   simpa using (show ((2 ^ BINDING_SECURITY_BITS : Nat) : ENNReal) ≤ queryBudget from
     Nat.cast_le.mpr large)
 
@@ -62,6 +63,6 @@ theorem replay_birthday_le_binding_target (queryBudget : Nat)
     _ = (queryBudget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
       change (queryBudget : ENNReal) * 2 ^ 136 / 2 ^ 256 = (queryBudget : ENNReal) / 2 ^ 120
       rw [show (2 : ENNReal) ^ 256 = 2 ^ 120 * 2 ^ 136 by rw [← pow_add]]
-      exact ENNReal.mul_div_mul_right _ _ (by positivity) (by finiteness)
+      exact ENNReal.mul_div_mul_right _ _ (by positivity) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)
 
 end CommitGolfCandidate

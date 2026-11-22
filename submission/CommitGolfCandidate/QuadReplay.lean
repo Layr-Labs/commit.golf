@@ -5,7 +5,7 @@ import CommitGolfCandidate.K3GQModel
 namespace TwoPermutationPrototype.Sampling
 open CommitGolf CommitGolfCandidate CommitGolfCandidate.Permutation OracleComp OracleComp.DeferredSampling Finset
 open TwoPermutationPrototype.RV64
-set_option maxRecDepth 8192
+set_option maxRecDepth 16384
 set_option exponentiation.threshold 2050
 set_option maxHeartbeats 1100000
 

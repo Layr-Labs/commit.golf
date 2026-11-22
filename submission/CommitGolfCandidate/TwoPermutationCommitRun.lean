@@ -78,16 +78,21 @@ theorem all_after_draw (s : MachineState) (entry : CommitEntry s) {bits : Nat} (
 
 attribute [local irreducible] commitBody
 
-def commitTrace (s : MachineState) : OracleComp World Execution := do
-  let packed ← liftM ($ᵗ BitVec (8*((initialPrefix s 11).getReg .x11).toNat) :
-    ProbComp (BitVec (8*((initialPrefix s 11).getReg .x11).toNat)))
+/-- The commitment run after setup, for a private salt of `bits` bits. -/
+def commitTraceOf (s : MachineState) (bits : Nat) : OracleComp World Execution := do
+  let packed ← liftM ($ᵗ BitVec bits : ProbComp (BitVec bits))
   let state ← commitBody s packed
   return ⟨.success,state,691142677,50331647⟩
+
+/-- The commitment run after setup. The salt width is a parameter of `commitTraceOf`, so that
+proofs can keep it abstract; see `commit_machine_resources`. -/
+def commitTrace (s : MachineState) : OracleComp World Execution :=
+  commitTraceOf s (8*((initialPrefix s 11).getReg .x11).toNat)
 
 theorem full_commit_execution (s : MachineState) (entry : CommitEntry s) (fuel : Nat) :
     execute commitImage (305266716+fuel) s true=commitTrace s := by
   rw [show 305266716+fuel=16+(305266700+fuel) by omega,execute_setup s entry]
-  simp only [commitTrace,bind_assoc]
+  simp only [commitTrace,commitTraceOf,bind_assoc]
   apply bind_congr_of_forall_mem_support
   intro packed _
   rw [all_after_draw s entry packed]

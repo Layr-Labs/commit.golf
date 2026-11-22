@@ -1,6 +1,7 @@
 import Mathlib.Tactic
 
 /-! The exact pinned-leaf event bound has room for the paid checker replay. -/
+set_option maxRecDepth 16384
 namespace TwoPermutationPrototype.Sampling
 
 set_option exponentiation.threshold 2048

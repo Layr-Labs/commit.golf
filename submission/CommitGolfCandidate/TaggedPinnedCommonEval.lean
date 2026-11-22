@@ -69,7 +69,11 @@ theorem pinned_common_full_separates {α : Type} (base : Cache) (positions : Pos
   intro first reached
   have firstBound : start.zero.entries.length + addresses.length ≤ 2^121 := by
     simpa only [firstPlans, pinnedConstantPlans, List.length_map] using firstRoom
-  obtain ⟨ready, enlarged, _, covered⟩ := pinned_high_const_support start 0 [] addresses
+  -- `reached` must have the lemma's spelling exactly. Since mathlib4#41506, Lean's kernel can run the
+  -- sampler when it compares two spellings of a `support` membership. So fold back the
+  -- `pinnedConstantPlans` that the `simp` above unfolded, and name the addresses as `reached` does.
+  rw [← pinnedConstantPlans.eq_1] at reached
+  obtain ⟨ready, enlarged, _, covered⟩ := pinned_high_const_support start 0 [] (pinnedFirstAddresses left right)
     (pinned_high_empty_valid base) firstBound first reached
   simp only [addresses, pinned_first_addresses_length, Nat.zero_add] at ready enlarged
   simp only [start, PinnedHighCache.zero, PinnedHighCache.empty_realize] at enlarged

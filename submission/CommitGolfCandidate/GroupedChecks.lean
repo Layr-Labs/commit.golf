@@ -23,7 +23,10 @@ theorem admitted : actual.Admission := by
 
 /-- The commit facts at the claimed cycle count (P's frozen final programs). -/
 theorem resources (msg : Message) (z : Execution) (hit : z∈support (actual.run .commit msg)) :
-    z.exit=.success ∧ z.cycles=504585244 ∧ z.oracleCalls≤COMMIT_BUDGET :=
-  Grouped.commit_resources msg z hit
+    z.exit=.success ∧ z.cycles=504585244 ∧ z.oracleCalls≤COMMIT_BUDGET := by
+  -- Spell `actual` out before passing `hit` on. Since mathlib4#41506, Lean's kernel can run the commit
+  -- when it compares two spellings of a `support` membership.
+  rw [show actual = K1Artifact.submission from rfl] at hit
+  exact Grouped.commit_resources msg z hit
 
 end TwoPermutationPrototype.GroupedChecks

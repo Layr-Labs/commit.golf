@@ -59,10 +59,10 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
     rw [read_buffer_memory_congr _ _ memory]
     have value := check_input_value_block input ordinal block present inside
     have indexSame :
-        ((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val =
+        ((positions.attach.sort (· ≤ ·))[ordinal]'(by simpa using present)).val =
           indices ordinal := Fin.ext (sorted_value_index positions ordinal present)
     change readBuffer initial (6039801888+256*ordinal+32*block) 32 =
-      (message (((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val)).extractLsb'
+      (message (((positions.attach.sort (· ≤ ·))[ordinal]'(by simpa using present)).val)).extractLsb'
         (256*block) 256 at value
     rw [indexSame] at value
     exact value
@@ -91,8 +91,12 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
     rootData indexData valueData saltData pathData correct.2.2 correct.2.1
   exact (scheme_check_acceptance oracle input).mpr ⟨opening_proof_length trapdoor positions, accepted⟩
 
+/-- The explicit `β` spells the trapdoor type as the scheme does, so that a hypothesis rewritten
+with this lemma matches `oracle_run_map_support` syntactically. -/
 private theorem scheme_commit (program : Submission) (message : Message) :
-    program.scheme.commit message = program.readCommit <$> program.run .commit message := rfl
+    program.scheme.commit message =
+      Functor.map (β := Commitment × program.scheme.Trapdoor) program.readCommit
+        (program.run .commit message) := rfl
 
 private theorem supported_commit_accepts (oracle : Oracle) (message : Message)
     (result : (Commitment × submission.scheme.Trapdoor) × Nat)
@@ -101,11 +105,9 @@ private theorem supported_commit_accepts (oracle : Oracle) (message : Message)
     (oracle.eval (submission.scheme.check result.1.1 positions (message.restrict positions)
       (submission.readProof (openingResult result.1.2 positions)))).1 = true := by
   rw [scheme_commit] at reachable
-  change result ∈ support (oracle.run (submission.readCommit <$>
-    submission.run .commit (message : Input submission.sizes .commit))) at reachable
-  rw [oracle_run_map] at reachable
-  simp only [support_map] at reachable
-  obtain ⟨execution, reached, rfl⟩ := reachable
+  obtain ⟨execution, reached, rfl⟩ :=
+    oracle_run_map_support (β := Commitment × submission.scheme.Trapdoor) oracle
+      submission.readCommit (submission.run .commit message) result reachable
   exact honest_check_accepts oracle message execution.1.state
     (commit_run_matches oracle message execution reached) positions
 
@@ -115,11 +117,11 @@ theorem submission_completeness : submission.scheme.Completeness := by
   intro oracle message positions
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
-  simp only [Scheme.honest, mem_support_bind_iff] at reached
-  obtain ⟨⟨⟨root, trapdoor⟩, commitCalls⟩, committed, rest⟩ := reached
-  rw [opening_scheme_execution trapdoor positions, oracle_run_pure] at rest
-  simp only [support_pure, Set.mem_singleton_iff] at rest
-  obtain ⟨opened, rfl, rfl⟩ := rest
+  obtain ⟨⟨⟨root, trapdoor⟩, commitCalls⟩, committed, opened, openedReached, rfl⟩ :=
+    honest_support _ oracle message positions result reached
+  rw [opening_scheme_execution trapdoor positions, oracle_run_pure] at openedReached
+  simp only [support_pure, Set.mem_singleton_iff] at openedReached
+  subst openedReached
   exact supported_commit_accepts oracle message ((root, trapdoor), commitCalls) committed positions
 
 end CommitGolfCandidate

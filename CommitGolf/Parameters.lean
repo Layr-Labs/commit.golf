@@ -1,6 +1,6 @@
 import Mathlib.Data.FinEnum
-import Mathlib.Data.ENNReal.Inv
-import Mathlib.Data.Real.Basic
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Basic.Real.Basic
 
 /-! # Parameters
 
