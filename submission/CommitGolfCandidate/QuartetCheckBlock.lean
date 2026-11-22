@@ -7,11 +7,9 @@ import CommitGolfCandidate.TwoPermutationCheckerLowerRun
 import CommitGolfCandidate.QuadReplay
 import CommitGolfCandidate.QuartetRVLeafFields
 
-/-! The whole quartet block, from word 58 to the lower-loop head at word 63: the four slot fills at
-`13312+72`, bit 2 of the index flipped (`x6 ^ 4`), the one permutation call over the 72 zero bytes and four
-digests with its output at `x23` for an even group (the node, reply bytes `0..32`, lands at 12288) or at
-`x23-168` for an odd group (reply bytes `168..200`), the heap index `2^22 + (⌊i/4⌋ ^^^ 1)` (the loop runs at
-`flipIndex i`), and the restored compression setup. -/
+/-! The whole variant-B quartet block, from word 58 to the lower-loop head at word 63: the four slot
+fills at `13312+72`, the one permutation call over the 72 zero bytes and four digests, the heap index
+`2^22 + ⌊i/4⌋`, and the restored compression setup. -/
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp OracleSpec
@@ -48,71 +46,12 @@ def qFill (j : Nat) (valid : 1 ≤ j ∧ j ≤ 3) (s : MachineState) := straight
 def qF1 (s : MachineState) := qFill 1 q_head_valid₁ (qS3 s)
 def qF2 (s : MachineState) := qFill 2 q_head_valid₂ (qF1 s)
 def qF3 (s : MachineState) := qFill 3 q_head_valid₃ (qF2 s)
-/-- The state at word 569, before the parity branch. -/
-def qP (s : MachineState) := straight qParityCode (qF3 s) 4
-def qB (s : MachineState) := qBranch (qP s)
-/-- Whether the quartet's group `⌊i/4⌋` is odd, as the machine reads it from `x6` at the entry. -/
-def qOdd (s : MachineState) : Bool := s.getReg .x6 &&& 4 != 0
-def qCallState (s : MachineState) : MachineState := if qOdd s then straight qOddCode (qB s) 1 else qB s
-def qCallSteps (s : MachineState) : Nat := if qOdd s then 130 else 129
-/-- The call's output word: `x23` for an even group, `x23-168` for an odd group. -/
-def qOutWord (s : MachineState) : Nat := if qOdd s then 1515 else 1536
+def qCallState (s : MachineState) := straight qCallCode (qF3 s) 1
 def qInput (s : MachineState) : Block := packBuffer (window (memoryView (qCallState s)) 1664)
 def qQuartet (s : MachineState) : BitVec 1024 := readBuffer (qCallState s) 13384 128
-def qReplyState (s : MachineState) (reply : Block) := writeBits (qCallState s) (wordAddress (qOutWord s)) reply
+def qReplyState (s : MachineState) (reply : Block) := writeBits (qCallState s) (wordAddress 1536) reply
 def qFinal (s : MachineState) (reply : Block) :=
-  straight qLowerCode (straight qExitCode (qReturn (qReplyState s reply)) 3) 3
-
-/-! ### The group parity -/
-
-theorem group_parity_bit (i : Nat) : (i &&& 4 = 0) ↔ i / 4 % 2 = 0 := by
-  have bit : i.testBit 2 = decide (i / 4 % 2 = 1) := Nat.testBit_eq_decide_div_mod_eq
-  have four : (4 : Nat).testBit 2 = true := by decide
-  constructor
-  · intro zero
-    have t := congrArg (fun n => n.testBit 2) zero
-    simp only [Nat.testBit_and, four, Bool.and_true, bit] at t
-    have : ¬ (i / 4 % 2 = 1) := by simpa using t
-    omega
-  · intro even
-    apply Nat.eq_of_testBit_eq
-    intro k
-    rw [Nat.testBit_and]
-    by_cases k2 : k = 2
-    · subst k2
-      rw [bit]
-      simp [show ¬ (i / 4 % 2 = 1) by omega]
-    · have off : (4 : Nat).testBit k = false := by
-        rw [show (4 : Nat) = 2^2 from rfl, Nat.testBit_two_pow]
-        simpa using (Ne.symm k2)
-      rw [off, Bool.and_false]
-      simp
-
-theorem q_odd_index {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    qOdd s = decide (index.val / 4 % 2 = 1) := by
-  have bound : index.val < 16777216 := index.isLt
-  have small : index.val &&& 4 ≤ 4 := Nat.and_le_right
-  have word : s.getReg .x6 &&& 4 = BitVec.ofNat 64 (index.val &&& 4) := by
-    rw [entry.node, BitVec.ofNat_and] <;> rfl
-  have zero : (s.getReg .x6 &&& 4 = 0) ↔ index.val / 4 % 2 = 0 := by
-    rw [word, ← group_parity_bit]
-    constructor
-    · intro h
-      have := congrArg BitVec.toNat h
-      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show index.val &&& 4 < 2^64 by omega)] at this
-      exact this
-    · intro h
-      simp [h]
-  unfold qOdd
-  by_cases even : index.val / 4 % 2 = 0
-  · have z := zero.mpr even
-    rw [z]
-    simp [show ¬ (index.val / 4 % 2 = 1) by omega]
-  · have nz : ¬ (s.getReg .x6 &&& 4 = 0) := fun h => even (zero.mp h)
-    have odd : index.val / 4 % 2 = 1 := by omega
-    rw [show (s.getReg .x6 &&& 4 != 0) = true by simpa using nz]
-    simp [odd]
-
+  straight qLowerCode (straight qExitCode (qReplyState s reply) 3) 3
 
 /-! ### Register bookkeeping -/
 
@@ -304,170 +243,72 @@ theorem q_fill_hop (j : Nat) (valid : 1 ≤ j ∧ j ≤ 3) {ordinal : Nat} {inde
   have h3 := execute_q_advance j valid (qCopy j valid state) cpc
   exact (h1.thenDo h2).thenDo h3
 
-theorem q_f3_hop {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    GroupHop s (qF3 s) 124 := by
+theorem q_call_hop {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
+    GroupHop s (qCallState s) 125 := by
   have r3 := q_s3_regs entry
   have r1 := q_fill_regs 1 q_head_valid₁ entry r3
   have r2 := q_fill_regs 2 q_head_valid₂ entry r1
+  have f3 := q_f3_regs entry
   have h0 := q_s2_hop entry
   have h1 := q_fill_hop 1 q_head_valid₁ entry r3
   have h2 := q_fill_hop 2 q_head_valid₂ entry r1
   have h3 := q_fill_hop 3 q_head_valid₃ entry r2
-  exact ((h0.thenDo h1).thenDo h2).thenDo h3
+  have h4 := execute_q_call_setup (qF3 s) f3.pc
+  exact (((h0.thenDo h1).thenDo h2).thenDo h3).thenDo h4
 
-/-! ### The parity block -/
-
-theorem q_p_regs {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    (qP s).pc = BitVec.ofNat 64 (4096+4*569) ∧ (qP s).mem = (qF3 s).mem ∧
-      (qP s).getReg .x28 = (s.getReg .x6 ^^^ 4) &&& 4 ∧ (qP s).getReg .x12 = 12288 ∧
-      (qP s).getReg .x6 = s.getReg .x6 ^^^ 4 ∧
-      ∀ r, r ≠ .x28 → r ≠ .x12 → r ≠ .x6 → (qP s).getReg r = (qF3 s).getReg r := by
-  have f3 := q_f3_regs entry
-  obtain ⟨pc, mem, x6, x28, x12, kept⟩ := q_parity_post (qF3 s) f3.pc
-  have f6 : (qF3 s).getReg .x6 = s.getReg .x6 :=
-    f3.kept .x6 (by decide) (by decide) (by decide) (by decide) (by decide)
-  refine ⟨pc, mem, ?_, ?_, ?_, fun r a b c => kept r c a b⟩
-  · rw [show qP s = straight qParityCode (qF3 s) 4 from rfl, x28, f6]
-  · rw [show qP s = straight qParityCode (qF3 s) 4 from rfl, x12,
-      f3.kept .x23 (by decide) (by decide) (by decide) (by decide) (by decide), entry.digest]
-  · rw [show qP s = straight qParityCode (qF3 s) 4 from rfl, x6, f6]
-
-/-- The entry's `x6` with bit 2 flipped is the checker's path index. -/
-theorem q_flip_word {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    s.getReg .x6 ^^^ 4 = BitVec.ofNat 64 (QuartetCheck.flipIndex index).val := by
-  rw [entry.node, QuartetCheck.flip_index_val, BitVec.ofNat_xor] <;> rfl
-
-theorem q_odd_branch {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    (qP s).getReg .x28 = 0 ↔ qOdd s = true := by
-  rw [(q_p_regs entry).2.2.1, q_flip_word entry, q_odd_index entry, QuartetCheck.flip_index_val]
-  have word : BitVec.ofNat 64 (index.val ^^^ 4) &&& 4 = BitVec.ofNat 64 ((index.val ^^^ 4) &&& 4) := by
-    rw [BitVec.ofNat_and] <;> rfl
-  have small : (index.val ^^^ 4) &&& 4 < 2^64 := lt_of_le_of_lt Nat.and_le_right (by decide)
-  rw [word]
-  have parity := group_parity_bit (index.val ^^^ 4)
-  rw [Sampling.Quartet.xor_four_div, Sampling.Quartet.xor_one_cases] at parity
-  simp only [decide_eq_true_eq]
-  constructor
-  · intro zero
-    have nat : (index.val ^^^ 4) &&& 4 = 0 := by
-      have raw : (BitVec.ofNat 64 ((index.val ^^^ 4) &&& 4)).toNat = (0 : BitVec 64).toNat :=
-        congrArg BitVec.toNat zero
-      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt small] at raw
-      exact raw
-    have flipped := parity.mp nat
-    split at flipped <;> omega
-  · intro odd
-    have nat : (index.val ^^^ 4) &&& 4 = 0 :=
-      parity.mpr (by rw [if_neg (show ¬ (index.val / 4 % 2 = 0) by omega)]; omega)
-    rw [nat] <;> rfl
-
-theorem q_call_hop {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    GroupHop s (qCallState s) (qCallSteps s) := by
-  have h0 := q_f3_hop entry
-  obtain ⟨ppc, _, _, _, _, _⟩ := q_p_regs entry
-  have h1 := execute_q_parity (qF3 s) (q_f3_regs entry).pc
-  have h2 := execute_q_branch (qP s) ppc
-  obtain ⟨bpc, _, _⟩ := q_branch_post (qP s) ppc
-  have h12 := (h0.thenDo h1).thenDo h2
-  cases odd : qOdd s
-  · rw [show qCallState s = qB s by simp [qCallState, odd],
-      show qCallSteps s = 124+4+1 by simp [qCallSteps, odd]]
-    exact h12
-  · have zero : (qP s).getReg .x28 = 0 := (q_odd_branch entry).mpr odd
-    rw [if_pos zero] at bpc
-    have h3 := execute_q_odd (qB s) bpc
-    rw [show qCallState s = straight qOddCode (qB s) 1 by simp [qCallState, odd],
-      show qCallSteps s = 124+4+1+1 by simp [qCallSteps, odd]]
-    exact h12.thenDo h3
 
 theorem q_call_regs {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    (qCallState s).pc = BitVec.ofNat 64 (4096+4*571) ∧
-      (qCallState s).getReg .x10 = wordAddress 1664 ∧ (qCallState s).getReg .x12 = wordAddress (qOutWord s) ∧
+    (qCallState s).pc = BitVec.ofNat 64 (4096+4*490) ∧
+      (qCallState s).getReg .x10 = wordAddress 1664 ∧ (qCallState s).getReg .x12 = wordAddress 1536 ∧
       (qCallState s).getReg .x5 = 0 ∧ (qCallState s).getReg .x11 = 200 ∧ (qCallState s).getReg .x13 = 1 ∧
       (qCallState s).getReg .x21 = BitVec.ofNat 64 (checkProofByte ordinal + 112) ∧
-      (qCallState s).mem = (qF3 s).mem ∧
-      (qCallState s).getReg .x6 = s.getReg .x6 ^^^ 4 ∧
-      ∀ r, r ≠ .x10 → r ≠ .x7 → r ≠ .x28 → r ≠ .x31 → r ≠ .x21 → r ≠ .x12 → r ≠ .x6 →
+      ∀ r, r ≠ .x10 → r ≠ .x7 → r ≠ .x28 → r ≠ .x31 → r ≠ .x21 → r ≠ .x12 →
         (qCallState s).getReg r = s.getReg r := by
   have f3 := q_f3_regs entry
-  obtain ⟨ppc, pmem, _, px12, px6, pkept⟩ := q_p_regs entry
-  obtain ⟨bpc, bmem, bregs⟩ := q_branch_post (qP s) ppc
-  -- registers of the branch state
-  have bkeep (r : Reg) (a : r ≠ .x10) (b : r ≠ .x7) (c : r ≠ .x28) (d : r ≠ .x31) (e : r ≠ .x21) (f : r ≠ .x12)
-      (g : r ≠ .x6) : (qB s).getReg r = s.getReg r :=
-    (bregs r).trans ((pkept r c f g).trans (f3.kept r a b c d e))
-  have b10 : (qB s).getReg .x10 = wordAddress 1664 :=
-    (bregs .x10).trans ((pkept .x10 (by decide) (by decide) (by decide)).trans f3.base)
-  have b21 : (qB s).getReg .x21 = BitVec.ofNat 64 (checkProofByte ordinal + 112) :=
-    (bregs .x21).trans ((pkept .x21 (by decide) (by decide) (by decide)).trans f3.proof)
-  have b6 : (qB s).getReg .x6 = s.getReg .x6 ^^^ 4 := (bregs .x6).trans px6
-  have b5 := (bkeep .x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans
-    entry.selector
-  have b11 := (bkeep .x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans
-    entry.syscallBytes
-  have b13 := (bkeep .x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans
-    entry.syscallSelector
-  have b23 := (bkeep .x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans
-    entry.digest
-  have bmem' : (qB s).mem = (qF3 s).mem := bmem.trans pmem
-  cases odd : qOdd s
-  · have nonzero : (qP s).getReg .x28 ≠ 0 := fun h => by
-      have := (q_odd_branch entry).mp h
-      rw [odd] at this
-      exact Bool.noConfusion this
-    rw [if_neg nonzero] at bpc
-    have state : qCallState s = qB s := by simp [qCallState, odd]
-    have out : qOutWord s = 1536 := by simp [qOutWord, odd]
-    rw [state, out]
-    exact ⟨bpc, b10, (bregs .x12).trans px12, b5, b11, b13, b21, bmem', b6, bkeep⟩
-  · have zero : (qP s).getReg .x28 = 0 := (q_odd_branch entry).mpr odd
-    rw [if_pos zero] at bpc
-    obtain ⟨epc, emem, ex12, ekept⟩ := q_odd_post (qB s)
-    have state : qCallState s = straight qOddCode (qB s) 1 := by simp [qCallState, odd]
-    have out : qOutWord s = 1515 := by simp [qOutWord, odd]
-    rw [state, out]
-    refine ⟨?_, (ekept .x10 (by decide)).trans b10, ?_, (ekept .x5 (by decide)).trans b5,
-      (ekept .x11 (by decide)).trans b11, (ekept .x13 (by decide)).trans b13, (ekept .x21 (by decide)).trans b21,
-      emem.trans bmem', (ekept .x6 (by decide)).trans b6,
-      fun r a b c d e f g => (ekept r f).trans (bkeep r a b c d e f g)⟩
-    · rw [epc, show (qB s).pc = BitVec.ofNat 64 (4096+4*570) from bpc]; decide
-    · rw [ex12, b23]; decide
+  obtain ⟨pc, _, x12, kept⟩ := q_call_setup_post (qF3 s)
+  have keep (r : Reg) (a : r ≠ .x10) (b : r ≠ .x7) (c : r ≠ .x28) (d : r ≠ .x31) (e : r ≠ .x21) (f : r ≠ .x12) :
+      (qCallState s).getReg r = s.getReg r := (kept r f).trans (f3.kept r a b c d e)
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, keep⟩
+  · change (straight qCallCode (qF3 s) 1).pc = _
+    rw [pc, f3.pc]; rfl
+  · exact (kept .x10 (by decide)).trans f3.base
+  · change (straight qCallCode (qF3 s) 1).getReg .x12 = _
+    rw [x12, f3.kept .x23 (by decide) (by decide) (by decide) (by decide) (by decide), entry.digest]; rfl
+  · exact (keep .x5 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans entry.selector
+  · exact (keep .x11 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans entry.syscallBytes
+  · exact (keep .x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans entry.syscallSelector
+  · exact (kept .x21 (by decide)).trans f3.proof
 
 theorem q_reply_pc {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s)
-    (reply : Block) : (qReplyState s reply).pc = BitVec.ofNat 64 (4096+4*572) := by
+    (reply : Block) : (qReplyState s reply).pc = BitVec.ofNat 64 (4096+4*491) := by
   unfold qReplyState writeBits
   change (qCallState s).pc + 4 = _
   rw [(q_call_regs entry).1]; rfl
 
 theorem q_tail_hop {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s)
-    (reply : Block) : GroupHop (qReplyState s reply) (qFinal s reply) 7 := by
+    (reply : Block) : GroupHop (qReplyState s reply) (qFinal s reply) 6 := by
   have pc := q_reply_pc entry reply
-  have h0 := execute_q_return (qReplyState s reply) pc
-  have rpc := (q_return_post (qReplyState s reply)).1
-  have h1 := execute_q_exit (qReturn (qReplyState s reply)) rpc
-  have h2 := execute_q_lower (straight qExitCode (qReturn (qReplyState s reply)) 3) (q_exit_post _ rpc).1
-  exact (h0.thenDo h1).thenDo h2
-
-theorem q_out_bound (s : MachineState) : qOutWord s + 25 ≤ 2^33 := by
-  unfold qOutWord; split <;> decide
+  have h1 := execute_q_exit (qReplyState s reply) pc
+  have h2 := execute_q_lower (straight qExitCode (qReplyState s reply) 3) (q_exit_post _ pc).1
+  exact h1.thenDo h2
 
 attribute [local irreducible] execute in
 theorem q_execute {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s)
     (fuel : Nat) :
-    execute packedImage (qCallSteps s + 1 + 7 + fuel) s false = (do
+    execute packedImage (132+fuel) s false = (do
       let reply ← World.query (.inr (.inr (.inl (qInput s))))
       let result ← execute packedImage fuel (qFinal s reply) false
-      return result.charge (qCallSteps s + 8 + 7) 1) := by
-  obtain ⟨pc, x10, x12, x5, x11, x13, _, _, _⟩ := q_call_regs entry
-  have call := execute_permutation_call packedImage (7+fuel) (qCallState s) false 1664 (qOutWord s)
-    (by decide) (q_out_bound s) x10 x12 x5 x11 x13 (q_call_fetch _ pc)
-  rw [show qCallSteps s + 1 + 7 + fuel = qCallSteps s + ((7+fuel)+1) by omega, q_call_hop entry, call]
+      return result.charge 139 1) := by
+  obtain ⟨pc, x10, x12, x5, x11, x13, _, _⟩ := q_call_regs entry
+  have call := execute_permutation_call packedImage (6+fuel) (qCallState s) false 1664 1536
+    (by decide) (by decide) x10 x12 x5 x11 x13 (q_call_fetch _ pc)
+  rw [show 132+fuel = 125+((6+fuel)+1) by omega, q_call_hop entry, call]
   simp only [bind_assoc, pure_bind]
   unfold qInput
   apply bind_congr_of_forall_mem_support
   intro reply _
   change Block at reply
-  rw [show writeBits (qCallState s) (wordAddress (qOutWord s)) reply = qReplyState s reply from rfl,
+  rw [show writeBits (qCallState s) (wordAddress 1536) reply = qReplyState s reply from rfl,
     q_tail_hop entry reply fuel]
   simp [Execution.charge, ← Nat.add_assoc]
 
@@ -590,9 +431,9 @@ theorem q_call_memory {ordinal : Nat} {index : Index} {s : MachineState} (entry 
   obtain ⟨read1, frame1⟩ := q_fill_memory 1 q_head_valid₁ entry r3
   obtain ⟨read2, frame2⟩ := q_fill_memory 2 q_head_valid₂ entry r1
   obtain ⟨read3, frame3⟩ := q_fill_memory 3 q_head_valid₃ entry r2
-  have callMem : (qCallState s).mem = (qF3 s).mem := (q_call_regs entry).2.2.2.2.2.2.2.1
+  have callMem : (qCallState s).mem = (qF3 s).mem := (q_call_setup_post (qF3 s)).2.1
   have room := entry.room
-  have card : checkProofByte ordinal ≥ 13824430176 := by unfold checkProofByte; omega
+  have card : checkProofByte ordinal ≥ 11676946528 := by unfold checkProofByte; omega
   have hr : index.val % 4 < 4 := Nat.mod_lt _ (by decide)
   generalize index.val % 4 = r at hr leafRead leafFrame read1 frame1 read2 frame2 read3 frame3 ⊢
   have x1 := xor_small r 1 hr (by decide)
@@ -686,7 +527,7 @@ theorem block_split (x : BitVec 1600) : x = x.extractLsb' 576 1024 ++ x.extractL
     omega
 
 theorem q_input_enc {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s) :
-    qInput s = quartetEncode (qQuartet s) := by
+    qInput s = quadNodeCall.enc (qQuartet s) := by
   have frame := (q_call_memory entry).2.2
   have prefixZero : readBuffer (qCallState s) 13312 72 = 0 := by
     have := read_zero_words (qCallState s) 1664 9 (fun w lo hi => by
@@ -725,28 +566,29 @@ theorem q_quartet_slots {ordinal : Nat} {index : Index} {s : MachineState} (entr
 
 theorem q_final_regs {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s)
     (reply : Block) :
-    LowerCursor ordinal (QuartetCheck.flipIndex index) 0 (qFinal s reply) ∧ LowerSaved s (qFinal s reply) := by
-  obtain ⟨_, _, _, _, _, _, x21, _, callX6, callKept⟩ := q_call_regs entry
-  obtain ⟨tpc, _, treg⟩ := q_return_post (qReplyState s reply)
-  obtain ⟨epc, _, ex6, ekept⟩ := q_exit_post (qReturn (qReplyState s reply)) tpc
-  obtain ⟨lpc, _, x11, x13, x29, lkept⟩ := q_lower_post (straight qExitCode (qReturn (qReplyState s reply)) 3) epc
+    LowerCursor ordinal index 0 (qFinal s reply) ∧ LowerSaved s (qFinal s reply) := by
+  obtain ⟨_, _, _, _, _, _, x21, callKept⟩ := q_call_regs entry
+  have rpc := q_reply_pc entry reply
+  obtain ⟨epc, _, ex6, ekept⟩ := q_exit_post (qReplyState s reply) rpc
+  obtain ⟨lpc, _, x11, x13, x29, lkept⟩ := q_lower_post (straight qExitCode (qReplyState s reply) 3) epc
   have replyReg (r : Reg) : (qReplyState s reply).getReg r = (qCallState s).getReg r := writeBits_register _ _ _ r
   have keep (r : Reg) (a : r ≠ .x10) (b : r ≠ .x7) (c : r ≠ .x28) (d : r ≠ .x31) (e : r ≠ .x21) (g : r ≠ .x12)
       (h : r ≠ .x6) (i : r ≠ .x11) (k : r ≠ .x13) (l : r ≠ .x29) : (qFinal s reply).getReg r = s.getReg r :=
-    (lkept r i k l).trans ((ekept r h).trans ((treg r).trans ((replyReg r).trans (callKept r a b c d e g h))))
+    (lkept r i k l).trans ((ekept r h).trans ((replyReg r).trans (callKept r a b c d e g)))
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, x11, x13⟩, ?_⟩
   · simpa [qFinal] using lpc
-  · change (straight qLowerCode (straight qExitCode (qReturn (qReplyState s reply)) 3) 3).getReg .x6 = _
-    rw [lkept .x6 (by decide) (by decide) (by decide), ex6, treg, treg, replyReg, replyReg,
-      callX6, callKept .x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide),
-      q_flip_word entry, entry.heapBase, QuartetRV.quarter_shift, ← BitVec.ofNat_add, QuartetCheck.lower_node_two]
+  · change (straight qLowerCode (straight qExitCode (qReplyState s reply) 3) 3).getReg .x6 = _
+    rw [lkept .x6 (by decide) (by decide) (by decide), ex6, replyReg, replyReg,
+      callKept .x6 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide),
+      callKept .x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide),
+      entry.node, entry.heapBase, QuartetRV.quarter_shift, ← BitVec.ofNat_add, QuartetCheck.lower_node_two]
     congr 1
-    change (QuartetCheck.flipIndex index).val/4 + 4194304 = 4194304 + (QuartetCheck.flipIndex index).val/4
+    change index.val/4 + 4194304 = 4194304 + index.val/4
     omega
-  · change (straight qLowerCode (straight qExitCode (qReturn (qReplyState s reply)) 3) 3).getReg .x21 = _
-    rw [lkept .x21 (by decide) (by decide) (by decide), ekept .x21 (by decide), treg, replyReg, x21]
+  · change (straight qLowerCode (straight qExitCode (qReplyState s reply) 3) 3).getReg .x21 = _
+    rw [lkept .x21 (by decide) (by decide) (by decide), ekept .x21 (by decide), replyReg, x21]
     rfl
-  · change (straight qLowerCode (straight qExitCode (qReturn (qReplyState s reply)) 3) 3).getReg .x29 = _
+  · change (straight qLowerCode (straight qExitCode (qReplyState s reply) 3) 3).getReg .x29 = _
     rw [x29]; rfl
   · exact (keep .x23 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide)).trans entry.digest
@@ -759,38 +601,27 @@ theorem q_final_regs {ordinal : Nat} {index : Index} {s : MachineState} (entry :
     apply keep r <;>
       rcases saved with h|h|h|h|h|h|h|h|h|h|h|h|h|h <;> subst h <;> decide
 
-/-- The quartet node the block leaves at 12288: reply bytes `0..32` (even group) or `168..200` (odd). -/
 theorem q_final_memory {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s)
     (reply : Block) :
-    (∀ w < 2^33, (w < 1515 ∨ 1561 ≤ w) → (w < 1673 ∨ 1690 ≤ w) → memoryView (qFinal s reply) w = memoryView s w) ∧
-      readBuffer (qFinal s reply) 12288 32 = quartetNode (index.val / 4) reply := by
-  obtain ⟨tpc, tmem, _⟩ := q_return_post (qReplyState s reply)
-  have exitMem := (q_exit_post (qReturn (qReplyState s reply)) tpc).2.1
-  have lowerMem := (q_lower_post (straight qExitCode (qReturn (qReplyState s reply)) 3) (q_exit_post _ tpc).1).2.1
-  have fMem : (qFinal s reply).mem = (qReplyState s reply).mem := lowerMem.trans (exitMem.trans tmem)
-  have parity := q_odd_index entry
+    (∀ w < 2^33, (w < 1536 ∨ 1561 ≤ w) → (w < 1673 ∨ 1690 ≤ w) → memoryView (qFinal s reply) w = memoryView s w) ∧
+      readBuffer (qFinal s reply) 12288 32 = quadNodeCall.trunc reply := by
+  have rpc := q_reply_pc entry reply
+  have exitMem := (q_exit_post (qReplyState s reply) rpc).2.1
+  have lowerMem := (q_lower_post (straight qExitCode (qReplyState s reply) 3) (q_exit_post _ rpc).1).2.1
+  have fMem : (qFinal s reply).mem = (qReplyState s reply).mem := lowerMem.trans exitMem
   change BitVec 1600 at reply
   constructor
   · intro w bounded scratch slots
     rw [view_of_mem fMem w]
-    change memoryView (writeBits (qCallState s) (wordAddress (qOutWord s)) reply) w = _
-    rw [permutation_write_memory (qCallState s) (qOutWord s) w reply (q_out_bound s) bounded, writeWindow,
-      dite_eq_right (show ¬(qOutWord s ≤ w ∧ w < qOutWord s + 25) by unfold qOutWord; split <;> omega)]
+    unfold qReplyState
+    change memoryView (writeBits (qCallState s) (wordAddress 1536) reply) w = _
+    rw [permutation_write_memory (qCallState s) 1536 w reply (by decide) bounded, writeWindow,
+      dite_eq_right (by omega : ¬(1536≤w ∧ w<1536+25))]
     exact (q_call_memory entry).2.2 w bounded (by omega)
   · rw [read_buffer_memory_congr _ _ fMem]
     unfold qReplyState
-    by_cases even : index.val / 4 % 2 = 0
-    · have out : qOutWord s = 1536 := by
-        unfold qOutWord; rw [parity]; simp [show ¬ (index.val / 4 % 2 = 1) by omega]
-      rw [out]; unfold quartetNode; rw [if_pos even]
-      exact write_bits_digest (qCallState s) 12288 0 reply (by decide) (by decide)
-    · have out : qOutWord s = 1515 := by
-        unfold qOutWord; rw [parity]; simp [show index.val / 4 % 2 = 1 by omega]
-      rw [out]; unfold quartetNode; rw [if_neg even]
-      exact write_bits_digest (qCallState s) 12120 168 reply (by decide) (by decide)
-
-theorem q_steps_bound (s : MachineState) : qCallSteps s + 1 + 7 ≤ 138 := by
-  unfold qCallSteps; split <;> omega
+    have digest := write_bits_digest (qCallState s) 12288 0 reply (by decide) (by decide)
+    exact digest
 
 /-! ### The quartet block as a record segment -/
 
@@ -800,7 +631,7 @@ def qQuery (s : MachineState) : OracleComp World MachineState := do
 
 def quartetBlock (oracle : Oracle) (s : MachineState) : RecordBlock :=
   let reply := oracle.permutation (qInput s)
-  ⟨qFinal s reply, qCallSteps s + 1 + 7, qCallSteps s + 8 + 7, [.permutation (qInput s) reply]⟩
+  ⟨qFinal s reply, 132, 139, [.permutation (qInput s) reply]⟩
 
 attribute [local irreducible] execute in
 theorem quartet_block_run {ordinal : Nat} {index : Index} {s : MachineState} (entry : QuartetEntry ordinal index s)
@@ -810,10 +641,10 @@ theorem quartet_block_run {ordinal : Nat} {index : Index} {s : MachineState} (en
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+fuel) s false)) =
       ((tail.1.1.charge block.cycles 1, block.rows++tail.1.2), 1+tail.2) := by
   intro block tail
-  have run : execute packedImage (qCallSteps s + 1 + 7 + fuel) s false = (do
+  have run : execute packedImage (132+fuel) s false = (do
       let next ← qQuery s
       let result ← execute packedImage fuel next false
-      return result.charge (qCallSteps s + 8 + 7) 1) := by
+      return result.charge 139 1) := by
     rw [q_execute entry fuel]
     simp only [qQuery, bind_assoc, pure_bind]
   have rows : checkEvaluation oracle (recordRows (qQuery s)) =
@@ -821,7 +652,7 @@ theorem quartet_block_run {ordinal : Nat} {index : Index} {s : MachineState} (en
     simp only [qQuery, record_rows_query, check_evaluation_public_bind, check_evaluation_map, record_rows_pure,
       check_evaluation_pure]
     rfl
-  change checkEvaluation oracle (recordRows (execute packedImage (qCallSteps s + 1 + 7 + fuel) s false)) = _
+  change checkEvaluation oracle (recordRows (execute packedImage (132+fuel) s false)) = _
   rw [run, check_recorded_bind, rows]
   simp only [bind_pure_comp, check_recorded_map]
   rfl

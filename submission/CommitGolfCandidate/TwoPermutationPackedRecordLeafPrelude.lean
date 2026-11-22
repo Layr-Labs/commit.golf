@@ -16,6 +16,22 @@ attribute [local simp] Opening.getReg_setMem Opening.getReg_setReg MachineState.
 @[local simp] private theorem setup_pc_set (state : MachineState) (pc : Word) :
     (state.setPC pc).pc = pc := rfl
 
+theorem execute_record_setup (state : MachineState) (pc : state.pc = 0x1058) (fuel : Nat)
+    (index : accessValid (state.getReg .x8) 8 = true) :
+    execute packedImage (6+fuel) state false =
+      (do let result ← execute packedImage fuel (beginRecord state 6) false
+          return result.charge 6 0) := by
+  apply execute_unit_steps (states := beginRecord state)
+  intro i bounded
+  refine ⟨.base (beginRecordCode[i]?.getD .EBREAK), ?_, ?_, ?_⟩
+  · apply fetch_at _ (22+i) _ (by omega)
+    · interval_cases i <;> simp [beginRecord, beginRecordCode, execInstrBr, MachineState.setPC, pc]
+    · interval_cases i <;> rfl
+  · interval_cases i <;> simp [ordinaryStep, memoryArgumentsValid, memAccess, beginRecord,
+      beginRecordCode, signExtend12, index] <;> assumption
+  · interval_cases i <;> rfl
+
+
 def staged (state : MachineState) : MachineState := copyField (fieldCode .nonce) (beginRecord state 6)
 
 theorem stage_ready (input : CheckInput) (ordinal : Nat) (h : ordinal < input.positions.card)

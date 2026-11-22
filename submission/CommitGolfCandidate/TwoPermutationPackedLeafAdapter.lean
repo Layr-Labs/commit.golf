@@ -22,7 +22,7 @@ theorem block_trace (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
   let item := honestIndex input.positions ordinal present
   let raw := (rawLeaf oracle ordinal item.val state).1
   have meaning := raw_digest_rows oracle ordinal item.val state
-  have values := raw_message_words input ordinal present state fits cursor framed
+  have values := staged_entry_words input ordinal present state fits cursor framed
   dsimp only at meaning
   rw [values] at meaning
   obtain ⟨rows,digest⟩ := meaning
@@ -32,7 +32,7 @@ theorem block_trace (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
   have final := (q_final_memory qentry reply).2
   have enc := q_input_enc qentry
   dsimp only
-  refine ⟨⟨rawNonce item.val state,?_,?_,qQuartet raw,reply,?_,?_,?_⟩⟩
+  refine ⟨⟨checkerNonce (staged state),?_,?_,qQuartet raw,reply,?_,?_,?_⟩⟩
   · change _ ∈ (rawLeaf oracle ordinal item.val state).2 ++ (quartetBlock oracle raw).rows
     rw [rows]
     exact List.mem_append_left _ List.mem_cons_self
@@ -54,7 +54,7 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (canonical : input = honestCheckInput oracle message input.positions salts) :
     let item := honestIndex input.positions ordinal present
     readBuffer (block oracle ordinal item.val state).state 12288 32 =
-      honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex item.val) 2) := by
+      honestHeap oracle message salts (Opening.lowerNode item.val 2) := by
   let item := honestIndex input.positions ordinal present
   let raw := (rawLeaf oracle ordinal item.val state).1
   let leaves := honestLeaves oracle message salts
@@ -64,14 +64,14 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
   obtain ⟨leafSlot, siblingSlots⟩ := q_quartet_slots qentry
   have card := checker_positions_bound input
   have room := (packed_record_geometry input ordinal present fits).2.2.2.1
-  obtain ⟨_,_,_,wordFrame,_,_⟩ := raw_view oracle input ordinal present state fits cursor framed
+  obtain ⟨_,_,_,wordFrame⟩ := raw_view oracle input ordinal present state fits cursor framed
   have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal state :=
     Eq.mp (congrArg (fun data => RecordInputFrame data ordinal state) canonical) framed
   -- the leaf digest at the quartet entry is honest
   have leafDigest : readBuffer raw 12288 32 = Sampling.Quartet.leafAt leaves item.val.val := by
     have digest := (raw_digest_rows oracle ordinal item.val state).2
-    rw [digest, raw_message_words input ordinal present state fits cursor framed,
-      raw_nonce_honest oracle input ordinal present state fits cursor framed message salts canonical,
+    rw [digest, staged_entry_words input ordinal present state fits cursor framed,
+      staged_honest_nonce_words oracle input ordinal present state fits cursor framed message salts canonical,
       canonical_entry_value oracle input message salts item canonical]
     rw [show Sampling.Quartet.leafAt leaves item.val.val = leaves item.val from dif_pos item.val.isLt]
     exact honest_row_digest oracle message salts item.val
@@ -93,10 +93,10 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
       (fun j lo hi => (siblingSlots j lo hi).trans (siblingDigest j lo hi))
   dsimp only
   change readBuffer (qFinal raw reply) 12288 32 = _
-  rw [final, QuartetCheck.lower_node_two_flip]
+  rw [final, QuartetCheck.lower_node_two]
   unfold PackedHonest.honestHeap
-  rw [QuartetCheck.upper_heap_leaf_flip _ _ _ (item.val.val/4) (by omega)]
-  change quartetNode (item.val.val / 4) (oracle.permutation (qInput raw)) = _
+  rw [QuartetCheck.upper_heap_leaf _ _ _ (item.val.val/4) (by omega)]
+  change quadNodeCall.trunc (oracle.permutation (qInput raw)) = _
   rw [q_input_enc qentry, honestQuartet]
   rfl
 

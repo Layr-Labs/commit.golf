@@ -1,6 +1,5 @@
 import CommitGolfCandidate.TwoPermutationPinnedStoredLeaf
 import CommitGolfCandidate.TwoPermutationPinnedPeerMargin
-import CommitGolfCandidate.K3GQModel
 
 namespace TwoPermutationPrototype.Sampling
 open CommitGolf CommitGolfCandidate CommitGolfCandidate.Permutation OracleComp OracleComp.DeferredSampling Finset
@@ -9,106 +8,53 @@ set_option maxRecDepth 8192
 set_option exponentiation.threshold 2050
 set_option maxHeartbeats 1100000
 
-/-- The quartet call of group `g`: the record window `0^72 ‖ d0 d1 d2 d3`, truncated to the
-parity node (`quartetNode g`: reply bytes `0..32` for even `g`, `168..200` for odd `g`). -/
-def quadNodeCall (group : Nat) : SingleCall S3State (BitVec 1024) (BitVec 256) where
-  enc := quartetEncode
-  enc_inj := quartet_encode_injective
-  trunc := quartetNode group
+/-- The quaternary node has a 72-byte zero prefix and four full digests. -/
+def quadNodeCall : SingleCall S3State (BitVec 1024) (BitVec 256) where
+  enc x := x ++ (0 : BitVec 576)
+  enc_inj := by
+    intro x y eq
+    have slice := congrArg (fun input : BitVec 1600 => input.extractLsb' 576 1024) eq
+    simpa only [BitVec.extractLsb'_append_eq_left] using slice
+  trunc := s3PinCall.trunc
 
-/-- Two different payloads with one quartet node in some group. -/
 def QuadWitness (rows : List PublicRow) : Prop :=
-  ∃ (group : Nat) (x y : BitVec 1024), x ≠ y ∧ ∃ dx dy : Block,
-    PublicRow.permutation (quartetEncode x) dx ∈ rows ∧
-    PublicRow.permutation (quartetEncode y) dy ∈ rows ∧
-    quartetNode group dx = quartetNode group dy
-
-/-- A quartet collision under the node truncation of group `g`. -/
-def QuadWitnessAt (group : Nat) (rows : List PublicRow) : Prop :=
   ∃ x y : BitVec 1024, x ≠ y ∧ ∃ dx dy : Block,
-    PublicRow.permutation (quartetEncode x) dx ∈ rows ∧
-    PublicRow.permutation (quartetEncode y) dy ∈ rows ∧
-    quartetNode group dx = quartetNode group dy
+    PublicRow.permutation (quadNodeCall.enc x) dx ∈ rows ∧
+    PublicRow.permutation (quadNodeCall.enc y) dy ∈ rows ∧
+    quadNodeCall.trunc dx = quadNodeCall.trunc dy
 
-/-- Only the parity of the group matters: a witness is a collision under one of two truncations. -/
-theorem quad_witness_split {rows : List PublicRow} (hit : QuadWitness rows) :
-    QuadWitnessAt 0 rows ∨ QuadWitnessAt 1 rows := by
-  obtain ⟨group, x, y, distinct, dx, dy, rx, ry, same⟩ := hit
-  rw [← quartet_node_parity group dx, ← quartet_node_parity group dy] at same
-  rcases Nat.mod_two_eq_zero_or_one group with even | odd
-  · rw [even] at same
-    exact Or.inl ⟨x, y, distinct, dx, dy, rx, ry, same⟩
-  · rw [odd] at same
-    exact Or.inr ⟨x, y, distinct, dx, dy, rx, ry, same⟩
-
-theorem QuadWitnessAt.witness {group : Nat} {rows : List PublicRow} (hit : QuadWitnessAt group rows) :
-    QuadWitness rows := by
-  obtain ⟨x, y, distinct, dx, dy, rx, ry, same⟩ := hit
-  exact ⟨group, x, y, distinct, dx, dy, rx, ry, same⟩
-
-theorem quad_witness_bad {group : Nat} {rows : List PublicRow} {trace : Trace PermState}
-    (stored : PinnedRowsStored rows trace) (hit : QuadWitnessAt group rows) :
-    ¬ (quadNodeCall group).badSpec.Good trace := by
+theorem quad_witness_bad {rows : List PublicRow} {trace : Trace PermState}
+    (stored : PinnedRowsStored rows trace) (hit : QuadWitness rows) :
+    ¬ quadNodeCall.badSpec.Good trace := by
   obtain ⟨x,y,distinct,dx,dy,rx,ry,same⟩ := hit
   obtain ⟨a, ha, ax, ad⟩ := stored _ _ rx
   obtain ⟨b, hb, bx, bd⟩ := stored _ _ ry
-  apply ((quadNodeCall group).not_good_iff trace).2
-  exact (quadNodeCall group).collision_imp_bad distinct
-    ⟨a, ha, ax, congrArg (quadNodeCall group).trunc ad⟩
-    ⟨b, hb, bx, (congrArg (quadNodeCall group).trunc bd).trans same.symm⟩
+  apply (quadNodeCall.not_good_iff trace).2
+  exact quadNodeCall.collision_imp_bad distinct
+    ⟨a, ha, ax, congrArg quadNodeCall.trunc ad⟩
+    ⟨b, hb, bx, (congrArg quadNodeCall.trunc bd).trans same.symm⟩
 
-private theorem high_node_pin (s : Block) : s.extractLsb' 1344 256 = s3PinCall.pin s := by
-  apply BitVec.eq_of_toNat_eq
-  change (s.extractLsb' 1344 256).toNat = (BitVec.ofNat 256 (s.toNat / 2 ^ 1344)).toNat
-  rw [BitVec.extractLsb'_toNat, Nat.shiftRight_eq_div_pow, BitVec.toNat_ofNat]
-
-private theorem low_node_trunc (s : Block) : s.extractLsb' 0 256 = s3PinCall.trunc s := by
-  apply BitVec.eq_of_toNat_eq
-  change (s.extractLsb' 0 256).toNat = (BitVec.ofNat 256 s.toNat).toNat
-  rw [BitVec.extractLsb'_toNat, Nat.shiftRight_eq_div_pow, BitVec.toNat_ofNat]
-  simp
-
-/-- Every quartet node value has at most `2^1344` preimage states, for either parity. -/
-theorem quad_node_fiber (group : Nat) (d : BitVec 256) :
-    (univ.filter fun s : S3State => (quadNodeCall group).trunc s = d).card ≤ 2^1344 := by
-  by_cases even : group % 2 = 0
-  · refine (Finset.card_le_card ?_).trans (s3_trunc_fiber d)
-    intro s hs
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hs ⊢
-    rw [← hs]
-    change s3PinCall.trunc s = quartetNode group s
-    simp only [quartetNode, even, ite_true]
-    exact (low_node_trunc s).symm
-  · refine (Finset.card_le_card ?_).trans (s3_pin_fiber d)
-    intro s hs
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hs ⊢
-    rw [← hs]
-    change s3PinCall.pin s = quartetNode group s
-    simp only [quartetNode, even, ite_false]
-    exact (high_node_pin s).symm
-
-theorem quad_bad_trace_bound {α : Type} (group : Nat) (st : Strat PermState α) (calls : Nat)
+theorem quad_bad_trace_bound {α : Type} (st : Strat PermState α) (calls : Nat)
     (fits : calls < Fintype.card S3State) :
-    st.prob PState.init (fun _ finish => ¬ (quadNodeCall group).badSpec.Good finish.trace ∧ finish.count ≤ calls) ≤
+    st.prob PState.init (fun _ finish => ¬ quadNodeCall.badSpec.Good finish.trace ∧ finish.count ≤ calls) ≤
       unionBound (Fintype.card S3State) (2^1344) (2^1024) calls := by
-  apply prob_not_good_le (quadNodeCall group).badSpec _ _ calls fits
+  apply prob_not_good_le quadNodeCall.badSpec _ _ calls fits
   · intro x old
-    exact ⟨univ.filter fun s => (quadNodeCall group).trunc s = (quadNodeCall group).trunc old.out,
-      quad_node_fiber group _, fun y hy => Finset.mem_filter.2 ⟨Finset.mem_univ _, hy.2⟩⟩
+    exact ⟨univ.filter fun s => quadNodeCall.trunc s = quadNodeCall.trunc old.out,
+      s3_trunc_fiber _, fun y hy => Finset.mem_filter.2 ⟨Finset.mem_univ _, hy.2⟩⟩
   · intro x
     exact ⟨∅, Nat.zero_le _, fun y hy => by simp [SingleCall.badSpec] at hy⟩
   · intro y old
     exact ⟨∅, Nat.zero_le _, fun x hx => by simp [SingleCall.badSpec] at hx⟩
   · intro y
-    refine ⟨univ.image (quadNodeCall group).enc, Finset.card_image_le.trans ?_, fun x hx => ?_⟩
+    refine ⟨univ.image quadNodeCall.enc, Finset.card_image_le.trans ?_, fun x hx => ?_⟩
     · rw [Finset.card_univ, s3_card_bitvec]
     · obtain ⟨value, eq⟩ := hx.2
       exact Finset.mem_image.2 ⟨value, Finset.mem_univ _, eq⟩
 
-/-- Margin of a union bound on the full 1600-bit state at `q/2^124` (unary count up to `2^1400`). -/
-theorem replay_extra_margin (q calls k v : Nat)
+private theorem replay_extra_margin (q calls k v : Nat)
     (positive : 1 ≤ q) (small : q ≤ 2^120) (replayed : calls ≤ q+2^31)
-    (kBound : k ≤ 2^1346) (vBound : v ≤ 2^1400) :
+    (kBound : k ≤ 2^1346) (vBound : v ≤ 2^1024) :
     unionBound (2^1600) k v calls ≤ (q : ℝ)/2^124 := by
   have one : (1 : ℝ) ≤ q := by exact_mod_cast positive
   have limit : (q : ℝ) ≤ 2^120 := by exact_mod_cast small
@@ -116,7 +62,7 @@ theorem replay_extra_margin (q calls k v : Nat)
   have nonneg : (0 : ℝ) ≤ calls := by positivity
   have qNonneg : (0 : ℝ) ≤ q := by positivity
   have K : (k : ℝ) ≤ 2^1346 := by exact_mod_cast kBound
-  have V : (v : ℝ) ≤ 2^1400 := by exact_mod_cast vBound
+  have V : (v : ℝ) ≤ 2^1024 := by exact_mod_cast vBound
   have callUpper : (calls : ℝ) ≤ 2^121 := by
     linarith [show (2 : ℝ)^120 + 2^31 ≤ 2^121 by norm_num]
   have denom : (2 : ℝ)^1599 ≤ 2^1600 - (calls : ℝ) := by
@@ -143,12 +89,12 @@ theorem replay_extra_margin (q calls k v : Nat)
       nlinarith [sq_nonneg (calls : ℝ)]
     exact (mul_le_mul_of_nonneg_right factor (by positivity : 0 ≤ (k : ℝ))).trans
       (mul_le_mul_of_nonneg_left K (by positivity))
-  have tail : (calls : ℝ) * (v : ℝ) ≤ (calls : ℝ) * 2^1400 :=
+  have tail : (calls : ℝ) * (v : ℝ) ≤ (calls : ℝ) * 2^1024 :=
     mul_le_mul_of_nonneg_left V nonneg
   have pairBound := mul_le_mul_of_nonneg_right squareBound (by positivity : (0 : ℝ) ≤ 2^1346)
-  have tailBound := mul_le_mul_of_nonneg_right linearBound (by positivity : (0 : ℝ) ≤ 2^1400)
+  have tailBound := mul_le_mul_of_nonneg_right linearBound (by positivity : (0 : ℝ) ≤ 2^1024)
   have lower := mul_le_mul_of_nonneg_left denom (by positivity : (0 : ℝ) ≤ (q : ℝ)/2^124)
-  have unified : (2 : ℝ)^122*2^1346 + 2^32*2^1400 ≤ 2^1599/2^124 := by norm_num
+  have unified : (2 : ℝ)^122*2^1346 + 2^32*2^1024 ≤ 2^1599/2^124 := by norm_num
   have scale := mul_le_mul_of_nonneg_left unified qNonneg
   simp only [unionBound, Nat.cast_pow, Nat.cast_ofNat]
   apply (div_le_iff₀ denomPos).2
@@ -177,68 +123,26 @@ private theorem fixed_compression_replayed_event {α : Type} (compress : Compres
   rw [ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num)]
   norm_num
 
-theorem fixed_compression_quad_bound_at {α : Type} (group : Nat) (compress : Compression)
-    (program : OracleComp World α)
-    (q calls : Nat) (positive : 1 ≤ q) (small : q ≤ 2^120) (replayed : calls ≤ q+2^31)
-    (bounded : PublicQueryBound (recordRows program) calls) :
-    Pr{let result ← (do let p ← $ᵗ Perm; fixedOracleRun ⟨compress,p⟩ (recordRows program))}[
-      QuadWitnessAt group result.2] ≤ (q : ENNReal)/2^124 := by
-  refine fixed_compression_replayed_event compress program (QuadWitnessAt group) (quadNodeCall group).badSpec
-    q calls bounded (fun _ _ => quad_witness_bad) ?_
-  have fits : calls < Fintype.card S3State := by rw [s3_card_state]; omega
-  refine (quad_bad_trace_bound group (toStrat compress (recordRows program)) calls fits).trans ?_
-  rw [s3_card_state]
-  exact replay_extra_margin q calls _ _ positive small replayed (by norm_num) (by norm_num)
-
-/-- The quartet collision bound over both node truncations (even and odd groups). -/
 theorem fixed_compression_quad_bound {α : Type} (compress : Compression) (program : OracleComp World α)
     (q calls : Nat) (positive : 1 ≤ q) (small : q ≤ 2^120) (replayed : calls ≤ q+2^31)
     (bounded : PublicQueryBound (recordRows program) calls) :
     Pr{let result ← (do let p ← $ᵗ Perm; fixedOracleRun ⟨compress,p⟩ (recordRows program))}[
-      QuadWitness result.2] ≤ (q : ENNReal)/2^123 := by
-  let execution := (do let p ← $ᵗ Perm; fixedOracleRun ⟨compress,p⟩ (recordRows program))
-  change Pr{let result ← execution}[QuadWitness result.2] ≤ _
-  have split := prEvent_mono execution (fun result => QuadWitness result.2)
-    (fun result => QuadWitnessAt 0 result.2 ∨ QuadWitnessAt 1 result.2)
-    (fun _ hit => quad_witness_split hit)
-  refine split.trans ((prEvent_or_le execution (fun result => QuadWitnessAt 0 result.2)
-    (fun result => QuadWitnessAt 1 result.2)).trans ?_)
-  have even := fixed_compression_quad_bound_at 0 compress program q calls positive small replayed bounded
-  have odd := fixed_compression_quad_bound_at 1 compress program q calls positive small replayed bounded
-  refine (add_le_add even odd).trans_eq ?_
-  rw [← ENNReal.add_div, ← two_mul,
-    show (2 : ENNReal)^124 = 2 * 2^123 by rw [show (124 : Nat) = 1+123 by decide, pow_add]; norm_num]
-  exact ENNReal.mul_div_mul_left _ _ (by norm_num) (by norm_num)
+      QuadWitness result.2] ≤ (q : ENNReal)/2^124 := by
+  refine fixed_compression_replayed_event compress program QuadWitness quadNodeCall.badSpec q calls bounded
+    (fun _ _ => quad_witness_bad) ?_
+  have fits : calls < Fintype.card S3State := by rw [s3_card_state]; omega
+  refine (quad_bad_trace_bound (toStrat compress (recordRows program)) calls fits).trans ?_
+  rw [s3_card_state]
+  exact replay_extra_margin q calls _ _ positive small replayed (by norm_num) le_rfl
 
 theorem fixed_compression_pinned_leaf_bound_small {α : Type} (layout : PeerLeafLayout)
     (compress : Compression) (program : OracleComp World α) (q calls : Nat) (positive : 1 ≤ q)
     (small : q ≤ 2^120) (replayed : calls ≤ q+2^31)
     (bounded : PublicQueryBound (recordRows program) calls) :
     Pr{let result ← (do let p ← $ᵗ Perm; fixedOracleRun ⟨compress,p⟩ (recordRows program))}[
-      PinnedLeafWitness result.2] ≤ (q : ENNReal)/2^123 :=
-  layout.bound compress program q calls positive small replayed bounded
-
-/-- The trace-level route to a fixed-compression replay bound: a witness in the stored rows forces
-a bad trace, whose probability is `q / 2^124`. (Exposed for per-kind leaf binding.) -/
-theorem fixed_compression_witness_bound {α : Type} (compress : Compression) (program : OracleComp World α)
-    (witness : List PublicRow → Prop) (bad : BadSpec PermState) (q calls : Nat)
-    (bounded : PublicQueryBound (recordRows program) calls)
-    (extract : ∀ trace rows, PinnedRowsStored rows trace → witness rows → ¬ bad.Good trace)
-    (prob : (toStrat compress (recordRows program)).prob PState.init
-      (fun _ finish => ¬ bad.Good finish.trace ∧ finish.count ≤ calls) ≤ (q : ℝ)/2^124) :
-    Pr{let result ← (do let p ← $ᵗ Perm; fixedOracleRun ⟨compress,p⟩ (recordRows program))}[
-      witness result.2] ≤ (q : ENNReal)/2^124 :=
-  fixed_compression_replayed_event compress program witness bad q calls bounded extract prob
-
-/-- The salt-first half of leaf binding, as in the record (`s3PinCall`). -/
-theorem fixed_compression_pinned_leaf_bound_sf {α : Type} (layout : SaltFirstPeerLayout)
-    (compress : Compression) (program : OracleComp World α) (q calls : Nat) (positive : 1 ≤ q)
-    (small : q ≤ 2^120) (replayed : calls ≤ q+2^31)
-    (bounded : PublicQueryBound (recordRows program) calls) :
-    Pr{let result ← (do let p ← $ᵗ Perm; fixedOracleRun ⟨compress,p⟩ (recordRows program))}[
-      PinnedLeafWitnessOf false result.2] ≤ (q : ENNReal)/2^124 := by
-  refine fixed_compression_replayed_event compress program (PinnedLeafWitnessOf false) s3PinCall.badSpec q calls bounded
-    (pinned_witness_bad_sf layout) ?_
+      PinnedLeafWitness result.2] ≤ (q : ENNReal)/2^124 := by
+  refine fixed_compression_replayed_event compress program PinnedLeafWitness s3PinCall.badSpec q calls bounded
+    (pinned_witness_bad layout) ?_
   let st := toStrat compress (recordRows program)
   have budget : st.QB calls := to_strat_QB compress bounded
   have fits : calls < Fintype.card S3State := by rw [s3_card_state]; omega
@@ -272,47 +176,58 @@ theorem quad_replay_bound_of_layout {α : Type} (layout : PeerLeafLayout) (progr
     rw [exchanged.prEvent_eq A]
     exact prEvent_bind_le_of_forall_le_of_support _ _ _ fun p _ =>
       fixed_permutation_projected_bound p program q calls positive small replayed bounded
-  have termB : Pr{let result ← execution}[B result] ≤ (q : ENNReal)/2^123 := by
+  have termB : Pr{let result ← execution}[B result] ≤ (q : ENNReal)/2^124 := by
     simp only [execution, Oracle.sample, bind_assoc, pure_bind]
     exact prEvent_bind_le_of_forall_le_of_support _ _ _ fun compress _ =>
       fixed_compression_pinned_leaf_bound_small layout compress program q calls positive small replayed bounded
-  have termC : Pr{let result ← execution}[C result] ≤ (q : ENNReal)/2^123 := by
+  have termC : Pr{let result ← execution}[C result] ≤ (q : ENNReal)/2^124 := by
     simp only [execution, Oracle.sample, bind_assoc, pure_bind]
     exact prEvent_bind_le_of_forall_le_of_support _ _ _ fun compress _ =>
       fixed_compression_quad_bound compress program q calls positive small replayed bounded
-  have margin : (q : ENNReal)/2^123 + (q : ENNReal)/2^123 ≤ (q : ENNReal)/2^122 := by
-    rw [← ENNReal.add_div, ← two_mul,
-      show (2 : ENNReal)^123 = 2 * 2^122 by rw [show (123 : Nat) = 1+122 by decide, pow_add]; norm_num]
-    exact (ENNReal.mul_div_mul_left _ _ (by norm_num) (by norm_num)).le
+  have margin : (q : ENNReal)/2^124 + (q : ENNReal)/2^124 ≤ (q : ENNReal)/2^122 := by
+    rw [← ENNReal.add_div]
+    calc
+      ((q : ENNReal) + q) / 2^124 ≤ (4 * (q : ENNReal))/2^124 := by
+        rw [← two_mul]
+        apply ENNReal.div_le_div_right
+        exact mul_le_mul' (by norm_num) le_rfl
+      _ = (q : ENNReal)/2^122 := by
+        rw [show (2 : ENNReal)^124 = 4 * 2^122 by rw [show (124 : Nat) = 2+122 by decide, pow_add]; norm_num]
+        exact ENNReal.mul_div_mul_left _ _ (by norm_num) (by finiteness)
   exact (prEvent_or_le execution A (fun r => B r ∨ C r)).trans
     ((add_le_add termA ((prEvent_or_le execution B C).trans ((add_le_add termB termC).trans margin))).trans_eq
       (event_budget_sum q))
 
-def quadDomain : Set Block := Set.range quartetEncode
+def quadEncode (payload : BitVec 1024) : Block := quadNodeCall.enc payload
+
+def quadDomain : Set Block := Set.range quadEncode
 
 theorem quad_domain_size : quadDomain.encard ≤ ((2^1024 : Nat) : ℕ∞) := by
   unfold quadDomain
   rw [← Set.image_univ]
-  refine (Set.encard_image_le quartetEncode Set.univ).trans_eq ?_
+  refine (Set.encard_image_le quadEncode Set.univ).trans_eq ?_
   rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, s3_card_bitvec]
 
 theorem quad_domain_disjoint_private (index : Index) (salt : Words 2)
     (first : BitVec 1600) (entry : Words 32) :
     packBuffer (pinnedSecondInput index salt (replyWords first) entry) ∉ quadDomain := by
   rintro ⟨payload, hit⟩
-  have zero : (quartetEncode payload).extractLsb' 128 64 = 0 := by
-    change (payload ++ (0 : BitVec 576)).extractLsb' 128 64 = 0
-    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 128 + 64 ≤ 576)]
+  have zero : (quadEncode payload).extractLsb' 0 64 = 0 := by
+    change (payload ++ (0 : BitVec 576)).extractLsb' 0 64 = 0
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 0 + 64 ≤ 576)]
     decide
-  have hit' : quartetEncode payload = packBuffer (pinnedSecondInput index salt (replyWords first) entry) := hit
+  have hit' : quadNodeCall.enc payload = packBuffer (pinnedSecondInput index salt (replyWords first) entry) := hit
+  change (quadNodeCall.enc payload).extractLsb' 0 64 = 0 at zero
   have tag := pinned_second_tag index salt first entry
-  change (packBuffer (pinnedSecondInput index salt (replyWords first) entry)).extractLsb' 128 64 =
+  change (packBuffer (pinnedSecondInput index salt (replyWords first) entry)).extractLsb' 0 64 =
     pinnedPositionTag index at tag
-  have zeroTag : pinnedPositionTag index = 0 :=
-    tag.symm.trans ((congrArg (fun x : BitVec 1600 => x.extractLsb' 128 64) hit').symm.trans zero)
-  have numerical : (pinnedPositionTag index).toNat = 0 := by rw [zeroTag]; rfl
-  rw [pinned_position_tag_toNat] at numerical
-  split at numerical <;> omega
+  rw [hit', tag] at zero
+  have indexBound : index.val < 2^24 := index.isLt
+  have fits : 4152 + 256*index.val < 2^64 := by omega
+  have numerical := congrArg BitVec.toNat zero
+  change (BitVec.ofNat 64 (4152 + 256*index.val)).toNat = (BitVec.ofNat 64 0).toNat at numerical
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt fits, BitVec.toNat_ofNat, Nat.zero_mod] at numerical
+  omega
 
 theorem quad_fresh_inverse_prob (cache : Cache) (target : Block)
     (unused : UnusedOutput cache.entries target) (room : cache.entries.length ≤ 2^121) :

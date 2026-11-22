@@ -1,9 +1,4 @@
-import CommitGolfCandidate.QuartetManifest
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.QuartetCommitRanges
-import CommitGolfCandidate.TwoPermutationCommitSetup
-import CommitGolfCandidate.TwoPermutationManifest
-import CommitGolfCandidate.TwoPermutationPackedParents
+import CommitGolfCandidate.QuartetCommitSetup
 import CommitGolfCandidate.QuartetCommitLeafSpill
 import CommitGolfCandidate.TwoPermutationInputWords
 namespace TwoPermutationPrototype.QuartetCommit
@@ -25,19 +20,19 @@ theorem wide_message_byte (s : Submission) (messageBase : s.layout.message=4096)
   simp only [quotient,remainder,i.isLt,dite_true]
 
 theorem initial_padding (msg : Message) (g k : Nat) (hg : g<4194304) (hk : k<9) :
-    memoryView (QuartetArtifact.submission.initialState .commit msg) (qSource g+k)=0 := by
+    memoryView (Artifact.submission.initialState .commit msg) (qSource g+k)=0 := by
   let atWord := 8*(qSource g+k)
-  change (QuartetArtifact.submission.initialState .commit msg).getMem (BitVec.ofNat 64 atWord)=0
-  rw [initial_input_word QuartetArtifact.submission .commit msg atWord (by dsimp [atWord,qSource];split_ifs <;> omega)]
-  have byte (j : Nat) (hj : j<8) : inputByte QuartetArtifact.submission .commit msg (atWord+j)=0 := by
+  change (Artifact.submission.initialState .commit msg).getMem (BitVec.ofNat 64 atWord)=0
+  rw [initial_input_word Artifact.submission .commit msg atWord (by dsimp [atWord,qSource];omega)]
+  have byte (j : Nat) (hj : j<8) : inputByte Artifact.submission .commit msg (atWord+j)=0 := by
     have gone : ¬(4096≤atWord+j ∧ atWord+j<4096+LENGTH*(LEAF_SIZE/8)) := by
-      change ¬(_ ∧ atWord+j<4096+16777216*256);dsimp [atWord,qSource];split_ifs <;> omega
-    have base : QuartetArtifact.submission.layout.message=4096 := rfl
-    have data : (QuartetArtifact.submission.image .commit).data=[] := rfl
+      change ¬(_ ∧ atWord+j<4096+16777216*256);dsimp [atWord,qSource];omega
+    have base : Artifact.submission.layout.message=4096 := rfl
+    have data : (Artifact.submission.image .commit).data=[] := rfl
     simp only [inputByte,Submission.inputBuffers,List.find?_cons,messageBuffer,base,gone,
       decide_false,Bool.false_eq_true,ite_false,List.find?_nil,data]
     simp
-  have zero : (∑ j ∈ Finset.range 8, (inputByte QuartetArtifact.submission .commit msg (atWord+j)).toNat * 2^(8*j))=0 := by
+  have zero : (∑ j ∈ Finset.range 8, (inputByte Artifact.submission .commit msg (atWord+j)).toNat * 2^(8*j))=0 := by
     apply Finset.sum_eq_zero;intro j hj;rw [byte j (Finset.mem_range.mp hj)];simp
   rw [zero];rfl
 
@@ -49,4 +44,12 @@ structure BodyContent (s : MachineState) (msg : Message) (salts : CompleteSaltTa
   nonces : ∀ i : Index, window (memoryView s) (qSalt i.val) = saltWords (salts i)
   padding : ∀ g<4194304, ∀ k<9, memoryView s (qSource g+k) = 0
 
+theorem frame_leaf_reference (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (ready : MachineState)
+    (content : BodyContent ready msg salts) (i : Index) :
+    outputDigest (QuartetLeaves.pinnedFinalReply oracle (memoryView ready) i.val) =
+      pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts i := by
+  unfold QuartetLeaves.pinnedFinalReply
+  rw [content.messages i,content.nonces i]
+  simp only [pinnedFullLeafDigests,pinnedLeafDigest,pinnedFirstRow,pinnedSecondRow,QuartetLeaves.pinned_typed_words]
+  rfl
 end TwoPermutationPrototype.QuartetCommit

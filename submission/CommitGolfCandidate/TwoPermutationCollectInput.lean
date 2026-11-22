@@ -6,9 +6,9 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
 set_option maxRecDepth 8192
 
-def checkIndexWord (ordinal : Nat) : Nat := 1174405636+ordinal
-def checkSourceWord (ordinal : Nat) : Nat := 1191182855+32*ordinal
-def checkNonceWord (ordinal : Nat) : Nat := 1728053772+66*ordinal
+def checkIndexWord (ordinal : Nat) : Nat := 905970180+ordinal
+def checkSourceWord (ordinal : Nat) : Nat := 922747399+32*ordinal
+def checkNonceWord (ordinal : Nat) : Nat := 1459618316+66*ordinal
 
 theorem checker_positions_bound (input : CheckInput) : input.positions.card ≤ 16777216 := by
   have card : input.positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ input.positions
@@ -72,7 +72,7 @@ theorem record_input_index (input : CheckInput) (ordinal : Nat) (present : ordin
     unfold checkIndexWord
     omega)))]
   have addr : 8*checkIndexWord ordinal = QAssembly.submission.layout.indices+8*ordinal := by
-    change 8*(1174405636+ordinal)=9395245088+8*ordinal
+    change 8*(905970180+ordinal)=7247761440+8*ordinal
     omega
   change (QAssembly.submission.initialState .check input).getMem (BitVec.ofNat 64 (8*checkIndexWord ordinal)) = _
   rw [addr]
@@ -88,7 +88,7 @@ theorem record_input_value (input : CheckInput) (ordinal : Nat) (present : ordin
       (Or.inr (Or.inr (by omega))))
   refine frame.trans ?_
   have addr : 8*(checkSourceWord ordinal+5) = QAssembly.submission.layout.values+256*ordinal := by
-    change 8*(1191182855+32*ordinal+5)=9529462880+256*ordinal
+    change 8*(922747399+32*ordinal+5)=7381979232+256*ordinal
     omega
   rw [addr]
   exact check_input_value input ordinal present
@@ -111,7 +111,7 @@ structure RecordCursor (input : CheckInput) (ordinal : Nat) (state : MachineStat
   tag : state.getReg .x3 = 4056
   commitment : state.getReg .x9 = 4294971392
   challengeLength : state.getReg .x20 = BitVec.ofNat 64 LENGTH
-  proofEnd : state.getReg .x22 = BitVec.ofNat 64 (13824430176+input.proof.length)
+  proofEnd : state.getReg .x22 = BitVec.ofNat 64 (11676946528+input.proof.length)
   digest : state.getReg .x23 = wordAddress 1536
   pair : state.getReg .x24 = wordAddress 1568
   capRoots : state.getReg .x25 = wordAddress 2048
@@ -159,7 +159,7 @@ theorem record_honest_inputs (oracle : Oracle) (message : Message) (positions : 
   · refine (aligned_buffer_frame initial state (checkNonceWord ordinal) 2
       (fun k hk => words k (by omega))).trans ?_
     have addr : 8*checkNonceWord ordinal = QAssembly.submission.layout.proof+528*ordinal := by
-      change 8*(1728053772+66*ordinal)=13824430176+528*ordinal
+      change 8*(1459618316+66*ordinal)=11676946528+528*ordinal
       omega
     rw [addr]
     exact honest_input_nonce oracle message positions salts ordinal present
@@ -169,7 +169,7 @@ theorem record_honest_inputs (oracle : Oracle) (message : Message) (positions : 
       simpa only [Nat.add_assoc] using words (2+4*offset+k) (by omega)
     · have addr : 8*(checkNonceWord ordinal+2+4*offset) =
           QAssembly.submission.layout.proof+(528*ordinal+16+32*offset) := by
-        change 8*(1728053772+66*ordinal+2+4*offset)=13824430176+(528*ordinal+16+32*offset)
+        change 8*(1459618316+66*ordinal+2+4*offset)=11676946528+(528*ordinal+16+32*offset)
         omega
       rw [addr]
       exact honest_input_sibling oracle message positions salts ordinal offset present inside
@@ -191,7 +191,7 @@ theorem record_honest_frontier (oracle : Oracle) (message : Message) (positions 
       omega)))
   · have addr : 8*(checkNonceWord positions.card+4*ordinal) =
         QAssembly.submission.layout.proof+(528*positions.card+32*ordinal) := by
-      change 8*(1728053772+66*positions.card+4*ordinal)=13824430176+(528*positions.card+32*ordinal)
+      change 8*(1459618316+66*positions.card+4*ordinal)=11676946528+(528*positions.card+32*ordinal)
       omega
     rw [addr]
     exact honest_input_frontier oracle message positions salts ordinal present

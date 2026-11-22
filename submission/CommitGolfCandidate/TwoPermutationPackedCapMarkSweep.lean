@@ -169,9 +169,9 @@ def startedCap (state : MachineState) := capStart (markMachine (startMark state)
 
 theorem execute_started_cap (state : MachineState) (pc : state.pc = 0x1444) (fuel : Nat)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase) :
-    execute packedImage (2557+fuel) state false =
+    execute packedImage (2554+fuel) state false =
       (do let result ← execute packedImage fuel (startedCap state) false
-          return result.charge 2557 0) := by
+          return result.charge 2554 0) := by
   have markPC : (startMark state).pc = 0x1448 := rfl
   have bound : 255 < 256 := by decide
   have count : (startMark state).getReg .x6 = BitVec.ofNat 64 255 := by
@@ -179,7 +179,7 @@ theorem execute_started_cap (state : MachineState) (pc : state.pc = 0x1444) (fue
   have markBaseReg : (startMark state).getReg .x26 = BitVec.ofNat 64 markBase := by
     simpa [startMark, MachineState.getReg_setPC, Opening.getReg_setReg] using base
   have tailPC := mark_machine_pc (startMark state) 255 bound markPC count
-  rw [show 2557+fuel = 1+(10*255+(6+fuel)) by omega, execute_start_mark state pc,
+  rw [show 2554+fuel = 1+(10*255+(3+fuel)) by omega, execute_start_mark state pc,
     execute_mark_sweep (startMark state) 255 _ bound markPC markBaseReg count,
     execute_cap_start _ tailPC]
   simp [startedCap, Execution.charge, ← Nat.add_assoc]

@@ -10,10 +10,10 @@ open Sampling.Quartet (upperHeap openingRecord leafAt builder)
 set_option maxRecDepth 8192
 
 def trapdoorSalt {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (index : Index) : BitVec 128 :=
-  t.extractLsb' (8*(288*LENGTH+16*index.val)) 128
+  t.extractLsb' (8*(160*LENGTH+16*index.val)) 128
 
 def trapdoorLeaf {s : Submission} (t : BitVec (8*s.sizes.trapdoor)) (index : Nat) : BitVec 256 :=
-  t.extractLsb' (8*(32*LENGTH + 1024*(index/4) + 72 + 32*(index%4))) 256
+  t.extractLsb' (8*(32*LENGTH + 512*(index/4) + 72 + 32*(index%4))) 256
 
 def physicalRecord (leaf heap : Nat → BitVec 256) (index : Index) (salt : BitVec 128) : Proof :=
   saltBytes salt ++ ([1,2,3] : List Nat).flatMap (fun j => digestBytes (leaf (index.val ^^^ j))) ++
@@ -84,5 +84,60 @@ theorem upper_sibling_bound (i : Index) (l : Nat) :
     rw [upper_node_heap_index]
     exact (Nat.div_le_self _ _).trans_lt bound
   exact Nat.xor_lt_two_pow n (show (1:Nat) < 2^23 by decide)
+
+private theorem lower_record_matches (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
+    (heap : Nat → BitVec 256) (leaves : DigestTape) (salts : CompleteSaltTape) (index : Index)
+    (digest : ∀ n, 0<n → n<2*(LENGTH/4) → trapdoorHeap (s:=s) trapdoor n = heap n)
+    (leaf : ∀ i : Index, trapdoorLeaf (s:=s) trapdoor i.val = leaves i)
+    (salt : ∀ i, trapdoorSalt (s:=s) trapdoor i = salts i) :
+    physicalRecord (trapdoorLeaf (s:=s) trapdoor) (trapdoorHeap (s:=s) trapdoor) index (trapdoorSalt (s:=s) trapdoor index) =
+    openingRecord leaves heap index (salts index) := by
+  unfold physicalRecord openingRecord
+  rw [salt]
+  congr 1
+  · congr 1
+    apply List.flatMap_congr
+    intro j member
+    have small : j<4 := by simp only [List.mem_cons,List.not_mem_nil,or_false] at member; omega
+    have within : index.val ^^^ j < LENGTH := Nat.xor_lt_two_pow index.isLt (by change j<2^24; omega)
+    rw [leafAt, dif_pos within]
+    exact congrArg digestBytes (leaf ⟨_,within⟩)
+  · apply List.flatMap_congr
+    intro l mem
+    have level := List.mem_range.mp mem
+    have pos : 0 < upperNode index l ^^^ 1 := lower_sibling_positive index (l+2) (by omega)
+    rw [digest _ pos (upper_sibling_bound index l), upper_node_heap_index]
+/-- The pure transcript reconstructed from the concrete trapdoor slices agrees
+with the reference transcript for any heap and nonce tape stored by commit. -/
+theorem proof_from_trapdoor_matches (s : Submission) (trapdoor : BitVec (8 * s.sizes.trapdoor))
+    (positions : Positions) (lookup : BitVec 1024 → BitVec 256) (compress : Compression) (leaves : DigestTape) (salts : CompleteSaltTape)
+    (digest : ∀ node, 0<node → node<2*(LENGTH/4) →
+      trapdoorHeap (s := s) trapdoor node = upperHeap lookup compress leaves node)
+    (leaf : ∀ i : Index, trapdoorLeaf (s:=s) trapdoor i.val = leaves i)
+    (salt : ∀ index, trapdoorSalt (s := s) trapdoor index = salts index) :
+    proofFromTrapdoor (s := s) trapdoor positions =
+      (builder lookup compress positions (fun i => salts i.val) leaves).2 := by
+  let heap := upperHeap lookup compress leaves
+  unfold proofFromTrapdoor builder
+  dsimp only
+  congr 1
+  · rw [← sorted_value_indices positions, List.flatMap_map]
+    apply List.flatMap_congr
+    intro index _
+    exact lower_record_matches s trapdoor heap leaves salts index.val digest leaf salt
+  · unfold frontierProof
+    rw [← grouping_sorted positions]
+    by_cases empty : positions.card = 0
+    · simp [openingNodes, empty, groupsBefore]
+    · have someGroups : (groupsBefore positions positions.card).isEmpty = false := by
+        cases h : (groupsBefore positions positions.card).isEmpty
+        · rfl
+        · exact False.elim (empty ((grouping_empty positions).mp h))
+      simp only [openingNodes, empty, someGroups, Bool.false_eq_true, ite_false]
+      apply List.flatMap_congr
+      intro node member
+      have small := cap_frontier_nodes_small _ 1 8 cap_span_root node member
+      have capacity : 512 < 2*(LENGTH/4) := by decide
+      rw [digest _ (cap_frontier_positive _ 1 8 cap_span_root node member) (small.trans capacity)]
 
 end TwoPermutationPrototype.QuartetRV

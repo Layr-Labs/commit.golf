@@ -51,7 +51,7 @@ theorem upper_content_step (oracle : Oracle) (s : MachineState) (heap : Nat → 
   · intro w lo hi
     rw [←read_word,read_buffer_memory_congr _ (parentWritten s cur reply) memory]
     have sep := write_bits_read_outside (bits:=256) s reply (8*treeWord cur) (8*w) 8 writeRange
-      (by omega) (by right; unfold treeWord qSource at *;dsimp [cur];split_ifs at * <;> omega)
+      (by omega) (by right; unfold treeWord qSource at *;dsimp [cur];omega)
     exact sep.trans ((read_word s w).trans (prior.high w lo hi))
 
 theorem upper_sequence_semantics (oracle : Oracle) (state : MachineState) (heap : Nat → BitVec 256)

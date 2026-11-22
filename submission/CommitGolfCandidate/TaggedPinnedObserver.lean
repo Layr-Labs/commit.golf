@@ -56,10 +56,10 @@ theorem pinned_fixed_address_hit_le (position : I → Index) (different : Functi
       (1 : ENNReal)/2^128 := by
   classical
   let event (i : I) (nonce : I → BitVec 128) := pinnedPrivateSecond (position i) (reply i) (message i) (nonce i) = guess
-  let selected (i : I) := pinnedPositionTag (position i) = guess.extractLsb' 128 64
+  let selected (i : I) := pinnedPositionTag (position i) = guess.extractLsb' 0 64
   have implied (i : I) (nonce : I → BitVec 128) (hit : event i nonce) : selected i :=
     (pinned_second_tag (position i) (saltWords (nonce i)) (reply i) (message i)).symm.trans
-      (congrArg (fun address : Block => address.extractLsb' 128 64) hit)
+      (congrArg (fun address : Block => address.extractLsb' 0 64) hit)
   by_cases someTag : ∃ i, selected i
   · obtain ⟨j, chosen⟩ := someTag
     refine (prEvent_mono ($ᵗ (I → BitVec 128)) (p := fun nonce => ∃ i, event i nonce)

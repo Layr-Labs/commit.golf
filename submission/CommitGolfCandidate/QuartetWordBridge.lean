@@ -1,25 +1,182 @@
 import CommitGolfCandidate.QuartetConcrete
-import CommitGolfCandidate.QuartetTransport
-import CommitGolfCandidate.K3GQModel
+import CommitGolfCandidate.QuartetCommitQFrame
 import CommitGolfCandidate.TwoPermutationPackedParentMask
-
-/-!
-# The honest heap of the commit
-
-`physicalHeap` is the transcript's upper heap: level-22 node `2^22 + g` is the parity truncation of the
-group call on quartet `g ^^^ 1`'s payload (the odd-quartet layout stores `node_odd ‖ node_even`, so the leaves
-are permuted); an internal node `n` keeps `nodeKeep n` of the compression of its children: all 256 bits at
-level 21, the low 240 bits at levels 17..20, the low 238 bits at the root and levels 1..16.
--/
+import CommitGolfCandidate.TwoPermutationBindingLeaf
 
 namespace TwoPermutationPrototype.QuartetCommit
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Sampling.Quartet (leafAt quartetPayload quartetLookup upperHeap upper_heap_parent upper_heap_leaf
-  upper_heap_leaf_flip)
+open TwoPermutationPrototype.Sampling.Quartet (leafAt quartetPayload quartetLookup upperHeap)
 set_option maxHeartbeats 1500000
 set_option maxRecDepth 8192
 
 def digestWords (v : BitVec 256) : Words 4 := fun k => v.extractLsb' (64*k.val) 64
+
+private theorem all_bits (l r : BitVec 1600) (same : ∀ k : Fin 25, l.extractLsb' (64*k.val) 64=r.extractLsb' (64*k.val) 64) : l=r := by
+  apply BitVec.eq_of_getLsbD_eq;intro b hb
+  have eq:=congrArg (fun v : BitVec 64 => v.getLsbD (b%64)) (same ⟨b/64,by omega⟩)
+  simpa only [Fin.val_mk,BitVec.getLsbD_extractLsb',show b%64<64 by omega,decide_true,Bool.true_and,
+    show 64*(b/64)+b%64=b by omega] using eq
+
+private theorem packet_word (d : Nat → BitVec 256) (g : Nat) (k : Fin 25) :
+    quadWords (fun i => digestWords (d i)) g k =
+      ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' (64*k.val) 64 := by
+  fin_cases k
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 0 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 0+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 64 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 64+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 128 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 128+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 192 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 192+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 256 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 256+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 320 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 320+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 384 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 384+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 448 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 448+64≤576)]
+    rfl
+  · change (0 : Word) = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 512 64
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 512+64≤576)]
+    rfl
+  · change (d (4*g+0)).extractLsb' 0 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 576 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤576)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 0+64≤256)]
+    try rfl
+  · change (d (4*g+0)).extractLsb' 64 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 640 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤640)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 64+64≤256)]
+    try rfl
+  · change (d (4*g+0)).extractLsb' 128 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 704 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤704)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 128+64≤256)]
+    try rfl
+  · change (d (4*g+0)).extractLsb' 192 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 768 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤768)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 192+64≤256)]
+    try rfl
+  · change (d (4*g+1)).extractLsb' 0 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 832 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤832)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤256)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 0+64≤256)]
+    try rfl
+  · change (d (4*g+1)).extractLsb' 64 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 896 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤896)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤320)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 64+64≤256)]
+    try rfl
+  · change (d (4*g+1)).extractLsb' 128 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 960 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤960)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤384)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 128+64≤256)]
+    try rfl
+  · change (d (4*g+1)).extractLsb' 192 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1024 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1024)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤448)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 192+64≤256)]
+    try rfl
+  · change (d (4*g+2)).extractLsb' 0 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1088 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1088)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤512)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤256)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 0+64≤256)]
+    try rfl
+  · change (d (4*g+2)).extractLsb' 64 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1152 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1152)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤576)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤320)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 64+64≤256)]
+    try rfl
+  · change (d (4*g+2)).extractLsb' 128 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1216 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1216)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤640)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤384)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 128+64≤256)]
+    try rfl
+  · change (d (4*g+2)).extractLsb' 192 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1280 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1280)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤704)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤448)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_add_le (by decide : 192+64≤256)]
+    try rfl
+  · change (d (4*g+3)).extractLsb' 0 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1344 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1344)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤768)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤512)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤256)]
+    try simp only [Nat.reduceSub]
+    try rfl
+  · change (d (4*g+3)).extractLsb' 64 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1408 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1408)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤832)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤576)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤320)]
+    try simp only [Nat.reduceSub]
+    try rfl
+  · change (d (4*g+3)).extractLsb' 128 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1472 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1472)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤896)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤640)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤384)]
+    try simp only [Nat.reduceSub]
+    try rfl
+  · change (d (4*g+3)).extractLsb' 192 64 = ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)).extractLsb' 1536 64
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 576≤1536)]
+    simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤960)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤704)]
+    try simp only [Nat.reduceSub]
+    rw [BitVec.extractLsb'_append_eq_of_le (by decide : 256≤448)]
+    try simp only [Nat.reduceSub]
+    try rfl
+
+theorem packing_exact (d : Nat → BitVec 256) (g : Nat) :
+    packBuffer (quadWords (fun i => digestWords (d i)) g) =
+      ((d (4*g+3) ++ d (4*g+2) ++ d (4*g+1) ++ d (4*g)) ++ (0 : BitVec 576)) := by
+  apply all_bits;intro k;exact (packed_word _ k).trans (packet_word d g k)
 
 def physicalHeap (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) :=
   let p := BiPermutation.equiv Block oracle.permutation
@@ -27,52 +184,16 @@ def physicalHeap (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) :=
 
 theorem physical_heap_parent (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (n : Nat)
     (hn : 0<n) (small : n<4194304) :
-    physicalHeap oracle msg salts n=nodeKeep n (oracle.compression
-      (physicalHeap oracle msg salts (2*n+1) ++ physicalHeap oracle msg salts (2*n))) := by
-  unfold physicalHeap
-  exact upper_heap_parent _ _ _ n hn small
+    physicalHeap oracle msg salts n=projectReply (oracle.compression (physicalHeap oracle msg salts (2*n+1) ++ physicalHeap oracle msg salts (2*n))) := by
+  unfold physicalHeap upperHeap
+  rw [reference_heap_parent _ _ _ _ hn small];rfl
 
-theorem physical_heap_level21 (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (U : Nat)
-    (small : U<2097152) :
-    physicalHeap oracle msg salts (2097152+U)=oracle.compression
-      (physicalHeap oracle msg salts (4194304+(2*U+1)) ++ physicalHeap oracle msg salts (4194304+2*U)) := by
-  have parent := (physical_heap_parent oracle msg salts (2097152+U) (by omega) (by omega)).trans
-    (node_keep_full (node := 2097152+U) (by omega) _)
-  rw [show 2*(2097152+U)+1=4194304+(2*U+1) by omega,show 2*(2097152+U)=4194304+2*U by omega] at parent
-  exact parent
-
-/-- Levels 17..20 (nodes `[2^17, 2^21)`) keep the low 240 bits of the compression. -/
-theorem physical_heap_240 (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (n : Nat)
-    (lo : 131072≤n) (hi : n<2097152) :
-    physicalHeap oracle msg salts n=projectReply (oracle.compression
-      (physicalHeap oracle msg salts (2*n+1) ++ physicalHeap oracle msg salts (2*n))) := by
-  exact (physical_heap_parent oracle msg salts n (by omega) (by omega)).trans
-    (node_keep_240 (node := n) (by omega) (by omega) _)
-
-/-- The root and levels 1..16 (nodes `[1, 2^17)`) keep the low 238 bits of the compression. -/
-theorem physical_heap_238 (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (n : Nat)
-    (pos : 0<n) (hi : n<131072) :
-    physicalHeap oracle msg salts n=pad238 (oracle.compression
-      (physicalHeap oracle msg salts (2*n+1) ++ physicalHeap oracle msg salts (2*n))) := by
-  exact (physical_heap_parent oracle msg salts n pos (by omega)).trans (node_keep_238 (node := n) (by omega) _)
-
-/-- Heap leaf `2^22 + g` holds the node of group `g ^^^ 1` (the level-22 leaves are permuted). -/
 theorem physical_heap_leaf (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (g : Nat) (small : g<4194304) :
-    physicalHeap oracle msg salts (4194304+g) =
-      quartetNode (g^^^1) (oracle.permutation (quartetEncode (quartetPayload
-        (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts) (g^^^1)))) := by
-  unfold physicalHeap
-  rw [upper_heap_leaf _ _ _ g small]
+    let d := leafAt (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts)
+    physicalHeap oracle msg salts (4194304+g) = outputDigest (quadReply oracle (fun i => digestWords (d i)) g) := by
+  dsimp only;unfold physicalHeap upperHeap quadReply
+  rw [reference_heap_leaf _ _ _ _ small,packing_exact]
   rfl
-
-/-- Group `g`'s node sits at heap leaf `2^22 + (g ^^^ 1)`. -/
-theorem physical_heap_leaf_flip (oracle : Oracle) (msg : Message) (salts : CompleteSaltTape) (g : Nat)
-    (small : g<4194304) :
-    physicalHeap oracle msg salts (4194304+(g^^^1)) =
-      quartetNode g (oracle.permutation (quartetEncode (quartetPayload
-        (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) msg salts) g))) := by
-  unfold physicalHeap
-  rw [upper_heap_leaf_flip _ _ _ g small]
-  rfl
-
 end TwoPermutationPrototype.QuartetCommit
+
+#print axioms TwoPermutationPrototype.QuartetCommit.packing_exact

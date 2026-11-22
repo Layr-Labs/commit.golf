@@ -27,20 +27,19 @@ structure CapFinished (oracle : Oracle) (groups : List Nat) (before : MachineSta
     observed.1.1.exit = .success → ∀ leaf ∈ groups, 256 ≤ leaf → leaf < 512 →
       ProjectedPath observed.1.2 leaf 8 (capRootAt before leaf) (readBuffer before (8*claim) 32)
   terminates : (checkEvaluation oracle (recordRows (execute packedImage fuel before false))).1.1.exit ≠ .unfinished
-  honest : ∀ heap, CapHeapCorrect oracle heap → CapContents groups before 1 8 pointer 0 heap →
+  honest : ∀ heap, CapHeapCorrect oracle heap → CapContents groups before 1 8 pointer heap →
     readBuffer before (8*claim) 32 = heap 1 →
-    before.getReg .x22 = BitVec.ofNat 64 (pointer+capPackedBytes (capFrontierNodes groups 1 8).length) →
+    before.getReg .x22 = BitVec.ofNat 64 (pointer+30*(capFrontierNodes groups 1 8).length) →
     (checkEvaluation oracle (recordRows (execute packedImage fuel before false))).1.1.exit = .success
 
 theorem execute_prepared_cap_suffix (codec : FrontierKernel) (oracle : Oracle) (groups : List Nat) (before : MachineState)
-    (pointer claim fuel : Nat) (position : CapPosition groups before 1 pointer 0)
+    (pointer claim fuel : Nat) (position : CapPosition groups before 1 pointer)
     (pc : before.pc = 0x147c) (claimReg : before.getReg .x9 = wordAddress claim)
     (claimAbove : 4096 ≤ claim) (claimBound : claim+4 ≤ 2^33)
-    (room : pointer+capPackedBytes (capFrontierNodes groups 1 8).length ≤ MEMORY_BYTES)
-    (fuelBound : 36299 ≤ fuel) : CapFinished oracle groups before pointer claim fuel := by
-  obtain ⟨walk⟩ := execute_cap_subtree codec oracle groups before 1 8 pointer 0 position pc Opening.cap_span_root
-    (by simpa using room)
-  have steps : walk.segment.steps ≤ 36281 := walk.steps
+    (room : pointer+30*(capFrontierNodes groups 1 8).length ≤ MEMORY_BYTES)
+    (fuelBound : 22502 ≤ fuel) : CapFinished oracle groups before pointer claim fuel := by
+  obtain ⟨walk⟩ := execute_cap_subtree codec oracle groups before 1 8 pointer position pc Opening.cap_span_root room
+  have steps : walk.segment.steps ≤ 22484 := walk.steps
   have leftFuel : 18 ≤ fuel-walk.segment.steps := by omega
   have observed := walk.segment.checked (fuel-walk.segment.steps)
   rw [show walk.segment.steps+(fuel-walk.segment.steps) = fuel by omega] at observed
@@ -95,7 +94,7 @@ theorem execute_prepared_cap_suffix (codec : FrontierKernel) (oracle : Oracle) (
         read_digest_congr _ _ _ (by omega) (fun _ _ => congrFun (root_test_memory walk.state) _)
       have lengthOK : tested.getReg .x21 = tested.getReg .x22 := by
         rw [root_test_register _ .x21 (by decide), root_test_register _ .x22 (by decide), actual.proof,
-          walk.stable .x22 (by decide), finishProof, Nat.zero_add]
+          walk.stable .x22 (by decide), finishProof, walk.readLength done]
       have good := accepted.mpr ⟨lengthOK, testedRoot.trans (heapRoot.trans
         ((claimStayed.trans (loadedClaim.trans rootClaim)).symm))⟩
       rw [observed]
@@ -120,8 +119,8 @@ theorem execute_prepared_cap_suffix (codec : FrontierKernel) (oracle : Oracle) (
       exact (show Exit.failure ≠ Exit.unfinished by decide)
     · intro _ _ _ _ finishProof
       have fit : MEMORY_BYTES < 2^64 := by decide
-      have enough : pointer+capPackedBytes (0+(capFrontierNodes groups 1 8).length) ≤ (before.getReg .x22).toNat := by
-        rw [finishProof, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), Nat.zero_add]
+      have enough : pointer+30*(capFrontierNodes groups 1 8).length ≤ (before.getReg .x22).toNat := by
+        rw [finishProof, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
       exact False.elim (done (walk.available enough))
 
 end TwoPermutationPrototype.Packed.Checker

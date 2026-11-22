@@ -6,7 +6,7 @@ open CommitGolf OracleComp TwoPermutationPrototype.RV64
 set_option maxRecDepth 8192
 
 def pinnedFirstAddress (message : Message) (index : Index) : Block :=
-  packBuffer (pinnedFirstInput index (messageWords message index))
+  packBuffer (pinnedFirstInput (messageWords message index))
 
 def pinnedSecondFromHigh (index : Index) (message : Message) (nonce : BitVec 128)
     (upper : BitVec 1344) : Block :=

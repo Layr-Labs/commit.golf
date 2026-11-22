@@ -115,7 +115,7 @@ theorem header_positive (input : CheckInput) (fits : input.proof.length ≤ 8959
   · exact usable.count.trans ((keep .x16 (by decide)).trans count)
   · exact usable.root.trans ((keep .x11 (by decide)).trans root)
   · rw [usable.proofEnd,keep .x15 (by decide),keep .x17 (by decide),proof,length]
-    change BitVec.ofNat 64 13824430176+BitVec.ofNat 64 input.proof.length = _
+    change BitVec.ofNat 64 11676946528+BitVec.ofNat 64 input.proof.length = _
     rw [← BitVec.ofNat_add]
   · exact usable.memory.trans ((check_guard_memory .empty (shortChecked input)).trans
       ((check_guard_memory .short (measured input)).trans (measured_view input).2.2.1))

@@ -53,8 +53,8 @@ theorem checker_body_facts (record : Oracle → Nat → Index → MachineState �
     (verified : RecordRefines record) (oracle : Oracle) (input : CheckInput) (beginning : MachineState)
     (fits : ProofWithin input) (cursor : RecordCursor input 0 beginning) (frame : RecordInputFrame input 0 beginning)
     (table : CollectedTable oracle input 0 beginning []) (fuel : Nat)
-    (fuelBound : 2048*input.positions.card+40000 ≤ fuel)
-    (cap : ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
+    (fuelBound : 2048*input.positions.card+25056 ≤ fuel)
+    (cap : ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest) :
     CheckerObservationFacts oracle input
@@ -64,7 +64,7 @@ theorem checker_body_facts (record : Oracle → Nat → Index → MachineState �
   obtain ⟨run,facts⟩ :=
     collect_records_observation record verified oracle input input.positions.card 0 (by omega) beginning [] cursor frame table fits rest
   have limit : collected.steps ≤ 2048*input.positions.card := facts.stepBound
-  have enough : 40000 ≤ rest := by dsimp only [rest]; omega
+  have enough : 25056 ≤ rest := by dsimp only [rest]; omega
   have total : collected.steps+rest = fuel := by dsimp only [rest]; omega
   change checkEvaluation oracle (recordRows (execute packedImage (collected.steps+rest) beginning false)) = _ at run
   rw [total] at run

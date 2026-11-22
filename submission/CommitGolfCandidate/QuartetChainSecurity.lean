@@ -3,11 +3,11 @@ import CommitGolfCandidate.QuartetFinalSharp
 
 /-! Adapted from submission c28dd9ca (dadon), `NonceChainSecurity`, for Quartet: the executable
 commitment draws a 192-bit key and expands it with the permutation chain; the chain world is within
-`chainError (t + 2·LENGTH + 2^22 + t)` of the independent-salt world on each side, and Quartet's
+`CommitGolfCandidate.Permutation.NoncePair.chainError (t + 2·LENGTH + 2^22 + t)` of the independent-salt world on each side, and Quartet's
 independent-salt bound at (t+1)/2^121 covers the middle. -/
 namespace TwoPermutationPrototype.Sampling.Quartet
 open CommitGolf OracleComp CommitGolfCandidate
-open CommitGolfCandidate.Permutation.NonceChain (Key actualNonces blocks)
+open CommitGolfCandidate.Permutation.NoncePair (Key actualNonces blocks)
 local instance quartetChainSecurityDiscrete {α : Type} : MeasurableSpace α := ⊤
 
 noncomputable def sampledChain {S O : Type} {n : Nat} (a : Hiding.HidingAdversary S O n) (b : Bool) : ProbComp O := do
@@ -20,8 +20,8 @@ noncomputable def sampledChain {S O : Type} {n : Nat} (a : Hiding.HidingAdversar
 theorem chain_grouped {S O : Type} {n t : Nat} (a : Hiding.HidingAdversary S O n)
     (h : Hiding.QueryBound a t) (b : Bool) :
     𝒟[sampledChain a b] =
-      𝒟[($ᵗ Compression) >>= fun c => chainNonceGame c (chainPublicComp a t c b)] := by
-  simp only [sampledChain,Oracle.sample,bind_assoc,pure_bind,chainNonceGame]
+      𝒟[($ᵗ Compression) >>= fun c => CommitGolfCandidate.Permutation.NoncePair.chainNonceGame c (chainPublicComp a t c b)] := by
+  simp only [sampledChain,Oracle.sample,bind_assoc,pure_bind,CommitGolfCandidate.Permutation.NoncePair.chainNonceGame]
   apply _root_.evalDist_bind_congr; intro c
   apply _root_.evalDist_bind_congr; intro π
   simp_rw [chain_comp_run a h (⟨c,π⟩ : Oracle)]
@@ -30,8 +30,8 @@ theorem chain_grouped {S O : Type} {n t : Nat} (a : Hiding.HidingAdversary S O n
 theorem iid_grouped {S O : Type} {n t : Nat} (a : Hiding.HidingAdversary S O n)
     (h : Hiding.QueryBound a t) (b : Bool) :
     𝒟[sampledReferenceView a (honestView builder) b] =
-      𝒟[($ᵗ Compression) >>= fun c => iidNonceGame c (chainPublicComp a t c b)] := by
-  simp only [sampledReferenceView,Oracle.sample,bind_assoc,pure_bind,iidNonceGame]
+      𝒟[($ᵗ Compression) >>= fun c => CommitGolfCandidate.Permutation.NoncePair.iidNonceGame c (chainPublicComp a t c b)] := by
+  simp only [sampledReferenceView,Oracle.sample,bind_assoc,pure_bind,CommitGolfCandidate.Permutation.NoncePair.iidNonceGame]
   apply _root_.evalDist_bind_congr; intro c
   trans 𝒟[do let π ← $ᵗ Perm
              let r ← $ᵗ SaltArray
@@ -44,23 +44,20 @@ theorem iid_grouped {S O : Type} {n t : Nat} (a : Hiding.HidingAdversary S O n)
 /-- The margin: the independent-salt bound plus both chain replacements stays below (t+1)/2^120. -/
 theorem quartet_chain_budget (t : Nat) :
     let q := t + (2*LENGTH + (4194304 + t))
-    ((t : ℝ)+1)/2^121 +
-      2 * (((blocks+1 : Nat) : ℝ) * ((2*q+(blocks+1) : ℝ)/2^192)) ≤
-        ((t : ℝ)+1)/2^120 := by
-  norm_num [blocks,LENGTH,LOG_LENGTH,Nat.cast_add,Nat.cast_mul]
-  nlinarith [Nat.cast_nonneg (α := ℝ) t]
+    ((t : ℝ)+1)/2^121 + 2 * CommitGolfCandidate.Permutation.NoncePair.chainError q ≤ ((t : ℝ)+1)/2^120 :=
+  CommitGolfCandidate.Permutation.NoncePair.quartet_budget t
 
 theorem chain_reference_hiding {S O : Type} {n t : Nat} (a : Hiding.HidingAdversary S O n)
     (h : Hiding.QueryBound a t) :
     measureTVDist (sampledChain a false) (sampledChain a true) ≤ min 1 (((t : ℝ)+1)/2^120) := by
   have side (b : Bool) :
       measureTVDist (sampledChain a b) (sampledReferenceView a (honestView builder) b) ≤
-        chainError (t + (2*LENGTH + (4194304 + t))) := by
+        CommitGolfCandidate.Permutation.NoncePair.chainError (t + (2*LENGTH + (4194304 + t))) := by
     have d := measureTVDist_bind_left_le_of_forall_le ($ᵗ Compression)
-      (fun c => chainNonceGame c (chainPublicComp a t c b))
-      (fun c => iidNonceGame c (chainPublicComp a t c b))
-      (δ := chainError (t + (2*LENGTH + (4194304 + t)))) (by unfold chainError;positivity)
-      (fun c => nonce_chain_oracle_distance _ _ _ (chain_comp_bound a h c b))
+      (fun c => CommitGolfCandidate.Permutation.NoncePair.chainNonceGame c (chainPublicComp a t c b))
+      (fun c => CommitGolfCandidate.Permutation.NoncePair.iidNonceGame c (chainPublicComp a t c b))
+      (δ := CommitGolfCandidate.Permutation.NoncePair.chainError (t + (2*LENGTH + (4194304 + t)))) (by unfold CommitGolfCandidate.Permutation.NoncePair.chainError;positivity)
+      (fun c => CommitGolfCandidate.Permutation.NoncePair.nonce_chain_oracle_distance _ _ _ (chain_comp_bound a h c b))
     simpa only [measureTVDist,chain_grouped a h b,iid_grouped a h b] using d
   refine le_min (measureTVDist_le_one _ _) ?_
   by_cases small : t+1 ≤ 2^120
@@ -83,7 +80,7 @@ theorem chain_reference_hiding {S O : Type} {n t : Nat} (a : Hiding.HidingAdvers
       (add_le_add old right)))
   refine combined.trans ?_
   have bound := quartet_chain_budget t
-  unfold chainError
+  unfold CommitGolfCandidate.Permutation.NoncePair.chainError at bound ⊢
   linarith
 
 /-- The executable commitment's transcript is the honest Quartet view of chain salts from a uniform key. -/

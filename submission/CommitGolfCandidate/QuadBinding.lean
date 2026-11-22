@@ -1,6 +1,5 @@
 import CommitGolfCandidate.QuadReplay
 import CommitGolfCandidate.TwoPermutationPackedPaths
-import CommitGolfCandidate.K3T238Replay
 
 namespace TwoPermutationPrototype.Quartet
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.Permutation OracleComp
@@ -8,37 +7,33 @@ open TwoPermutationPrototype.Sampling TwoPermutationPrototype.RV64 TwoPermutatio
 open TwoPermutationPrototype.Packed (ProjectedPath)
 set_option maxRecDepth 8192
 
-/-- What an accepting check records for one opened position: both leaf calls, the quartet call of
-the position's group (the leaf digest in slot `index % 4` of the window `0^72 ‖ d0 d1 d2 d3`), and a
-projected path from the group node (`quartetNode (index / 4)`, at heap node `2^22 + (⌊index/4⌋ ^^^ 1)`) to
-the root. -/
 structure RecordedQuartetOpening (oracle : Oracle) (index : Index) (entry : Entry) (root : Commitment)
     (rows : List PublicRow) where
   nonce : Words 2
   first : PublicRow.permutation
-    (pinnedFirstRow oracle.permutation index (entryWords entry)).1
-    (pinnedFirstRow oracle.permutation index (entryWords entry)).2 ∈ rows
+    (pinnedFirstRow oracle.permutation (entryWords entry)).1
+    (pinnedFirstRow oracle.permutation (entryWords entry)).2 ∈ rows
   second : PublicRow.permutation
     (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation index (entryWords entry)).2 (entryWords entry)).1
+      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).1
     (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation index (entryWords entry)).2 (entryWords entry)).2 ∈ rows
+      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).2 ∈ rows
   quartet : BitVec 1024
   reply : Block
   child : quartet.extractLsb' (256 * (index.val % 4)) 256 =
     outputDigest (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation index (entryWords entry)).2 (entryWords entry)).2
-  parentRow : PublicRow.permutation (quartetEncode quartet) reply ∈ rows
-  upper : ProjectedPath rows (LENGTH / 4 + (index.val / 4 ^^^ 1)) (LOG_LENGTH - 2) (quartetNode (index.val / 4) reply) root
+      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).2
+  parentRow : PublicRow.permutation (quadNodeCall.enc quartet) reply ∈ rows
+  upper : ProjectedPath rows (LENGTH / 4 + index.val / 4) (LOG_LENGTH - 2) (quadNodeCall.trunc reply) root
 
 theorem quartet_recorded_conflict (oracle : Oracle) (index : Index) (root : Commitment)
     (v w : Entry) (different : v ≠ w) (rows₀ rows₁ : List PublicRow)
     (left : RecordedQuartetOpening oracle index v root rows₀)
     (right : RecordedQuartetOpening oracle index w root rows₁) :
-    QuadReplayEvidence238 (rows₀ ++ rows₁) := by
+    QuadReplayEvidence (rows₀ ++ rows₁) := by
   rcases (left.upper.mono (fun _ h => List.mem_append_left _ h)).compare
     (right.upper.mono (fun _ h => List.mem_append_right _ h)) with collision | sameParent
-  · exact Or.inl (by first | exact collision | exact collision.to238)
+  · exact Or.inl collision
   · by_cases sameInput : left.quartet = right.quartet
     · have sameLeaf := left.child.symm.trans
         ((congrArg (fun x : BitVec 1024 => x.extractLsb' (256 * (index.val % 4)) 256) sameInput).trans
@@ -47,8 +42,22 @@ theorem quartet_recorded_conflict (oracle : Oracle) (index : Index) (root : Comm
         List.mem_append_left _ left.first, List.mem_append_right _ right.first,
         List.mem_append_left _ left.second, List.mem_append_right _ right.second,
         sameLeaf, fun same => different (entry_words_injective same)⟩)
-    · exact Or.inr (Or.inr ⟨index.val / 4, left.quartet, right.quartet, sameInput, left.reply, right.reply,
+    · exact Or.inr (Or.inr ⟨left.quartet, right.quartet, sameInput, left.reply, right.reply,
         List.mem_append_left _ left.parentRow, List.mem_append_right _ right.parentRow, sameParent⟩)
+
+theorem quad_evidence_mono {before after : List PublicRow} (included : ∀ row ∈ before, row ∈ after)
+    (proof : QuadReplayEvidence before) : QuadReplayEvidence after := by
+  rcases proof with comp | leaf | q
+  · have small : PinnedReplayEvidence before := Or.inl comp
+    rcases small.mono included with c | l
+    · exact Or.inl c
+    · exact Or.inr (Or.inl l)
+  · have small : PinnedReplayEvidence before := Or.inr leaf
+    rcases small.mono included with c | l
+    · exact Or.inl c
+    · exact Or.inr (Or.inl l)
+  · obtain ⟨x,y,h,ax,ay,rx,ry,equal⟩ := q
+    exact Or.inr (Or.inr ⟨x,y,h,ax,ay,included _ rx,included _ ry,equal⟩)
 
 def AcceptedQuartetTrace (s : Submission) : Prop :=
   ∀ (oracle : Oracle) (input : CheckInput),
@@ -68,7 +77,7 @@ private theorem limited_quartet_check (s : Submission) (oracle : Oracle) (input 
 
 theorem quartet_replay_extracts (s : Submission) (refines : AcceptedQuartetTrace s)
     (oracle : Oracle) (claim : Scheme.Claim) (breaks : s.scheme.Breaks oracle claim) :
-    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), QuadReplayEvidence238 result.2 := by
+    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), QuadReplayEvidence result.2 := by
   obtain ⟨⟨index, member₀, member₁, conflict⟩, accepted₀, accepted₁⟩ := breaks
   let left := leftCheck claim
   let right := rightCheck claim
@@ -98,12 +107,10 @@ theorem quartet_replay_extracts (s : Submission) (refines : AcceptedQuartetTrace
   exact quartet_recorded_conflict oracle index claim.root _ _ conflict _ _
     (path₀ ⟨index, member₀⟩).some (path₁ ⟨index, member₁⟩).some
 
-/-- Binding from accepted checks: tree conflicts at 238 bits (product-form birthday), leaf conflicts
-through the sharp leaf layout, quartet conflicts under both node truncations (`K3T238Replay`). -/
-theorem quartet_scheme_binding (s : Submission) (layout : PeerLeafLayoutSharp) (refines : AcceptedQuartetTrace s) :
+theorem quartet_scheme_binding (s : Submission) (layout : PeerLeafLayout) (refines : AcceptedQuartetTrace s) :
     s.scheme.Binding :=
   scheme_binding_of_replay_with s.scheme
     ⟨checkerReplay s, checker_replay_bounded s, quartet_replay_extracts s refines⟩
-    (fun h proof => quad_evidence238_mono h proof) (quad_replay_bound_t238_of_layout layout)
+    (fun h proof => quad_evidence_mono h proof) (quad_replay_bound_of_layout layout)
 
 end TwoPermutationPrototype.Quartet

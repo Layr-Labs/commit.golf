@@ -33,7 +33,7 @@ theorem checker_global_budget (input : CheckInput) (records capQueries : Nat)
 
 theorem checker_footer_address (input : CheckInput) :
     8*checkNonceWord input.positions.card = QAssembly.submission.layout.proof+528*input.positions.card := by
-  change 8*(1728053772+66*input.positions.card)=13824430176+528*input.positions.card
+  change 8*(1459618316+66*input.positions.card)=11676946528+528*input.positions.card
   omega
 
 theorem checker_honest_footer_end (oracle : Oracle) (message : Message) (positions : Positions)
@@ -44,8 +44,8 @@ theorem checker_honest_footer_end (oracle : Oracle) (message : Message) (positio
   dsimp only
   rw [honest_proof_length]
   unfold Opening.openingLength checkNonceWord
-  change 8*(1728053772+66*positions.card+4*(Opening.openingNodes positions).length) =
-    13824430176+(528*positions.card+32*(Opening.openingNodes positions).length)
+  change 8*(1459618316+66*positions.card+4*(Opening.openingNodes positions).length) =
+    11676946528+(528*positions.card+32*(Opening.openingNodes positions).length)
   omega
 
 theorem checker_cap_marks (oracle : Oracle) (input : CheckInput) (state : MachineState) (rows : List PublicRow)
@@ -64,8 +64,8 @@ theorem checker_cap_memory_room (input : CheckInput) :
   have frontier : (capFrontierNodes groups 1 8).length ≤ 128 := by
     rw [cap_frontier_length]
     exact production_boundary_bound _
-  change 4096 ≤ 1728053772+66*input.positions.card ∧
-    1728053772+66*input.positions.card+4*(capFrontierNodes groups 1 8).length ≤ 2^33
+  change 4096 ≤ 1459618316+66*input.positions.card ∧
+    1459618316+66*input.positions.card+4*(capFrontierNodes groups 1 8).length ≤ 2^33
   omega
 
 theorem checker_honest_cap_nodes (positions : Positions) (nonempty : positions.card ≠ 0) :
@@ -111,10 +111,10 @@ theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : 
   · rw [cursor.proofEnd]
     have finish := checker_honest_footer_end oracle message input.positions salts
     change 8*(pointer+4*(Opening.openingNodes input.positions).length) =
-      13824430176+(honestCheckInput oracle message input.positions salts).proof.length at finish
+      11676946528+(honestCheckInput oracle message input.positions salts).proof.length at finish
     rw [nodes] at finish
     have proofLen := congrArg (fun value : CheckInput => value.proof.length) canonical
-    change BitVec.ofNat 64 (13824430176+input.proof.length) =
+    change BitVec.ofNat 64 (11676946528+input.proof.length) =
       BitVec.ofNat 64 (8*(pointer+4*(capFrontierNodes groups 1 8).length))
     rw [proofLen,finish]
 

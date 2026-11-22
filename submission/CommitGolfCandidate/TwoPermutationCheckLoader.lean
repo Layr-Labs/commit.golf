@@ -18,9 +18,9 @@ theorem check_initial_registers (input : CheckInput) :
     let state := QAssembly.submission.initialState .check input
     state.pc = 4096 ∧
     state.getReg .x11 = 4294971392 ∧
-    state.getReg .x13 = 9395245088 ∧
-    state.getReg .x14 = 9529462880 ∧
-    state.getReg .x15 = 13824430176 ∧
+    state.getReg .x13 = 7247761440 ∧
+    state.getReg .x14 = 7381979232 ∧
+    state.getReg .x15 = 11676946528 ∧
     state.getReg .x16 = BitVec.ofNat 64 input.positions.card ∧
     state.getReg .x17 = BitVec.ofNat 64 input.proof.length :=
   ⟨rfl,rfl,rfl,rfl,rfl,rfl,rfl⟩
@@ -48,13 +48,13 @@ theorem check_scratch_word_zero (input : CheckInput) (address : Nat)
       change ¬ 4294971392 ≤ address+offset
       omega
     have indices : ¬ QAssembly.submission.layout.indices ≤ address+offset := by
-      change ¬ 9395245088 ≤ address+offset
+      change ¬ 7247761440 ≤ address+offset
       omega
     have values : ¬ QAssembly.submission.layout.values ≤ address+offset := by
-      change ¬ 9529462880 ≤ address+offset
+      change ¬ 7381979232 ≤ address+offset
       omega
     have proof : ¬ QAssembly.submission.layout.proof ≤ address+offset := by
-      change ¬ 13824430176 ≤ address+offset
+      change ¬ 11676946528 ≤ address+offset
       omega
     have data : (QAssembly.submission.image .check).data = [] := rfl
     simp [inputByte, Submission.inputBuffers, fixedBuffer, positionsBuffer, valuesBuffer,
@@ -97,20 +97,20 @@ theorem check_input_proof_byte (input : CheckInput)
       (BitVec.ofNat 64 (QAssembly.submission.layout.proof+offset)) = input.proof[offset] := by
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte QAssembly.submission .check input _ (by
-    change 13824430176+offset < 2^64
+    change 11676946528+offset < 2^64
     change input.proof.length ≤ 8959041024 at valid
     omega)]
   have outsideRoot : ¬ (QAssembly.submission.layout.commitment ≤ QAssembly.submission.layout.proof+offset ∧
       QAssembly.submission.layout.proof+offset < QAssembly.submission.layout.commitment+(DIGEST_BITS+7)/8) := by
-    change ¬ (4294971392 ≤ 13824430176+offset ∧ 13824430176+offset < 4294971424)
+    change ¬ (4294971392 ≤ 11676946528+offset ∧ 11676946528+offset < 4294971424)
     omega
   have outsideIndices : ¬ (QAssembly.submission.layout.indices ≤ QAssembly.submission.layout.proof+offset ∧
       QAssembly.submission.layout.proof+offset < QAssembly.submission.layout.indices+8*input.positions.card) := by
-    change ¬ (9395245088 ≤ 13824430176+offset ∧ 13824430176+offset < 9395245088+8*input.positions.card)
+    change ¬ (7247761440 ≤ 11676946528+offset ∧ 11676946528+offset < 7247761440+8*input.positions.card)
     omega
   have outsideValues : ¬ (QAssembly.submission.layout.values ≤ QAssembly.submission.layout.proof+offset ∧
       QAssembly.submission.layout.proof+offset < QAssembly.submission.layout.values+(LEAF_SIZE/8)*input.positions.card) := by
-    change ¬ (9529462880 ≤ 13824430176+offset ∧ 13824430176+offset < 9529462880+256*input.positions.card)
+    change ¬ (7381979232 ≤ 11676946528+offset ∧ 11676946528+offset < 7381979232+256*input.positions.card)
     omega
   have selected : QAssembly.submission.layout.proof ≤ QAssembly.submission.layout.proof+offset ∧
       QAssembly.submission.layout.proof+offset < QAssembly.submission.layout.proof+input.proof.length := by omega
@@ -150,9 +150,9 @@ theorem check_loader_bounds (input : CheckInput) (admitted : input.proof.length 
   have cardinal := positions_card_bound input.positions
   change input.proof.length ≤ 8959041024 at admitted
   change input.positions.card ≤ 16777216 ∧ input.proof.length < 2^64 ∧
-    9395245088+8*input.positions.card ≤ 9529462880 ∧
-    9529462880+256*input.positions.card ≤ 13824430176 ∧
-    13824430176+input.proof.length ≤ 68719476736
+    7247761440+8*input.positions.card ≤ 7381979232 ∧
+    7381979232+256*input.positions.card ≤ 11676946528 ∧
+    11676946528+input.proof.length ≤ 68719476736
   omega
 
 /-- The checker receives the caller's leaf values in the ABI's sorted order. -/
@@ -164,16 +164,16 @@ theorem check_input_value_byte (input : CheckInput) (ordinal offset : Nat)
         simpa using present))).extractLsb' (8*offset) 8 := by
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte QAssembly.submission .check input _ (by
-    change 9529462880+256*ordinal+offset < 2^64
+    change 7381979232+256*ordinal+offset < 2^64
     omega)]
   have outsideRoot : ¬ (QAssembly.submission.layout.commitment ≤ QAssembly.submission.layout.values+256*ordinal+offset ∧
       QAssembly.submission.layout.values+256*ordinal+offset < QAssembly.submission.layout.commitment+(DIGEST_BITS+7)/8) := by
-    change ¬ (4294971392 ≤ 9529462880+256*ordinal+offset ∧ 9529462880+256*ordinal+offset < 4294971424)
+    change ¬ (4294971392 ≤ 7381979232+256*ordinal+offset ∧ 7381979232+256*ordinal+offset < 4294971424)
     omega
   have outsideIndices : ¬ (QAssembly.submission.layout.indices ≤ QAssembly.submission.layout.values+256*ordinal+offset ∧
       QAssembly.submission.layout.values+256*ordinal+offset < QAssembly.submission.layout.indices+8*input.positions.card) := by
-    change ¬ (9395245088 ≤ 9529462880+256*ordinal+offset ∧
-      9529462880+256*ordinal+offset < 9395245088+8*input.positions.card)
+    change ¬ (7247761440 ≤ 7381979232+256*ordinal+offset ∧
+      7381979232+256*ordinal+offset < 7247761440+8*input.positions.card)
     omega
   have selected : QAssembly.submission.layout.values ≤ QAssembly.submission.layout.values+256*ordinal+offset ∧
       QAssembly.submission.layout.values+256*ordinal+offset < QAssembly.submission.layout.values+(LEAF_SIZE/8)*input.positions.card := by
@@ -233,11 +233,11 @@ theorem check_input_position (input : CheckInput) (ordinal : Nat)
       (QAssembly.submission.initialState .check input).getByte
         (BitVec.ofNat 64 (QAssembly.submission.layout.indices+8*ordinal+offset)) =
           (BitVec.ofNat 64 index.val).extractLsb' (8*offset) 8 := by
-    rw [initial_input_byte QAssembly.submission .check input _ (by change 9395245088+8*ordinal+offset < 2^64; omega)]
+    rw [initial_input_byte QAssembly.submission .check input _ (by change 7247761440+8*ordinal+offset < 2^64; omega)]
     have outside : ¬ (QAssembly.submission.layout.commitment ≤ QAssembly.submission.layout.indices+8*ordinal+offset ∧
         QAssembly.submission.layout.indices+8*ordinal+offset < QAssembly.submission.layout.commitment+(DIGEST_BITS+7)/8) := by
-      change ¬ (4294971392 ≤ 9395245088+8*ordinal+offset ∧
-        9395245088+8*ordinal+offset < 4294971424)
+      change ¬ (4294971392 ≤ 7247761440+8*ordinal+offset ∧
+        7247761440+8*ordinal+offset < 4294971424)
       omega
     have selected : QAssembly.submission.layout.indices ≤ QAssembly.submission.layout.indices+8*ordinal+offset ∧
         QAssembly.submission.layout.indices+8*ordinal+offset <
@@ -255,7 +255,7 @@ theorem check_input_position (input : CheckInput) (ordinal : Nat)
   have decoded := read_serialized_slice (QAssembly.submission.initialState .check input)
     (BitVec.ofNat 64 index.val) (QAssembly.submission.layout.indices+8*ordinal) 0 8 (by
       simpa only [Nat.zero_add] using bytes)
-  rw [read_word _ _ (by change (9395245088+8*ordinal)%8 = 0; omega)] at decoded
+  rw [read_word _ _ (by change (7247761440+8*ordinal)%8 = 0; omega)] at decoded
   change (QAssembly.submission.initialState .check input).getMem
     (BitVec.ofNat 64 (QAssembly.submission.layout.indices+8*ordinal)) =
       (BitVec.ofNat 64 index.val).extractLsb' 0 64 at decoded

@@ -1,4 +1,4 @@
-import CommitGolfCandidate.NonceChainOracle
+import CommitGolfCandidate.NoncePairOracle
 import CommitGolfCandidate.QuartetConcrete
 import CommitGolfCandidate.PublicQueryList
 
@@ -8,16 +8,57 @@ computation now also queries the 2^22 quartet permutation nodes, so its budget i
 leaf tape, so the queried answers can stand in for the permutation. -/
 namespace TwoPermutationPrototype.Sampling.Quartet
 open CommitGolf OracleComp CommitGolfCandidate
-open CommitGolfCandidate.Permutation.NonceChain (Key actualNonces blocks)
+open CommitGolfCandidate.Permutation.NoncePair (Key actualNonces blocks)
 local instance quartetChainViewDiscrete {α : Type} : MeasurableSpace α := ⊤
 set_option maxRecDepth 8192
 set_option exponentiation.threshold 2048
+
+/-! ### The builder depends on the quartet lookup only at the tape's payloads -/
+
+theorem reference_heap_congr (compress : Compression) (leafCount : Nat) (leaf leaf' : Nat → Digest)
+    (same : ∀ g < leafCount, leaf g = leaf' g) (node : Nat) :
+    referenceHeap compress leafCount leaf node = referenceHeap compress leafCount leaf' node := by
+  conv_lhs => rw [referenceHeap]
+  conv_rhs => rw [referenceHeap]
+  by_cases branch : 0 < node ∧ node < leafCount
+  · rw [dif_pos branch, dif_pos branch,
+      reference_heap_congr compress leafCount leaf leaf' same (2*node),
+      reference_heap_congr compress leafCount leaf leaf' same (2*node+1)]
+  · rw [dif_neg branch, dif_neg branch]
+    by_cases low : leafCount ≤ node ∧ node < 2*leafCount
+    · rw [if_pos low, if_pos low]
+      exact same _ (by omega)
+    · rw [if_neg low, if_neg low]
+termination_by 2*leafCount - node
+decreasing_by all_goals omega
+
+/-- `builder` with the 2^22 quartet digests supplied directly. -/
+def builderFrom (quads : Nat → BitVec 256) (compress : Compression) (positions : Positions)
+    (salts : OpenedSalts positions) (leaves : DigestTape) : Commitment × Proof :=
+  let heap := referenceHeap (projectInternal true compress) 4194304 quads
+  let ordered := positions.attach.sort (fun i j => i.val ≤ j.val)
+  let records := ordered.flatMap (fun i => openingRecord leaves heap i.val (salts i))
+  (heap 1, records ++ frontierProof true heap (ordered.map (capGroup ∘ Subtype.val)))
+
+theorem builder_eq_from (lookup : BitVec 1024 → BitVec 256) (compress : Compression) (positions : Positions)
+    (salts : OpenedSalts positions) (leaves : DigestTape) :
+    builder lookup compress positions salts leaves =
+      builderFrom (fun g => lookup (quartetPayload leaves g)) compress positions salts leaves := rfl
+
+theorem builder_from_congr (quads quads' : Nat → BitVec 256) (same : ∀ g < 4194304, quads g = quads' g)
+    (compress : Compression) (positions : Positions) (salts : OpenedSalts positions) (leaves : DigestTape) :
+    builderFrom quads compress positions salts leaves = builderFrom quads' compress positions salts leaves := by
+  have heap : referenceHeap (projectInternal true compress) 4194304 quads =
+      referenceHeap (projectInternal true compress) 4194304 quads' :=
+    funext (reference_heap_congr _ _ _ _ same)
+  unfold builderFrom
+  rw [heap]
 
 /-! ### Honest public queries -/
 
 def querySaltedDigest (m : Message) (r : CompleteSaltTape) (i : Index) :
     OracleComp World (BitVec 256) := do
-  let a ← World.query (.inr (.inr (.inl (RV64.packBuffer (pinnedFirstInput i (messageWords m i))))))
+  let a ← World.query (.inr (.inr (.inl (RV64.packBuffer (pinnedFirstInput (messageWords m i))))))
   let b ← World.query (.inr (.inr (.inl (RV64.packBuffer (pinnedSecondInput i (saltWords (r i)) (RV64.replyWords a) (messageWords m i))))))
   return outputDigest b
 
@@ -36,22 +77,22 @@ def queryDigests (m : Message) (r : CompleteSaltTape) : OracleComp World DigestT
   let ds ← queryList (querySaltedDigest m r) (List.finRange LENGTH)
   return fun i => ds[i.val]?.getD 0
 
-def quartetQuery (group : Nat) (payload : BitVec 1024) : OracleComp World (BitVec 256) := do
-  let y ← World.query (.inr (.inr (.inl (quartetEncode payload))))
-  return quartetNode group y
+def quartetQuery (payload : BitVec 1024) : OracleComp World (BitVec 256) := do
+  let y ← World.query (.inr (.inr (.inl (payload ++ (0 : BitVec 576)))))
+  return pinnedOutputDigest y
 
-theorem quartet_query_bound (group : Nat) (payload : BitVec 1024) : PublicQueryBound (quartetQuery group payload) 1 := by
+theorem quartet_query_bound (payload : BitVec 1024) : PublicQueryBound (quartetQuery payload) 1 := by
   unfold quartetQuery
   exact ⟨(by change 1 ≤ 1;omega),fun _ => trivial⟩
 
-theorem quartet_query_run (o : Oracle) (group : Nat) (payload : BitVec 1024) :
-    fixedOracleRun o (quartetQuery group payload) =
-      pure (quartetLookup (BiPermutation.equiv Block o.permutation) group payload) := by
+theorem quartet_query_run (o : Oracle) (payload : BitVec 1024) :
+    fixedOracleRun o (quartetQuery payload) =
+      pure (quartetLookup (BiPermutation.equiv Block o.permutation) payload) := by
   rw [quartetQuery,fixed_oracle_run_public,fixed_oracle_run_pure]
   rfl
 
 def queryQuartets (ds : DigestTape) : OracleComp World (List (BitVec 256)) :=
-  queryList (fun g => quartetQuery g (quartetPayload ds g)) (List.range 4194304)
+  queryList (fun g => quartetQuery (quartetPayload ds g)) (List.range 4194304)
 
 attribute [local irreducible] List.finRange queryList querySaltedDigest quartetQuery
 
@@ -71,17 +112,17 @@ theorem query_digests_run (o : Oracle) (m : Message) (r : CompleteSaltTape) :
   simp
 
 theorem query_quartets_bound (ds : DigestTape) : PublicQueryBound (queryQuartets ds) 4194304 := by
-  have h := query_list_bound _ 1 (fun g => quartet_query_bound g (quartetPayload ds g)) (List.range 4194304)
+  have h := query_list_bound _ 1 (fun g => quartet_query_bound (quartetPayload ds g)) (List.range 4194304)
   simpa only [queryQuartets,List.length_range,Nat.mul_one] using h
 
 theorem query_quartets_run (o : Oracle) (ds : DigestTape) :
     fixedOracleRun o (queryQuartets ds) =
-      pure ((List.range 4194304).map (fun g => quartetLookup (BiPermutation.equiv Block o.permutation) g (quartetPayload ds g))) :=
-  query_list_reference o _ _ _ (fun g _ => quartet_query_run o g (quartetPayload ds g))
+      pure ((List.range 4194304).map (fun g => quartetLookup (BiPermutation.equiv Block o.permutation) (quartetPayload ds g))) :=
+  query_list_reference o _ _ _ (fun g _ => quartet_query_run o (quartetPayload ds g))
 
 theorem queried_quartets (p : BiPermutation Block) (ds : DigestTape) (g : Nat) (inside : g < 4194304) :
-    ((List.range 4194304).map (fun g => quartetLookup p g (quartetPayload ds g))).getD g 0 =
-      quartetLookup p g (quartetPayload ds g) := by
+    ((List.range 4194304).map (fun g => quartetLookup p (quartetPayload ds g))).getD g 0 =
+      quartetLookup p (quartetPayload ds g) := by
   rw [List.getD_eq_getElem _ _ (by simp [inside])]
   simp
 
@@ -152,8 +193,8 @@ theorem chain_comp_run {S O : Type} {n t : Nat} (a : Hiding.HidingAdversary S O 
   let message := if b then ch.message₁ else ch.message₀
   let ds := pinnedFullLeafDigests p message r
   have same := builder_from_congr
-    (fun g => ((List.range 4194304).map (fun g => quartetLookup p g (quartetPayload ds g))).getD g 0)
-    (fun g => quartetLookup p g (quartetPayload ds g)) (fun g inside => queried_quartets p ds g inside)
+    (fun g => ((List.range 4194304).map (fun g => quartetLookup p (quartetPayload ds g))).getD g 0)
+    (fun g => quartetLookup p (quartetPayload ds g)) (fun g inside => queried_quartets p ds g inside)
     o.compression ch.positions (fun i => r i.val) ds
   simp only [observeTranscriptView,honestView,fixedOracle,Equiv.symm_apply_apply,builder_eq_from]
   rw [same]

@@ -1,8 +1,7 @@
-import CommitGolfCandidate.QuartetManifest
 import CommitGolfCandidate.TwoPermutationPackedCheckerBody
 import CommitGolfCandidate.TwoPermutationPackedHeaderAssembly
 import CommitGolfCandidate.TwoPermutationPackedTrustedInput
-import CommitGolfCandidate.K1HideLeafBinding
+import CommitGolfCandidate.TwoPermutationPinnedPeerLayout
 import CommitGolfCandidate.QuadBinding
 
 namespace TwoPermutationPrototype.Packed.Checker
@@ -16,7 +15,7 @@ set_option maxHeartbeats 1800000
 
 theorem artifact_image :
     PackedChecker.submission.image .check = packedImage := by
-  unfold PackedChecker.submission K1Artifact.submission packedImage
+  unfold PackedChecker.submission Artifact.submission packedImage
   rfl
 
 attribute [local irreducible] execute checkEvaluation
@@ -27,8 +26,7 @@ private theorem observation_admitted (oracle : Oracle) (input : CheckInput)
       checkEvaluation oracle (recordRows
         (execute packedImage 34359803904 (QAssembly.submission.initialState .check input) false)) := by
   unfold checkObservation
-  erw [PackedChecker.check_run_admitted input admitted]
-  rw [artifact_image, PackedChecker.initial_state]
+  erw [PackedChecker.check_run_admitted input admitted, artifact_image, PackedChecker.initial_state]
 
 private theorem observation_oversized (oracle : Oracle) (input : CheckInput)
     (oversized : PackedChecker.submission.sizes.proof < input.proof.length) :
@@ -86,7 +84,7 @@ private theorem observation_hop (oracle : Oracle) (input : CheckInput)
 private theorem raw_positive (record : Oracle → Nat → Index → MachineState → RecordBlock)
     (verified : RecordRefines record)
     (cap : ∀ (oracle : Oracle) (input : CheckInput), input.positions.card ≠ 0 →
-      ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
+      ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
     (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8959041024)
@@ -94,7 +92,7 @@ private theorem raw_positive (record : Oracle → Nat → Index → MachineState
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   obtain ⟨state,cursor,memory,executeHeader⟩ := header_positive input fits nonempty long
   have cardinal := checker_positions_bound input
-  have enough : 2048*input.positions.card+40000 ≤ 34359803882 := by omega
+  have enough : 2048*input.positions.card+25056 ≤ 34359803882 := by omega
   have initialFrame : RecordInputFrame input 0 state := by
     intro word _ _
     exact congrFun memory (wordAddress word)
@@ -108,7 +106,7 @@ private theorem raw_positive (record : Oracle → Nat → Index → MachineState
 private theorem raw_checker_observation (record : Oracle → Nat → Index → MachineState → RecordBlock)
     (verified : RecordRefines record)
     (cap : ∀ (oracle : Oracle) (input : CheckInput), input.positions.card ≠ 0 →
-      ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
+      ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
     (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8959041024) :
@@ -122,7 +120,7 @@ private theorem raw_checker_observation (record : Oracle → Nat → Index → M
 theorem checker_complete_observation (record : Oracle → Nat → Index → MachineState → RecordBlock)
     (verified : RecordRefines record)
     (cap : ∀ (oracle : Oracle) (input : CheckInput), input.positions.card ≠ 0 →
-      ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
+      ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
     (oracle : Oracle) (input : CheckInput) :
@@ -137,13 +135,13 @@ theorem checker_complete_observation (record : Oracle → Nat → Index → Mach
     · intro message salts canonical
       exact (admitted (canonical.symm ▸ honest_input_admitted oracle message input.positions salts)).elim
 
-theorem checker_facts_of_observations
+theorem checker_facts_of_observations (bound : PinnedReplayBound)
     (checked : ∀ (oracle : Oracle) (input : CheckInput),
       CheckerObservationFacts oracle input (checkObservation PackedChecker.submission oracle input)) :
     QuartetCertificate.CheckerFacts PackedChecker.submission := by
   refine ⟨fun oracle input => (checked oracle input).terminates,
     fun oracle input => (checked oracle input).queries.trans (by omega), ?_, ?_⟩
-  · apply Quartet.quartet_scheme_binding _ k1_peer_leaf_layout_sharp
+  · apply Quartet.quartet_scheme_binding _ ⟨pinnedPeerSalt, pinned_first_peer, pinned_second_peer⟩
     intro oracle input
     dsimp only
     intro accepted

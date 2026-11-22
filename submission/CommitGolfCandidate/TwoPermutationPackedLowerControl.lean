@@ -20,12 +20,12 @@ def dispatch (s : MachineState) (leaf even : Bool) : MachineState :=
     (BitVec.ofNat 64 (4096+4*dispatchStart leaf even))
 
 private theorem dispatch_false_false (s : MachineState) (pc : s.pc=4348)
-    (counter : BitVec.ult (s.getReg .x29) 13 = true)
+    (counter : s.getReg .x29 ≠ 14)
     (parity : s.getReg .x6 &&& 1 ≠ 0) :
     GroupHop s (dispatch s false false) 5 := by
-  let a := (s.setReg .x30 13).setPC 4352
+  let a := (s.setReg .x30 14).setPC 4352
   have h0 : GroupHop s a 1 := by
-    apply hop_one _ _ (.ADDI .x30 .x0 13)
+    apply hop_one _ _ (.ADDI .x30 .x0 14)
     · exact fetch_at s 63 _ (by decide) pc rfl
     · simp [a,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -33,7 +33,7 @@ private theorem dispatch_false_false (s : MachineState) (pc : s.pc=4348)
     · rfl
   let b := (a).setPC 4356
   have h1 : GroupHop a b 1 := by
-    apply hop_one _ _ (.BGEU .x29 .x30 336)
+    apply hop_one _ _ (.BEQ .x29 .x30 336)
     · exact fetch_at a 64 _ (by decide) rfl rfl
     · simp [a,b,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -72,12 +72,12 @@ private theorem dispatch_false_false (s : MachineState) (pc : s.pc=4348)
   exact run
 
 private theorem dispatch_false_true (s : MachineState) (pc : s.pc=4348)
-    (counter : BitVec.ult (s.getReg .x29) 13 = true)
+    (counter : s.getReg .x29 ≠ 14)
     (parity : s.getReg .x6 &&& 1 = 0) :
     GroupHop s (dispatch s false true) 5 := by
-  let a := (s.setReg .x30 13).setPC 4352
+  let a := (s.setReg .x30 14).setPC 4352
   have h0 : GroupHop s a 1 := by
-    apply hop_one _ _ (.ADDI .x30 .x0 13)
+    apply hop_one _ _ (.ADDI .x30 .x0 14)
     · exact fetch_at s 63 _ (by decide) pc rfl
     · simp [a,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -85,7 +85,7 @@ private theorem dispatch_false_true (s : MachineState) (pc : s.pc=4348)
     · rfl
   let b := (a).setPC 4356
   have h1 : GroupHop a b 1 := by
-    apply hop_one _ _ (.BGEU .x29 .x30 336)
+    apply hop_one _ _ (.BEQ .x29 .x30 336)
     · exact fetch_at a 64 _ (by decide) rfl rfl
     · simp [a,b,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -124,12 +124,12 @@ private theorem dispatch_false_true (s : MachineState) (pc : s.pc=4348)
   exact run
 
 private theorem dispatch_true_false (s : MachineState) (pc : s.pc=4348)
-    (counter : BitVec.ult (s.getReg .x29) 13 = false)
+    (counter : s.getReg .x29 = 14)
     (parity : s.getReg .x6 &&& 1 ≠ 0) :
     GroupHop s (dispatch s true false) 5 := by
-  let a := (s.setReg .x30 13).setPC 4352
+  let a := (s.setReg .x30 14).setPC 4352
   have h0 : GroupHop s a 1 := by
-    apply hop_one _ _ (.ADDI .x30 .x0 13)
+    apply hop_one _ _ (.ADDI .x30 .x0 14)
     · exact fetch_at s 63 _ (by decide) pc rfl
     · simp [a,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -137,7 +137,7 @@ private theorem dispatch_true_false (s : MachineState) (pc : s.pc=4348)
     · rfl
   let b := (a).setPC 4688
   have h1 : GroupHop a b 1 := by
-    apply hop_one _ _ (.BGEU .x29 .x30 336)
+    apply hop_one _ _ (.BEQ .x29 .x30 336)
     · exact fetch_at a 64 _ (by decide) rfl rfl
     · simp [a,b,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -176,12 +176,12 @@ private theorem dispatch_true_false (s : MachineState) (pc : s.pc=4348)
   exact run
 
 private theorem dispatch_true_true (s : MachineState) (pc : s.pc=4348)
-    (counter : BitVec.ult (s.getReg .x29) 13 = false)
+    (counter : s.getReg .x29 = 14)
     (parity : s.getReg .x6 &&& 1 = 0) :
     GroupHop s (dispatch s true true) 5 := by
-  let a := (s.setReg .x30 13).setPC 4352
+  let a := (s.setReg .x30 14).setPC 4352
   have h0 : GroupHop s a 1 := by
-    apply hop_one _ _ (.ADDI .x30 .x0 13)
+    apply hop_one _ _ (.ADDI .x30 .x0 14)
     · exact fetch_at s 63 _ (by decide) pc rfl
     · simp [a,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -189,7 +189,7 @@ private theorem dispatch_true_true (s : MachineState) (pc : s.pc=4348)
     · rfl
   let b := (a).setPC 4688
   have h1 : GroupHop a b 1 := by
-    apply hop_one _ _ (.BGEU .x29 .x30 336)
+    apply hop_one _ _ (.BEQ .x29 .x30 336)
     · exact fetch_at a 64 _ (by decide) rfl rfl
     · simp [a,b,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,signExtend12,signExtend13,
         MachineState.getReg,MachineState.setReg,MachineState.setPC,pc] at counter parity ⊢
@@ -227,18 +227,12 @@ private theorem dispatch_true_true (s : MachineState) (pc : s.pc=4348)
   rw [endState] at run
   exact run
 
-/-- Words 63–67 (or 148–150): `addi x30,x0,13; bgeu x29,x30,+336` sends `x29 ≥ 13` (loop levels 0 and 1)
-to the 32-byte sibling path, then the sibling width and the node parity pick one of four copy orders. -/
 theorem execute_dispatch (s : MachineState) (leaf even : Bool) (pc : s.pc=4348)
-    (counter : (leaf=true) ↔ BitVec.ult (s.getReg .x29) 13 = false) (parity : (even=true) ↔ s.getReg .x6 &&& 1=0) :
+    (counter : (leaf=true) ↔ s.getReg .x29=14) (parity : (even=true) ↔ s.getReg .x6 &&& 1=0) :
     GroupHop s (dispatch s leaf even) 5 := by
-  have narrow (no : leaf = false) : BitVec.ult (s.getReg .x29) 13 = true := by
-    cases h : BitVec.ult (s.getReg .x29) 13
-    · exact absurd (counter.mpr h) (by rw [no]; decide)
-    · rfl
   cases leaf <;> cases even
-  · exact dispatch_false_false s pc (narrow rfl) (fun h => Bool.noConfusion (parity.mpr h))
-  · exact dispatch_false_true s pc (narrow rfl) (parity.mp rfl)
+  · exact dispatch_false_false s pc (fun h => Bool.noConfusion (counter.mpr h)) (fun h => Bool.noConfusion (parity.mpr h))
+  · exact dispatch_false_true s pc (fun h => Bool.noConfusion (counter.mpr h)) (parity.mp rfl)
   · exact dispatch_true_false s pc (counter.mp rfl) (fun h => Bool.noConfusion (parity.mpr h))
   · exact dispatch_true_true s pc (counter.mp rfl) (parity.mp rfl)
 
@@ -278,66 +272,27 @@ theorem execute_latch (state : MachineState) (pc : state.pc = 0x13b0)
   simp only [execute, f0, s0, f1, s1, f2, s2, f3, s3, instructionCycles, bind_assoc, pure_bind]
   simp [Execution.charge, ← Nat.add_assoc]
 
-/-- The state at word 234 for loop levels 0..4: word 232 jumps to 577 (`addi x10,x24,0; addi x7,x0,10;
-bgeu x29,x7` back to 233), then 233 `addi x12,x23,0`. -/
 def hashSetup (state : MachineState) : MachineState :=
-  (((state.setReg .x10 (state.getReg .x24)).setReg .x7 10).setReg .x12 (state.getReg .x23)).setPC 0x13a8
+  ((state.setReg .x10 (state.getReg .x24)).setReg .x12 (state.getReg .x23)).setPC 0x13a8
 
-theorem execute_hash_setup (state : MachineState) (pc : state.pc = 0x13a0)
-    (counter : BitVec.ult (state.getReg .x29) 10 = false) (fuel : Nat) :
-    execute packedImage (5+fuel) state false =
+theorem execute_hash_setup (state : MachineState) (pc : state.pc = 0x13a0) (fuel : Nat) :
+    execute packedImage (2+fuel) state false =
       (do let result ← execute packedImage fuel (hashSetup state) false
-          return result.charge 5 0) := by
-  let s1 := state.setPC (BitVec.ofNat 64 (4096+4*577))
-  let s2 := (state.setReg .x10 (state.getReg .x24)).setPC (BitVec.ofNat 64 (4096+4*578))
-  let s3 := ((state.setReg .x10 (state.getReg .x24)).setReg .x7 10).setPC (BitVec.ofNat 64 (4096+4*579))
-  let s4 := ((state.setReg .x10 (state.getReg .x24)).setReg .x7 10).setPC (BitVec.ofNat 64 (4096+4*233))
-  have j0 : GroupHop state s1 1 := by
-    apply hop_one _ _ (.JAL .x0 1380)
-    · exact fetch_at state 232 _ (by decide) pc rfl
-    · show some (execInstrBr state (.JAL .x0 1380)) = some s1
-      rw [show execInstrBr state (.JAL .x0 1380) = state.setPC (state.pc + signExtend21 1380) from rfl, pc]
-      rfl
-    · rfl
-  have j1 : GroupHop s1 s2 1 := by
-    apply hop_one _ _ (.ADDI .x10 .x24 0)
-    · exact fetch_at s1 577 _ (by decide) rfl rfl
-    · simp [s1, s2, ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
-        MachineState.getReg_setPC]
-      rfl
-    · rfl
-  have j2 : GroupHop s2 s3 1 := by
-    apply hop_one _ _ (.ADDI .x7 .x0 10)
-    · exact fetch_at s2 578 _ (by decide) rfl rfl
-    · show some (execInstrBr s2 (.ADDI .x7 .x0 10)) = some s3
-      rfl
-    · rfl
-  have x29 : s3.getReg .x29 = state.getReg .x29 := by
-    simp only [s3, MachineState.getReg_setPC, MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x7 ≠ .x29),
-      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x10 ≠ .x29)]
-  have x7 : s3.getReg .x7 = 10 := by
-    simp only [s3, MachineState.getReg_setPC, MachineState.getReg_setReg_eq (by decide : Reg.x7 ≠ .x0)]
-  have j3 : GroupHop s3 s4 1 := by
-    apply hop_one _ _ (.BGEU .x29 .x7 0x1a98)
-    · exact fetch_at s3 579 _ (by decide) rfl rfl
-    · have taken : (¬ BitVec.ult (s3.getReg .x29) (s3.getReg .x7) = true) := by
-        rw [x29, x7]
-        show ¬ BitVec.ult (state.getReg .x29) 10 = true
-        rw [counter]
-        decide
-      have s3pc : s3.pc = BitVec.ofNat 64 (4096+4*579) := rfl
-      have landing : s3.pc + signExtend13 0x1a98 = BitVec.ofNat 64 (4096+4*233) := by rw [s3pc]; rfl
-      show some (execInstrBr s3 (.BGEU .x29 .x7 0x1a98)) = some s4
-      simp only [execInstrBr, taken, if_true, ite_true, not_false_eq_true, landing]
-      rfl
-    · rfl
-  have j4 : GroupHop s4 (hashSetup state) 1 := by
-    apply hop_one _ _ (.ADDI .x12 .x23 0)
-    · exact fetch_at s4 233 _ (by decide) rfl rfl
-    · simp [s4, ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, hashSetup,
-        MachineState.getReg_setPC, Opening.getReg_setReg]
-      rfl
-    · rfl
-  exact (((j0.thenDo j1).thenDo j2).thenDo j3).thenDo j4 fuel
+          return result.charge 2 0) := by
+  let middle := (state.setReg .x10 (state.getReg .x24)).setPC 0x13a4
+  have f₀ : fetch packedImage state = some (.base (.ADDI .x10 .x24 0)) :=
+    fetch_at state 232 _ (by decide) pc rfl
+  have f₁ : fetch packedImage middle = some (.base (.ADDI .x12 .x23 0)) :=
+    fetch_at middle 233 _ (by decide) rfl rfl
+  have s₀ : ordinaryStep state (.base (.ADDI .x10 .x24 0)) = some middle := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, middle, pc]
+  have s₁ : ordinaryStep middle (.base (.ADDI .x12 .x23 0)) = some (hashSetup state) := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, middle,
+      hashSetup, MachineState.getReg_setPC, Opening.getReg_setReg]
+    rfl
+  rw [Nat.add_comm 2 fuel]
+  simp only [execute, f₀, f₁, s₀, s₁, instructionCycles, bind_assoc, pure_bind]
+  simp [Execution.charge, ← Nat.add_assoc]
+
 
 end TwoPermutationPrototype.Packed.Checker

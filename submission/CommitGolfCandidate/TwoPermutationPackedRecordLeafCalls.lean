@@ -30,7 +30,6 @@ structure LeafReady (state : MachineState) (src nonce : Nat) (index : Index) whe
   primitive : state.getReg .x13 = 1
   separated : nonce + 2 ≤ src
   endBound : src + 37 ≤ 2^33
-  sf : isAHead index = false
 
 theorem aligned_access (word : Nat) (bounded : word < 2 ^ 33) :
     accessValid (wordAddress word) 8 = true := by
@@ -109,11 +108,11 @@ private theorem second_setup {state : MachineState} {src nonce : Nat} {index : I
     after.pc = before.pc+40 ∧ after.getReg .x5=before.getReg .x5 ∧
     after.getReg .x11=before.getReg .x11 ∧ after.getReg .x13=before.getReg .x13 := by
   let before := firstReplyState state src answer
-  have a := staged_nonce_separate ready answer 0 2 (by decide) (by decide)
-  have b := staged_nonce_separate ready answer 1 2 (by decide) (by decide)
-  have c := staged_nonce_separate ready answer 1 0 (by decide) (by decide)
+  have a := staged_nonce_separate ready answer 0 0 (by decide) (by decide)
+  have b := staged_nonce_separate ready answer 1 0 (by decide) (by decide)
+  have c := staged_nonce_separate ready answer 1 1 (by decide) (by decide)
   apply second_prefix_post
-  · change before.getReg .x4 + 0#64 ≠ before.getReg .x10+72#64 at a
+  · change before.getReg .x4 + 0#64 ≠ before.getReg .x10+56#64 at a
     simpa only [BitVec.add_zero] using a
   · exact b
   · exact c
@@ -122,8 +121,8 @@ private theorem second_header_view {state : MachineState} {src nonce : Nat} {ind
     (ready : LeafReady state src nonce index) (answer : Block) (word : Nat) (bounded : word<2^33) :
     let before := firstReplyState state src answer
     memoryView (secondPrefix before 10) word =
-      writeWord (writeWord (writeWord (memoryView before) (src+14) (pinnedPositionTag index))
-        (src+12) (checkerNonce state 0)) (src+13) (checkerNonce state 1) word := by
+      writeWord (writeWord (writeWord (memoryView before) (src+12) (pinnedPositionTag index))
+        (src+13) (checkerNonce state 0)) (src+14) (checkerNonce state 1) word := by
   let before := firstReplyState state src answer
   have mem := (second_setup ready answer).1
   have r := first_reply_pointer ready answer
@@ -136,8 +135,6 @@ private theorem second_header_view {state : MachineState} {src nonce : Nat} {ind
     change BitVec.ofNat 64 (4056+256*index.val)+BitVec.ofNat 64 96=_
     rw [← BitVec.ofNat_add]
     unfold pinnedPositionTag
-    rw [ready.sf]
-    simp only [Bool.false_eq_true, ite_false]
     congr 1
     omega
   calc
@@ -146,15 +143,15 @@ private theorem second_header_view {state : MachineState} {src nonce : Nat} {ind
       unfold secondHeaderMemory
       dsimp only
       rw [a,b,c,tag,first_reply_nonce ready answer,
-        memory_at_store (by omega : src+13<2^61) (by omega : word<2^61)]
+        memory_at_store (by omega : src+14<2^61) (by omega : word<2^61)]
       simp only [writeWord]
       split
       · rfl
-      · rw [memory_at_store (by omega : src+12<2^61) (by omega : word<2^61)]
+      · rw [memory_at_store (by omega : src+13<2^61) (by omega : word<2^61)]
         simp only [writeWord]
         split
         · rfl
-        · rw [memory_at_store (by omega : src+14<2^61) (by omega : word<2^61)]
+        · rw [memory_at_store (by omega : src+12<2^61) (by omega : word<2^61)]
           rfl
 
 theorem checker_second_input {state : MachineState} {src nonce : Nat} {index : Index}
@@ -168,17 +165,15 @@ theorem checker_second_input {state : MachineState} {src nonce : Nat} {index : I
   change memoryView (secondPrefix (firstReplyState state src answer) 10) (src+12+i.val) = _
   rw [second_header_view ready answer _ word]
   unfold pinnedSecondInput
-  rw [ready.sf]
-  simp only [Bool.false_eq_true, ite_false]
   by_cases prologue : i.val < 3
   · have slots : i.val=0 ∨ i.val=1 ∨ i.val=2 := by omega
     rcases slots with z | o | t
     · simp [writeWord,z]
     · simp [writeWord,o,show src+12+1=src+13 by omega]
     · simp [writeWord,t,show src+12+2=src+14 by omega]
-  · rw [writeWord,ite_eq_right (by omega : src+12+i.val≠src+13),writeWord,
-      ite_eq_right (by omega : src+12+i.val≠src+12),writeWord,ite_eq_right (by omega : src+12+i.val≠src+14),
-      ite_eq_right (by omega : i.val≠2),dite_eq_right (by omega : ¬ i.val < 2),first_reply_word ready answer _ word]
+  · rw [writeWord,ite_eq_right (by omega : src+12+i.val≠src+14),writeWord,
+      ite_eq_right (by omega : src+12+i.val≠src+13),writeWord,ite_eq_right (by omega : src+12+i.val≠src+12),
+      ite_eq_right (by omega : i.val≠0),dite_eq_right prologue,first_reply_word ready answer _ word]
     by_cases inside : i.val < 14
     · rw [writeWindow,dite_eq_left (by omega : src+1≤src+12+i.val ∧ src+12+i.val<src+1+25),
         dite_eq_left inside]
@@ -198,7 +193,7 @@ private theorem first_call_run {state : MachineState} {src nonce : Nat} {index :
     (ready : LeafReady state src nonce index) (fuel : Nat) :
     execute packedImage (3+fuel) state false =
       (do let a ← World.query (.inr (.inr (.inl (packBuffer
-            (pinnedFirstInput index (window (memoryView state) (src+5)))))))
+            (pinnedFirstInput (window (memoryView state) (src+5)))))))
           let r ← execute packedImage fuel (firstReplyState state src a) false
           return r.charge 10 1) := by
   obtain ⟨mem,r10,r12,pc,r5,r11,r13⟩ := first_prefix_post state
@@ -212,9 +207,8 @@ private theorem first_call_run {state : MachineState} {src nonce : Nat} {index :
     (by omega) (by omega) input output (r5.trans ready.selector) (r11.trans ready.size)
     (r13.trans ready.primitive) (checker_first_ecall _ callPC)
   have windowEq : window (memoryView (firstPrefix state 2)) (src+5) =
-      pinnedFirstInput index (window (memoryView state) (src+5)) := by
+      pinnedFirstInput (window (memoryView state) (src+5)) := by
     funext i
-    simp only [pinnedFirstInput, ready.sf, Bool.false_eq_true, ite_false]
     exact congrFun mem (wordAddress (src+5+i.val))
   rw [windowEq] at call
   rw [show 3+fuel=2+(fuel+1) by omega,execute_first_prefix state ready.pc _,call]
@@ -255,13 +249,13 @@ private theorem second_call_run {state : MachineState} {src nonce : Nat} {index 
     rw [nonceReg,show wordAddress nonce+8#64=wordAddress (nonce+1) from add_word nonce 1]
     exact aligned_access _ (by omega)
   rw [show 11+fuel=10+(fuel+1) by omega,execute_second_prefix prev secondStart _
-    (dstAccess 2 (by decide)) (dstAccess 0 (by decide)) (dstAccess 1 (by decide))
+    (dstAccess 0 (by decide)) (dstAccess 1 (by decide)) (dstAccess 2 (by decide))
     (nonceReg ▸ aligned_access nonce (by omega)) nonceTail,call]
   simp [secondReplyState,Execution.charge,← Nat.add_assoc]
 
 def leafQueries (state : MachineState) (src : Nat) (index : Index) : OracleComp World MachineState := do
   let message := window (memoryView state) (src+5)
-  let first ← World.query (.inr (.inr (.inl (packBuffer (pinnedFirstInput index message)))))
+  let first ← World.query (.inr (.inr (.inl (packBuffer (pinnedFirstInput message)))))
   let second ← World.query (.inr (.inr (.inl (packBuffer
     (pinnedSecondInput index (checkerNonce state) (replyWords first) message)))))
   return secondReplyState state src first second
@@ -283,7 +277,7 @@ theorem execute_checker_leaf {state : MachineState} {src nonce : Nat} {index : I
 theorem checker_leaf_rows (oracle : Oracle) (state : MachineState) (src : Nat) (index : Index) :
     let message := window (memoryView state) (src+5)
     let nonce := checkerNonce state
-    let a := pinnedFirstRow oracle.permutation index message
+    let a := pinnedFirstRow oracle.permutation message
     let b := pinnedSecondRow oracle.permutation index nonce a.2 message
     checkEvaluation oracle (recordRows (leafQueries state src index)) =
       ((secondReplyState state src a.2 b.2,[.permutation a.1 a.2,.permutation b.1 b.2]),2) := by
@@ -321,8 +315,8 @@ theorem checker_leaf_frame {state : MachineState} {src nonce : Nat} {index : Ind
   change memoryView (writeBits (secondPrefix prev 10) (wordAddress 1536) b) word=_
   rw [permutation_write_memory (secondPrefix prev 10) 1536 word b (by decide) bound,writeWindow,
     dite_eq_right (by omega : ¬(1536≤word ∧ word<1536+25)),second_header_view ready a word bound]
-  rw [writeWord,ite_eq_right (by omega : word≠src+13),writeWord,ite_eq_right (by omega : word≠src+12),
-    writeWord,ite_eq_right (by omega : word≠src+14),first_reply_word ready a word bound,writeWindow,
+  rw [writeWord,ite_eq_right (by omega : word≠src+14),writeWord,ite_eq_right (by omega : word≠src+13),
+    writeWord,ite_eq_right (by omega : word≠src+12),first_reply_word ready a word bound,writeWindow,
     dite_eq_right (by omega : ¬(src+1≤word ∧ word<src+1+25))]
 
 end TwoPermutationPrototype.Packed.RecordLeaf
