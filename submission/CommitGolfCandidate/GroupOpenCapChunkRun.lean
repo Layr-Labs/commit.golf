@@ -29,7 +29,15 @@ theorem jal_exit : ∀ k<4096,
     BitVec.ofNat 64 (4096+4*(8224+k))+signExtend21 (jalOffset (8224+k) 703)=0x1afc := by decide +kernel
 
 theorem word_even : ∀ k<8224+4096, BitVec.ofNat 64 (4096+4*k) &&& ~~~1#64=BitVec.ofNat 64 (4096+4*k) := by
-  decide +kernel
+  intro k _
+  apply BitVec.eq_of_getLsbD_eq; intro i hi
+  simp only [BitVec.getLsbD_and, BitVec.getLsbD_not, BitVec.getLsbD_ofNat, hi, decide_true, Bool.true_and]
+  by_cases z : i=0
+  · subst z
+    simp [Nat.testBit_zero, show (4096+4*k)%2=0 by omega]
+  · have one : Nat.testBit 1 i=false := by
+      rw [Nat.testBit, Nat.shiftRight_eq_div_pow, Nat.div_eq_of_lt (Nat.one_lt_two_pow z)]; rfl
+    simp [one]
 
 theorem chunk_entries_range : ∀ mask<256, mask ≠ 0 → ∀ r ∈ chunkEntries mask, 2 ≤ r ∧ r<16 := by decide +kernel
 

@@ -1,8 +1,6 @@
 import CommitGolfCandidate.GroupOpenEffect
 import CommitGolfCandidate.GroupOpenLatch
 import CommitGolfCandidate.GroupOpenInitial
-import CommitGolfCandidate.GroupOpenRecordRun
-import CommitGolfCandidate.GroupOpenRecords
 import CommitGolfCandidate.GroupOpenTableInit
 
 namespace TwoPermutationPrototype.GroupedOpening

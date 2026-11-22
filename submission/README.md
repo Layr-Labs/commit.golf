@@ -1,3 +1,103 @@
+# Layout 2 record encoding (-19,742 opening cycles)
+
+Based on the 97,691-cycle chunked cap walk (next inherited section). The opener writes the record area in a
+new byte layout that it can emit with aligned 64-bit stores only. The checker converts the record area back to
+today's layout with a bit-permutation table before its unchanged body runs. The proof keeps its previous length
+for each position set, with a proved bound of 72,160 bytes for 128 positions, and its cap bytes are unchanged.
+
+## The change
+
+- Layout (V1): four records form a 2,136-byte superblock. Record `p` of a superblock (phase `p`) occupies 528 (`p = 0`) or 536 bytes at
+  offset 0, 528, 1064 or 1600:
+  - 488 field bytes: salt, three quartet mates, levels 0 and 1, the first 24 bytes of levels 2..5, three dwords
+    holding their packed 48-bit tails, and the first 24 bytes of levels 6..13;
+  - then 5 or 6 dwords of a bit stream of the 46-bit tails of levels 6..13, which runs across the four phases.
+  A partial last superblock ends with the 6, 4 or 2 pending stream bytes. The first `534 k` bytes are a bit
+  permutation of today's records. The cap follows unchanged.
+- Opener: word 18 jumps to an entry stub (5071, 5072). Per phase there are a 3-word header, a straight-line body
+  (228, 232, 232 and 231 instructions; loads of the 560 source bytes, packing in `a1`, aligned `sd` stores), a
+  7-word tail (stride, cap-leaf mark, index advance, latch) and an exit stub that flushes the pending stream
+  bytes. Phases occupy words 4096..5070, and words 5073..8191 are NOPs. Pass 1, the cap preparation and the
+  chunked cap walk (661..665, 701..708, 8192..12319) are unchanged. The old record writers are no longer
+  reached.
+- Checker: word 0 jumps to an 81-word prologue appended at word 705 (words 1..704 are unchanged). It converts the
+  record area with
+  four bit tables (multiplicities 4, 1, 2, 3; 85,440 data bytes) and then enters the unchanged checker. The check fuel is
+  2^41.
+
+```json
+{"commitCycles":504585244,"openingCycles":77949,"proofBytes":72160}
+```
+
+```text
+30 + (314*128 + 2) + (37740 - 15) = 77949          (wide: 15 + 30820 + 769 + 6130 + 6 = 37740)
+records: 6 + 3*127 + sum over 128 records of (body + 7) + exit 5 = 30820
+(504585244 + 77949) * 72160 = 36416496006880
+Parent (97,691):  (504585244 + 97691) * 72160 = 36417920589600
+Saving: 19,742 opening cycles; 1424582720 score
+```
+
+## Proof changes
+
+- `Layout2Phase` (shared, imports only the cost model): the phase geometry, the source bytes of a record, the
+  phase writer's output (`writerByte`, `writerCarry`) and the per-phase guarantee `PhaseFacts`.
+  `Layout2Writer{Sources,Model,Program,Track,Step,Run,Facts}` prove `PhaseFacts openingImage p` for the four
+  bodies.
+- `Layout2Loop`, `Layout2Steps`, `Layout2First`, `Layout2Records`, `Layout2Run`: rows of the headers, tails, exit
+  and entry stubs, their steps, the loop frame and `records_run` (word 15 to the cap preparation at 1097 in
+  `l2RecordsCost k` cycles, 30,820 for 128 positions). `Layout2ABI` composes cap preparation, cap walk and return
+  (`L2OpenPhysical`, `l2WideCycles`). `Layout2ProofBytes` reads the output (`l2Proof`). `Layout2Full` gives
+  resources, the 128-position bounds and the deterministic opener (`fixed_open`).
+- `Layout2Bytes`, `Layout2Sources`, `Layout2Fields`, `Layout2Area`: on clean digests (band-A bits 240..255 and
+  band-B bits 238..255 zero, true for every honest heap node):
+  - each record block is `newPhaseBytes` of its superblock;
+  - the carry in `a1` is `streamCarry`;
+  - the flush is `newPartialFlush`;
+  - so the opener's proof is `convert encTables k` of today's proof (`l2_proof_convert`).
+- `Layout2Codec`, `Layout2Tables`, `Layout2OpenerBridge`: the conversion, the closed-form tables with their
+  ranges and two-sided inverses, the field-level description of both layouts, and today's physical records.
+  `Layout2Abstract`: certificate assembly for an encoded honest proof (`certificate_of_dec`).
+- Checker: `Layout2Prologue` and its blocks and loaders; `Layout2V1EntryCheck` and `Layout2V1Bank1..4` check the
+  85,440 table bytes against `decTables`; `Layout2V1CheckerFacts.v1_checker_facts`; replaced `K1CheckFacts` and
+  packed-checker modules.
+- `Layout2Closing`: today's commitment, the honest-stash cleanliness, `l2_proof_eq`, `l2_refines` and
+  `layout2_certificate` at 77,949. `Solution.lean` and `claim.json` are updated.
+- Existing modules:
+  - `GroupOpenInitial` and `GroupOpenPass` change only their imports.
+  - `GroupOpenResume.start_at_end` replaces `boundary_at_end`.
+  - `GroupedChecks` drops the old `checker_facts`.
+  - `GroupOpenCapChunkRun.word_even` gets a general proof instead of an exhaustive one.
+  - `programs.json`, `K1Manifest`, `GroupOpenImage` and `TwoPermutationPackedImage` are regenerated.
+- Removed (no longer imported; they described the old record writers and the old word-18 dispatch):
+  `GroupOpenABI`, `GroupOpenCarryKernel`, `GroupOpenCarryMemory`, `GroupOpenCarryPlans`, `GroupOpenClosing`,
+  `GroupOpenFull`, `GroupOpenLeafFields`, `GroupOpenMask`, `GroupOpenPrefix`, `GroupOpenProofBytes`,
+  `GroupOpenRecordBytes`, `GroupOpenRecordData`, `GroupOpenRecordRun`, `GroupOpenRecordTail`, `GroupOpenRecords`,
+  `GroupOpenRecordsAPI`, `GroupOpenUpperRun`, `GroupOpenWholeCode`, `GroupOpenWholeFlow`, `GroupOpenWholeNode`,
+  `GroupOpenWholePack`, `GroupOpenWholeRaw`, `GroupOpenWholeRecords`.
+
+## Evidence
+
+A C emulator of the `Riscv.lean` cost model with stand-in oracles ran one full 2^24-leaf commitment, then the
+97,691-cycle parent and this tree on the same trapdoor, on 100 cases covering 92 distinct position sets:
+- the general sets (sizes 0 to 1,000, spread, random, runs, tile and segment boundaries);
+- frontiers of 1, 2, 127 and 128 nodes, single and full chunks, all 255 non-zero leaf masks;
+- the clustered, spread and worst-case shapes of the earlier stages.
+
+Six tampered proofs were run on each tree. On every honest set both checkers accept, the proof lengths are equal
+and the opening oracle trace equals the parent's. Every non-empty set is faster, and every 128-position set
+by exactly 19,742 cycles. The worst case is the parent's worst fixture (one marked leaf in each half of every
+level-5 subtree at the deepest salt-chain offset), at exactly 77,949 cycles (97,691 for the parent). The six
+tampered proofs are rejected by both checkers.
+
+A second emulator run on this exact manifest decoded the V1 record areas byte for byte to the parent's proofs.
+It also paired honest and malformed checker inputs (truncated, oversized and extended proofs, a 7-step short
+rejection and a zero-step oversized rejection): all 58 cases agree. A Python check confirms that the closed-form
+tables equal the reference converter and the 85,440 data bytes.
+
+The repository verifier (`python3 scripts/run.py`) accepted this tree in a local KVM guest set up like the official one (Ubuntu 26.04, systemd 259, Landlock, a non-root account): status verified, score 36,416,496,006,880, artifact digest `3f0e4b38c8ccd6eb…`, in 84 minutes on two CPUs.
+
+## Inherited documentation
+
 # Chunked cap walk (-2,688 opening cycles)
 
 Based on the 100,379-cycle carried record writers (next inherited section). The cap walk no longer descends below
@@ -23,10 +123,9 @@ by the byte of their marks. The frontier of the subtree is then emitted without 
 
 Cost: a marked level-5 node costs 36 cycles (lookup 4, level branch 1, chunk jump 1, chunk code 28, block exit 2)
 plus 2 or 3 words, the emit block and the return per frontier node. A DFS emit costs 2 more than before
-(stub and return). The worst case over all 128-position sets moves from walk 8,818 to 6,130. A dynamic
-program outside Lean first found this maximum. The Lean proof establishes the same bound on its own, and one
-marked leaf in each half of every level-5 subtree, e.g. leaves 0 and 4, attains it: frontier 128 with two inner
-nodes per block.
+(stub and return). The worst case over all 128-position sets moves from walk 8,818 to 6,130. A dynamic program
+outside Lean first found this maximum; the Lean proof establishes the same bound on its own. One marked leaf in
+each half of every level-5 subtree, e.g. leaves 0 and 4, attains it (frontier 128, two inner nodes per block).
 
 ```json
 {"commitCycles":504585244,"openingCycles":97691,"proofBytes":72160}

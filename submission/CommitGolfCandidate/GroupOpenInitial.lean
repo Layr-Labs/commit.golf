@@ -1,5 +1,6 @@
-import CommitGolfCandidate.GroupOpenRecordsAPI
 import CommitGolfCandidate.GroupOpenStep
+import CommitGolfCandidate.GroupOpenSetup
+import CommitGolfCandidate.TwoPermutationOpeningRecordGroups
 
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64

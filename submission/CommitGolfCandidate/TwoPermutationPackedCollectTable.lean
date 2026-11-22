@@ -69,14 +69,11 @@ structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) 
       capRootAt state group = honestHeap oracle message salts group
 
 theorem collected_table_empty (oracle : Oracle) (input : CheckInput) (state : MachineState)
-    (memory : state.mem = (QAssembly.submission.initialState .check input).mem) :
+    (zero : ∀ group < 512, machineMarks state group=0) :
     CollectedTable oracle input 0 state [] := by
   constructor
   · intro group inside
-    have framed := congrFun memory (wordAddress (512+group))
-    have mark := check_mark_zero input group inside
-    have clean : machineMarks state group = 0 := (checker_marks_as_word _ _).trans (framed.trans mark)
-    simpa only [Opening.groupsBefore, List.take_zero, List.map_nil, List.not_mem_nil, ite_false] using clean
+    simpa [Opening.groupsBefore, List.take_zero, List.map_nil, List.not_mem_nil, ite_false] using zero group inside
   · intro earlier before
     omega
   · intro message salts honest group belongs

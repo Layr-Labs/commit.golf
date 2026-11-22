@@ -1,6 +1,7 @@
 import CommitGolfCandidate.GroupOpenFixed
 import CommitGolfCandidate.GroupOpenHeaderSpec
-import CommitGolfCandidate.GroupOpenProofBytes
+import CommitGolfCandidate.GroupOpenModel
+import CommitGolfCandidate.Layout2Records
 import CommitGolfCandidate.TwoPermutationHeapInvariant
 
 namespace TwoPermutationPrototype.GroupedOpening
@@ -16,9 +17,10 @@ theorem untouched_low (p : Positions) (j w : Nat)
   have := top_le p j
   rintro (x|x|x|x|⟨q,hq,m,hm,e⟩) <;> (try unfold rebuiltWord blockWord at e) <;> omega
 
-theorem boundary_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (k : BitVec 192)
+/-- After the pass (word 15): the Layout 2 record loop's start state for the virtual trapdoor. -/
+theorem start_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (k : BitVec 192)
     (s : MachineState) (p0 : 0<p.card) (r : Ready td p k s p.card) :
-    RecordBoundary actual (virtualTd s) p s 0 ∧ RecordMarks p s 0 := by
+    Layout2.L2Start actual (virtualTd s) p s := by
   have inp := virtual_input td p s (by
     intro a lo hi alg
     let w:=a/8
@@ -30,10 +32,11 @@ theorem boundary_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) 
     have h:=r.frame w wlim (untouched_low p p.card w (Or.inr (Or.inr (Or.inr (Or.inr wlo)))))
     rw [ea];exact h)
   have start : s.pc=0x103c := by simpa [passPC,address] using r.pc
-  refine ⟨⟨?_,r.heap,?_,r.salt,r.dest,r.leaves,r.slots,inp,?_,r.base,r.mark,(by rw [r.shift]; simpa using r.heap),r.capLeaves,r.start,
-    ?_⟩,?_⟩
-  · simpa [Nat.ne_of_lt p0, Whole.setupPC, AlignedFields.pcAt] using start
+  refine ⟨?_,r.heap,?_,r.salt,?_,r.leaves,r.slots,?_,r.base,r.mark,(by rw [r.shift]; simpa using r.heap),r.capLeaves,
+    r.start,inp,?_,?_⟩
+  · rw [start]; rfl
   · simpa using r.indices
+  · rw [r.dest]
   · rw [r.endReg]
     unfold indexAt
     congr 1
