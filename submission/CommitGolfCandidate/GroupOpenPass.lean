@@ -91,9 +91,9 @@ structure Ready (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (key : B
   quartet : s.getReg .x4=BitVec.ofNat 64 (lastOf p j)
   frame : Preserved p j (actual.initialState .opening (td,p)) s
   keyFrame : KeyWords s key
-  /-- The table base (the ABI's `sp`) and the entry mask (header rows 732, 739), kept by every position. -/
+  /-- The table base (the ABI's `sp`) and the entry mask (header row 732), kept by every position. -/
   sp : s.getReg .x2=BitVec.ofNat 64 tableBase
-  mask : s.getReg .x1=65520
+  mask : s.getReg .x1=65535
   /-- The pointer word of every processed position's quartet holds the address of its level-22 sibling node. -/
   pointer : ∀ a<j, memoryView s (pointerWord ((pos p a).val/4))=wordAddress (nodeWordOf ((pos p a).val/4^^^1))
 

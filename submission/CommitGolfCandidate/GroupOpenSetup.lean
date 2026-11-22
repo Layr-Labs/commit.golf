@@ -41,31 +41,39 @@ theorem setup_pc (state : MachineState) (pc : state.pc = 0x1000)
     (setupPrefix state 15).pc = 0x103c := by
   simp [setupPrefix, setupInstructions, execInstrBr, pc, beq_iff_eq, nonempty]
 
+/-- The delivered entry rows 0..3: word 2 branches to the header at 713 for a nonempty opening (it stands for
+the entry test at index 2 of `setupInstructions`), word 3 jumps to the exit block at 709. -/
+def emptyInstructions : List Instr :=
+  [.ADDI .x20 .x15 0, .ADDI .x21 .x15 0, .BNE .x16 .x0 2844, .JAL .x0 2824]
+
+def emptyPrefix (state : MachineState) (count : Nat) : MachineState :=
+  (emptyInstructions.take count).foldl execInstrBr state
+
 /-- The zero-cardinality opener bypasses the marks and outputs zero proof bytes. -/
 theorem execute_empty (state : MachineState) (pc : state.pc = 0x1000) (fuel : Nat)
     (allowCoins : Bool) (empty : state.getReg .x16 = 0#64) :
-    execute openingImage (7 + fuel) state allowCoins =
-      pure ⟨.success, exitPrefix (setupPrefix state 3) 3, 7, 0⟩ := by
-  have ranSetup : execute openingImage (3 + (4 + fuel)) state allowCoins =
-      (do let result ← execute openingImage (4 + fuel) (setupPrefix state 3) allowCoins
-          return result.charge 3 0) := by
-    apply execute_unit_steps (states := setupPrefix state)
+    execute openingImage (8 + fuel) state allowCoins =
+      pure ⟨.success, exitPrefix (emptyPrefix state 4) 3, 8, 0⟩ := by
+  have ranSetup : execute openingImage (4 + (4 + fuel)) state allowCoins =
+      (do let result ← execute openingImage (4 + fuel) (emptyPrefix state 4) allowCoins
+          return result.charge 4 0) := by
+    apply execute_unit_steps (states := emptyPrefix state)
     intro i bounded
-    refine ⟨.base ((setupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
+    refine ⟨.base ((emptyInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
     · apply packed_fetch_base _ i _ (by omega)
-      · interval_cases i <;> simp [setupPrefix, setupInstructions, execInstrBr, pc]
+      · interval_cases i <;> simp [emptyPrefix, emptyInstructions, execInstrBr, pc, beq_iff_eq, empty]
       · interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
-  have branchPC : (setupPrefix state 3).pc = 0x1b14 := by
-    simp [setupPrefix, setupInstructions, execInstrBr, signExtend13, pc, beq_iff_eq, empty]
-  rw [show 7 + fuel = 3 + (4 + fuel) by omega, ranSetup, execute_exit _ branchPC]
+  have branchPC : (emptyPrefix state 4).pc = 0x1b14 := by
+    simp [emptyPrefix, emptyInstructions, execInstrBr, signExtend13, signExtend21, pc, beq_iff_eq, empty]
+  rw [show 8 + fuel = 4 + (4 + fuel) by omega, ranSetup, execute_exit _ branchPC]
   simp [Execution.charge]
 
 theorem empty_proof_length (state : MachineState) :
-    (exitPrefix (setupPrefix state 3) 3).getReg .x11 = 0 := by
+    (exitPrefix (emptyPrefix state 4) 3).getReg .x11 = 0 := by
   rw [exit_register]
   by_cases empty : state.getReg .x16 = 0#64 <;>
-    simp [setupPrefix, setupInstructions, execInstrBr, signExtend12, beq_iff_eq, empty]
+    simp [emptyPrefix, emptyInstructions, execInstrBr, signExtend12, beq_iff_eq, empty]
 
 end TwoPermutationPrototype.GroupedOpening

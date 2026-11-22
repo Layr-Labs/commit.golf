@@ -99,7 +99,7 @@ theorem Keeps.next {s u v : MachineState} (head : Keeps s u) (tail : Keeps u v) 
   fun r hr => (tail r hr).trans (head r hr)
 
 structure PrefixStart (s : MachineState) (i : Index) (o : Nat) : Prop where
-  pc : s.pc=0x103c
+  pc : s.pc=Whole.setupPC o
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
   slots : s.getReg .x24=BitVec.ofNat 64 groupSlots
   nonce : s.getReg .x22=BitVec.ofNat 64 nonceBase
@@ -131,7 +131,7 @@ def saltStart (c : Nat) (s : MachineState) := Whole.fixedSlot (Whole.copy c 0 (W
 theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let c := Whole.pageClass o
     let u := saltStart c s
-    RunsOpeningBlock s u (9+(Whole.row c 2-Whole.row c 0)) ∧ GroupCursor u i o 0 ∧
+    RunsOpeningBlock s u ((3+Whole.firstCost o)+(Whole.row c 2-Whole.row c 0)) ∧ GroupCursor u i o 0 ∧
       PrefixWrites s u i o 0 16 ∧ Keeps s u := by
   let c : Fin 4 := ⟨Whole.pageClass o,Whole.class_lt o⟩
   let n := nonceSetup s
@@ -144,11 +144,8 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
   have sa : nonceAddress i%8=0 := by
     have a : nonceBase%8=0 := by decide
     unfold nonceAddress;omega
-  have pcN : n.pc=pcAt 18 := by rw [show n.pc=_ from h.1,start.pc];rfl
   have output : n.getReg .x21=BitVec.ofNat 64 (recordBase o) := (h.2.2.2.2 _ (by decide) (by decide)).trans start.output
-  have bits:=CapCopy.mask_bits n (recordBase o) 7 (by simp) output (by unfold MEMORY_BYTES at room;omega)
-  rw [show 7+1=8 by decide,Whole.class_residue o] at bits
-  obtain ⟨dispatch,pcT,memT,keepT⟩:=Whole.dispatch_run n c pcN bits
+  obtain ⟨entered,pcT,memT,keepT⟩:=Whole.enter_run s o start.pc start.readable
   have rr : recordBase o%8=Whole.destResidue c 0 := by
     rw [Whole.class_residue o]; change 2*c.val = (2*c.val+0)%8
     have := c.isLt;omega
@@ -165,17 +162,14 @@ theorem run_salt_start (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH)
     intro r free
     apply (z.2.2.2.2.2 r ?_ ?_ ?_).trans (fixed r ?_ ?_ ?_ ?_)
     all_goals intro e;subst r; simp [prefixScratch] at free
-  have gate : RunsOpeningBlock s n 3 := fun fuel coins => execute_nonce_setup s start.pc start.readable fuel coins
   have sourceBytes : PrefixWrites t v i o 0 16 := by
     apply PrefixWrites.of_copy (src:=nonceAddress i) (count:=16) field.bytes (by simpa using room)
     · intro b hb; simp [firstSource,hb]
     · intro a ha;exact Whole.beforeProof field a ha (by unfold recordBase;omega)
-  have total := ((gate.next dispatch).next field.run).next (Whole.slot_run c v fieldPC)
-  have eq : 3+6+(Whole.shape c 0).cycles+5=9+(Whole.row c 2-Whole.row c 0) := by
-    have t : ∀ c : Fin 4, 3+6+(Whole.shape c 0).cycles+5=9+(Whole.row c 2-Whole.row c 0) := by decide
-    exact t c
-  change RunsOpeningBlock s (Whole.fixedSlot v) (3+6+(Whole.shape c 0).cycles+5) at total
-  rw [eq] at total
+  have total := (entered.next field.run).next (Whole.slot_run c v fieldPC)
+  have price : ∀ a : Fin 4, (Whole.shape a 0).cycles+5=Whole.row a 2-Whole.row a 0 := by decide
+  change RunsOpeningBlock s (Whole.fixedSlot v) ((3+Whole.firstCost o)+(Whole.shape c 0).cycles+5) at total
+  rw [Nat.add_assoc,price c] at total
   refine ⟨total,⟨?_,(stable .x9 (by decide)).trans start.heap,(stable .x19 (by decide)).trans start.groups,
     ?_,?_,?_,?_⟩,sourceBytes.move (memT.trans h.2.1).symm z.2.1,stable⟩
   · change (Whole.fixedSlot v).pc=_
@@ -255,7 +249,7 @@ def recordPrefix (c : Nat) (s : MachineState) :=
   Whole.preload (Whole.fixedExit (groupStep c 2 (groupStep c 1 (groupStep c 0 (saltStart c s)))))
 
 structure WholeCursor (s : MachineState) (i : Index) (o l : Nat) : Prop where
-  pc : s.pc=(if l=14 then pcAt 642 else pcAt (Whole.row (Whole.pageClass o) (7+l)))
+  pc : s.pc=(if l=14 then pcAt (Whole.row (Whole.pageClass o) 22) else pcAt (Whole.row (Whole.pageClass o) (7+l)))
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
   node : s.getReg .x6=BitVec.ofNat 64 (upperNode i l)
   dest : s.getReg .x21=BitVec.ofNat 64 (recordBase o + (if l=14 then 534 else 0))
@@ -263,7 +257,7 @@ structure WholeCursor (s : MachineState) (i : Index) (o l : Nat) : Prop where
 theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<LENGTH) (start : PrefixStart s i o) :
     let c:=Whole.pageClass o
     let u:=recordPrefix c s
-    RunsOpeningBlock s u (9+(Whole.row c 7-Whole.row c 0)) ∧ WholeCursor u i o 0 ∧
+    RunsOpeningBlock s u ((3+Whole.firstCost o)+(Whole.row c 7-Whole.row c 0)) ∧ WholeCursor u i o 0 ∧
       PrefixWrites s u i o 0 112 ∧ Keeps s u ∧
       u.getReg .x7=BitVec.ofNat 64 (groupSlots+1024*(i.val/4)+584) ∧
       u.getReg .x10=(u.getHalfword (BitVec.ofNat 64 (siblingAddress i 13+28))).zeroExtend 64 := by
@@ -291,10 +285,12 @@ theorem execute_record_prefix (s : MachineState) (i : Index) (o : Nat) (fit : o<
   have finalKeep : Keeps ex (Whole.preload ex) := by
     intro r free;apply regEnd <;> intro h <;> subst r <;> simp [prefixScratch] at free
   have all := (((((salt.next s0).next s1).next s2).next (Whole.exit_run c last atExit)).next top)
-  have price : ∀ c : Fin 4, 9+(Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+
-      (Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+2+5=9+(Whole.row c 7-Whole.row c 0) := by decide
-  change RunsOpeningBlock s (recordPrefix c s) (9+(Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+(Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+2+5) at all
-  rw [price c] at all
+  have price : ∀ c : Fin 4, (Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+
+      (Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+2+5=Whole.row c 7-Whole.row c 0 := by decide
+  let initCost:=3+Whole.firstCost o
+  change RunsOpeningBlock s (recordPrefix c s) (initCost+(Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+(Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+2+5) at all
+  have p:=price c
+  rw [show initCost+(Whole.row c 2-Whole.row c 0)+(Whole.row c 3-Whole.row c 2)+(Whole.row c 4-Whole.row c 3)+(Whole.row c 5-Whole.row c 4)+2+5=initCost+(Whole.row c 7-Whole.row c 0) by omega] at all
   refine ⟨all,⟨pcEnd,(regEnd _ (by decide) (by decide)).trans heap,(regEnd _ (by decide) (by decide)).trans node,?_⟩,
     writes.move rfl (memEnd.trans e.2.1), (past.next kept).next finalKeep,
     (regEnd _ (by decide) (by decide)).trans ((e.2.2.2.2 _ (by decide) (by decide)).trans g3.group),?_⟩

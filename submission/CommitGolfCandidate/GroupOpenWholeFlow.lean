@@ -14,7 +14,7 @@ def PureRow : Instr → Bool
   | _ => false
 
 theorem pure_run (s : MachineState) (w : Nat) (xs : List Instr) (slice : Slice w xs)
-    (bounded : w+xs.length≤6144) (pc : s.pc=pcAt w) (pure : ∀ i∈xs, PureRow i=true) :
+    (bounded : w+xs.length≤7872) (pc : s.pc=pcAt w) (pure : ∀ i∈xs, PureRow i=true) :
     RunsOpeningBlock s (execCode s xs) xs.length := by
   have ready (t : MachineState) (ops : List Instr) (h : ∀ i∈ops, PureRow i=true) : Ready t ops := by
     induction ops generalizing t with
@@ -27,28 +27,49 @@ theorem pure_run (s : MachineState) (w : Nat) (xs : List Instr) (slice : Slice w
     (fun i m => by have hi:=pure i m; cases i <;> first | rfl | cases hi)
     (fun t i m => by have hi:=pure i m; cases i <;> first | rfl | cases hi)
 
-private def selectorRows : List Instr := [.ANDI .x31 .x21 7, .SLLI .x31 .x31 10, .LUI .x29 5, .ADD .x31 .x31 .x29]
+/-- Only the first record arrives from the salt pass at word 15. Subsequent
+records enter the nonce setup immediately before their class's writer. -/
+def dispatch (n : MachineState) := if n.pc=pcAt 18 then n.setPC (pcAt (row 0 0)) else n
 
-def dispatch (s : MachineState) :=
-  execInstrBr (execCode (execInstrBr s (.JAL .x0 12216)) selectorRows) (.JALR .x0 .x31 0)
+private theorem entry_table (c : Fin 4) : Slice (row c 0-3) nonceSetupCode ∧
+    3≤row c 0 ∧ row c 0<7872 ∧ row c 0≠18 := by revert c;decide +kernel
 
-theorem dispatch_run (s : MachineState) (c : Fin 4) (pc : s.pc=pcAt 18)
-    (sel : s.getReg .x21 &&& signExtend12 7 = BitVec.ofNat 64 (2*c.val)) :
-    RunsOpeningBlock s (dispatch s) 6 ∧ (dispatch s).pc=pcAt (row c 0) ∧
-    (dispatch s).mem=s.mem ∧ ∀ r, r≠.x31 → r≠.x29 → (dispatch s).getReg r=s.getReg r := by
-  let entry := execInstrBr s (.JAL .x0 12216)
-  let mid := execCode entry selectorRows
-  have hop := run_step s 18 (.JAL .x0 12216) (by decide) pc (by decide +kernel) rfl rfl
-  have pc1 : entry.pc=pcAt 3072 := by change s.pc+signExtend21 12216=_; rw [pc]; rfl
-  have setup : RunsOpeningBlock entry mid 4 := pure_run entry 3072 selectorRows
-    (by decide +kernel) (by decide) pc1 (by decide)
-  have pc2 : mid.pc=pcAt 3076 := by change entry.pc+4+4+4+4=_; rw [pc1]; rfl
-  have finish := run_step mid 3076 (.JALR .x0 .x31 0) (by decide) pc2 (by decide +kernel) rfl rfl
-  refine ⟨(hop.next setup).next finish, ?_, rfl, ?_⟩
-  · change ((((s.getReg .x21 &&& signExtend12 7) <<< (10 : Nat)) + (20480#64) + 0) &&& ~~~1#64) = _
-    rw [sel]; fin_cases c <;> decide
-  · intro r h31 h29
-    simp [dispatch,selectorRows,execCode,execInstrBr,Ne.symm h31,Ne.symm h29]
+theorem enter_run (s : MachineState) (o : Nat) (pc : s.pc=setupPC o)
+    (valid : accessValid (s.getReg .x8) 8=true) :
+    let n:=nonceSetup s
+    RunsOpeningBlock s (dispatch n) (3+firstCost o) ∧ (dispatch n).pc=pcAt (row (pageClass o) 0) ∧
+    (dispatch n).mem=n.mem ∧ ∀ r, r≠.x31 → r≠.x29 → (dispatch n).getReg r=n.getReg r := by
+  let c : Fin 4:=⟨pageClass o,class_lt o⟩
+  let n:=nonceSetup s
+  have post:=nonce_setup_post s
+  by_cases first : o=0
+  · have at15 : s.pc=pcAt 15 := by simpa only [setupPC,if_pos first] using pc
+    have at18 : n.pc=pcAt 18 := by rw [show n.pc=_ from post.1,at15];rfl
+    have run : RunsOpeningBlock s n 3 := fun fuel coins => execute_nonce_setup s at15 valid fuel coins
+    have hop:=run_step n 18 (.JAL .x0 24516) (by decide) at18 (by decide +kernel) rfl rfl
+    have eq : execInstrBr n (.JAL .x0 24516)=n.setPC (pcAt (row 0 0)) := by
+      change n.setPC (n.pc+signExtend21 24516)=_;rw [at18];rfl
+    rw [eq] at hop
+    change RunsOpeningBlock s (dispatch n) _ ∧ _
+    simp only [dispatch,show (nonceSetup s).pc=pcAt 18 from at18,at18,if_pos rfl,firstCost,first,zero_class]
+    exact ⟨run.next hop,rfl,rfl,fun _ _ _ => MachineState.getReg_setPC ..⟩
+  · have entry : s.pc=pcAt (row c 0-3) := by simpa only [setupPC,if_neg first] using pc
+    obtain ⟨code,low,high,ne⟩:=entry_table c
+    have ra : Ready s nonceSetupCode := by
+      refine ⟨?_,rfl,rfl,trivial⟩
+      simpa [memoryArgumentsValid,memAccess,signExtend12] using valid
+    have run : RunsOpeningBlock s n 3 := code_run nonceSetupCode _ s (by change _+3≤_;omega)
+      (codeOfSlice code) ra entry (by decide)
+      (by intro u i m;simp only [nonceSetupCode,List.mem_cons,List.not_mem_nil,or_false] at m
+          rcases m with rfl|rfl|rfl <;> rfl)
+    have endPC : n.pc=pcAt (row c 0) := by
+      rw [show n.pc=_ from post.1,entry];exact (ofNat_step _ 3).trans (congrArg pcAt (by omega))
+    have nePC : n.pc≠pcAt 18 := by
+      rw [endPC];intro eq;have q:=congrArg BitVec.toNat eq
+      change (4096+4*row c 0)%2^64=4168 at q;omega
+    change RunsOpeningBlock s (dispatch n) _ ∧ _
+    simp only [dispatch,show (nonceSetup s).pc≠pcAt 18 from nePC,nePC,if_false,firstCost,if_neg first,Nat.add_zero]
+    exact ⟨run,endPC,trivial,fun _ _ _ => trivial⟩
 
 def topRows : List Instr :=
   [.SRLI .x29 .x6 13,.XORI .x29 .x29 1,.SLLI .x29 .x29 5,.ADD .x29 .x9 .x29,.LHU .x10 .x29 28]
@@ -90,7 +111,7 @@ theorem prefix_code (c : Fin 4) : Slice (row c 1) fixedSlotCode ∧ Slice (row c
 
 theorem prefix_layout (c : Fin 4) :
     rawStart c 0+(shape c 0).cycles=row c 1 ∧ row c 1+5=row c 2 ∧
-    row c 5+2=row c 6 ∧ row c 6+5=row c 7 ∧ row c 7<6144 ∧
+    row c 5+2=row c 6 ∧ row c 6+5=row c 7 ∧ row c 7<7872 ∧
     ∀ j : Fin 3, rawStart c (1+j.val)=row c (2+j.val)+3 ∧
       rawStart c (1+j.val)+(shape c (1+j.val)).cycles=row c (3+j.val) ∧
       row c (2+j.val)≤row c (3+j.val) ∧ row c (3+j.val)≤row c 5 := by
@@ -98,12 +119,12 @@ theorem prefix_layout (c : Fin 4) :
 
 theorem slot_run (c : Fin 4) (s : MachineState) (pc : s.pc=pcAt (row c 1)) :
     RunsOpeningBlock s (fixedSlot s) 5 :=
-  pure_run s _ fixedSlotCode (prefix_code c).1 ((show ∀ a : Fin 4, row a 1+5≤6144 from by decide) c) pc (by decide)
+  pure_run s _ fixedSlotCode (prefix_code c).1 ((show ∀ a : Fin 4, row a 1+5≤7872 from by decide) c) pc (by decide)
 
 theorem mate_run (c : Fin 4) (j : Fin 3) (s : MachineState) (pc : s.pc=pcAt (row c (2+j.val))) :
     RunsOpeningBlock s (quartetHead j s) 3 := by
   exact pure_run s _ (quartetHeadCode j) ((prefix_code c).2.2.2 j)
-    ((show ∀ a : Fin 4, ∀ k : Fin 3, row a (2+k.val)+3≤6144 from by decide) c j) pc
+    ((show ∀ a : Fin 4, ∀ k : Fin 3, row a (2+k.val)+3≤7872 from by decide) c j) pc
     (by intro i hi; simp only [quartetHeadCode,List.mem_cons,List.not_mem_nil,or_false] at hi;rcases hi with rfl|rfl|rfl <;> rfl)
 
 theorem exit_run (c : Fin 4) (s : MachineState) (pc : s.pc=pcAt (row c 5)) :

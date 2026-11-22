@@ -1,3 +1,11 @@
+# Directly chained record writers
+
+The four record writers branch directly to the next alignment class. Each writer loads its index on entry, advances the proof cursor by 534 bytes, marks the cap group and branches on the end of the index buffer. A finished batch enters the cap at word 1097. The initial record still arrives through word 15 from the relocated salt pass.
+
+The first-record jump and the shorter cap entry balance. A 128-record batch saves exactly 896 opening cycles compared with the 104,349-cycle fixed-cursor parent. The record-only image executed 103,453 cycles on both maximal fixtures. Opus's four-word header change saves two more cycles on a nonempty opening. The combined bound is 103,451 cycles and 72,160 proof bytes.
+
+Opus implemented the header change. Words 2 and 3 branch directly to the nonempty path and give the empty path an eight-cycle exit. The two-word entry swap comes from public submission fbb73eb4. Word 732 forms the tile mask with one shift, and word 739 jumps to the relocated salt pass at 3077.
+
 # Record-relative store offsets
 
 The four record writers keep the proof destination in `s5` at the beginning of the 534-byte record. Each store encodes its offset from that address. After the final field, one instruction advances `s5` by 534, ready for the next record or the cap. This removes fifteen instructions per record and saves 1,920 opening cycles on a batch of 128.

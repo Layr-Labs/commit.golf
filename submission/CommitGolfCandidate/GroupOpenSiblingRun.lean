@@ -209,15 +209,12 @@ theorem nonce_copy_cost_mod (ordinal : Nat) : nonceCopyCost ordinal = nonceCopyC
   rw [eq, Nat.add_mul_mod_self_left]
 
 /-- Alignment-dependent cycles of all writer copies in a record. -/
-def recordExtra (ordinal : Nat) := Whole.pageCost ordinal-118
-
-theorem record_extra_mod (ordinal : Nat) : recordExtra ordinal=recordExtra (ordinal%4) := by
-  unfold recordExtra Whole.pageCost
-  rw [Whole.class_mod ordinal]
+def recordExtra (ordinal : Nat) := Whole.pageCost ordinal-124+Whole.firstCost ordinal
 
 theorem record_extra_le (ordinal : Nat) : recordExtra ordinal≤517 := by
-  have h : ∀ c : Fin 4, Whole.row c 22-Whole.row c 0-118≤517 := by decide
-  exact h ⟨Whole.pageClass ordinal,Whole.class_lt ordinal⟩
+  have h : ∀ c : Fin 4, Whole.row c 22-Whole.row c 0-124≤516 := by decide
+  have k : Whole.row (Whole.pageClass ordinal) 22-Whole.row (Whole.pageClass ordinal) 0-124≤516 := h ⟨Whole.pageClass ordinal,Whole.class_lt ordinal⟩
+  unfold recordExtra Whole.pageCost Whole.firstCost;split <;> omega
 
 /-- Cycles of a lower-level block: levels 0..1 copy 32 bytes, levels 2..12 copy 30; level 0's head is two rows. -/
 def siblingCost (ordinal level : Nat) : Nat :=

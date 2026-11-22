@@ -8,7 +8,7 @@ set_option maxHeartbeats 4000000
 
 private theorem pairPart (s : MachineState) (w n size : Nat) (src : Reg) (off p S T : Nat)
     (hw : size=2 ∨ size=4 ∨ size=8) (notTemp : src≠.x31)
-    (code : Slice w (pairRows n size src p (off+p))) (bound : w+2*n≤6144)
+    (code : Slice w (pairRows n size src p (off+p))) (bound : w+2*n≤7872)
     (pc : s.pc=pcAt w) (sr : s.getReg src=BitVec.ofNat 64 S)
     (dr : s.getReg .x21+BitVec.ofNat 64 off=BitVec.ofNat 64 T)
     (sa : (S+p)%size=0) (ta : (T+p)%size=0) (imm : off+p+size*n≤2048)
@@ -23,7 +23,7 @@ private theorem pairPart (s : MachineState) (w n size : Nat) (src : Reg) (off p 
   exact ⟨ran,by simpa using next,regs,by simpa using bytes,below⟩
 
 private theorem shiftPart (s : MachineState) (w : Nat) (src : Reg) (off p S T : Nat)
-    (code : Slice w (Shifted32.chunkCode src off p)) (bound : w+6≤6144)
+    (code : Slice w (Shifted32.chunkCode src off p)) (bound : w+6≤7872)
     (pc : s.pc=pcAt w) (sr : s.getReg src=BitVec.ofNat 64 S)
     (dr : s.getReg .x21+BitVec.ofNat 64 off=BitVec.ofNat 64 T)
     (sa : (S+p)%8=0) (ta : (T+p)%4=2) (imm : off+p+6<2048)
@@ -98,7 +98,7 @@ private theorem six_ready (s : MachineState) (source : Reg) (store S T offset : 
     sourceAddr, dst0, addr 2 (by omega), addr 6 (by omega), v0, v1, v2, and_self]
 
 private theorem shortPart (s : MachineState) (w : Nat) (src : Reg) (off p S T : Nat)
-    (code : Slice w (sixRows src off p)) (bound : w+4≤6144)
+    (code : Slice w (sixRows src off p)) (bound : w+4≤7872)
     (pc : s.pc=pcAt w) (sr : s.getReg src=BitVec.ofNat 64 S)
     (dr : s.getReg .x21+BitVec.ofNat 64 off=BitVec.ofNat 64 T)
     (sa : (S+p)%8=0) (ta : (T+p)%4=2) (imm : off+p+6<2048)
@@ -122,7 +122,7 @@ private theorem shortPart (s : MachineState) (w : Nat) (src : Reg) (off p S T : 
     exact chunk_below s _ _ true q (by unfold MEMORY_BYTES at room;omega) low
 
 theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : Nat)
-    (code : RawCode q w src off) (bound : w+q.cycles≤6144) (pc : s.pc=pcAt w)
+    (code : RawCode q w src off) (bound : w+q.cycles≤7872) (pc : s.pc=pcAt w)
     (notTemp : src≠.x31) (sr : s.getReg src=BitVec.ofNat 64 S)
     (dr : s.getReg .x21+BitVec.ofNat 64 off=BitVec.ofNat 64 T)
     (sa : S%8=0) (ta : TargetAligned q T) (imm : off+32≤2048)
@@ -130,7 +130,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     Done s (rawState q src off s) S T q.size q.cycles (w+q.cycles) := by
   cases q with
   | d16 =>
-    change w+4≤6144 at bound
+    change w+4≤7872 at bound
     change S+16≤T at apart
     change T+16≤MEMORY_BYTES at room
     change T%8=0 at ta
@@ -139,7 +139,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc0 := h0
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
   | w16 =>
-    change w+8≤6144 at bound
+    change w+8≤7872 at bound
     change S+16≤T at apart
     change T+16≤MEMORY_BYTES at room
     change T%8=4 at ta
@@ -148,7 +148,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc0 := h0
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
   | s16 =>
-    change w+12≤6144 at bound
+    change w+12≤7872 at bound
     change S+16≤T at apart
     change T+16≤MEMORY_BYTES at room
     change T%4=2 at ta
@@ -161,7 +161,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc1 := append acc0 h1 (by omega) (by omega)
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc1
   | d28 =>
-    change w+8≤6144 at bound
+    change w+8≤7872 at bound
     change S+28≤T at apart
     change T+28≤MEMORY_BYTES at room
     change T%8=0 at ta
@@ -174,7 +174,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc1 := append acc0 h1 (by omega) (by omega)
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc1
   | w28 =>
-    change w+14≤6144 at bound
+    change w+14≤7872 at bound
     change S+28≤T at apart
     change T+28≤MEMORY_BYTES at room
     change T%8=4 at ta
@@ -183,7 +183,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc0 := h0
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
   | s28 =>
-    change w+22≤6144 at bound
+    change w+22≤7872 at bound
     change S+28≤T at apart
     change T+28≤MEMORY_BYTES at room
     change T%4=2 at ta
@@ -202,7 +202,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc3 := append acc2 h3 (by omega) (by omega)
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc3
   | d30 =>
-    change w+10≤6144 at bound
+    change w+10≤7872 at bound
     change S+30≤T at apart
     change T+30≤MEMORY_BYTES at room
     change T%8=0 at ta
@@ -218,7 +218,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc2 := append acc1 h2 (by omega) (by omega)
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc2
   | w30 =>
-    change w+16≤6144 at bound
+    change w+16≤7872 at bound
     change S+30≤T at apart
     change T+30≤MEMORY_BYTES at room
     change T%8=4 at ta
@@ -231,7 +231,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc1 := append acc0 h1 (by omega) (by omega)
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc1
   | s30 =>
-    change w+22≤6144 at bound
+    change w+22≤7872 at bound
     change S+30≤T at apart
     change T+30≤MEMORY_BYTES at room
     change T%4=2 at ta
@@ -250,7 +250,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc3 := append acc2 h3 (by omega) (by omega)
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc3
   | d32 =>
-    change w+8≤6144 at bound
+    change w+8≤7872 at bound
     change S+32≤T at apart
     change T+32≤MEMORY_BYTES at room
     change T%8=0 at ta
@@ -259,7 +259,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc0 := h0
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
   | w32 =>
-    change w+16≤6144 at bound
+    change w+16≤7872 at bound
     change S+32≤T at apart
     change T+32≤MEMORY_BYTES at room
     change T%8=4 at ta
@@ -268,7 +268,7 @@ theorem raw_run (q : Shape) (s : MachineState) (w : Nat) (src : Reg) (off S T : 
     have acc0 := h0
     simpa only [rawState,Shape.size,Shape.cycles,Nat.add_zero,Nat.zero_add,Nat.add_assoc] using acc0
   | s32 =>
-    change w+24≤6144 at bound
+    change w+24≤7872 at bound
     change S+32≤T at apart
     change T+32≤MEMORY_BYTES at room
     change T%4=2 at ta

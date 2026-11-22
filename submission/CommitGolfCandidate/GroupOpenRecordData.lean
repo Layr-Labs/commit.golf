@@ -7,7 +7,7 @@ open Opening (sortedIndex)
 
 structure RecordStart (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (state : MachineState) (ordinal : Nat) : Prop where
-  pc : state.pc=0x103c
+  pc : state.pc=Whole.setupPC ordinal
   heap : state.getReg .x9=BitVec.ofNat 64 trapdoorBase
   index : state.getReg .x8=BitVec.ofNat 64 (indicesBase+8*ordinal)
   nonce : state.getReg .x22=BitVec.ofNat 64 nonceBase
@@ -30,7 +30,7 @@ def recordData (s : MachineState) :=
 
 structure RecordData (s u : MachineState) (i : Index) (o : Nat) : Prop where
   run : RunsOpeningBlock s u (127+recordExtra o)
-  cursor : LowerCursor u i o 14
+  cursor : WholeCursor u i o 14
   register : ∀ r, r ∉ recordScratch → u.getReg r = s.getReg r
   input : ∀ a<proofBase, u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a)
   frame : ∀ a<2^64, a<recordBase o ∨ recordBase (o+1)≤a →
@@ -108,10 +108,11 @@ theorem execute_record_data (s : Submission) (layout : OpeningLayout s) (t : Bit
   refine ⟨?_,⟨result.next.pc,result.next.heap,result.next.node,result.next.dest⟩,?_,
     fun a ha => (result.input a ha).trans (writes.input a ha),?_,?_,?_,?_⟩
   · have chain:=run0.next result.run
-    have price : ∀ c : Fin 4, (9+(Whole.row c 7-Whole.row c 0))+
-        (Whole.point c (0+14)-Whole.point c 0)=127+(Whole.row c 22-Whole.row c 0-118) := by decide
+    have price : ∀ c : Fin 4, ∀ k : Fin 2, ((3+k.val)+(Whole.row c 7-Whole.row c 0))+
+        (Whole.point c (0+14)-Whole.point c 0)=127+(Whole.row c 22-Whole.row c 0-124+k.val) := by decide
+    have k : Whole.firstCost o<2 := by unfold Whole.firstCost;split <;> decide
     change RunsOpeningBlock st u (127+recordExtra o)
-    rw [show 127+recordExtra o=(9+(Whole.row c 7-Whole.row c 0))+(Whole.point c (0+14)-Whole.point c 0) from (price c).symm]
+    rw [show 127+recordExtra o=((3+Whole.firstCost o)+(Whole.row c 7-Whole.row c 0))+(Whole.point c (0+14)-Whole.point c 0) from (price c ⟨_,k⟩).symm]
     exact chain
   · intro r free
     refine (result.kept r ?_ ?_ ?_ ?_ ?_).trans (kept r free)

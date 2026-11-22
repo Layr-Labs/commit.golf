@@ -26,7 +26,7 @@ def state (s : MachineState) : MachineState :=
   else shifted s
 
 theorem jump {s t : MachineState} {S T n c word : Nat} (copy : Done s t S T n c word)
-    (off : BitVec 21) (bound : word<6144) (code : Decodes word (.JAL .x0 off))
+    (off : BitVec 21) (bound : word<7872) (code : Decodes word (.JAL .x0 off))
     (target : BitVec.ofNat 64 (4096+4*word)+signExtend21 off=BitVec.ofNat 64 (4096+4*220)) :
     Done s (execInstrBr t (.JAL .x0 off)) S T n (c+1) 220 := by
   have mem : (execInstrBr t (.JAL .x0 off)).mem=t.mem := rfl

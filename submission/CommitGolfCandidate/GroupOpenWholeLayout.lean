@@ -5,10 +5,10 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 /-- Section starts within the four 512-word pages, checked against the delivered image. -/
 def row (c j : Nat) : Nat := match c with
-  | 0 => ([4096, 4100, 4105, 4116, 4127, 4138, 4140, 4145, 4155, 4167, 4181, 4207, 4227, 4253, 4269, 4300, 4323, 4354, 4371, 4402, 4425, 4450, 4453])[j]?.getD 0
-  | 1 => ([4608, 4620, 4625, 4652, 4679, 4706, 4708, 4713, 4739, 4767, 4793, 4807, 4833, 4853, 4883, 4900, 4931, 4954, 4985, 5002, 5033, 5050, 5053])[j]?.getD 0
-  | 2 => ([5120, 5128, 5133, 5152, 5171, 5190, 5192, 5197, 5215, 5235, 5255, 5281, 5295, 5321, 5343, 5374, 5391, 5422, 5445, 5476, 5493, 5518, 5521])[j]?.getD 0
-  | 3 => ([5632, 5644, 5649, 5676, 5703, 5730, 5732, 5737, 5763, 5791, 5817, 5837, 5863, 5877, 5907, 5930, 5961, 5978, 6009, 6032, 6063, 6074, 6077])[j]?.getD 0
+  | 0 => ([6147, 6151, 6156, 6167, 6178, 6189, 6191, 6196, 6206, 6218, 6232, 6258, 6278, 6304, 6320, 6351, 6374, 6405, 6422, 6453, 6476, 6501, 6503])[j]?.getD 0
+  | 1 => ([6512, 6524, 6529, 6556, 6583, 6610, 6612, 6617, 6643, 6671, 6697, 6711, 6737, 6757, 6787, 6804, 6835, 6858, 6889, 6906, 6937, 6954, 6956])[j]?.getD 0
+  | 2 => ([6965, 6973, 6978, 6997, 7016, 7035, 7037, 7042, 7060, 7080, 7100, 7126, 7140, 7166, 7188, 7219, 7236, 7267, 7290, 7321, 7338, 7363, 7365])[j]?.getD 0
+  | 3 => ([7374, 7386, 7391, 7418, 7445, 7472, 7474, 7479, 7505, 7533, 7559, 7579, 7605, 7619, 7649, 7672, 7703, 7720, 7751, 7774, 7805, 7816, 7818])[j]?.getD 0
   | _ => 0
 
 def rawStart (c f : Nat) := if f=0 then row c 0 else
@@ -71,5 +71,13 @@ theorem sibling_residue (o l : Nat) (hl : l<14) :
   have := class_residue o
   unfold siblingDestination siblingOffset destResidue
   split <;> split_ifs <;> omega
+
+def firstCost (o : Nat) := if o=0 then 1 else 0
+def setupPC (o : Nat) : Word := if o=0 then AlignedFields.pcAt 15 else AlignedFields.pcAt (row (pageClass o) 0-3)
+def nextClass (c : Nat) := (c+3)%4
+
+theorem class_succ (o : Nat) : pageClass (o+1)=nextClass (pageClass o) := by
+  unfold pageClass nextClass recordBase recordBytes;omega
+theorem zero_class : pageClass 0=0 := by decide
 
 end TwoPermutationPrototype.GroupedOpening.Whole

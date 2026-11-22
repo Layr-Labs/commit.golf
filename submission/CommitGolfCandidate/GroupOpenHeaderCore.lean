@@ -14,7 +14,7 @@ structure HeaderRegisters (s : MachineState) (p : Positions) where
   b : Base s p
   quartet : s.getReg .x4=BitVec.ofNat 64 (2^64-1)
   sp : s.getReg .x2=BitVec.ofNat 64 tableBase
-  mask : s.getReg .x1=65520
+  mask : s.getReg .x1=65535
 
 theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 0) (nr : init.getReg .x16≠0#64)
     (base0 : Base (setupPrefix init 15) p)
@@ -46,10 +46,11 @@ theorem header_core (init : MachineState) (p : Positions) (pc : init.pc=address 
     simp [c,configRows,walkRows,execInstrBr,Opening.getReg_setReg,
       MachineState.getReg_setPC,open_zero]
     all_goals decide
-  obtain ⟨mpc,mm,m1,mkeep⟩:=mark_frame t tpc ((keep0 _ (by decide)).trans c1)
-  have keep (k : Reg) (h31 : k≠.x31) (h1 : k≠.x1 := by decide) :
-      m.getReg k=c.getReg k := (mkeep k h1).trans (keep0 k h31)
-  have m4 : m.getReg .x4=BitVec.ofNat 64 (2^64-1) := (mkeep _ (by decide)).trans quartet
+  obtain ⟨mpc,mm,mkeep⟩:=mark_frame t tpc
+  have keep (k : Reg) (h31 : k≠.x31) (_h1 : k≠.x1 := by decide) :
+      m.getReg k=c.getReg k := (mkeep k).trans (keep0 k h31)
+  have m1 : m.getReg .x1=65535 := (mkeep _).trans ((keep0 _ (by decide)).trans c1)
+  have m4 : m.getReg .x4=BitVec.ofNat 64 (2^64-1) := (mkeep _).trans quartet
   have setupSp : (setupPrefix init 15).getReg .x2=init.getReg .x2 := by
     by_cases empty : init.getReg .x16=0#64 <;>
       simp [setupPrefix,setupInstructions,execInstrBr,Opening.getReg_setReg,MachineState.getReg_setPC,beq_iff_eq,empty,open_zero]

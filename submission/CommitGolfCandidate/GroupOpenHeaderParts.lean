@@ -18,7 +18,7 @@ attribute [local simp] mem_of_reg MachineState.getMem_setPC MachineState.getMem_
 theorem layout_ok (s : MachineState) (pc : s.pc=address 0) (nz : s.getReg .x16≠0#64) :
     legal layoutRows s := by
   simp [layoutRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address,beq_iff_eq,nz,
-    show signExtend21 2840#21=2840#64 by decide]
+    show signExtend13 2844#13=2844#64 by decide]
 
 private def tailOps := setupInstructions.drop 3
 
@@ -55,18 +55,30 @@ private theorem instructions_of_rows (s : MachineState) (rows : List Row) :
   | nil => rfl
   | cons row tail ih => exact ih (execInstrBr s row.2)
 
+private theorem setpc_twice (t : MachineState) (p q : Word) : (t.setPC p).setPC q=t.setPC q := rfl
+
 theorem layout_sem (s : MachineState) (pc : s.pc=address 0) (nz : s.getReg .x16≠0#64) :
     walkRows s layoutRows=(setupPrefix s 15).setPC (address 725) := by
-  let before:=setupPrefix s 3
-  have here : before.pc=address 3 := by
-    simp [before,setupPrefix,setupInstructions,execInstrBr,pc,address,beq_iff_eq,nz]
-  have jump : execInstrBr before (.JAL .x0 2840)=before.setPC (address 713) := by
-    change before.setPC (before.pc+signExtend21 2840)=_;rw [here];rfl
-  have first : layoutRows.map Prod.snd=setupInstructions.take 3++[.JAL .x0 2840]++tailOps := rfl
-  have original : setupInstructions.take 15=setupInstructions.take 3++tailOps := rfl
+  let before:=setupPrefix s 2
+  have here : before.pc=address 2 := by
+    simp [before,setupPrefix,setupInstructions,execInstrBr,pc,address]
+  have x16 : before.getReg .x16=s.getReg .x16 := by
+    simp [before,setupPrefix,setupInstructions,execInstrBr]
+  have jump : execInstrBr before (.BNE .x16 .x0 2844)=before.setPC (address 713) := by
+    have yes : (before.getReg .x16 != before.getReg .x0)=true := by simp [x16,nz,open_zero]
+    simp only [execInstrBr,yes,ite_true,here]
+    exact congrArg before.setPC (by decide : address 2+signExtend13 2844=address 713)
+  have fall : execInstrBr before (.BEQ .x16 .x0 2828)=before.setPC (address 3) := by
+    have no : (before.getReg .x16 == before.getReg .x0)=false := by simp [x16,nz,open_zero]
+    simp only [execInstrBr,no,Bool.false_eq_true,ite_false,here]
+    exact congrArg before.setPC (by decide : address 2+4=address 3)
+  have first : layoutRows.map Prod.snd=setupInstructions.take 2++[.BNE .x16 .x0 2844]++tailOps := rfl
+  have original : setupInstructions.take 15=setupInstructions.take 2++[.BEQ .x16 .x0 2828]++tailOps := rfl
   rw [instructions_of_rows,first,setupPrefix,original]
   simp only [List.foldl_append,List.foldl_cons,List.foldl_nil]
-  exact (congrArg (List.foldl execInstrBr · tailOps) jump).trans (moved_tail before)
+  change tailOps.foldl execInstrBr (execInstrBr before _)=(tailOps.foldl execInstrBr (execInstrBr before _)).setPC _
+  rw [jump,fall,moved_tail,moved before (address 3) tailOps (by decide)]
+  exact (setpc_twice _ _ _).symm
 
 theorem config_ok (s : MachineState) (pc : s.pc=address 725) : legal configRows s := by
   simp [configRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
@@ -75,7 +87,7 @@ theorem config_frame (s : MachineState) (pc : s.pc=address 725) (p : Positions)
     (b : Base s p) (salt : s.getReg .x22=9126809632) (base : s.getReg .x26=4096)
     (shift : s.getReg .x25=BitVec.ofNat 64 (8*p.card)) (nz : 0<p.card) (selector : s.getReg .x5=0) :
     let t:=walkRows s configRows
-    t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card ∧ t.getReg .x10=1024 ∧ t.getReg .x1=65536 ∧
+    t.pc=address 733 ∧ t.mem=s.mem ∧ Base t p ∧ Registers t 0 p.card ∧ t.getReg .x10=1024 ∧ t.getReg .x1=65535 ∧
       t.getReg .x2=s.getReg .x2 := by
   let t:=walkRows s configRows
   have keep (k : Reg) (h : k ∉ ([.x10,.x12,.x11,.x13,.x4,.x14,.x17,.x25,.x1] : List Reg)) : t.getReg k=s.getReg k := by
@@ -121,16 +133,14 @@ theorem mark_ok (s : MachineState) (pc : s.pc=address 739) : legal markRows s :=
   simp [markRows,legal,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,pc,address]
   all_goals decide
 
-theorem mark_frame (s : MachineState) (pc : s.pc=address 739) (x1 : s.getReg .x1=65536) :
+theorem mark_frame (s : MachineState) (pc : s.pc=address 739) :
     let t:=walkRows s markRows
-    t.pc=address 3077 ∧ t.mem=s.mem ∧ t.getReg .x1=65520 ∧ ∀ k, k≠.x1 → t.getReg k=s.getReg k := by
-  refine ⟨?_,?_,?_,?_⟩
+    t.pc=address 3077 ∧ t.mem=s.mem ∧ ∀ k, t.getReg k=s.getReg k := by
+  refine ⟨?_,?_,?_⟩
   · simp [walkRows,markRows,execInstrBr,pc,address]
     all_goals decide
   · simp [walkRows,markRows,execInstrBr]
-  · simp [walkRows,markRows,execInstrBr,x1]
-    all_goals decide
-  · intro k n1;simp [walkRows,markRows,execInstrBr,Ne.symm n1]
+  · intro k;simp [walkRows,markRows,execInstrBr]
 
 theorem low_zero (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (w : Nat) (low : w<1024) :
     memoryView (actual.initialState .opening (td,p)) w=0 := by

@@ -8,11 +8,11 @@ open Opening (markBase trapdoorBase machineMarks markWord)
 
 def capPreparation := CapStudy.capPreparation
 
-theorem execute_cap_preparation (state : MachineState) (pc : state.pc = 0x1a24)
+theorem execute_cap_preparation (state : MachineState) (pc : state.pc = CapStudy.Postorder.pcOf 1097)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase) (fuel : Nat) (allowCoins : Bool) :
-    execute openingImage (771 + fuel) state allowCoins =
+    execute openingImage (770 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (capPreparation state) allowCoins
-          return result.charge 771 0) :=
+          return result.charge 770 0) :=
   CapStudy.execute_cap_preparation state pc base fuel allowCoins
 
 theorem cap_preparation_context (state : MachineState) (groups : List Nat) (dest : Nat)

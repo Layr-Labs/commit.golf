@@ -28,7 +28,7 @@ def packStart (c l : Nat) := rawStart c (4+l)+(shape c (4+l)).cycles
 
 private theorem pack_code (c : Fin 4) (l : Fin 14) (hl : folded l) :
     Slice (packStart c l) (packRows l) := by revert l;fin_cases c <;> decide +kernel
-theorem pack_fit (c : Fin 4) (l : Fin 14) : packStart c l+packCost l<6144 := by revert c l;decide
+theorem pack_fit (c : Fin 4) (l : Fin 14) : packStart c l+packCost l<7872 := by revert c l;decide
 
 theorem half_from_words {s u : MachineState} (h : ∀ a<proofBase, u.getMem (BitVec.ofNat 64 a)=s.getMem (BitVec.ofNat 64 a))
     (a : Nat) (below : a<proofBase) : u.getHalfword (BitVec.ofNat 64 a)=s.getHalfword (BitVec.ofNat 64 a) := by

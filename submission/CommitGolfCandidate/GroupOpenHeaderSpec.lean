@@ -7,19 +7,19 @@ set_option maxRecDepth 22000
 set_option maxHeartbeats 2000000
 
 def layoutRows : List Row :=
-  [(0,.ADDI .x20 .x15 0),(1,.ADDI .x21 .x15 0),(2,.BEQ .x16 .x0 2828),(3,.JAL .x0 2840),
+  [(0,.ADDI .x20 .x15 0),(1,.ADDI .x21 .x15 0),(2,.BNE .x16 .x0 2844),
    (713,.ADDI .x8 .x13 0),(714,.ADDI .x9 .x12 0),(715,.LUI .x18 2),(716,.LUI .x19 1024),
    (717,.LUI .x6 131072),(718,.ADD .x24 .x9 .x6),(719,.SLLI .x6 .x6 3),(720,.ADD .x22 .x24 .x6),
    (721,.ADDI .x23 .x0 1),(722,.SLLI .x25 .x16 3),(723,.LUI .x26 1),(724,.ADDI .x27 .x0 256)]
 def configRows : List Row :=
   [(725,.ADDI .x10 .x0 1024),(726,.ADDI .x12 .x0 1536),(727,.ADDI .x11 .x0 200),(728,.ADDI .x13 .x0 1),
-   (729,.ADDI .x4 .x0 (-1)),(730,.ADDI .x14 .x8 0),(731,.ADD .x17 .x8 .x25),(732,.LUI .x1 16)]
+   (729,.ADDI .x4 .x0 (-1)),(730,.ADDI .x14 .x8 0),(731,.ADD .x17 .x8 .x25),(732,.SRLI .x1 .x4 48)]
 def keyRows : List Row :=
   [(733,.LD .x31 .x22 8),(734,.SD .x10 .x31 8),(735,.LD .x31 .x22 16),(736,.SD .x10 .x31 16),
    (737,.LD .x31 .x22 24),(738,.SD .x10 .x31 24)]
-/-- Row 739 completes the table-entry mask `x1 = 65536 - 16 = 65520` (row 732 set `x1 = 65536`) and row 740
-jumps to the first position of the relocated first pass (3077). `x2` keeps the ABI's `sp`, the table base. -/
-def markRows : List Row := [(739,.ADDI .x1 .x1 (-16)),(740,.JAL .x0 9348)]
+/-- Row 739 jumps to the first position of the relocated first pass (3077). Row 732 already set the table-entry
+mask `x1 = (2^64 - 1) >>> 48 = 65535` from `x4 = -1`; `x2` keeps the ABI's `sp`, the table base. -/
+def markRows : List Row := [(739,.JAL .x0 9352)]
 def headerRows := layoutRows++configRows++keyRows++markRows
 def header (s : MachineState) := walkRows s headerRows
 
@@ -35,6 +35,6 @@ theorem nested_slice {n outer width start len : Nat} (word : BitVec n) (bound : 
 structure HeaderFacts : Prop where
   ready : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → Ready td p (keyOf td) (header (actual.initialState .opening (td,p))) 0
   run : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → ∀ fuel, let s:=actual.initialState .opening (td,p)
-    execute openingImage (32+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 32 0)
+    execute openingImage (30+fuel) s true=(do let z ←execute openingImage fuel (header s) true;return z.charge 30 0)
 
 end TwoPermutationPrototype.GroupedOpening

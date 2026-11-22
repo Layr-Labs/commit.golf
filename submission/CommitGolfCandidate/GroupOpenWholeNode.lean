@@ -13,24 +13,21 @@ def nodeHead (l : Nat) (s : MachineState) := if l=0 then execInstrBr s (.LD .x7 
 def point (c l : Nat) := if l=14 then row c 22 else row c (7+l)
 def tailAt (c l : Nat) := packStart c l+packCost l
 def fixedTail (l : Nat) (s : MachineState) := if l=13 then
-  (execCode s [.ADDI .x21 .x21 534,.SRLI .x6 .x6 1]).setPC (pcAt 642)
+  execCode s [.ADDI .x21 .x21 534,.SRLI .x6 .x6 1]
   else execInstrBr s (.SRLI .x6 .x6 1)
 def step (c : Nat) (l : Fin 14) (s : MachineState) :=
   fixedTail l (pack l (copy c (4+l.val) (nodeHead l s)))
 
-private def backOff (c : Nat) := BitVec.ofNat 21 (2^21+4*642-4*(row c 21+2))
-private theorem back_code (c : Fin 4) :
-    Slice (row c 21) [.ADDI .x21 .x21 534,.SRLI .x6 .x6 1] ∧
-    Decodes (row c 21+2) (.JAL .x0 (backOff c)) ∧
-    pcAt (row c 21+2)+signExtend21 (backOff c)=pcAt 642 ∧ row c 21+2<6144 := by revert c;decide +kernel
+private theorem end_code (c : Fin 4) : Slice (row c 21) [.ADDI .x21 .x21 534,.SRLI .x6 .x6 1] ∧
+    row c 21+2=row c 22 ∧ row c 22<7872 := by revert c;decide +kernel
 
 theorem node_layout (c : Fin 4) (l : Fin 14) :
     rawStart c (4+l.val)=row c (7+l.val)+headLen l ∧ source (4+l.val)=.x7 ∧ offset (4+l.val)=siblingOffset l ∧
-    width (4+l.val)=plainWidth l ∧ row c (7+l.val)<6144 ∧
+    width (4+l.val)=plainWidth l ∧ row c (7+l.val)<7872 ∧
     (l.val=13 → tailAt c l=row c 21) ∧
     (l.val≠13 → tailAt c l+1=row c (8+l.val)) ∧
     point c (l.val+1)-point c l =
-      headLen l+(shape c (4+l.val)).cycles+packCost l+(if l.val=13 then 3 else 1) := by
+      headLen l+(shape c (4+l.val)).cycles+packCost l+(if l.val=13 then 2 else 1) := by
   revert c l;decide
 
 theorem node_codes (c : Fin 4) (l : Fin 14) :
@@ -68,7 +65,7 @@ private theorem head_result (c : Fin 4) (l : Fin 14) (s : MachineState) (i : Ind
     · intro r ne;simp [execInstrBr,Ne.symm ne]
   · have h:=sibling_head_post s
     have run : RunsOpeningBlock s (headPrefix s 3) 3 := pure_run s _ headCode (codes.2.1 z)
-      ((show ∀ c : Fin 4, ∀ l : Fin 14, row c (7+l.val)+3≤6144 from by decide) c l)
+      ((show ∀ c : Fin 4, ∀ l : Fin 14, row c (7+l.val)+3≤7872 from by decide) c l)
       pc (by decide)
     simp only [nodeHead,headLen,if_neg z]
     refine ⟨run,?_,h.2.1,physical_sibling_source s i l z heap node,h.2.2.2⟩
@@ -77,26 +74,22 @@ private theorem head_result (c : Fin 4) (l : Fin 14) (s : MachineState) (i : Ind
 private theorem finish_result (c : Fin 4) (l : Fin 14) (s : MachineState)
     (pc : s.pc=pcAt (tailAt c l)) :
     let u:=fixedTail l s
-    RunsOpeningBlock s u (if l.val=13 then 3 else 1) ∧
-    u.pc=(if l.val+1=14 then pcAt 642 else pcAt (row c (7+(l.val+1)))) ∧
+    RunsOpeningBlock s u (if l.val=13 then 2 else 1) ∧
+    u.pc=(if l.val+1=14 then pcAt (row c 22) else pcAt (row c (7+(l.val+1)))) ∧
     u.mem=s.mem ∧ u.getReg .x21=s.getReg .x21+BitVec.ofNat 64 (if l.val=13 then 534 else 0) ∧
     u.getReg .x6=s.getReg .x6 >>> 1 ∧
     ∀ r, r≠.x21 → r≠.x6 → u.getReg r=s.getReg r := by
   have eqs:=(node_layout c l).2.2.2.2.2
   by_cases last : l.val=13
-  · obtain ⟨rows,code,dest,fit⟩:=back_code c
+  · obtain ⟨rows,dest,fit⟩:=end_code c
     let mid := execCode s [.ADDI .x21 .x21 534,.SRLI .x6 .x6 1]
     have start : s.pc=pcAt (row c 21) := pc.trans (congrArg pcAt (eqs.1 last))
     have ran : RunsOpeningBlock s mid 2 := pure_run s _ _ rows (by change _+2≤_;omega) start (by decide)
-    have pcJ : mid.pc=pcAt (row c 21+2) := by change s.pc+4+4=_;rw [start,BitVec.add_assoc];exact ofNat_step _ 2
-    have j:=run_step mid _ _ fit pcJ code rfl rfl
-    have e : execInstrBr mid (.JAL .x0 (backOff c))=mid.setPC (pcAt 642) := by
-      change mid.setPC (mid.pc+signExtend21 (backOff c))=_;rw [pcJ,dest]
-    rw [e] at j
+    have pcJ : mid.pc=pcAt (row c 22) := by change s.pc+4+4=_;rw [start,BitVec.add_assoc,←dest];exact ofNat_step _ 2
     simp only [fixedTail,if_pos last,if_pos (show l.val+1=14 by omega)]
-    refine ⟨ran.next j,rfl,rfl,rfl,rfl,?_⟩
+    refine ⟨ran,pcJ,rfl,rfl,rfl,?_⟩
     intro r a b; simp [execCode,execInstrBr,Ne.symm a,Ne.symm b]
-  · have fit : tailAt c l<6144 := pack_fit c l
+  · have fit : tailAt c l<7872 := pack_fit c l
     have ran:=run_step s _ _ fit pc ((node_codes c l).2.2 last) rfl rfl
     simp only [fixedTail,if_neg last,if_neg (show l.val+1≠14 by omega)]
     refine ⟨ran,?_,rfl,?_,rfl,?_⟩
@@ -169,7 +162,7 @@ theorem node_result (s : MachineState) (i : Index) (o : Nat) (l : Fin 14) (bound
   refine ⟨?_,⟨pcU,(kept _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans cur.heap,?_,?_⟩,
     kept,?_,?_,?_⟩
   · have total:=((runH.next field.run).next pRes.run).next runU
-    change RunsOpeningBlock s u ((headLen l+(shape c (4+l.val)).cycles+packCost l)+(if l.val=13 then 3 else 1)) at total
+    change RunsOpeningBlock s u ((headLen l+(shape c (4+l.val)).cycles+packCost l)+(if l.val=13 then 2 else 1)) at total
     change RunsOpeningBlock s u _
     rw [price];simpa only [Nat.add_assoc] using total
   · change u.getReg .x6=_

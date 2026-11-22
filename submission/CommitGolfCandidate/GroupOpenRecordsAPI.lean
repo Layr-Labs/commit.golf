@@ -10,7 +10,7 @@ open Opening (sortedIndex markBase
 
 structure RecordBoundary (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (state : MachineState) (ordinal : Nat) : Prop where
-  pc : state.pc = if ordinal = positions.card then 0x1a24 else 0x103c
+  pc : state.pc = if ordinal = positions.card then Whole.pcAt 1097 else Whole.setupPC ordinal
   heap : state.getReg .x9 = BitVec.ofNat 64 trapdoorBase
   index : state.getReg .x8 = BitVec.ofNat 64 (indicesBase+8*ordinal)
   nonce : state.getReg .x22 = BitVec.ofNat 64 nonceBase
@@ -49,10 +49,10 @@ the `jal` at 647): its four 32-byte and twelve 30-byte wide copies depend on its
 def recordCost (ordinal : Nat) (final : Bool) : Nat := (if final then 133 else 132)+recordExtra ordinal
 
 def afterLatch (marked : MachineState) (final : Bool) : MachineState :=
-  if final then marked.setPC 0x1a24 else marked
+  marked.setPC (if final then Whole.pcAt 1097 else Whole.pcAt (Whole.row ((marked.getReg .x21).toNat%8/2) 0-3))
 
 def runRecord (state : MachineState) (final : Bool) : MachineState :=
-  afterLatch (recordTailPrefix (recordData state) 5) final
+  afterLatch (recordTailPrefix (recordData state) 4) final
 
 structure OneRecord (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (before after : MachineState) (ordinal : Nat)

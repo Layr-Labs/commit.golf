@@ -157,9 +157,9 @@ structure Input (s : MachineState) (i : Index) (ord left last : Nat) extends Reg
   small : last<2^64
   loaded : s.getMem (indexAt ord)=BitVec.ofNat 64 i.val
   access : accessValid (indexAt ord) 8=true
-  /-- The table base (the ABI's `sp`) and the entry mask set once by the header (rows 732, 739). -/
+  /-- The table base (the ABI's `sp`) and the entry mask set once by the header (row 732). -/
   sp : s.getReg .x2=BitVec.ofNat 64 tableBase
-  mask : s.getReg .x1=65520
+  mask : s.getReg .x1=65535
   /-- The embedded table is in place. -/
   table : TableAt s
 
@@ -198,12 +198,11 @@ def headA : List Row := [(3077,.LD .x6 .x14 0),(3078,.SRLI .x28 .x6 2),(3079,.SL
 theorem head_split : headRows=headA++[(3082,.BEQ .x28 .x4 56)] := rfl
 
 theorem tile16' (i : Index) :
-    (BitVec.ofNat 64 i.val <<< (4:Nat)) &&& 65520#64=BitVec.ofNat 64 (16*(i.val%4096)) := by
+    (BitVec.ofNat 64 i.val <<< (4:Nat)) &&& 65535#64=BitVec.ofNat 64 (16*(i.val%4096)) := by
   have hi : i.val<16777216 := i.isLt
-  rw [show (65520#64 : BitVec 64)=4095#64 <<< (4:Nat) by decide, ← BitVec.shiftLeft_and_distrib]
   apply BitVec.eq_of_toNat_eq
-  rw [BitVec.toNat_shiftLeft, BitVec.toNat_and, BitVec.toNat_ofNat, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
-    Nat.mod_eq_of_lt (by omega : i.val<2^64), show (4095:Nat)%2^64=2^12-1 by norm_num,
+  rw [BitVec.toNat_and, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (by omega : i.val<2^64), show (65535:Nat)%2^64=2^16-1 by norm_num,
     Nat.and_two_pow_sub_one_eq_mod, Nat.shiftLeft_eq]
   norm_num
   omega

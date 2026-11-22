@@ -32,7 +32,7 @@ theorem boundary_at_end (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) 
   have start : s.pc=0x103c := by simpa [passPC,address] using r.pc
   refine ⟨⟨?_,r.heap,?_,r.salt,r.dest,r.leaves,r.slots,inp,?_,r.base,r.mark,(by rw [r.shift]; simpa using r.heap),r.capLeaves,r.start,
     ?_⟩,?_⟩
-  · simpa only [ite_eq_right (Nat.ne_of_lt p0)] using start
+  · simpa [Nat.ne_of_lt p0, Whole.setupPC, AlignedFields.pcAt] using start
   · simpa using r.indices
   · rw [r.endReg]
     unfold indexAt

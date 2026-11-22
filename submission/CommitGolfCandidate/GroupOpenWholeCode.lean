@@ -90,7 +90,7 @@ theorem target_aligned (c : Fin 4) (f : Fin 18) (T : Nat) (r : T%8=destResidue c
   cases eq : shape c f <;> rw [eq] at ht <;> simp only [TargetAligned,←r,Nat.mod_mod] at * <;> omega
 
 theorem placed (c : Fin 4) (f : Fin 18) :
-    rawStart c f+(shape c f).cycles ≤ 6144 ∧ (shape c f).size=width f ∧
+    rawStart c f+(shape c f).cycles ≤ 7872 ∧ (shape c f).size=width f ∧
     source f≠.x31 ∧ offset f+32≤2048 := by
   revert c f; decide
 
