@@ -3,7 +3,7 @@ import CommitGolfCandidate.Layout2Regions
 import CommitGolfCandidate.Layout2Touched
 namespace CommitGolfCandidate.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
-open TwoPermutationPrototype.GroupedOpening (access_ok)
+open CommitGolfCandidate.Layout2Helpers (access_ok)
 def clearScratch : List Reg := [.x5,.x6]
 def temps : List Reg := [.x5,.x6,.x7,.x28,.x29,.x30,.x31,.x8,.x9,.x18,.x19,.x20,.x21]
 structure ClearCursor (s t : MachineState) (j : Nat) : Prop where

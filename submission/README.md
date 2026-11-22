@@ -1,3 +1,120 @@
+# Layout 2 V2b: byte marks and an aligned cap (-3,626 opening cycles)
+
+Based on Layout 2 V2a (72,955 opening cycles, next inherited section). The record pass marks each record's cap leaf
+with one byte instead of one dword. A new cap stage at word 6960 then emits the cap frontier in a dword-aligned
+format with aligned stores, instead of V1's 30-byte copies. The checker first maps the cap back to V1's packed layout
+with its tables and then runs V2a's decoder. The records and the proof length are V2a's, with the same 72,160-byte
+bound for 128 positions.
+
+## The change
+
+- Layout: the records are V2a's. The `f` frontier digests take `C(f) = 238 (f/8) + 30 (f%8)` cap bytes, as before,
+  in a new arrangement (CAP-B), cut into 952-byte blocks of 32 nodes plus one partial block:
+  - In each block, node `j` has its 24 low bytes at `24 j + 8 floor(46 j / 64)`.
+  - The 46-bit tails are packed least significant bit first into carry dwords that sit between the bodies. A
+    partial block ends with a flush of the remaining tail bits.
+  - Each block is a fixed bit permutation of V1's block, given by Astra's table `Layout2.Cap.enc` for the block's
+    node count.
+  - `Cap.encoder p = transform enc k ∘ Quartet.encoder p` (`Layout2CapCodec`).
+- Opener:
+  - Record pass: each tail stores the mark as one byte, `add t2,s10,t1; sb s7,0(t2)` at `4096 + 256 + pos/2^16`,
+    where V2a used `slli; add; sd`. The tails shrink from 7 to 6 words. The four bodies are V2a's word for word, at
+    4097, 4302, 4509 and 4716; the headers are at 4096, 4301, 4508 and 4715. The exits flush 6/4/2/0 bytes as
+    before and jump to 6960.
+  - Cap stage. Starting at word 6960, the opener compresses the 256 mark bytes into 32 doubleword masks with one
+    multiplication each and combines them in an OR tree. It keeps the parent's depth-first walk and three-level
+    chunk dispatch, adapting the dispatch at 8192 and the per-mask blocks at 8224..12319 to use the masks and the new
+    aligned handlers. Frontier digests call one of 32 handlers at words 6144..6655 through word 702 or a call inside a
+    chunk block. Word 707 enters the finish at 6656, which flushes the last carry, copies scratch when needed,
+    computes the proof length and halts. The cap stage makes no oracle call.
+  - When the record end `proofBase + 534 k` is not 8-aligned (k not divisible by 4), the cap is built in a scratch
+    area at 12288 and copied byte by byte.
+  - The empty opening takes the unchanged direct exit (words 0..3, 709..712).
+  - Unreachable code. Words that this entry no longer uses stay in the opening image: the parent's cap preparation at
+    word 1097, words 4919..4923 and the earlier leftovers of the base image. They change no cycle count; the
+    certificate covers the image as delivered. The adapted chunk dispatch and per-mask blocks from word 8192 are
+    active.
+- Checker (Astra): the image has 1,156 words and 337,472 data bytes. V2a's 85,440 record-table bytes are followed by
+  the 256-byte directory and the 32 cap tables.
+  - Word 0 enters a cap pass. It rejects short proofs and nonempty proofs for empty selections.
+  - For a remainder `r` it reads directory entry `floor((r+6)/30)` and rejects a length mismatch.
+  - It rewrites every complete block and the partial block into V1's layout in place, through the tables, and
+    clears its scratch.
+  - Word 1001 then jumps to V2a's quartet guard. Words 1..1000 are V2a's.
+
+```json
+{"commitCycles":504585244,"openingCycles":69329,"proofBytes":72160}
+```
+
+```text
+31 + (312*128 + 2) + 25953 + 3407 = 69329
+records: sum over 128 records of (1 + body + 6) + exit 1 = 26081 - 128 = 25953
+cap stage (k = 128): at most 3,407 cycles, including preparation, root exit and HALT (Astra)
+(504585244 + 69329) * 72160 = 36415873987680
+Parent (72,955):  (504585244 + 72955) * 72160 = 36416135639840
+Saving: 3,626 opening cycles; 261,652,160 score
+```
+
+## Proof changes
+
+- Writer interface: `Layout2Phase2.bodyWord` is 4097/4302/4509/4716 (with `tail_words`). Astra's 11
+  `Layout2Writer2*` modules are unchanged and re-check on this image.
+- Record loop (`Layout2Loop/Steps/Records/Run`):
+  - the 6-word tails with the byte store (`set_byte_read`, `set_byte_mem`);
+  - `ByteMarks` (byte `4096+256+i` is `capIsMarked (groupsBefore p j) (256+i) 0`), zero at the start because the
+    loaded input has zero mark dwords and the pass leaves them;
+  - the exits to 6960, and `l2RecordsCost 128 = 25953`.
+- Boundary (`Layout2CapStage`):
+  - `CapEntry`: the registers, the byte marks and the input region at 6960;
+  - `CapStage capRaw`: the run, the length and the honest relation.
+- `Layout2CapBridge` builds Astra's `CapB.CapEntry` from it (the trapdoor heap dwords, the marked root) and gives
+  `CapStage CapB.capRaw` from Astra's `CapB.cap_stage` and `CapB.cap_raw_honest`.
+- `Layout2ABI`, `Layout2ProofBytes` and `Layout2Full`:
+  - the record loop, then the cap stage;
+  - the proof `l2bProofFromPass capRaw` (V2a's records and flush, then `capRaw` of the raw frontier digests) for
+    every trapdoor (`fixed_open`);
+  - 69,329 cycles at 128 positions.
+- `Layout2Closing`:
+  - `l2b_proof_eq`: on an honest stash, `Cap.encoder_of_blocks`, with V2a's `l2_proof_eq` for the records and
+    `cap_raw_honest` for the cap. The zero high bits of the honest frontier digests come from `upper_heap_high`.
+  - The certificate takes `Cap.decode_encode`, `Cap.honest_good` and Astra's `K1Check.v2b_checker_facts`.
+- V1 cap walk: words 702/707 and the chunk code at 8192.. changed.
+  - `GroupOpenCapAdvance.execute_advance_exit` and `execute_emit_stub`, and
+    `GroupOpenCapMoves.advance_right_to_root`, are removed.
+  - `GroupOpenCapNode/ChunkCode/ChunkRun/Subtree/Emit` and `GroupOpenFinish` are deleted.
+  - `K3OpenCapBytes` is split into Astra's `CapBFormat` and the remainder. The declarations are unchanged.
+- Added: Astra's checker bundle (81 files), Astra's cap-stage bundle (34 `CapB*` files), `Layout2CapStage` and
+  `Layout2CapBridge`.
+- Removed: `Layout2V2CheckerFacts` (V2a's checker statement).
+
+## Evidence
+
+A C emulator of the `Riscv.lean` cost model with stand-in oracles ran one full 2^24-leaf commitment. It then ran
+Layout 2 V2a and this tree on the same trapdoor, over V2a's battery: 100 honest cases covering 92 distinct position sets and 6 tampered proofs.
+- Honest sets:
+  - both checkers accept;
+  - the proof lengths are equal;
+  - the openings make identical numbers of oracle calls.
+- On all 87 cases with saved proofs, covering 79 distinct position sets, the V2b proof is byte for byte `Cap.transform enc k` of V2a's proof, and
+  `transform dec` maps it back.
+- The six tampered proofs are rejected by both checkers.
+- Cycles:
+  - The worst case is V1's worst fixture, at exactly 69,329 cycles (72,955 for V2a).
+  - The 50 tested 128-position cases are 674 to 3,626 cycles faster, and every tested nonempty case with `k`
+    divisible by 4 is faster. Empty openings still take 8 cycles.
+  - Sets with `k` not divisible by 4 take the unaligned fallback (scratch, then a byte copy) and can be slower than
+    V2a, by up to 15,420 cycles at `k = 127`. Only `k = 128` is scored.
+
+Astra's batteries: 237 paired checker cases on this manifest, and 1,103 cap-stage runs from word 6960. The cap-stage
+runs include 552 trapdoors with dirty high bits, all 256 chunk masks, all 32 residues, every record alignment, `f = 0`
+and `k = 2^24`.
+
+The repository verifier (`python3 scripts/run.py`) accepted this tree in a local KVM guest set up like the official one
+(Ubuntu 26.04, systemd 259, Landlock, a non-root account): status verified, score 36,415,873,987,680, artifact digest
+`ca46c281981bce0a…`, in 168 minutes on two CPUs of a heavily loaded host.
+
+## Inherited documentation
+
 # Layout 2 V2a: direct salts and direct quartet replies (-4,994 opening cycles)
 
 Based on Layout 2 V1 (77,949 opening cycles, next inherited section). The first pass now writes each position's salt

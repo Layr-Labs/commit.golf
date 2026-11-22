@@ -190,9 +190,9 @@ theorem atom850 (s : MachineState) (here : s.pc=pc 850) :
     ∃ u, Runs checkImage s u 1 1 ∧ u.pc=(pc 992) ∧ u.mem=s.mem ∧ ∀ r,u.getReg r=(s.getReg r) := by
   exact jump s 850 992 568 (by decide) here code850 (by decide +kernel)
 
-theorem atom0 (s : MachineState) (here : s.pc=pc 0) :
+theorem atom0 (s : MachineState) (here : s.pc=pc 1001) :
     ∃ u, Runs checkImage s u 1 1 ∧ u.pc=(pc 787) ∧ u.mem=s.mem ∧ ∀ r,u.getReg r=(s.getReg r) := by
-  exact jump s 0 787 3148 (by decide) here code0 (by decide +kernel)
+  exact jump s 1001 787 2096296 (by decide) here code0 (by decide +kernel)
 
 theorem atom787 (s : MachineState) (here : s.pc=pc 787) :
     ∃ u, Runs checkImage s u 1 1 ∧ u.pc=(pc 788) ∧ u.mem=s.mem ∧ ∀ r,u.getReg r=(if .x6=r then 0#64 + signExtend12 534 else s.getReg r) := by

@@ -1,13 +1,13 @@
 import CommitGolfCandidate.Layout2Records
 
-/-! Layout 2 V2a opener: the whole record loop. From the state at word 4096 (`L2Start`, the end of the pass), the
-records `0 ..< k` by induction (header, phase body, tail), then the exit stub of phase `(k+3) % 4` with the
-6/4/2/0-byte flush, to the cap preparation at word 1097 (`L2Done`). -/
+/-! Layout 2 V2b opener: the whole record loop. From the state at word 4096 (`L2Start`, the end of the pass), the
+records `0 ..< k` by induction (header, phase body, tail with the byte mark), then the exit stub of phase
+`(k+3) % 4` with the 6/4/2/0-byte flush, to the cap stage at word 6960 (`L2Done`). -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
 open CommitGolfCandidate.Layout2Phase (stride phaseBase writerByte writerCarry recordSource streamRun)
 open CommitGolfCandidate.Layout2Phase2 (bodyWord bodyLen tailWord PhaseFacts PhaseEntry)
-open Opening (sortedIndex RecordMarks groupsBefore machineMarks)
+open Opening (sortedIndex groupsBefore)
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
 
@@ -52,14 +52,14 @@ theorem records_from (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submissi
     obtain ⟨v, r2, fv, pv, dv, cv⟩ := ih (j+1) u (by omega) fu pu du cu
     refine ⟨v, runs_cost (r1.next r2) ?_, fv, pv, dv, cv⟩
     have m := loop_mono (j+1) n
-    have step : loopCost (j+1)=loopCost j+bodyLen (j%4)+8 := rfl
+    have step : loopCost (j+1)=loopCost j+bodyLen (j%4)+7 := rfl
     rw [show j+1+n=j+(n+1) by omega] at m ⊢
     omega
 
-/-- The state at the cap preparation (word 1097) after the record loop. -/
+/-- The state at the cap stage (word 6960) after the record loop. -/
 structure L2Done (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
     (pass state : MachineState) : Prop where
-  pc : state.pc=address 1097
+  pc : state.pc=address 6960
   heap : state.getReg .x9=BitVec.ofNat 64 trapdoorBase
   index : state.getReg .x8=BitVec.ofNat 64 (indicesBase+8*positions.card)
   nonce : state.getReg .x22=BitVec.ofNat 64 nonceBase
@@ -73,7 +73,7 @@ structure L2Done (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor)) (posi
   capLeaves : state.getReg .x27=256#64
   proofBegin : state.getReg .x20=BitVec.ofNat 64 proofBase
   input : SameOpeningInput (s.initialState .opening (trapdoor, positions)) state
-  marked : RecordMarks positions state positions.card
+  marked : ByteMarks positions state positions.card
   bytes : L2Bytes (s.initialState .opening (trapdoor, positions)) pass positions state positions.card
   /-- The pending stream bytes of the last phase (none after a phase-3 record). -/
   flush : ∀ b<flushLen ((positions.card+3)%4), state.getByte (BitVec.ofNat 64 (destOf positions.card+b))=
@@ -85,7 +85,7 @@ private theorem ofNat_ne (a b : Nat) (h : a<b) (hb : b<2^64) : BitVec.ofNat 64 a
   rw [BitVec.toNat_ofNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt hb] at this
   omega
 
-/-- The record loop: `l2RecordsCost k` cycles from word 4096 to word 1097. -/
+/-- The record loop: `l2RecordsCost k` cycles from word 4096 to word 6960. -/
 theorem records_run (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submission) (layout : OpeningLayout s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState)
     (positive : 0<positions.card) (start : L2Start s trapdoor positions begin) :
@@ -123,14 +123,10 @@ theorem records_run (phases : ∀ p<4, PhaseFacts openingImage p) (s : Submissio
   · exact (kr .x20 (by decide) (by decide)).trans fv.proofBegin
   · intro a lo hi al
     exact (far a hi).trans (fv.input a lo hi al)
-  · intro node bounded
-    have tb : trapdoorBase ≤ proofBase := by decide
-    have mk : Opening.markBase+8*node<trapdoorBase := by
-      have : trapdoorBase=4294971424 := by decide
-      unfold Opening.markBase; omega
-    unfold machineMarks
-    rw [far _ (by omega)]
-    exact fv.marked node bounded
+  · intro i hi
+    have mk : Opening.markBase+256+i<proofBase := by unfold Opening.markBase; omega
+    rw [bytes3 _ (by unfold Opening.markBase; omega) (Or.inl (by omega))]
+    exact fv.marked i hi
   · intro j hj b hb
     have mono := dest_mono j positions.card hj
     rw [bytes3 _ (by omega) (Or.inl (by omega))]

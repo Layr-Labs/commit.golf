@@ -3,7 +3,7 @@ import CommitGolfCandidate.Layout2EffectsCopy
 import CommitGolfCandidate.Layout2Touched
 namespace CommitGolfCandidate.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
-open TwoPermutationPrototype.GroupedOpening (access_ok)
+open CommitGolfCandidate.Layout2Helpers (access_ok)
 set_option maxHeartbeats 2000000
 def byteScratch : List Reg := [.x5,.x6,.x19,.x28,.x29,.x30]
 

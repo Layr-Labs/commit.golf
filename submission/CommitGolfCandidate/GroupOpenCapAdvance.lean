@@ -107,17 +107,8 @@ theorem advance_up_post (state : MachineState) (pc : state.pc = 0x1b04) :
   by_cases taken : state.getReg .x6 >>> 1 = state.getReg .x23 <;>
     simp [advancePrefix, advanceCode, execInstrBr, signExtend13, pc, taken] <;> rfl
 
-/-- Row 707: the root exit `jal x0,<709>`. -/
-theorem execute_advance_exit (state : MachineState) (pc : state.pc = 0x1b0c)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute openingImage (1 + fuel) state allowCoins =
-      (do let result ← execute openingImage fuel (state.setPC 0x1b14) allowCoins
-          return result.charge 1 0) := by
-  have fetched := packed_fetch_base state 707 (.JAL .x0 8) (by decide) pc (by decide +kernel)
-  have step : ordinaryStep state (.base (.JAL .x0 8)) = some (state.setPC 0x1b14) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21, pc, MachineState.setReg]
-  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched step]
-  rfl
+/- V2b: row 707 is now `jal x0,<6656>` (the V2b cap stage's root exit), so V1's root-exit step
+(`execute_advance_exit`, to the return block at 709) is no longer a fact of the image and is removed. -/
 
 /-- Row 708: the chunk jump `jal x0,<8192>`. -/
 theorem execute_chunk_jump (state : MachineState) (pc : state.pc = 0x1b10)
@@ -145,18 +136,7 @@ theorem execute_emit_return (state : MachineState) (pc : state.pc = 0x1af4) (tar
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched step]
   rfl
 
-/-- Row 702: the DFS emit stub `jal x18,<668>`, linking the advance block at 703. -/
-def emitStub (state : MachineState) : MachineState := (state.setReg .x18 0x1afc).setPC 0x1a70
-
-theorem execute_emit_stub (state : MachineState) (pc : state.pc = 0x1af8)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute openingImage (1 + fuel) state allowCoins =
-      (do let result ← execute openingImage fuel (emitStub state) allowCoins
-          return result.charge 1 0) := by
-  have fetched := packed_fetch_base state 702 (.JAL .x18 2097016) (by decide) pc (by decide +kernel)
-  have step : ordinaryStep state (.base (.JAL .x18 2097016)) = some (emitStub state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21, pc, emitStub]
-  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched step]
-  rfl
+/- V2b: row 702 is now the handler dispatch `jalr x18,x19,0`, so V1's emit stub (`emitStub`,
+`execute_emit_stub`) is no longer a fact of the image and is removed. -/
 
 end TwoPermutationPrototype.GroupedOpening

@@ -2,9 +2,9 @@ import CommitGolfCandidate.Layout2EffectsBits
 import CommitGolfCandidate.Layout2Invariant
 
 namespace CommitGolfCandidate.Layout2
-open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 TwoPermutationPrototype.GroupedOpening.Wide
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 CommitGolfCandidate.Layout2Helpers
 set_option maxRecDepth 8000
-open TwoPermutationPrototype.GroupedOpening (access_ok)
+open CommitGolfCandidate.Layout2Helpers (access_ok)
 set_option maxHeartbeats 2000000
 
 def bitScratch : List Reg := [.x6,.x19,.x28,.x29,.x30]

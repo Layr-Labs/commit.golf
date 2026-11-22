@@ -8,8 +8,8 @@ open TwoPermutationPrototype.QuartetCertificate (CheckerFactsDec honestCheckInpu
 /-- A certified checker on an encoded external input. Its trace, query budget and binding
 depend only on the converted record bytes. No inverse table is required here. -/
 theorem checker_facts_dec_for (τ : Layout2.Tables) (wf : Layout2.WellFormed τ)
-    (physical : ∀ k, k<85440 → GroupedOpening.pget K1Artifact.checkData k=Layout2.tableByte τ k) :
-    CheckerFactsDec (fun p proof=>Layout2.convert τ p.card (Layout2.Quartet.normalize p proof)) K1Artifact.submission := by
+    (physical : ∀ k, k<85440 → CommitGolfCandidate.Layout2Helpers.pget K1Artifact.checkData k=Layout2.tableByte τ k) :
+    CheckerFactsDec (fun p proof=>Layout2.convert τ p.card (Layout2.Quartet.normalize p (Layout2.Cap.transform Layout2.Cap.dec p.card proof))) K1Artifact.submission := by
   have checked:=Packed.Checker.executable_converted_observation τ wf physical
   refine ⟨fun o i=>(checked o i).terminates,?_,Packed.Checker.binding_of_decoder τ wf physical,?_⟩
   · intro oracle i

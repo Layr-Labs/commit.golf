@@ -3,7 +3,7 @@ import CommitGolfCandidate.Layout2Table
 namespace CommitGolfCandidate.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 TwoPermutationPrototype TwoPermutationPrototype.RV64
 open TwoPermutationPrototype.Checker (check_scratch_word_zero)
-open TwoPermutationPrototype.GroupedOpening.Wide (byte_at)
+open CommitGolfCandidate.Layout2Helpers (byte_at)
 set_option maxRecDepth 6000
 attribute [local irreducible] ArtifactEncoding.decode
 set_option maxHeartbeats 1600000

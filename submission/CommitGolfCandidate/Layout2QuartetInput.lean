@@ -31,6 +31,11 @@ private theorem initial_reg (c : Submission) (i : CheckInput) (r : Reg) :
     (c.initialState .check i).getReg r=abiReg c i.positions.card i.proof.length r := by
   cases r <;> rfl
 
+theorem same_args_for (c : Submission) (i v : CheckInput) (r : Reg)
+    (pos : i.positions=v.positions) (len : i.proof.length=v.proof.length) :
+    (c.initialState .check i).getReg r=(c.initialState .check v).getReg r := by
+  rw [initial_reg,initial_reg,pos,len]
+
 theorem same_args (c : Submission) (i : CheckInput) (r : Reg) :
     (c.initialState .check i).getReg r=(c.initialState .check (prepared i)).getReg r := by
   rw [initial_reg,initial_reg,prepared_len];rfl

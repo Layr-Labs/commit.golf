@@ -26,16 +26,16 @@ theorem lower_step_refines : LowerStepRefines lowerStep := by
 changes when the opening format changes. -/
 theorem executable_converted_observation (τ : CommitGolfCandidate.Layout2.Tables)
     (wf : CommitGolfCandidate.Layout2.WellFormed τ)
-    (physical : ∀ k, k<85440 → GroupedOpening.pget K1Artifact.checkData k=CommitGolfCandidate.Layout2.tableByte τ k)
+    (physical : ∀ k, k<85440 → CommitGolfCandidate.Layout2Helpers.pget K1Artifact.checkData k=CommitGolfCandidate.Layout2.tableByte τ k)
     (oracle : Oracle) (input : CheckInput) :
-    CheckerObservationFacts oracle (CommitGolfCandidate.Layout2.converted τ (CommitGolfCandidate.Layout2.Quartet.prepared input))
+    CheckerObservationFacts oracle (CommitGolfCandidate.Layout2.converted τ (CommitGolfCandidate.Layout2.Quartet.prepared (CommitGolfCandidate.Layout2.Cap.prepared input)))
       (TwoPermutationPrototype.Checker.checkObservation K1Artifact.submission oracle input) :=
   converted_observation τ wf physical (joinedRecord RecordLeaf.block lowerStep)
     (joined_record_refines RecordLeaf.block lowerStep RecordLeaf.actual_leaf_block lower_step_refines)
     checker_cap_facts oracle input
 
 theorem binding_of_decoder (τ : CommitGolfCandidate.Layout2.Tables) (wf : CommitGolfCandidate.Layout2.WellFormed τ)
-    (physical : ∀ k, k<85440 → GroupedOpening.pget K1Artifact.checkData k=CommitGolfCandidate.Layout2.tableByte τ k) :
+    (physical : ∀ k, k<85440 → CommitGolfCandidate.Layout2Helpers.pget K1Artifact.checkData k=CommitGolfCandidate.Layout2.tableByte τ k) :
     K1Artifact.submission.scheme.Binding := by
   apply TwoPermutationPrototype.Quartet.quartet_scheme_binding _ TwoPermutationPrototype.Sampling.k1_peer_leaf_layout_sharp
   intro oracle input

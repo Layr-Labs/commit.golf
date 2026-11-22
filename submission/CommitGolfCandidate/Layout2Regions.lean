@@ -1,7 +1,7 @@
 import CommitGolfCandidate.Layout2Invariant
 namespace CommitGolfCandidate.Layout2
-open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 TwoPermutationPrototype.GroupedOpening.Wide
-open TwoPermutationPrototype.GroupedOpening (halfword_of_bytes)
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 CommitGolfCandidate.Layout2Helpers
+open CommitGolfCandidate.Layout2Helpers (halfword_of_bytes)
 set_option maxHeartbeats 1000000
 
 /-- The temporary block is live during conversion. All other RAM follows the proof-prefix update. -/

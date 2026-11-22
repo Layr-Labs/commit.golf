@@ -1,10 +1,10 @@
 import CommitGolfCandidate.Layout2Invariant
-import CommitGolfCandidate.GroupOpenTable
+import CommitGolfCandidate.Layout2Helpers
 import CommitGolfCandidate.TwoPermutationCheckLoader
 
 namespace CommitGolfCandidate.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
-open TwoPermutationPrototype.GroupedOpening (pget pget_get halfword_bytes half_ext)
+open CommitGolfCandidate.Layout2Helpers (pget pget_get halfword_bytes half_ext)
 set_option maxRecDepth 32000
 set_option maxHeartbeats 1500000
 set_option exponentiation.threshold 2048

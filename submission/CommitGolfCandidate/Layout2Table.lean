@@ -4,7 +4,7 @@ import CommitGolfCandidate.TwoPermutationCheckLoader
 
 namespace CommitGolfCandidate.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
-open TwoPermutationPrototype.GroupedOpening (pget pget_get halfword_bytes half_ext)
+open CommitGolfCandidate.Layout2Helpers (pget pget_get halfword_bytes half_ext)
 set_option maxRecDepth 32000
 set_option maxHeartbeats 1500000
 set_option exponentiation.threshold 2048
@@ -16,13 +16,13 @@ theorem high_input (τ : Tables) (physical : ∀ k, k<85440 → pget K1Artifact.
   refine (initial_input_byte candidate .check input (tableBase+k) (by unfold tableBase;omega)).trans ?_
   let a:=tableBase+k
   have root : ¬(candidate.layout.commitment≤a ∧ a<candidate.layout.commitment+(DIGEST_BITS+7)/8) := by
-    change ¬(4294971392≤68719391296+k ∧ 68719391296+k<4294971424);omega
+    change ¬(4294971392≤68719139264+k ∧ 68719139264+k<4294971424);omega
   have ix : ¬(candidate.layout.indices≤a ∧ a<candidate.layout.indices+8*input.positions.card) := by
-    change ¬(9395245088≤68719391296+k ∧ 68719391296+k<9395245088+8*input.positions.card);omega
+    change ¬(9395245088≤68719139264+k ∧ 68719139264+k<9395245088+8*input.positions.card);omega
   have vs : ¬(candidate.layout.values≤a ∧ a<candidate.layout.values+(LEAF_SIZE/8)*input.positions.card) := by
-    change ¬(9529462880≤68719391296+k ∧ 68719391296+k<9529462880+256*input.positions.card);omega
+    change ¬(9529462880≤68719139264+k ∧ 68719139264+k<9529462880+256*input.positions.card);omega
   have pr : ¬(candidate.layout.proof≤a ∧ a<candidate.layout.proof+input.proof.length) := by
-    change ¬(13824430176≤68719391296+k ∧ 68719391296+k<13824430176+input.proof.length);omega
+    change ¬(13824430176≤68719139264+k ∧ 68719139264+k<13824430176+input.proof.length);omega
   change inputByte candidate .check input a=_
   simpa [inputByte,Submission.inputBuffers,fixedBuffer,positionsBuffer,valuesBuffer,root,ix,vs,pr,data_base,a] using data_read physical k inside
 

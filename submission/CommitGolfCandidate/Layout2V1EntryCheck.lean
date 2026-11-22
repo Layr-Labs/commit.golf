@@ -1,9 +1,9 @@
-import CommitGolfCandidate.GroupOpenTable
+import CommitGolfCandidate.Layout2Helpers
 import CommitGolfCandidate.Layout2Tables
 
 namespace CommitGolfCandidate.Layout2
 open CommitGolf
-open TwoPermutationPrototype.GroupedOpening (pget pget_get)
+open CommitGolfCandidate.Layout2Helpers (pget pget_get)
 set_option maxRecDepth 22000
 set_option maxHeartbeats 1800000
 

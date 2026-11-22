@@ -1,9 +1,9 @@
 import CommitGolfCandidate.Layout2Codec
-import CommitGolfCandidate.GroupOpenWideCopyCore
+import CommitGolfCandidate.Layout2Helpers
 import RiscvZkvm.Rv64.Logic.MemRegionWrite
 
 namespace CommitGolfCandidate.Layout2
-open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 TwoPermutationPrototype.GroupedOpening.Wide
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 CommitGolfCandidate.Layout2Helpers
 abbrev addr := BitVec.ofNat 64
 def byte (s : MachineState) (a : Nat) : Byte := s.getByte (addr a)
 

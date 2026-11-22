@@ -232,21 +232,7 @@ theorem advance_right_to_parent (groups : List Nat) (state : MachineState) (pare
   have ⟨ran, target, pos, memory⟩ := advance_climb groups state parent dest bounded position pc
   exact ⟨ran, by rw [target, if_neg (show ¬ parent = 1 by omega)], pos, memory⟩
 
-/-- The root's right child (node 3) climbs to the root and leaves through the `jal` at 707. -/
-def advanceRootExit (state : MachineState) : MachineState :=
-  (advanceUp state).setPC 0x1b14
-
-theorem advance_right_to_root (groups : List Nat) (state : MachineState) (dest : Nat)
-    (position : CapPosition groups state 3 dest) (pc : state.pc = 0x1afc) :
-    RunsOpeningBlock state (advanceRootExit state) 5 ∧
-    (advanceRootExit state).pc = 0x1b14 ∧
-    CapPosition groups (advanceRootExit state) 1 dest ∧
-    (advanceRootExit state).mem = state.mem := by
-  have ⟨ran, target, pos, memory⟩ :=
-    advance_climb groups state 1 dest (by decide) position pc
-  have exitPC : (advanceUp state).pc = 0x1b0c := by rw [target, if_pos rfl]
-  refine ⟨ran.next (fun fuel coins => execute_advance_exit _ exitPC fuel coins), rfl,
-    ⟨?_, pos.nodeWord, pos.destWord⟩, memory⟩
-  exact context_memory (after := advanceRootExit state) pos.context (fun _ _ => rfl) rfl
+/- V2b: V1's root exit through the `jal` at 707 (`advance_right_to_root`) is removed with
+`GroupOpenCapAdvance.execute_advance_exit`; the V2b cap stage owns the walk. -/
 
 end TwoPermutationPrototype.GroupedOpening

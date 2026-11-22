@@ -1,3 +1,4 @@
+import CommitGolfCandidate.Layout2CapLoaded
 import CommitGolfCandidate.Layout2QuartetLoaded
 import CommitGolfCandidate.Layout2Loaded
 import CommitGolfCandidate.Layout2Delivered
@@ -92,50 +93,51 @@ private theorem positive_body (record : Oracle → Nat → Index → MachineStat
 /-- The physical checker's trace and exit refine the canonical checker facts on converted input.
 The gather table need only be bounded. -/
 theorem converted_observation (τ : Layout2.Tables) (wf : Layout2.WellFormed τ)
-    (physical : ∀ k, k<85440 → GroupedOpening.pget K1Artifact.checkData k=Layout2.tableByte τ k)
+    (physical : ∀ k, k<85440 → CommitGolfCandidate.Layout2Helpers.pget K1Artifact.checkData k=Layout2.tableByte τ k)
     (record : Oracle → Nat → Index → MachineState → RecordBlock) (verified : RecordRefines record)
     (cap : ∀ (oracle : Oracle) (input : CheckInput), input.positions.card ≠ 0 →
       ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
     (oracle : Oracle) (i : CheckInput) :
-    CheckerObservationFacts oracle (Layout2.converted τ (Layout2.Quartet.prepared i)) (checkObservation K1Artifact.submission oracle i) := by
-  let v:=Layout2.converted τ (Layout2.Quartet.prepared i)
+    CheckerObservationFacts oracle (Layout2.converted τ (Layout2.Quartet.prepared (Layout2.Cap.prepared i))) (checkObservation K1Artifact.submission oracle i) := by
+  let v:=Layout2.converted τ (Layout2.Quartet.prepared (Layout2.Cap.prepared i))
   let s:=K1Artifact.submission.initialState .check i
   let k:=i.positions.card
-  have eqL : v.proof.length=i.proof.length := (Layout2.convert_length ..).trans (Layout2.Quartet.prepared_len i)
+  have eqL : v.proof.length=i.proof.length := (Layout2.convert_length ..).trans ((Layout2.Quartet.prepared_len _).trans (Layout2.Cap.prepared_len i))
   change CheckerObservationFacts oracle v _
   by_cases good : i.proof.length ≤ K1Artifact.submission.sizes.proof
   · rw [observation_admitted oracle i good]
     change i.proof.length≤8959041024 at good
     have args:=Layout2.initial_args i good
-    have base : s.pc=Layout2.pc 0 := check_start _ _
-    by_cases short : i.proof.length<534*k
-    · obtain ⟨t,pre,atBad,_,_⟩:=Layout2.Quartet.guard s k _ args base
-      rw [if_pos short] at atBad
-      change Layout2.Runs packedImage s t 4 7 at pre
-      have head:=pre (3+(2^41-7))
-      rw [execute_header_reject _ atBad (2^41-7),pure_bind] at head
-      unfold machine;rw [show (2^41:Nat)=4+(3+(2^41-7)) by decide,head,record_rows_pure,check_evaluation_pure]
-      refine ⟨(by change Exit.failure ≠ Exit.unfinished;decide),Nat.zero_le _,?_,?_⟩
-      · intro no;cases no
-      · intro msg salts canonical
-        have h : 534*v.positions.card ≤ v.proof.length := canonical.symm ▸ honest_input_records_fit oracle msg v.positions salts
-        change 534*k≤_ at h;omega
-    · have long:=Nat.le_of_not_gt short
-      obtain ⟨t,h,c,left,run,endState⟩:=Layout2.Quartet.prepare_run τ wf physical i good long
-      change Layout2.Runs packedImage s t h c at run
+    obtain ⟨t,h,c,left,run,endState⟩:=Layout2.Cap.prepare_run τ wf physical i good
+    change Layout2.Runs packedImage s t h c at run
+    by_cases legal : Layout2.Cap.Good k i.proof.length
+    · rw [if_pos legal] at endState
+      have long := legal.1
       let e:=Layout2.header_entry endState
       let spare:=2^41-h
       have room : 34359803904 ≤ spare := by dsimp [spare];omega
       have body : CheckerObservationFacts oracle v (machine oracle spare t) := by
         by_cases empty : k=0
         · exact empty_body oracle v e (eqL.trans_le good) empty spare (by omega)
-        · obtain ⟨frame,marks⟩:=Layout2.record_entry wf (Layout2.Quartet.prepared i) (by simpa using good) (by simpa [Layout2.Quartet.prepared,Layout2.Quartet.normalize] using long) t endState
+        · obtain ⟨frame,marks⟩:=Layout2.record_entry wf (Layout2.Quartet.prepared (Layout2.Cap.prepared i)) (by simpa using good) (by simpa only [Layout2.Quartet.prepared_len,Layout2.Cap.prepared_len,show (Layout2.Quartet.prepared (Layout2.Cap.prepared i)).positions=i.positions from rfl] using long) t endState
           exact positive_body record verified cap oracle v e (eqL.trans_le good) empty (by change 534*k ≤ v.proof.length;omega)
             frame marks spare room
       exact (show h+spare=2^41 by dsimp [spare];omega) ▸
         observation_hop oracle v s t _ _ spare run body
+    · rw [if_neg legal] at endState
+      let spare:=2^41-(h+3)
+      have sum : h+(3+spare)=2^41 := by dsimp [spare];omega
+      have go:=run (3+spare)
+      rw [execute_header_reject _ endState spare,pure_bind] at go
+      unfold machine;rw [←sum,go,record_rows_pure,check_evaluation_pure]
+      refine ⟨(by change Exit.failure ≠ Exit.unfinished;decide),Nat.zero_le _,?_,?_⟩
+      · intro no;cases no
+      · intro msg salts canonical
+        have ok:=Layout2.Cap.honest_good oracle msg v.positions salts
+        rw [←canonical,eqL] at ok
+        exact False.elim (legal ok)
   · rw [observation_oversized oracle i (Nat.lt_of_not_ge good)]
     refine ⟨(by change Exit.failure ≠ Exit.unfinished;decide),Nat.zero_le _,?_,?_⟩
     · intro no;cases no

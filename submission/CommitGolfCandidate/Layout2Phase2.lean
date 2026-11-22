@@ -3,12 +3,13 @@ import CommitGolfCandidate.Layout2Phase
 /-! Layout 2 V2a (Inc 2 direct salts + Inc 3 direct inverse-quartet output): shared phase interface
 (Opus ↔ Astra), the V2 counterpart of `Layout2Phase`.
 
-Image: `cg-team/astra/layout2/v2/programs.json` (SHA-256 `b0be540d…7f07`). Per phase `p` the record pass is
+Image: V2b, the delivered `programs.json` (SHA-256 `ca46c281…b4b3`); the bodies are V2a's
+(`b0be540d…7f07`) word for word, relocated to `bodyWord p`. Per phase `p` the record pass is
 
     hdr_p  (1 word)          ld t1,0(s0)                                        -- Opus (loop)
     body_p (bodyLen p words) words bodyWord p ..< tailWord p, straight line       -- Astra (writer)
-    tail_p (7 words)         as V1: addi s5,s5,stride; srli; slli; add; sd s7; addi s0,s0,8; bne s0,a7
-    exit_p                   as V1: flush 6/4/2/0 carry bytes, jal <1097>          -- Opus (loop)
+    tail_p (6 words)         addi s5,s5,stride; srli; add t2,s10,t1; sb s7 (byte mark); addi s0,s0,8; bne s0,a7
+    exit_p                   as V1: flush 6/4/2/0 carry bytes, jal <6960>          -- Opus (loop)
 
 At body entry the block `[B, B+stride p)` already holds what pass 1 put there (Opus proves this):
 
@@ -30,8 +31,9 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 CommitGolfCandidate.Layout2Phase
 
 /-- Unit-cost instructions of the V2a `body_p`. -/
 def bodyLen (p : Nat) : Nat := if p=0 then 193 else if p=3 then 196 else 197
-/-- First word of the V2a `body_p`: the word after the header `ld t1,0(s0)` at `bodyWord p - 1`. -/
-def bodyWord (p : Nat) : Nat := if p=0 then 4097 else if p=1 then 4303 else if p=2 then 4511 else 4719
+/-- First word of the V2b `body_p` (V2a's body relocated; V2b's tails are one word shorter): the word after the
+header `ld t1,0(s0)` at `bodyWord p - 1`. -/
+def bodyWord (p : Nat) : Nat := if p=0 then 4097 else if p=1 then 4302 else if p=2 then 4509 else 4716
 /-- First word of `tail_p` (`addi s5,s5,stride p`). -/
 def tailWord (p : Nat) : Nat := bodyWord p+bodyLen p
 
@@ -91,7 +93,7 @@ def PhaseFacts (image : Image) (p : Nat) : Prop :=
 
 /-! ### Sanity checks -/
 
-theorem tail_words : tailWord 0=4290 ∧ tailWord 1=4500 ∧ tailWord 2=4708 ∧ tailWord 3=4915 := by decide
+theorem tail_words : tailWord 0=4290 ∧ tailWord 1=4499 ∧ tailWord 2=4706 ∧ tailWord 3=4912 := by decide
 
 /-- Every V2a body is V1's body less 35 instructions (salt copy 4, mate copies and their address set-up 31). -/
 theorem body_saving : ∀ p<4, bodyLen p+35=Layout2Phase.bodyLen p := by decide

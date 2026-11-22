@@ -4,7 +4,7 @@ namespace CommitGolfCandidate.Layout2.Quartet
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxHeartbeats 1200000
 
-theorem guard (s : MachineState) (k len : Nat) (args : Input s k len) (here : s.pc=pc 0) :
+theorem guard (s : MachineState) (k len : Nat) (args : Input s k len) (here : s.pc=pc 1001) :
     ∃ g, Runs checkImage s g 4 7 ∧ g.pc=(if len<534*k then pc 364 else pc 790) ∧
       g.mem=s.mem ∧ Kept temps s g := by
   obtain ⟨g,run,atG,mem,reg⟩:=ctl_guard s here
@@ -18,7 +18,7 @@ theorem guard (s : MachineState) (k len : Nat) (args : Input s k len) (here : s.
     simp only [reg,if_neg f]
 
 theorem prefix_run (s : MachineState) (k len : Nat) (qs : Selectors)
-    (args : Input s k len) (base : s.getReg .x13=addr indicesBase) (here : s.pc=pc 0)
+    (args : Input s k len) (base : s.getReg .x13=addr indicesBase) (here : s.pc=pc 1001)
     (indices : Indices s k qs) (long : 534*k≤len) :
     ∃ m h, h≤9+65*k ∧ Runs checkImage s m h (h+3) ∧ m.pc=pc 786 ∧
       Writes s m proofBase (534*k) (payload s k qs) ∧ Kept temps s m := by

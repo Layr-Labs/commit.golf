@@ -1,7 +1,7 @@
 import CommitGolfCandidate.Layout2V1EntryCheck
 namespace CommitGolfCandidate.Layout2
 open CommitGolf
-open TwoPermutationPrototype.GroupedOpening (pget pget_get)
+open CommitGolfCandidate.Layout2Helpers (pget pget_get)
 set_option maxRecDepth 22000
 set_option maxHeartbeats 1800000
 private theorem checked_4_0 : entriesCheck 4 0 2048=true := by decide +kernel

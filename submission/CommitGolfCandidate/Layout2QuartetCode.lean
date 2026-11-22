@@ -2,7 +2,7 @@ import CommitGolfCandidate.Layout2QuartetBytes
 namespace CommitGolfCandidate.Layout2.Quartet
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 set_option maxRecDepth 10000
-theorem code0 : (checkImage.code[0]?).bind decodeInstruction=some (.base (.JAL .x0 3148)) := rfl
+theorem code0 : (checkImage.code[1001]?).bind decodeInstruction=some (.base (.JAL .x0 2096296)) := rfl
 theorem code787 : (checkImage.code[787]?).bind decodeInstruction=some (.base (.ADDI .x6 .x0 534)) := rfl
 theorem code788 : (checkImage.code[788]?).bind decodeInstruction=some (.base (.MUL .x6 .x16 .x6)) := rfl
 theorem code789 : (checkImage.code[789]?).bind decodeInstruction=some (.base (.BLTU .x17 .x6 6492)) := rfl

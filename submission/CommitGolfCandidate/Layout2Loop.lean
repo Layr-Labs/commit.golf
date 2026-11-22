@@ -4,10 +4,10 @@ import CommitGolfCandidate.GroupOpenMemory
 import CommitGolfCandidate.GroupOpenCapEmitPrefix
 import CommitGolfCandidate.GroupOpenTable
 
-/-! Layout 2 V2a opener, record loop code around the phase writers: the per-phase header (`hdrWord p`, 1 word,
-`ld t1,0(s0)`; the pass jumps straight to phase 0's header at word 4096), the per-phase tail (`tailWord p`, 7 words:
-stride, mark of the cap leaf, index advance, latch) and the exit stubs (`exitWord p`: flush of the 6/4/2/0 pending
-stream bytes and the jump to the cap preparation at 1097). The geometry is `Layout2Phase2`'s. -/
+/-! Layout 2 V2b opener, record loop code around the phase writers: the per-phase header (`hdrWord p`, 1 word,
+`ld t1,0(s0)`; the pass jumps straight to phase 0's header at word 4096), the per-phase tail (`tailWord p`, 6 words:
+stride, byte mark of the cap leaf, index advance, latch) and the exit stubs (`exitWord p`: flush of the 6/4/2/0
+pending stream bytes and the jump to the cap stage at 6960). The geometry is `Layout2Phase2`'s (V2b `bodyWord`). -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
 open CommitGolfCandidate.Layout2Phase (stride phaseBase)
@@ -23,7 +23,7 @@ theorem word_address (i : Nat) : Layout2Phase.wordAddress i=address i := rfl
 
 /-- First word of phase `p`'s header and of its exit stub. -/
 def hdrWord (p : Nat) : Nat := bodyWord p-1
-def exitWord (p : Nat) : Nat := tailWord p+7
+def exitWord (p : Nat) : Nat := tailWord p+6
 /-- Bytes the exit stub of phase `p` flushes (the pending stream bits of `a1`). -/
 def flushLen (p : Nat) : Nat := if p=0 then 6 else if p=1 then 4 else if p=2 then 2 else 0
 /-- Cycles of the exit stub of phase `p`. -/
@@ -37,17 +37,19 @@ def branchTo (w t : Nat) : BitVec 13 := BitVec.ofNat 13 ((8192+4*t-4*w)%8192)
 def hdrRowsAt (w : Nat) : List Row := [(w,.LD .x6 .x8 0)]
 def hdrRows (p : Nat) : List Row := hdrRowsAt (hdrWord p)
 
+/-- The V2b tail: `addi s5,s5,stride; srli t1,t1,1; add t2,s10,t1; sb s7,0(t2); addi s0,s0,8; bne s0,a7`. The mark
+of the record's cap leaf `256 + pos/65536` is the byte `1` at `4096 + 256 + pos/65536`. -/
 def tailRows (p : Nat) : List Row :=
   [(tailWord p,.ADDI .x21 .x21 (BitVec.ofNat 12 (stride p))),(tailWord p+1,.SRLI .x6 .x6 1),
-   (tailWord p+2,.SLLI .x7 .x6 3),(tailWord p+3,.ADD .x7 .x26 .x7),(tailWord p+4,.SD .x7 .x23 0),
-   (tailWord p+5,.ADDI .x8 .x8 8),(tailWord p+6,.BNE .x8 .x17 (branchTo (tailWord p+6) (hdrWord ((p+1)%4))))]
+   (tailWord p+2,.ADD .x7 .x26 .x6),(tailWord p+3,.SB .x7 .x23 0),
+   (tailWord p+4,.ADDI .x8 .x8 8),(tailWord p+5,.BNE .x8 .x17 (branchTo (tailWord p+5) (hdrWord ((p+1)%4))))]
 
 def exitRows (p : Nat) : List Row :=
-  if p=0 then [(4297,.SW .x21 .x11 0),(4298,.SRLI .x11 .x11 32),(4299,.SH .x21 .x11 4),(4300,.ADDI .x21 .x21 6),
-    (4301,.JAL .x0 (jumpTo 4301 1097))]
-  else if p=1 then [(4507,.SW .x21 .x11 0),(4508,.ADDI .x21 .x21 4),(4509,.JAL .x0 (jumpTo 4509 1097))]
-  else if p=2 then [(4715,.SH .x21 .x11 0),(4716,.ADDI .x21 .x21 2),(4717,.JAL .x0 (jumpTo 4717 1097))]
-  else [(4922,.JAL .x0 (jumpTo 4922 1097))]
+  if p=0 then [(4296,.SW .x21 .x11 0),(4297,.SRLI .x11 .x11 32),(4298,.SH .x21 .x11 4),(4299,.ADDI .x21 .x21 6),
+    (4300,.JAL .x0 (jumpTo 4300 6960))]
+  else if p=1 then [(4505,.SW .x21 .x11 0),(4506,.ADDI .x21 .x21 4),(4507,.JAL .x0 (jumpTo 4507 6960))]
+  else if p=2 then [(4712,.SH .x21 .x11 0),(4713,.ADDI .x21 .x21 2),(4714,.JAL .x0 (jumpTo 4714 6960))]
+  else [(4918,.JAL .x0 (jumpTo 4918 6960))]
 
 theorem hdr_present (p : Nat) (hp : p<4) : presentRows (hdrRows p) := by
   apply rows_present; revert p; decide +kernel

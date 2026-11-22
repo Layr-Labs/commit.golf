@@ -11,7 +11,7 @@ set_option linter.unreachableTactic false
 set_option linter.unusedTactic false
 attribute [local simp] zero mem_pc pc_pc mem_reg pc_ite reg_ite mem_ite
 attribute [local irreducible] execute checkImage
-theorem ctl_guard (s : MachineState) (here : s.pc=pc 0) :
+theorem ctl_guard (s : MachineState) (here : s.pc=pc 1001) :
     ∃ t, Runs checkImage s t 4 7 ∧ t.pc=(if BitVec.ult (s.getReg .x17) (s.getReg .x16*534#64) then pc 364 else pc 790) ∧ t.mem=s.mem ∧
       ∀ r, t.getReg r=(if .x6=r then (s.getReg .x16*534#64) else if .x6=r then (0#64+534#64) else s.getReg r) := by
   obtain ⟨u0,run0,p0,m0,r0⟩:=atom0 s here

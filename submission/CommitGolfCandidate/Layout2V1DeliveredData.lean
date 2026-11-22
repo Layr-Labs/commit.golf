@@ -5,7 +5,7 @@ import CommitGolfCandidate.Layout2V1Bank3
 import CommitGolfCandidate.Layout2V1Bank4
 namespace CommitGolfCandidate.Layout2
 open CommitGolf
-open TwoPermutationPrototype.GroupedOpening (pget pget_get)
+open CommitGolfCandidate.Layout2Helpers (pget pget_get)
 set_option maxRecDepth 22000
 set_option maxHeartbeats 1800000
 theorem v1_entry (r i : Nat) (lo : 1≤r) (hi : r≤4) (inside : i<4272*r) :
@@ -32,7 +32,7 @@ private theorem bank_end (r : Nat) (lo : 1≤r) (hi : r≤4) : tableOffset r+2*(
   interval_cases r <;> decide
 
 private theorem byte_fit (j : Nat) (hj : j<85440) : pget K1Artifact.checkData j<256 := by
-  rw [←pget_get K1Artifact.checkData ⟨j,hj⟩]
+  rw [←pget_get K1Artifact.checkData ⟨j,by omega⟩]
   exact BitVec.isLt _
 
 attribute [local irreducible] decTables K1Artifact.checkData

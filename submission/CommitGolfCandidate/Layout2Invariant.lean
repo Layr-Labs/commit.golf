@@ -1,12 +1,12 @@
 import CommitGolfCandidate.Layout2Blocks
 import CommitGolfCandidate.Layout2Memory
-import CommitGolfCandidate.GroupOpenSiblingRun
+import CommitGolfCandidate.Layout2Helpers
 
 namespace CommitGolfCandidate.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
-open TwoPermutationPrototype.GroupedOpening (halfword_of_bytes)
+open CommitGolfCandidate.Layout2Helpers (halfword_of_bytes)
 abbrev scratchBase : Nat := 4096
-abbrev tableBase : Nat := 68719391296
+abbrev tableBase : Nat := 68719139264
 abbrev proofBase : Nat := 13824430176
 
 def Kept (except : List Reg) (s t : MachineState) := ∀ r, r∉except → t.getReg r=s.getReg r
