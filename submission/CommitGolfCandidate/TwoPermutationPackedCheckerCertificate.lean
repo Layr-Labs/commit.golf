@@ -28,7 +28,8 @@ theorem executable_converted_observation (τ : CommitGolfCandidate.Layout2.Table
     (wf : CommitGolfCandidate.Layout2.WellFormed τ)
     (physical : ∀ k, k<85440 → CommitGolfCandidate.Layout2Helpers.pget K1Artifact.checkData k=CommitGolfCandidate.Layout2.tableByte τ k)
     (oracle : Oracle) (input : CheckInput) :
-    CheckerObservationFacts oracle (CommitGolfCandidate.Layout2.converted τ (CommitGolfCandidate.Layout2.Quartet.prepared (CommitGolfCandidate.Layout2.Cap.prepared input)))
+    CheckerObservationFacts oracle (CommitGolfCandidate.Layout2.converted τ (CommitGolfCandidate.Layout2.Quartet.prepared
+      (CommitGolfCandidate.Layout2.Cap.prepared (CommitGolfCandidate.Layout2.Cap.effective input))))
       (TwoPermutationPrototype.Checker.checkObservation K1Artifact.submission oracle input) :=
   converted_observation τ wf physical (joinedRecord RecordLeaf.block lowerStep)
     (joined_record_refines RecordLeaf.block lowerStep RecordLeaf.actual_leaf_block lower_step_refines)
@@ -44,7 +45,7 @@ theorem binding_of_decoder (τ : CommitGolfCandidate.Layout2.Tables) (wf : Commi
   have checked:=executable_converted_observation τ wf physical oracle input
   have count:=checked.queries
   have card:=TwoPermutationPrototype.Checker.checker_positions_bound input
-  change _ ≤ 26*input.positions.card at count
+  change _ ≤ 41*input.positions.card at count
   exact ⟨by omega,checked.paths accepted⟩
 
 end TwoPermutationPrototype.Packed.Checker

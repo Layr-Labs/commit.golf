@@ -169,7 +169,7 @@ theorem nav_copyDone (s : MachineState) (here : s.pc=pc 6670) :
   · intro r;cases r <;> simp [r0,m0,MachineState.getMem,BitVec.add_assoc,signExtend12]
 
 theorem nav_haltJump (s : MachineState) (here : s.pc=pc 6671) :
-    ∃ t, Run openingImage s t 1 1 ∧ t.pc=(pc 709) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
+    ∃ t, Run openingImage s t 1 1 ∧ t.pc=(pc 12320) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
   obtain ⟨u0,h0,p0,m0,r0⟩:=leaf6671 s here
   refine ⟨u0,h0,?_,m0,?_⟩
   · simpa [r0,m0,MachineState.getMem,BitVec.add_assoc,signExtend12] using p0

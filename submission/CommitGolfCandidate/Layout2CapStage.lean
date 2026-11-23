@@ -5,14 +5,15 @@ import CommitGolfCandidate.TwoPermutationOpeningABI
 import CommitGolfCandidate.Layout2CapCodec
 import CommitGolfCandidate.GroupOpenImage
 
-/-! Layout 2 V2b: the boundary between the record loop (Opus) and the cap stage (Astra) at opening word 6960.
+/-! Layout 2 V2b with the one-byte search: the boundary between the record loop (Opus) and the cap stage (Astra) at opening word 6960.
 
 `CapEntry` is what the record loop establishes at 6960 for `k = p.card > 0` records (Opus, `Layout2ABI`).
 `CapStage capRaw` is what the cap stage provides, for a pure byte function `capRaw` of the raw frontier digests:
 
 - `run`: from any `CapEntry`, a deterministic run to the successful HALT, with no oracle call, an explicit steps bound
-  (fuel), at most 3,407 cycles for 128 positions, the proof length `534 k + capOffset f`, the record bytes
-  `[proofBase, proofBase+534k)` kept, and the cap bytes `capRaw (frontierDigests td p)` after them;
+  (fuel), at most 3,412 cycles for 128 positions, the proof length `534 k + capOffset f - dropped k f` (one-byte
+  search: the final byte is left out exactly when `k = f = 128`), the record bytes `[proofBase, proofBase+534k)`
+  kept, and the cap bytes `capRaw (frontierDigests td p)` after them;
 - `length`: `capRaw ds` has `capOffset ds.length` bytes;
 - `honest`: on digests whose bits `238..255` are zero, the bytes of `capRaw ds` are, block by block,
   `gather enc` of `foldNodes ds` (the `caps` premise of `Cap.encoder_of_blocks`).
@@ -20,6 +21,9 @@ import CommitGolfCandidate.GroupOpenImage
 Definitions only; neither side imports the other's proof modules. -/
 namespace CommitGolfCandidate.Layout2CapStage
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype TwoPermutationPrototype.GroupedOpening
+
+/-- The one-byte search: the opener leaves out the final proof byte exactly when `k = f = 128`. -/
+def dropped (k f : Nat) : Nat := if k=128 ∧ f=128 then 1 else 0
 
 /-- The state at opening word 6960 after the record loop, for `k = p.card > 0` records, with the input loaded as
 `initial`. -/
@@ -57,9 +61,10 @@ structure CapStage (capRaw : List (BitVec 256) → List Byte) : Prop where
   run : ∀ (s : Submission) (layout : OpeningLayout s) (td : BitVec (8*s.sizes.trapdoor)) (p : Positions)
       (st : MachineState), s.image .opening=openingImage →
       CapEntry (s.initialState .opening (td,p)) st p →
-    ∃ final steps cycles, steps ≤ 2^30 ∧ (p.card=128 → cycles ≤ 3407) ∧
+    ∃ final steps cycles, steps ≤ 2^30 ∧ (p.card=128 → cycles ≤ 3412) ∧
       (∀ surplus, execute openingImage (steps+surplus) st true=pure ⟨.success,final,cycles,0⟩) ∧
-      (final.getReg .x11).toNat=534*p.card+capOffset (Opening.openingNodes p).length ∧
+      (final.getReg .x11).toNat=534*p.card+capOffset (Opening.openingNodes p).length-
+        dropped p.card (Opening.openingNodes p).length ∧
       (∀ a, proofBase ≤ a → a<proofBase+534*p.card →
         final.getByte (BitVec.ofNat 64 a)=st.getByte (BitVec.ofNat 64 a)) ∧
       bytesAt final (proofBase+534*p.card) (capOffset (Opening.openingNodes p).length)=

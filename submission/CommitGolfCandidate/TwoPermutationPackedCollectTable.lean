@@ -2,6 +2,7 @@ import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationCollectTable
 import CommitGolfCandidate.TwoPermutationPackedPaths
 import CommitGolfCandidate.TwoPermutationPackedHonestInput
+import CommitGolfCandidate.TwoPermutationPackedNearHonest
 import CommitGolfCandidate.QuadBinding
 import CommitGolfCandidate.QuartetOpeningSchedule
 
@@ -64,7 +65,7 @@ structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) 
     Nonempty (RecordedLower oracle index.val (input.values index)
       (capRootAt state (capGroup index.val)) rows)
   honest : ∀ (message : Message) (salts : CompleteSaltTape),
-    input = honestCheckInput oracle message input.positions salts →
+    NearHonest input (honestCheckInput oracle message input.positions salts) →
     ∀ group ∈ Opening.groupsBefore input.positions ordinal,
       capRootAt state group = honestHeap oracle message salts group
 
@@ -92,7 +93,7 @@ theorem collected_table_append (oracle : Oracle) (input : CheckInput) (ordinal :
     (latest : let idx := honestIndex input.positions ordinal present
       Nonempty (RecordedLower oracle idx.val (input.values idx) (capRootAt next (capGroup idx.val)) extra))
     (honestLatest : ∀ (message : Message) (salts : CompleteSaltTape),
-      input = honestCheckInput oracle message input.positions salts →
+      NearHonest input (honestCheckInput oracle message input.positions salts) →
       capRootAt next (capGroup (honestIndex input.positions ordinal present).val) =
         honestHeap oracle message salts (capGroup (honestIndex input.positions ordinal present).val)) :
     CollectedTable oracle input (ordinal+1) next (rows++extra) := by

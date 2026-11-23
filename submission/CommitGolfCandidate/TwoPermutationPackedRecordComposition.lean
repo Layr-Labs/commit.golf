@@ -44,7 +44,7 @@ structure LeafBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
   trace :
     let index := honestIndex input.positions ordinal present
     Nonempty (PackedLeafTrace oracle index.val (input.values index) (readBuffer block.state 12288 32) block.rows)
-  honest : ∀ message salts, input=honestCheckInput oracle message input.positions salts →
+  honest : ∀ message salts, NearHonest input (honestCheckInput oracle message input.positions salts) →
     readBuffer block.state 12288 32 =
       honestHeap oracle message salts
         (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex input.positions ordinal present).val) 2)
@@ -121,14 +121,12 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
       List.mem_append_left later.rows leafTrace.second, leafTrace.quartet, leafTrace.reply, leafTrace.child,
       List.mem_append_left later.rows leafTrace.parentRow, witness⟩⟩
   · intro message salts canonical
-    have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
-      Eq.mp (congrArg (fun data => RecordInputFrame data ordinal before) canonical) framed
     change readBuffer later.state 12288 32 = honestHeap oracle message salts (capGroup item.val)
     rw [← QuartetCheck.cap_group_flip item.val]
     apply tail.honest _ (honestLeaves oracle message salts)
     · exact entry.honest message salts canonical
     · intro level _ within
       rw [leaf_sibling_frame before early.state input ordinal level present within entry.frame]
-      exact canonical_lower_wire_sibling oracle message input.positions salts ordinal present before loaded level within
+      exact canonical_lower_wire_sibling oracle message input.positions salts ordinal present before canonical framed level within
 
 end TwoPermutationPrototype.Packed.Checker

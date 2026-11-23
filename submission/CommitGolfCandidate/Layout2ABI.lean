@@ -3,15 +3,15 @@ import CommitGolfCandidate.Layout2CapStage
 import CommitGolfCandidate.QuartetOpeningSchedule
 import CommitGolfCandidate.GroupOpenSetup
 
-/-! Layout 2 V2b opener after the pass: the record loop (`records_run`, to word 6960), then the cap stage
-(`Layout2CapStage.CapStage capRaw`, a hypothesis until the cap stage's theorem is supplied). The result
-(`L2OpenPhysical`) holds the V2a record blocks (relative to the state `pass` the pass left), the flush bytes and the
-raw cap bytes `capRaw (frontierDigests td p)` at `proofBase + 534 k`. -/
+/-! Layout 2 V2b opener with the one-byte search, after the pass: the record loop (`records_run`, to word 6960), then
+the cap stage (`Layout2CapStage.CapStage capRaw`). The result (`L2OpenPhysical`) holds the V2a record blocks
+(relative to the state `pass` the pass left), the flush bytes and the raw cap bytes `capRaw (frontierDigests td p)`
+at `proofBase + 534 k`; the proof length leaves out the final cap byte exactly when `k = f = 128`. -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate Sampling
 open CommitGolfCandidate.Layout2Phase (stride writerByte)
 open CommitGolfCandidate.Layout2Phase2 (PhaseFacts)
-open CommitGolfCandidate.Layout2CapStage (CapEntry CapStage frontierDigests)
+open CommitGolfCandidate.Layout2CapStage (CapEntry CapStage frontierDigests dropped)
 open QuartetOpening (proofLength)
 open Opening (groupsBefore openingNodes)
 set_option maxRecDepth 16000
@@ -29,7 +29,7 @@ structure L2OpenPhysical (s : Submission) (capRaw : List (BitVec 256) → List B
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (pass : MachineState) (result : Execution) :
     Prop where
   success : result.exit = .success
-  length : (result.state.getReg .x11).toNat = proofLength positions
+  length : (result.state.getReg .x11).toNat = proofLength positions-dropped positions.card (openingNodes positions).length
   noCalls : result.oracleCalls = 0
   lower : L2Bytes (s.initialState .opening (trapdoor, positions)) pass positions result.state positions.card
   flush : ∀ b<flushLen ((positions.card+3)%4), result.state.getByte (BitVec.ofNat 64 (destOf positions.card+b))=
@@ -54,7 +54,7 @@ theorem l2_body (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List (Bi
     (cap : CapStage capRaw) (s : Submission) (abi : L2ABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState)
     (positive : 0<positions.card) (ready : L2Start s trapdoor positions begin) :
-    ∃ final steps cycles, steps ≤ 2^30 ∧ (positions.card=128 → cycles ≤ 3407) ∧
+    ∃ final steps cycles, steps ≤ 2^30 ∧ (positions.card=128 → cycles ≤ 3412) ∧
       (∀ surplus, execute openingImage (l2RecordsCost positions.card+steps+surplus) begin true =
         pure ⟨.success,final,l2RecordsCost positions.card+cycles,0⟩) ∧
       L2OpenPhysical s capRaw trapdoor positions begin ⟨.success,final,l2RecordsCost positions.card+cycles,0⟩ := by

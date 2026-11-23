@@ -11,7 +11,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate S
 open CommitGolfCandidate.Layout2Phase (stride writerByte)
 open QuartetOpening (proofLength)
 open Opening (openingNodes)
-open CommitGolfCandidate.Layout2CapStage (frontierDigests)
+open CommitGolfCandidate.Layout2CapStage (frontierDigests dropped)
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
 
@@ -80,18 +80,27 @@ theorem records_read (loaded pass state : MachineState) (positions : Positions)
     rw [show proofBase+(destOf n-proofBase)+b=destOf n+b by omega]
     exact lower n (by omega) b hb'
 
-/-- The decoded output of the V2b opener. -/
+theorem bytes_at_take (state : MachineState) (address n m : Nat) (h : m ≤ n) :
+    bytesAt state address m=(bytesAt state address n).take m := by
+  unfold bytesAt
+  rw [← List.map_take, List.take_range, Nat.min_eq_left h]
+
+/-- The decoded output of the V2b opener with the one-byte search: the first `proofLength - dropped` bytes of
+`l2bProofFromPass`. -/
 theorem read_l2b_proof (s : Submission) (abi : L2ABI s) (capRaw : List (BitVec 256) → List Byte)
     (trapdoor : BitVec (8 * s.sizes.trapdoor)) (positions : Positions) (pass : MachineState) (result : Execution)
     (physical : L2OpenPhysical s capRaw trapdoor positions pass result) :
-    s.readProof result = l2bProofFromPass (s := s) capRaw trapdoor pass positions := by
+    s.readProof result = (l2bProofFromPass (s := s) capRaw trapdoor pass positions).take
+      (proofLength positions-dropped positions.card (openingNodes positions).length) := by
   have fit : (result.state.getReg .x11).toNat ≤ s.sizes.proof := by
     rw [physical.length]
-    exact (QuartetOpening.capacity_all positions).trans abi.capacity
+    exact (Nat.sub_le _ _).trans ((QuartetOpening.capacity_all positions).trans abi.capacity)
   have success : s.openingSucceeded result = true := by
     simp [Submission.openingSucceeded, physical.success, fit]
   simp only [Submission.readProof, success, ite_true, physical.length, abi.toOpeningLayout.proof]
-  change bytesAt result.state proofBase (proofLength positions) = _
+  change bytesAt result.state proofBase (proofLength positions-dropped positions.card (openingNodes positions).length)=_
+  rw [bytes_at_take result.state proofBase (proofLength positions) _ (Nat.sub_le _ _)]
+  congr 1
   have lo := (dest_bound positions.card).1
   have fl := dest_end positions.card
   have split : proofLength positions =

@@ -3,7 +3,7 @@ import CommitGolfCandidate.Layout2CapStage
 import CommitGolfCandidate.GroupOpenVirtual
 import CommitGolfCandidate.GroupOpenHeaderSpec
 
-/-! Layout 2 V2b: Astra's cap-stage machine theorem (`CapB.cap_stage`, from word 6960 to the HALT) in the form the
+/-! Layout 2 V2b with the one-byte search: Astra's cap-stage machine theorem (`CapB.cap_stage`, from word 6960 to the HALT) in the form the
 opener's assembly uses (`Layout2CapStage.CapStage CapB.capRaw`). The record loop's `CapEntry` gives Astra's
 `CapB.CapEntry` for the groups of the opened positions and the raw trapdoor heap; the honest relation
 (`HonestCap CapB.capRaw`) is a separate premise. -/
@@ -65,10 +65,10 @@ theorem astra_entry (s : Submission) (layout : OpeningLayout s) (td : BitVec (8*
 theorem cap_stage_of (honest : HonestCap CapB.capRaw) : CapStage CapB.capRaw where
   run := by
     intro s layout td p st _ e
-    obtain ⟨t, steps, cycles, sb, cb, _, ran, len, kept, bytes⟩ := CapB.cap_stage (astra_entry s layout td p st e)
+    obtain ⟨t, steps, cycles, sb, cb, ran, len, kept, bytes⟩ := CapB.cap_stage (astra_entry s layout td p st e)
     have nodes : Opening.openingNodes p=Sampling.capFrontierNodes (Opening.groupsBefore p p.card) 1 8 := by
       unfold Opening.openingNodes; rw [if_neg (by have := e.nonempty; omega)]
-    refine ⟨t, steps, cycles, by omega, cb, ran, by rw [nodes]; exact len, ?_, ?_⟩
+    refine ⟨t, steps, cycles, by omega, cb, ran, by rw [nodes]; unfold dropped; exact len, ?_, ?_⟩
     · intro a lo hi; exact kept a lo hi
     · unfold frontierDigests; rw [nodes]; exact bytes
   length := fun ds => by rw [CapB.capRaw_length, Layout2.Cap.size_eq]; rfl

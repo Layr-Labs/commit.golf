@@ -52,7 +52,7 @@ termination_by N-i
 theorem scratchCopy (s : MachineState) (b N : Nat) (space : 12288+N≤b ∧ b+N≤MEMORY_BYTES)
     (here : s.pc=pc 6663) (dst : s.getReg .x14=addr b) (stop : s.getReg .x21=addr (12288+N)) :
     ∃ t, Run openingImage s t (3+5*N) (3+5*N) ∧ t.pc=pc 6671 ∧ t.getReg .x21=addr (b+N) ∧
-    t.getReg .x20=s.getReg .x20 ∧ Layout2.Writes s t b N (fun j=>gbyte s (12288+j)) := by
+    t.getReg .x20=s.getReg .x20 ∧ Layout2.Writes s t b N (fun j=>gbyte s (12288+j)) ∧ t.getReg .x14=addr (b+N) := by
   have lim : MEMORY_BYTES<2^64 := by decide
   obtain ⟨u,ru,pu,mu,rU⟩:=nav_copyStart s here
   have atU : u.pc=if 0=N then pc 6670 else pc 6665 := by
@@ -64,5 +64,5 @@ theorem scratchCopy (s : MachineState) (b N : Nat) (space : 12288+N≤b ∧ b+N�
     ((Layout2.writes_zero s _ _).move rfl mu)
   obtain ⟨t,rt,pt,regM,regT⟩:=nav_copyDone v pv
   have len : 2+5*(N-0)+1=3+5*N := by omega
-  exact ⟨t,by simpa only [len] using (ru.thenDo rv).thenDo rt,pt,by simp [regT,dv],by simp [regT,ov,rU],bv.move rfl regM⟩
+  exact ⟨t,by simpa only [len] using (ru.thenDo rv).thenDo rt,pt,by simp [regT,dv],by simp [regT,ov,rU],bv.move rfl regM,by simp [regT,dv]⟩
 end CommitGolfCandidate.CapB

@@ -11,16 +11,15 @@ set_option linter.unreachableTactic false
 set_option linter.unusedTactic false
 attribute [local simp] zero mem_pc pc_pc mem_reg pc_ite reg_ite mem_ite
 attribute [local irreducible] execute checkImage
-theorem ctl_guard (s : MachineState) (here : s.pc=pc 0) :
-    ∃ t, Runs checkImage s t 4 7 ∧ t.pc=(if BitVec.ult (s.getReg .x17) ((s.getReg .x16)*534#64) then pc 364 else pc 1005) ∧ t.mem=s.mem ∧ (∀ r,t.getReg r=(if .x6=r then ((s.getReg .x16)*534#64) else s.getReg r)) ∧ Kept temps s t := by
-  obtain ⟨u0,h0,p0,m0,r0⟩:=atom0 s here
-  obtain ⟨u1,h1,p1,m1,r1⟩:=atom1002 u0 p0
+theorem ctl_guard (s : MachineState) (here : s.pc=pc 1002) :
+    ∃ t, Runs checkImage s t 3 6 ∧ t.pc=(if BitVec.ult (s.getReg .x17) ((s.getReg .x16)*534#64) then pc 364 else pc 1005) ∧ t.mem=s.mem ∧ (∀ r,t.getReg r=(if .x6=r then ((s.getReg .x16)*534#64) else s.getReg r)) ∧ Kept temps s t := by
+  obtain ⟨u1,h1,p1,m1,r1⟩:=atom1002 s here
   obtain ⟨u2,h2,p2,m2,r2⟩:=atom1003 u1 p1
   obtain ⟨u3,h3,p3,m3,r3⟩:=atom1004 u2 p2
-  refine ⟨u3,(((h0.thenDo h1).thenDo h2).thenDo h3),?_,(m3.trans (m2.trans (m1.trans m0))),?_,?_⟩
-  · simpa [r3,r2,r1,r0,signExtend12] using p3
-  · intro r;cases r <;> simp [r3,r2,r1,r0,signExtend12]
-  · intro r fr;cases r <;> first | exact (fr (by decide)).elim | simp [r3,r2,r1,r0,signExtend12]
+  refine ⟨u3,((h1.thenDo h2).thenDo h3),?_,(m3.trans (m2.trans m1)),?_,?_⟩
+  · simpa [r3,r2,r1,signExtend12] using p3
+  · intro r;cases r <;> simp [r3,r2,r1,signExtend12]
+  · intro r fr;cases r <;> first | exact (fr (by decide)).elim | simp [r3,r2,r1,signExtend12]
 
 theorem ctl_empty (s : MachineState) (here : s.pc=pc 1005) :
     ∃ t, Runs checkImage s t 1 1 ∧ t.pc=(if (s.getReg .x16) == 0#64 then pc 1154 else pc 1006) ∧ t.mem=s.mem ∧ (∀ r,t.getReg r=(s.getReg r)) ∧ Kept temps s t := by

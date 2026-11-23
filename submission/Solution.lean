@@ -9,7 +9,7 @@ theorem submission_matches_artifact : submission = CommitGolf.Artifact.submissio
 
 private theorem k1_manifest : submission = K1Artifact.submission := rfl
 
-theorem certificate : Certificate submission 72160 504585244 69329 := by
+theorem certificate : Certificate submission 72159 504585244 69334 := by
   rw [k1_manifest]
   exact TwoPermutationPrototype.GroupedOpening.Layout2V2.layout2_certificate
 

@@ -48,7 +48,7 @@ theorem word6667 : (openingImage.code[6667]?).bind decodeInstruction=some (.base
 theorem word6668 : (openingImage.code[6668]?).bind decodeInstruction=some (.base (.ADDI .x14 .x14 1)) := rfl
 theorem word6669 : (openingImage.code[6669]?).bind decodeInstruction=some (.base (.BNE .x6 .x21 8176)) := rfl
 theorem word6670 : (openingImage.code[6670]?).bind decodeInstruction=some (.base (.ADDI .x21 .x14 0)) := rfl
-theorem word6671 : (openingImage.code[6671]?).bind decodeInstruction=some (.base (.JAL .x0 2073304)) := rfl
+theorem word6671 : (openingImage.code[6671]?).bind decodeInstruction=some (.base (.JAL .x0 22596)) := rfl
 theorem word709 : (openingImage.code[709]?).bind decodeInstruction=some (.base (.SUB .x11 .x21 .x20)) := rfl
 theorem word710 : (openingImage.code[710]?).bind decodeInstruction=some (.base (.ADDI .x5 .x0 1)) := rfl
 theorem word711 : (openingImage.code[711]?).bind decodeInstruction=some (.base (.ADDI .x10 .x0 0)) := rfl

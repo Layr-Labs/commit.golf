@@ -5,21 +5,21 @@ import CommitGolfCandidate.TwoPermutationPackedHonestInput
 import CommitGolfCandidate.Layout2Full
 import CommitGolfCandidate.Layout2V2Bridge
 import CommitGolfCandidate.Layout2Abstract
-import CommitGolfCandidate.Layout2V2bCheckerFacts
+import CommitGolfCandidate.Layout2OneByteCheckerFacts
 import CommitGolfCandidate.Layout2CapOpenerSpec
 import CommitGolfCandidate.Layout2CapLoaded
 import CommitGolfCandidate.Layout2CapBridge
 import CommitGolfCandidate.CapBHonest
 import CommitGolfCandidate.Layout2Writer2Facts
 
-/-! Layout 2 V2b closing assembly. The commitment is today's (honest Quartet view with linked generator salts). The
-opener outputs `l2bProofFromPass capRaw` of the trapdoor and the pass's end state: V2a's record blocks and flush,
-then the cap stage's raw cap bytes. V2a's records are Astra's quartet transform of V1's proof of the reference
-trapdoor (`pass_proof_eq`), so on an honest stash the V2a proof is `Quartet.encoder p` of today's honest proof
-(`l2_proof_eq`); with the cap stage's honest relation and `Cap.encoder_of_blocks` the V2b proof is
-`Cap.encoder p` of it (`l2b_proof_eq`). `certificate_of_dec` with the checker's `CheckerFactsDec` for
-`Cap.decoder` gives the certificate at 72,160 proof bytes, 504,585,244 commit cycles and 69,329 worst opening
-cycles. -/
+/-! Layout 2 V2b closing assembly, with the one-byte search. The commitment is today's (honest Quartet view with
+linked generator salts). The opener outputs `obProofFromPass capRaw` of the trapdoor and the pass's end state: V2a's
+record blocks and flush, then the cap stage's raw cap bytes, less the final byte when `k = f = 128`. V2a's records are
+Astra's quartet transform of V1's proof of the reference trapdoor (`pass_proof_eq`), so on an honest stash the V2a
+proof is `Quartet.encoder p` of today's honest proof (`l2_proof_eq`); with the cap stage's honest relation and
+`Cap.encoder_of_blocks` the V2b proof is `Cap.encoder p` of it (`l2b_proof_eq`), and the opener's proof is `obEnc p`
+of it (`ob_proof_eq`). `certificate_of_linked_enc` with the checker's `CheckerFactsEnc obEnc` gives the certificate
+at 72,159 proof bytes, 504,585,244 commit cycles and 69,334 worst opening cycles. -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2V2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open TwoPermutationPrototype.GroupedOpening TwoPermutationPrototype.GroupedOpening.Layout2
@@ -33,15 +33,18 @@ set_option exponentiation.threshold 2048
 local instance groupedFullSpace {α : Type} : MeasurableSpace α := ⊤
 
 /-- The claim: proof bytes, commit cycles and worst opening cycles. -/
-abbrev claimProofBytes : Nat := 72160
+abbrev claimProofBytes : Nat := 72159
 abbrev claimCommitCycles : Nat := 504585244
-abbrev claimOpeningCycles : Nat := 69329
+abbrev claimOpeningCycles : Nat := 69334
 
 /-- V2a's encoding of an honest proof (V1's bit tables, then the quartet transform), the reference of the bridge. -/
 abbrev l2Enc : Positions → Proof → Proof := CommitGolfCandidate.Layout2.Quartet.encoder
 /-- The V2b opener's encoding (V2a's, then the cap transform) and the checker's decoding (Astra's `Layout2.Cap`). -/
 abbrev l2bEnc : Positions → Proof → Proof := CommitGolfCandidate.Layout2.Cap.encoder
 abbrev l2bDec : Positions → Proof → Proof := CommitGolfCandidate.Layout2.Cap.decoder
+/-- The one-byte search's encoding (`Cap.obEnc`): `Cap.encoder`, less the final byte when `k = 128` and the encoded
+proof has 72,160 bytes. -/
+abbrev obEnc : Positions → Proof → Proof := CommitGolfCandidate.Layout2.Cap.obEnc
 
 noncomputable def committed (o : Oracle) (m : Message) (k : Grouped.Key) :=
   actual.readCommit (Grouped.packedOutput o (Grouped.seededLeaves o m k))
@@ -233,14 +236,61 @@ theorem l2b_proof_eq (capRaw : List (BitVec 256) → List Byte) (cap : CapStage 
     rw [lhs, cap_at, nlen]
     simp only [src]
 
+theorem cap_encoder_length (p : Positions) (P : Proof) : (l2bEnc p P).length=P.length := by
+  simp [l2bEnc, CommitGolfCandidate.Layout2.Cap.encoder]
+
+/-- An honest proof has `proofLength p` bytes. -/
+theorem honest_length (o : Oracle) (m : Message) (k : Grouped.Key) (p : Positions) :
+    (Quartet.honestView Quartet.builder o.compression (BiPermutation.equiv Block o.permutation) m p
+        (Permutation.LinkedSalt.salts QuartetCounterCertificate.linkedSchedule o.permutation k)).2.length=
+      QuartetOpening.proofLength p := by
+  let td := stash o m k
+  let ld := actual.initialState .opening (td,p)
+  let pass := passEnd o td p
+  let ds := frontierDigests (s:=actual) td p
+  have rl : ((List.range p.card).flatMap (physRecord2 ld pass p) ++ physFlush ld p).length=534*p.card :=
+    prefix_length ld pass p
+  have v2a : l2ProofFromPass (s:=actual) td pass p=
+      ((List.range p.card).flatMap (physRecord2 ld pass p) ++ physFlush ld p) ++ foldNodes ds := rfl
+  have e := congrArg List.length (l2_proof_eq o m k p)
+  rw [v2a, CommitGolfCandidate.Layout2.Quartet.encoder_length, List.length_append, rl, fold_nodes_length] at e
+  have dl : ds.length=(Opening.openingNodes p).length := by
+    show ((Opening.openingNodes p).map (fun n => td.extractLsb' (256*n) 256)).length=_
+    rw [List.length_map]
+  rw [← e, dl, proof_length_split]
+
+/-- On an honest stash the opener's proof is `obEnc p` of today's honest proof. -/
+theorem ob_proof_eq (capRaw : List (BitVec 256) → List Byte) (cap : CapStage capRaw)
+    (o : Oracle) (m : Message) (k : Grouped.Key) (p : Positions) :
+    obProofFromPass capRaw (stash o m k) (passEnd o (stash o m k) p) p =
+      obEnc p (Quartet.honestView Quartet.builder o.compression (BiPermutation.equiv Block o.permutation) m p
+        (Permutation.LinkedSalt.salts QuartetCounterCertificate.linkedSchedule o.permutation k)).2 := by
+  have len := (cap_encoder_length p _).trans (honest_length o m k p)
+  have split := proof_length_split p
+  have nb := Opening.opening_nodes_bound p
+  unfold obProofFromPass obEnc CommitGolfCandidate.Layout2.Cap.obEnc
+  rw [l2b_proof_eq capRaw cap o m k p, len]
+  unfold CommitGolfCandidate.Layout2CapStage.dropped
+  by_cases hd : p.card=128 ∧ (Opening.openingNodes p).length=128
+  · have L : QuartetOpening.proofLength p=72160 := by rw [split, hd.1, hd.2]; rfl
+    rw [if_pos hd, if_pos ⟨hd.1, L⟩, L]
+  · have nd : ¬(p.card=128 ∧ QuartetOpening.proofLength p=72160) := by
+      rintro ⟨c, h⟩
+      apply hd
+      refine ⟨c, ?_⟩
+      rw [split, c] at h
+      unfold capOffset at h
+      omega
+    rw [if_neg hd, if_neg nd, Nat.sub_zero, List.take_of_length_le (by rw [len])]
+
 theorem l2_refines (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List (BitVec 256) → List Byte)
     (cap : CapStage capRaw) :
-    Quartet.LinkedQuartetRefinesEnc QuartetCounterCertificate.linkedSchedule l2bEnc actual.scheme :=
-  QuartetCounterCertificate.linked_refines_of_parts_enc actual.scheme l2bEnc
+    Quartet.LinkedQuartetRefinesEnc QuartetCounterCertificate.linkedSchedule obEnc actual.scheme :=
+  QuartetCounterCertificate.linked_refines_of_parts_enc actual.scheme obEnc
     (fun o m k => QuartetCommit.physicalHeap o m (Grouped.chainSalts o k) 1) stash
-    (fun o td p => l2bProofFromPass (s:=actual) capRaw td (passEnd o td p) p)
+    (fun o td p => obProofFromPass capRaw td (passEnd o td p) p)
     commit_distribution (fun o td p => fixed_open phases capRaw cap o td p) (fun _ _ _ _ => rfl)
-    (fun o m k p => l2b_proof_eq capRaw cap o m k p)
+    (fun o m k p => ob_proof_eq capRaw cap o m k p)
 
 private theorem opening_runs (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List (BitVec 256) → List Byte)
     (cap : CapStage capRaw) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (z : Execution)
@@ -270,34 +320,31 @@ theorem honest_fits (oracle : Oracle) (message : Message) (positions : Positions
   unfold LENGTH LOG_LENGTH at card room
   omega
 
-theorem cap_encoder_length (p : Positions) (P : Proof) : (l2bEnc p P).length=P.length := by
-  simp [l2bEnc, CommitGolfCandidate.Layout2.Cap.encoder]
-
-/-- The V2b certificate from the phase writers, the cap stage and the checker's facts for `Cap.decoder`. -/
+/-- The certificate from the phase writers, the cap stage and the one-byte checker's facts for `obEnc`. -/
 theorem l2_certificate (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List (BitVec 256) → List Byte)
-    (cap : CapStage capRaw) (checks : QuartetCertificate.CheckerFactsDec l2bDec actual) :
+    (cap : CapStage capRaw) (checks : QuartetCertificate.CheckerFactsEnc obEnc actual) :
     Certificate actual claimProofBytes claimCommitCycles claimOpeningCycles :=
-  QuartetCounterCertificate.certificate_of_dec GroupedChecks.resources GroupedChecks.admitted
+  QuartetCounterCertificate.certificate_of_linked_enc GroupedChecks.resources GroupedChecks.admitted
     ⟨opening_runs phases capRaw cap, l2_refines phases capRaw cap⟩ checks
-    (fun o m p s => CommitGolfCandidate.Layout2.Cap.decode_encode p _ (CommitGolfCandidate.Layout2.Cap.honest_good o m p s))
-    (fun o m p s => cap_encoder_length _ _)
-    (fun o m p s => honest_fits o m p s)
 
-/-- The V2b certificate from Astra's V2a phase writers (`layout2_writer2_facts`, on the V2b body words), the cap
-stage and Astra's V2b checker (`K1Check.v2b_checker_facts`). -/
-theorem layout2_certificate_of (capRaw : List (BitVec 256) → List Byte) (cap : CapStage capRaw) :
+/-- The certificate from Astra's V2a phase writers (`layout2_writer2_facts`, on the V2b body words), the cap
+stage and the one-byte checker's facts. -/
+theorem layout2_certificate_of (capRaw : List (BitVec 256) → List Byte) (cap : CapStage capRaw)
+    (checks : QuartetCertificate.CheckerFactsEnc obEnc actual) :
     Certificate actual claimProofBytes claimCommitCycles claimOpeningCycles :=
-  l2_certificate layout2_writer2_facts capRaw cap CommitGolf.K1Check.v2b_checker_facts
+  l2_certificate layout2_writer2_facts capRaw cap checks
 
-/-- The V2b certificate with Astra's cap-stage machine theorem (`CapB.cap_stage`); the cap stage's honest relation
-for `CapB.capRaw` is the remaining premise. -/
-theorem layout2_certificate_of_honest (honest : CommitGolfCandidate.Layout2CapStage.HonestCap CommitGolfCandidate.CapB.capRaw) :
+/-- The certificate with Astra's cap stage (`CapB.cap_stage`, with the one-byte guard) and its honest relation
+(`CapB.cap_raw_honest`); the one-byte checker's facts are the remaining premise. -/
+theorem layout2_certificate_of_checks (checks : QuartetCertificate.CheckerFactsEnc obEnc actual) :
     Certificate actual claimProofBytes claimCommitCycles claimOpeningCycles :=
-  layout2_certificate_of CommitGolfCandidate.CapB.capRaw (CommitGolfCandidate.Layout2CapStage.cap_stage_of honest)
+  layout2_certificate_of CommitGolfCandidate.CapB.capRaw
+    (CommitGolfCandidate.Layout2CapStage.cap_stage_of (fun ds _ clean => CommitGolfCandidate.CapB.cap_raw_honest ds clean))
+    checks
 
-/-- The V2b certificate: Astra's V2a phase writers on the V2b body words, Astra's cap stage (`CapB.cap_stage`) with
-its honest relation (`CapB.cap_raw_honest`), and Astra's V2b checker (`K1Check.v2b_checker_facts`). -/
+/-- The certificate: Astra's cap stage with the one-byte guard, and the one-byte checker's facts
+(`K1Check.onebyte_checker_facts`). -/
 theorem layout2_certificate : Certificate actual claimProofBytes claimCommitCycles claimOpeningCycles :=
-  layout2_certificate_of_honest (fun ds _ clean => CommitGolfCandidate.CapB.cap_raw_honest ds clean)
+  layout2_certificate_of_checks CommitGolf.K1Check.onebyte_checker_facts
 
 end TwoPermutationPrototype.GroupedOpening.Layout2V2

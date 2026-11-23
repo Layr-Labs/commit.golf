@@ -1,3 +1,95 @@
+# One-byte search: 72,159 proof bytes (-504,293,778 score)
+
+Based on Layout 2 V2b (69,329 opening cycles at 72,160 proof bytes, next inherited section). When a 128-position proof
+would be exactly 72,160 bytes, the opener leaves out its final byte, and the checker finds that byte again by trying
+its 256 values against the commitment. The proof bytes for 128 positions drop to 72,159, at a cost of 5 opening cycles.
+
+## The change
+
+- Which byte. In V2b's cap layout the final proof byte holds exactly bits 230..237 of the last frontier digest. A
+  proof of 72,160 bytes at 128 positions has 128 frontier digests, and the last one belongs to cap node 510, 511 or
+  255, depending on which of the cap leaves 510 and 511 are marked.
+- Opener. Word 6671, the cap stage's return, jumps to a length guard at 12320..12328. When the records end aligned
+  (the copy destination `x14` is 0, so `k` is a multiple of 4) and the length is 72,160, it drops the final byte;
+  then it halts. Only `k = 128` with 128 frontier digests gives that pair. The guard adds 5 cycles when it drops
+  the byte, 4 on other aligned openings and 1 on unaligned ones; the empty opening keeps its own exit.
+- Checker entry. Word 0 jumps to 1156..1162. When `k = 128` and the length is 72,159, the length becomes 72,160;
+  memory beyond the proof is zero, so the final byte reads as 0. Then V2b's checker runs.
+- Search. On a root mismatch, the root comparisons at words 347, 350, 353 and 356 go to a search at 1163:
+  - it rejects unless the proof ends at `proofBase + 72160`;
+  - it picks `u` from the marks of cap leaves 510 and 511 (`u` = 511, 510 or 255; it rejects if both are marked).
+    With 128 frontier digests, `u` owns the final byte;
+  - for `g = 1..255` it writes `g` into bits 230..237 of `u`'s slot, recomputes `u`'s ancestors with the walk's
+    compression and 238-bit mask, and accepts when the root equals the commitment;
+  - it rejects after `g = 255`.
+  The initial walk uses the supplied byte, which is 0 after padding a shortened proof. The subsequent trials use
+  values 1..255. The search makes at most 255 * 8 = 2,040 compression calls, so the check stays within 41 calls per position
+  against the budget of 100. Two bytes would need 65,536 candidates, more than the whole budget.
+
+```json
+{"commitCycles":504585244,"openingCycles":69334,"proofBytes":72159}
+```
+
+```text
+31 + (312*128 + 2) + 25953 + 3412 = 69334        (cap stage with the guard: 3,407 + 5)
+(504585244 + 69334) * 72159 = 36415369693902
+Parent: (504585244 + 69329) * 72160 = 36415873987680
+Saving: 504,293,778 score
+```
+
+## Binding
+
+The search runs on every proof that reaches it with a read length of 72,160: a 72,159-byte proof padded at entry, a
+72,160-byte proof at 128 positions, and a 72,160-byte proof at 129 positions. There is no flag. Binding does not
+depend on how the search was reached; it comes from the rows recorded in the accepting run:
+
+- Without a search, the walk's recorded paths are V2b's.
+- In trial `g`, every opened leaf's path is the walk's path from the leaf up to the node where it leaves `u`'s
+  path, followed by trial `g`'s recomputed rows up to the root, which equals the commitment. With `u` in
+  {510, 511, 255} that node is a right-spine node or the left child of one, so its slot still holds the walk's value
+  (`meet_table`, checked by the kernel for every leaf; `search_binding`).
+- These paths feed the existing scheme binding unchanged (`binding_of_decoder`).
+
+## Proof changes
+
+- Opener: `CapBGuard` and the changed end of the cap stage (`CapBCopy`, `CapBFlow*`, `CapBResult`) prove the guard;
+  `Layout2Full` gives 69,334 cycles and 72,159 bytes at 128 positions; `Layout2ProofBytes`, `Layout2CapStage` and
+  `Layout2CapBridge` carry the dropped byte through.
+- Checker: `Layout2OneByteGuard` (entry), `Layout2OneByteDecode` (the padded decoder),
+  `TwoPermutationPackedSearch{Head,Loop,Climb,Run,Paths}` (the search, its query bound `search_facts` and
+  `search_binding`), `TwoPermutationPackedNearHonest` and `TwoPermutationPackedNearCap` (the record and cap facts for
+  inputs that agree with the honest one except in that byte), `TwoPermutationPackedFrontierCount`, and the cap walk
+  and root modules, which now record the slots the walk keeps and send a mismatch to the search.
+  `K1CheckFacts.checker_facts_onebyte_for` and `Layout2OneByteCheckerFacts.onebyte_checker_facts` give the checker
+  facts for the encoder that drops the byte (`Cap.obEnc`).
+- Honest acceptance: when the byte is dropped, the padded input decodes to the honest input with bits 230..237 of
+  the last frontier digest cleared; the two-load pick is that digest's node, trial `g` = the honest bits restores it
+  and the climb reaches the honest root (`honest_trial`), and when those bits are 0 the walk accepts directly. No
+  other honest proof at 128 positions is 72,159 bytes long, so the guard leaves them unchanged.
+- `Layout2Closing`, `Solution.lean` and `claim.json` claim 72,159 bytes and 69,334 cycles. `Layout2V2bCheckerFacts`
+  is replaced by `Layout2OneByteCheckerFacts`. `programs.json`, `K1Manifest`, `GroupOpenImage` and
+  `TwoPermutationPackedImage` are regenerated.
+
+## Evidence
+
+A C emulator of the `Riscv.lean` cost model with stand-in oracles ran one full 2^24-leaf commitment, then V2b and
+this tree on the same trapdoor:
+- 106 honest pairs: both checkers accept, with equal opener oracle-call counts and the expected proof lengths.
+  Bytewise comparison of 93 saved proof pairs finds equality except on the 23 shortened sets, where only the final
+  byte is dropped; the other 13 pairs have matching 64-bit proof hashes. The worst case is V2b's worst fixture at
+  69,334 cycles and 72,159 bytes (69,329 and 72,160 for V2b).
+- The three fixtures with `u` = 511, 510 and 255 accept. Each rejects when tampered, with a bit flipped in the last
+  kept byte, or truncated to 72,158 bytes, and accepts when padded back to 72,160 bytes with final byte 0 or 255. A
+  mixed fixture also accepts on both images; this battery records no mutation tests for that fixture.
+- Malformed 72,159-byte inputs (random bytes, another set's proof, tampered proofs) are rejected.
+- With a test oracle that ignores one input bit, so that two candidates always collide, all 20 runs accept.
+
+The repository verifier (`python3 scripts/run.py`) accepted this tree in a local KVM guest set up like the official one
+(Ubuntu 26.04, systemd 259, Landlock, a non-root account): status verified, score 36,415,369,693,902, artifact digest
+`4f64e6e03b562c6c…`, in 143 minutes on two CPUs.
+
+## Inherited documentation
+
 # Layout 2 V2b: byte marks and an aligned cap (-3,626 opening cycles)
 
 Based on Layout 2 V2a (72,955 opening cycles, next inherited section). The record pass marks each record's cap leaf

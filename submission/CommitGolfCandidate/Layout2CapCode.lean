@@ -10,7 +10,6 @@ set_option linter.unusedSimpArgs false
 set_option linter.unreachableTactic false
 set_option linter.unusedTactic false
 attribute [local simp] zero mem_pc pc_pc mem_reg pc_ite reg_ite mem_ite
-theorem capCode0 : (checkImage.code[0]?).bind decodeInstruction=some (.base (.JAL .x0 4008)) := rfl
 theorem capCode1002 : (checkImage.code[1002]?).bind decodeInstruction=some (.base (.ADDI .x6 .x0 534)) := rfl
 theorem capCode1003 : (checkImage.code[1003]?).bind decodeInstruction=some (.base (.MUL .x6 .x16 .x6)) := rfl
 theorem capCode1004 : (checkImage.code[1004]?).bind decodeInstruction=some (.base (.BLTU .x17 .x6 5632)) := rfl

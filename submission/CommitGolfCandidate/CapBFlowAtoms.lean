@@ -240,9 +240,9 @@ theorem leaf6670 (s : MachineState) (here : s.pc=pc 6670) :
   simp only [execInstrBr,show signExtend12 0=0#64 from rfl,BitVec.add_zero] <;> rfl
 
 theorem leaf6671 (s : MachineState) (here : s.pc=pc 6671) :
-    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 709) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
-  apply jumpNav s 6671 (.JAL .x0 2073304) (pc 709) here (by decide) word6671 rfl rfl
-  have eq : s.pc+signExtend21 2073304=pc 709 := (congrArg (fun v : Word=>v+signExtend21 2073304) here).trans (by decide +kernel)
+    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 12320) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
+  apply jumpNav s 6671 (.JAL .x0 22596) (pc 12320) here (by decide) word6671 rfl rfl
+  have eq : s.pc+signExtend21 22596=pc 12320 := (congrArg (fun v : Word=>v+signExtend21 22596) here).trans (by decide +kernel)
   change s.setPC _=s.setPC _;rw [eq]
 
 theorem leaf709 (s : MachineState) (here : s.pc=pc 709) :

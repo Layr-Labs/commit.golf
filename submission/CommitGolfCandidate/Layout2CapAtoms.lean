@@ -23,10 +23,6 @@ private theorem jump_control (s : MachineState) (w d : Nat) (rd : Reg) (off : Bi
   · simp only [u,execInstrBr,mem_pc,mem_reg]
   · intro r;simp only [u,execInstrBr,MachineState.getReg_setPC,getReg_setReg,here,pc_next]
 
-theorem atom0 (s : MachineState) (here : s.pc=pc 0) :
-    ∃ u, Runs checkImage s u 1 1 ∧ u.pc=(pc 1002) ∧ u.mem=s.mem ∧ ∀ r,u.getReg r=(s.getReg r) := by
-  simpa using jump_control s 0 1002 .x0 4008 here (by decide) capCode0 (by decide +kernel)
-
 theorem atom1002 (s : MachineState) (here : s.pc=pc 1002) :
     ∃ u, Runs checkImage s u 1 1 ∧ u.pc=(pc 1003) ∧ u.mem=s.mem ∧ ∀ r,u.getReg r=(if .x6=r then 534#64 else s.getReg r) := by
   let u:=execInstrBr s (.ADDI .x6 .x0 534)

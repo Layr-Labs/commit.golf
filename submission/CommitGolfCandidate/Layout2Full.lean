@@ -2,16 +2,16 @@ import CommitGolfCandidate.Layout2V2Facts
 import CommitGolfCandidate.Machine
 import CommitGolfCandidate.Layout2ProofBytes
 
-/-! Layout 2 V2b opener, whole run: the 31-cycle header, the four-phase pass, then the record loop and the cap stage
-(`l2_body`), against the V2a phase-writer guarantee `Layout2Phase2.PhaseFacts openingImage p` (V2b body words) and
-the cap stage's `Layout2CapStage.CapStage capRaw`. Resources, the 128-position bounds (69,329 cycles, 72,160 bytes)
-and the deterministic opener (`fixed_open`: the proof is `l2bProofFromPass capRaw` of the trapdoor and the pass's end
-state). -/
+/-! Layout 2 V2b opener with the one-byte search, whole run: the 31-cycle header, the four-phase pass, then the record
+loop and the cap stage (`l2_body`), against the V2a phase-writer guarantee `Layout2Phase2.PhaseFacts openingImage p`
+(V2b body words) and the cap stage's `Layout2CapStage.CapStage capRaw`. Resources, the 128-position bounds (69,334
+cycles, 72,159 bytes) and the deterministic opener (`fixed_open`: the proof is `l2bProofFromPass capRaw` of the
+trapdoor and the pass's end state, less the final byte when `k = f = 128`). -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2V2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open TwoPermutationPrototype.GroupedOpening TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolfCandidate.Layout2Phase2 (PhaseFacts bodyLen)
-open CommitGolfCandidate.Layout2CapStage (CapStage frontierDigests)
+open CommitGolfCandidate.Layout2CapStage (CapStage frontierDigests dropped)
 open QuartetOpening (proofLength)
 set_option maxRecDepth 18000
 set_option maxHeartbeats 1700000
@@ -134,7 +134,7 @@ theorem body_result (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List
     (cap : CapStage capRaw) (td : BitVec (8*actual.sizes.trapdoor))
     (p : Positions) (nz : 0<p.card) (s : MachineState) (r : Ready td p (keyOf td) s p.card) :
     ∃ final cycles, execute openingImage (restFuel p) s true=Pure.pure ⟨.success,final,l2RecordsCost p.card+cycles,0⟩ ∧
-      (p.card=128 → cycles ≤ 3407) ∧
+      (p.card=128 → cycles ≤ 3412) ∧
       L2OpenPhysical actual capRaw td p s ⟨.success,final,l2RecordsCost p.card+cycles,0⟩ := by
   obtain ⟨final,steps,cycles,sb,cb,ran,phys⟩:=l2_body phases capRaw cap actual l2abi td p s nz (start_at_end td p _ s nz r)
   have room:=rest_room p steps sb
@@ -164,14 +164,28 @@ theorem l2_opening_success (s : Submission) (abi : L2ABI s) (capRaw : List (BitV
     s.openingSucceeded result=true := by
   have bytes : (result.state.getReg .x11).toNat ≤ s.sizes.proof := by
     rw [physical.length]
-    exact (QuartetOpening.capacity_all positions).trans abi.capacity
+    exact (Nat.sub_le _ _).trans ((QuartetOpening.capacity_all positions).trans abi.capacity)
   simp [Submission.openingSucceeded, physical.success, bytes]
+
+/-- With 128 positions the proof has at most 72,159 bytes: 72,160 only with 128 frontier nodes, and then the final
+byte is left out. -/
+theorem scored_drop (p : Positions) (k : p.card=128) :
+    QuartetOpening.proofLength p-dropped p.card (Opening.openingNodes p).length ≤ 72159 := by
+  have split := proof_length_split p
+  have nb := Opening.opening_nodes_bound p
+  rw [split,k]
+  unfold dropped capOffset
+  by_cases hf : (Opening.openingNodes p).length=128
+  · rw [if_pos ⟨rfl,hf⟩]
+    omega
+  · rw [if_neg (fun h => hf h.2)]
+    omega
 
 theorem all_resources (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List (BitVec 256) → List Byte)
     (cap : CapStage capRaw) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (z : Execution)
     (hit : z∈support (actual.run .opening (td,p))) :
     z.exit=.success ∧ actual.openingSucceeded z=true ∧
-      (p.card=BATCH → z.cycles≤69329 ∧ (actual.readProof z).length≤72160) ∧ z.oracleCalls≤100*p.card := by
+      (p.card=BATCH → z.cycles≤69334 ∧ (actual.readProof z).length≤72159) ∧ z.oracleCalls≤100*p.card := by
   by_cases empty : p.card=0
   · obtain ⟨out,run,ex,ok,calls,_⟩:=empty_result td p empty
     rw [run,support_pure,Set.mem_singleton_iff] at hit;subst z
@@ -192,10 +206,12 @@ theorem all_resources (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : Li
     have rc : l2RecordsCost p.card=25953 := by rw [k]; exact records_cost_batch
     have cyc:=pass_cycles_bound p p.card 0 (by omega)
     have cc:=cb k
-    refine ⟨by change 31+passCycles p p.card 0+(l2RecordsCost p.card+cycles)≤69329;omega,?_⟩
+    refine ⟨by change 31+passCycles p p.card 0+(l2RecordsCost p.card+cycles)≤69334;omega,?_⟩
     have length : (actual.readProof ref).length=(st.getReg .x11).toNat := by
       simp only [Submission.readProof,ok,ite_true,List.length_map,List.length_range];rfl
-    exact (length.trans phys.length).le.trans (QuartetOpening.scored_limits p batch).2
+    show (actual.readProof ref).length ≤ 72159
+    rw [length,phys.length]
+    exact scored_drop p k
 
 theorem pass_proof_empty (capRaw : List (BitVec 256) → List Byte) (cap : CapStage capRaw)
     (td : BitVec (8*actual.sizes.trapdoor)) (pass : MachineState) :
@@ -203,19 +219,27 @@ theorem pass_proof_empty (capRaw : List (BitVec 256) → List Byte) (cap : CapSt
   have nil : capRaw []=[] := List.eq_nil_of_length_eq_zero (by rw [cap.length]; rfl)
   simp [l2bProofFromPass, l2Proof2, physFlush, flushLen, frontierDigests, Opening.openingNodes, nil]
 
-/-- The V2b opener is deterministic: its proof is `l2bProofFromPass capRaw` of the trapdoor and the pass's end
-state. -/
+/-- The opener's proof with the one-byte search: `l2bProofFromPass capRaw` less the final byte when
+`k = f = 128`. -/
+def obProofFromPass (capRaw : List (BitVec 256) → List Byte) (td : BitVec (8*actual.sizes.trapdoor))
+    (pass : MachineState) (p : Positions) : Proof :=
+  (l2bProofFromPass (s:=actual) capRaw td pass p).take
+    (QuartetOpening.proofLength p-dropped p.card (Opening.openingNodes p).length)
+
+/-- The V2b opener with the one-byte search is deterministic: its proof is `obProofFromPass capRaw` of the trapdoor
+and the pass's end state. -/
 theorem fixed_open (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List (BitVec 256) → List Byte)
     (cap : CapStage capRaw) (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) :
     fixedOracleRun o (actual.scheme.opening td p)=
-      Pure.pure (l2bProofFromPass (s:=actual) capRaw td (passEnd o td p) p) := by
+      Pure.pure (obProofFromPass capRaw td (passEnd o td p) p) := by
   change fixedOracleRun o (actual.readProof <$> actual.run .opening (td,p))=_
   rw [fixed_oracle_run_map]
   by_cases empty : p.card=0
   · obtain ⟨z,run,_,_,_,_,proof⟩:=empty_result td p empty
     rw [run,fixed_oracle_run_pure,map_pure,proof]
     have emp : p=∅:=Finset.card_eq_zero.mp empty;subst p
-    rw [pass_proof_empty capRaw cap]
+    unfold obProofFromPass
+    rw [pass_proof_empty capRaw cap, List.take_nil]
   · have nz : 0<p.card := by omega
     let begin:=header2 (actual.initialState .opening (td,p))
     let st:=fixedPass o p (keyOf td) p.card 0 begin

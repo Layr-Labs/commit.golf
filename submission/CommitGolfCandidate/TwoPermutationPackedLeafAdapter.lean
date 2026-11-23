@@ -51,7 +51,7 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (state : MachineState) (fits : ProofWithin input)
     (cursor : RecordCursor input ordinal state) (framed : RecordInputFrame input ordinal state)
     (message : Message) (salts : CompleteSaltTape)
-    (canonical : input = honestCheckInput oracle message input.positions salts) :
+    (canonical : NearHonest input (honestCheckInput oracle message input.positions salts)) :
     let item := honestIndex input.positions ordinal present
     readBuffer (block oracle ordinal item.val state).state 12288 32 =
       honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex item.val) 2) := by
@@ -65,8 +65,6 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
   have card := checker_positions_bound input
   have room := (packed_record_geometry input ordinal present fits).2.2.2.1
   obtain ⟨_,_,_,wordFrame,_,_⟩ := raw_view oracle input ordinal present state fits cursor framed
-  have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal state :=
-    Eq.mp (congrArg (fun data => RecordInputFrame data ordinal state) canonical) framed
   -- the leaf digest at the quartet entry is honest
   have leafDigest : readBuffer raw 12288 32 = Sampling.Quartet.leafAt leaves item.val.val := by
     have digest := (raw_digest_rows oracle ordinal item.val state).2
@@ -85,7 +83,7 @@ theorem block_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
       unfold MEMORY_BYTES at room
       exact wordFrame _ (by omega) (Or.inr (by unfold checkSourceWord checkProofByte; omega)) (Or.inr (by
         unfold checkProofByte; omega))
-    rw [same, packed_record_quartet_sibling oracle message input.positions salts ordinal (j-1) present (by omega) state loaded,
+    rw [same, packed_record_quartet_sibling oracle message input.positions salts ordinal (j-1) present (by omega) state canonical framed,
       show j-1+1 = j by omega]
   have bound : item.val.val < 16777216 := item.val.isLt
   have honestQuartet : qQuartet raw = Sampling.Quartet.quartetPayload leaves (item.val.val/4) :=
