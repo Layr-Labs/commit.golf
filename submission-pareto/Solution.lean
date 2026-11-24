@@ -1,37 +1,16 @@
-import CommitGolfCandidate.Properties
-import CommitGolfCandidate.Binding
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.OpeningInput
-import CommitGolfCandidate.CheckInput
-import CommitGolfCandidate.Budgets
-import CommitGolfCandidate.CheckAcceptance
-import CommitGolfCandidate.Completeness
-import CommitGolfCandidate.BindingSecurity
-import CommitGolfCandidate.HidingSecurity
 import CommitGolf.Artifact
-import CommitGolfCandidate.LeafResourceBridge
-import CommitGolfCandidate.ResourceTests
+import CommitGolfCandidate.Layout2Closing
 
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
 namespace CommitGolf.Challenge
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+def submission : CommitGolf.Submission := CommitGolf.Artifact.submission
 
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
-theorem certificate : CommitGolf.Certificate submission 102400 3959423012 48670 where
-  admission := CommitGolfCandidate.submission_admission
-  machineSuccess := CommitGolfCandidate.submission_machine_success
-  termination := CommitGolfCandidate.submission_termination
-  completeness := CommitGolfCandidate.submission_completeness
-  honestBudgets := CommitGolfCandidate.submission_honest_budgets
-  proofSize := CommitGolfCandidate.submission_proof_size
-  proverCycles := CommitGolfCandidate.submission_prover_cycles
-  binding := CommitGolfCandidate.submission_binding
-  hidingProperty := CommitGolfCandidate.submission_hiding
+private theorem k1_manifest : submission = K1Artifact.submission := rfl
+
+theorem certificate : Certificate submission 72159 504585244 68563 := by
+  rw [k1_manifest]
+  exact TwoPermutationPrototype.GroupedOpening.Layout2V2.layout2_certificate
 
 end CommitGolf.Challenge
