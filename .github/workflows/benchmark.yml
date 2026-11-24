@@ -29,18 +29,43 @@ jobs:
   benchmark:
     # 64 GB host: 32 GB for the isolated verifier VM, with host headroom.
     runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 300
+    # Total job quota; the verifier retains its separate four-hour/24-GiB limits.
+    # Bootstrap/network delays can still exhaust this quota before proofs finish.
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
+      - name: Offline VM bootstrap regressions
+        run: python3 -m unittest discover -s verifier/tests -p test_vm_bootstrap.py
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         id: cache
         with:
           path: .cache/trusted.tar.zst
-          key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
+          key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh', 'scripts/vm-packages.sh') }}-v2
+      - name: Identify pinned VM image
+        id: image
+        run: echo "sha256=$(bash scripts/blacksmith.sh image-key)" >> "$GITHUB_OUTPUT"
+      - name: Restore VM image
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: image-cache
+        with:
+          path: .cache/vm-image/${{ steps.image.outputs.sha256 }}.img
+          key: verifier-base-image-${{ steps.image.outputs.sha256 }}-v1
+      - name: Prepare and verify VM image
+        timeout-minutes: 25
+        run: bash scripts/blacksmith.sh prepare-image
+      # Save only the verified base image, before VM setup or candidate execution.
+      # The default branch seeds the cache shared with submission branches.
+      - name: Save VM image
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: steps.image-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        with:
+          path: .cache/vm-image/${{ steps.image.outputs.sha256 }}.img
+          key: ${{ steps.image-cache.outputs.cache-primary-key }}
       - name: Start verifier VM
+        timeout-minutes: 50
         run: bash scripts/blacksmith.sh start
       - name: Setup
         run: bash scripts/blacksmith.sh setup

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+from contextlib import ExitStack
 import json
 import os
 import platform
@@ -15,13 +16,14 @@ import re
 import selectors
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
 import uuid
 from pathlib import Path
 
-from check_submission import check
+from check_submission import check, inventory, regular_bytes, MAX_FILES, MAX_FILE_BYTES, MAX_TOTAL_BYTES
 from artifact import load_artifact, purge_artifact_cache, write_artifact_module
 from fetch import FetchError, fetch_pr
 
@@ -59,6 +61,73 @@ def clone_tree(src: Path, dst: Path) -> None:
     else:
         cmd = ['cp', '-a', '--reflink=auto', str(src), str(dst)]
     subprocess.run(cmd, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+
+def copy_local_submission(local: Path, destination: Path) -> None:
+    """Bound staging before the sandbox; anchor traversal to directory FDs against path swaps.
+
+    Metadata preflight avoids copying an already oversized tree. The actual walk/read quotas
+    remain authoritative if the source grows or entries change after that preflight.
+    """
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK
+    with ExitStack() as cleanup:
+        def frame(fd, target):
+            scope = ExitStack()
+            scope.callback(os.close, fd)
+            cleanup.callback(scope.close)
+            entries = scope.enter_context(os.scandir(fd))
+            return fd, target, entries, scope, stat.S_IMODE(os.fstat(fd).st_mode)
+
+        root_fd = os.open(local, flags)
+        root = frame(root_fd, destination)
+        paths = inventory(local)
+        if len(paths) > MAX_FILES:
+            raise VerifyError(f'submission has more than {MAX_FILES} entries')
+        advertised = 0
+        for path in paths:
+            mode = path.lstat()
+            if stat.S_ISREG(mode.st_mode):
+                if mode.st_size > MAX_FILE_BYTES:
+                    raise VerifyError('submission file exceeds 8 MiB')
+                advertised += mode.st_size
+                if advertised > MAX_TOTAL_BYTES:
+                    raise VerifyError('submission exceeds 32 MiB')
+            elif not stat.S_ISDIR(mode.st_mode):
+                raise VerifyError('submission symlinks and special files are forbidden')
+
+        destination.mkdir()
+        frames = [root]
+        count = total = 0
+        while frames:
+            parent, target, entries, scope, directory_mode = frames[-1]
+            try:
+                entry = next(entries)
+            except StopIteration:
+                target.chmod(directory_mode)
+                scope.close()
+                frames.pop()
+                continue
+            count += 1
+            if count > MAX_FILES:
+                raise VerifyError(f'submission has more than {MAX_FILES} entries')
+            mode = entry.stat(follow_symlinks=False)
+            output = target / entry.name
+            if stat.S_ISDIR(mode.st_mode):
+                child_fd = os.open(entry.name, flags, dir_fd=parent)
+                child = frame(child_fd, output)
+                output.mkdir()
+                frames.append(child)
+            elif stat.S_ISREG(mode.st_mode):
+                limit = min(MAX_FILE_BYTES, MAX_TOTAL_BYTES - total)
+                if mode.st_size > limit:
+                    raise VerifyError('submission exceeds its file or total byte limit')
+                raw = regular_bytes(Path(entry.name), limit, dir_fd=parent)
+                total += len(raw)
+                with output.open('xb') as file:
+                    file.write(raw)
+                output.chmod(stat.S_IMODE(mode.st_mode))
+            else:
+                raise VerifyError('submission symlinks and special files are forbidden')
 
 
 def linux_systemd_preflight() -> None:
@@ -205,7 +274,7 @@ def verify(args: argparse.Namespace) -> dict:
             raise VerifyError('trusted checkout has no canonical commit')
         source = work / 'source'
         if args.local:
-            shutil.copytree(args.local, source, symlinks=True)
+            copy_local_submission(args.local, source)
         else:
             fetch_pr(args.repository, args.pr, args.commit, source)
         policy = check(source)

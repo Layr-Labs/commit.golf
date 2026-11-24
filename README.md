@@ -32,7 +32,8 @@ budgets, proof size, prover cycles, binding, and statistical hiding.
 
 Binding and hiding target 120-bit security, with 2,048-bit logical leaves and 256-bit
 commitments. The scheme remains noninteractive. See [RULES.md](RULES.md) for the
-machine interface, cost schedule, and security requirements.
+machine interface, cost schedule, and security requirements, and
+[LIMITATIONS.md](LIMITATIONS.md) for security, resource and verifier trust boundaries.
 
 ## Submit and validate
 
