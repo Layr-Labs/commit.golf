@@ -173,42 +173,45 @@ theorem setup_run (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
   simp only [readyState,bind_assoc,pure_bind,Execution.charge]
   apply bind_congr;intro z;cases z;simp [Nat.add_assoc] <;> omega
 
+/-- Reuse the scan's preserved `x15 = 2^32`; word 181043 skips the obsolete subtraction. -/
 def tailPostOps : List Instr :=
-  [.ADDI .x8 .x10 (-56),.ADDI .x31 .x0 1,.SLLI .x31 .x31 32,.SUB .x21 .x24 .x31,.LUI .x31 131072,.SUB .x9 .x21 .x31]
-private theorem tail_post_decoded : ∀ i : Fin 6, Manifest.decodeBase (codeWord (181041+i.val)) =
+  [.ADDI .x8 .x10 (-56),.SUB .x21 .x24 .x15,.JAL .x0 8,.LUI .x31 131072,.SUB .x9 .x21 .x31]
+def tailPostWord (i : Nat) : Nat := 181041+i+(if 3≤i then 1 else 0)
+private theorem tail_post_decoded : ∀ i : Fin 5, Manifest.decodeBase (codeWord (tailPostWord i.val)) =
     some ((tailPostOps[i.val]?).getD .EBREAK) := by decide +kernel
-theorem fetch_tail_post (s : MachineState) (i : Fin 6) (pc : s.pc=wordPC (181041+i.val)) :
+theorem fetch_tail_post (s : MachineState) (i : Fin 5) (pc : s.pc=wordPC (tailPostWord i.val)) :
     fetch image s=some (.base ((tailPostOps[i.val]?).getD .EBREAK)) :=
-  fetch_decoded s _ (by have := i.isLt;omega) pc _ (tail_post_decoded i)
+  fetch_decoded s _ (by have := i.isLt;unfold tailPostWord;split_ifs <;> omega) pc _ (tail_post_decoded i)
 
 def tailPostPrefix (s : MachineState) (i : Nat) := (tailPostOps.take i).foldl execInstrBr s
 theorem tail_post_run (s : MachineState) (pc : s.pc=wordPC 181041) (fuel : Nat) :
-    execute image (6+fuel) s true = (do
-      let e ← execute image fuel (tailPostPrefix s 6) true; return e.charge 6 0) := by
+    execute image (5+fuel) s true = (do
+      let e ← execute image fuel (tailPostPrefix s 5) true; return e.charge 5 0) := by
   apply CommitGolfCandidate.execute_unit_steps (states := tailPostPrefix s)
   intro i hi
   refine ⟨.base ((tailPostOps[i]?).getD .EBREAK),?_,?_,?_⟩
-  · have here : (tailPostPrefix s i).pc=wordPC (181041+i) := by
-      interval_cases i <;> simp only [tailPostPrefix,tailPostOps,List.take,List.foldl,execInstrBr,MachineState.setPC,pc] <;> rfl
+  · have here : (tailPostPrefix s i).pc=wordPC (tailPostWord i) := by
+      interval_cases i <;> simp only [tailPostPrefix,tailPostOps,tailPostWord,List.take,List.foldl,execInstrBr,MachineState.setPC,pc] <;> rfl
     have cell := fetch_tail_post (tailPostPrefix s i) ⟨i,hi⟩ here
     interval_cases i <;> exact cell
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-theorem tail_post_mem (s : MachineState) : memoryView (tailPostPrefix s 6)=memoryView s := rfl
+theorem tail_post_mem (s : MachineState) : memoryView (tailPostPrefix s 5)=memoryView s := rfl
 
 theorem tail_post_regs (s : MachineState) (r : Live s N) :
-    (tailPostPrefix s 6).pc=wordPC 181047 ∧ (tailPostPrefix s 6).getReg .x5=0 ∧
-    (tailPostPrefix s 6).getReg .x8=4294971392 ∧ (tailPostPrefix s 6).getReg .x9=4294971424 ∧
-    (tailPostPrefix s 6).getReg .x21=wordAddress 603980292 ∧ (tailPostPrefix s 6).getReg .x24=9126809632 := by
+    (tailPostPrefix s 5).pc=wordPC 181047 ∧ (tailPostPrefix s 5).getReg .x5=0 ∧
+    (tailPostPrefix s 5).getReg .x8=4294971392 ∧ (tailPostPrefix s 5).getReg .x9=4294971424 ∧
+    (tailPostPrefix s 5).getReg .x21=wordAddress 603980292 ∧ (tailPostPrefix s 5).getReg .x24=9126809632 := by
   have k10 : s.regs .x10=wordAddress (entryWord N) := r.msg
   have k24 : s.regs .x24=wordAddress (qSalt 0) := r.counter
   have k5 : s.regs .x5=0 := r.selector
+  have k15 : s.regs .x15=4294967296 := r.limit
   have pc : s.pc=wordPC 181041 := by rw [r.pc];unfold startPC;rw [if_pos rfl]
   refine ⟨?_,?_,?_,?_,?_,?_⟩
   all_goals dsimp only [tailPostPrefix,tailPostOps,List.take,List.foldl,execInstrBr,MachineState.setPC,
     MachineState.setReg,MachineState.getReg]
-  all_goals simp (config := {decide := true}) only [k10,k24,k5,pc,↓reduceIte]
+  all_goals simp (config := {decide := true}) only [k10,k24,k5,k15,pc,↓reduceIte]
   all_goals decide
 
 end TwoPermutationPrototype.Grouped

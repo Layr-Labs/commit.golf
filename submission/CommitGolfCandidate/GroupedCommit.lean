@@ -4,9 +4,9 @@ import CommitGolfCandidate.GroupedTailEval
 /-!
 # The whole commit run
 
-Setup (key draw) | 2^24 leaf slots of the body (scan) | six post words | tail (level-21 loop, heap loop, root
-copy, halt). Steps 40 + 185,356,288 + 6 + 14,942,621 = 200,298,955, cycles 43 + 460,292,096 + 6 + 44,302,742 =
-504,594,887, oracle calls 39,276,544 + 4,194,303 = 43,470,847.
+Setup (key draw) | 2^24 leaf slots of the body (scan) | five executed post words | tail (level-21 loop, heap loop, root
+copy, halt). Steps 38 + 185,346,047 + 5 + 14,943,221 = 200,289,311, cycles 41 + 460,281,855 + 5 + 44,303,342 =
+504,585,243, oracle calls 39,276,544 + 4,194,303 = 43,470,847.
 -/
 
 namespace TwoPermutationPrototype.Grouped
@@ -17,36 +17,36 @@ set_option maxHeartbeats 1800000
 attribute [local irreducible] execute image GroupedUpper.packedWideCommitImage scan tailBody
 
 /-- Steps of the whole commit run (odd-quartet image). -/
-def commitSteps : Nat := 200289312
+def commitSteps : Nat := 200289311
 
 theorem image_eq_packed : image=GroupedUpper.packedWideCommitImage :=
   exact_image.trans GroupedUpper.packed_manifest_image.symm
 
-theorem tail_entry (s : MachineState) (r : Live s N) : TailEntry (tailPostPrefix s 6) := by
+theorem tail_entry (s : MachineState) (r : Live s N) : TailEntry (tailPostPrefix s 5) := by
   obtain ⟨pc,sel,out,heap,cells,key⟩ := tail_post_regs s r
   exact ⟨pc.trans rfl,sel,out,heap,cells.trans (by unfold cellFirst;rfl),key⟩
 
 def commitTrace (s : MachineState) : OracleComp World Execution := do
   let key ← liftM ($ᵗ Key : ProbComp Key)
   let leaves ← scan N 0 (readyState s key)
-  let out ← tailBody (tailPostPrefix leaves 6)
+  let out ← tailBody (tailPostPrefix leaves 5)
   return ⟨.success,out,commitCycles,commitCalls⟩
 
 attribute [local irreducible] readyState
 
 theorem full_commit (s : MachineState) (e : CommitEntry s) (fuel : Nat) :
     execute image (commitSteps+fuel) s true = commitTrace s := by
-  rw [show commitSteps+fuel=38+(185346047+(6+(14943221+fuel))) by unfold commitSteps;omega,setup_run s e]
+  rw [show commitSteps+fuel=38+(185346047+(5+(14943221+fuel))) by unfold commitSteps;omega,setup_run s e]
   simp only [commitTrace,bind_assoc,pure_bind];apply bind_congr;intro key
   have read := ready_live s e key
-  have run := run_scan N 0 _ (by decide) read (6+(14943221+fuel))
+  have run := run_scan N 0 _ (by decide) read (5+(14943221+fuel))
   rw [show S (0+N)-S 0=185346047 by decide,show C (0+N)-C 0=460281855 by decide,
     show Q (0+N)-Q 0=39276544 by decide] at run
   rw [run];simp only [bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support;intro leaves hit
   have last : Live leaves N := by simpa only [Nat.zero_add] using scan_post N 0 _ _ (by decide) read hit
   rw [tail_post_run leaves (by rw [last.pc];unfold startPC;rw [if_pos rfl]),image_eq_packed,
-    tail_run (tailPostPrefix leaves 6) (tail_entry leaves last)]
+    tail_run (tailPostPrefix leaves 5) (tail_entry leaves last)]
   simp only [bind_assoc,pure_bind,Execution.charge,commitCycles,commitCalls]
 
 theorem commit_of_image (program : Submission) (im : program.image .commit=image)

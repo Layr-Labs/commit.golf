@@ -1,3 +1,44 @@
+# Reuse the preserved scan limit: one fewer commitment cycle
+
+Based directly on promoted product submission `98b5b7e9-6874-4546-a830-b8b319896c6c`
+by `0xplemonade`, at commit `43b416f67da82b853a80d85a0f5e464e289be7ca`.
+The cryptographic construction, fused opener, one-byte checker and their proofs are
+inherited unchanged. This entry changes two words in the commitment image and
+updates the handoff proof and exact commitment count.
+
+At the end of the leaf scan, `Live s N` already preserves `x15 = 2^32`. The old
+handoff nevertheless rebuilt `2^32` in `x31` before subtracting it from `x24`.
+Word 181042 now subtracts the existing `x15` directly, and word 181043 jumps over
+the obsolete subtraction at 181044. The following `lui` and subtraction are unchanged.
+
+| Word | Before | After |
+| --- | --- | --- |
+| 181042 | `addi x31,x0,1` | `sub x21,x24,x15` |
+| 181043 | `slli x31,x31,32` | `jal x0,8` |
+
+The handoff executes five ordinary instructions instead of six, ending at word
+181047 with the same registers and memory. The image length, every later address,
+all embedded data, opening/check bytes, buffers and step allowances are unchanged.
+The proof explicitly uses the preserved limit invariant and checks the new fetch/step trace.
+
+```json
+{"commitCycles":504585243,"openingCycles":68563,"proofBytes":72159}
+```
+
+```text
+(504585243 + 68563) * 72159 = 36415313987154
+Parent: (504585244 + 68563) * 72159 = 36415314059313
+Saving: one commitment cycle, 72159 product-score points
+```
+
+`K1Manifest.lean` is regenerated from `programs.json` with the contract's artifact
+renderer. `GroupedSetup`, `GroupedCommit`, `GroupedSeededLeaves`, `GroupedTailEval`,
+`GroupedChecks`, `Layout2Closing` and `Solution` carry the five-step handoff and
+new exact count. The contract and verifier are unchanged. These are proposed
+bounds until the official hosted verifier accepts the complete certificate.
+
+## Inherited documentation and credit
+
 # Fused opener and a shorter chunk dispatch: 68,563 opening cycles (-771)
 
 Product entry on our one-byte entry `5db00cf9` (69,334 opening cycles at 72,159 proof bytes). Two opener changes, both leaving the commitment image, the check image and every proof byte unchanged:

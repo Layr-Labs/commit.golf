@@ -10,10 +10,10 @@ attribute [local irreducible] readBuffer scan fixedScan readyState
 /-- The machine after the 2^24 leaf slots. -/
 def bodyLeaves (o : Oracle) (m : Message) (k : Key) :=
   fixedScan o N 0 (readyState (K1Artifact.submission.initialState .commit m) k)
-/-- The machine the upper stage starts from: the body, then the six post words. -/
-def seededLeaves (o : Oracle) (m : Message) (k : Key) := tailPostPrefix (bodyLeaves o m k) 6
+/-- The machine the upper stage starts from: the body, then the five executed post words. -/
+def seededLeaves (o : Oracle) (m : Message) (k : Key) := tailPostPrefix (bodyLeaves o m k) 5
 
-theorem seeded_eq (o : Oracle) (m : Message) (k : Key) : seededLeaves o m k=tailPostPrefix (bodyLeaves o m k) 6 := rfl
+theorem seeded_eq (o : Oracle) (m : Message) (k : Key) : seededLeaves o m k=tailPostPrefix (bodyLeaves o m k) 5 := rfl
 
 private theorem fixed_supported (o : Oracle) (s : MachineState) (n j : Nat) (b : j+n≤N) :
     fixedScan o n j s∈support (scan n j s) := by

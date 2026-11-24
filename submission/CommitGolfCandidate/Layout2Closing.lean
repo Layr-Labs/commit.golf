@@ -33,7 +33,7 @@ local instance groupedFullSpace {α : Type} : MeasurableSpace α := ⊤
 
 /-- The claim: proof bytes, commit cycles and worst opening cycles. -/
 abbrev claimProofBytes : Nat := 72159
-abbrev claimCommitCycles : Nat := 504585244
+abbrev claimCommitCycles : Nat := 504585243
 abbrev claimOpeningCycles : Nat := 68563
 
 /-- V2a's encoding of an honest proof (V1's bit tables, then the quartet transform), the reference of the bridge. -/
