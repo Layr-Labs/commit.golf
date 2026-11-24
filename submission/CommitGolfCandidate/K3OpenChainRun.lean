@@ -1,6 +1,6 @@
 import CommitGolfCandidate.K3OpenChainLink
 
-/-! Opener chain block (rows 3097..3105 and the link block 3106..3138), execution: `chain_run`. -/
+/-! Opener chain block (fused opener: rows 4114+272ph..4122+272ph and the link block 4123+272ph..4155+272ph), execution: `chain_run`. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)

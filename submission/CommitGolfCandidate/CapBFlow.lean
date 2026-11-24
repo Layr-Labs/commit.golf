@@ -18,7 +18,7 @@ theorem nav_visit (s : MachineState) (here : s.pc=pc 661) (valid : accessValid (
   · intro r;cases r <;> simp [r3,r2,r1,r0,m3,m2,m1,m0,MachineState.getMem,BitVec.add_assoc,signExtend12]
 
 theorem nav_level (s : MachineState) (here : s.pc=pc 665) :
-    ∃ t, Run openingImage s t 1 1 ∧ t.pc=(if !(BitVec.ult (s.getReg .x16) (s.getReg .x27)) then pc 708 else pc 666) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
+    ∃ t, Run openingImage s t 1 1 ∧ t.pc=(if !(BitVec.ult (s.getReg .x16) (s.getReg .x27)) then pc 668 else pc 666) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
   obtain ⟨u0,h0,p0,m0,r0⟩:=leaf665 s here
   refine ⟨u0,h0,?_,m0,?_⟩
   · simpa [r0,m0,MachineState.getMem,BitVec.add_assoc,signExtend12] using p0
@@ -32,19 +32,12 @@ theorem nav_descend (s : MachineState) (here : s.pc=pc 666) :
   · simpa [r1,r0,m1,m0,MachineState.getMem,BitVec.add_assoc,signExtend12] using p1
   · intro r;cases r <;> simp [r1,r0,m1,m0,MachineState.getMem,BitVec.add_assoc,signExtend12]
 
-theorem nav_toChunk (s : MachineState) (here : s.pc=pc 708) :
-    ∃ t, Run openingImage s t 1 1 ∧ t.pc=(pc 8192) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
-  obtain ⟨u0,h0,p0,m0,r0⟩:=leaf708 s here
-  refine ⟨u0,h0,?_,m0,?_⟩
-  · simpa [r0,m0,MachineState.getMem,BitVec.add_assoc,signExtend12] using p0
-  · intro r;cases r <;> simp [r0,m0,MachineState.getMem,BitVec.add_assoc,signExtend12]
-
-theorem nav_dispatch (s : MachineState) (here : s.pc=pc 8192) :
+theorem nav_dispatch (s : MachineState) (here : s.pc=pc 668) :
     ∃ t, Run openingImage s t 4 4 ∧ t.pc=(((36864#64+((s.getReg .x28) <<< (6:Nat)))+128#64) &&& ~~~1#64) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(if .x11=r then (36864#64+((s.getReg .x28) <<< (6:Nat))) else if .x28=r then ((s.getReg .x28) <<< (6:Nat)) else s.getReg r) := by
-  obtain ⟨u0,h0,p0,m0,r0⟩:=leaf8192 s here
-  obtain ⟨u1,h1,p1,m1,r1⟩:=leaf8193 u0 p0
-  obtain ⟨u2,h2,p2,m2,r2⟩:=leaf8194 u1 p1
-  obtain ⟨u3,h3,p3,m3,r3⟩:=leaf8195 u2 p2
+  obtain ⟨u0,h0,p0,m0,r0⟩:=leaf668 s here
+  obtain ⟨u1,h1,p1,m1,r1⟩:=leaf669 u0 p0
+  obtain ⟨u2,h2,p2,m2,r2⟩:=leaf670 u1 p1
+  obtain ⟨u3,h3,p3,m3,r3⟩:=leaf671 u2 p2
   refine ⟨u3,(((h0.thenDo h1).thenDo h2).thenDo h3),?_,(m3.trans (m2.trans (m1.trans m0))),?_⟩
   · simpa [r3,r2,r1,r0,m3,m2,m1,m0,MachineState.getMem,BitVec.add_assoc,signExtend12] using p3
   · intro r;cases r <;> simp [r3,r2,r1,r0,m3,m2,m1,m0,MachineState.getMem,BitVec.add_assoc,signExtend12]

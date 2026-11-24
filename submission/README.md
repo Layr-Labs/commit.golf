@@ -1,3 +1,104 @@
+# Fused opener and a shorter chunk dispatch: 68,563 opening cycles (-771)
+
+Product entry on our one-byte entry `5db00cf9` (69,334 opening cycles at 72,159 proof bytes). Two opener changes, both leaving the commitment image, the check image and every proof byte unchanged:
+
+1. The opener's first pass, which regenerates each position's salt, and its record pass become one loop: each position regenerates its salt and writes its record in the same iteration (-739 cycles; section "Fused opener" below).
+2. The cap walk's branch to a chunk goes straight to the chunk dispatch, now at words 668..671, instead of through a one-word trampoline (-32 cycles; section "Chunk dispatch without the trampoline").
+
+```json
+{"commitCycles":504585244,"openingCycles":68563,"proofBytes":72159}
+```
+
+```text
+(504585244 + 68563) * 72159 = 36415314059313
+5db00cf9: (504585244 + 69334) * 72159 = 36415369693902
+Saving: 55,634,589 score
+```
+
+The two steps follow, newest first, then the documentation inherited from the earlier entries. The fused opener alone (68,595 opening cycles) was built and tested but never submitted; this entry is its first submission.
+
+# Chunk dispatch without the trampoline: 68,563 opening cycles (-32)
+
+On top of the fused opener (68,595 opening cycles at 72,159 proof bytes, next section). The cap walk's branch to
+a chunk (word 665) went to a one-word trampoline at 708 (`jal <8192>`) and then to the four-word chunk dispatch at
+8192..8195. Since CAP-B, words 668..701 (the old node emitter) are unreachable, so the dispatch now sits at 668..671 and
+word 665 branches there directly (Neon's design notes, section 3 item 4). This removes one `jal` per dispatched chunk:
+32 at 128 positions with 128 frontier digests. Proof bytes, the commitment and the check image are unchanged.
+
+```json
+{"commitCycles":504585244,"openingCycles":68563,"proofBytes":72159}
+```
+
+```text
+31 + 65151 + 1 + 3380 = 68563      (header, loop, exit stub, cap stage with the guard: 3,375 + 5)
+(504585244 + 68563) * 72159 = 36415314059313
+Fused opener alone: (504585244 + 68595) * 72159 = 36415316368401
+This step: -2,309,088 score
+```
+
+## Proof changes
+
+- `CapBFlowWords`, `CapBFlowAtoms`, `CapBFlow`, `CapBWalk`: word 665's target and the dispatch rows at 668..671; the walk's
+  chunk step has no trampoline step.
+- `CapBPrice` (a chunk dispatch costs 11 + its entries; the root ceiling drops from 882 to 850), `CapBResult` (3,380),
+  `Layout2CapStage`, `Layout2ABI`, `Layout2Full` (68,563), `Layout2Closing`.
+- V1 modules that described the old node emitter at 668..671: `GroupOpenCapCursor` and `GroupOpenCapMoves` follow the new
+  branch target; three theorems about the dead words were removed (`GroupOpenFields.execute_cap_source`,
+  `GroupOpenCapCopy.CapCopy.copy`, `GroupOpenCapEmitPrefix.cap_emit_prefix`), and two modules outside the proof
+  (`GroupOpenCapEmitPlain`, `GroupOpenCapEmitFold`) left the tree.
+
+# Fused opener: 68,595 opening cycles (-739)
+
+Based on the one-byte search entry (69,334 opening cycles at 72,159 proof bytes, next inherited section). The opener's
+first pass and its record pass become one loop: each position runs its salt regeneration and then, in the same
+iteration, writes its record. Proof bytes, the commitment and the check image are unchanged.
+
+## The change
+
+- Opener words 739..740 jump to 4096 instead of 3078. Word 4096 sets `s9 = s1` once; the loop's four phases start at
+  `4097 + 272 p` (phase 3 loops back with `beq`/`jal`).
+- One iteration, phase `p = j mod 4`, block `B = destOf j` in `s5`:
+  - the former first-pass head, inverse call into `B`, chained salt generator and salt copy to `B+0..15`, with the
+    index cursor in `s0` (was `a4`), the block cursor in `s5` (was `t4`) and the L22 sibling address kept in `s2`
+    instead of being stored at `B+16`;
+  - the former phase writer at `4160 + 272 p`, one instruction shorter (no `ld t2,16(s5)`: the L22 copy reads
+    `0..24(s2)`), with the band-B carry in `tp` instead of `a1` (which keeps the oracle width 200);
+  - the tail (stride, byte mark, index advance, latch) and, after the last position, the exit stub flushing `tp`.
+- The opening data's chain-entry halfwords move by +5,700 bytes (to word 4564, midway between the link blocks of
+  phases 1 and 2); each phase's `jalr` adds `(2p - 3) * 544` bytes.
+- Removed per position: the second index load, the `sd/ld` of the L22 pointer, the block-cursor update and the first
+  pass's latch (2), six instructions, 768 at 128 positions. Phase 3 pays one extra `jal` on its 31 looping positions
+  (its back edge, 1,079 words, is beyond a branch's 1,024-word reach), and two cycles between the passes go away:
+  768 - 31 + 2 = 739.
+
+```json
+{"commitCycles":504585244,"openingCycles":68595,"proofBytes":72159}
+```
+
+```text
+31 + 65151 + 1 + 3412 = 68595      (header, loop, exit stub, cap stage with the guard)
+loop: sum over j < 128 of 308 + writerLen(j mod 4) + tail(j)  (chain at its 280-cycle maximum)
+(504585244 + 68595) * 72159 = 36415316368401
+Parent: (504585244 + 69334) * 72159 = 36415369693902
+Saving: 53,325,501 score
+```
+
+## Proof changes
+
+- Writer: `Layout2Writer3Program`, `Layout2Writer3Phase0..3` (Astra's V2a writer model with the fused registers; the
+  kernel checks the model for all 16 phase/selector pairs) and `Layout2Writer3Run` (the writer as a row walk).
+- Loop: `Layout2FusedRows` (rows and their presence in the image), `Layout2FusedHead` (head, inverse call, chain
+  entry and exit), `Layout2FusedRec` (salt, writer, tail), `Layout2FusedStep` (one position: execution, post-state,
+  fixed oracle), `Layout2FusedLoop` (the invariant `Ready`, the loop's execution and counts, the retained bytes under a
+  fixed oracle, the exit stub), `Layout2FusedHeader` (31 cycles), `Layout2FusedPass` (the reference state the bridge
+  reads the retained bytes from), `Layout2Seen` (definitions kept from the old first pass).
+- Changed: the chain (`K3OpenChainRows`, `K3OpenChainExit`: words and `jalr` offsets), the table (`GroupOpenTable`:
+  the shifted entries), the header's final jump (`GroupOpenHeader*`), the tail and exit stubs (`Layout2Loop`,
+  `Layout2Steps`), `Layout2ABI` (cap stage from the loop's end), `Layout2Full` (68,595 cycles), `Layout2V2Facts`
+  (the reference state), `Layout2Closing` (no phase-writer premise), the image modules.
+- Removed: the separate first pass (`Layout2Pass*`) and the V2a writer's run and image check (`Layout2Writer2Run`,
+  `Head`, `Step`, `Context`, `Code`, `Facts`, `Phase0..3`).
+
 # One-byte search: 72,159 proof bytes (-504,293,778 score)
 
 Based on Layout 2 V2b (69,329 opening cycles at 72,160 proof bytes, next inherited section). When a 128-position proof

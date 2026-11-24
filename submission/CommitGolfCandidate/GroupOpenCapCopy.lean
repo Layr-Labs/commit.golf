@@ -200,38 +200,8 @@ theorem mask_bits (s : MachineState) (T mask : Nat) (hmask : mask=3 ∨ mask=7)
     | rw [show (3:Nat)=2^2-1 from rfl, Nat.and_two_pow_sub_one_eq_mod]; omega
     | rw [show (7:Nat)=2^3-1 from rfl, Nat.and_two_pow_sub_one_eq_mod]; omega
 
-/-- The three paths reach the unchanged final digest halfword with identical copied bytes. -/
-theorem copy (s : MachineState) (S T : Nat) (pc : s.pc=BitVec.ofNat 64 (4096+4*670))
-    (src : s.getReg .x7=BitVec.ofNat 64 S) (dst : s.getReg .x21=BitVec.ofNat 64 T)
-    (sa : S%8=0) (ta : T%2=0) (apart : S+28 ≤ T) (room : T+28 ≤ MEMORY_BYTES) :
-    ∃ t, Done s t S T 28 (cycles T) 696 := by
-  have fit : T<2^64 := by unfold MEMORY_BYTES at room; omega
-  obtain ⟨a, ra, pa, ga, ma⟩ := test s T 670 4 3 40 (by decide) pc (by decide +kernel)
-    (by decide +kernel) (by decide) (mask_bits s T 3 (by simp) dst fit)
-  by_cases four : T%4=0
-  · have pca : a.pc=BitVec.ofNat 64 (4096+4*672) := by simpa [four] using pa
-    obtain ⟨b, rb, pb, gb, mb⟩ := test a T 672 8 7 36 (by decide) pca (by decide +kernel)
-      (by decide +kernel) (by decide) (mask_bits a T 7 (by simp) ((ga _ (by decide)).trans dst) fit)
-    by_cases eight : T%8=0
-    · obtain ⟨t, body⟩ := dword_path b S T (by simpa [eight] using pb)
-        ((gb _ (by decide)).trans ((ga _ (by decide)).trans src))
-        ((gb _ (by decide)).trans ((ga _ (by decide)).trans dst)) sa eight apart room
-      exact ⟨t, by simpa [cycles, four, eight] using before ra ga ma (before rb gb mb body)⟩
-    · obtain ⟨t, body⟩ := word_path b S T (by rw [if_neg eight] at pb; exact pb.trans (by decide))
-        ((gb _ (by decide)).trans ((ga _ (by decide)).trans src))
-        ((gb _ (by decide)).trans ((ga _ (by decide)).trans dst)) sa four apart room
-      exact ⟨t, by simpa [cycles, four, eight] using before ra ga ma (before rb gb mb body)⟩
-  · have pca : a.pc=BitVec.ofNat 64 (4096+4*681) := by rw [if_neg four] at pa; exact pa.trans (by decide)
-    let b := execInstrBr a (.JAL .x0 4836)
-    have rb := run_step a 681 (.JAL .x0 4836) (by decide) pca (by decide +kernel) rfl rfl
-    have pcb : b.pc=BitVec.ofNat 64 (4096+4*1890) := by
-      change a.pc+signExtend21 4836=_; rw [pca]; decide
-    have gb (r : Reg) (_ : r ≠ .x31) : b.getReg r=a.getReg r := by cases r <;> rfl
-    have mb : b.mem=a.mem := rfl
-    obtain ⟨t, body⟩ := shifted_path b S T pcb
-      ((gb _ (by decide)).trans ((ga _ (by decide)).trans src))
-      ((gb _ (by decide)).trans ((ga _ (by decide)).trans dst)) sa (by omega) apart room
-    exact ⟨t, by simpa [cycles, four] using before ra ga ma (before rb gb mb body)⟩
+/- (`copy`, the old emit_node's copy entry at words 670..671, was removed: since CAP-B those words are dead, and the
+fused trampoline-free image reuses 668..671 for the chunk dispatch.) -/
 
 end CapCopy
 end TwoPermutationPrototype.GroupedOpening

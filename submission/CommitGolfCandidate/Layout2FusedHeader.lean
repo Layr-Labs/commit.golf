@@ -1,15 +1,21 @@
 import CommitGolfCandidate.GroupOpenHeaderCore
-import CommitGolfCandidate.Layout2Pass
+import CommitGolfCandidate.Layout2FusedLoop
 
-/-! Layout 2 V2a opener, the header: today's rows 0..2 and 713..738, the jump at 739 to 3078 and the cursor row 3078
-(`addi x29,x21,0`); `Ready` for ordinal 0 at word 3079, 31 cycles. -/
-namespace TwoPermutationPrototype.GroupedOpening.Layout2V2
+/-! Fused opener, the header: today's rows 0..2 and 713..738, the jump at 739 to 4096 and the row 4096
+(`addi x25,x9,0`: `s9 = s1`, the cap stage's heap base, set once before the loop); `Ready` for ordinal 0 at word
+4097, 31 cycles. -/
+namespace TwoPermutationPrototype.GroupedOpening.Layout2F
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
-open TwoPermutationPrototype.GroupedOpening
+open TwoPermutationPrototype.GroupedOpening TwoPermutationPrototype.GroupedOpening.Layout2
 set_option maxRecDepth 22000
 set_option maxHeartbeats 2000000
 
-/-- The V2a header: today's header rows, then the cursor row. -/
+/-- Word 4096: `addi x25,x9,0`. -/
+def cursorRows : List Row := [(4096,.ADDI .x25 .x9 0)]
+
+theorem cursor_fetch : presentRows cursorRows := by apply rows_present; decide +kernel
+
+/-- The fused header: today's header rows, then row 4096. -/
 def header2 (s : MachineState) := walkRows (header s) cursorRows
 
 attribute [local irreducible] setupPrefix walkRows keyCopy header
@@ -23,10 +29,10 @@ private theorem key_cell (s : MachineState) (j : Fin 3) : memoryView (keyCopy s)
   fin_cases j <;> unfold memoryView keyCopy <;> rfl
 
 attribute [local semireducible] walkRows
-private theorem cursor_step (t : MachineState) (pc : t.pc=address 3078) :
-    legal cursorRows t ∧ (walkRows t cursorRows).pc=address 3079 ∧ (walkRows t cursorRows).mem=t.mem ∧
-      (walkRows t cursorRows).getReg .x29=t.getReg .x21 ∧
-      (∀ k, k≠.x29 → (walkRows t cursorRows).getReg k=t.getReg k) := by
+private theorem cursor_step (t : MachineState) (pc : t.pc=address 4096) :
+    legal cursorRows t ∧ (walkRows t cursorRows).pc=address 4097 ∧ (walkRows t cursorRows).mem=t.mem ∧
+      (walkRows t cursorRows).getReg .x25=t.getReg .x9 ∧
+      (∀ k, k≠.x25 → (walkRows t cursorRows).getReg k=t.getReg k) := by
   refine ⟨⟨pc,rfl,trivial⟩,?_,?_,?_,?_⟩
   · simp [cursorRows,walkRows,execInstrBr,pc,address,pc_of_set]
   · simp [cursorRows,walkRows,execInstrBr,mem_of_set,mem_of_reg]
@@ -48,31 +54,38 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
     simp [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc]
   have sp0 : init.getReg .x2=BitVec.ofNat 64 tableBase := by rw [← actual_data_base]; rfl
   obtain ⟨valid,⟨regs⟩,mem⟩:=header_core init p rfl nr b salt marks shift0 nz mem0 rfl sp0
-  obtain ⟨cl,cpc,cmem,c29,ckeep⟩ := cursor_step t regs.pc
-  have hk (k : Reg) (h : k≠.x29 := by decide) : (header2 init).getReg k=t.getReg k := ckeep k h
+  obtain ⟨cl,cpc,cmem,c25,ckeep⟩ := cursor_step t regs.pc
+  have hk (k : Reg) (h : k≠.x25 := by decide) : (header2 init).getReg k=t.getReg k := ckeep k h
   have hmem : (header2 init).mem=(keyCopy init).mem := cmem.trans mem
   have rr := regs.r
   have bb := regs.b
-  refine ⟨?_,⟨⟨(hk .x12).trans rr.output,(hk .x5).trans rr.selector,(hk .x11).trans rr.width,
-      (hk .x13).trans rr.primitive,(hk .x14).trans rr.index,(hk .x17).trans rr.endReg,
-      (by rw [hk .x25, rr.shift, hk .x9, Nat.sub_zero]),(hk .x22).trans rr.salt,(hk .x26).trans rr.base⟩,
-    ⟨(hk .x8).trans bb.indices,(hk .x9).trans bb.heap,(hk .x18).trans bb.count,(hk .x19).trans bb.leaves,
-      (hk .x20).trans bb.start,(hk .x21).trans bb.dest,(hk .x23).trans bb.mark,(hk .x24).trans bb.slots,
-      (hk .x27).trans bb.capLeaves⟩,?_,?_,?_,?_,(hk .x2).trans regs.sp,(hk .x1).trans regs.mask,
-    fun _ h => (Nat.not_lt_zero _ h).elim⟩⟩
-  · have th : t=walkRows init headerRows := by show header init=_; unfold header; rfl
-    exact legal_append _ _ _ valid (th ▸ cl)
-  · rw [show passPC p 0=address 3079 by simp [passPC,Nat.ne_of_lt nz]]; exact cpc
-  · show (walkRows t cursorRows).getReg .x29=_
-    rw [c29, bb.dest]; congr 1
-  · intro w fit away
-    have guard : w<128 ∨ 153≤w := by
-      by_contra h; exact away (Or.inl (by omega))
-    have neq (j : Nat) (hj : 129≤j ∧ j≤131) : wordAddress w≠wordAddress j :=
-      fun h => (by have :=wordAddress_injective_of_bound (by omega) (by omega) h;omega : False)
+  have card := Layout2V2.card_le p
+  have viewH (w : Nat) (fit : w<2^33) (away : w≠129 ∧ w≠130 ∧ w≠131) :
+      memoryView (header2 init) w=memoryView init w := by
+    have neq (j : Nat) (hj : 129≤j ∧ j≤131) (ne : w≠j) : wordAddress w≠wordAddress j :=
+      fun h => ne (wordAddress_injective_of_bound (by omega) (by omega) h)
     change (header2 init).mem _=_;rw [hmem]
     change (keyCopy init).getMem (wordAddress w)=_
-    exact key_outside init _ (neq 129 (by decide)) (neq 130 (by decide)) (neq 131 (by decide))
+    exact key_outside init _ (neq 129 (by decide) away.1) (neq 130 (by decide) away.2.1) (neq 131 (by decide) away.2.2)
+  refine ⟨?_,⟨⟨(hk .x12).trans rr.output,(hk .x5).trans rr.selector,(hk .x11).trans rr.width,
+      (hk .x13).trans rr.primitive,(hk .x8).trans bb.indices,by rw [hk .x17, rr.endReg]; simp,
+      (hk .x22).trans rr.salt,(hk .x26).trans rr.base,(hk .x9).trans bb.heap,
+      c25.trans bb.heap,(hk .x19).trans bb.leaves,(hk .x20).trans bb.start,(hk .x23).trans bb.mark,
+      (hk .x24).trans bb.slots,(hk .x27).trans bb.capLeaves,(hk .x2).trans regs.sp,(hk .x1).trans regs.mask⟩,
+    ?_,?_,fun h => absurd rfl h,?_,?_,?_,?_,fun _ h => (Nat.not_lt_zero _ h).elim⟩⟩
+  · have th : t=walkRows init headerRows := by show header init=_; unfold header; rfl
+    exact legal_append _ _ _ valid (th ▸ cl)
+  · rw [show loopPC p 0=address 4097 by simp [loopPC,Nat.ne_of_lt nz,fphaseWord]]; exact cpc
+  · rw [hk .x21, bb.dest]; rfl
+  · intro a lo hi al
+    have tb : trapdoorBase=4294971424 := rfl
+    have ea : BitVec.ofNat 64 a=wordAddress (a/8) := by unfold wordAddress; congr 1; omega
+    rw [ea]
+    have pb : proofBase=13824430176 := rfl
+    exact viewH (a/8) (by omega) (by omega)
+  · intro e he h hh
+    rw [viewH _ (by simp only [tableWord]; omega) (by simp only [tableWord]; omega)]
+    exact initial_table td p e he h hh
   · intro j lo hi;change (header2 init).mem _=_;rw [hmem]
     by_cases stored : j≤3
     · let ix : Fin 3 := ⟨j-1,by omega⟩
@@ -87,6 +100,21 @@ theorem header_valid (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz
       rw [low_zero td p _ (by omega)]
       apply BitVec.eq_of_getLsbD_eq;intro b hb
       simp [keyBlock,hb,show 192≤64*(j-1)+b by omega]
+  · -- the byte marks start at zero: their dwords are zero in the loaded input and the header leaves them
+    intro i hi
+    have hn : 32+i/8<512 := by omega
+    have stable := viewH (512+(32+i/8)) (by omega) (by omega)
+    have z := initial_mark_word actual actual_layout image_actual td p (32+i/8) hn
+    have addr : BitVec.ofNat 64 (Opening.markBase+8*(32+i/8))=wordAddress (512+(32+i/8)) := by
+      unfold Opening.markBase wordAddress;congr 1 <;> omega
+    have zz : memoryView init (512+(32+i/8))=0 := by simpa only [addr,memoryView] using z
+    have w0 : (header2 init).getMem (BitVec.ofNat 64 (Opening.markBase+8*(32+i/8)))=0 := by
+      rw [addr]; exact stable.trans zz
+    have al : alignToDword (BitVec.ofNat 64 (Opening.markBase+256+i))=BitVec.ofNat 64 (Opening.markBase+8*(32+i/8)) := by
+      rw [table_align_eq (Opening.markBase+256+i) (by unfold Opening.markBase; omega)]; congr 1; unfold Opening.markBase; omega
+    unfold MachineState.getByte
+    rw [al, w0]
+    simp [Opening.groupsBefore, Sampling.capIsMarked, extractByte]
 
 theorem header_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) (fuel : Nat) :
     let s:=actual.initialState .opening (td,p)
@@ -99,4 +127,4 @@ theorem header_run (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz :
   unfold header2 header
   rw [walk_join]
 
-end TwoPermutationPrototype.GroupedOpening.Layout2V2
+end TwoPermutationPrototype.GroupedOpening.Layout2F

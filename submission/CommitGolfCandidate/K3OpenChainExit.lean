@@ -1,6 +1,6 @@
 import CommitGolfCandidate.K3OpenChainPost
 
-/-! Opener chain block (rows 3097..3105 and the link block 3106..3138), exit row and post-state: `chain_post`. Owner: C2 (draft by S9-L2). -/
+/-! Opener chain block (fused opener: rows 4114+272ph..4122+272ph and the link block 4123+272ph..4155+272ph), exit row and post-state: `chain_post`. Owner: C2 (draft by S9-L2). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open CommitGolfCandidate.Permutation.CounterSalt (coord)
@@ -15,7 +15,7 @@ attribute [local simp] chain_zero_reg
 /-! ### Post-state -/
 
 theorem exit_rows (b : MachineState) (ph : Nat) (pc : b.pc=address (linkEnd ph)) :
-    (walkRows b chainExitRows).pc=address (3139+80*ph) ∧
+    (walkRows b chainExitRows).pc=address (4156+272*ph) ∧
       (∀ x, (walkRows b chainExitRows).getReg x=b.getReg x) ∧
       (walkRows b chainExitRows).mem=b.mem :=
   ⟨pc,fun _ => rfl,rfl⟩
@@ -43,7 +43,7 @@ theorem link_post (ph : Nat) : ∀ (c : Nat) (s : MachineState), LinkReady s c p
 
 theorem chain_post (h : MachineState) (i : Index) (ph : Nat) (e : ChainEntry h i ph) (t : MachineState)
     (hit : t ∈ support (chainTrace h i ph)) :
-    t.pc=address (3139+80*ph) ∧ t.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
+    t.pc=address (4156+272*ph) ∧ t.getReg .x28=BitVec.ofNat 64 (tabS (i.val%4096)) ∧
       t.getReg .x3=BitVec.ofNat 64 i.val <<< (4:Nat) ∧
       (∀ r, r≠.x3 → r≠.x7 → r≠.x10 → r≠.x28 → r≠.x30 → r≠.x31 → t.getReg r=h.getReg r) ∧
       (∀ w, w<2^33 → w≠128 → (w<192 ∨ 217≤w) → memoryView t w=memoryView h w) := by

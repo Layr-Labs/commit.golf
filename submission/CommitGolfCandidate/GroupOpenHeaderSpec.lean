@@ -20,9 +20,9 @@ def configRows : List Row :=
 def keyRows : List Row :=
   [(733,.LD .x31 .x22 8),(734,.SD .x10 .x31 8),(735,.LD .x31 .x22 16),(736,.SD .x10 .x31 16),
    (737,.LD .x31 .x22 24),(738,.SD .x10 .x31 24)]
-/-- Row 739 jumps to the V2a pass entry (3078, `addi x29,x21,0`, then phase 0 at 3079). Row 732 already set the
+/-- Row 739 jumps to the fused loop's entry (4096, `addi x25,x9,0`, then phase 0 at 4097). Row 732 already set the
 table-entry mask `x1 = (2^64 - 1) >>> 48 = 65535` from `x4 = -1`; `x2` keeps the ABI's `sp`, the table base. -/
-def markRows : List Row := [(739,.JAL .x0 9356)]
+def markRows : List Row := [(739,.JAL .x0 13428)]
 def headerRows := layoutRows++configRows++keyRows++markRows
 def header (s : MachineState) := walkRows s headerRows
 

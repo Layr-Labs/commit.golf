@@ -3,14 +3,13 @@ import CommitGolfCandidate.Layout2CapStage
 import CommitGolfCandidate.QuartetOpeningSchedule
 import CommitGolfCandidate.GroupOpenSetup
 
-/-! Layout 2 V2b opener with the one-byte search, after the pass: the record loop (`records_run`, to word 6960), then
-the cap stage (`Layout2CapStage.CapStage capRaw`). The result (`L2OpenPhysical`) holds the V2a record blocks
+/-! Layout 2 V2 opener with the one-byte search, after the fused loop: from the state at word 6960 (`L2Done`), the cap
+stage (`Layout2CapStage.CapStage capRaw`). The result (`L2OpenPhysical`) holds the V2a record blocks
 (relative to the state `pass` the pass left), the flush bytes and the raw cap bytes `capRaw (frontierDigests td p)`
 at `proofBase + 534 k`; the proof length leaves out the final cap byte exactly when `k = f = 128`. -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate Sampling
 open CommitGolfCandidate.Layout2Phase (stride writerByte)
-open CommitGolfCandidate.Layout2Phase2 (PhaseFacts)
 open CommitGolfCandidate.Layout2CapStage (CapEntry CapStage frontierDigests dropped)
 open QuartetOpening (proofLength)
 open Opening (groupsBefore openingNodes)
@@ -49,23 +48,18 @@ theorem proof_length_split (positions : Positions) :
     proofLength positions=534*positions.card+capOffset (openingNodes positions).length := by
   unfold proofLength capOffset; omega
 
-/-- The record loop, then the cap stage: `l2RecordsCost k + cycles` cycles, `l2RecordsCost k + steps` steps. -/
-theorem l2_body (phases : ∀ p<4, PhaseFacts openingImage p) (capRaw : List (BitVec 256) → List Byte)
+/-- The cap stage from the state the record blocks leave at word 6960 (`L2Done`): `cycles` cycles, `steps` steps. -/
+theorem l2_cap (capRaw : List (BitVec 256) → List Byte)
     (cap : CapStage capRaw) (s : Submission) (abi : L2ABI s)
-    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (begin : MachineState)
-    (positive : 0<positions.card) (ready : L2Start s trapdoor positions begin) :
-    ∃ final steps cycles, steps ≤ 2^30 ∧ (positions.card=128 → cycles ≤ 3412) ∧
-      (∀ surplus, execute openingImage (l2RecordsCost positions.card+steps+surplus) begin true =
-        pure ⟨.success,final,l2RecordsCost positions.card+cycles,0⟩) ∧
-      L2OpenPhysical s capRaw trapdoor positions begin ⟨.success,final,l2RecordsCost positions.card+cycles,0⟩ := by
-  obtain ⟨lower, ranRecords, done⟩ := records_run phases s abi.toOpeningLayout trapdoor positions begin positive ready
+    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (pass lower : MachineState)
+    (positive : 0<positions.card) (done : L2Done s trapdoor positions pass lower) :
+    ∃ final steps cycles, steps ≤ 2^30 ∧ (positions.card=128 → cycles ≤ 3380) ∧
+      (∀ surplus, execute openingImage (steps+surplus) lower true = pure ⟨.success,final,cycles,0⟩) ∧
+      L2OpenPhysical s capRaw trapdoor positions pass ⟨.success,final,cycles,0⟩ := by
   obtain ⟨final, steps, cycles, stepBound, cycleBound, ranCap, len, kept, footer⟩ :=
-    cap.run s abi.toOpeningLayout trapdoor positions lower abi.image (done_entry s trapdoor positions begin lower positive done)
+    cap.run s abi.toOpeningLayout trapdoor positions lower abi.image (done_entry s trapdoor positions pass lower positive done)
   have flushEnd := dest_flush positions.card positive
-  refine ⟨final, steps, cycles, stepBound, cycleBound, ?_, ⟨rfl, ?_, rfl, ?_, ?_, footer⟩⟩
-  · intro surplus
-    rw [Nat.add_assoc, ranRecords (steps+surplus) true, ranCap surplus]
-    simp [Execution.charge]
+  refine ⟨final, steps, cycles, stepBound, cycleBound, ranCap, ⟨rfl, ?_, rfl, ?_, ?_, footer⟩⟩
   · change (final.getReg .x11).toNat=_
     rw [len, proof_length_split]
   · intro j hj b hb

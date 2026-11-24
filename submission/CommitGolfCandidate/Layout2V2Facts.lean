@@ -1,9 +1,11 @@
-import CommitGolfCandidate.Layout2PassHeader
+import CommitGolfCandidate.Layout2FusedPass
 import CommitGolfCandidate.Layout2V2Ref
 import CommitGolfCandidate.K3OpenReply
 
-/-! Layout 2 V2a opener facts: the pass under a fixed oracle and what it leaves (`passEnd`, `pass_end_facts`), and the
-old opener's proof of the reference trapdoor (`opened_proof`: today's builder proof on an honest trapdoor). -/
+/-! Layout 2 V2 opener facts (fused opener): the reference pass state `passEnd` (`Layout2F.fusedPass`, a pure
+definition: every record block holds its linked salt and the inverse of its quartet's reply) and its `Seen`
+(`pass_end_facts`), and the old opener's proof of the reference trapdoor (`opened_proof`: today's builder proof on an
+honest trapdoor). -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2V2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 open TwoPermutationPrototype.GroupedOpening
@@ -11,28 +13,13 @@ open TwoPermutationPrototype.Sampling
 set_option maxRecDepth 20000
 set_option maxHeartbeats 1400000
 
-/-- The V2a header facts: the ready state for ordinal 0 and the header's 31 cycles. -/
-structure HeaderFacts : Prop where
-  ready : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card →
-    Ready td p (keyOf td) (header2 (actual.initialState .opening (td,p))) 0
-  run : ∀ (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions), 0<p.card → ∀ fuel,
-    let s:=actual.initialState .opening (td,p)
-    execute openingImage (31+fuel) s true=(do let z ←execute openingImage fuel (header2 s) true;return z.charge 31 0)
-
-theorem certifiedHeader : HeaderFacts := ⟨fun td p nz => (header_valid td p nz).2, header_run⟩
-
-/-- The pass's end state under a fixed oracle. -/
+/-- The reference pass state under a fixed oracle (`Layout2F.fusedPass`). -/
 noncomputable def passEnd (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) : MachineState :=
-  fixedPass o p (keyOf td) p.card 0 (header2 (actual.initialState .opening (td,p)))
+  Layout2F.fusedPass o td p
 
-theorem pass_end_facts (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) (nz : 0<p.card) :
-    Ready td p (keyOf td) (passEnd o td p) p.card ∧ Seen o (keyOf td) td p (passEnd o td p) p.card := by
-  let s0:=header2 (actual.initialState .opening (td,p))
-  have r0 := certifiedHeader.ready td p nz
-  have r := fixed_post o td p (keyOf td) s0 0 p.card (by omega) r0
-  have seen := seen_pass o td p (keyOf td) s0 0 p.card (by omega) r0 (seen_zero o (keyOf td) td p s0)
-  rw [Nat.zero_add] at r seen
-  exact ⟨r,seen⟩
+theorem pass_end_facts (o : Oracle) (td : BitVec (8*actual.sizes.trapdoor)) (p : Positions) :
+    Seen o (keyOf td) td p (passEnd o td p) p.card :=
+  Layout2F.fused_seen o td p
 
 /-- The group node a level-22 sibling copy reads: the parity slice of the group reply. -/
 theorem node_slice (td : BitVec (8*actual.sizes.trapdoor)) (h : Nat) (hh : h<4194304) :

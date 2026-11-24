@@ -45,13 +45,13 @@ private theorem context_memory {groups : List Nat} {before after : MachineState}
     (memory : after.mem = before.mem) : CapContext groups after :=
   context.of_preserved register (fun n _ _ => congrFun memory (BitVec.ofNat 64 (markBase+8*n)))
 
-/-- A marked level-5 node (`x16 = 8 node ≥ 256`) leaves the walk for the chunk jump at 708. -/
+/-- A marked level-5 node (`x16 = 8 node ≥ 256`) leaves the walk for the chunk dispatch at 668. -/
 theorem cap_chunk_step (groups : List Nat) (state : MachineState) (node dest : Nat)
     (position : CapPosition groups state node dest) (span : CapSpan node 3)
     (level : state.getReg .x16 = BitVec.ofNat 64 (8 * node)) (pc : state.pc = 0x1a64) :
-    RunsOpeningBlock state (state.setPC 0x1b10) 1 ∧
-    CapPosition groups (state.setPC 0x1b10) node dest ∧
-    (state.setPC 0x1b10).getReg .x16 = BitVec.ofNat 64 (8 * node) := by
+    RunsOpeningBlock state (state.setPC 0x1a70) 1 ∧
+    CapPosition groups (state.setPC 0x1a70) node dest ∧
+    (state.setPC 0x1a70).getReg .x16 = BitVec.ofNat 64 (8 * node) := by
   have bounded := (cap_span_node node 3 span).2
   have low := span.start
   have comparison : BitVec.ult (state.getReg .x16) (state.getReg .x27) = false := by

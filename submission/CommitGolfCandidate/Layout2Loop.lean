@@ -4,14 +4,13 @@ import CommitGolfCandidate.GroupOpenMemory
 import CommitGolfCandidate.GroupOpenCapEmitPrefix
 import CommitGolfCandidate.GroupOpenTable
 
-/-! Layout 2 V2b opener, record loop code around the phase writers: the per-phase header (`hdrWord p`, 1 word,
-`ld t1,0(s0)`; the pass jumps straight to phase 0's header at word 4096), the per-phase tail (`tailWord p`, 6 words:
-stride, byte mark of the cap leaf, index advance, latch) and the exit stubs (`exitWord p`: flush of the 6/4/2/0
-pending stream bytes and the jump to the cap stage at 6960). The geometry is `Layout2Phase2`'s (V2b `bodyWord`). -/
+/-! Fused opener (Layout 2 V2 Increment 4b), the loop code after each phase writer: the per-phase tail
+(`ftailWord p`, 6 or 7 words: stride, byte mark of the cap leaf, index advance, latch) and the exit stubs
+(`fexitWord p`: flush of the 6/4/2/0 pending stream bytes of `tp` and the jump to the cap stage at 6960). -/
 namespace TwoPermutationPrototype.GroupedOpening.Layout2
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
 open CommitGolfCandidate.Layout2Phase (stride phaseBase)
-open CommitGolfCandidate.Layout2Phase2 (bodyWord bodyLen tailWord)
+open CommitGolfCandidate.Layout2Phase2 (bodyLen)
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
 
@@ -21,10 +20,14 @@ theorem salt_base : Layout2Phase.saltBase=nonceBase := by decide
 theorem record_base0 : Layout2Phase.recordBase0=proofBase := by decide
 theorem word_address (i : Nat) : Layout2Phase.wordAddress i=address i := rfl
 
-/-- First word of phase `p`'s header and of its exit stub. -/
-def hdrWord (p : Nat) : Nat := bodyWord p-1
-def exitWord (p : Nat) : Nat := tailWord p+6
-/-- Bytes the exit stub of phase `p` flushes (the pending stream bits of `a1`). -/
+/-- Fused loop geometry (Layout 2 V2 Increment 4b): phase `p` of the loop starts at `fphaseWord p`; its writer
+(`Layout2Writer3`, `writerLen p` words) at `fwriterWord p`; its tail (stride, byte mark, index advance, latch) at
+`ftailWord p`; its exit stub at `fexitWord p`. -/
+def fphaseWord (p : Nat) : Nat := 4097+272*p
+def fwriterWord (p : Nat) : Nat := 4160+272*p
+def ftailWord (p : Nat) : Nat := fwriterWord p+(bodyLen p-1)
+def fexitWord (p : Nat) : Nat := if p=3 then 5178 else ftailWord p+6
+/-- Bytes the exit stub of phase `p` flushes (the pending stream bits of `tp`). -/
 def flushLen (p : Nat) : Nat := if p=0 then 6 else if p=1 then 4 else if p=2 then 2 else 0
 /-- Cycles of the exit stub of phase `p`. -/
 def exitCost (p : Nat) : Nat := if p=0 then 5 else if p=3 then 1 else 3
@@ -33,36 +36,43 @@ def exitCost (p : Nat) : Nat := if p=0 then 5 else if p=3 then 1 else 3
 def jumpTo (w t : Nat) : BitVec 21 := BitVec.ofNat 21 ((2097152+4*t-4*w)%2097152)
 def branchTo (w t : Nat) : BitVec 13 := BitVec.ofNat 13 ((8192+4*t-4*w)%8192)
 
-/-- A record header at word `w`: `ld t1,0(s0)`. -/
-def hdrRowsAt (w : Nat) : List Row := [(w,.LD .x6 .x8 0)]
-def hdrRows (p : Nat) : List Row := hdrRowsAt (hdrWord p)
+/-- The straight part of a fused tail: `addi s5,s5,stride; srli t1,t1,1; add t2,s10,t1; sb s7,0(t2); addi s0,s0,8`.
+The mark of the record's cap leaf `256 + pos/65536` is the byte `1` at `4096 + 256 + pos/65536`. -/
+def tailBodyRows (p : Nat) : List Row :=
+  [(ftailWord p,.ADDI .x21 .x21 (BitVec.ofNat 12 (stride p))),(ftailWord p+1,.SRLI .x6 .x6 1),
+   (ftailWord p+2,.ADD .x7 .x26 .x6),(ftailWord p+3,.SB .x7 .x23 0),(ftailWord p+4,.ADDI .x8 .x8 8)]
+/-- The latch: `bne s0,a7,<next phase>` (phases 0..2, falling through to the exit stub), or for phase 3
+`beq s0,a7,<5178>` and, unless it was the last record, `jal <4097>`. -/
+def latchRows (p : Nat) (last : Bool) : List Row :=
+  if p=3 then (5176,.BEQ .x8 .x17 (branchTo 5176 5178)) :: (if last then [] else [(5177,.JAL .x0 (jumpTo 5177 4097))])
+  else [(ftailWord p+5,.BNE .x8 .x17 (branchTo (ftailWord p+5) (fphaseWord (p+1))))]
+def ftailRows (p : Nat) (last : Bool) : List Row := tailBodyRows p ++ latchRows p last
+/-- Cycles of a fused tail. -/
+def tailCost (p : Nat) (last : Bool) : Nat := if p=3 ∧ last=false then 7 else 6
 
-/-- The V2b tail: `addi s5,s5,stride; srli t1,t1,1; add t2,s10,t1; sb s7,0(t2); addi s0,s0,8; bne s0,a7`. The mark
-of the record's cap leaf `256 + pos/65536` is the byte `1` at `4096 + 256 + pos/65536`. -/
-def tailRows (p : Nat) : List Row :=
-  [(tailWord p,.ADDI .x21 .x21 (BitVec.ofNat 12 (stride p))),(tailWord p+1,.SRLI .x6 .x6 1),
-   (tailWord p+2,.ADD .x7 .x26 .x6),(tailWord p+3,.SB .x7 .x23 0),
-   (tailWord p+4,.ADDI .x8 .x8 8),(tailWord p+5,.BNE .x8 .x17 (branchTo (tailWord p+5) (hdrWord ((p+1)%4))))]
+def fexitRows (p : Nat) : List Row :=
+  if p=0 then [(4358,.SW .x21 .x4 0),(4359,.SRLI .x4 .x4 32),(4360,.SH .x21 .x4 4),(4361,.ADDI .x21 .x21 6),
+    (4362,.JAL .x0 (jumpTo 4362 6960))]
+  else if p=1 then [(4634,.SW .x21 .x4 0),(4635,.ADDI .x21 .x21 4),(4636,.JAL .x0 (jumpTo 4636 6960))]
+  else if p=2 then [(4906,.SH .x21 .x4 0),(4907,.ADDI .x21 .x21 2),(4908,.JAL .x0 (jumpTo 4908 6960))]
+  else [(5178,.JAL .x0 (jumpTo 5178 6960))]
 
-def exitRows (p : Nat) : List Row :=
-  if p=0 then [(4296,.SW .x21 .x11 0),(4297,.SRLI .x11 .x11 32),(4298,.SH .x21 .x11 4),(4299,.ADDI .x21 .x21 6),
-    (4300,.JAL .x0 (jumpTo 4300 6960))]
-  else if p=1 then [(4505,.SW .x21 .x11 0),(4506,.ADDI .x21 .x21 4),(4507,.JAL .x0 (jumpTo 4507 6960))]
-  else if p=2 then [(4712,.SH .x21 .x11 0),(4713,.ADDI .x21 .x21 2),(4714,.JAL .x0 (jumpTo 4714 6960))]
-  else [(4918,.JAL .x0 (jumpTo 4918 6960))]
+theorem tail_words : ftailWord 0=4352 ∧ ftailWord 1=4628 ∧ ftailWord 2=4900 ∧ ftailWord 3=5171 := by decide
 
-theorem hdr_present (p : Nat) (hp : p<4) : presentRows (hdrRows p) := by
+theorem tail_present (p : Nat) (hp : p<4) (last : Bool) : presentRows (ftailRows p last) := by
+  apply rows_present; revert p; cases last <;> decide +kernel
+theorem exit_present (p : Nat) (hp : p<4) : presentRows (fexitRows p) := by
   apply rows_present; revert p; decide +kernel
-theorem tail_present (p : Nat) (hp : p<4) : presentRows (tailRows p) := by
-  apply rows_present; revert p; decide +kernel
-theorem exit_present (p : Nat) (hp : p<4) : presentRows (exitRows p) := by
-  apply rows_present; revert p; decide +kernel
 
-theorem exit_words (p : Nat) (hp : p<4) : (exitRows p).head?.map Prod.fst=some (exitWord p) := by
+theorem exit_words (p : Nat) (hp : p<4) : (fexitRows p).head?.map Prod.fst=some (fexitWord p) := by
   revert p; decide
 
-theorem exit_cost (p : Nat) (hp : p<4) : price (exitRows p)=exitCost p ∧ (exitRows p).length=exitCost p := by
+theorem exit_cost (p : Nat) (hp : p<4) : price (fexitRows p)=exitCost p ∧ (fexitRows p).length=exitCost p := by
   revert p; decide
+
+theorem tail_cost (p : Nat) (hp : p<4) (last : Bool) : price (ftailRows p last)=tailCost p last ∧
+    (ftailRows p last).length=tailCost p last := by
+  revert p; cases last <;> decide
 
 /-! ### Word and halfword stores of the exit stubs -/
 

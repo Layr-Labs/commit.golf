@@ -50,8 +50,8 @@ theorem bill_fit (gs : List Nat) (k : Nat) : bill gs k≤65536 := by
   have bound : f≤128 := limit_frontier gs
   have all := TwoPermutationPrototype.GroupedOpening.CapB.batch_frontier ⟨f,by omega⟩
   have c:=TwoPermutationPrototype.GroupedOpening.CapB.control_bound gs 1 5
-  change TwoPermutationPrototype.GroupedOpening.CapB.control gs 1 5≤882+2*f at c
-  change 297+(882+2*f)+handlers f+1+7+flushPrice f≤3407 at all
+  change TwoPermutationPrototype.GroupedOpening.CapB.control gs 1 5≤850+2*f at c
+  change 297+(850+2*f)+handlers f+1+7+flushPrice f≤3375 at all
   have sz : Layout2.Cap.size f≤3840 := by unfold Layout2.Cap.size;omega
   unfold bill TwoPermutationPrototype.GroupedOpening.CapB.price;change 297+_+handlers f+1+7+flushPrice f+_≤_
   split <;> dsimp only [f] at * <;> omega
@@ -104,7 +104,7 @@ theorem return_guard (s : MachineState) (B n k : Nat) (here : s.pc=pc 6671) (des
 theorem cap_stage {gs H k s} (e : CapEntry gs H k s) :
     let ns:=capFrontierNodes gs 1 8
     let ds:=ns.map H
-    ∃ t steps cycles, steps≤65536 ∧ (k=128 → cycles≤3412) ∧
+    ∃ t steps cycles, steps≤65536 ∧ (k=128 → cycles≤3380) ∧
       (∀ surplus,execute openingImage (steps+surplus) s true=pure ⟨.success,t,cycles,0⟩) ∧
       (t.getReg .x11).toNat=534*k+capOffset ns.length-(if k=128 ∧ ns.length=128 then 1 else 0) ∧
       (∀ q,proofBase≤q → q<capStart k → gbyte t q=gbyte s q) ∧

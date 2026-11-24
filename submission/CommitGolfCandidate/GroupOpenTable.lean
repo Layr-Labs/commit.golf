@@ -6,7 +6,8 @@ import CommitGolfCandidate.TwoPermutationMemoryBridge
 
 Entry `e` (the tile offset `e = i % 4096` of position `i`) sits at `tableBase + 16 e`:
 - dword 0: `tabT e | tabS e << 16 | tabR e << 32 | tabG e << 48`, where `tabT e` is the byte address of
-  link-block word `3139 - (e % 374) / 11` (the chain entry of the position), `tabS e = 1536 + tabOff (e % 11)`
+  word `4564 - (e % 374) / 11` (the fused opener's chain entry of the position, relative to the midpoint between the
+  link blocks of phases 1 and 2; each phase's `jalr` adds its own offset), `tabS e = 1536 + tabOff (e % 11)`
   is the address of the salt in the generator reply (rank `e % 11`), and `tabR e`, `tabG e` are the signed
   16-bit offsets from a quartet block to its reply and to the sibling quartet's node (`168, 136` for even
   quartets `e / 4`, `-1056, -856` for odd ones);
@@ -24,8 +25,8 @@ abbrev tableWord (e : Nat) : Nat := 8589926400 + 2*e
 
 /-- Byte offset of the salt of rank `r` in the K1 generator reply (`offAt`). -/
 def tabOff (r : Nat) : Nat := if r=0 then 0 else if r=1 then 184 else 16*(r-1)
-/-- Chain entry: byte address of word `3139 - (e % 374) / 11`. -/
-def tabT (e : Nat) : Nat := 4096 + 4*(3139 - (e%374)/11)
+/-- Chain entry: byte address of word `4564 - (e % 374) / 11`. -/
+def tabT (e : Nat) : Nat := 4096 + 4*(4564 - (e%374)/11)
 /-- Salt source address in the reply at 1536. -/
 def tabS (e : Nat) : Nat := 1536 + tabOff (e%11)
 /-- Counter offset `4352 - 256 (e % 374)` as a 64-bit two's-complement value. -/

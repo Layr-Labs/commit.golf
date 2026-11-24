@@ -61,7 +61,7 @@ structure CapStage (capRaw : List (BitVec 256) → List Byte) : Prop where
   run : ∀ (s : Submission) (layout : OpeningLayout s) (td : BitVec (8*s.sizes.trapdoor)) (p : Positions)
       (st : MachineState), s.image .opening=openingImage →
       CapEntry (s.initialState .opening (td,p)) st p →
-    ∃ final steps cycles, steps ≤ 2^30 ∧ (p.card=128 → cycles ≤ 3412) ∧
+    ∃ final steps cycles, steps ≤ 2^30 ∧ (p.card=128 → cycles ≤ 3380) ∧
       (∀ surplus, execute openingImage (steps+surplus) st true=pure ⟨.success,final,cycles,0⟩) ∧
       (final.getReg .x11).toNat=534*p.card+capOffset (Opening.openingNodes p).length-
         dropped p.card (Opening.openingNodes p).length ∧

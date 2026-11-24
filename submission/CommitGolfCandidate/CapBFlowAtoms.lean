@@ -30,9 +30,9 @@ theorem leaf664 (s : MachineState) (here : s.pc=pc 664) :
   simp only [execInstrBr,yes,no ,show s.getReg .x0=0#64 from rfl] <;> split <;> simp_all
 
 theorem leaf665 (s : MachineState) (here : s.pc=pc 665) :
-    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(if !(BitVec.ult (s.getReg .x16) (s.getReg .x27)) then pc 708 else pc 666) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
-  apply branchNav s 665 708 (.BGEU .x16 .x27 172) (!(BitVec.ult (s.getReg .x16) (s.getReg .x27))) here (by decide) word665 rfl rfl
-  have yes : s.pc+signExtend13 172=pc 708 := (congrArg (fun a : Word=>a+signExtend13 172) here).trans (by decide +kernel)
+    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(if !(BitVec.ult (s.getReg .x16) (s.getReg .x27)) then pc 668 else pc 666) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
+  apply branchNav s 665 668 (.BGEU .x16 .x27 12) (!(BitVec.ult (s.getReg .x16) (s.getReg .x27))) here (by decide) word665 rfl rfl
+  have yes : s.pc+signExtend13 12=pc 668 := (congrArg (fun a : Word=>a+signExtend13 12) here).trans (by decide +kernel)
   have no : s.pc+4=pc 666 := (congrArg (fun a : Word=>a+4) here).trans (pc_add 665)
   simp only [execInstrBr,yes,no,Bool.not_eq_true',Bool.eq_false_iff ,show s.getReg .x0=0#64 from rfl] <;> split <;> simp_all
 
@@ -47,30 +47,24 @@ theorem leaf667 (s : MachineState) (here : s.pc=pc 667) :
   have eq : s.pc+signExtend21 2097128=pc 661 := (congrArg (fun v : Word=>v+signExtend21 2097128) here).trans (by decide +kernel)
   change s.setPC _=s.setPC _;rw [eq]
 
-theorem leaf708 (s : MachineState) (here : s.pc=pc 708) :
-    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 8192) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
-  apply jumpNav s 708 (.JAL .x0 29936) (pc 8192) here (by decide) word708 rfl rfl
-  have eq : s.pc+signExtend21 29936=pc 8192 := (congrArg (fun v : Word=>v+signExtend21 29936) here).trans (by decide +kernel)
-  change s.setPC _=s.setPC _;rw [eq]
-
-theorem leaf8192 (s : MachineState) (here : s.pc=pc 8192) :
-    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 8193) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(if .x28=r then ((s.getReg .x28) <<< (6:Nat)) else s.getReg r) := by
-  apply assignNav s 8192 (.SLLI .x28 .x28 6) .x28 (((s.getReg .x28) <<< (6:Nat))) here (by decide) word8192 rfl rfl _ (by decide)
+theorem leaf668 (s : MachineState) (here : s.pc=pc 668) :
+    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 669) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(if .x28=r then ((s.getReg .x28) <<< (6:Nat)) else s.getReg r) := by
+  apply assignNav s 668 (.SLLI .x28 .x28 6) .x28 (((s.getReg .x28) <<< (6:Nat))) here (by decide) word668 rfl rfl _ (by decide)
   simp only [execInstrBr,show signExtend12 0=0#64 from rfl,BitVec.add_zero] <;> rfl
 
-theorem leaf8193 (s : MachineState) (here : s.pc=pc 8193) :
-    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 8194) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(if .x11=r then 36864#64 else s.getReg r) := by
-  apply assignNav s 8193 (.LUI .x11 9) .x11 (36864#64) here (by decide) word8193 rfl rfl _ (by decide)
+theorem leaf669 (s : MachineState) (here : s.pc=pc 669) :
+    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 670) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(if .x11=r then 36864#64 else s.getReg r) := by
+  apply assignNav s 669 (.LUI .x11 9) .x11 (36864#64) here (by decide) word669 rfl rfl _ (by decide)
   simp only [execInstrBr,show signExtend12 0=0#64 from rfl,BitVec.add_zero] <;> rfl
 
-theorem leaf8194 (s : MachineState) (here : s.pc=pc 8194) :
-    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 8195) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(if .x11=r then ((s.getReg .x11)+(s.getReg .x28)) else s.getReg r) := by
-  apply assignNav s 8194 (.ADD .x11 .x11 .x28) .x11 (((s.getReg .x11)+(s.getReg .x28))) here (by decide) word8194 rfl rfl _ (by decide)
+theorem leaf670 (s : MachineState) (here : s.pc=pc 670) :
+    ∃ t,Run openingImage s t 1 1 ∧ t.pc=(pc 671) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(if .x11=r then ((s.getReg .x11)+(s.getReg .x28)) else s.getReg r) := by
+  apply assignNav s 670 (.ADD .x11 .x11 .x28) .x11 (((s.getReg .x11)+(s.getReg .x28))) here (by decide) word670 rfl rfl _ (by decide)
   simp only [execInstrBr,show signExtend12 0=0#64 from rfl,BitVec.add_zero] <;> rfl
 
-theorem leaf8195 (s : MachineState) (here : s.pc=pc 8195) :
+theorem leaf671 (s : MachineState) (here : s.pc=pc 671) :
     ∃ t,Run openingImage s t 1 1 ∧ t.pc=(((s.getReg .x11)+128#64) &&& ~~~1#64) ∧ t.mem=s.mem ∧ ∀ r,t.getReg r=(s.getReg r) := by
-  apply jumpNav s 8195 (.JALR .x0 .x11 128) _ here (by decide) word8195 rfl rfl
+  apply jumpNav s 671 (.JALR .x0 .x11 128) _ here (by decide) word671 rfl rfl
   simp [execInstrBr,signExtend12,MachineState.setReg]
 
 theorem leaf703 (s : MachineState) (here : s.pc=pc 703) :

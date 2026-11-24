@@ -67,14 +67,12 @@ theorem walk {gs} (api : API gs) (h n : Nat) (xs : List Nat) (s : MachineState)
     | zero =>
       have bottom : 32≤n := by simpa using zspan
       have u : BitVec.ult (addr (8*n)) 256#64=false := by simp [BitVec.ult,addr,Nat.mod_eq_of_lt (show 8*n<2^64 by omega)];omega
-      have toChunk : b.pc=pc 708 := by simpa [u] using pb
-      obtain ⟨c,rc,pcC,mc,regC⟩:=nav_toChunk b toChunk
-      have ic:=api.move ib (show Moved b c from ⟨mc,fun r _=>regC r⟩)
-      obtain ⟨d,rd,pd,md,regD⟩:=nav_dispatch c pcC
-      have id:=api.move ic (show Moved c d from ⟨md,by intro r f;cases r <;> first | exact False.elim ((by decide : _∉savedRegs) f) | simp [regD]⟩)
+      have toChunk : b.pc=pc 668 := by simpa [u] using pb
+      obtain ⟨d,rd,pd,md,regD⟩:=nav_dispatch b toChunk
+      have id:=api.move ib (show Moved b d from ⟨md,by intro r f;cases r <;> first | exact False.elim ((by decide : _∉savedRegs) f) | simp [regD]⟩)
       let mask:=leafMask gs n
       have hmask:=TwoPermutationPrototype.GroupedOpening.leaf_mask_lt gs n
-      have maskR : c.getReg .x28=addr mask := by rw [regC,regB,regA];rfl
+      have maskR : b.getReg .x28=addr mask := by rw [regB,regA];rfl
       have begin : d.pc=pc (chunkBlockWord mask) := by rw [pd,maskR];exact targetBlock ⟨mask,hmask⟩
       have nonzero : mask≠0 := (TwoPermutationPrototype.GroupedOpening.mask_marked_iff _ hmask).1 ((TwoPermutationPrototype.GroupedOpening.chunk_marked gs n).symm ▸ marked)
       have frontier:=TwoPermutationPrototype.GroupedOpening.chunk_frontier gs n
@@ -84,8 +82,8 @@ theorem walk {gs} (api : API gs) (h n : Nat) (xs : List Nat) (s : MachineState)
             omega)
         (fun r hr=>chunk_entries_range mask hmask nonzero r hr)
         (by rw [frontier,List.length_map] at room;exact room) begin
-        (by simpa [regD,regC,regB] using lev) id
-      have joint:=(((ra.thenDo rb).thenDo rc).thenDo rd).thenDo rt
+        (by simpa [regD,regB] using lev) id
+      have joint:=((ra.thenDo rb).thenDo rd).thenDo rt
       refine ⟨t,?_,by simpa [show n≠1 by omega] using pt,by simpa only [frontier] using it,nT⟩
       unfold walkCost;rw [frontier,List.length_map]
       simp only [TwoPermutationPrototype.GroupedOpening.CapB.control,marked,ite_true,chunkPrice,entriesPrice] at joint ⊢

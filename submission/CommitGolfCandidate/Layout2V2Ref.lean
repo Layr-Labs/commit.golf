@@ -1,4 +1,4 @@
-import CommitGolfCandidate.Layout2Pass
+import CommitGolfCandidate.Layout2Seen
 import CommitGolfCandidate.GroupOpenModel
 import CommitGolfCandidate.TwoPermutationHeapInvariant
 import CommitGolfCandidate.GroupOpenHeaderSpec

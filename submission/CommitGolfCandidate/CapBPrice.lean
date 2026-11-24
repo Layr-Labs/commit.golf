@@ -5,7 +5,7 @@ open Sampling CommitGolfCandidate.Layout2
 set_option maxHeartbeats 1400000
 
 def entryLen (r : Nat) := if depthOf r=3 then 2 else 3
-def chunkPrice (mask : Nat) := 12+((chunkEntries mask).map entryLen).sum
+def chunkPrice (mask : Nat) := 11+((chunkEntries mask).map entryLen).sum
 def control (gs : List Nat) (node : Nat) : Nat → Nat
   | 0 => if capIsMarked gs node 3 then chunkPrice (leafMask gs node) else 5
   | h+1 => if capIsMarked gs node (h+4) then 14+control gs (2*node) h+control gs (2*node+1) h else 5
@@ -26,10 +26,10 @@ def price (gs : List Nat) (k : Nat) :=
     if k%4=0 then 0 else 2+3+5*bytes
 
 def ceiling : Nat → Nat
-  | 0 => 14
+  | 0 => 13
   | h+1 => 14+2*ceiling h
 
-theorem chunks_bounded : ∀ m : Fin 256, chunkPrice m.val≤14+2*(chunkEntries m.val).length := by decide +kernel
+theorem chunks_bounded : ∀ m : Fin 256, chunkPrice m.val≤13+2*(chunkEntries m.val).length := by decide +kernel
 
 theorem control_bound (gs : List Nat) (n h : Nat) :
     control gs n h≤ceiling h+2*(capFrontierNodes gs n (h+3)).length := by
@@ -48,14 +48,14 @@ theorem control_bound (gs : List Nat) (n h : Nat) :
     split <;> rename_i mark <;> simp only [mark,ite_true,ite_false,List.length_append,List.length_singleton] <;> omega
 
 theorem batch_frontier : ∀ f : Fin 129,
-    297+(882+2*f.val)+handlers f.val+1+7+flushPrice f.val≤3407 := by decide +kernel
-theorem last_two : (297+(882+2*127)+handlers 127+1+7+flushPrice 127=3398) ∧
-    (297+(882+2*128)+handlers 128+1+7+flushPrice 128=3407) := by decide +kernel
+    297+(850+2*f.val)+handlers f.val+1+7+flushPrice f.val≤3375 := by decide +kernel
+theorem last_two : (297+(850+2*127)+handlers 127+1+7+flushPrice 127=3366) ∧
+    (297+(850+2*128)+handlers 128+1+7+flushPrice 128=3375) := by decide +kernel
 
 theorem scored (gs : List Nat) (hf : (capFrontierNodes gs 1 8).length≤128) :
-    price gs 128≤3407 := by
+    price gs 128≤3375 := by
   have c:=control_bound gs 1 5
-  change control gs 1 5≤882+2*(capFrontierNodes gs 1 8).length at c
+  change control gs 1 5≤850+2*(capFrontierNodes gs 1 8).length at c
   have stop:=batch_frontier ⟨(capFrontierNodes gs 1 8).length,by omega⟩
   unfold price;dsimp only at stop ⊢;rw [if_pos (by decide : 128%4=0)];omega
 

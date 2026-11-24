@@ -11,14 +11,13 @@ theorem word661 : (openingImage.code[661]?).bind decodeInstruction=some (.base (
 theorem word662 : (openingImage.code[662]?).bind decodeInstruction=some (.base (.ADD .x7 .x26 .x16)) := rfl
 theorem word663 : (openingImage.code[663]?).bind decodeInstruction=some (.base (.LD .x28 .x7 0)) := rfl
 theorem word664 : (openingImage.code[664]?).bind decodeInstruction=some (.base (.BEQ .x28 .x0 152)) := rfl
-theorem word665 : (openingImage.code[665]?).bind decodeInstruction=some (.base (.BGEU .x16 .x27 172)) := rfl
+theorem word665 : (openingImage.code[665]?).bind decodeInstruction=some (.base (.BGEU .x16 .x27 12)) := rfl
 theorem word666 : (openingImage.code[666]?).bind decodeInstruction=some (.base (.SLLI .x6 .x6 1)) := rfl
 theorem word667 : (openingImage.code[667]?).bind decodeInstruction=some (.base (.JAL .x0 2097128)) := rfl
-theorem word708 : (openingImage.code[708]?).bind decodeInstruction=some (.base (.JAL .x0 29936)) := rfl
-theorem word8192 : (openingImage.code[8192]?).bind decodeInstruction=some (.base (.SLLI .x28 .x28 6)) := rfl
-theorem word8193 : (openingImage.code[8193]?).bind decodeInstruction=some (.base (.LUI .x11 9)) := rfl
-theorem word8194 : (openingImage.code[8194]?).bind decodeInstruction=some (.base (.ADD .x11 .x11 .x28)) := rfl
-theorem word8195 : (openingImage.code[8195]?).bind decodeInstruction=some (.base (.JALR .x0 .x11 128)) := rfl
+theorem word668 : (openingImage.code[668]?).bind decodeInstruction=some (.base (.SLLI .x28 .x28 6)) := rfl
+theorem word669 : (openingImage.code[669]?).bind decodeInstruction=some (.base (.LUI .x11 9)) := rfl
+theorem word670 : (openingImage.code[670]?).bind decodeInstruction=some (.base (.ADD .x11 .x11 .x28)) := rfl
+theorem word671 : (openingImage.code[671]?).bind decodeInstruction=some (.base (.JALR .x0 .x11 128)) := rfl
 theorem word703 : (openingImage.code[703]?).bind decodeInstruction=some (.base (.ANDI .x7 .x6 1)) := rfl
 theorem word704 : (openingImage.code[704]?).bind decodeInstruction=some (.base (.BEQ .x7 .x0 8016)) := rfl
 theorem word660 : (openingImage.code[660]?).bind decodeInstruction=some (.base (.ADDI .x6 .x6 1)) := rfl
