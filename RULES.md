@@ -8,7 +8,10 @@ The `product` track minimizes the certified score for **one full commitment and 
 
 The `pareto` track minimizes the two objectives `[commitCycles + openingCycles, proofBytes]`
 independently. A candidate dominates another when it is no worse on both and strictly
-better on at least one. Both tracks use the identical contract and numeric limits below.
+better on at least one. `commit-golf-64-32-product` and `commit-golf-64-32-pareto` use the corresponding
+scoring rules with permutation calls priced at 30 cycles. `commit-golf-96-32-product` and
+`commit-golf-96-32-pareto` additionally widen compression to 96→32 bytes, still at 8 cycles.
+All six tracks share every other contract parameter and numeric limit below.
 
 The cycle bounds and opening-proof byte bound are worst-case honest-run bounds, not
 sample averages. Commitment bytes, private trapdoor storage, opened values, indices,
@@ -26,14 +29,14 @@ See [Parameters](CommitGolf/Parameters.lean) and [Oracle](CommitGolf/Oracle.lean
 | Commitment size | 32 bytes |
 | Scored opening | 128 distinct positions |
 | Binding / hiding security bits | 120 / 120 |
-| Compression | 512 → 256 bits |
+| Compression | 512 → 256 bits; 768 → 256 bits on `commit-golf-96-32-*` |
 | Permutation, forward and inverse | 1,600 → 1,600 bits |
 | Commit query budget | 100 × vector length |
 | Opening / checking query budget | 100 × number of opened positions |
 
 The compression function and permutation are sampled independently and uniformly,
 once per experiment, and shared by all parties. Solvers may build compound functions
-using them; they cannot add oracle instances or change their widths. Every underlying
+using them; they cannot add oracle instances or change their track's widths. Every underlying
 public query counts once, including repeats and inverse queries. Private randomness
 and local computation do not consume query budget, but do incur machine-cycle costs.
 
@@ -77,11 +80,14 @@ Oversized proofs reject.
 | Ordinary instruction | 1 |
 | Multiplication/division, including remainder and word forms | 4 |
 | Compression syscall | 8 |
-| Forward or inverse permutation syscall | 8 |
+| Forward or inverse permutation syscall | 8 (`product`, `pareto`); 30 (all `commit-golf-*` tracks) |
 | Private randomness, `n` bytes | 1 + ceil(n / 8) |
 | HALT | 1 |
 
-The eight-cycle oracle price includes fixed input/output handling, with no extra per-byte charge.
+Each oracle price includes fixed input/output handling, with no extra per-byte charge.
+The verifier fixes the compression width and permutation price from the selected track in its isolated contract;
+submissions cannot override it. Every public oracle call still consumes exactly one query.
+Compression takes exactly 64 bytes, or exactly 96 on the `commit-golf-96-32-*` tracks, and returns 32 bytes.
 Syscalls have no additional ordinary-instruction charge. These are benchmark model
 costs, not elapsed time or measured processor cycles. `t0=0` requests an oracle:
 `a0` input address, `a1` exact input byte length, `a2` output address, `a3` primitive
@@ -128,7 +134,9 @@ records the comparisons and application limits.
 ## Submit and verify
 
 **Only the selected track’s directory is solver-editable: `submission/` for product,
-`submission-pareto/` for Pareto.** Define
+`submission-pareto/` for Pareto, `submission-commit-golf-64-32-product/` for commit-golf-64-32-product, or
+`submission-commit-golf-64-32-pareto/` for commit-golf-64-32-pareto, `submission-commit-golf-96-32-product/` for
+commit-golf-96-32-product, or `submission-commit-golf-96-32-pareto/` for commit-golf-96-32-pareto.** Define
 `CommitGolf.Challenge.submission : CommitGolf.Submission`, and prove
 `CommitGolf.Challenge.certificate : Certificate submission proofBytes commitCycles openingCycles`.
 Deliver all image bytes and ABI fields in `programs.json` ([encoding](submission/README.md#delivered-programs)).
@@ -143,8 +151,8 @@ The [verifier](verifier/verify.py) runs Lean's comparator on the exact trusted
 [certificate template](verifier/Challenge.lean.in), replaying declarations through the
 kernel and permitting only `propext`, `Classical.choice`, and `Quot.sound`.
 Only accepted certificates produce `scripts/score.json` (product) or
-`scripts/pareto/score.json` (Pareto); failed verification produces no score.
-Accepted reports include the SHA-256 digest of the exact delivered manifest.
+`scripts/<track>/score.json` (the other tracks); failed verification produces no score.
+Accepted reports include the track, compression input size, permutation price, and SHA-256 digest of the exact delivered manifest.
 
 ```sh
 lake build CommitGolf CommitGolfTests

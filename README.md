@@ -2,7 +2,7 @@
 
 Design a hiding vector commitment scheme using two independent ideal primitives:
 
-- One **512→256-bit compression function**.
+- One **64→32-byte compression function**, or **96→32 bytes** on the `commit-golf-96-32-*` tracks.
 - One **1,600→1,600-bit permutation**, supporting forward and inverse queries.
 
 Both are available together through the fixed `PublicSpec` interface. Solvers can implement
@@ -14,10 +14,18 @@ change widths, or access a built-in variable-input RO or XOF.
 
 - `product`: minimize `(commitCycles + openingCycles) × proofBytes`; edit `submission/`.
 - `pareto`: minimize `[commitCycles + openingCycles, proofBytes]` independently; edit `submission-pareto/`.
+- `commit-golf-64-32-product`: product scoring with 30-cycle permutation calls; edit `submission-commit-golf-64-32-product/`.
+- `commit-golf-64-32-pareto`: Pareto scoring with 30-cycle permutation calls; edit `submission-commit-golf-64-32-pareto/`.
+- `commit-golf-96-32-product`: product scoring with 96→32-byte compression at 8 cycles and permutation at 30; edit `submission-commit-golf-96-32-product/`.
+- `commit-golf-96-32-pareto`: Pareto scoring with the same 96→32-byte compression and prices; edit `submission-commit-golf-96-32-pareto/`.
 
-Both use the same certificate and numeric limits. Use `yukon run --track <track>` or
+The original tracks charge 8 cycles per permutation call. Compression costs 8 in all six.
+All tracks use the same certificate, query budgets, and numeric limits. Use `yukon run --track <track>` or
 `python3 scripts/run.py --track <track>` (default: product). `yukon switch <track>`
 selects a track without changing Git state.
+The `commit-golf-96-32-*` tracks accept exactly 96 input bytes: three 256-bit digests fit in one
+query. They use the same ideal-function model with the wider domain; they do not
+provide an additional 64-byte oracle or implement concrete BLAKE3.
 
 ## Score and certificate
 
@@ -41,7 +49,7 @@ and proof modules must live inside it. The contract, parameters, oracle definiti
 verifier, build configuration, scripts, and workflows are maintained by the challenge
 authors and are not part of a submission.
 
-Use `submission/` (product) or `submission-pareto/` (Pareto) for `Solution.lean`, `claim.json`, `programs.json`, and optional
+Use the selected directory above for `Solution.lean`, `claim.json`, `programs.json`, and optional
 `CommitGolfCandidate/` modules. The included [salted Merkle submission](submission/README.md)
 provides a complete certificate for the current contract. Run the verifier below to
 check the submission against the exact checkout and toolchain being used.
@@ -72,6 +80,13 @@ uses a fresh directory under the current directory's `.work/` by default.
 Each track’s workflow verifies its own submission directory. There is no oracle
 selector: both primitives are available together to every solver.
 Reports are `scripts/score.json` (product) and `scripts/pareto/score.json` (Pareto).
+The new tracks write `scripts/commit-golf-64-32-product/score.json` and `scripts/commit-golf-64-32-pareto/score.json`.
+Each report identifies its track, compression input size, and permutation cost.
+The 96→32-byte variants have separate `scripts/<track>/score.json` reports.
+The four new variants include only track configuration and verifier contracts.
+Their submission directories, programs, claims, and complete certificates will be
+added separately. Until then, their full-score workflows cannot produce a score.
+Porting a 64-byte baseline requires changing its programs and proofs, not only its price.
 
 The binding game follows the original sampled-function design: sample the two
 primitives once, run the adversary, and check both openings against those same
@@ -96,8 +111,14 @@ the fixed compression and forward/inverse permutation syscalls, private randomne
 and halt/failure, recording abstract cycles and public oracle calls separately.
 Ordinary instructions cost one cycle; multiplication and division cost four.
 Private randomness retains the historical charge of `1 + ceil(bytes / 8)` cycles.
-Compression and forward/inverse permutation syscalls each cost eight cycles, with
-no additional instruction charge for the syscall. These prices are fixed in Parameters.
+Compression costs eight cycles. Forward/inverse permutation calls cost eight on the original
+tracks and 30 on the four `commit-golf-*` tracks, with no additional instruction charge for the syscall.
+The verifier selects the price from its trusted track configuration, changes only
+`PERMUTATION_CYCLES` and `COMPRESSION_INPUT_LENGTH` in its isolated contract copy, and
+removes incompatible project builds. The repository's `Parameters.lean` retains
+the original eight-cycle price and 512-bit compression input.
+For development against a new track, use the verifier with `--track commit-golf-64-32-product` or
+the corresponding track name; a default `lake build` uses the original model.
 
 `CommitGolf/Programs.lean` defines input loading, output decoding, the executable-derived
 scheme and honest machine runs. The certificate and comparator require cycle bounds
@@ -108,21 +129,41 @@ they do not claim elapsed time on a physical processor.
 
 ## Yukon setup
 
-`benchmark.json` defines schema-v2 product and Pareto tracks, sharing setup and verification.
-`benchmark.yml` runs product; `benchmark-pareto.yml` runs Pareto. Each uploads its own report.
+`benchmark.json` defines six schema-v2 tracks, sharing setup and verification.
+`benchmark.yml` runs product; the five `benchmark-<track>.yml` wrappers select the other tracks.
+Each uploads its own report.
 Yukon must support mixed modes before import. For an existing standalone import, convert it
 into the product track first, then import Pareto. Mixed-mode reorgs require `trackScope: "track"`.
 
-`Test PR` compares the PR's exact head and target commits and checks both tracks when required.
-Differences outside both submission directories enable the artifact-linkage matrix and maximum-image
-admission test. Submission-only PRs on Yukon's same-repository `submissions/*` branches
+`Test PR` compares the PR's exact head and target commits. Its existing checks run
+through four independent workflows in parallel:
+
+- `benchmark.yml`: the original product baseline and its score.
+- `benchmark-pareto.yml`: the original Pareto baseline and its score.
+- `test-linkage.yml`: Python unit tests and artifact-linkage regressions, including
+  oracle widths, costs, and query counts on all six tracks.
+- `test-scale.yml`: maximum-image admission and byte-linkage regressions.
+
+Each workload has its own runner, result, and log artifact. All four workflows can also
+be dispatched individually from Actions, making it possible to rerun a failed workload.
+For each new track whose submission directory changes, PR CI also calls that track's
+`benchmark-commit-golf-<width>-32-<mode>.yml` workflow in parallel and requires full
+certificate and artifact-equality verification. Additions, edits, deletions, and both
+sides of moves between tracks select the affected tracks. An unchanged new-track
+submission is not verified by the PR gate.
+Differences outside the six submission directories enable the linkage and scale workflows.
+Submission-only PRs on Yukon's same-repository `submissions/*` branches
 leave Benchmark execution to Yukon; contract changes on those branches still run the
-full checks here. Forks and other branches run Benchmark here.
-The final `contract-regressions` check fails if detection or a required Benchmark fails.
+full checks here, including any changed new-track submissions. Forks and other branches
+run the original product and Pareto benchmarks plus every changed new track here.
+The final `contract-regressions` check waits for all required workflows and fails if
+change detection or any required workload fails, is cancelled, or unexpectedly skips.
 
 Every Benchmark run verifies the full submitted certificate; failed verification produces
 no score. Routine dispatches omit the stress tests. Maintainers can explicitly enable
-`contract_regressions` for a manual run.
+`contract_regressions` for a manual Benchmark run to start linkage and scale workflows
+alongside the benchmark. Regression failures fail the overall run; each benchmark
+publishes a score only after its own full certificate passes.
 
 The workflow file alone does not make its final check required. Once a recent eligible
 PR run has reported the check, an administrator can activate the additive

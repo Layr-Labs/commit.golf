@@ -70,11 +70,15 @@ CLOUD
     # Export before any candidate code runs; only trusted dependency/build trees.
     guest 'sudo tar --zstd -C /srv -cf - golf/.elan commit-benchmark/.lake commit-benchmark/verifier/.tools' > .cache/trusted.tar.zst
     ;;
-  run|run-pareto)
+  run|run-pareto|run-commit-golf-64-32-product|run-commit-golf-64-32-pareto|run-commit-golf-96-32-product|run-commit-golf-96-32-pareto)
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
     case "$1" in
       run) track=product ;;
       run-pareto) track=pareto ;;
+      run-commit-golf-64-32-product) track=commit-golf-64-32-product ;;
+      run-commit-golf-64-32-pareto) track=commit-golf-64-32-pareto ;;
+      run-commit-golf-96-32-product) track=commit-golf-96-32-product ;;
+      run-commit-golf-96-32-pareto) track=commit-golf-96-32-pareto ;;
     esac
     guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 scripts/run.py --track '"$track"
     ;;
@@ -99,5 +103,5 @@ CLOUD
   stop)
     if [[ -f "${vm}/qemu.pid" ]]; then sudo kill "$(sudo cat "${vm}/qemu.pid")"; fi
     ;;
-  *) echo 'Usage: blacksmith.sh start | setup | cache | run | run-pareto | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
+  *) echo 'Usage: blacksmith.sh start | setup | cache | run | run-pareto | run-commit-golf-64-32-product | run-commit-golf-64-32-pareto | run-commit-golf-96-32-product | run-commit-golf-96-32-pareto | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
 esac

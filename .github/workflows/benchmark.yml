@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       contract_regressions:
-        description: Run the maintainer artifact linkage and maximum-image regressions
+        description: Also run artifact linkage and maximum-image workflows in parallel
         required: false
         default: false
         type: boolean
@@ -19,7 +19,7 @@ on:
         required: true
         type: string
       contract_regressions:
-        description: Run the maintainer artifact linkage and maximum-image regressions
+        description: Also run artifact linkage and maximum-image workflows in parallel
         required: false
         default: false
         type: boolean
@@ -35,25 +35,7 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        id: cache
-        with:
-          path: .cache/trusted.tar.zst
-          key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
-      - name: Start verifier VM
-        run: bash scripts/blacksmith.sh start
-      - name: Setup
-        run: bash scripts/blacksmith.sh setup
-      # Save trusted builds before candidate verification, even if the proof fails.
-      # Only the default branch publishes caches shared with submission branches.
-      - name: Export trusted cache
-        if: steps.cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
-        run: bash scripts/blacksmith.sh cache
-      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        if: steps.cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
-        with:
-          path: .cache/trusted.tar.zst
-          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - uses: ./.github/actions/setup-verifier
       - name: Benchmark
         env:
           TRACK: ${{ inputs.track || 'product' }}
@@ -61,14 +43,12 @@ jobs:
           case "$TRACK" in
             product) bash scripts/blacksmith.sh run ;;
             pareto) bash scripts/blacksmith.sh run-pareto ;;
+            commit-golf-64-32-product) bash scripts/blacksmith.sh run-commit-golf-64-32-product ;;
+            commit-golf-64-32-pareto) bash scripts/blacksmith.sh run-commit-golf-64-32-pareto ;;
+            commit-golf-96-32-product) bash scripts/blacksmith.sh run-commit-golf-96-32-product ;;
+            commit-golf-96-32-pareto) bash scripts/blacksmith.sh run-commit-golf-96-32-pareto ;;
             *) echo 'Unknown track' >&2; exit 1 ;;
           esac
-      - name: Verifier regressions and artifact linkage
-        if: inputs.contract_regressions
-        run: bash scripts/blacksmith.sh test-linkage
-      - name: Maximum artifact admission and byte linkage
-        if: inputs.contract_regressions
-        run: bash scripts/blacksmith.sh test-scale
       - name: Collect results
         if: always()
         run: bash scripts/blacksmith.sh collect
@@ -79,6 +59,10 @@ jobs:
           case "$TRACK" in
             product) score_path=scripts/score.json ;;
             pareto) score_path=scripts/pareto/score.json ;;
+            commit-golf-64-32-product) score_path=scripts/commit-golf-64-32-product/score.json ;;
+            commit-golf-64-32-pareto) score_path=scripts/commit-golf-64-32-pareto/score.json ;;
+            commit-golf-96-32-product) score_path=scripts/commit-golf-96-32-product/score.json ;;
+            commit-golf-96-32-pareto) score_path=scripts/commit-golf-96-32-pareto/score.json ;;
             *) exit 1 ;;
           esac
           mkdir -p ".work/score-artifact/$(dirname "$score_path")"
@@ -102,3 +86,13 @@ jobs:
       - name: Stop verifier VM
         if: always()
         run: bash scripts/blacksmith.sh stop
+  linkage:
+    if: inputs.contract_regressions
+    uses: ./.github/workflows/test-linkage.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+  scale:
+    if: inputs.contract_regressions
+    uses: ./.github/workflows/test-scale.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}

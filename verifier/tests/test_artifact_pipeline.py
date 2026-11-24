@@ -26,6 +26,7 @@ class ArtifactPipelineTests(unittest.TestCase):
         for name in ('lean-toolchain', 'lakefile.lean', 'lake-manifest.json', 'CommitGolf.lean'):
             shutil.copy2(ROOT / name, trusted / name)
         (trusted / 'CommitGolf').mkdir()
+        shutil.copy2(ROOT / 'CommitGolf/Parameters.lean', trusted / 'CommitGolf/Parameters.lean')
         (trusted / 'verifier').mkdir()
         shutil.copy2(ROOT / 'verifier/Challenge.lean.in', trusted / 'verifier/Challenge.lean.in')
         shutil.copy2(ROOT / 'verifier/comparator.json', trusted / 'verifier/comparator.json')
@@ -75,6 +76,73 @@ class ArtifactPipelineTests(unittest.TestCase):
             self.assertEqual(comparator.call_count, 1)
             self.assertEqual(result['status'], 'verified')
             self.assertEqual(result['artifact_digest'], hashlib.sha256(raw).hexdigest())
+
+    def test_track_price_is_trusted_and_incompatible_builds_are_removed(self):
+        from tracks import TRACKS
+        for name, track in TRACKS.items():
+            with self.subTest(track=name), tempfile.TemporaryDirectory() as directory:
+                args, _ = self.fixture(Path(directory))
+                args.track = name
+                original = (args.trusted / 'CommitGolf/Parameters.lean').read_bytes()
+                cache_paths = ['lib/lean/CommitGolf/Parameters.olean',
+                               'lib/lean/CommitGolf/Riscv.olean',
+                               'lib/lean/CommitGolf.olean', 'ir/CommitGolf/Riscv.c',
+                               'lib/libCommitGolf.a']
+                for path in cache_paths:
+                    cached = args.trusted / '.lake/build' / path
+                    cached.parent.mkdir(parents=True, exist_ok=True)
+                    cached.write_bytes(b'cached eight-cycle contract')
+                dependency = args.trusted / '.lake/packages/dependency/build.olean'
+                dependency.parent.mkdir(parents=True)
+                dependency.write_bytes(b'independent dependency')
+
+                def inspect(command, project, env, log):
+                    self.assertIn(f'def PERMUTATION_CYCLES : Nat := {track.permutation_cycles}\n',
+                                  (project / 'CommitGolf/Parameters.lean').read_text())
+                    self.assertIn('def COMPRESSION_CYCLES : Nat := 8\n',
+                                  (project / 'CommitGolf/Parameters.lean').read_text())
+                    self.assertIn(f'def COMPRESSION_INPUT_LENGTH : Nat := {8 * track.compression_input_bytes}\n',
+                                  (project / 'CommitGolf/Parameters.lean').read_text())
+                    self.assertIn('def COMPRESSION_OUTPUT_LENGTH : Nat := 256\n',
+                                  (project / 'CommitGolf/Parameters.lean').read_text())
+                    for path in cache_paths:
+                        self.assertEqual((project / '.lake/build' / path).exists(),
+                                         track.permutation_cycles == 8 and track.compression_input_bytes == 64)
+                    self.assertTrue((project / '.lake/packages/dependency/build.olean').exists())
+                    log.write_text('Your solution is okay!\n')
+                    return 0, False
+
+                result, comparator = self.execute(args, inspect)
+                self.assertEqual(comparator.call_count, 1)
+                self.assertEqual(result['status'], 'verified')
+                self.assertEqual(result['track'], name)
+                self.assertEqual(result['permutation_cycles'], track.permutation_cycles)
+                self.assertEqual(result['compression_input_bytes'], track.compression_input_bytes)
+                self.assertEqual((args.trusted / 'CommitGolf/Parameters.lean').read_bytes(), original)
+
+    def test_unrecognized_contract_price_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args, _ = self.fixture(Path(directory))
+            args.track = 'commit-golf-64-32-product'
+            path = args.trusted / 'CommitGolf/Parameters.lean'
+            path.write_text(path.read_text().replace('def PERMUTATION_CYCLES : Nat := 8',
+                                                     'def PERMUTATION_CYCLES : Nat := 9'))
+            result, comparator = self.execute(args, lambda *args: self.fail('must not compile'))
+            comparator.assert_not_called()
+            self.assertEqual(result['status'], 'failed')
+            self.assertIn('canonical eight-cycle', result['reason'])
+
+    def test_unrecognized_contract_width_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args, _ = self.fixture(Path(directory))
+            args.track = 'commit-golf-96-32-product'
+            path = args.trusted / 'CommitGolf/Parameters.lean'
+            path.write_text(path.read_text().replace('def COMPRESSION_INPUT_LENGTH : Nat := 512',
+                                                     'def COMPRESSION_INPUT_LENGTH : Nat := 1024'))
+            result, comparator = self.execute(args, lambda *args: self.fail('must not compile'))
+            comparator.assert_not_called()
+            self.assertEqual(result['status'], 'failed')
+            self.assertIn('canonical 512-bit', result['reason'])
 
     def test_change_after_policy_validation_is_rejected_before_compilation(self):
         with tempfile.TemporaryDirectory() as directory:

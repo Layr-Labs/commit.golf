@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from check_submission import check
 from fetch import FetchError, fetch_pr
+from tracks import TRACKS
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -49,6 +50,21 @@ class ChallengeTests(unittest.TestCase):
             with patch('fetch.bounded', side_effect=replies):
                 fetch_pr('Layr-Labs/commit.golf', 1, commit, destination)
             self.assertEqual((destination / 'programs.json').read_bytes(), raw)
+
+    def test_fetch_uses_only_the_selected_track_subtree(self):
+        commit = 'a' * 40
+        for name, track in TRACKS.items():
+            with self.subTest(track=name), patch(
+                    'fetch.bounded', side_effect=[b'', b'', b'', commit.encode(), b'']) as git:
+                with self.assertRaisesRegex(FetchError, 'submission directory is empty'):
+                    fetch_pr('Layr-Labs/commit.golf', 1, commit,
+                             ROOT / 'unused-fetch-destination', track=name)
+                self.assertEqual(git.call_args_list[-1].args[0][-1], f'{commit}:{track.submission}')
+        with patch('fetch.bounded') as git:
+            with self.assertRaisesRegex(FetchError, 'unknown track'):
+                fetch_pr('Layr-Labs/commit.golf', 1, commit,
+                         ROOT / 'unused-fetch-destination', track='../other')
+            git.assert_not_called()
 
     def test_missing_starter_is_not_accepted(self):
         with tempfile.TemporaryDirectory() as directory:

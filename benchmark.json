@@ -70,6 +70,148 @@
           "version": "certificate-v1"
         }
       }
+    },
+    {
+      "name": "commit-golf-64-32-product",
+      "description": "Optimize a statistically hiding vector commitment with 120-bit binding and hiding security. Minimize (commitment cycles + opening cycles) times opening-proof bytes for 128 leaves of 2048 bits each. Compression costs 8 cycles; forward and inverse permutation calls cost 30 cycles.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission-commit-golf-64-32-product"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py",
+        "--track",
+        "commit-golf-64-32-product"
+      ],
+      "scorePath": "scripts/commit-golf-64-32-product/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-commit-golf-64-32-product.yml",
+        "maxConcurrentWorkflows": 2
+      }
+    },
+    {
+      "name": "commit-golf-64-32-pareto",
+      "description": "Minimize certified total prover cycles and opening-proof bytes independently for the same hiding vector commitment contract. Compression costs 8 cycles; forward and inverse permutation calls cost 30 cycles.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission-commit-golf-64-32-pareto"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py",
+        "--track",
+        "commit-golf-64-32-pareto"
+      ],
+      "scorePath": "scripts/commit-golf-64-32-pareto/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-commit-golf-64-32-pareto.yml",
+        "maxConcurrentWorkflows": 2
+      },
+      "mode": "pareto",
+      "objectives": [
+        {
+          "name": "proverCycles",
+          "direction": "-"
+        },
+        {
+          "name": "proofBytes",
+          "direction": "-"
+        }
+      ],
+      "paretoPolicies": {
+        "scoring": {
+          "version": "cycles-bytes-perm30-v1"
+        },
+        "validity": {
+          "version": "certificate-perm30-v1"
+        }
+      }
+    },
+    {
+      "name": "commit-golf-96-32-product",
+      "description": "Optimize a statistically hiding vector commitment with 120-bit binding and hiding security. Minimize (commitment cycles + opening cycles) times opening-proof bytes for 128 leaves of 2048 bits each. Compression takes 96 bytes and returns 32 bytes at 8 cycles; forward and inverse permutation calls cost 30 cycles.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission-commit-golf-96-32-product"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py",
+        "--track",
+        "commit-golf-96-32-product"
+      ],
+      "scorePath": "scripts/commit-golf-96-32-product/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-commit-golf-96-32-product.yml",
+        "maxConcurrentWorkflows": 2
+      }
+    },
+    {
+      "name": "commit-golf-96-32-pareto",
+      "description": "Minimize certified total prover cycles and opening-proof bytes independently for the same hiding vector commitment contract. Compression takes 96 bytes and returns 32 bytes at 8 cycles; forward and inverse permutation calls cost 30 cycles.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission-commit-golf-96-32-pareto"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py",
+        "--track",
+        "commit-golf-96-32-pareto"
+      ],
+      "scorePath": "scripts/commit-golf-96-32-pareto/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-commit-golf-96-32-pareto.yml",
+        "maxConcurrentWorkflows": 2
+      },
+      "mode": "pareto",
+      "objectives": [
+        {
+          "name": "proverCycles",
+          "direction": "-"
+        },
+        {
+          "name": "proofBytes",
+          "direction": "-"
+        }
+      ],
+      "paretoPolicies": {
+        "scoring": {
+          "version": "cycles-bytes-hash96-perm30-v1"
+        },
+        "validity": {
+          "version": "certificate-hash96-perm30-v1"
+        }
+      }
     }
   ]
 }

@@ -1,0 +1,40 @@
+name: Test maximum artifact
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact candidate commit to check
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  scale:
+    name: Maximum artifact admission and byte linkage
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-verifier
+      - name: Maximum artifact admission and byte linkage
+        run: bash scripts/blacksmith.sh test-scale
+      - name: Collect results
+        if: always()
+        run: bash scripts/blacksmith.sh collect
+      - name: Upload verifier logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verifier-logs-scale
+          path: |
+            .work/*/verify.log
+            .work-vm-console.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+      - name: Stop verifier VM
+        if: always()
+        run: bash scripts/blacksmith.sh stop

@@ -9,19 +9,21 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
 from scoring import score_claim
+from tracks import TRACKS
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--track", choices=("product", "pareto"), default="product")
+parser.add_argument("--track", choices=tuple(TRACKS), default="product")
 args = parser.parse_args()
-submission = Path("submission-pareto" if args.track == "pareto" else "submission")
+track = TRACKS[args.track]
+submission = Path(track.submission)
 
-score_path = Path("scripts/pareto/score.json" if args.track == "pareto" else "scripts/score.json")
+score_path = Path(track.score_path)
 score_path.parent.mkdir(parents=True, exist_ok=True)
 score_path.unlink(missing_ok=True)
 if sys.platform != "linux":
     raise SystemExit("Official verification requires Linux; the macOS mode is unsandboxed")
 command = [sys.executable, "verifier/verify.py", "--local", str(submission),
-           "--trusted", ".", "--work", f".work/{uuid.uuid4().hex}"]
+           "--trusted", ".", "--work", f".work/{uuid.uuid4().hex}", "--track", args.track]
 result = subprocess.run(command, stdout=subprocess.PIPE, text=True)
 print(result.stdout, end="")
 if result.returncode:
@@ -29,6 +31,11 @@ if result.returncode:
 report = json.loads(result.stdout)
 if report["status"] != "verified":
     raise SystemExit("Verifier did not accept the submission")
+if (report.get("track") != args.track or type(report.get("permutation_cycles")) is not int
+        or report["permutation_cycles"] != track.permutation_cycles
+        or type(report.get("compression_input_bytes")) is not int
+        or report["compression_input_bytes"] != track.compression_input_bytes):
+    raise SystemExit("Verifier used a different track, permutation cost, or compression width")
 claim = report["claim"]
 try:
     score = score_claim(claim)
@@ -44,9 +51,11 @@ if report.get('artifact_digest') != artifact_digest:
     raise SystemExit('Verifier used a different delivered program manifest')
 metrics = {**claim,
            "proverCycles": claim["commitCycles"] + claim["openingCycles"],
+           "track": args.track, "permutationCycles": track.permutation_cycles,
+           "compressionInputBytes": track.compression_input_bytes,
            "contractCommit": contract, "artifactDigest": artifact_digest, "verified": True}
 temporary = score_path.with_suffix(".tmp")
 payload = ({"valid": True, "scores": [metrics["proverCycles"], claim["proofBytes"]],
-            "metrics": metrics} if args.track == "pareto" else {"score": score, "metrics": metrics})
+            "metrics": metrics} if track.pareto else {"score": score, "metrics": metrics})
 temporary.write_text(json.dumps(payload) + "\n")
 temporary.replace(score_path)

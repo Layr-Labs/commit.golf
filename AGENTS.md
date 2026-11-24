@@ -1,6 +1,9 @@
 # Agent instructions
 
-- Solvers edit only their selected track: `submission/` (product) or `submission-pareto/` (Pareto): `claim.json`, `programs.json`, `Solution.lean`, and
+- Solvers edit only their selected track: `submission/` (product), `submission-pareto/` (Pareto),
+  `submission-commit-golf-64-32-product/`, `submission-commit-golf-64-32-pareto/`,
+  `submission-commit-golf-96-32-product/`, or `submission-commit-golf-96-32-pareto/`:
+  `claim.json`, `programs.json`, `Solution.lean`, and
   supporting modules under the selected directory’s `CommitGolfCandidate/`, and the optional README.
   No other repository directory is solver-editable. Everything else is the contract; preserve it.
 - Submissions prove `CommitGolf.Certificate submission proofBytes commitCycles openingCycles`
@@ -13,8 +16,19 @@
   and one opening of 128 leaves. Binding and hiding target 120 bits; leaves are 2,048 bits.
 - The Pareto track minimizes `[commitCycles + openingCycles, proofBytes]` independently
   under the same certificate and numeric admission limits. Run it with `python3 scripts/run.py --track pareto`.
-- `Oracle.lean` fixes a 512→256 compression function and 1,600-bit permutation. Both public
-  syscalls cost eight abstract cycles. Queries and cycles are separate accounting systems.
+- `Oracle.lean` uses a 512→256 compression function (768→256 on the `commit-golf-96-32-*` tracks)
+  and 1,600-bit permutation. Compression
+  costs eight cycles in every track. Forward and inverse permutation calls cost eight on the
+  original tracks and 30 on every `commit-golf-*` track. The verifier selects the
+  trusted width and cost in its isolated contract; the repository's `Parameters.lean`
+  retains the 512-bit compression input and eight-cycle permutation price.
+  Queries and cycles are separate accounting systems; every public call consumes one query.
+- Never weaken the comparator to accept a missing or incomplete certificate.
+  Full-score workflows require the same complete certificate. The PR gate verifies
+  the original product and Pareto baselines plus every changed new-track submission.
+  Submission-only same-repository `submissions/*` branches delegate verification to
+  Yukon; contract changes override that delegation. Unchanged new-track submissions
+  are not part of the baseline PR gate.
 - Historical baselines are preserved but excluded from compilation and submission imports.
 - Build with `lake build CommitGolf CommitGolfTests`.
   Verify with `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux.
