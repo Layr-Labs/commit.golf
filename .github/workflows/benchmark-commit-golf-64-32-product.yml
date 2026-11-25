@@ -1,7 +1,7 @@
 name: Benchmark commit-golf-64-32-product
 on:
   push:
-    branches: [master]
+    branches: [fix/register-track-workflows]
     paths:
       - '.github/workflows/benchmark-commit-golf-64-32-product.yml'
   workflow_dispatch:
