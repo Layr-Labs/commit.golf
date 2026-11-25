@@ -160,6 +160,51 @@ class TrackDetectionTests(unittest.TestCase):
         self.assert_selection(self.detect({}, {'verifier/tracks.py': 'new configuration'}),
                               set(), contract='true')
 
+    def test_contract_only_change_requires_every_existing_track(self):
+        baselines = {directory + '/Solution.lean': 'unchanged certificate'
+                     for directory in DIRECTORIES.values()}
+        for branch in ('feature/contract', 'submissions/candidate'):
+            detected = self.detect(
+                {**baselines, 'verifier/tracks.py': 'before'},
+                {**baselines, 'verifier/tracks.py': 'after'}, branch=branch)
+            self.assert_selection(detected, set(DIRECTORIES), contract='true',
+                                  managed=str(branch.startswith('submissions/')).lower())
+            env = {**self.gate_inputs(detected),
+                   **{f'TRACK_{track}_RESULT': 'success' for track in DIRECTORIES}}
+            self.assertEqual(ci_gate.run_gate(**env).returncode, 0)
+            for track in DIRECTORIES:
+                for status in ('skipped', 'failure', 'cancelled', ''):
+                    with self.subTest(branch=branch, track=track, status=status):
+                        self.assertNotEqual(ci_gate.run_gate(
+                            **{**env, f'TRACK_{track}_RESULT': status}).returncode, 0)
+
+    def test_contract_change_requires_only_existing_or_changed_tracks(self):
+        existing, removed = '64_32_PRODUCT', '96_32_PARETO'
+        baseline = {DIRECTORIES[existing] + '/Solution.lean': 'unchanged certificate'}
+        detected = self.detect(
+            {**baseline, DIRECTORIES[removed] + '/Solution.lean': 'deleted certificate',
+             'CommitGolf/Example.lean': 'before'},
+            {**baseline, 'CommitGolf/Example.lean': 'after'})
+        self.assert_selection(detected, {existing, removed}, contract='true')
+
+    def test_submission_only_change_does_not_select_unchanged_tracks(self):
+        baselines = {directory + '/Solution.lean': 'certificate'
+                     for directory in DIRECTORIES.values()}
+        selected = '64_32_PARETO'
+        self.assert_selection(self.detect(baselines, {
+            **baselines, DIRECTORIES[selected] + '/Solution.lean': 'updated certificate'}),
+            {selected})
+
+    def test_contract_change_does_not_silently_skip_invalid_existing_roots(self):
+        selected = '96_32_PRODUCT'
+        for value in ('invalid root file', ('missing-target',)):
+            with self.subTest(value=value):
+                baseline = {DIRECTORIES[selected]: value}
+                detected = self.detect(
+                    {**baseline, 'verifier/tracks.py': 'before'},
+                    {**baseline, 'verifier/tracks.py': 'after'})
+                self.assert_selection(detected, {selected}, contract='true')
+
 
 if __name__ == '__main__':
     unittest.main()
