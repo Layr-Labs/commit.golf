@@ -101,13 +101,13 @@ theorem check_position_proof_pointer (state : MachineState) :
 
 /-- The machine-state distribution at the root comparison for one position. -/
 def checkPositionHash (state : MachineState) : OracleComp World MachineState := do
-  let leaf ← checkLeafLoop (((checkPositionState state).setReg .x28 8).setPC 4448) 8
+  let leaf ← checkLeafLoop (((checkPositionState state).setReg .x28 4).setPC 4448) 4
   checkPathLoop (checkPathInitializedState (leaf.setPC 4196)) 24
 
 set_option maxHeartbeats 300000 in
 /-- A complete leaf and authentication-path computation, before root comparison.
 The instruction and cycle totals account for the index's left/right branch choices;
-all possible compression replies are included. Exactly 32 public calls are made. -/
+all possible compression replies are included. Exactly 28 public calls are made. -/
 theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
     (indexValid : accessValid (state.getReg .x24) 8 = true)
     (scratch : state.getReg .x21 = 256)
@@ -117,12 +117,12 @@ theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check)
-        (281 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel) state allowCoins =
+        (117 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel) state allowCoins =
       (do let finished ← checkPositionHash state
           let result ← execute (submission.image .check) fuel finished allowCoins
-          return result.charge (505 + pathInstructions (state.getMem (state.getReg .x24)) 24) 32) := by
+          return result.charge (313 + pathInstructions (state.getMem (state.getReg .x24)) 24) 28) := by
   let ready := checkPositionState state
-  let initialized := (ready.setReg .x28 8).setPC 4448
+  let initialized := (ready.setReg .x28 4).setPC 4448
   have readyPC : ready.pc = 4444 := rfl
   have readyLink : ready.getReg .x1 = 4196 := by
     simp only [ready, checkPositionState, checkLeafCallState, MachineState.getReg_setPC,
@@ -140,14 +140,14 @@ theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
   have saltValid : ∀ word : Fin 4,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word.val)) 8 = true :=
     fun word => proofValid word.val (by omega)
-  rw [show 281 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel =
-      11 + (266 + (4 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel)) by omega,
+  rw [show 117 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel =
+      11 + (102 + (4 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel)) by omega,
     check_position_setup state pc indexValid scratch saltValid,
     check_leaf_subroutine ready readyPC readyLink readyScratch readyValue]
   simp only [checkPositionHash, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro leaf reached
-  have registers := (check_leaf_loop_registers initialized 8 leaf reached).2
+  have registers := (check_leaf_loop_registers initialized 4 leaf reached).2
   have leafIndex : (leaf.setPC 4196).getReg .x20 = state.getMem (state.getReg .x24) := by
     rw [MachineState.getReg_setPC, registers .x20 (by decide), initRegister .x20 (by decide)]
     exact check_position_index state
@@ -169,8 +169,8 @@ theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
   simp only [leafIndex, bind_assoc, pure_bind]
   have charges (result : Execution) :
       ((result.charge (4 + pathInstructions (state.getMem (state.getReg .x24)) 24 + 168) 24).charge
-        322 8).charge 11 0 =
-      result.charge (505 + pathInstructions (state.getMem (state.getReg .x24)) 24) 32 := by
+        130 4).charge 11 0 =
+      result.charge (313 + pathInstructions (state.getMem (state.getReg .x24)) 24) 28 := by
     cases result
     simp only [Execution.charge, Execution.mk.injEq, true_and]
     omega
@@ -186,8 +186,8 @@ theorem check_position_hash_registers (state finished : MachineState)
     ∀ reg ∈ [Reg.x21, .x24, .x26, .x27], finished.getReg reg = state.getReg reg := by
   simp only [checkPositionHash, mem_support_bind_iff] at reachable
   obtain ⟨leaf, leafReached, pathReached⟩ := reachable
-  let initialized := ((checkPositionState state).setReg .x28 8).setPC 4448
-  have leafRegs := check_leaf_loop_registers initialized 8 leaf leafReached
+  let initialized := ((checkPositionState state).setReg .x28 4).setPC 4448
+  have leafRegs := check_leaf_loop_registers initialized 4 leaf leafReached
   have pathRegs := check_path_loop_registers _ 24 finished pathReached
   have initRegister (reg : Reg) (notCounter : reg ≠ .x28) :
       initialized.getReg reg = (checkPositionState state).getReg reg := by
@@ -424,7 +424,7 @@ attribute [local irreducible] checkRootWordsState checkPositionNextState checkPo
 set_option maxHeartbeats 500000 in
 /-- Every outer-loop execution terminates, even for incorrect proof contents.
 A uniform allowance of 1412 instructions per position suffices; cycles are at most
-1612 per position and there are at most 32 public queries per position. These are
+1612 per position and there are at most 32 public queries per position (exactly 28 are made). These are
 worst-case bounds over all oracle answers, not test measurements. -/
 theorem check_loop_terminates (state : MachineState) (count : Nat)
     (bounded : count ≤ 2 ^ 24) (invariant : CheckLoopInvariant state count)
@@ -452,9 +452,9 @@ theorem check_loop_terminates (state : MachineState) (count : Nat)
       fun word smaller => invariant.values word (by omega)
     let steps := pathInstructions (state.getMem (state.getReg .x24)) 24
     have stepBound : steps ≤ 1080 := (path_instruction_bounds _ 24).2
-    let extra := fuel + (1116 - steps)
+    let extra := fuel + (1280 - steps)
     have budget : 1412 * (count + 1) + 3 + fuel =
-        281 + steps + (15 + (1412 * count + 3 + extra)) := by dsimp [extra]; omega
+        117 + steps + (15 + (1412 * count + 3 + extra)) := by dsimp [extra]; omega
     rw [budget, check_position_hash state pc indexValid invariant.scratch proofValid valueValid] at reachable
     simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
     obtain ⟨hashed, hashedReached, continued, continuedReached, rfl⟩ := reachable

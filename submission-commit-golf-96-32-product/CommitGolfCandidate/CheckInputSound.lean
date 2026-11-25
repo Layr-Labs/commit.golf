@@ -60,9 +60,9 @@ theorem check_input_sound (oracle : Oracle) (input : CheckInput)
       ready.getMem (BitVec.ofNat 64 (5905584160+8*ordinal)) = BitVec.ofNat 64 (recordIndex input ordinal).val := by
     rw [show ready.getMem = initial.getMem from congrArg (fun mem address => mem address) memory]
     exact check_input_position input ordinal present
-  have valueData (ordinal : Nat) (present : ordinal < input.positions.card) (block : Nat) (inside : block < 8) :
-      readBuffer ready (6039801888+256*ordinal+32*block) 32 =
-        (recordValue input ordinal).extractLsb' (256*block) 256 := by
+  have valueData (ordinal : Nat) (present : ordinal < input.positions.card) (block : Nat) (inside : block < 4) :
+      readBuffer ready (6039801888+256*ordinal+64*block) 64 =
+        (recordValue input ordinal).extractLsb' (512*block) 512 := by
     rw [read_buffer_memory_congr _ _ memory]
     simpa only [recordValue, dif_pos present, initial,
       show submission.layout.values = 6039801888 from rfl] using check_input_value_block input ordinal block present inside

@@ -25,48 +25,54 @@ def commitInputReady (message : Message) {bits : Nat} (answer : BitVec bits) : M
 private theorem initialized_registers (initial : MachineState) {bits : Nat} (answer : BitVec bits) :
     let setup := commitSetupState initial
     let ready := commitReadyState (writeBits setup (setup.getReg .x10) answer)
-    ready.getReg .x8 = initial.getReg .x10 ∧
+    ready.getReg .x8 = initial.getReg .x10 + 18446744073709551584 ∧
     ready.getReg .x9 = initial.getReg .x12 ∧
     ready.getReg .x18 = initial.getReg .x12 + 1073741824 ∧
     ready.getReg .x19 = 16777216 ∧
     ready.getReg .x23 = initial.getReg .x12 + 536870912 ∧
     ready.getReg .x26 = initial.getReg .x11 ∧
-    ready.getReg .x21 = 256 ∧ ready.getReg .x20 = 0 := by
+    ready.getReg .x21 = 256 ∧ ready.getReg .x20 = 0 ∧
+    ready.getReg .x5 = 0 ∧ ready.getReg .x11 = 96 ∧ ready.getReg .x13 = 0 := by
   dsimp only
   have regs := commit_setup_registers initial
-  have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20) :
+  have readyReg (reg : Reg) (notScratch : reg ≠ .x21) (notCounter : reg ≠ .x20)
+      (not5 : reg ≠ .x5) (not11 : reg ≠ .x11) (not13 : reg ≠ .x13) :
       (commitReadyState (writeBits (commitSetupState initial)
         ((commitSetupState initial).getReg .x10) answer)).getReg reg =
           (commitSetupState initial).getReg reg := by
-    rw [commit_ready_register _ reg notScratch notCounter, writeBits_register]
+    rw [commit_ready_register _ reg notScratch notCounter not5 not11 not13, writeBits_register]
   have counters := commit_ready_counters (writeBits (commitSetupState initial)
     ((commitSetupState initial).getReg .x10) answer)
-  exact ⟨(readyReg .x8 (by decide) (by decide)).trans regs.2.1,
-    (readyReg .x9 (by decide) (by decide)).trans regs.2.2.1,
-    (readyReg .x18 (by decide) (by decide)).trans regs.2.2.2.2.2.1,
-    (readyReg .x19 (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
-    (readyReg .x23 (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.1,
-    (readyReg .x26 (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.2,
-    counters.1, counters.2⟩
+  exact ⟨(readyReg .x8 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.1,
+    (readyReg .x9 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.1,
+    (readyReg .x18 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.1,
+    (readyReg .x19 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
+    (readyReg .x23 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.1,
+    (readyReg .x26 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2.2,
+    counters.1, counters.2.1, counters.2.2.1, counters.2.2.2.1, counters.2.2.2.2⟩
 
 /-- Fixed ABI pointers and loop registers, independent of sampled salt bytes. -/
 theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec bits) :
-    (commitInputReady message answer).getReg .x8 = 4096 ∧
+    (commitInputReady message answer).getReg .x8 = 4064 ∧
     (commitInputReady message answer).getReg .x9 = 4294971424 ∧
     (commitInputReady message answer).getReg .x18 = 5368713248 ∧
     (commitInputReady message answer).getReg .x19 = 16777216 ∧
     (commitInputReady message answer).getReg .x23 = 4831842336 ∧
     (commitInputReady message answer).getReg .x26 = 4294971392 ∧
     (commitInputReady message answer).getReg .x21 = 256 ∧
-    (commitInputReady message answer).getReg .x20 = 0 := by
+    (commitInputReady message answer).getReg .x20 = 0 ∧
+    (commitInputReady message answer).getReg .x5 = 0 ∧
+    (commitInputReady message answer).getReg .x11 = 96 ∧
+    (commitInputReady message answer).getReg .x13 = 0 := by
   let initial := submission.initialState .commit message
   have regs := initialized_registers initial answer
   have messagePtr : initial.getReg .x10 = (4096 : Word) := rfl
   have heapPtr : initial.getReg .x12 = (4294971424 : Word) := rfl
   have outputPtr : initial.getReg .x11 = (4294971392 : Word) := rfl
+  have slotPtr : initial.getReg .x10 + 18446744073709551584 = (4064 : Word) := by rw [messagePtr]; rfl
   have saltPtr : initial.getReg .x12 + 1073741824 = (5368713248 : Word) := by rw [heapPtr]; rfl
   have leafPtr : initial.getReg .x12 + 536870912 = (4831842336 : Word) := by rw [heapPtr]; rfl
-  exact ⟨regs.1.trans messagePtr, regs.2.1.trans heapPtr, regs.2.2.1.trans saltPtr,
+  exact ⟨regs.1.trans slotPtr, regs.2.1.trans heapPtr, regs.2.2.1.trans saltPtr,
     regs.2.2.2.1, regs.2.2.2.2.1.trans leafPtr, regs.2.2.2.2.2.1.trans outputPtr,
     regs.2.2.2.2.2.2⟩
 
@@ -75,20 +81,21 @@ leaf digest, for all actual messages and every private random answer. -/
 theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bits) :
     CommitLeavesInvariant (commitInputReady message answer) (2 ^ 24) := by
   have regs := commit_input_registers message answer
-  refine ⟨?_, ?_, ?_, regs.2.2.2.2.2.2.1, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, regs.2.2.2.2.2.2.1, regs.2.2.2.2.2.2.2.2.1, regs.2.2.2.2.2.2.2.2.2.1,
+    regs.2.2.2.2.2.2.2.2.2.2, ?_, ?_, ?_, ?_, ?_⟩
   · have setupPC := commit_setup_pc (submission.initialState .commit message) rfl
-    change (commitReadyState _).pc = 4256
+    change (commitReadyState _).pc = 4268
     apply commit_ready_pc
     simp only [writeBits, MachineState.setPC]
     rw [setupPC]; rfl
-  · rw [regs.2.2.2.2.2.2.2, regs.2.2.2.1]; rfl
+  · rw [regs.2.2.2.2.2.2.2.1, regs.2.2.2.1]; rfl
   · rw [regs.2.2.2.1]; decide
-  · rw [regs.1]
-    exact fun word inside => commit_buffer_access 4096 (32 * 2 ^ 24) word (by decide) (by decide) inside
+  · rw [regs.1]; decide
+  · rw [regs.1]; decide
   · rw [regs.2.2.1]
     exact fun word inside => commit_buffer_access 5368713248 (4 * 2 ^ 24) word (by decide) (by decide) inside
-  · rw [regs.2.2.2.2.1]
-    exact fun word inside => commit_buffer_access 4831842336 (4 * 2 ^ 24) word (by decide) (by decide) inside
+  · rw [regs.2.2.2.2.1]; decide
+  · rw [regs.2.2.2.2.1]; decide
 
 /-- The complete fixed heap allocation meets the oracle syscall's size and
 alignment requirements for every internal node. -/

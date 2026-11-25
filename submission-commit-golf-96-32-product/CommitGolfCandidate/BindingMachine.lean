@@ -33,11 +33,11 @@ def recordInputs (compress : Compression) (input : CheckInput) (ordinal : Nat) :
     (recordPath (recordIndex input ordinal) (recordSibling input ordinal))
 
 theorem record_inputs_length (compress : Compression) (input : CheckInput) (ordinal : Nat) :
-    (recordInputs compress input ordinal).length = 32 := by
+    (recordInputs compress input ordinal).length = 28 := by
   rw [recordInputs, openingInputs_length, record_path_length]
 
 /-- Any conflicting ordinal pair in a successful machine binding claim yields a
-compression collision among the 32 replay inputs of each record. This theorem uses
+compression collision among the 28 replay inputs of each record. This theorem uses
 actual checker acceptance, not an assumed abstract verifier. -/
 theorem binding_claim_collision (oracle : Oracle) (claim : Scheme.Claim) (left right : Nat)
     (records : ConflictingRecords claim left right)
@@ -59,12 +59,12 @@ theorem binding_claim_collision (oracle : Oracle) (claim : Scheme.Claim) (left r
   · exact leftRoot.trans rightRoot.symm
 
 /-- A winning binding-game claim forces a collision detectable by replaying at
-most 64 compression calls, independently of the sizes of its two opening batches. -/
+most 56 compression calls, independently of the sizes of its two opening batches. -/
 theorem breaks_implies_collision (oracle : Oracle) (claim : Scheme.Claim)
     (breaks : submission.scheme.Breaks oracle claim) :
     ∃ left right, ConflictingRecords claim left right ∧
       (recordInputs oracle.compression (claimLeft claim) left).length +
-        (recordInputs oracle.compression (claimRight claim) right).length = 64 ∧
+        (recordInputs oracle.compression (claimRight claim) right).length = 56 ∧
       ∃ input ∈ recordInputs oracle.compression (claimLeft claim) left,
         ∃ input' ∈ recordInputs oracle.compression (claimRight claim) right,
           input ≠ input' ∧ oracle.compression input = oracle.compression input' := by

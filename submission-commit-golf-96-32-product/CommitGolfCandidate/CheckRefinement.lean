@@ -28,8 +28,8 @@ theorem check_position_outside (state : MachineState) (address : Word)
   exact check_salt_copy_outside (checkIndexState state) address
     (by simpa [checkIndexState, MachineState.getReg_setReg_ne] using scratch) outside
 
-private theorem word_outside_scratch (address offset : Nat) (above : 320 ≤ address)
-    (bounded : address+offset < 2^64) (i : Nat) (hi : i < 8) :
+private theorem word_outside_scratch (address offset : Nat) (above : 352 ≤ address)
+    (bounded : address+offset < 2^64) (i : Nat) (hi : i < 12) :
     BitVec.ofNat 64 (address+offset) ≠ BitVec.ofNat 64 (256+8*i) := by
   intro equal
   have natural := congrArg BitVec.toNat equal
@@ -48,7 +48,7 @@ theorem check_position_hash_evaluation (oracle : Oracle) (state : MachineState) 
     (checkEvaluation oracle (checkPositionHash state)).1 =
       (checkEvaluation oracle (checkPathLoop (checkPathInitializedState
         (((checkEvaluation oracle (checkLeafLoop
-          (((checkPositionState state).setReg .x28 8).setPC 4448) 8)).1).setPC 4196)) 24)).1 := by
+          (((checkPositionState state).setReg .x28 4).setPC 4448) 4)).1).setPC 4196)) 24)).1 := by
   rw [checkPositionHash, check_evaluation_bind]
 
 set_option maxRecDepth 4096 in
@@ -58,9 +58,9 @@ private theorem finish_check_path (oracle : Oracle) (state leaf : MachineState)
     (leafPointer : leaf.getReg .x25 = BitVec.ofNat 64 (proofAddress+32))
     (leafIndex : leaf.getReg .x20 = state.getMem (state.getReg .x24))
     (leafOutside : ∀ address : Word,
-      (∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i)) → leaf.getMem address = state.getMem address)
+      (∀ i < 12, address ≠ BitVec.ofNat 64 (256+8*i)) → leaf.getMem address = state.getMem address)
     (leafDigestEq : readBuffer leaf 256 32 = digest)
-    (proofAligned : proofAddress%8 = 0) (proofAbove : 320 ≤ proofAddress)
+    (proofAligned : proofAddress%8 = 0) (proofAbove : 352 ≤ proofAddress)
     (proofBound : proofAddress+800 < 2^64) (pathLength : path.length = 24)
     (pathData : ∀ i (hi : i < path.length),
       readBuffer state (proofAddress+32+32*i) 32 = (path[i]'hi).2)
@@ -115,11 +115,11 @@ theorem check_position_hash_digest (oracle : Oracle) (state : MachineState)
     (valuePointer : state.getReg .x8 = BitVec.ofNat 64 valueAddress)
     (proofPointer : state.getReg .x25 = BitVec.ofNat 64 proofAddress)
     (valueAligned : valueAddress%8 = 0) (proofAligned : proofAddress%8 = 0)
-    (valueAbove : 320 ≤ valueAddress) (proofAbove : 320 ≤ proofAddress)
+    (valueAbove : 352 ≤ valueAddress) (proofAbove : 352 ≤ proofAddress)
     (valueBound : valueAddress+256 < 2^64) (proofBound : proofAddress+800 < 2^64)
     (saltData : readBuffer state proofAddress 32 = salt)
-    (valueData : ∀ block < 8, readBuffer state (valueAddress+32*block) 32 =
-      value.extractLsb' (256*block) 256)
+    (valueData : ∀ block < 4, readBuffer state (valueAddress+64*block) 64 =
+      value.extractLsb' (512*block) 512)
     (pathLength : path.length = 24)
     (pathData : ∀ i (hi : i < path.length),
       readBuffer state (proofAddress+32+32*i) 32 = (path[i]'hi).2)
@@ -127,30 +127,34 @@ theorem check_position_hash_digest (oracle : Oracle) (state : MachineState)
       (state.getMem (state.getReg .x24)).getLsbD i = (path[i]'hi).1) :
     readBuffer (checkEvaluation oracle (checkPositionHash state)).1 256 32 =
       climb oracle.compression (leafDigest oracle.compression salt value) path := by
-  let ready := ((checkPositionState state).setReg .x28 8).setPC 4448
-  let leaf := (checkEvaluation oracle (checkLeafLoop ready 8)).1
+  let ready := ((checkPositionState state).setReg .x28 4).setPC 4448
+  let leaf := (checkEvaluation oracle (checkLeafLoop ready 4)).1
   have readyScratch : ready.getReg .x21 = 256 :=
     (check_position_register state .x21 (by decide)).trans scratch
   have readyPointer : ready.getReg .x8 = BitVec.ofNat 64 valueAddress :=
     (check_position_register state .x8 (by decide)).trans valuePointer
   have readySalt : readBuffer ready 256 32 = salt :=
-    (check_position_salt state proofAddress scratch proofPointer proofAligned proofAbove (by omega)).trans saltData
+    (check_position_salt state proofAddress scratch proofPointer proofAligned (by omega) (by omega)).trans saltData
   have readyOutside (address : Word) (outside : ∀ i < 4, address ≠ BitVec.ofNat 64 (256+8*i)) :
       ready.getMem address = state.getMem address := check_position_outside state address scratch outside
-  have readyData (block : Nat) (hb : block < 8) :
-      readBuffer ready (valueAddress+32*block) 32 = value.extractLsb' (256*block) 256 := by
-    have same : readBuffer ready (valueAddress+32*block) 32 =
-        readBuffer state (valueAddress+32*block) 32 := by
-      apply read_digest_congr _ _ _ (by omega)
-      intro word hw
-      apply readyOutside
-      intro i hi
-      simpa only [Nat.add_assoc] using word_outside_scratch valueAddress (32*block+8*word) valueAbove (by omega) i (by omega)
-    exact same.trans (valueData block hb)
+  have readyHalf (address : Nat) (aligned : address % 8 = 0) (above : 352 ≤ address)
+      (bounded : address + 32 < 2^64) : readBuffer ready address 32 = readBuffer state address 32 := by
+    apply read_digest_congr _ _ _ aligned
+    intro word hw
+    apply readyOutside
+    intro i hi
+    exact word_outside_scratch address (8*word) above (by omega) i (by omega)
+  have readyData (block : Nat) (hb : block < 4) :
+      readBuffer ready (valueAddress+64*block) 64 = value.extractLsb' (512*block) 512 := by
+    rw [read_compression_halves _ _ (by omega),
+      readyHalf (valueAddress+64*block+32) (by omega) (by omega) (by omega),
+      readyHalf (valueAddress+64*block) (by omega) (by omega) (by omega),
+      ← read_compression_halves _ _ (by omega)]
+    exact valueData block hb
   have leafDigestEq : readBuffer leaf 256 32 = leafDigest oracle.compression salt value :=
     check_leaf_digest oracle ready valueAddress salt value readyScratch readyPointer
       valueAligned valueAbove valueBound readySalt readyData
-  have leafRegs := check_leaf_loop_registers ready 8 leaf (check_evaluation_support oracle _)
+  have leafRegs := check_leaf_loop_registers ready 4 leaf (check_evaluation_support oracle _)
   have leafScratch : leaf.getReg .x21 = 256 := (leafRegs.2 .x21 (by decide)).trans readyScratch
   have leafPointer : leaf.getReg .x25 = BitVec.ofNat 64 (proofAddress+32) := by
     rw [leafRegs.2 .x25 (by decide)]
@@ -160,9 +164,9 @@ theorem check_position_hash_digest (oracle : Oracle) (state : MachineState)
   have leafIndex : leaf.getReg .x20 = state.getMem (state.getReg .x24) := by
     rw [leafRegs.2 .x20 (by decide)]
     exact check_position_index state
-  have leafOutside (address : Word) (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i)) :
+  have leafOutside (address : Word) (outside : ∀ i < 12, address ≠ BitVec.ofNat 64 (256+8*i)) :
       leaf.getMem address = state.getMem address :=
-    (check_leaf_loop_outside oracle ready 8 address readyScratch outside).trans
+    (check_leaf_loop_outside oracle ready 4 address readyScratch outside).trans
       (readyOutside address (fun i hi => outside i (by omega)))
   rw [check_position_hash_evaluation]
   exact finish_check_path oracle state leaf proofAddress path _ leafScratch leafPointer leafIndex
@@ -170,32 +174,32 @@ theorem check_position_hash_digest (oracle : Oracle) (state : MachineState)
 
 private theorem check_path_phase_outside (oracle : Oracle) (leaf : MachineState) (address : Word)
     (scratch : leaf.getReg .x21 = 256)
-    (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i)) :
+    (outside : ∀ i < 12, address ≠ BitVec.ofNat 64 (256+8*i)) :
     (checkEvaluation oracle
       (checkPathLoop (checkPathInitializedState (leaf.setPC 4196)) 24)).1.getMem address =
         leaf.getMem address := by
   have pathScratch : (checkPathInitializedState (leaf.setPC 4196)).getReg .x21 = 256 :=
     (check_path_setup_register (leaf.setPC 4196) .x21 (by decide)).trans scratch
   exact (check_path_loop_outside oracle (checkPathInitializedState (leaf.setPC 4196))
-    24 address pathScratch outside).trans
+    24 address pathScratch (fun i hi => outside i (by omega))).trans
       (congrFun (check_path_setup_memory (leaf.setPC 4196)) address)
 
 set_option maxRecDepth 4096 in
 /-- Computing one position does not modify any input buffer or the supplied root. -/
 theorem check_position_hash_outside (oracle : Oracle) (state : MachineState) (address : Word)
     (scratch : state.getReg .x21 = 256)
-    (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i)) :
+    (outside : ∀ i < 12, address ≠ BitVec.ofNat 64 (256+8*i)) :
     (checkEvaluation oracle (checkPositionHash state)).1.getMem address = state.getMem address := by
-  let ready := ((checkPositionState state).setReg .x28 8).setPC 4448
-  let leaf := (checkEvaluation oracle (checkLeafLoop ready 8)).1
+  let ready := ((checkPositionState state).setReg .x28 4).setPC 4448
+  let leaf := (checkEvaluation oracle (checkLeafLoop ready 4)).1
   have readyScratch : ready.getReg .x21 = 256 :=
     (check_position_register state .x21 (by decide)).trans scratch
   have leafScratch : leaf.getReg .x21 = 256 :=
-    ((check_leaf_loop_registers ready 8 leaf (check_evaluation_support oracle _)).2 .x21 (by decide)).trans
+    ((check_leaf_loop_registers ready 4 leaf (check_evaluation_support oracle _)).2 .x21 (by decide)).trans
       readyScratch
   have initialMemory : ready.getMem address = state.getMem address :=
     check_position_outside state address scratch (fun i hi => outside i (by omega))
-  have leafMemory := check_leaf_loop_outside oracle ready 8 address readyScratch outside
+  have leafMemory := check_leaf_loop_outside oracle ready 4 address readyScratch outside
   rw [check_position_hash_evaluation]
   exact (check_path_phase_outside oracle leaf address leafScratch outside).trans
     (leafMemory.trans initialMemory)
@@ -205,7 +209,7 @@ its right is still the supplied root, not an overwritten copy in scratch memory.
 theorem check_position_comparison (oracle : Oracle) (state : MachineState) (rootAddress : Nat)
     (scratch : state.getReg .x21 = 256)
     (rootPointer : state.getReg .x26 = BitVec.ofNat 64 rootAddress)
-    (rootAligned : rootAddress%8 = 0) (rootAbove : 320 ≤ rootAddress)
+    (rootAligned : rootAddress%8 = 0) (rootAbove : 352 ≤ rootAddress)
     (rootBound : rootAddress+32 < 2^64) :
     let hashed := (checkEvaluation oracle (checkPositionHash state)).1
     (∀ word < 4, hashed.getMem (hashed.getReg .x21+BitVec.ofNat 64 (8*word)) =
@@ -246,11 +250,11 @@ theorem check_position_heap_root (oracle : Oracle) (state : MachineState)
     (valuePointer : state.getReg .x8 = BitVec.ofNat 64 valueAddress)
     (proofPointer : state.getReg .x25 = BitVec.ofNat 64 proofAddress)
     (valueAligned : valueAddress%8 = 0) (proofAligned : proofAddress%8 = 0)
-    (valueAbove : 320 ≤ valueAddress) (proofAbove : 320 ≤ proofAddress)
+    (valueAbove : 352 ≤ valueAddress) (proofAbove : 352 ≤ proofAddress)
     (valueBound : valueAddress+256 < 2^64) (proofBound : proofAddress+800 < 2^64)
     (saltData : readBuffer state proofAddress 32 = salt)
-    (valueData : ∀ block < 8, readBuffer state (valueAddress+32*block) 32 =
-      value.extractLsb' (256*block) 256)
+    (valueData : ∀ block < 4, readBuffer state (valueAddress+64*block) 64 =
+      value.extractLsb' (512*block) 512)
     (indexData : state.getMem (state.getReg .x24) = BitVec.ofNat 64 index.val)
     (pathData : ∀ level < 24, readBuffer state (proofAddress+32+32*level) 32 =
       heap (((2^24+index.val)/2^level) ^^^ 1))

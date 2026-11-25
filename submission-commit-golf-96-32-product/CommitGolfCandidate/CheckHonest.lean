@@ -55,7 +55,7 @@ private theorem compare_next_memory (hashed : MachineState) :
   (latch_memory _).trans (check_root_words_preserves hashed 4 .x21 (by decide) (by decide)).2
 
 theorem next_check_memory (oracle : Oracle) (state : MachineState) (address : Nat)
-    (scratch : state.getReg .x21 = 256) (above : 320 ≤ address) (bounded : address < 2^64) :
+    (scratch : state.getReg .x21 = 256) (above : 352 ≤ address) (bounded : address < 2^64) :
     (nextCheckState oracle state).getMem (BitVec.ofNat 64 address) =
       state.getMem (BitVec.ofNat 64 address) := by
   let hashed := (checkEvaluation oracle (checkPositionHash state)).1
@@ -71,7 +71,7 @@ theorem next_check_memory (oracle : Oracle) (state : MachineState) (address : Na
 
 theorem next_check_digest (oracle : Oracle) (state : MachineState) (address : Nat)
     (scratch : state.getReg .x21 = 256) (aligned : address%8 = 0)
-    (above : 320 ≤ address) (bounded : address+32 < 2^64) :
+    (above : 352 ≤ address) (bounded : address+32 < 2^64) :
     readBuffer (nextCheckState oracle state) address 32 = readBuffer state address 32 := by
   apply read_digest_congr _ _ _ aligned
   intro word inside
@@ -91,16 +91,16 @@ theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Me
     (indexPointer : state.getReg .x24 = BitVec.ofNat 64 indexAddress)
     (rootAligned : rootAddress%8 = 0) (valueAligned : valueAddress%8 = 0)
     (proofAligned : proofAddress%8 = 0)
-    (rootAbove : 320 ≤ rootAddress) (valueAbove : 320 ≤ valueAddress)
-    (proofAbove : 320 ≤ proofAddress) (indexAbove : 320 ≤ indexAddress)
+    (rootAbove : 352 ≤ rootAddress) (valueAbove : 352 ≤ valueAddress)
+    (proofAbove : 352 ≤ proofAddress) (indexAbove : 352 ≤ indexAddress)
     (rootBound : rootAddress+32 < 2^64) (valueBound : valueAddress+256*count < 2^64)
     (proofBound : proofAddress+800*count < 2^64) (indexBound : indexAddress+8*count < 2^64)
     (rootData : readBuffer state rootAddress 32 = heap 1)
     (indexData : ∀ ordinal < count, state.getMem (BitVec.ofNat 64 (indexAddress+8*ordinal)) =
       BitVec.ofNat 64 (indices ordinal).val)
-    (valueData : ∀ ordinal < count, ∀ block < 8,
-      readBuffer state (valueAddress+256*ordinal+32*block) 32 =
-        (message (indices ordinal)).extractLsb' (256*block) 256)
+    (valueData : ∀ ordinal < count, ∀ block < 4,
+      readBuffer state (valueAddress+256*ordinal+64*block) 64 =
+        (message (indices ordinal)).extractLsb' (512*block) 512)
     (saltData : ∀ ordinal < count, readBuffer state (proofAddress+800*ordinal) 32 = salts (indices ordinal))
     (pathData : ∀ ordinal < count, ∀ level < 24,
       readBuffer state (proofAddress+800*ordinal+32+32*level) 32 =
@@ -142,10 +142,13 @@ theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Me
       convert indexData (ordinal+1) (by omega) using 1
       congr 2
       omega
-    have nextValueData (ordinal : Nat) (inside : ordinal < count) (block : Nat) (blockBound : block < 8) :
-        readBuffer next (valueAddress+256+256*ordinal+32*block) 32 =
-          (message (indices (ordinal+1))).extractLsb' (256*block) 256 := by
-      rw [next_check_digest oracle state _ scratch (by omega) (by omega) (by omega)]
+    have nextValueData (ordinal : Nat) (inside : ordinal < count) (block : Nat) (blockBound : block < 4) :
+        readBuffer next (valueAddress+256+256*ordinal+64*block) 64 =
+          (message (indices (ordinal+1))).extractLsb' (512*block) 512 := by
+      rw [read_compression_halves _ _ (by omega),
+        next_check_digest oracle state (valueAddress+256+256*ordinal+64*block+32) scratch (by omega) (by omega) (by omega),
+        next_check_digest oracle state (valueAddress+256+256*ordinal+64*block) scratch (by omega) (by omega) (by omega),
+        ← read_compression_halves _ _ (by omega)]
       convert valueData (ordinal+1) (by omega) block blockBound using 1
       congr 1
       omega

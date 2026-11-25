@@ -3,8 +3,8 @@ import CommitGolf.Programs
 
 /-! A salted binary Merkle baseline, implemented as RV64IM images.
 
-Each leaf uses eight compression calls, starting from a private 256-bit salt and
-absorbing eight 256-bit blocks. Internal nodes compress two child digests. The private
+Each leaf uses four direct 96-byte compression calls, starting from a private 256-bit
+salt and absorbing four 512-bit blocks. Internal nodes compress two child digests. The private
 trapdoor stores a heap-indexed tree followed by the salts. Each opening contains the
 salt and the copath, in increasing position order. This module constructs programs;
 it does not assert their security or supply a challenge certificate. -/
@@ -100,31 +100,41 @@ def compression96Routine : List Asm :=
    sd 14 10 64, sd 15 10 72, sd 16 10 80, sd 17 10 88,
    addi 11 0 64, insn 0x000f8067]
 
-/-- The caller initializes the first scratch half to the salt. Consumes 256 bytes
-from x8, preserves x8's final pointer, and returns through x1. -/
+/-- The caller initializes the first scratch word to the salt. Each of four blocks copies
+64 message bytes from x8 behind the chaining value and makes one direct 96-byte
+compression call C(state | b_2j | b_2j+1). Consumes 256 bytes from x8, returns through x1. -/
 def leafSubroutine : List Asm :=
-  [.label "leaf", addi 28 0 8, .label "leaf-block"] ++
-  copyDigest 8 21 0 32 ++ compressScratch ++
-  [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
+  [.label "leaf", addi 28 0 4, .label "leaf-block"] ++
+  ((List.range 8).flatMap fun j => [ld 6 8 (8*j), sd 6 21 (32 + 8*j)]) ++
+  [addi 5 0 0, mv 10 21, addi 11 0 96, mv 12 21, addi 13 0 0, insn 0x73,
+   addi 8 8 64, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
 def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
 
+/-- In-place leaf chain. x8 points at the 32-byte salt slot just below leaf i's message
+(free memory for i = 0, otherwise the already-consumed last block of leaf i-1). Each call
+compresses the contiguous 96 bytes [chaining value | next 64-byte block] and writes the new
+chaining value over the last 32 bytes it consumed; the fourth call writes the heap slot. -/
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 8 10, mv 26 11, mv 9 12] ++ li 19 n ++ li 6 (64*n) ++
+  [addi 8 10 (-32), mv 26 11, mv 9 12] ++ li 19 n ++ li 6 (64*n) ++
   [regop 18 9 6] ++ li 6 (32*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
-  li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
-  copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
-  [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
+  li 21 256 ++ [addi 20 0 0, addi 5 0 0, addi 11 0 96, addi 13 0 0, .label "commit-leaf"] ++
+  copyDigest 18 8 ++
+  [mv 10 8, addi 12 8 64, insn 0x73,
+   addi 10 8 64, addi 12 8 128, insn 0x73,
+   addi 10 8 128, addi 12 8 192, insn 0x73,
+   addi 10 8 192, mv 12 23, insn 0x73,
+   addi 8 8 256, addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
    addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
    shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
    addi 5 0 0, addi 11 0 64, addi 13 0 0, .jump 31 "compress96",
    addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ leafSubroutine ++ compression96Routine
+  copyDigest 9 26 32 ++ halt true ++ compression96Routine
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
@@ -166,7 +176,7 @@ def sizes (depth : Nat) : Sizes :=
   ⟨trapdoorBytes depth, openingBytes depth * LENGTH⟩
 
 /-- Reserve the contract's full message and values buffers even for small test trees.
-Scratch memory [256,320) is below all input/output buffers. -/
+Scratch memory [256,352) is below all input/output buffers. -/
 def layout (depth : Nat) : Layout :=
   let message := 4096
   let commitment := message + LENGTH * (LEAF_SIZE / 8)

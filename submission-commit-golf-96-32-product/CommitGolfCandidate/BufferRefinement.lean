@@ -31,17 +31,17 @@ theorem commit_input_byte (message : Message) (index : Index) (offset : Nat)
       submission.layout.message) % (LEAF_SIZE/8) = offset := by change _ % 256 = _; omega
   simp only [quotient, remainder, index.isLt, dite_true]
 
-/-- The eight compression blocks consumed by the commitment leaf loop are exactly
-that leaf's eight 256-bit slices. -/
+/-- The four blocks consumed by the commitment leaf loop are exactly
+that leaf's four 512-bit slices. -/
 theorem commit_input_block (message : Message) (index : Index) (block : Nat)
-    (inside : block < 8) :
+    (inside : block < 4) :
     readBuffer (submission.initialState .commit message)
-      (submission.layout.message + 256*index.val + 32*block) 32 =
-        (message index).extractLsb' (256*block) 256 := by
+      (submission.layout.message + 256*index.val + 64*block) 64 =
+        (message index).extractLsb' (512*block) 512 := by
   have decoded := read_serialized_slice (submission.initialState .commit message) (message index)
-    (submission.layout.message + 256*index.val + 32*block) (32*block) 32 (by
+    (submission.layout.message + 256*index.val + 64*block) (64*block) 64 (by
       intro j hj
-      simpa only [Nat.add_assoc] using commit_input_byte message index (32*block+j) (by omega))
+      simpa only [Nat.add_assoc] using commit_input_byte message index (64*block+j) (by omega))
   simpa only [← Nat.mul_assoc, Nat.reduceMul] using decoded
 
 /-- Private state is loaded without modification before opening. -/
@@ -175,18 +175,18 @@ theorem check_input_value_byte (input : CheckInput) (ordinal offset : Nat)
     omega
   rw [quotient, remainder, List.getElem?_eq_getElem (by simpa using present)]
 
-/-- The checker leaf loop reads the same eight blocks as the supplied opened value. -/
+/-- The checker leaf loop reads the same four blocks as the supplied opened value. -/
 theorem check_input_value_block (input : CheckInput) (ordinal block : Nat)
-    (present : ordinal < input.positions.card) (inside : block < 8) :
+    (present : ordinal < input.positions.card) (inside : block < 4) :
     readBuffer (submission.initialState .check input)
-      (submission.layout.values+256*ordinal+32*block) 32 =
+      (submission.layout.values+256*ordinal+64*block) 64 =
       (input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
-        simpa using present))).extractLsb' (256*block) 256 := by
+        simpa using present))).extractLsb' (512*block) 512 := by
   have decoded := read_serialized_slice (submission.initialState .check input)
     (input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by
-      simpa using present))) (submission.layout.values+256*ordinal+32*block) (32*block) 32 (by
+      simpa using present))) (submission.layout.values+256*ordinal+64*block) (64*block) 64 (by
       intro j hj
-      simpa only [Nat.add_assoc] using check_input_value_byte input ordinal (32*block+j) present (by omega))
+      simpa only [Nat.add_assoc] using check_input_value_byte input ordinal (64*block+j) present (by omega))
   simpa only [← Nat.mul_assoc, Nat.reduceMul] using decoded
 
 /-- The actual bytes returned by opening are the bytes loaded by verification.

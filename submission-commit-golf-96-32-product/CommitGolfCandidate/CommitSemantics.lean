@@ -18,21 +18,13 @@ private theorem deterministic_pure (oracle : Oracle) {α : Type} (value : α) :
     oracle.run (pure value : OracleComp World α) = pure (checkEvaluation oracle (pure value)) := by
   rw [oracle_run_pure, check_evaluation_pure]
 
-/-- The leaf hash uses only public queries once its salt is supplied. -/
-theorem commit_leaf_loop_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
-    oracle.run (commitLeafLoop state count) = pure (checkEvaluation oracle (commitLeafLoop state count)) := by
-  induction count generalizing state with
-  | zero => exact deterministic_pure oracle state
-  | succ count ih =>
-    rw [commitLeafLoop, oracle_run_public_bind, check_evaluation_public_bind, ih]
-    simp only [pure_bind]
-
-/-- Salt copying, leaf hashing, and heap storage add no private randomness. -/
+/-- Salt copying, the four in-place leaf calls, and the heap write use only
+public queries: they add no private randomness. -/
 theorem commit_position_deterministic (oracle : Oracle) (state : MachineState) :
     oracle.run (commitPositionRun state) = pure (checkEvaluation oracle (commitPositionRun state)) := by
   unfold commitPositionRun
-  exact deterministic_bind oracle _ _ (commit_leaf_loop_deterministic oracle _ 8)
-    (fun leaf => deterministic_pure oracle _)
+  simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
+    check_evaluation_pure, pure_bind]
 
 /-- After salt sampling, the full leaf loop is deterministic for a fixed oracle. -/
 theorem commit_leaves_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
@@ -69,7 +61,7 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, body.1, 380*LENGTH+20, 9*LENGTH-1⟩, body.2)
+  (⟨.success, body.1, 90*LENGTH+23, 5*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
     (packCommitResult body).1.state = body.1 := rfl

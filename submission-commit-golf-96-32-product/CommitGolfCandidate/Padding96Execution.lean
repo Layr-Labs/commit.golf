@@ -7,7 +7,7 @@ namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 def paddingProgram (checker : Bool) : Program := if checker then .check else .commit
-def paddingEntry (checker : Bool) : Nat := if checker then 106 else 103
+def paddingEntry (checker : Bool) : Nat := if checker then 114 else 91
 def paddingInstructions : List Instr :=
   paddingSetupInstructions ++ [.ECALL] ++ paddingFinishInstructions
 
