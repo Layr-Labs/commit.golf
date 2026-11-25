@@ -24,6 +24,7 @@ from pathlib import Path
 from check_submission import check
 from artifact import load_artifact, purge_artifact_cache, write_artifact_module
 from fetch import FetchError, fetch_pr
+from tracks import TRACKS, prepare_contract
 
 HERE = Path(__file__).resolve().parent
 TRUSTED = HERE.parent
@@ -189,6 +190,12 @@ def verify(args: argparse.Namespace) -> dict:
     result = {'status': 'failed', 'commit': args.commit, 'contract_commit': None,
               'log': str(log), 'claim': None, 'artifact_digest': None, 'work_created': False}
     try:
+        track_name = getattr(args, 'track', 'product')
+        if track_name not in TRACKS:
+            raise VerifyError('unknown track')
+        track = TRACKS[track_name]
+        result.update(track=track_name, permutation_cycles=track.permutation_cycles,
+                      compression_input_bytes=track.compression_input_bytes)
         if args.local and work.is_relative_to(args.local.resolve()):
             raise VerifyError('work directory must be outside the local submission directory')
         if work.exists():
@@ -207,7 +214,7 @@ def verify(args: argparse.Namespace) -> dict:
         if args.local:
             shutil.copytree(args.local, source, symlinks=True)
         else:
-            fetch_pr(args.repository, args.pr, args.commit, source)
+            fetch_pr(args.repository, args.pr, args.commit, source, track=track_name)
         policy = check(source)
         result['claim'] = policy['claim']
         if not policy['ok']:
@@ -235,6 +242,7 @@ def verify(args: argparse.Namespace) -> dict:
             challenge = challenge.replace('{{' + key + '}}', str(value))
         (project / 'CommitGolf' / 'Challenge.lean').write_text(challenge)
         clone_tree(args.trusted / '.lake', project / '.lake')
+        prepare_contract(project, track)
         purge_artifact_cache(project)
         # Drop every cached artifact of candidate, solution, and challenge modules: the module
         # directories and the root-module files (.olean, .ilean, .trace, .hash, .c) beside them.
@@ -272,6 +280,7 @@ def main() -> int:
     parser.add_argument('--pr', type=int)
     parser.add_argument('--commit')
     parser.add_argument('--local', type=Path)
+    parser.add_argument('--track', choices=tuple(TRACKS), default='product')
     parser.add_argument('--trusted', type=Path, default=TRUSTED)
     parser.add_argument('--work', type=Path)
     parser.add_argument('--hide', type=Path, action='append', default=[])

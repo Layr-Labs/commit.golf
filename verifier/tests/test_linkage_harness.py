@@ -52,8 +52,8 @@ class LinkageHarnessTests(unittest.TestCase):
 
     def test_all_linkage_cases_reach_proof_checking_with_small_fixed_sources(self):
         cases = make_cases(json.dumps(manifest()).encode())
-        self.assertEqual(len(cases), 8)
-        self.assertEqual(sum(case.expected == 'verified' for case in cases), 2)
+        self.assertEqual(len(cases), 14)
+        self.assertEqual(sum(case.expected == 'verified' for case in cases), 8)
         for case in cases:
             with self.subTest(case=case.name), tempfile.TemporaryDirectory() as directory:
                 candidate = Path(directory)
@@ -91,7 +91,8 @@ class LinkageHarnessTests(unittest.TestCase):
             self.assertFalse(case_passes(negative, {'status': 'rejected'}, diagnostic))
 
     def test_missing_equality_requires_the_exact_missing_export_target(self):
-        missing = make_cases(json.dumps(manifest()).encode())[-1]
+        missing = next(case for case in make_cases(json.dumps(manifest()).encode())
+                       if case.name == 'missing_equality')
         self.assertTrue(case_passes(missing, {'status': 'rejected'}, MISSING_TARGET))
         for diagnostic in ('PANIC at unrelated location\nuncaught exception: Child exited with 134\n',
                            MISSING_TARGET.replace('submission_matches_artifact', 'unrelated_target'),
@@ -102,7 +103,8 @@ class LinkageHarnessTests(unittest.TestCase):
             self.assertFalse(case_passes(missing, {'status': 'rejected'}, diagnostic))
 
     def test_official_missing_target_exit_requires_the_same_specific_rejection(self):
-        missing = make_cases(json.dumps(manifest()).encode())[-1]
+        missing = next(case for case in make_cases(json.dumps(manifest()).encode())
+                       if case.name == 'missing_equality')
         official = MISSING_TARGET.replace('Child exited with 134', 'Child exited with 139')
         self.assertTrue(case_passes(missing, {'status': 'rejected'}, official))
         for diagnostic in ('uncaught exception: Child exited with 139\n',

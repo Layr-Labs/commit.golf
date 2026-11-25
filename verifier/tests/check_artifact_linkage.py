@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise artifact equality in the real Linux comparator sandbox.
+"""Exercise artifact equality and track costs in the real Linux comparator sandbox.
 
 This is a linkage-only regression, not a security-certificate verifier. An isolated trusted
 configuration checks only submission_matches_artifact, so the fixed source fixtures do not
 import the baseline's cryptographic proofs. This program never writes a benchmark score.
-Run after the normal full-certificate benchmark on a supported verifier host.
+Run independently on a supported verifier host.
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from artifact import parse_artifact
 from artifact_fixture import manifest
 from check_submission import check
 import verify
+from tracks import TRACKS
 
 MATCHES = 'CommitGolf.Challenge.submission_matches_artifact'
 
@@ -35,6 +36,7 @@ class Case:
     manifest: bytes
     source: str
     expected: str
+    track: str = 'product'
 
 
 def linkage_config(production):
@@ -92,6 +94,12 @@ end CommitGolf.Challenge
     missing = direct.replace(
         'theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by rfl\n', '')
     cases.append(Case('missing_equality', raw, missing, 'rejected'))
+    cost_probe = (Path(__file__).parent / 'TrackCosts.lean.in').read_text()
+    for name, track in TRACKS.items():
+        source = direct + cost_probe.replace('{{permutationCycles}}', str(track.permutation_cycles))
+        source = source.replace('{{compressionInputBytes}}', str(track.compression_input_bytes))
+        source = source.replace('{{compressionInputBits}}', str(8 * track.compression_input_bytes))
+        cases.append(Case('costs_' + name, raw, source, 'verified', name))
     return cases
 
 
@@ -193,7 +201,7 @@ def run(root=ROOT):
                 if not policy['ok']:
                     raise ValueError(f'{case.name}: invalid regression fixture: {policy["errors"]}')
                 args = SimpleNamespace(work=work, commit=None, trusted=trusted, local=candidate,
-                                       hide=[], repository=None, pr=None)
+                                       hide=[], repository=None, pr=None, track=case.track)
                 report = verify.verify(args)
                 full_log = ((work / 'verify.log').read_text(errors='replace')
                             if (work / 'verify.log').is_file() else '')

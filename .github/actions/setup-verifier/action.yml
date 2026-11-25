@@ -1,0 +1,26 @@
+name: Setup verifier VM
+description: Restore trusted builds and prepare the supported Linux verifier
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      id: cache
+      with:
+        path: .cache/trusted.tar.zst
+        key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
+    - name: Start verifier VM
+      shell: bash
+      run: bash scripts/blacksmith.sh start
+    - name: Setup
+      shell: bash
+      run: bash scripts/blacksmith.sh setup
+    # Publish only trusted builds from the default branch, before running candidates.
+    - name: Export trusted cache
+      if: steps.cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+      shell: bash
+      run: bash scripts/blacksmith.sh cache
+    - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      if: steps.cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+      with:
+        path: .cache/trusted.tar.zst
+        key: ${{ steps.cache.outputs.cache-primary-key }}

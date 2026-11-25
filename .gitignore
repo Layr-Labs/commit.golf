@@ -12,3 +12,7 @@ verifier/.tools
 verifier/.work/
 /CommitGolf/Artifact.lean
 scripts/pareto/
+scripts/commit-golf-64-32-product/
+scripts/commit-golf-64-32-pareto/
+scripts/commit-golf-96-32-product/
+scripts/commit-golf-96-32-pareto/

@@ -13,6 +13,10 @@ jobs:
     outputs:
       contract: ${{ steps.paths.outputs.contract }}
       solver_branch: ${{ steps.paths.outputs.solver_branch }}
+      changed_64_32_product: ${{ steps.paths.outputs.changed_64_32_product }}
+      changed_64_32_pareto: ${{ steps.paths.outputs.changed_64_32_pareto }}
+      changed_96_32_product: ${{ steps.paths.outputs.changed_96_32_product }}
+      changed_96_32_pareto: ${{ steps.paths.outputs.changed_96_32_pareto }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -42,7 +46,25 @@ jobs:
           paths = subprocess.check_output([
               'git', 'diff', '--no-ext-diff', '--no-textconv', '--no-renames',
               '--name-only', '-z', base, head, '--']).split(b'\0')
-          contract = any(path and not path.startswith((b'submission/', b'submission-pareto/')) for path in paths)
+          new_tracks = {
+              '64_32_product': b'submission-commit-golf-64-32-product',
+              '64_32_pareto': b'submission-commit-golf-64-32-pareto',
+              '96_32_product': b'submission-commit-golf-96-32-product',
+              '96_32_pareto': b'submission-commit-golf-96-32-pareto',
+          }
+          submission_paths = (b'submission/', b'submission-pareto/',
+                              *(directory + b'/' for directory in new_tracks.values()))
+          contract = any(path and not path.startswith(submission_paths) for path in paths)
+          # Do not check whether candidate files still exist: deletions and root replacements
+          # must also reach the full verifier. --no-renames selects both sides of a move.
+          # Shared contract changes must recheck every baseline already shipped.
+          # Missing, untouched tracks are allowed during configuration-first rollout.
+          # Changed roots still run even after deletion or replacement.
+          changed_tracks = {
+              name: (any(path == directory or path.startswith(directory + b'/') for path in paths)
+                     or (contract and os.path.lexists(os.fsdecode(directory))))
+              for name, directory in new_tracks.items()
+          }
           # A fork or differently cased lookalike is not a Yukon-owned submission branch.
           head_repo = os.environ['HEAD_REPO_ID']
           solver_branch = bool(re.fullmatch(r'[1-9][0-9]*', head_repo)) and (
@@ -51,8 +73,12 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'contract={str(contract).lower()}\n'
                            f'solver_branch={str(solver_branch).lower()}\n')
+              for name, changed in changed_tracks.items():
+                  output.write(f'changed_{name}={str(changed).lower()}\n')
           print(f'Contract regressions required: {contract}')
           print(f'Yukon submission branch: {solver_branch}')
+          print('Required new tracks:', ', '.join(name for name, changed in changed_tracks.items()
+                                                if changed) or 'none')
           PY
   benchmark:
     needs: changes
@@ -61,18 +87,55 @@ jobs:
     uses: ./.github/workflows/benchmark.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
-      contract_regressions: ${{ needs.changes.outputs.contract == 'true' }}
   benchmark-pareto:
     needs: changes
     if: needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true'
     uses: ./.github/workflows/benchmark-pareto.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
+  benchmark-64-32-product:
+    needs: changes
+    if: needs.changes.outputs.changed_64_32_product == 'true' && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true')
+    uses: ./.github/workflows/benchmark-commit-golf-64-32-product.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+  benchmark-64-32-pareto:
+    needs: changes
+    if: needs.changes.outputs.changed_64_32_pareto == 'true' && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true')
+    uses: ./.github/workflows/benchmark-commit-golf-64-32-pareto.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+  benchmark-96-32-product:
+    needs: changes
+    if: needs.changes.outputs.changed_96_32_product == 'true' && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true')
+    uses: ./.github/workflows/benchmark-commit-golf-96-32-product.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+  benchmark-96-32-pareto:
+    needs: changes
+    if: needs.changes.outputs.changed_96_32_pareto == 'true' && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true')
+    uses: ./.github/workflows/benchmark-commit-golf-96-32-pareto.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+  linkage:
+    needs: changes
+    if: needs.changes.outputs.contract == 'true'
+    uses: ./.github/workflows/test-linkage.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+  scale:
+    needs: changes
+    if: needs.changes.outputs.contract == 'true'
+    uses: ./.github/workflows/test-scale.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
   contract-regressions:
     # Preserve this completed check name when a managed submission legitimately skips Benchmark.
     name: contract-regressions
     if: always()
-    needs: [changes, benchmark, benchmark-pareto]
+    needs: [changes, benchmark, benchmark-pareto, linkage, scale,
+            benchmark-64-32-product, benchmark-64-32-pareto,
+            benchmark-96-32-product, benchmark-96-32-pareto]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -82,7 +145,17 @@ jobs:
           CONTRACT_CHANGED: ${{ needs.changes.outputs.contract }}
           BENCHMARK_RESULT: ${{ needs.benchmark.result }}
           PARETO_RESULT: ${{ needs.benchmark-pareto.result }}
+          LINKAGE_RESULT: ${{ needs.linkage.result }}
+          SCALE_RESULT: ${{ needs.scale.result }}
           SOLVER_BRANCH: ${{ needs.changes.outputs.solver_branch }}
+          CHANGED_64_32_PRODUCT: ${{ needs.changes.outputs.changed_64_32_product }}
+          CHANGED_64_32_PARETO: ${{ needs.changes.outputs.changed_64_32_pareto }}
+          CHANGED_96_32_PRODUCT: ${{ needs.changes.outputs.changed_96_32_product }}
+          CHANGED_96_32_PARETO: ${{ needs.changes.outputs.changed_96_32_pareto }}
+          TRACK_64_32_PRODUCT_RESULT: ${{ needs.benchmark-64-32-product.result }}
+          TRACK_64_32_PARETO_RESULT: ${{ needs.benchmark-64-32-pareto.result }}
+          TRACK_96_32_PRODUCT_RESULT: ${{ needs.benchmark-96-32-product.result }}
+          TRACK_96_32_PARETO_RESULT: ${{ needs.benchmark-96-32-pareto.result }}
         run: |
           if [[ "$CHANGES_RESULT" != success ]]; then
             echo 'Contract change detection did not succeed.' >&2
@@ -92,14 +165,34 @@ jobs:
             true|false) ;;
             *) echo 'Unknown submission-branch classification.' >&2; exit 1 ;;
           esac
-          case "$CONTRACT_CHANGED:$BENCHMARK_RESULT:$PARETO_RESULT" in
-            true:success:success|false:success:success) echo 'Required benchmark checks passed.' ;;
-            false:skipped:skipped)
+          case "$CONTRACT_CHANGED:$BENCHMARK_RESULT:$PARETO_RESULT:$LINKAGE_RESULT:$SCALE_RESULT" in
+            true:success:success:success:success|false:success:success:skipped:skipped)
+              : ;;
+            false:skipped:skipped:skipped:skipped)
               if [[ "$SOLVER_BRANCH" == true ]]; then
                 echo 'Submission-only managed branch; Yukon dispatches Benchmark.'
               else
                 echo 'Benchmark unexpectedly skipped.' >&2
                 exit 1
               fi ;;
-            *) echo 'Contract change detection or required benchmark did not succeed.' >&2; exit 1 ;;
+            *) echo "Required check did not succeed: product=$BENCHMARK_RESULT pareto=$PARETO_RESULT linkage=$LINKAGE_RESULT scale=$SCALE_RESULT" >&2; exit 1 ;;
           esac
+          check_track() {
+            local track="$1" changed="$2" result="$3" expected=skipped
+            case "$changed" in
+              true|false) ;;
+              *) echo "Unknown change classification for $track." >&2; exit 1 ;;
+            esac
+            if [[ "$changed" == true && ( "$CONTRACT_CHANGED" == true || "$SOLVER_BRANCH" == false ) ]]; then
+              expected=success
+            fi
+            if [[ "$result" != "$expected" ]]; then
+              echo "$track: expected $expected, observed $result." >&2
+              exit 1
+            fi
+          }
+          check_track commit-golf-64-32-product "$CHANGED_64_32_PRODUCT" "$TRACK_64_32_PRODUCT_RESULT"
+          check_track commit-golf-64-32-pareto "$CHANGED_64_32_PARETO" "$TRACK_64_32_PARETO_RESULT"
+          check_track commit-golf-96-32-product "$CHANGED_96_32_PRODUCT" "$TRACK_96_32_PRODUCT_RESULT"
+          check_track commit-golf-96-32-pareto "$CHANGED_96_32_PARETO" "$TRACK_96_32_PARETO_RESULT"
+          echo 'All required benchmark and regression checks passed.'

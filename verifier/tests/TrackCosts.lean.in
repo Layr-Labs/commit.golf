@@ -1,0 +1,59 @@
+
+/-! Interpreter regression inside the selected track's isolated verifier project.
+Expected prices are literals supplied by the trusted test harness, independently of
+the contract constants being tested. Repeated calls must each cost one query.
+The last input byte must be consumed, and compression writes exactly 32 bytes. -/
+namespace CommitGolf.TrackCostTests
+open OracleComp OracleSpec Riscv RiscvZkvm.Rv64
+
+private def oracle : Oracle :=
+  ⟨fun x => (x >>> (COMPRESSION_INPUT_LENGTH - 8)).setWidth COMPRESSION_OUTPUT_LENGTH,
+    Equiv.swap 0 9⟩
+
+example : COMPRESSION_INPUT_LENGTH = {{compressionInputBits}} := rfl
+example : COMPRESSION_OUTPUT_LENGTH = 256 := rfl
+example : COMPRESSION_CYCLES = 8 := rfl
+
+private def fixed : QueryImpl World Id
+  | .inl n => pure (⟨0, Nat.zero_lt_succ n⟩ : Fin (n + 1))
+  | .inr q => oracle.answer q
+
+private def addi (rd rs immediate : Nat) : BitVec 32 :=
+  BitVec.ofNat 32 ((immediate % 4096) * 2 ^ 20 + rs * 2 ^ 15 + rd * 2 ^ 7 + 0x13)
+
+private def halt : List (BitVec 32) := [addi 5 0 1, addi 10 0 0, 0x73]
+
+private def runSmall (code : List (BitVec 32)) (state : MachineState) : Execution :=
+  Id.run (simulateQ fixed (execute ⟨code, []⟩ 20 state))
+
+private def syscallState (kind bytes : Nat) : MachineState :=
+  ((initialMachine.setReg .x11 (BitVec.ofNat 64 bytes)).setReg .x12 256).setReg .x13
+    (BitVec.ofNat 64 kind)
+
+#eval show IO Unit from do
+  for (kind, bytes, price) in
+      [(0, {{compressionInputBytes}}, 8), (1, 200, {{permutationCycles}}),
+       (2, 200, {{permutationCycles}})] do
+    let single := runSmall (0x73 :: halt) (syscallState kind bytes)
+    unless single.exit == Exit.success && single.cycles == price + 3 &&
+        single.oracleCalls == 1 do
+      throw (IO.userError "incorrect single-call track cost or query count")
+    let repeated := runSmall ([0x73, 0x73] ++ halt) (syscallState kind bytes)
+    unless repeated.exit == Exit.success && repeated.cycles == 2 * price + 3 &&
+        repeated.oracleCalls == 2 do
+      throw (IO.userError "incorrect repeated-call track cost or query count")
+  let state := ((syscallState 0 {{compressionInputBytes}}).setByte
+    (BitVec.ofNat 64 ({{compressionInputBytes}} - 1)) 0xa5).setByte 288 0xb6
+  let result := runSmall (0x73 :: halt) state
+  unless result.exit == Exit.success && result.cycles == 11 && result.oracleCalls == 1 &&
+      result.state.getByte 256 == 0xa5 && result.state.getByte 287 == 0 &&
+      result.state.getByte 288 == 0xb6 do
+    throw (IO.userError "compression input was truncated or output width changed")
+  for bytes in [0, 63, 64, 65, 95, 96, 97, 200] do
+    if bytes != {{compressionInputBytes}} then
+      let rejected := runSmall (0x73 :: halt) (syscallState 0 bytes)
+      unless rejected.exit == Exit.failure && rejected.cycles == 1 &&
+          rejected.oracleCalls == 0 do
+        throw (IO.userError "compression accepted an incorrect input width")
+
+end CommitGolf.TrackCostTests
