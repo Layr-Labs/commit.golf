@@ -1,0 +1,58 @@
+import CommitGolf.Programs
+
+/-! Literal challenge-image words. The full certificate proves execution of these
+bytes; CapPackedImageEquality also checks the complete independently regenerated artifact. -/
+namespace CommitGolfCandidate
+
+def group341HeadWords : List (BitVec 32) :=
+  [328723, 363795, 394387, 16779703, 1073742647, 6588723, 536871735, 6589363, 2097811, 591123, 402654647, 100663407, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 115, 4261677715, 592659, 2579, 659, 689427, 67110291, 689683, 1683, 3603, 37748847, 33554543, 6631459, 8991491, 6632483, 17380099, 6633507, 25768707, 6634531, 1600082159, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 278270563, 71303279, 25757971, 34311059, 4218153699, 19, 4294543891, 6951699, 6587699, 5903251, 34209891, 7636531, 115, 4228187411, 4261807635, 4204140259, 8388719, 19, 33862403, 7155747, 42251011, 7156771, 50639619, 7157795, 59028227, 7158819, 1049235, 1299, 115, 602883, 6631459, 8991491, 6632483, 17380099, 6633507, 343075, 33883667, 115, 33883411, 33883667, 115, 33883411, 33883667, 115, 33883411, 33883667, 115, 33883411, 33883667, 115, 33883411, 33883667, 115, 33883411, 33883667, 115, 33883411, 755219, 115, 33883411, 25757971, 34311059, 4151045859, 4057985135, 19, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 9835619, 4045402223, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 115, 4228187411, 4261807635, 9835619, 3936350319]
+
+def group341BodyWord (index : Nat) : BitVec 32 :=
+  match index%3 with
+  | 0 => 115
+  | 1 => 4228187411
+  | _ => 4261807635
+
+def group341BodyWords : List (BitVec 32) :=
+  List.ofFn (fun i : Fin 251658 => group341BodyWord i.val)
+
+/-- One unrolled leaf: three salt loads at immediates 24*slot, 24*slot+8 and
+24*slot+16, four stores, seven carried-input blocks, and a final block whose reply
+goes to x23+32*slot. Slot-dependent immediates are added to the slot-zero words. -/
+def unrolledLeafWord (slot index : Nat) : BitVec 32 :=
+  match index with
+  | 0 => BitVec.ofNat 32 (24 * slot * 2 ^ 20 + 602883)
+  | 1 => 6631459
+  | 2 => BitVec.ofNat 32 ((24 * slot + 8) * 2 ^ 20 + 602883)
+  | 3 => 6632483
+  | 4 => BitVec.ofNat 32 ((24 * slot + 16) * 2 ^ 20 + 602883)
+  | 5 => 6633507
+  | 6 => 343075
+  | 28 => BitVec.ofNat 32 (32 * slot * 2 ^ 20 + 755219)
+  | 29 => 115
+  | 30 => 33883411
+  | other =>
+    match (other - 7) % 3 with
+    | 0 => 33883667
+    | 1 => 115
+    | _ => 33883411
+
+/-- A segment: 64 leaves, then x18+=1536 and x23:=x12+32. -/
+def unrolledSegmentWord (index : Nat) : BitVec 32 :=
+  if index < 1984 then unrolledLeafWord (index / 31) (index % 31)
+  else if index = 1984 then 1611204883 else 33950611
+
+/-- A block: four segments, BLTU x23,x22,+8, then the exit and loop jumps. -/
+def unrolledBlockWord (index : Nat) : BitVec 32 :=
+  if index < 7944 then unrolledSegmentWord (index % 1986)
+  else if index = 7944 then 23848035
+  else if index = 7945 then 3787464815 else 3180298351
+
+def unrolledBlockWords : List (BitVec 32) :=
+  List.ofFn (fun i : Fin 7947 => unrolledBlockWord i.val)
+
+/-- The leaf entry jump (word 54) targets the unrolled block after the parent groups. -/
+def group341ImageWords : List (BitVec 32) :=
+  group341HeadWords ++ (group341BodyWords ++ ([9835619, 2810224751, 3170934895] ++ unrolledBlockWords))
+
+end CommitGolfCandidate
