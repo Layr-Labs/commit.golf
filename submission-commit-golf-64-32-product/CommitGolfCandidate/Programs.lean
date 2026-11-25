@@ -116,7 +116,9 @@ def openingCode (depth : Nat) : List Asm :=
   [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (64*n) ++
   [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
    shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
-  [addi 25 25 32, regop 20 20 19] ++ li 28 depth ++
+  [addi 25 25 32, regop 20 20 19] ++
+  (if depth = 24 then [addi 28 0 24, .word (jumpWord 0 12), addi 28 28 24]
+   else li 28 depth) ++
   [.branch 0 28 0 "open-next", .label "open-path",
    -- XORI x7,x20,1 selects the sibling heap slot.
    insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
