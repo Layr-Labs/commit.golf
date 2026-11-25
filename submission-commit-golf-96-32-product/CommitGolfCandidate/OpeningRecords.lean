@@ -61,9 +61,9 @@ theorem opening_position_records (state : MachineState) (heap : Nat → Digest)
     (destinationPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
     (heapAligned : base % 8 = 0) (saltAligned : salts % 8 = 0)
     (destinationAligned : destination % 8 = 0)
-    (indexBound : index < LENGTH) (heapSeparated : base+2^30 ≤ destination)
+    (indexBound : index < LENGTH) (heapSeparated : base+3*2^29 ≤ destination)
     (saltSeparated : salts+2^29 ≤ destination) (bounded : destination+800 ≤ MEMORY_BYTES)
-    (data : ∀ slot < 2^25, readBuffer state (base+32*slot) 32 = heap slot) :
+    (data : ∀ slot < 2^25, readBuffer state (base+heapOffset slot) 32 = heap slot) :
     readBuffer (openingPositionState state) destination 32 = readBuffer state (salts+32*index) 32 ∧
     ∀ level < 24, readBuffer (openingPositionState state) (destination+32+32*level) 32 =
       heap (((LENGTH+index)/2^level) ^^^ 1) := by
@@ -82,8 +82,10 @@ theorem opening_position_records (state : MachineState) (heap : Nat → Digest)
     rw [(opening_position_path_registers state).2.1, selected, leafCount, ← BitVec.ofNat_add]
     rw [Nat.add_comm]
   have pathData (slot : Nat) (inside : slot < 2^25) :
-      readBuffer path (base+32*slot) 32 = heap slot := by
-    rw [opening_position_setup_preserves state destination (base+32*slot)
+      readBuffer path (base+heapOffset slot) 32 = heap slot := by
+    have within := heap_offset_bound slot (2^24) (by omega)
+    have aligned := heap_offset_aligned slot
+    rw [opening_position_setup_preserves state destination (base+heapOffset slot)
       destinationPointer (by omega) (by omega) (by omega)]
     exact data slot inside
   have unchanged : ∀ address count,
@@ -164,13 +166,13 @@ theorem opening_all_records (state : MachineState) (heap saltValue : Nat → Dig
     (outputPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
     (heapAligned : base % 8 = 0) (saltAligned : salts % 8 = 0)
     (outputAligned : destination % 8 = 0)
-    (heapSeparated : base+2^30 ≤ destination) (saltSeparated : salts+2^29 ≤ destination)
+    (heapSeparated : base+3*2^29 ≤ destination) (saltSeparated : salts+2^29 ≤ destination)
     (indexSeparated : indexAddress+8*count ≤ destination)
     (bounded : destination+800*count ≤ MEMORY_BYTES)
     (indexData : ∀ ordinal < count,
       state.getMem (BitVec.ofNat 64 (indexAddress+8*ordinal)) = BitVec.ofNat 64 (indices ordinal))
     (indexBound : ∀ ordinal < count, indices ordinal < LENGTH)
-    (heapData : ∀ slot < 2^25, readBuffer state (base+32*slot) 32 = heap slot)
+    (heapData : ∀ slot < 2^25, readBuffer state (base+heapOffset slot) 32 = heap slot)
     (saltData : ∀ index < LENGTH, readBuffer state (salts+32*index) 32 = saltValue index) :
     ∀ ordinal < count,
       readBuffer (openingPositionState^[count] state) (destination+800*ordinal) 32 =
@@ -205,8 +207,10 @@ theorem opening_all_records (state : MachineState) (heap saltValue : Nat → Dig
           Nat.mod_eq_of_lt (by omega : destination < 2^64)]
         omega
     have nextHeapData (slot : Nat) (inside : slot < 2^25) :
-        readBuffer next (base+32*slot) 32 = heap slot := by
-      rw [opening_position_preserves_digest state destination (base+32*slot)
+        readBuffer next (base+heapOffset slot) 32 = heap slot := by
+      have within := heap_offset_bound slot (2^24) (by omega)
+      have aligned := heap_offset_aligned slot
+      rw [opening_position_preserves_digest state destination (base+heapOffset slot)
         outputPointer (by omega) (by omega) (by omega)]
       exact heapData slot inside
     have nextSaltData (index : Nat) (inside : index < LENGTH) :

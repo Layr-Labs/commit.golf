@@ -21,7 +21,7 @@ theorem opening_proof_path (committed : MachineState) (positions : Positions) (o
     let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
     openingProofPath (openingResult trapdoor positions).state
       (submission.layout.proof+800*ordinal) (openingIndex positions ordinal) =
-    heapPath (fun slot => readBuffer committed (4294971424+32*slot) 32)
+    heapPath (fun slot => readBuffer committed (4294971424+heapOffset slot) 32)
       (LENGTH+openingIndex positions ordinal) 24 := by
   dsimp only
   apply List.ext_getElem
@@ -54,12 +54,12 @@ theorem opening_proof_authenticates (oracle : Oracle) (message : Message)
     (opening_output_records committed positions ordinal present).1]
   let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
   have leaf := correct.2.2 index
-  change readBuffer committed (4294971424+32*(LENGTH+index.val)) 32 =
-    leafDigest oracle.compression (readBuffer committed (5368713248+32*index.val) 32)
+  change readBuffer committed (4294971424+heapOffset (LENGTH+index.val)) 32 =
+    leafDigest oracle.compression (readBuffer committed (5905584160+32*index.val) 32)
       (message index) at leaf
   rw [← leaf]
   have root := reconstruct_heap_root oracle.compression
-    (fun slot => readBuffer committed (4294971424+32*slot) 32) 24 index.val index.isLt correct.2.1
+    (fun slot => readBuffer committed (4294971424+heapOffset slot) 32) 24 index.val index.isLt correct.2.1
   exact root.trans correct.1.symm
 
 /-- The same authentication statement for every supported result of the submitted

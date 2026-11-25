@@ -83,14 +83,14 @@ def openingResult (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) : Execution :=
   ⟨.success, openingExitState (openingPositionState^[positions.card]
     (openingInitializedState (submission.initialState .opening (trapdoor, positions)))),
-    30 + 380 * positions.card, 0⟩
+    30 + 428 * positions.card, 0⟩
 
 set_option maxRecDepth 4096 in
 private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (fuel : Nat) :
-    execute (submission.image .opening) (380 * positions.card + (7 + fuel))
+    execute (submission.image .opening) (428 * positions.card + (7 + fuel))
       (openingInitializedState (submission.initialState .opening (trapdoor, positions))) true =
-        pure ⟨.success, (openingResult trapdoor positions).state, 380 * positions.card + 10, 0⟩ := by
+        pure ⟨.success, (openingResult trapdoor positions).state, 428 * positions.card + 10, 0⟩ := by
   let initial := submission.initialState .opening (trapdoor, positions)
   let ready := openingInitializedState initial
   have cardinal : positions.card ≤ LENGTH := by
@@ -108,9 +108,9 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
   have outputPointer : ready.getReg .x25 = BitVec.ofNat 64 submission.layout.proof :=
     (opening_setup_registers initial).2.2.1
   have leaves : ready.getReg .x19 = 16777216 := (opening_setup_registers initial).2.2.2.2.1
-  have salts : ready.getReg .x18 = BitVec.ofNat 64 (submission.layout.trapdoor + 1073741824) := by
+  have salts : ready.getReg .x18 = BitVec.ofNat 64 (submission.layout.trapdoor + 1610612736) := by
     rw [(opening_setup_registers initial).2.2.2.2.2.1]
-    change BitVec.ofNat 64 submission.layout.trapdoor + BitVec.ofNat 64 1073741824 = _
+    change BitVec.ofNat 64 submission.layout.trapdoor + BitVec.ofNat 64 1610612736 = _
     rw [BitVec.ofNat_add]
   have memory (address : Word) : ready.getMem address = initial.getMem address :=
     congrFun (opening_setup_registers initial).2.2.2.2.2.2.2 address
@@ -139,7 +139,7 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
   have indexAligned : (ready.getReg .x24).toNat % 8 = 0 := by rw [indexPointer]; decide
   have saltBound : (ready.getReg .x18).toNat + 2 ^ 29 ≤ MEMORY_BYTES := by rw [salts]; decide
   have saltAligned : (ready.getReg .x18).toNat % 8 = 0 := by rw [salts]; decide
-  have heapBound : (ready.getReg .x9).toNat + 2 ^ 30 ≤ MEMORY_BYTES := by rw [heap]; decide
+  have heapBound : (ready.getReg .x9).toNat + 3 * 2 ^ 29 ≤ MEMORY_BYTES := by rw [heap]; decide
   have heapAligned : (ready.getReg .x9).toNat % 8 = 0 := by rw [heap]; decide
   have outputBound : (ready.getReg .x25).toNat + 800 * positions.card ≤ MEMORY_BYTES := by
     rw [outputPointer]
@@ -148,11 +148,11 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
     norm_num [LENGTH, LOG_LENGTH] at cardinal
     omega
   have outputAligned : (ready.getReg .x25).toNat % 8 = 0 := by rw [outputPointer]; decide
-  have finishedPC : (openingPositionState^[positions.card] ready).pc = 4316 := by
+  have finishedPC : (openingPositionState^[positions.card] ready).pc = 4324 := by
     by_cases empty : positions.card = 0
     · simp [empty, ready, openingInitializedState, MachineState.setPC, initialCount]
     · exact (opening_positions_finished positions.card (by omega) ready counter).1
-  change execute (submission.image .opening) (380 * positions.card + (7 + fuel)) ready true = _
+  change execute (submission.image .opening) (428 * positions.card + (7 + fuel)) ready true = _
   rw [opening_positions_loop positions.card cardinal ready counter readyPC indices indexSpace indexAligned
       leaves saltBound saltAligned heapBound heapAligned outputBound outputAligned,
     opening_exit _ finishedPC]
@@ -161,7 +161,7 @@ private theorem opening_ready_execution (trapdoor : BitVec (8 * submission.sizes
 
 private theorem opening_execution_extra (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (fuel : Nat) :
-    execute (submission.image .opening) (20 + (380 * positions.card + (7 + fuel)))
+    execute (submission.image .opening) (20 + (428 * positions.card + (7 + fuel)))
       (submission.initialState .opening (trapdoor, positions)) true =
         pure (openingResult trapdoor positions) := by
   rw [opening_setup _ rfl, opening_ready_execution]
@@ -183,7 +183,7 @@ theorem opening_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor))
   have cardinal : positions.card ≤ LENGTH := by
     simpa [Index] using Finset.card_le_univ positions
   have steps : submission.steps .opening =
-      20 + (380 * positions.card + (7 + (submission.steps .opening - (27 + 380 * positions.card)))) := by
+      20 + (428 * positions.card + (7 + (submission.steps .opening - (27 + 428 * positions.card)))) := by
     norm_num [submission, candidate, LENGTH, LOG_LENGTH] at cardinal ⊢
     omega
   exact (run_opening_eq_execute submission (trapdoor, positions)).trans
@@ -214,7 +214,7 @@ theorem opening_result_succeeded (trapdoor : BitVec (8 * submission.sizes.trapdo
 /-- The scored batch's actual opening cost, proved for arbitrary trapdoors and sets. -/
 theorem opening_batch_cycles (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (batch : positions.card = BATCH) :
-    (openingResult trapdoor positions).cycles = 48670 := by
+    (openingResult trapdoor positions).cycles = 54814 := by
   simp [openingResult, batch, BATCH]
 
 
@@ -263,11 +263,11 @@ theorem submission_proof_size : submission.scheme.ProofSize 102400 := by
 
 
 /-- Exact resources for a scored opening, expressed through the same oracle runner
-used by the certificate: 48,670 cycles, zero queries, and 102,400 proof bytes. -/
+used by the certificate: 54,814 cycles, zero queries, and 102,400 proof bytes. -/
 theorem opening_batch_resources (oracle : Oracle)
     (trapdoor : BitVec (8 * submission.sizes.trapdoor)) (positions : Positions)
     (batch : positions.card = BATCH) :
-    (prEvent ((fun result => result.1.cycles = 48670 ∧ result.2 = 0 ∧
+    (prEvent ((fun result => result.1.cycles = 54814 ∧ result.2 = 0 ∧
       (submission.readProof result.1).length = 102400) <$> (oracle.run (submission.run .opening (trapdoor, positions))))) = 1 := by
   rw [opening_execution, oracle_run_pure]
   simp [opening_batch_cycles trapdoor positions batch, opening_proof_length trapdoor positions,

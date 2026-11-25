@@ -18,12 +18,12 @@ private theorem deterministic_pure (oracle : Oracle) {α : Type} (value : α) :
     oracle.run (pure value : OracleComp World α) = pure (checkEvaluation oracle (pure value)) := by
   rw [oracle_run_pure, check_evaluation_pure]
 
-/-- Salt copying, the four in-place leaf calls, and the heap write use only
+/-- Salt copying, the eight in-place leaf calls of a pair, and the heap writes use only
 public queries: they add no private randomness. -/
 theorem commit_position_deterministic (oracle : Oracle) (state : MachineState) :
     oracle.run (commitPositionRun state) = pure (checkEvaluation oracle (commitPositionRun state)) := by
-  unfold commitPositionRun
-  simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
+  unfold commitPositionRun laneRun
+  simp only [bind_assoc, oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
     check_evaluation_pure, pure_bind]
 
 /-- After salt sampling, the full leaf loop is deterministic for a fixed oracle. -/
@@ -39,16 +39,22 @@ theorem commit_leaves_deterministic (oracle : Oracle) (state : MachineState) (co
 theorem commit_parents_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
     oracle.run (commitParents state count) = pure (checkEvaluation oracle (commitParents state count)) := by
   induction count generalizing state with
-  | zero => exact deterministic_pure oracle state
+  | zero =>
+    rw [commitParents]
+    simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
+      check_evaluation_pure, pure_bind]
   | succ count ih =>
-    rw [commitParents, oracle_run_public_bind, check_evaluation_public_bind, ih]
-    simp only [pure_bind]
+    rw [commitParents]
+    apply deterministic_bind oracle _ _ _ ih
+    unfold parentIterationRun
+    simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
+      check_evaluation_pure, pure_bind]
 
 /-- The entire commitment body makes no additional coin requests. -/
 theorem commit_body_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
     oracle.run (commitBody state count) = pure (checkEvaluation oracle (commitBody state count)) := by
   unfold commitBody
-  apply deterministic_bind oracle _ _ (commit_leaves_deterministic oracle state count)
+  apply deterministic_bind oracle _ _ (commit_leaves_deterministic oracle state (count/2))
   intro leaves
   exact deterministic_bind oracle _ _ (commit_parents_deterministic oracle _ _)
     (fun parents => deterministic_pure oracle _)
@@ -61,7 +67,7 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, body.1, 90*LENGTH+23, 5*LENGTH-1⟩, body.2)
+  (⟨.success, body.1, 66*LENGTH+54, 5*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
     (packCommitResult body).1.state = body.1 := rfl
@@ -148,7 +154,7 @@ reply. Keeping the reply width as a parameter avoids unfolding the large sampler
 theorem commit_final_salt (oracle : Oracle) (message : Message) {bits : Nat}
     (answer : BitVec bits) (width : bits = 256*LENGTH) (index : Index) :
     readBuffer (commitFinalResult oracle message answer).1.state
-      (5368713248+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 := by
+      (5905584160+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 := by
   rw [commit_final_state]
   subst bits
   exact commit_body_salt oracle message answer index
@@ -159,7 +165,7 @@ theorem commit_final_contents (oracle : Oracle) (message : Message) {bits : Nat}
     (answer : BitVec bits) (width : bits = 256*LENGTH) :
     CommittedState oracle message (commitFinalResult oracle message answer).1.state ∧
     ∀ index : Index, readBuffer (commitFinalResult oracle message answer).1.state
-      (5368713248+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 :=
+      (5905584160+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 :=
   ⟨commit_final_matches oracle message answer width, commit_final_salt oracle message answer width⟩
 
 end CommitGolfCandidate

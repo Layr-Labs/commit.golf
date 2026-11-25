@@ -109,43 +109,55 @@ def leafSubroutine : List Asm :=
   [addi 5 0 0, mv 10 21, addi 11 0 96, mv 12 21, addi 13 0 0, insn 0x73,
    addi 8 8 64, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
-/-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
-def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
+/-- Gap heap: node `s` lives at byte offset `32*(s + s/2)` of the trapdoor, so the pair
+`2q, 2q+1` occupies `[96q, 96q+64)` and the 32 bytes `[96q+64, 96q+96)` are never written
+(they stay zero). Slot 0 is unused. The salts follow the heap at offset `96*n`. -/
+def heapOffset (node : Nat) : Nat := 32 * (node + node / 2)
+
+def trapdoorBytes (depth : Nat) : Nat := 128 * 2^depth
 def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
 
-/-- In-place leaf chain. x8 points at the 32-byte salt slot just below leaf i's message
-(free memory for i = 0, otherwise the already-consumed last block of leaf i-1). Each call
-compresses the contiguous 96 bytes [chaining value | next 64-byte block] and writes the new
-chaining value over the last 32 bytes it consumed; the fourth call writes the heap slot. -/
+/-- Four in-place calls for the leaf whose salt slot is `x8+o`; the last writes `x23+h`. -/
+def leafCalls (o h : Nat) : List Asm :=
+  [addi 10 8 o, addi 12 8 (o+64), insn 0x73,
+   addi 10 8 (o+64), addi 12 8 (o+128), insn 0x73,
+   addi 10 8 (o+128), addi 12 8 (o+192), insn 0x73,
+   addi 10 8 (o+192), addi 12 23 h, insn 0x73]
+
+/-- In-place leaf chain, two leaves per iteration, on the gap heap. x8 points at the
+32-byte salt slot just below the pair's first message (free memory for the first pair,
+otherwise the already-consumed last block of the previous leaf); the second leaf's salt
+slot is x8+256. Each call compresses the contiguous 96 bytes [chaining value | next
+64-byte block] and writes over the last 32 bytes it consumed; the fourth call of each
+leaf writes its heap slot (x23 and x23+32). Parents are direct calls on the pair
+`[L | R | 0]`, two per iteration in descending order, then the root. -/
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [addi 8 10 (-32), mv 26 11, mv 9 12] ++ li 19 n ++ li 6 (64*n) ++
-  [regop 18 9 6] ++ li 6 (32*n) ++ [regop 23 9 6] ++
+  [addi 8 10 (-32), mv 26 11, mv 9 12] ++ li 6 (96*n) ++
+  [regop 18 9 6] ++ li 6 (48*n) ++ [regop 23 9 6] ++
   -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
-  li 21 256 ++ [addi 20 0 0, addi 5 0 0, addi 11 0 96, addi 13 0 0, .label "commit-leaf"] ++
-  copyDigest 18 8 ++
-  [mv 10 8, addi 12 8 64, insn 0x73,
-   addi 10 8 64, addi 12 8 128, insn 0x73,
-   addi 10 8 128, addi 12 8 192, insn 0x73,
-   addi 10 8 192, mv 12 23, insn 0x73,
-   addi 8 8 256, addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
-   addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
-   shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
-   addi 5 0 0, addi 11 0 64, addi 13 0 0, .jump 31 "compress96",
-   addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ compression96Routine
+  li 20 (n/2) ++ [addi 5 0 0, addi 11 0 96, addi 13 0 0, .label "commit-pair"] ++
+  copyDigest 18 8 ++ leafCalls 0 0 ++ copyDigest 18 8 32 256 ++ leafCalls 256 32 ++
+  [addi 8 8 512, addi 18 18 64, addi 23 23 96, addi 20 20 (-1), .branch 1 20 0 "commit-pair"] ++
+  li 6 (96*n - 192) ++ [regop 21 9 6] ++ li 6 (48*n - 96) ++ [regop 22 9 6] ++
+  [.branch 0 22 9 "commit-root", .label "commit-parent",
+   addi 10 21 96, addi 12 22 32, insn 0x73,
+   mv 10 21, mv 12 22, insn 0x73,
+   addi 21 21 (-192), addi 22 22 (-96), .branch 1 22 9 "commit-parent",
+   .label "commit-root", addi 10 9 96, addi 12 9 32, insn 0x73] ++
+  copyDigest 9 26 32 ++ halt true
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (64*n) ++
+  [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (96*n) ++
   [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
    shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
   [addi 25 25 32, regop 20 20 19] ++ li 28 depth ++
   [.branch 0 28 0 "open-next", .label "open-path",
-   -- XORI x7,x20,1 selects the sibling heap slot.
+   -- XORI x7,x20,1 selects the sibling t; its gap-heap offset is 32*(t + t/2).
    insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
-   shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
+   shift 6 20 1 true, regop 7 7 6, shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
   [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
    .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
    .label "open-done"] ++ li 6 (openingBytes depth) ++

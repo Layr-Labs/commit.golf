@@ -1,6 +1,6 @@
 import CommitGolfCandidate.Model
 import CommitGolfCandidate.Memory
-import CommitGolfCandidate.CommitLeaf
+import CommitGolfCandidate.Check
 import CommitGolfCandidate.CheckEvaluation
 import CommitGolfCandidate.WriteMemory
 

@@ -46,12 +46,12 @@ theorem opening_output_records (committed : MachineState) (positions : Positions
     ∀ ordinal < positions.card,
       readBuffer (openingResult trapdoor positions).state
         (submission.layout.proof+800*ordinal) 32 =
-          readBuffer committed (5368713248+32*openingIndex positions ordinal) 32 ∧
+          readBuffer committed (5905584160+32*openingIndex positions ordinal) 32 ∧
       ∀ level < 24,
         readBuffer (openingResult trapdoor positions).state
           (submission.layout.proof+800*ordinal+32+32*level) 32 =
             readBuffer committed
-              (4294971424+32*(((LENGTH+openingIndex positions ordinal)/2^level) ^^^ 1)) 32 := by
+              (4294971424+heapOffset (((LENGTH+openingIndex positions ordinal)/2^level) ^^^ 1)) 32 := by
   let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
   let initial := submission.initialState .opening (trapdoor, positions)
   let ready := openingInitializedState initial
@@ -61,42 +61,44 @@ theorem opening_output_records (committed : MachineState) (positions : Positions
   have regs := opening_setup_registers initial
   have heap : ready.getReg .x9 = BitVec.ofNat 64 4294971424 :=
     regs.1.trans (initial_heap submission trapdoor positions)
-  have indices : ready.getReg .x24 = BitVec.ofNat 64 5905584160 :=
+  have indices : ready.getReg .x24 = BitVec.ofNat 64 6442455072 :=
     regs.2.1.trans (initial_indices submission trapdoor positions)
-  have output : ready.getReg .x25 = BitVec.ofNat 64 10334769184 :=
+  have output : ready.getReg .x25 = BitVec.ofNat 64 10871640096 :=
     regs.2.2.1.trans (initial_output submission trapdoor positions)
   have leaves : ready.getReg .x19 = BitVec.ofNat 64 LENGTH := regs.2.2.2.2.1
-  have salts : ready.getReg .x18 = BitVec.ofNat 64 5368713248 := by
+  have salts : ready.getReg .x18 = BitVec.ofNat 64 5905584160 := by
     rw [regs.2.2.2.2.2.1, initial_heap submission trapdoor positions]
     rfl
   have memory : ready.mem = initial.mem := regs.2.2.2.2.2.2.2
   have indexData (ordinal : Nat) (present : ordinal < positions.card) :
-      ready.getMem (BitVec.ofNat 64 (5905584160+8*ordinal)) =
+      ready.getMem (BitVec.ofNat 64 (6442455072+8*ordinal)) =
         BitVec.ofNat 64 (openingIndex positions ordinal) := by
     rw [show ready.getMem = initial.getMem from congrArg (fun mem address => mem address) memory]
     exact (opening_input_index trapdoor positions ordinal present).trans (by
       simp only [openingIndex, dif_pos present])
   have heapData (slot : Nat) (inside : slot < 2^25) :
-      readBuffer ready (4294971424+32*slot) 32 = readBuffer committed (4294971424+32*slot) 32 := by
+      readBuffer ready (4294971424+heapOffset slot) 32 =
+        readBuffer committed (4294971424+heapOffset slot) 32 := by
     rw [read_buffer_memory_congr _ _ memory]
-    exact opening_input_roundtrip committed positions (32*slot) (by
-      change 32*slot+32 ≤ 1610612736; omega)
+    have within := heap_offset_bound slot (2^24) (by omega)
+    exact opening_input_roundtrip committed positions (heapOffset slot) (by
+      change heapOffset slot+32 ≤ 2147483648; omega)
   have saltData (index : Nat) (inside : index < LENGTH) :
-      readBuffer ready (5368713248+32*index) 32 = readBuffer committed (5368713248+32*index) 32 := by
+      readBuffer ready (5905584160+32*index) 32 = readBuffer committed (5905584160+32*index) 32 := by
     have small : index < 16777216 := inside
     rw [read_buffer_memory_congr _ _ memory]
-    have result := opening_input_roundtrip committed positions (1073741824+32*index) (by
-      change 1073741824+32*index+32 ≤ 1610612736; omega)
-    change readBuffer initial (4294971424+(1073741824+32*index)) 32 =
-      readBuffer committed (4294971424+(1073741824+32*index)) 32 at result
+    have result := opening_input_roundtrip committed positions (1610612736+32*index) (by
+      change 1610612736+32*index+32 ≤ 2147483648; omega)
+    change readBuffer initial (4294971424+(1610612736+32*index)) 32 =
+      readBuffer committed (4294971424+(1610612736+32*index)) 32 at result
     simpa only [← Nat.add_assoc] using result
   have records := opening_all_records ready
-    (fun slot => readBuffer committed (4294971424+32*slot) 32)
-    (fun index => readBuffer committed (5368713248+32*index) 32)
-    (openingIndex positions) 4294971424 5368713248 5905584160 10334769184 positions.card
+    (fun slot => readBuffer committed (4294971424+heapOffset slot) 32)
+    (fun index => readBuffer committed (5905584160+32*index) 32)
+    (openingIndex positions) 4294971424 5905584160 6442455072 10871640096 positions.card
     heap salts leaves indices output (by decide) (by decide) (by decide)
     (by decide) (by decide) (by omega)
-    (by change 10334769184+800*positions.card ≤ 2^36; omega)
+    (by change 10871640096+800*positions.card ≤ 2^36; omega)
     indexData (fun ordinal _ => opening_index_bound positions ordinal) heapData saltData
   dsimp only
   intro ordinal present

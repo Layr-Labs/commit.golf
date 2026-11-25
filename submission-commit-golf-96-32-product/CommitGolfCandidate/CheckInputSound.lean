@@ -49,33 +49,33 @@ theorem check_input_sound (oracle : Oracle) (input : CheckInput)
   have registers := check_ready_registers initial
   have loaded := initial_registers submission input
   have rootPointer : ready.getReg .x26 = BitVec.ofNat 64 4294971392 := registers.2.2.2.2.1.trans loaded.1
-  have valuePointer : ready.getReg .x8 = BitVec.ofNat 64 6039801888 := registers.2.2.1.trans loaded.2.2.1
-  have proofPointer : ready.getReg .x25 = BitVec.ofNat 64 10334769184 := registers.2.2.2.1.trans loaded.2.2.2
-  have indexPointer : ready.getReg .x24 = BitVec.ofNat 64 5905584160 := registers.2.1.trans loaded.2.1
+  have valuePointer : ready.getReg .x8 = BitVec.ofNat 64 6576672800 := registers.2.2.1.trans loaded.2.2.1
+  have proofPointer : ready.getReg .x25 = BitVec.ofNat 64 10871640096 := registers.2.2.2.1.trans loaded.2.2.2
+  have indexPointer : ready.getReg .x24 = BitVec.ofNat 64 6442455072 := registers.2.1.trans loaded.2.1
   have memory : ready.mem = initial.mem := ready_memory initial
   have rootData : readBuffer ready 4294971392 32 = input.commitment := by
     rw [read_buffer_memory_congr _ _ memory]
     exact check_input_commitment input
   have indexData (ordinal : Nat) (present : ordinal < input.positions.card) :
-      ready.getMem (BitVec.ofNat 64 (5905584160+8*ordinal)) = BitVec.ofNat 64 (recordIndex input ordinal).val := by
+      ready.getMem (BitVec.ofNat 64 (6442455072+8*ordinal)) = BitVec.ofNat 64 (recordIndex input ordinal).val := by
     rw [show ready.getMem = initial.getMem from congrArg (fun mem address => mem address) memory]
     exact check_input_position input ordinal present
   have valueData (ordinal : Nat) (present : ordinal < input.positions.card) (block : Nat) (inside : block < 4) :
-      readBuffer ready (6039801888+256*ordinal+64*block) 64 =
+      readBuffer ready (6576672800+256*ordinal+64*block) 64 =
         (recordValue input ordinal).extractLsb' (512*block) 512 := by
     rw [read_buffer_memory_congr _ _ memory]
     simpa only [recordValue, dif_pos present, initial,
-      show submission.layout.values = 6039801888 from rfl] using check_input_value_block input ordinal block present inside
+      show submission.layout.values = 6576672800 from rfl] using check_input_value_block input ordinal block present inside
   have saltData (ordinal : Nat) (_present : ordinal < input.positions.card) :
-      readBuffer ready (10334769184+800*ordinal) 32 = recordSalt input ordinal := by
+      readBuffer ready (10871640096+800*ordinal) 32 = recordSalt input ordinal := by
     rw [read_buffer_memory_congr _ _ memory]
     rfl
   have pathData (ordinal : Nat) (_present : ordinal < input.positions.card) (level : Nat) (_inside : level < 24) :
-      readBuffer ready (10334769184+800*ordinal+32+32*level) 32 = recordSibling input ordinal level := by
+      readBuffer ready (10871640096+800*ordinal+32+32*level) 32 = recordSibling input ordinal level := by
     rw [read_buffer_memory_congr _ _ memory]
     rfl
   exact check_loop_sound oracle ready input.commitment (recordValue input) (recordSalt input)
-    (recordIndex input) (recordSibling input) 4294971392 6039801888 10334769184 5905584160 input.positions.card
+    (recordIndex input) (recordSibling input) 4294971392 6576672800 10871640096 6442455072 input.positions.card
     registers.1 rootPointer valuePointer proofPointer indexPointer
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by omega) (by omega) (by omega) rootData indexData valueData saltData pathData

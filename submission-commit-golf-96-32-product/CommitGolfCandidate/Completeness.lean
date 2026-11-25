@@ -35,56 +35,56 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
   let ready := checkReadyState (checkLengthState initial)
   let indices : Nat → Index := fun ordinal =>
     ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-  let heap : Nat → Digest := fun slot => readBuffer committed (4294971424+32*slot) 32
-  let salts : Index → Digest := fun index => readBuffer committed (5368713248+32*index.val) 32
+  let heap : Nat → Digest := fun slot => readBuffer committed (4294971424+heapOffset slot) 32
+  let salts : Index → Digest := fun index => readBuffer committed (5905584160+32*index.val) 32
   have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
   have small : positions.card ≤ 16777216 := cardinal
   have registers := check_ready_registers initial
   have loaded := initial_check_registers submission input
   have rootPointer : ready.getReg .x26 = BitVec.ofNat 64 4294971392 := registers.2.2.2.2.1.trans loaded.1
-  have valuePointer : ready.getReg .x8 = BitVec.ofNat 64 6039801888 := registers.2.2.1.trans loaded.2.2.1
-  have proofPointer : ready.getReg .x25 = BitVec.ofNat 64 10334769184 := registers.2.2.2.1.trans loaded.2.2.2
-  have indexPointer : ready.getReg .x24 = BitVec.ofNat 64 5905584160 := registers.2.1.trans loaded.2.1
+  have valuePointer : ready.getReg .x8 = BitVec.ofNat 64 6576672800 := registers.2.2.1.trans loaded.2.2.1
+  have proofPointer : ready.getReg .x25 = BitVec.ofNat 64 10871640096 := registers.2.2.2.1.trans loaded.2.2.2
+  have indexPointer : ready.getReg .x24 = BitVec.ofNat 64 6442455072 := registers.2.1.trans loaded.2.1
   have memory : ready.mem = initial.mem := ready_memory initial
   have rootData : readBuffer ready 4294971392 32 = heap 1 := by
     rw [read_buffer_memory_congr _ _ memory]
     exact (check_input_commitment input).trans correct.1
   have indexData (ordinal : Nat) (present : ordinal < positions.card) :
-      ready.getMem (BitVec.ofNat 64 (5905584160+8*ordinal)) = BitVec.ofNat 64 (indices ordinal).val := by
+      ready.getMem (BitVec.ofNat 64 (6442455072+8*ordinal)) = BitVec.ofNat 64 (indices ordinal).val := by
     rw [show ready.getMem = initial.getMem from congrArg (fun mem address => mem address) memory]
     exact check_input_position input ordinal present
   have valueData (ordinal : Nat) (present : ordinal < positions.card) (block : Nat) (inside : block < 4) :
-      readBuffer ready (6039801888+256*ordinal+64*block) 64 =
+      readBuffer ready (6576672800+256*ordinal+64*block) 64 =
         (message (indices ordinal)).extractLsb' (512*block) 512 := by
     rw [read_buffer_memory_congr _ _ memory]
     have value := check_input_value_block input ordinal block present inside
     have indexSame :
         ((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val =
           indices ordinal := Fin.ext (sorted_value_index positions ordinal present)
-    change readBuffer initial (6039801888+256*ordinal+64*block) 64 =
+    change readBuffer initial (6576672800+256*ordinal+64*block) 64 =
       (message (((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val)).extractLsb'
         (512*block) 512 at value
     rw [indexSame] at value
     exact value
   have saltData (ordinal : Nat) (present : ordinal < positions.card) :
-      readBuffer ready (10334769184+800*ordinal) 32 = salts (indices ordinal) := by
+      readBuffer ready (10871640096+800*ordinal) 32 = salts (indices ordinal) := by
     rw [read_buffer_memory_congr _ _ memory]
     have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
       (800*ordinal) (by omega)
     exact copied.trans (opening_output_records committed positions ordinal present).1
   have pathData (ordinal : Nat) (present : ordinal < positions.card) (level : Nat) (inside : level < 24) :
-      readBuffer ready (10334769184+800*ordinal+32+32*level) 32 =
+      readBuffer ready (10871640096+800*ordinal+32+32*level) 32 =
         heap (((LENGTH+(indices ordinal).val)/2^level) ^^^ 1) := by
     rw [read_buffer_memory_congr _ _ memory]
     have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
       (800*ordinal+32+32*level) (by omega)
     have record := (opening_output_records committed positions ordinal present).2 level inside
     have joined := copied.trans (by simpa only [Nat.add_assoc] using record)
-    change readBuffer initial (10334769184+(800*ordinal+32+32*level)) 32 =
+    change readBuffer initial (10871640096+(800*ordinal+32+32*level)) 32 =
       heap (((LENGTH+(indices ordinal).val)/2^level) ^^^ 1) at joined
     simpa only [Nat.add_assoc] using joined
   have accepted := check_loop_honest oracle ready message heap salts indices
-    4294971392 6039801888 10334769184 5905584160 positions.card
+    4294971392 6576672800 10871640096 6442455072 positions.card
     registers.1 rootPointer valuePointer proofPointer indexPointer
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by omega) (by omega) (by omega)
