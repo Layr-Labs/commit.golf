@@ -1,9 +1,5 @@
 name: Benchmark commit-golf-64-32-pareto
 on:
-  push:
-    branches: [master, fix/register-track-workflows]
-    paths:
-      - '.github/workflows/benchmark-commit-golf-64-32-pareto.yml'
   workflow_dispatch:
     inputs:
       yukon_evaluation:
