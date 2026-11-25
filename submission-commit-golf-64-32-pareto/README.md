@@ -1,36 +1,27 @@
-# Initial submission: commit-golf-64-32-pareto
+# Eight full-width parent levels
 
-This is the compression-only salted binary Merkle baseline from the original
-Pareto track, adapted to the 64→32-byte compression / 30-cycle permutation contract.
-Compression costs eight cycles. The programs make no permutation calls, so their
-cycle claims are unchanged. The general interpreter cost helper allows the new
-permutation price.
+The commitment reads the first 200 bytes of each 256-byte entry into the forward permutation.
+The second input contains the position tag, the salt, 88 reply bytes, and the final 88 entry bytes.
+Each leaf and the first eight parent levels use full 32-byte digests.
+Each remaining parent keeps 30 digest bytes.
+The commitment occupies 32 bytes.
 
-Each leaf absorbs eight 32-byte message blocks starting from a private 32-byte
-salt. Parent nodes compress two child digests. An opening contains a salt and
-24 sibling digests for each opened leaf. Each public oracle call consumes one
-query regardless of its cycle cost.
+Each selected entry contributes a 514-byte record.
+It contains a 16-byte salt, nine 32-byte siblings, and seven 30-byte siblings.
+The upper tree shares a list of 30-byte siblings across the selected entries.
+The checker reconstructs every selected path and checks the root.
 
-The claimed bounds for a full commitment and an opening of 128 leaves are:
-
-| Claim | Bound |
+| Certified metric | Bound |
 | --- | ---: |
-| Proof bytes | 102,400 |
-| Commitment cycles | 3,959,423,012 |
-| Opening cycles | 48,670 |
+| Commitment cycles | 621,224,986 |
+| Opening cycles for 128 positions | 87,559 |
+| Total prover cycles | 621,312,545 |
+| Proof bytes for 128 positions | 69,632 |
 
-The track scores `[commitCycles + openingCycles, proofBytes]`.
+The three images are in [programs.json](programs.json).
+[Solution.lean](Solution.lean) links those images to the security and resource certificate.
+[claim.json](claim.json) supplies the public bounds.
 
-`programs.json` delivers the three machine images and their ABI. `Solution.lean`
-assembles the complete certificate and proves equality with the generated artifact.
-The supporting `CommitGolfCandidate/` modules prove execution, resource bounds,
-completeness, binding, and hiding for those images.
-
-From the repository root, on a supported Linux verifier host:
-
-```sh
-bash scripts/setup.sh
-python3 scripts/run.py --track commit-golf-64-32-pareto
-```
-
-See [RULES.md](../RULES.md) for the trusted contract and verifier requirements.
+The raw leaf design and its security proof come from kaankolcu’s accepted submission.
+The opening uses our earlier postorder mark pass and upper-tree cursor.
+[Raw leaf source](https://api.yukon.org/api/submissions/a6b5adf3-8bdb-4a6c-a8fd-873990a4bf20) · [Opening source](https://api.yukon.org/api/submissions/1ed6362a-1617-43a8-98eb-e533b179fbbc)

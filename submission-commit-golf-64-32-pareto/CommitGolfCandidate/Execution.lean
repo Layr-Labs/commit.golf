@@ -127,7 +127,7 @@ private theorem instructionCycles_le_four (instruction : Instruction) :
 private theorem oracleCycles_le_thirty (input : PublicSpec.Domain) : oracleCycles input ≤ 30 := by
   cases input <;> simp [oracleCycles, COMPRESSION_CYCLES, PERMUTATION_CYCLES]
 
-/-- Without private randomness, each step costs at most thirty abstract cycles.
+/-- Without private randomness, each step costs at most eight abstract cycles.
 This applies to the checker, including malformed inputs and early failure paths. -/
 theorem execute_cycles_le_steps (image : Image) (steps : Nat) (state : MachineState)
     (result : Execution) (h : result ∈ support (execute image steps state false)) :
@@ -152,7 +152,7 @@ theorem execute_cycles_le_steps (image : Image) (steps : Nat) (state : MachineSt
         · simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at h
           obtain ⟨answer, _, next, hnext, rfl⟩ := h
           have := ih _ _ hnext
-          have cost := oracleCycles_le_thirty (by assumption)
+          have := oracleCycles_le_thirty (by assumption)
           simp only [Execution.charge]
           omega
       · split at h
