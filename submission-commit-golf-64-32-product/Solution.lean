@@ -1,20 +1,27 @@
-import CommitGolfCandidate.NonceCertificate
-import CommitGolf.Artifact
-import CommitGolfCandidate.CapPackedImageEquality
+import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
+import CommitGolfCandidate.TwoPermutationPinnedFinalHiding
+import CommitGolfCandidate.TwoPermutationPackedAssembly
+import CommitGolfCandidate.TwoPermutationPackedLeafCertificate
+import CommitGolfCandidate.TwoPermutationPackedCheckerCertificate
 
-/-! Concrete nonce-packed cap multiproof certificate. The security scheme and
-resource bounds come from these executable images, which are compared with
-the exact independently generated manifest artifact below. -/
 namespace CommitGolf.Challenge
+open TwoPermutationPrototype
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.nonceCompressedProgram
+set_option maxRecDepth 65536
+set_option exponentiation.threshold 2048
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 20000000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  exact CommitGolfCandidate.nonce_packed_submission_matches
+def submission : CommitGolf.Submission := RV64.packedSubmission
 
-theorem certificate : CommitGolf.Certificate submission 72704 1678377395 99225 :=
-  CommitGolfCandidate.nonce_certificate
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
+
+theorem certificate : CommitGolf.Certificate submission 67840 1367745656 85767 := by
+  let leaves := RV64.PackedLeaves.executableLeaves
+  let meaning := RV64.PackedLeaves.executableMeaning
+  let opening := PackedCertificate.packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)
+  have privacy := Sampling.scheme_hiding_of_pinned_transcript submission.scheme TwoPermutationPrototype.Hybrid.builder
+    opening.refines (fun adversary compress budget bounded =>
+      Sampling.pinned_final_reference_hiding adversary TwoPermutationPrototype.Hybrid.builder compress budget bounded)
+  exact PackedCertificate.packed_certificate leaves meaning
+    (Packed.Checker.executable_checker_facts Sampling.pinned_replay_bound) privacy
 
 end CommitGolf.Challenge
