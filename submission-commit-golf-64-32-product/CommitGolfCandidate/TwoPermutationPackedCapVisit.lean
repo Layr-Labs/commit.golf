@@ -1,5 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedCapTransitions
 import CommitGolfCandidate.TwoPermutationOpeningCapStructure
+import CommitGolfCandidate.K3C4CapCodec
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
@@ -18,31 +19,36 @@ theorem CapContext.transport {groups : List Nat} {before after : MachineState}
   ⟨context.controls.transport stable, fun node pos bound =>
     (markFrame _ (by omega) (by omega)).trans (context.marked node pos bound)⟩
 
-structure CapPosition (groups : List Nat) (state : MachineState) (node pointer : Nat) : Prop where
+/-- The walk at heap node `node`, having read `first` frontier nodes of the packed frontier at `start`:
+the proof cursor is `start + capPackedBytes first` and the group countdown `x30` is `7 - first % 8`. -/
+structure CapPosition (groups : List Nat) (state : MachineState) (node start first : Nat) : Prop where
   context : CapContext groups state
   heap : state.getReg .x6 = BitVec.ofNat 64 node
-  proof : state.getReg .x21 = BitVec.ofNat 64 pointer
-  above : 32768 ≤ pointer
-  even : pointer%2 = 0
+  proof : state.getReg .x21 = BitVec.ofNat 64 (start+capPackedBytes first)
+  countdown : state.getReg .x30 = BitVec.ofNat 64 (7-first%8)
+  above : 32768 ≤ start
+  even : start%2 = 0
 
-theorem cap_lookup_is_marked {groups : List Nat} {state : MachineState} {node height proof : Nat}
-    (position : CapPosition groups state node proof) (span : Opening.CapSpan node height) :
+theorem cap_lookup_is_marked {groups : List Nat} {state : MachineState} {node height start first : Nat}
+    (position : CapPosition groups state node start first) (span : Opening.CapSpan node height) :
     capMarkedWord state = 0#64 ↔ capIsMarked groups node height = false := by
   obtain ⟨pos, bound⟩ := Opening.cap_span_node node height span
   rw [cap_lookup_observation state node position.context.controls position.heap,
     position.context.marked node pos bound, Opening.markWord, Opening.cap_span_height node height span]
   cases capIsMarked groups node height <;> decide
 
-theorem cap_lookup_position {groups : List Nat} {state : MachineState} {node height proof : Nat}
-    (position : CapPosition groups state node proof) (span : Opening.CapSpan node height) :
+theorem cap_lookup_position {groups : List Nat} {state : MachineState} {node height start first : Nat}
+    (position : CapPosition groups state node start first) (span : Opening.CapSpan node height) :
     let next := capLookup state
     let marked := capIsMarked groups node height
     next.pc = (if marked then if height = 0 then 0x1528 else 0x147c else 0x1498) ∧
-    CapPosition groups next (if marked && height != 0 then 2*node else node) proof ∧ next.mem = state.mem := by
+    CapPosition groups next (if marked && height != 0 then 2*node else node) start first ∧ next.mem = state.mem := by
   obtain ⟨pc, heap, mem⟩ := cap_lookup_post state
   dsimp only at pc heap mem ⊢
-  have proofReg : (capLookup state).getReg .x21 = BitVec.ofNat 64 proof :=
+  have proofReg : (capLookup state).getReg .x21 = BitVec.ofNat 64 (start+capPackedBytes first) :=
     (cap_lookup_register state .x21 (by decide) (by decide) (by decide)).trans position.proof
+  have countReg : (capLookup state).getReg .x30 = BitVec.ofNat 64 (7-first%8) :=
+    (cap_lookup_register state .x30 (by decide) (by decide) (by decide)).trans position.countdown
   have ctxt := position.context.transport (cap_lookup_stable state) (fun _ _ _ => congrFun mem _)
   have marked := cap_lookup_is_marked position span
   have leaf := cap_lookup_leaf_iff state node (Opening.cap_span_node node height span).2
@@ -57,7 +63,7 @@ theorem cap_lookup_position {groups : List Nat} {state : MachineState} {node hei
     | succ height =>
       have internal := Opening.cap_span_is_internal node height span
       cases capIsMarked groups node (height+1) <;> simp [Nat.not_le_of_gt internal]
-  · refine ⟨⟨ctxt, ?_, proofReg, position.above, position.even⟩, mem⟩
+  · refine ⟨⟨ctxt, ?_, proofReg, countReg, position.above, position.even⟩, mem⟩
     have leaf' := leaf
     rw [position.heap] at leaf'
     rw [heap, position.heap]
@@ -72,12 +78,12 @@ theorem cap_lookup_position {groups : List Nat} {state : MachineState} {node hei
       rw [position.heap] at shift
       cases capIsMarked groups node (height+1) <;> simp [Nat.not_le_of_gt internal, shift]
 
-theorem cap_next_sibling {groups : List Nat} {state : MachineState} {node pointer : Nat}
-    (oracle : Oracle) (position : CapPosition groups state (2*node) pointer)
+theorem cap_next_sibling {groups : List Nat} {state : MachineState} {node start first : Nat}
+    (oracle : Oracle) (position : CapPosition groups state (2*node) start first)
     (pc : state.pc = 0x1528) (nodeBound : 0 < node ∧ 2*node < 512) :
     let next := capRight (capAfterTests state)
     ∃ segment : Segment oracle state next, segment.steps = 6 ∧ segment.rows = [] ∧
-      next.pc = 0x147c ∧ CapPosition groups next (2*node+1) pointer ∧ next.mem = state.mem := by
+      next.pc = 0x147c ∧ CapPosition groups next (2*node+1) start first ∧ next.mem = state.mem := by
   obtain ⟨after, heap⟩ := cap_after_tests state (2*node) (by omega) pc position.heap
   have nextPC : (capAfterTests state).pc = 0x1558 := by rw [after, ite_eq_left (by omega)]
   have post := cap_right_post _ nextPC
@@ -85,31 +91,33 @@ theorem cap_next_sibling {groups : List Nat} {state : MachineState} {node pointe
   have mem := post.2.2.trans (cap_tests_memory state)
   refine ⟨(capTestsSegment oracle state (2*node) (by omega) pc position.heap).append
       (capRightSegment oracle (capAfterTests state) nextPC),
-    rfl,rfl,post.1,⟨position.context.transport stable (fun _ _ _ => congrFun mem _), ?_, ?_, position.above, position.even⟩,mem⟩
+    rfl,rfl,post.1,⟨position.context.transport stable (fun _ _ _ => congrFun mem _), ?_, ?_, ?_, position.above,
+      position.even⟩,mem⟩
   · rw [post.2.1, heap, BitVec.ofNat_add]
   · exact (cap_right_register _ .x21 (by decide)).trans ((cap_tests_cursor state).trans position.proof)
+  · exact (cap_right_register _ .x30 (by decide)).trans ((cap_tests_countdown state).trans position.countdown)
 
-structure CapParentResult (oracle : Oracle) (groups : List Nat) (before : MachineState) (node pointer : Nat) where
+structure CapParentResult (oracle : Oracle) (groups : List Nat) (before : MachineState) (node start first : Nat) where
   state : MachineState
   segment : Segment oracle before state
-  steps : segment.steps = 12
+  steps : segment.steps = 17
   row : segment.rows =
     [.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node))
       (oracle.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node)))]
   pc : state.pc = 0x1528
-  position : CapPosition groups state node pointer
+  position : CapPosition groups state node start first
   stable : CapStable before state
   frame : ∀ word < 2^61, (word < 2048+4*node ∨ 2048+4*node+4 ≤ word) →
     memoryView state word = memoryView before word
   digest : capRootAt state node =
-    padLow (oracle.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node)))
+    pad238 (oracle.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node)))
 
 attribute [local irreducible] capAfterTests capHashReply capRootAt
 
-noncomputable def cap_return_parent {groups : List Nat} {state : MachineState} {node pointer : Nat}
-    (oracle : Oracle) (position : CapPosition groups state (2*node+1) pointer)
+noncomputable def cap_return_parent {groups : List Nat} {state : MachineState} {node start first : Nat}
+    (oracle : Oracle) (position : CapPosition groups state (2*node+1) start first)
     (pc : state.pc = 0x1528) (nodeBound : 0 < node ∧ 2*node+1 < 512) :
-    CapParentResult oracle groups state node pointer := by
+    CapParentResult oracle groups state node start first := by
   let beforeCall := capAfterTests state
   obtain ⟨target, heap⟩ := cap_after_tests state (2*node+1) (by omega) pc position.heap
   have hashPC : beforeCall.pc = 0x1538 := by rw [target, ite_eq_right (by omega)]
@@ -125,7 +133,8 @@ noncomputable def cap_return_parent {groups : List Nat} {state : MachineState} {
   have half : (2*node+1)/2 = node := by omega
   let hashSegment : Segment oracle beforeCall next := capHashSegment oracle ready
   let tested := capTestsSegment oracle state (2*node+1) (by omega) pc position.heap
-  have hashed : capRootAt next node = padLow answer := (congrArg (capRootAt next) half).symm.trans (cap_hash_digest beforeCall parent answer)
+  have hashed : capRootAt next node = pad238 answer :=
+    (congrArg (capRootAt next) half).symm.trans (cap_hash_digest ready answer)
   have bytes (i : Nat) : capRootAt beforeCall i = capRootAt state i := by
     unfold capRootAt
     exact read_digest_congr _ _ _ (by omega) (fun _ _ => congrFun mem _)
@@ -145,10 +154,12 @@ noncomputable def cap_return_parent {groups : List Nat} {state : MachineState} {
     have parentEq : parent = node := half
     simp only [answer, pair, parentEq, bytes]
   · refine ⟨position.context.transport stable (fun word _ bound => frame word (by omega) (Or.inl (by omega))),
-      ?_, ?_, position.above, position.even⟩
+      ?_, ?_, ?_, position.above, position.even⟩
     · exact (cap_hash_heap ready answer).trans (congrArg (BitVec.ofNat 64) half)
-    · exact (cap_hash_register beforeCall parent answer .x21 (by decide) (by decide) (by decide)).trans
+    · exact (cap_hash_register beforeCall parent answer .x21 (by decide) (by decide) (by decide) (by decide)).trans
         ((cap_tests_cursor state).trans position.proof)
+    · exact (cap_hash_register beforeCall parent answer .x30 (by decide) (by decide) (by decide) (by decide)).trans
+        ((cap_tests_countdown state).trans position.countdown)
   · have parentEq : parent = node := half
     exact hashed.trans (by simp only [answer, pair, parentEq, bytes])
 

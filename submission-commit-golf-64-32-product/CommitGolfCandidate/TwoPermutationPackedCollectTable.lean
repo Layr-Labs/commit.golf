@@ -2,6 +2,8 @@ import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationCollectTable
 import CommitGolfCandidate.TwoPermutationPackedPaths
 import CommitGolfCandidate.TwoPermutationPackedHonestInput
+import CommitGolfCandidate.QuadBinding
+import CommitGolfCandidate.QuartetOpeningSchedule
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
@@ -9,45 +11,48 @@ open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.Checker (honestIndex honestOrder honest_order_length
   record_groups_next collected_group_present machineMarks capRootAt checker_marks_as_word
   checker_cap_group check_mark_zero)
-open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
+open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
 open TwoPermutationPrototype.PackedHonest (honestHeap)
 
+/-- One accepted Quartet record: both leaf rows, the quartet permutation row with the leaf digest in
+slot `index % 4`, and a fourteen-level projected path from the quartet node to the cap group root. -/
 structure RecordedLower (oracle : Oracle) (index : Index) (value : Entry) (groupRoot : Digest)
     (rows : List PublicRow) where
   nonce : Words 2
   first : PublicRow.permutation
-    (pinnedFirstRow oracle.permutation (entryWords value)).1
-    (pinnedFirstRow oracle.permutation (entryWords value)).2 ∈ rows
+    (pinnedFirstRow oracle.permutation index (entryWords value)).1
+    (pinnedFirstRow oracle.permutation index (entryWords value)).2 ∈ rows
   second : PublicRow.permutation
     (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).1
+      (pinnedFirstRow oracle.permutation index (entryWords value)).2 (entryWords value)).1
     (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).2 ∈ rows
-  path : Hybrid.ProjectedPath rows (LENGTH+index.val) 16
-    (outputDigest (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).2) groupRoot
+      (pinnedFirstRow oracle.permutation index (entryWords value)).2 (entryWords value)).2 ∈ rows
+  quartet : BitVec 1024
+  reply : Block
+  child : quartet.extractLsb' (256 * (index.val % 4)) 256 =
+    outputDigest (pinnedSecondRow oracle.permutation index nonce
+      (pinnedFirstRow oracle.permutation index (entryWords value)).2 (entryWords value)).2
+  parentRow : PublicRow.permutation (quartetEncode quartet) reply ∈ rows
+  path : ProjectedPath rows (LENGTH / 4 + (index.val / 4 ^^^ 1)) 14 (quartetNode (index.val / 4) reply) groupRoot
 
 def RecordedLower.mono {oracle : Oracle} {index : Index} {value : Entry} {groupRoot : Digest}
     {before after : List PublicRow} (lower : RecordedLower oracle index value groupRoot before)
     (contains : ∀ row ∈ before, row ∈ after) : RecordedLower oracle index value groupRoot after :=
-  ⟨lower.nonce, contains _ lower.first, contains _ lower.second, lower.path.mono contains⟩
+  ⟨lower.nonce, contains _ lower.first, contains _ lower.second, lower.quartet, lower.reply, lower.child,
+    contains _ lower.parentRow, lower.path.mono contains⟩
 
-private theorem hybrid_cap_path {rows : List PublicRow} {node height : Nat} {start finish : Digest}
-    (path : ProjectedPath rows node height start finish) (bounded : node < LENGTH/2) :
-    Hybrid.ProjectedPath rows node height start finish := by
-  induction path with
-  | done node digest => exact .done node digest
-  | @step node height child parent sibling root call next ih =>
-    apply Hybrid.ProjectedPath.step call
-    have small : node/2 < LENGTH/2 := by omega
-    rw [Hybrid.normalize,ite_eq_left small]
-    exact ih small
+theorem quartet_node_cap_group (index : Index) : (LENGTH / 4 + (index.val / 4 ^^^ 1)) / 2 ^ 14 = capGroup index := by
+  have shift := Sampling.Quartet.flip_start_shift (index.val / 4) 14 (by decide)
+  change (4194304 + (index.val / 4 ^^^ 1)) / 2 ^ 14 = capGroup index
+  rw [shift]
+  exact QuartetOpening.group_index index
 
 def RecordedLower.join {oracle : Oracle} {index : Index} {value : Entry} {groupRoot : Digest}
     {rows : List PublicRow} {root : Commitment} (lower : RecordedLower oracle index value groupRoot rows)
     (cap : ProjectedPath rows (capGroup index) 8 groupRoot root) :
-    Hybrid.ProjectedOpening oracle index value root rows :=
-  ⟨lower.nonce, lower.first, lower.second, lower.path.append (hybrid_cap_path cap (by have h := (checker_cap_group index).2;change capGroup index<8388608;omega))⟩
+    Quartet.RecordedQuartetOpening oracle index value root rows :=
+  ⟨lower.nonce, lower.first, lower.second, lower.quartet, lower.reply, lower.child, lower.parentRow,
+    lower.path.append ((quartet_node_cap_group index).symm ▸ cap)⟩
 
 /-- The accepted prefix and the cap groups its records authenticate. -/
 structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (state : MachineState)
@@ -64,7 +69,7 @@ structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) 
       capRootAt state group = honestHeap oracle message salts group
 
 theorem collected_table_empty (oracle : Oracle) (input : CheckInput) (state : MachineState)
-    (memory : state.mem = (Assembly.submission.initialState .check input).mem) :
+    (memory : state.mem = (QAssembly.submission.initialState .check input).mem) :
     CollectedTable oracle input 0 state [] := by
   constructor
   · intro group inside

@@ -83,19 +83,24 @@ theorem execute_cap_parent_setup (state : MachineState) (pc : state.pc = 0x1538)
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-def capStartCode : List Instr := [.ADDI .x11 .x0 64, .ADDI .x13 .x0 0, .ADDI .x6 .x0 1]
+/-- The cap start through the T238 countdown block: `jal <628>` at 284, `addi x11,x0,64; addi x30,x0,7;
+jal <285>` at 628..630, then `addi x13,x0,0; addi x6,x0,1` at 285..286. -/
+def capStartCode : List Instr := [.JAL .x0 1376, .ADDI .x11 .x0 64, .ADDI .x30 .x0 7, .JAL .x0 2095772,
+  .ADDI .x13 .x0 0, .ADDI .x6 .x0 1]
 
-def capStart (state : MachineState) := blockPrefix capStartCode state 3
+def capStartWords : List Nat := [284, 628, 629, 630, 285, 286]
+
+def capStart (state : MachineState) := blockPrefix capStartCode state 6
 
 theorem execute_cap_start (state : MachineState) (pc : state.pc = 0x1470) (fuel : Nat) :
-    execute packedImage (3+fuel) state false =
+    execute packedImage (6+fuel) state false =
       (do let next ← execute packedImage fuel (capStart state) false
-          return next.charge 3 0) := by
+          return next.charge 6 0) := by
   apply execute_unit_steps (states := blockPrefix capStartCode state)
   intro i inside
   refine ⟨.base (capStartCode[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply cap_fetch _ (284+i) _ (by omega)
-    · interval_cases i <;> simp [blockPrefix, capStartCode, execInstrBr, pc]
+  · apply cap_fetch _ (capStartWords.getD i 0) _ (by interval_cases i <;> decide)
+    · interval_cases i <;> simp [blockPrefix, capStartCode, capStartWords, execInstrBr, signExtend21, pc] <;> rfl
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl

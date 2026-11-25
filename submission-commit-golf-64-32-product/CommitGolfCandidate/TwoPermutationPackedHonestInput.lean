@@ -1,21 +1,29 @@
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.InputOrder
 import CommitGolfCandidate.TwoPermutationPackedTrustedInput
-import CommitGolfCandidate.TwoPermutationPackedCertificate
+import CommitGolfCandidate.QuartetCertificate
+import CommitGolfCandidate.QuartetCheckHeap
+import CommitGolfCandidate.QuartetOpeningSchedule
 import CommitGolfCandidate.TwoPermutationPackedOpeningSchedule
 import CommitGolfCandidate.TwoPermutationPackedOpeningProofBytes
 
 namespace TwoPermutationPrototype.PackedHonest
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
+open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
+open TwoPermutationPrototype.Sampling.Quartet (upperHeap quartetLookup openingRecord leafAt opening_record_length
+  packEight packedSlot frontierProof238 pack_nodes_length)
 
 set_option maxHeartbeats 2200000
 set_option maxRecDepth 16384
 
+def honestLeaves (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) : DigestTape :=
+  pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts
+
+/-- The honest Quartet upper heap: quartet nodes at `2^22+g`, binary projected parents above. -/
 def honestHeap (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) : Nat → Digest :=
-  Hybrid.heap oracle.compression
-    (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)
+  upperHeap (quartetLookup (BiPermutation.equiv Block oracle.permutation)) oracle.compression
+    (honestLeaves oracle message salts)
 
 def honestOrder (positions : Positions) : List {index // index ∈ positions} :=
   positions.attach.sort (fun i j => i.val ≤ j.val)
@@ -37,32 +45,19 @@ private theorem honest_groups (positions : Positions) :
 theorem honest_proof_parts (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape) :
     (honestCheckInput oracle message positions salts).proof =
       (honestOrder positions).flatMap (fun i : {i // i ∈ positions} =>
-        Hybrid.record (honestHeap oracle message salts) i.val (salts i.val)) ++
-      (Opening.openingNodes positions).flatMap (fun node => proofDigestBytes true (honestHeap oracle message salts node)) := by
-  change _ ++ frontierProof true _ ((honestOrder positions).map (capGroup ∘ Subtype.val)) = _
-  rw [honest_groups]
-  have size : (Opening.groupsBefore positions positions.card).length = positions.card := by
-    simp [Opening.groupsBefore]
-  have empty : (Opening.groupsBefore positions positions.card).isEmpty = true ↔ positions.card = 0 := by
-    rw [List.isEmpty_iff]
-    simpa only [size] using (List.length_eq_zero_iff (l := Opening.groupsBefore positions positions.card)).symm
-  unfold frontierProof Opening.openingNodes
-  by_cases noPositions : positions.card = 0
-  · rw [ite_eq_left (empty.mpr noPositions), ite_eq_left noPositions, List.flatMap_nil]
-    rfl
-  · have someGroup : (Opening.groupsBefore positions positions.card).isEmpty = false :=
-      Bool.eq_false_of_not_eq_true (mt empty.mp noPositions)
-    rw [ite_eq_right (by rw [someGroup]; decide), ite_eq_right noPositions]
-    rfl
+        openingRecord (honestLeaves oracle message salts) (honestHeap oracle message salts) i.val (salts i.val)) ++
+      frontierProof238 (honestHeap oracle message salts) (Opening.groupsBefore positions positions.card) := by
+  rw [← honest_groups]
+  rfl
 
-private theorem fixed_flatmap_length {α β : Type} (f : α → List β) (width : Nat)
+theorem fixed_flatmap_length {α β : Type} (f : α → List β) (width : Nat)
     (fixed : ∀ a, (f a).length = width) (xs : List α) :
     (xs.flatMap f).length = width * xs.length := by
   induction xs with
   | nil => simp
   | cons x xs ih => simp [fixed, ih, Nat.mul_succ, Nat.add_comm]
 
-private theorem fixed_flatmap_byte {α β : Type} (f : α → List β) (width : Nat)
+theorem fixed_flatmap_byte {α β : Type} (f : α → List β) (width : Nat)
     (fixed : ∀ a, (f a).length = width) (xs : List α) (ordinal offset : Nat)
     (present : ordinal < xs.length) (inside : offset < width) :
     (xs.flatMap f)[width*ordinal+offset]? = (f xs[ordinal])[offset]? := by
@@ -79,16 +74,39 @@ private theorem fixed_flatmap_byte {α β : Type} (f : α → List β) (width : 
         show width*ordinal+width+offset-width = width*ordinal+offset by omega]
       exact inductionHypothesis ordinal (by simpa only [List.length_cons, Nat.succ_lt_succ_iff] using present)
 
+/-- The packed frontier: `30 f - 2 ⌊f/8⌋` bytes for the `f` cap frontier nodes. -/
+theorem honest_frontier_length (heap : Nat → Digest) (positions : Positions) :
+    (frontierProof238 heap (Opening.groupsBefore positions positions.card)).length =
+      30*(Opening.openingNodes positions).length - 2*((Opening.openingNodes positions).length/8) := by
+  have size : (Opening.groupsBefore positions positions.card).length = positions.card := by
+    simp [Opening.groupsBefore]
+  unfold frontierProof238 Opening.openingNodes
+  by_cases noPositions : positions.card = 0
+  · have empty : (Opening.groupsBefore positions positions.card).isEmpty = true := by
+      rw [List.isEmpty_iff]; exact List.length_eq_zero_iff.mp (size.trans noPositions)
+    rw [if_pos empty, if_pos noPositions]
+    rfl
+  · have some : (Opening.groupsBefore positions positions.card).isEmpty = false := by
+      apply Bool.eq_false_of_not_eq_true
+      rw [List.isEmpty_iff]
+      intro nil
+      exact noPositions (size.symm.trans (by rw [nil]; rfl))
+    rw [if_neg (by rw [some]; decide), if_neg noPositions]
+    have packed := pack_nodes_length ((capFrontierNodes (Opening.groupsBefore positions positions.card) 1 8).map heap)
+    rw [List.length_map] at packed
+    omega
+
 theorem honest_proof_length (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape) :
-    (honestCheckInput oracle message positions salts).proof.length = PackedOpening.proofLength positions := by
+    (honestCheckInput oracle message positions salts).proof.length =
+      534*positions.card +
+        (30*(Opening.openingNodes positions).length - 2*((Opening.openingNodes positions).length/8)) := by
   rw [honest_proof_parts, List.length_append,
-    fixed_flatmap_length _ 500 (fun _ => Hybrid.record_bytes _ _ _) _,
-    fixed_flatmap_length _ 30 (fun _ => proof_digest_length true _) _, honest_order_length]
-  rfl
+    fixed_flatmap_length _ 534 (fun _ => opening_record_length _ _ _ _) _, honest_order_length,
+    honest_frontier_length]
 
 theorem honest_input_records_fit (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) :
-    500*positions.card ≤ (honestCheckInput oracle message positions salts).proof.length := by
+    534*positions.card ≤ (honestCheckInput oracle message positions salts).proof.length := by
   rw [honest_proof_length]
   exact Nat.le_add_right _ _
 
@@ -96,103 +114,156 @@ theorem honest_input_empty (oracle : Oracle) (message : Message) (positions : Po
     (salts : CompleteSaltTape) (empty : positions.card = 0) :
     (honestCheckInput oracle message positions salts).proof.length = 0 := by
   rw [honest_proof_length]
-  simp [PackedOpening.proofLength, Opening.openingNodes, empty]
+  simp [Opening.openingNodes, empty]
 
 theorem honest_record_byte (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal offset : Nat)
-    (present : ordinal < positions.card) (inside : offset < 500) :
-    (honestCheckInput oracle message positions salts).proof[500*ordinal+offset]? =
-      (Hybrid.record (honestHeap oracle message salts) (honestIndex positions ordinal present)
-        (salts (honestIndex positions ordinal present)))[offset]? := by
-  let record := fun i : {i // i ∈ positions} => Hybrid.record (honestHeap oracle message salts) i.val (salts i)
-  have width (i : {i // i ∈ positions}) : (record i).length = 500 := Hybrid.record_bytes _ _ _
-  have length := fixed_flatmap_length record 500 width (honestOrder positions)
+    (present : ordinal < positions.card) (inside : offset < 534) :
+    (honestCheckInput oracle message positions salts).proof[534*ordinal+offset]? =
+      (openingRecord (honestLeaves oracle message salts) (honestHeap oracle message salts)
+        (honestIndex positions ordinal present) (salts (honestIndex positions ordinal present)))[offset]? := by
+  let record := fun i : {i // i ∈ positions} =>
+    openingRecord (honestLeaves oracle message salts) (honestHeap oracle message salts) i.val (salts i)
+  have width (i : {i // i ∈ positions}) : (record i).length = 534 := opening_record_length _ _ _ _
+  have length := fixed_flatmap_length record 534 width (honestOrder positions)
   rw [honest_order_length] at length
-  have within : 500*ordinal+offset < ((honestOrder positions).flatMap record).length := by rw [length]; omega
+  have within : 534*ordinal+offset < ((honestOrder positions).flatMap record).length := by rw [length]; omega
   rw [honest_proof_parts, List.getElem?_append_left within]
-  exact fixed_flatmap_byte record 500 width (honestOrder positions) ordinal offset
+  exact fixed_flatmap_byte record 534 width (honestOrder positions) ordinal offset
     (by simpa only [honest_order_length]) inside
 
-theorem honest_frontier_byte (oracle : Oracle) (message : Message) (positions : Positions)
-    (salts : CompleteSaltTape) (ordinal offset : Nat)
-    (present : ordinal < (Opening.openingNodes positions).length) (inside : offset < 30) :
-    (honestCheckInput oracle message positions salts).proof[500*positions.card+30*ordinal+offset]? =
-      (proofDigestBytes true (honestHeap oracle message salts (Opening.openingNodes positions)[ordinal]))[offset]? := by
-  let record := fun i : {i // i ∈ positions} => Hybrid.record (honestHeap oracle message salts) i.val (salts i)
-  have length := fixed_flatmap_length record 500 (fun _ => Hybrid.record_bytes _ _ _) (honestOrder positions)
-  rw [honest_order_length] at length
-  rw [honest_proof_parts, List.getElem?_append_right (by rw [length]; omega), length,
-    show 500*positions.card+30*ordinal+offset-500*positions.card = 30*ordinal+offset by omega]
-  exact fixed_flatmap_byte _ 30 (fun _ => proof_digest_length true _) _ ordinal offset present inside
+/-- A record: salt, the three quartet mates, the 32-byte siblings of loop levels 0 and 1, the 30-byte siblings of
+levels 2..5, and the packed block of levels 6..13, all beside the checker's path (`flipIndex index`). -/
+theorem record_fields (leaves : DigestTape) (heap : Nat → Digest) (index : Index) (salt : BitVec 128) :
+    openingRecord leaves heap index salt =
+      saltBytes salt ++ ([1, 2, 3] : List Nat).flatMap (fun j => digestBytes (leafAt leaves (index.val ^^^ j))) ++
+        (digestBytes (heap (Opening.lowerNode (QuartetCheck.flipIndex index) 2 ^^^ 1)) ++ digestBytes (heap (Opening.lowerNode (QuartetCheck.flipIndex index) 3 ^^^ 1)) ++
+          (List.range 4).flatMap (fun j => proofDigestBytes true (heap (Opening.lowerNode (QuartetCheck.flipIndex index) (j+4) ^^^ 1))) ++
+          packEight ((List.range 8).map (fun k => heap (Opening.lowerNode (QuartetCheck.flipIndex index) (k+8) ^^^ 1)))) := by
+  have node (level : Nat) :
+      (4194304 + (index.val/4 ^^^ 1)) / 2^level = Opening.lowerNode (QuartetCheck.flipIndex index) (level+2) :=
+    (QuartetCheck.lower_node_shift_flip index level).symm
+  have mid : (List.range 6).flatMap (fun level =>
+      proofDigestBytes (2 ≤ level) (heap ((((4194304 + (index.val/4 ^^^ 1)) / 2^level)) ^^^ 1))) =
+      digestBytes (heap (Opening.lowerNode (QuartetCheck.flipIndex index) 2 ^^^ 1)) ++ digestBytes (heap (Opening.lowerNode (QuartetCheck.flipIndex index) 3 ^^^ 1)) ++
+        (List.range 4).flatMap (fun j => proofDigestBytes true (heap (Opening.lowerNode (QuartetCheck.flipIndex index) (j+4) ^^^ 1))) := by
+    rw [show List.range 6 = [0, 1, 2, 3, 4, 5] from rfl, show List.range 4 = [0, 1, 2, 3] from rfl]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, List.append_assoc, node]
+    rfl
+  have pack : (List.range 8).map (fun k => heap ((((4194304 + index.val/4) / 2^(6+k))) ^^^ 1)) =
+      (List.range 8).map (fun k => heap (Opening.lowerNode (QuartetCheck.flipIndex index) (k+8) ^^^ 1)) := by
+    congr 1
+    funext k
+    rw [← QuartetCheck.lower_node_shift index (6+k), show 6+k+2 = k+8 by omega,
+      QuartetCheck.lower_node_flip index (k+8) (by omega)]
+  unfold openingRecord
+  rw [mid, pack]
+  simp only [List.append_assoc]
 
-theorem nonce_byte (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
+private theorem quartet_part_length (leaves : DigestTape) (index : Index) :
+    (([1, 2, 3] : List Nat).flatMap (fun j => digestBytes (leafAt leaves (index.val ^^^ j)))).length = 96 := by
+  simp [digestBytes_length]
+
+private theorem head_length (leaves : DigestTape) (index : Index) (salt : BitVec 128) :
+    (saltBytes salt ++ ([1, 2, 3] : List Nat).flatMap (fun j => digestBytes (leafAt leaves (index.val ^^^ j)))).length = 112 := by
+  rw [List.length_append, quartet_part_length]
+  simp [saltBytes]
+
+theorem nonce_byte (leaves : DigestTape) (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
     (offset : Nat) (inside : offset < 16) :
-    (Hybrid.record heap index salt)[offset]? = some (salt.extractLsb' (8*offset) 8) := by
-  unfold Hybrid.record
-  rw [List.getElem?_append_left (by simpa [saltBytes] using inside)]
+    (openingRecord leaves heap index salt)[offset]? = some (salt.extractLsb' (8*offset) 8) := by
+  rw [record_fields, List.append_assoc, List.getElem?_append_left (by simpa [saltBytes] using inside)]
   simp only [saltBytes, List.getElem?_ofFn, dite_eq_left inside]
 
+theorem quartet_sibling_byte (leaves : DigestTape) (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
+    (slot offset : Nat) (valid : slot < 3) (inside : offset < 32) :
+    (openingRecord leaves heap index salt)[16+32*slot+offset]? =
+      some ((leafAt leaves (index.val ^^^ (slot+1))).extractLsb' (8*offset) 8) := by
+  rw [record_fields, List.getElem?_append_left (by rw [head_length]; omega),
+    List.getElem?_append_right (by simp only [saltBytes, List.length_ofFn]; omega),
+    show (saltBytes salt).length = 16 by simp [saltBytes], show 16+32*slot+offset-16 = 32*slot+offset by omega,
+    fixed_flatmap_byte _ 32 (fun _ => digestBytes_length _) _ slot offset (by simpa using valid) inside]
+  have entry : ([1, 2, 3] : List Nat)[slot]'(by simpa using valid) = slot+1 := by
+    interval_cases slot <;> rfl
+  rw [entry]
+  simp only [digestBytes, List.getElem?_ofFn, dite_eq_left inside]
 
-theorem record_fields (heap : Nat → Digest) (index : Index) (salt : BitVec 128) :
-    Hybrid.record heap index salt =
-      saltBytes salt ++ digestBytes (heap (Opening.lowerNode index 0 ^^^ 1)) ++
-      digestBytes (heap (Opening.lowerNode index 1 ^^^ 1)) ++
-      (List.range 14).flatMap (fun j => proofDigestBytes true (heap (Opening.lowerNode index (j+2) ^^^ 1))) := by
-  unfold Hybrid.record
-  rw [show List.range 16=0::1::(List.range 14).map (fun j => j+2) by decide,
-    List.flatMap_cons,List.flatMap_cons,List.flatMap_map]
-  simp [Opening.lowerNode, proofDigestBytes, List.append_assoc,Function.comp_def]
-
-theorem first_sibling_byte (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
+theorem first_sibling_byte (leaves : DigestTape) (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
     (offset : Nat) (inside : offset < 32) :
-    (Hybrid.record heap index salt)[16+offset]? =
-      some ((heap ((LENGTH+index.val) ^^^ 1)).extractLsb' (8*offset) 8) := by
-  rw [record_fields]
+    (openingRecord leaves heap index salt)[112+offset]? =
+      some ((heap (Opening.lowerNode (QuartetCheck.flipIndex index) 2 ^^^ 1)).extractLsb' (8*offset) 8) := by
+  rw [record_fields, List.getElem?_append_right (by rw [head_length]; omega), head_length, Nat.add_sub_cancel_left]
   simp only [List.append_assoc]
-  rw [List.getElem?_append_right (by simp [saltBytes]),
-      show (saltBytes salt).length=16 by simp [saltBytes],Nat.add_sub_cancel_left,
-      List.getElem?_append_left (by simpa only [digestBytes_length] using inside)]
-  simp only [digestBytes,List.getElem?_ofFn,dite_eq_left inside,Opening.lowerNode,Nat.pow_zero,Nat.div_one]
+  rw [List.getElem?_append_left (by simpa only [digestBytes_length] using inside)]
+  simp only [digestBytes, List.getElem?_ofFn, dite_eq_left inside]
 
-theorem second_sibling_byte (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
+theorem second_sibling_byte (leaves : DigestTape) (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
     (offset : Nat) (inside : offset < 32) :
-    (Hybrid.record heap index salt)[48+offset]? =
-      some ((heap (Opening.lowerNode index 1 ^^^ 1)).extractLsb' (8*offset) 8) := by
-  rw [record_fields]
+    (openingRecord leaves heap index salt)[144+offset]? =
+      some ((heap (Opening.lowerNode (QuartetCheck.flipIndex index) 3 ^^^ 1)).extractLsb' (8*offset) 8) := by
+  rw [record_fields, List.getElem?_append_right (by rw [head_length]; omega), head_length,
+    show 144+offset-112 = 32+offset by omega]
   simp only [List.append_assoc]
-  rw [List.getElem?_append_right (by simp [saltBytes] <;> omega),show (saltBytes salt).length=16 by simp [saltBytes],
-      show 48+offset-16=32+offset by omega,List.getElem?_append_right (by simp [digestBytes_length]),
-      digestBytes_length,Nat.add_sub_cancel_left,List.getElem?_append_left (by simpa only [digestBytes_length] using inside)]
-  simp only [digestBytes,List.getElem?_ofFn,dite_eq_left inside]
+  rw [List.getElem?_append_right (by rw [digestBytes_length]; omega), digestBytes_length, Nat.add_sub_cancel_left,
+    List.getElem?_append_left (by simpa only [digestBytes_length] using inside)]
+  simp only [digestBytes, List.getElem?_ofFn, dite_eq_left inside]
 
-theorem later_sibling_byte (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
-    (ordinal offset : Nat) (hasSibling : ordinal < 14) (inside : offset < 30) :
-    (Hybrid.record heap index salt)[80+30*ordinal+offset]? =
-      some ((heap (Opening.lowerNode index (ordinal+2) ^^^ 1)).extractLsb' (8*offset) 8) := by
-  rw [record_fields, List.getElem?_append_right (by simp [saltBytes,digestBytes_length] <;> omega)]
-  simp only [List.length_append,digestBytes_length,show (saltBytes salt).length=16 by simp [saltBytes]]
-  rw [show 80+30*ordinal+offset-(16+32+32) = 30*ordinal+offset by omega,
-    fixed_flatmap_byte _ 30 (fun _ => proof_digest_length true _) _ ordinal offset (by simpa using hasSibling) inside,
+/-- The 30-byte siblings of loop levels `2..5`. -/
+theorem mid_sibling_byte (leaves : DigestTape) (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
+    (slot offset : Nat) (valid : slot < 4) (inside : offset < 30) :
+    (openingRecord leaves heap index salt)[176+30*slot+offset]? =
+      some ((heap (Opening.lowerNode (QuartetCheck.flipIndex index) (slot+4) ^^^ 1)).extractLsb' (8*offset) 8) := by
+  rw [record_fields, List.getElem?_append_right (by rw [head_length]; omega), head_length,
+    show 176+30*slot+offset-112 = 64+(30*slot+offset) by omega]
+  simp only [List.append_assoc]
+  rw [List.getElem?_append_right (by rw [digestBytes_length]; omega), digestBytes_length,
+    show 64+(30*slot+offset)-32 = 32+(30*slot+offset) by omega,
+    List.getElem?_append_right (by rw [digestBytes_length]; omega), digestBytes_length, Nat.add_sub_cancel_left,
+    List.getElem?_append_left (by
+      rw [fixed_flatmap_length _ 30 (fun _ => proof_digest_length true _) _, List.length_range]; omega),
+    fixed_flatmap_byte _ 30 (fun _ => proof_digest_length true _) _ slot offset (by simpa using valid) inside,
     List.getElem_range]
   simp only [proofDigestBytes, ite_true, List.getElem?_take, if_pos inside,
-    digestBytes,List.getElem?_ofFn,Nat.lt_trans inside (by decide : 30<32),dite_true]
+    digestBytes, List.getElem?_ofFn, Nat.lt_trans inside (by decide : 30<32), dite_true]
 
-theorem honest_projected_node (compress : Compression) (leaves : DigestTape) (node : Nat)
-    (pos : 0<node) (internal : node<LENGTH/2) :
-    (0#16) ++ (Hybrid.heap compress leaves node).extractLsb' 0 240 =
-      Hybrid.heap compress leaves node := by
-  rw [Hybrid.heap_parent compress leaves node ⟨pos,by omega⟩,Hybrid.normalize,ite_eq_left internal]
-  unfold ShortTree.padLow
-  rw [BitVec.extractLsb'_append_eq_right]
-  rfl
+/-- The packed block of loop levels `6..13`. -/
+theorem packed_block_byte (leaves : DigestTape) (heap : Nat → Digest) (index : Index) (salt : BitVec 128)
+    (offset : Nat) (inside : offset < 238) :
+    (openingRecord leaves heap index salt)[296+offset]? =
+      (packEight ((List.range 8).map (fun k => heap (Opening.lowerNode (QuartetCheck.flipIndex index) (k+8) ^^^ 1))))[offset]? := by
+  rw [record_fields, List.getElem?_append_right (by rw [head_length]; omega), head_length,
+    show 296+offset-112 = 184+offset by omega]
+  simp only [List.append_assoc]
+  rw [List.getElem?_append_right (by rw [digestBytes_length]; omega), digestBytes_length,
+    show 184+offset-32 = 152+offset by omega,
+    List.getElem?_append_right (by rw [digestBytes_length]; omega), digestBytes_length,
+    show 152+offset-32 = 120+offset by omega,
+    List.getElem?_append_right (by
+      rw [fixed_flatmap_length _ 30 (fun _ => proof_digest_length true _) _, List.length_range]; omega),
+    fixed_flatmap_length _ 30 (fun _ => proof_digest_length true _) _, List.length_range,
+    show 120+offset-30*4 = offset by omega]
+
+theorem honest_projected_node (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) (node : Nat)
+    (pos : 0<node) (internal : node<2097152) :
+    (0#16) ++ (honestHeap oracle message salts node).extractLsb' 0 240 = honestHeap oracle message salts node :=
+  QuartetCheck.upper_heap_projected _ _ _ node pos internal
+
+theorem honest_projected238_node (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) (node : Nat)
+    (pos : 0<node) (internal : node<2^17) :
+    pad238 (honestHeap oracle message salts node) = honestHeap oracle message salts node :=
+  QuartetCheck.upper_heap_projected238 _ _ _ node pos internal
 
 theorem honest_input_admitted (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) :
     (honestCheckInput oracle message positions salts).proof.length ≤ PackedChecker.submission.sizes.proof := by
   rw [honest_proof_length]
-  exact (PackedOpening.proof_fits_every_cardinality positions).trans (by decide)
+  have cap := QuartetOpening.capacity_all positions
+  unfold QuartetOpening.proofLength at cap
+  change _ ≤ 8959041024
+  change _ ≤ 8959041024 at cap
+  omega
 
-private theorem read_field {bits : Nat} (input : CheckInput)
+theorem read_field {bits : Nat} (input : CheckInput)
     (valid : input.proof.length ≤ PackedChecker.submission.sizes.proof)
     (value : BitVec bits) (start count : Nat) (within : start+count ≤ input.proof.length)
     (serialized : ∀ j, j<count → input.proof[start+j]? = some (value.extractLsb' (8*j) 8)) :
@@ -209,67 +280,74 @@ private theorem read_field {bits : Nat} (input : CheckInput)
 theorem honest_input_nonce (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) :
     readBuffer (PackedChecker.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (PackedChecker.submission.layout.proof+500*ordinal) 16 = salts (honestIndex positions ordinal present) := by
+      (PackedChecker.submission.layout.proof+534*ordinal) 16 = salts (honestIndex positions ordinal present) := by
   have enough := honest_input_records_fit oracle message positions salts
   have bytes := read_field (honestCheckInput oracle message positions salts)
     (honest_input_admitted oracle message positions salts) (salts (honestIndex positions ordinal present))
-    (500*ordinal) 16 (by omega) (by
+    (534*ordinal) 16 (by omega) (by
       intro j bound
-      rw [honest_record_byte oracle message positions salts _ _ present (by omega),nonce_byte _ _ _ j bound])
+      rw [honest_record_byte oracle message positions salts _ _ present (by omega),nonce_byte _ _ _ _ j bound])
+  exact bytes.trans BitVec.extractLsb'_eq_self
+
+theorem honest_input_quartet_sibling (oracle : Oracle) (message : Message) (positions : Positions)
+    (salts : CompleteSaltTape) (ordinal slot : Nat) (present : ordinal < positions.card) (valid : slot < 3) :
+    readBuffer (PackedChecker.submission.initialState .check (honestCheckInput oracle message positions salts))
+      (PackedChecker.submission.layout.proof+(534*ordinal+16+32*slot)) 32 =
+      leafAt (honestLeaves oracle message salts) ((honestIndex positions ordinal present).val.val ^^^ (slot+1)) := by
+  have enough := honest_input_records_fit oracle message positions salts
+  have bytes := read_field (honestCheckInput oracle message positions salts)
+    (honest_input_admitted oracle message positions salts) _ (534*ordinal+16+32*slot) 32 (by omega) (by
+      intro j bound
+      rw [show 534*ordinal+16+32*slot+j = 534*ordinal+(16+32*slot+j) by omega,
+        honest_record_byte oracle message positions salts _ _ present (by omega),
+        quartet_sibling_byte _ _ _ _ slot j valid bound])
   exact bytes.trans BitVec.extractLsb'_eq_self
 
 theorem honest_input_first_sibling (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) :
     readBuffer (PackedChecker.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (PackedChecker.submission.layout.proof+(500*ordinal+16)) 32 =
-      honestHeap oracle message salts ((LENGTH+(honestIndex positions ordinal present).val.val) ^^^ 1) := by
+      (PackedChecker.submission.layout.proof+(534*ordinal+112)) 32 =
+      honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) 2 ^^^ 1) := by
   have enough := honest_input_records_fit oracle message positions salts
   have bytes := read_field (honestCheckInput oracle message positions salts)
-    (honest_input_admitted oracle message positions salts) _ (500*ordinal+16) 32 (by omega) (by
+    (honest_input_admitted oracle message positions salts) _ (534*ordinal+112) 32 (by omega) (by
       intro j bound
       rw [Nat.add_assoc, honest_record_byte oracle message positions salts _ _ present (by omega),
-        first_sibling_byte _ _ _ j bound])
+        first_sibling_byte _ _ _ _ j bound])
   exact bytes.trans BitVec.extractLsb'_eq_self
 
 theorem honest_input_second_sibling (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) :
     readBuffer (PackedChecker.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (PackedChecker.submission.layout.proof+(500*ordinal+48)) 32 =
-      honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) 1 ^^^ 1) := by
+      (PackedChecker.submission.layout.proof+(534*ordinal+144)) 32 =
+      honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) 3 ^^^ 1) := by
   have enough := honest_input_records_fit oracle message positions salts
   have bytes := read_field (honestCheckInput oracle message positions salts)
-    (honest_input_admitted oracle message positions salts) _ (500*ordinal+48) 32 (by omega) (by
+    (honest_input_admitted oracle message positions salts) _ (534*ordinal+144) 32 (by omega) (by
       intro j bound
       rw [Nat.add_assoc, honest_record_byte oracle message positions salts _ _ present (by omega),
-        second_sibling_byte _ _ _ j bound])
+        second_sibling_byte _ _ _ _ j bound])
   exact bytes.trans BitVec.extractLsb'_eq_self
 
-theorem honest_input_later_sibling (oracle : Oracle) (message : Message) (positions : Positions)
-    (salts : CompleteSaltTape) (ordinal sibling : Nat) (present : ordinal < positions.card) (later : sibling<14) :
+theorem honest_input_mid_sibling (oracle : Oracle) (message : Message) (positions : Positions)
+    (salts : CompleteSaltTape) (ordinal slot : Nat) (present : ordinal < positions.card) (valid : slot < 4) :
     readBuffer (PackedChecker.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (PackedChecker.submission.layout.proof+(500*ordinal+80+30*sibling)) 30 =
-      (honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) (sibling+2) ^^^ 1)).extractLsb' 0 240 := by
+      (PackedChecker.submission.layout.proof+(534*ordinal+176+30*slot)) 30 =
+      (honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (slot+4) ^^^ 1)).extractLsb' 0 240 := by
   have enough := honest_input_records_fit oracle message positions salts
   apply read_field _ (honest_input_admitted oracle message positions salts) _ _ _ (by omega)
   intro j bound
-  rw [show 500*ordinal+80+30*sibling+j=500*ordinal+(80+30*sibling+j) by omega,
+  rw [show 534*ordinal+176+30*slot+j=534*ordinal+(176+30*slot+j) by omega,
     honest_record_byte oracle message positions salts _ _ present (by omega),
-    later_sibling_byte _ _ _ sibling j later bound]
+    mid_sibling_byte _ _ _ _ slot j valid bound]
 
-theorem honest_frontier_digest (oracle : Oracle) (message : Message) (positions : Positions)
-    (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < (Opening.openingNodes positions).length) :
-    readBuffer (PackedChecker.submission.initialState .check (honestCheckInput oracle message positions salts))
-      (PackedChecker.submission.layout.proof+(500*positions.card+30*ordinal)) 30 =
-      (honestHeap oracle message salts (Opening.openingNodes positions)[ordinal]).extractLsb' 0 240 := by
-  have length := honest_proof_length oracle message positions salts
-  have enough : 500*positions.card+30*ordinal+30 ≤ (honestCheckInput oracle message positions salts).proof.length := by
-    rw [length]
-    unfold PackedOpening.proofLength PackedOpening.recordBytes
-    omega
-  apply read_field _ (honest_input_admitted oracle message positions salts) _ _ _ enough
-  intro j bound
-  rw [honest_frontier_byte oracle message positions salts ordinal j present bound]
-  simp only [proofDigestBytes, ite_true, List.getElem?_take, if_pos bound,
-    digestBytes, List.getElem?_ofFn, Nat.lt_trans bound (by decide : 30<32), dite_true]
+/-- The packed block of an honest record, byte by byte. -/
+theorem honest_input_packed_byte (oracle : Oracle) (message : Message) (positions : Positions)
+    (salts : CompleteSaltTape) (ordinal offset : Nat) (present : ordinal < positions.card) (inside : offset < 238) :
+    (honestCheckInput oracle message positions salts).proof[534*ordinal+296+offset]? =
+      (packEight ((List.range 8).map (fun k =>
+        honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (k+8) ^^^ 1))))[offset]? := by
+  rw [show 534*ordinal+296+offset = 534*ordinal+(296+offset) by omega,
+    honest_record_byte oracle message positions salts _ _ present (by omega), packed_block_byte _ _ _ _ offset inside]
 
 end TwoPermutationPrototype.PackedHonest

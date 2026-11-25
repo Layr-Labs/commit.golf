@@ -10,7 +10,7 @@ open Opening (OpeningLayout sortedIndex SameOpeningInput trapdoorBase indicesBas
 
 structure RecordBoundary (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (state : MachineState) (ordinal : Nat) : Prop where
-  pc : state.pc = if ordinal = positions.card then 0x1974 else 0x1034
+  pc : state.pc = if ordinal = positions.card then 0x196c else 0x1034
   heap : state.getReg .x9 = BitVec.ofNat 64 trapdoorBase
   index : state.getReg .x8 = BitVec.ofNat 64 (indicesBase+8*ordinal)
   nonce : state.getReg .x22 = BitVec.ofNat 64 nonceBase
@@ -31,7 +31,7 @@ theorem RecordBoundary.start {s : Submission} {trapdoor : BitVec (8*s.sizes.trap
   ⟨by simpa only [ite_eq_right (show ordinal ≠ positions.card by omega)] using boundary.pc,
     boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.input⟩
 
-def recordCost (final : Bool) : Nat := if final then 591 else 592
+def recordCost (final : Bool) : Nat := if final then 589 else 590
 
 def afterLatch (marked : MachineState) (final : Bool) : MachineState :=
   if final then marked else marked.setPC 0x1034
@@ -56,7 +56,7 @@ structure OneRecord (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
       before.getByte (BitVec.ofNat 64 (siblingAddress (sortedIndex positions ordinal present) level+byte))
 
 def recordsCost (size ordinal count : Nat) : Nat :=
-  if 0<count ∧ ordinal+count=size then 592*count-1 else 592*count
+  if 0<count ∧ ordinal+count=size then 590*count-1 else 590*count
 
 def runRecords (size ordinal : Nat) : Nat → MachineState → MachineState
   | 0, state => state

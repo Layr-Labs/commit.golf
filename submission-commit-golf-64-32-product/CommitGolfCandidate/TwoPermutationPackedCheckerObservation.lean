@@ -1,19 +1,22 @@
+import CommitGolfCandidate.QuartetManifest
 import CommitGolfCandidate.TwoPermutationPackedCheckerBody
 import CommitGolfCandidate.TwoPermutationPackedHeaderAssembly
 import CommitGolfCandidate.TwoPermutationPackedTrustedInput
+import CommitGolfCandidate.K1HideLeafBinding
+import CommitGolfCandidate.QuadBinding
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.Checker (checkObservation check_recorded_map checker_positions_bound RecordInputFrame)
-open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
+open TwoPermutationPrototype.QuartetCertificate (honestCheckInput)
 open TwoPermutationPrototype.PackedHonest (honest_input_empty honest_input_records_fit honest_input_admitted)
 set_option maxRecDepth 32768
 set_option maxHeartbeats 1800000
 
 theorem artifact_image :
     PackedChecker.submission.image .check = packedImage := by
-  unfold PackedChecker.submission Artifact.submission packedImage
+  unfold PackedChecker.submission K1Artifact.submission packedImage
   rfl
 
 attribute [local irreducible] execute checkEvaluation
@@ -22,9 +25,10 @@ private theorem observation_admitted (oracle : Oracle) (input : CheckInput)
     (admitted : input.proof.length ≤ PackedChecker.submission.sizes.proof) :
     checkObservation PackedChecker.submission oracle input =
       checkEvaluation oracle (recordRows
-        (execute packedImage 34359803904 (Assembly.submission.initialState .check input) false)) := by
+        (execute packedImage 34359803904 (QAssembly.submission.initialState .check input) false)) := by
   unfold checkObservation
-  erw [PackedChecker.check_run_admitted input admitted, artifact_image, PackedChecker.initial_state]
+  erw [PackedChecker.check_run_admitted input admitted]
+  rw [artifact_image, PackedChecker.initial_state]
 
 private theorem observation_oversized (oracle : Oracle) (input : CheckInput)
     (oversized : PackedChecker.submission.sizes.proof < input.proof.length) :
@@ -35,10 +39,10 @@ private theorem observation_oversized (oracle : Oracle) (input : CheckInput)
 
 private abbrev rawObserved (oracle : Oracle) (input : CheckInput) :=
   checkEvaluation oracle (recordRows
-    (execute packedImage 34359803904 (Assembly.submission.initialState .check input) false))
+    (execute packedImage 34359803904 (QAssembly.submission.initialState .check input) false))
 
 private theorem raw_empty (oracle : Oracle) (input : CheckInput)
-    (fits : input.proof.length ≤ 8388615680) (empty : input.positions.card = 0) :
+    (fits : input.proof.length ≤ 8959041024) (empty : input.positions.card = 0) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   obtain ⟨result, executed, terminal, succeeds⟩ := header_empty input fits empty
   unfold rawObserved
@@ -52,7 +56,7 @@ private theorem raw_empty (oracle : Oracle) (input : CheckInput)
     exact canonical.symm ▸ honest_input_empty oracle message input.positions salts empty
 
 private theorem raw_short (oracle : Oracle) (input : CheckInput)
-    (fits : input.proof.length ≤ 8388615680) (short : input.proof.length < 500*input.positions.card) :
+    (fits : input.proof.length ≤ 8959041024) (short : input.proof.length < 534*input.positions.card) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   obtain ⟨result,executed,failed⟩ := header_short input fits short
   unfold rawObserved
@@ -66,7 +70,7 @@ private theorem raw_short (oracle : Oracle) (input : CheckInput)
     rw [failed] at impossible
     cases impossible
   · intro message salts canonical
-    have required : 500*input.positions.card ≤ input.proof.length :=
+    have required : 534*input.positions.card ≤ input.proof.length :=
       canonical.symm ▸ honest_input_records_fit oracle message input.positions salts
     omega
 
@@ -82,43 +86,43 @@ private theorem observation_hop (oracle : Oracle) (input : CheckInput)
 private theorem raw_positive (record : Oracle → Nat → Index → MachineState → RecordBlock)
     (verified : RecordRefines record)
     (cap : ∀ (oracle : Oracle) (input : CheckInput), input.positions.card ≠ 0 →
-      ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
+      ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
-    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8388615680)
-    (nonempty : input.positions.card ≠ 0) (long : 500*input.positions.card ≤ input.proof.length) :
+    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8959041024)
+    (nonempty : input.positions.card ≠ 0) (long : 534*input.positions.card ≤ input.proof.length) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   obtain ⟨state,cursor,memory,executeHeader⟩ := header_positive input fits nonempty long
   have cardinal := checker_positions_bound input
-  have enough : 2048*input.positions.card+25056 ≤ 34359803882 := by omega
+  have enough : 2048*input.positions.card+40000 ≤ 34359803882 := by omega
   have initialFrame : RecordInputFrame input 0 state := by
     intro word _ _
     exact congrFun memory (wordAddress word)
   have table := collected_table_empty oracle input state memory
   have body := checker_body_facts record verified oracle input state ⟨long,fits⟩ cursor initialFrame table
     34359803882 enough (cap oracle input nonempty)
-  have chain := observation_hop oracle input (Assembly.submission.initialState .check input) state
+  have chain := observation_hop oracle input (QAssembly.submission.initialState .check input) state
     22 25 34359803882 executeHeader body
   exact chain
 
 private theorem raw_checker_observation (record : Oracle → Nat → Index → MachineState → RecordBlock)
     (verified : RecordRefines record)
     (cap : ∀ (oracle : Oracle) (input : CheckInput), input.positions.card ≠ 0 →
-      ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
+      ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
-    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8388615680) :
+    (oracle : Oracle) (input : CheckInput) (fits : input.proof.length ≤ 8959041024) :
     CheckerObservationFacts oracle input (rawObserved oracle input) := by
   by_cases empty : input.positions.card = 0
   · exact raw_empty oracle input fits empty
-  by_cases short : input.proof.length < 500*input.positions.card
+  by_cases short : input.proof.length < 534*input.positions.card
   · exact raw_short oracle input fits short
   exact raw_positive record verified cap oracle input fits empty (Nat.le_of_not_gt short)
 
 theorem checker_complete_observation (record : Oracle → Nat → Index → MachineState → RecordBlock)
     (verified : RecordRefines record)
     (cap : ∀ (oracle : Oracle) (input : CheckInput), input.positions.card ≠ 0 →
-      ∀ state rows rest, 25056 ≤ rest → RecordCursor input input.positions.card state →
+      ∀ state rows rest, 40000 ≤ rest → RecordCursor input input.positions.card state →
       RecordInputFrame input input.positions.card state →
       CollectedTable oracle input input.positions.card state rows → CheckerCapFacts oracle input state rest)
     (oracle : Oracle) (input : CheckInput) :
@@ -133,13 +137,13 @@ theorem checker_complete_observation (record : Oracle → Nat → Index → Mach
     · intro message salts canonical
       exact (admitted (canonical.symm ▸ honest_input_admitted oracle message input.positions salts)).elim
 
-theorem checker_facts_of_observations (bound : PinnedReplayBound)
+theorem checker_facts_of_observations
     (checked : ∀ (oracle : Oracle) (input : CheckInput),
       CheckerObservationFacts oracle input (checkObservation PackedChecker.submission oracle input)) :
-    PackedCertificate.CheckerFacts PackedChecker.submission := by
+    QuartetCertificate.CheckerFacts PackedChecker.submission := by
   refine ⟨fun oracle input => (checked oracle input).terminates,
     fun oracle input => (checked oracle input).queries.trans (by omega), ?_, ?_⟩
-  · apply Hybrid.binding_of_packed_trace _ ?_ bound
+  · apply Quartet.quartet_scheme_binding _ k1_peer_leaf_layout_sharp
     intro oracle input
     dsimp only
     intro accepted

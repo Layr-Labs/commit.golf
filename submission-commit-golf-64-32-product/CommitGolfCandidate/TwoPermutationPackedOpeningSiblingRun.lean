@@ -6,7 +6,7 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open Opening (lowerNode trapdoorBase proofBase)
 
 def lowerPC (level : Nat) : Word :=
-  if bounded : level < 16 then BitVec.ofNat 64 (4096+4*siblingStart ⟨level,bounded⟩) else 0x1958
+  if bounded : level < 16 then BitVec.ofNat 64 (4096+4*siblingStart ⟨level,bounded⟩) else 0x1950
 
 structure LowerCursor (state : MachineState) (index : Index) (ordinal level : Nat) : Prop where
   pc : state.pc = lowerPC level

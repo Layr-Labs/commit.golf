@@ -1,4 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedRecordGeometry
+import CommitGolfCandidate.QuartetCheckHeap
+import CommitGolfCandidate.K3GQModel
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.ShortTree RiscvZkvm.Rv64 OracleComp
@@ -7,17 +9,18 @@ open TwoPermutationPrototype.Checker (check_recorded_bind)
 set_option maxHeartbeats 1800000
 set_option maxRecDepth 8192
 
+/-- Registers before Quartet upper level `level` (heap node `lowerNode index (level+2)`), or at the
+mark-table insertion after level fourteen. -/
 structure LowerCursor (ordinal : Nat) (index : Index) (level : Nat) (state : MachineState) : Prop where
-  pc : state.pc = if level=16 then 5056 else 4348
-  node : state.getReg .x6 = BitVec.ofNat 64 (Opening.lowerNode index level)
+  pc : state.pc = if level=14 then 5056 else 4348
+  node : state.getReg .x6 = BitVec.ofNat 64 (Opening.lowerNode index (level+2))
   proof : state.getReg .x21 = BitVec.ofNat 64 (lowerProofByte ordinal level)
-  counter : state.getReg .x29 = BitVec.ofNat 64 (16-level)
+  counter : state.getReg .x29 = BitVec.ofNat 64 (14-level)
   digest : state.getReg .x23 = 12288
   pair : state.getReg .x24 = 12544
   selector : state.getReg .x5 = 0
   syscallBytes : state.getReg .x11 = 64
   syscallSelector : state.getReg .x13 = 0
-  challengeLength : state.getReg .x20 = 16777216
 
 def LowerFrame (before after : MachineState) : Prop :=
   ∀ word < 2^33, (word < 1536 ∨ 1540 ≤ word) → (word < 1568 ∨ 1576 ≤ word) →
@@ -33,11 +36,11 @@ structure LowerStepFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (leve
   saved : LowerSaved before step.state
   frame : LowerFrame before step.state
   digest :
-    let pair := pathPair (Opening.lowerNode index level) (readBuffer before 12288 32)
+    let pair := pathPair (Opening.lowerNode index (level+2)) (readBuffer before 12288 32)
       (lowerWireSibling before ordinal level)
-    readBuffer step.state 12288 32 = Hybrid.normalize (Opening.lowerNode index level/2) (oracle.compression pair)
+    readBuffer step.state 12288 32 = nodeKeep (Opening.lowerNode index (level+3)) (oracle.compression pair)
   row :
-    let pair := pathPair (Opening.lowerNode index level) (readBuffer before 12288 32)
+    let pair := pathPair (Opening.lowerNode index (level+2)) (readBuffer before 12288 32)
       (lowerWireSibling before ordinal level)
     PublicRow.compression pair (oracle.compression pair) ∈ step.rows
   run : ∀ fuel,
@@ -47,7 +50,7 @@ structure LowerStepFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (leve
 
 def LowerStepRefines (step : Oracle → Nat → Index → Nat → MachineState → RecordBlock) : Prop :=
   ∀ (oracle : Oracle) (ordinal : Nat) (index : Index) (level : Nat) (state : MachineState),
-    level < 16 → checkProofByte ordinal+500 ≤ MEMORY_BYTES → LowerCursor ordinal index level state →
+    level < 14 → checkProofByte ordinal+536 ≤ MEMORY_BYTES → LowerCursor ordinal index level state →
       LowerStepFacts oracle ordinal index level state (step oracle ordinal index level state)
 
 def runLower (step : Oracle → Nat → Index → Nat → MachineState → RecordBlock)
@@ -60,17 +63,17 @@ def runLower (step : Oracle → Nat → Index → Nat → MachineState → Recor
 
 structure LowerRunFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (level left : Nat)
     (before : MachineState) (run : RecordBlock) : Prop where
-  cursor : LowerCursor ordinal index 16 run.state
+  cursor : LowerCursor ordinal index 14 run.state
   steps : run.steps ≤ 116*left
   saved : LowerSaved before run.state
   frame : LowerFrame before run.state
-  path : Hybrid.ProjectedPath run.rows (Opening.lowerNode index level) left (readBuffer before 12288 32)
+  path : ProjectedPath run.rows (Opening.lowerNode index (level+2)) left (readBuffer before 12288 32)
     (readBuffer run.state 12288 32)
-  honest : ∀ leaves : DigestTape,
-    let heap := Hybrid.heap oracle.compression leaves
-    readBuffer before 12288 32 = heap (Opening.lowerNode index level) →
-    (∀ j, level ≤ j → j < 16 →
-      lowerWireSibling before ordinal j = heap (Opening.lowerNode index j ^^^ 1)) →
+  honest : ∀ (lookup : Nat → BitVec 1024 → BitVec 256) (leaves : DigestTape),
+    let heap := Sampling.Quartet.upperHeap lookup oracle.compression leaves
+    readBuffer before 12288 32 = heap (Opening.lowerNode index (level+2)) →
+    (∀ j, level ≤ j → j < 14 →
+      lowerWireSibling before ordinal j = heap (Opening.lowerNode index (j+2) ^^^ 1)) →
     readBuffer run.state 12288 32 = heap (capGroup index)
   exact_run : ∀ fuel,
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel run.state false))
@@ -78,36 +81,57 @@ structure LowerRunFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (level
       ((tail.1.1.charge run.cycles left,run.rows++tail.1.2),left+tail.2)
 
 private theorem saved_wire (before after : MachineState) (ordinal level : Nat)
-    (room : checkProofByte ordinal+500 ≤ MEMORY_BYTES) (within : level<16) (framed : LowerFrame before after) :
+    (room : checkProofByte ordinal+536 ≤ MEMORY_BYTES) (within : level<14) (framed : LowerFrame before after) :
     lowerWireSibling after ordinal level = lowerWireSibling before ordinal level := by
-  apply lower_wire_sibling_frame
+  apply lower_wire_sibling_frame before after ordinal level within
   intro j inside
-  by_cases first : level<2
-  · change checkProofByte ordinal+500 ≤ 2^36 at room
-    simp only [lowerProofByte,lowerSiblingWidth,first,ite_true] at inside ⊢
-    unfold checkProofByte at room ⊢
-    exact framed _ (by omega) (Or.inr (by omega)) (Or.inr (by omega))
-  · change checkProofByte ordinal+500 ≤ 2^36 at room
-    simp only [lowerProofByte,lowerSiblingWidth,first,ite_false] at inside ⊢
-    unfold checkProofByte at room ⊢
-    exact framed _ (by omega) (Or.inr (by omega)) (Or.inr (by omega))
+  change checkProofByte ordinal+536 ≤ 2^36 at room
+  have low : 32768 ≤ checkProofByte ordinal := by unfold checkProofByte; omega
+  exact framed _ (by omega) (Or.inr (by omega)) (Or.inr (by omega))
 
-attribute [local irreducible] execute checkEvaluation readBuffer
+/-- Loop levels `L ≤ 4` keep the full node at `L = 0` (level 21) and 240 bits at `L = 1..4` (levels 17..20). -/
+theorem node_keep_lower_low (index : Index) (level : Nat) (low : level ≤ 4) (x : Digest) :
+    nodeKeep (Opening.lowerNode index (level+3)) x = if level = 0 then x else padLow x := by
+  have bounds := QuartetCheck.lower_node_upper_bounds index (level+1) (by omega)
+  rw [show level+1+2 = level+3 by omega] at bounds
+  have shift := QuartetCheck.lower_node_shift index (level+1)
+  rw [show level+1+2 = level+3 by omega] at shift
+  have bounded := index.isLt
+  change index.val < 16777216 at bounded
+  split
+  · subst level
+    apply node_keep_full
+    rw [shift]
+    norm_num <;> omega
+  · rw [shift]
+    have upper := Nat.pow_le_pow_right (show 2 > 0 by decide) (show level+1 ≤ 5 by omega)
+    have lower := Nat.pow_le_pow_right (show 2 > 0 by decide) (show 2 ≤ level+1 by omega)
+    have positive : 0 < 2^(level+1) := by positivity
+    norm_num at upper lower
+    apply node_keep_240
+    · rw [Nat.le_div_iff_mul_le positive]
+      norm_num
+      omega
+    · rw [Nat.div_lt_iff_lt_mul positive]
+      norm_num
+      omega
+
+attribute [local irreducible] execute checkEvaluation Sampling.Quartet.upperHeap readBuffer
 
 theorem run_lower_facts (step : Oracle → Nat → Index → Nat → MachineState → RecordBlock)
     (kernel : LowerStepRefines step) (oracle : Oracle) (ordinal : Nat) (index : Index)
-    (left level : Nat) (remaining : level+left=16) (room : checkProofByte ordinal+500 ≤ MEMORY_BYTES)
+    (left level : Nat) (remaining : level+left=14) (room : checkProofByte ordinal+536 ≤ MEMORY_BYTES)
     (state : MachineState) (cursor : LowerCursor ordinal index level state) :
     LowerRunFacts oracle ordinal index level left state (runLower step oracle ordinal index left level state) := by
   induction left generalizing level state with
   | zero =>
-    have done : level=16 := by omega
+    have done : level=14 := by omega
     subst level
     refine ⟨cursor,Nat.zero_le _,fun _ _ => rfl,fun _ _ _ _ => rfl,.done _ _,?_,?_⟩
-    · intro leaves
+    · intro lookup leaves
       dsimp only
       intro child _
-      exact child
+      exact child.trans (congrArg _ (Opening.lower_node_cap_group index))
     · intro fuel
       simp [runLower,Execution.charge]
   | succ left ih =>
@@ -127,23 +151,20 @@ theorem run_lower_facts (step : Oracle → Nat → Index → Nat → MachineStat
     · intro word bounded leftRange rightRange
       exact (tail.frame _ bounded leftRange rightRange).trans (headMem _ bounded leftRange rightRange)
     · have path := tail.path.mono (fun _ hit => List.mem_append_right head.rows hit)
-      rw [Opening.lower_node_next,headDigest] at path
+      rw [show level+1+2 = (level+2)+1 by omega, Opening.lower_node_next index (level+2), headDigest,
+        show level+3 = (level+2)+1 by omega, Opening.lower_node_next index (level+2)] at path
       exact .step (List.mem_append_left rest.rows headRow) path
-    · intro leaves
+    · intro lookup leaves
       dsimp only
       intro child siblings
-      apply tail.honest leaves
-      · have fit : level<16 := by omega
-        have low : 2 ≤ Opening.lowerNode index level := by
-          have powerBound : (2:Nat)^level ≤ 32768 :=
-            (Nat.pow_le_pow_right (by decide : 0 < (2:Nat)) (show level ≤ 15 by omega)).trans (by decide)
-          apply (Nat.le_div_iff_mul_le (by positivity : 0 < (2:Nat)^level)).mpr
-          change 2*2^level ≤ 16777216+index.val
-          omega
+      apply tail.honest lookup leaves
+      · have fit : level<14 := by omega
+        have bounds := QuartetCheck.lower_node_upper_bounds index level fit
         change readBuffer head.state 12288 32 =
-          Hybrid.heap oracle.compression leaves (Opening.lowerNode index (level+1))
-        rw [headDigest, child, siblings level (by omega) fit,Opening.lower_node_next]
-        exact packed_honest_heap_climb oracle leaves _ low (Opening.lower_node_bound index level)
+          Sampling.Quartet.upperHeap lookup oracle.compression leaves (Opening.lowerNode index (level+1+2))
+        rw [headDigest, child, siblings level (by omega) fit,show level+1+2 = (level+2)+1 by omega,
+          show level+3 = (level+2)+1 by omega,Opening.lower_node_next index (level+2)]
+        exact QuartetCheck.upper_heap_climb lookup oracle.compression leaves _ bounds.1 bounds.2
       · intro k next within
         rw [saved_wire state head.state ordinal k room within headMem]
         exact siblings k (by omega) within

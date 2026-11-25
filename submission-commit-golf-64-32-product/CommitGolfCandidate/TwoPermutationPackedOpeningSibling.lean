@@ -23,9 +23,7 @@ def siblingEnd (level : Fin 16) : Nat := (siblingSite level).start+2*(siblingSit
 
 theorem sibling_width_exact (level : Fin 16) :
     2*(siblingSite level).halfwords = siblingWidth level.val := by
-  have h : ∀ i : Fin 16, 2*(siblingSite i).halfwords = siblingWidth i.val := by decide
-  exact h level
-
+  by_cases first : level.val = 0 <;> simp [siblingSite, CopySite.halfwords, siblingWidth, first]
 
 theorem sibling_copy_start (level : Fin 16) : siblingStart level+3 = (siblingSite level).start := by
   unfold siblingStart siblingSite
@@ -33,11 +31,14 @@ theorem sibling_copy_start (level : Fin 16) : siblingStart level+3 = (siblingSit
 
 theorem sibling_next (level : Fin 16) (later : level.val+1 < 16) :
     siblingEnd level+2 = siblingStart ⟨level.val+1, later⟩ := by
-  exact (show ∀ i : Fin 16, ∀ h : i.val+1<16, siblingEnd i+2=siblingStart ⟨i.val+1,h⟩ by decide) level later
-
+  have positive : level.val+1 ≠ 0 := by omega
+  by_cases first : level.val = 0
+  · simp [siblingStart, siblingEnd, siblingSite, CopySite.start, CopySite.halfwords, first]
+  · simp [siblingStart, siblingEnd, siblingSite, CopySite.start, CopySite.halfwords, first]
+    omega
 
 theorem first_sibling_start : siblingStart 0 = 34 := rfl
-theorem last_sibling_end : siblingEnd 15+2 = 598 := rfl
+theorem last_sibling_end : siblingEnd 15+2 = 596 := rfl
 
 def headCode : List Instr :=
   [.XORI .x7 .x6 1, .SLLI .x7 .x7 5, .ADD .x7 .x9 .x7]
@@ -115,7 +116,7 @@ theorem sibling_tail_post (state : MachineState) (level : Fin 16) :
       next.getReg .x21 = state.getReg .x21 + BitVec.ofNat 64 (siblingWidth level.val) ∧
       next.getReg .x6 = state.getReg .x6 >>> 1 ∧
       ∀ reg, reg ≠ .x21 → reg ≠ .x6 → next.getReg reg = state.getReg reg := by
-  by_cases first : level.val < 2 <;>
+  by_cases first : level.val = 0 <;>
     simp [tailPrefix, tailCode, execInstrBr, siblingWidth, first, signExtend12, BitVec.add_assoc] <;>
     intro reg a b <;> simp [Ne.symm a, Ne.symm b]
 

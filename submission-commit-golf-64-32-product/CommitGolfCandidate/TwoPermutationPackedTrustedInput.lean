@@ -1,3 +1,5 @@
+import CommitGolfCandidate.QuartetManifest
+import CommitGolfCandidate.K1Manifest
 import CommitGolf.Artifact
 import CommitGolfCandidate.TwoPermutationCheckLoader
 
@@ -8,38 +10,44 @@ set_option autoImplicit false
 set_option maxRecDepth 16384
 set_option maxHeartbeats 1800000
 
-abbrev submission : Submission := Artifact.submission
+/-- The K1 submission: its check image is `packedImage` (567 words). -/
+abbrev submission : Submission := K1Artifact.submission
 
-/-- The trusted loader writes buffer data and registers from the ABI. The
-packed and full-width checker layouts are equal and both data images are empty. -/
+private theorem initial_congr (a b : Submission) (layout : a.layout = b.layout) (sizes : a.sizes = b.sizes)
+    (data : (a.image .check).data = (b.image .check).data) (input : CheckInput) :
+    a.initialState .check input = b.initialState .check input := by
+  cases a with | mk sz l im st =>
+    cases b with | mk sz' l' im' st' =>
+      change sz = sz' at sizes
+      change l = l' at layout
+      subst sz'
+      subst l'
+      change (im .check).data = (im' .check).data at data
+      simp only [Submission.initialState, Submission.inputBuffers, Riscv.dataBase, data]
+      rfl
+
+/-- The trusted loader writes buffer data and registers from the ABI. The K1 and record check
+submissions share the layout, the sizes and the (empty) check data, so their loaded states agree. -/
 theorem initial_state (input : CheckInput) :
-    submission.initialState .check input = Assembly.submission.initialState .check input := by
-  have inputs : submission.inputBuffers .check input = Assembly.submission.inputBuffers .check input := rfl
-  have packedData : (submission.image .check).data = [] := rfl
-  have referenceData : (Assembly.submission.image .check).data = [] := rfl
-  have base : dataBase (submission.image .check) = dataBase (Assembly.submission.image .check) := by
-    unfold dataBase
-    rw [packedData,referenceData]
-  unfold Submission.initialState
-  rw [inputs]
-  dsimp only
-  rw [base,packedData,referenceData]
-  rfl
+    submission.initialState .check input = QAssembly.submission.initialState .check input :=
+  initial_congr K1Artifact.submission QuartetArtifact.submission rfl rfl (by
+    show ArtifactEncoding.decode 8 K1Artifact.checkData = ArtifactEncoding.decode 8 QuartetArtifact.checkData
+    rfl) input
 
 private theorem admitted_reference (input : CheckInput)
     (valid : input.proof.length ≤ submission.sizes.proof) :
-    input.proof.length ≤ Assembly.submission.sizes.proof := by
-  change input.proof.length ≤ 8388615680 at valid
-  change input.proof.length ≤ 8858378240
+    input.proof.length ≤ QAssembly.submission.sizes.proof := by
+  change input.proof.length ≤ 8959041024 at valid
+  change input.proof.length ≤ 8959041024
   omega
 
 theorem check_initial_registers (input : CheckInput) :
     let state := submission.initialState .check input
     state.pc = 4096 ∧
     state.getReg .x11 = 4294971392 ∧
-    state.getReg .x13 = 5905584160 ∧
-    state.getReg .x14 = 6039801952 ∧
-    state.getReg .x15 = 10334769248 ∧
+    state.getReg .x13 = 9395245088 ∧
+    state.getReg .x14 = 9529462880 ∧
+    state.getReg .x15 = 13824430176 ∧
     state.getReg .x16 = BitVec.ofNat 64 input.positions.card ∧
     state.getReg .x17 = BitVec.ofNat 64 input.proof.length := by
   rw [initial_state]

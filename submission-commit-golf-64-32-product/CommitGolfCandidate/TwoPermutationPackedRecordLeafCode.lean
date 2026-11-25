@@ -20,10 +20,12 @@ attribute [local simp] Opening.getReg_setMem Opening.getReg_setReg MachineState.
 
 def firstPreamble : List Instr := [.ADDI .x12 .x10 8, .ADDI .x10 .x10 40]
 
+/-- Words 47–56 of the K1 check image: the salt-first window stores the tag at offset 16 and the
+salt at offsets 0 and 8 (the record stored the tag first). -/
 def secondPreamble : List Instr :=
   [.ADDI .x10 .x10 56, .ADDI .x31 .x28 96, .ADDI .x0 .x0 0, .ADDI .x0 .x0 0,
-   .SD .x10 .x31 0, .LD .x31 .x4 0, .SD .x10 .x31 8,
-   .LD .x31 .x4 8, .SD .x10 .x31 16, .ADDI .x12 .x23 0]
+   .SD .x10 .x31 16, .LD .x31 .x4 0, .SD .x10 .x31 0,
+   .LD .x31 .x4 8, .SD .x10 .x31 8, .ADDI .x12 .x23 0]
 
 def firstPrefix (state : MachineState) (count : Nat) : MachineState :=
   (firstPreamble.take count).foldl execInstrBr state
@@ -45,9 +47,9 @@ theorem execute_first_prefix (state : MachineState) (pc : state.pc = 0x10b0) (fu
   · interval_cases i <;> rfl
 
 theorem execute_second_prefix (state : MachineState) (pc : state.pc = 0x10bc) (fuel : Nat)
-    (tagDst : accessValid (state.getReg .x10 + 56#64) 8 = true)
-    (saltDst : accessValid (state.getReg .x10 + 64#64) 8 = true)
-    (saltDstTail : accessValid (state.getReg .x10 + 72#64) 8 = true)
+    (tagDst : accessValid (state.getReg .x10 + 72#64) 8 = true)
+    (saltDst : accessValid (state.getReg .x10 + 56#64) 8 = true)
+    (saltDstTail : accessValid (state.getReg .x10 + 64#64) 8 = true)
     (saltSrc : accessValid (state.getReg .x4) 8 = true)
     (saltSrcTail : accessValid (state.getReg .x4 + 8#64) 8 = true) :
     execute packedImage (10 + fuel) state false =
@@ -79,9 +81,9 @@ def checkerNonce (state : MachineState) : Words 2 := fun i =>
 
 def secondHeaderMemory (state : MachineState) : MachineState :=
   let tag := state.getReg .x28+96#64
-  let afterTag := state.setMem (state.getReg .x10+56#64) tag
-  let afterNonce := afterTag.setMem (state.getReg .x10+64#64) (checkerNonce state 0)
-  afterNonce.setMem (state.getReg .x10+72#64) (checkerNonce state 1)
+  let afterTag := state.setMem (state.getReg .x10+72#64) tag
+  let afterNonce := afterTag.setMem (state.getReg .x10+56#64) (checkerNonce state 0)
+  afterNonce.setMem (state.getReg .x10+64#64) (checkerNonce state 1)
 
 theorem first_prefix_post (state : MachineState) :
     let after := firstPrefix state 2
@@ -92,9 +94,9 @@ theorem first_prefix_post (state : MachineState) :
   simp [firstPrefix,firstPreamble,execInstrBr,signExtend12,BitVec.add_assoc] <;> rfl
 
 theorem second_prefix_post (state : MachineState)
-    (d0 : state.getReg .x4 ≠ state.getReg .x10+56#64)
-    (e0 : state.getReg .x4+8#64 ≠ state.getReg .x10+56#64)
-    (e8 : state.getReg .x4+8#64 ≠ state.getReg .x10+64#64) :
+    (d0 : state.getReg .x4 ≠ state.getReg .x10+72#64)
+    (e0 : state.getReg .x4+8#64 ≠ state.getReg .x10+72#64)
+    (e8 : state.getReg .x4+8#64 ≠ state.getReg .x10+56#64) :
     let after := secondPrefix state 10
     after.mem = (secondHeaderMemory state).mem ∧
     after.getReg .x10 = state.getReg .x10+56#64 ∧ after.getReg .x12 = state.getReg .x23 ∧

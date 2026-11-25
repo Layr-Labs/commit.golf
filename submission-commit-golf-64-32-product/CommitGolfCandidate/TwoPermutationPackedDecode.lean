@@ -13,8 +13,9 @@ def fieldCode (site : FieldSite) : CopyCode :=
    by cases site <;> decide, by cases site <;> decide,
    field_fetch_load site, field_fetch_store site⟩
 
-inductive LowSite where | right | left | boundary
-def LowSite.field : LowSite → FieldSite | .right => .rightInternal | .left => .leftInternal | .boundary => .boundary
+/-- The two internal-sibling copy sites of the lower loop (copy 15 halfwords, then clear the top two bytes). -/
+inductive LowSite where | right | left
+def LowSite.field : LowSite → FieldSite | .right => .rightInternal | .left => .leftInternal
 theorem LowSite.count (site : LowSite) : (fieldCode site.field).count=15 := by cases site <;> rfl
 theorem clear_fetch (site : LowSite) (s : MachineState) (pc : s.pc=BitVec.ofNat 64 (4096+4*(site.field.start+30))) :
     fetch packedImage s=some (.base (.SH site.field.dest .x0 (BitVec.ofNat 12 (site.field.offset+30)))) := by

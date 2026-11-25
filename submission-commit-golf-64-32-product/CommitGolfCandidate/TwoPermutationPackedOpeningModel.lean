@@ -1,4 +1,3 @@
-import CommitGolfCandidate.TwoPermutationHybridModel
 import CommitGolfCandidate.TwoPermutationOpeningProofBytes
 
 namespace TwoPermutationPrototype.PackedOpening
@@ -8,7 +7,7 @@ open Opening (groupsBefore lower_swap_bound lowerNode trapdoorHeap trapdoorSalt 
 
 def proofFromTrapdoor {s : Submission} (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) : Proof :=
-  (positions.sort (· ≤ ·)).flatMap (fun i => Hybrid.record (trapdoorHeap (s := s) trapdoor)
+  (positions.sort (· ≤ ·)).flatMap (fun i => lowerRecord true (trapdoorHeap (s := s) trapdoor)
     i (trapdoorSalt (s := s) trapdoor i)) ++
     (openingNodes positions).flatMap (fun node => proofDigestBytes true (trapdoorHeap (s := s) trapdoor node))
 
@@ -69,9 +68,9 @@ private theorem lower_record_matches (s : Submission) (trapdoor : BitVec (8 * s.
     (heap : Nat → BitVec 256) (salts : CompleteSaltTape) (index : Index)
     (digest : ∀ node, 0<node → node<2*LENGTH → trapdoorHeap (s := s) trapdoor node = heap node)
     (salt : ∀ i, trapdoorSalt (s := s) trapdoor i = salts i) :
-    Hybrid.record (trapdoorHeap (s := s) trapdoor) index (trapdoorSalt (s := s) trapdoor index) =
-      Hybrid.record heap index (salts index) := by
-  unfold Hybrid.record
+    lowerRecord true (trapdoorHeap (s := s) trapdoor) index (trapdoorSalt (s := s) trapdoor index) =
+      lowerRecord true heap index (salts index) := by
+  unfold lowerRecord
   rw [salt]
   congr 1
   apply List.flatMap_congr
@@ -86,12 +85,12 @@ with the reference transcript for any heap and nonce tape stored by commit. -/
 theorem proof_from_trapdoor_matches (s : Submission) (trapdoor : BitVec (8 * s.sizes.trapdoor))
     (positions : Positions) (compress : Compression) (leaves : DigestTape) (salts : CompleteSaltTape)
     (digest : ∀ node, 0<node → node<2*LENGTH →
-      trapdoorHeap (s := s) trapdoor node = Hybrid.heap compress leaves node)
+      trapdoorHeap (s := s) trapdoor node = transcriptHeap true compress leaves node)
     (salt : ∀ index, trapdoorSalt (s := s) trapdoor index = salts index) :
     proofFromTrapdoor (s := s) trapdoor positions =
-      (Hybrid.builder compress positions (fun i => salts i.val) leaves).2 := by
-  let heap := Hybrid.heap compress leaves
-  unfold proofFromTrapdoor Hybrid.builder
+      (transcriptBuilder true compress positions (fun i => salts i.val) leaves).2 := by
+  let heap := transcriptHeap true compress leaves
+  unfold proofFromTrapdoor transcriptBuilder
   dsimp only
   congr 1
   · rw [← sorted_value_indices positions, List.flatMap_map]

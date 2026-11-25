@@ -112,7 +112,7 @@ theorem record_lower_geometry (oracle : Oracle) {state : MachineState} {source n
       positioned.proofReg positioned.nodeReg (by omega)
   exact ⟨pc (by decide), node, pointer⟩
 
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 4000000 in
 theorem execute_check_record (oracle : Oracle) {state : MachineState} {source nonce : Nat} {index : Index}
     (ready : CheckRecordReady state source nonce index) (fuel : Nat) :
     let leaf := recordLeaf oracle state source index
