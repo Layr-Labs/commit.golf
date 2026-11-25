@@ -41,12 +41,25 @@ theorem commit_parents_deterministic (oracle : Oracle) (state : MachineState) (c
   induction count generalizing state with
   | zero =>
     rw [commitParents]
-    simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
-      check_evaluation_pure, pure_bind]
+    exact deterministic_pure oracle state
   | succ count ih =>
     rw [commitParents]
     apply deterministic_bind oracle _ _ _ ih
     unfold parentIterationRun
+    simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
+      check_evaluation_pure, pure_bind]
+
+/-- The cap chain is deterministic for the same fixed oracle. -/
+theorem commit_chain_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
+    oracle.run (commitChain state count) = pure (checkEvaluation oracle (commitChain state count)) := by
+  induction count generalizing state with
+  | zero =>
+    rw [commitChain]
+    exact deterministic_pure oracle state
+  | succ count ih =>
+    rw [commitChain]
+    apply deterministic_bind oracle _ _ _ ih
+    unfold chainIterationRun
     simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
       check_evaluation_pure, pure_bind]
 
@@ -57,7 +70,8 @@ theorem commit_body_deterministic (oracle : Oracle) (state : MachineState) (coun
   apply deterministic_bind oracle _ _ (commit_leaves_deterministic oracle state (count/2))
   intro leaves
   exact deterministic_bind oracle _ _ (commit_parents_deterministic oracle _ _)
-    (fun parents => deterministic_pure oracle _)
+    (fun parents => deterministic_bind oracle _ _ (commit_chain_deterministic oracle _ _)
+      (fun chained => deterministic_pure oracle _))
 
 attribute [local irreducible] commitBody commitInputReady checkEvaluation
 
@@ -67,7 +81,7 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, body.1, 66*LENGTH+54, 5*LENGTH-1⟩, body.2)
+  (⟨.success, body.1, 66*LENGTH-563, 5*LENGTH-64⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
     (packCommitResult body).1.state = body.1 := rfl

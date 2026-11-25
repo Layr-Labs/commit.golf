@@ -52,18 +52,43 @@ theorem replay_path_run (oracle : Oracle) (node : Digest) (path : List (Bool × 
     simp only [pure_bind, oracle_run_pure]
     cases right <;> simp [Oracle.answer, pathInputs, climb, combine, Nat.add_comm] <;> exact ⟨rfl, rfl⟩
 
-/-- Exactly the 28 public calls needed to reconstruct one parsed record. -/
-def replayRecord (input : CheckInput) (ordinal : Nat) : OracleComp World (List (BitVec COMPRESSION_INPUT_LENGTH)) := do
+/-- Replay the 64-call chain over a supplied cap. -/
+def replayCap (input : CheckInput) : OracleComp World (List (BitVec COMPRESSION_INPUT_LENGTH)) := do
+  let (_, capInputs) ← replayChain 0 (capBlocks (recordCap input))
+  return capInputs
+
+theorem replay_cap_run (oracle : Oracle) (input : CheckInput) :
+    oracle.run (replayCap input) =
+      pure (chainInputs oracle.compression 0 (capBlocks (recordCap input)), 64) := by
+  simp only [replayCap, oracle_run_bind, replay_chain_run, pure_bind, oracle_run_pure,
+    capBlocks_length, CAP_PAIRS, Nat.add_zero]
+
+/-- The leaf chain and the path of one parsed record. -/
+def replayLeafPath (input : CheckInput) (ordinal : Nat) : OracleComp World (List (BitVec COMPRESSION_INPUT_LENGTH)) := do
   let (leaf, leafInputs) ← replayChain (recordSalt input ordinal) (leafBlocks (recordValue input ordinal))
   let (_, treeInputs) ← replayPath leaf (recordPath (recordIndex input ordinal) (recordSibling input ordinal))
   return leafInputs ++ treeInputs
 
-theorem replay_record_run (oracle : Oracle) (input : CheckInput) (ordinal : Nat) :
-    oracle.run (replayRecord input ordinal) = pure (recordInputs oracle.compression input ordinal, 28) := by
-  simp only [replayRecord, oracle_run_bind, replay_chain_run,
+theorem replay_leaf_path_run (oracle : Oracle) (input : CheckInput) (ordinal : Nat) :
+    oracle.run (replayLeafPath input ordinal) =
+      pure (openingInputs oracle.compression (recordSalt input ordinal) (recordValue input ordinal)
+        (recordPath (recordIndex input ordinal) (recordSibling input ordinal)), 21) := by
+  simp only [replayLeafPath, oracle_run_bind, replay_chain_run,
     bind_pure_comp, oracle_run_map, replay_path_run, map_pure]
-  simp only [recordInputs, openingInputs, leafDigest_eq_fold, leafBlocks,
-    List.length_map, List.length_range, record_path_length]
+  simp only [openingInputs, leafDigest_eq_fold, leafBlocks,
+    List.length_map, List.length_range, record_path_length, PATH_LEVELS]
+
+/-- Exactly the 85 public calls needed to reconstruct one parsed record up to the
+commitment: 4 leaf calls, 17 path calls and the 64-call cap chain. -/
+def replayRecord (input : CheckInput) (ordinal : Nat) : OracleComp World (List (BitVec COMPRESSION_INPUT_LENGTH)) := do
+  let opening ← replayLeafPath input ordinal
+  let capInputs ← replayCap input
+  return opening ++ capInputs
+
+theorem replay_record_run (oracle : Oracle) (input : CheckInput) (ordinal : Nat) :
+    oracle.run (replayRecord input ordinal) = pure (recordInputs oracle.compression input ordinal, 85) := by
+  simp only [replayRecord, oracle_run_bind, replay_leaf_path_run, replay_cap_run, pure_bind,
+    oracle_run_pure, recordInputs, capOpeningInputs]
 
 /-- This choice depends only on the adversary's claim, not on oracle answers.
 Classical choice is allowed here because the binding adversary is unrestricted
@@ -81,7 +106,7 @@ theorem selected_records_conflict (claim : Scheme.Claim) (conflicting : claim.Co
   simp only [selectedRecords, dif_pos conflicting]
   exact Classical.choose_spec (Classical.choose_spec (conflicting_records_exist claim conflicting))
 
-/-- Replay both selected records. Even a nonconflicting claim costs exactly 56
+/-- Replay both selected records. Even a nonconflicting claim costs exactly 170
 queries, making the reduction's overhead independent of the adversary's output. -/
 noncomputable def replayClaim (claim : Scheme.Claim) : OracleComp World (List (BitVec COMPRESSION_INPUT_LENGTH)) := do
   let left ← replayRecord (claimLeft claim) (selectedRecords claim).1
@@ -93,7 +118,7 @@ noncomputable def claimInputs (compress : Compression) (claim : Scheme.Claim) : 
     recordInputs compress (claimRight claim) (selectedRecords claim).2
 
 theorem replay_claim_run (oracle : Oracle) (claim : Scheme.Claim) :
-    oracle.run (replayClaim claim) = pure (claimInputs oracle.compression claim, 56) := by
+    oracle.run (replayClaim claim) = pure (claimInputs oracle.compression claim, 170) := by
   simp only [replayClaim, oracle_run_bind, replay_record_run, pure_bind,
     oracle_run_pure, claimInputs]
 
@@ -109,7 +134,7 @@ theorem breaks_replay_collision (oracle : Oracle) (claim : Scheme.Claim)
     (selected_records_conflict claim breaks.1) breaks.2.1 breaks.2.2
   exact ⟨input, List.mem_append_left _ member, input', List.mem_append_right _ member', collision⟩
 
-/-- The binding reduction runs the original adversary, then spends 56 calls
+/-- The binding reduction runs the original adversary, then spends 170 calls
 replaying its selected records. -/
 noncomputable def bindingExtractor (adversary : Scheme.Adversary) : OracleComp World (List (BitVec COMPRESSION_INPUT_LENGTH)) := do
   let claim ← adversary
@@ -117,7 +142,7 @@ noncomputable def bindingExtractor (adversary : Scheme.Adversary) : OracleComp W
 
 theorem binding_extractor_run (oracle : Oracle) (adversary : Scheme.Adversary) :
     oracle.run (bindingExtractor adversary) =
-      (fun result => (claimInputs oracle.compression result.1, result.2 + 56)) <$>
+      (fun result => (claimInputs oracle.compression result.1, result.2 + 170)) <$>
         oracle.run adversary := by
   simp only [bindingExtractor, oracle_run_bind, replay_claim_run, pure_bind,
     map_eq_bind_pure_comp]
@@ -151,10 +176,10 @@ theorem replay_path_query_bound (node : Digest) (path : List (Bool × Digest)) :
     refine ⟨by omega, fun next => ?_⟩
     simpa only [Nat.add_sub_cancel, IsTotalQueryBound, isQueryBound_map_iff] using ih next
 
-theorem replay_record_query_bound (input : CheckInput) (ordinal : Nat) :
-    IsTotalQueryBound (replayRecord input ordinal) 28 := by
-  unfold replayRecord
-  change IsTotalQueryBound (_ >>= _) (4 + 24)
+theorem replay_leaf_path_query_bound (input : CheckInput) (ordinal : Nat) :
+    IsTotalQueryBound (replayLeafPath input ordinal) 21 := by
+  unfold replayLeafPath
+  change IsTotalQueryBound (_ >>= _) (4 + 17)
   apply isTotalQueryBound_bind
   · simpa only [leafBlocks, List.length_map, List.length_range] using
       replay_chain_query_bound (recordSalt input ordinal) (leafBlocks (recordValue input ordinal))
@@ -163,10 +188,26 @@ theorem replay_record_query_bound (input : CheckInput) (ordinal : Nat) :
     simpa only [record_path_length, IsTotalQueryBound] using replay_path_query_bound result.1
       (recordPath (recordIndex input ordinal) (recordSibling input ordinal))
 
+theorem replay_cap_query_bound (input : CheckInput) : IsTotalQueryBound (replayCap input) 64 := by
+  unfold replayCap
+  change IsTotalQueryBound (_ >>= _) (64 + 0)
+  apply isTotalQueryBound_bind
+  · simpa only [capBlocks_length] using replay_chain_query_bound 0 (capBlocks (recordCap input))
+  · intro result
+    trivial
+
+theorem replay_record_query_bound (input : CheckInput) (ordinal : Nat) :
+    IsTotalQueryBound (replayRecord input ordinal) 85 := by
+  unfold replayRecord
+  change IsTotalQueryBound (_ >>= _) (21 + 64)
+  apply isTotalQueryBound_bind (replay_leaf_path_query_bound _ _)
+  intro opening
+  simpa only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff] using replay_cap_query_bound input
+
 theorem replay_claim_query_bound (claim : Scheme.Claim) :
-    IsTotalQueryBound (replayClaim claim) 56 := by
+    IsTotalQueryBound (replayClaim claim) 170 := by
   unfold replayClaim
-  change IsTotalQueryBound (_ >>= _) (28 + 28)
+  change IsTotalQueryBound (_ >>= _) (85 + 85)
   apply isTotalQueryBound_bind (replay_record_query_bound _ _)
   intro left
   simpa only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff] using

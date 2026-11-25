@@ -94,4 +94,49 @@ theorem opening_sibling_bounds (index : Index) (level : Nat) (inside : level < L
     lt_of_le_of_lt (Nat.div_le_self _ _) (by omega)
   exact heap_sibling_bounds LENGTH _ lower upper
 
+/-- Heap consistency above a cap level `low` and the leaf contents determine every
+slot above `low`; nodes at or below `low` need not be parent-consistent. -/
+theorem heap_eq_reference_above (compress : Compression) (leafCount low : Nat)
+    (leaf heap : Nat → Digest)
+    (parents : ∀ node, low < node → node < leafCount →
+      heap node = combine compress (heap (2*node)) (heap (2*node+1)))
+    (leaves : ∀ index, index < leafCount → heap (leafCount+index) = leaf index) :
+    ∀ measure node, 2*leafCount-node ≤ measure → low < node → node < 2*leafCount →
+      heap node = referenceHeap compress leafCount leaf node := by
+  intro measure
+  induction measure with
+  | zero => intro node bounded above inside; omega
+  | succ measure ih =>
+    intro node bounded above inside
+    by_cases branch : node < leafCount
+    · rw [parents node above branch, reference_heap_parent _ _ _ _ (by omega) branch]
+      congr 1
+      · exact ih (2*node) (by omega) (by omega) (by omega)
+      · exact ih (2*node+1) (by omega) (by omega) (by omega)
+    · have index : node-leafCount < leafCount := by omega
+      have address : leafCount+(node-leafCount) = node := by omega
+      rw [← address, leaves _ index, reference_heap_leaf _ _ _ _ index]
+
+/-- The 17 siblings of an opened record lie strictly above the cap level 127. -/
+theorem opening_cap_sibling_bounds (index : Index) (level : Nat) (inside : level < 17) :
+    127 < ((LENGTH+index.val)/2^level) ^^^ 1 ∧
+      ((LENGTH+index.val)/2^level) ^^^ 1 < 2*LENGTH := by
+  have indexBound := index.isLt
+  have powerPositive : 0 < 2^level := by positivity
+  have powerBound : 2^level ≤ 2^16 := Nat.pow_le_pow_right (by decide) (by omega)
+  norm_num at powerBound
+  have lower : 256 ≤ (LENGTH+index.val)/2^level := by
+    apply (Nat.le_div_iff_mul_le powerPositive).mpr
+    change 256 * 2^level ≤ 16777216 + index.val
+    omega
+  have upper : (LENGTH+index.val)/2^level < 2*LENGTH :=
+    lt_of_le_of_lt (Nat.div_le_self _ _) (by omega)
+  have bounds := heap_sibling_bounds LENGTH _ (by omega) upper
+  refine ⟨?_, bounds.2⟩
+  by_cases even : ((LENGTH+index.val)/2^level) % 2 = 0
+  · rw [Nat.xor_one_of_even (Nat.even_iff.mpr even)]
+    omega
+  · rw [Nat.xor_one_of_odd (Nat.odd_iff.mpr (by omega))]
+    omega
+
 end CommitGolfCandidate

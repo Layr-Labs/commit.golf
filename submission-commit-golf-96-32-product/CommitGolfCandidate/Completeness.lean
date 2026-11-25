@@ -1,25 +1,19 @@
 import CommitGolfCandidate.HonestRecords
 import CommitGolfCandidate.CheckHonest
+import CommitGolfCandidate.CheckInputSound
 import CommitGolfCandidate.InputOrder
 
 /-! Perfect completeness for the scheme derived from the submitted machine images. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-private theorem initial_check_registers (program : Submission) (input : CheckInput) :
-    (program.initialState .check input).getReg .x11 = BitVec.ofNat 64 program.layout.commitment ∧
-    (program.initialState .check input).getReg .x13 = BitVec.ofNat 64 program.layout.indices ∧
-    (program.initialState .check input).getReg .x14 = BitVec.ofNat 64 program.layout.values ∧
-    (program.initialState .check input).getReg .x15 = BitVec.ofNat 64 program.layout.proof := by
-  exact ⟨rfl, rfl, rfl, rfl⟩
+attribute [local irreducible] checkEvaluation openingInitializedState openingPositionState openingExitState
 
-private theorem ready_memory (state : MachineState) :
-    (checkReadyState (checkLengthState state)).mem = state.mem := rfl
-
-attribute [local irreducible] checkReadyState checkLengthState checkEvaluation
+set_option maxRecDepth 200000
 
 /-- The actual checker accepts the bytes produced by opening any correctly
-constructed commitment state, for every requested position set. -/
+constructed commitment state, for every requested position set: the transmitted cap
+hashes to the commitment, and every record climbs 17 levels to its cap node. -/
 theorem honest_check_accepts (oracle : Oracle) (message : Message)
     (committed : MachineState) (correct : CommittedState oracle message committed)
     (positions : Positions) :
@@ -31,65 +25,60 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
   let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
   let input : CheckInput :=
     ⟨root, positions, message.restrict positions, submission.readProof (openingResult trapdoor positions)⟩
-  let initial := submission.initialState .check input
-  let ready := checkReadyState (checkLengthState initial)
-  let indices : Nat → Index := fun ordinal =>
-    ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-  let heap : Nat → Digest := fun slot => readBuffer committed (4294971424+heapOffset slot) 32
-  let salts : Index → Digest := fun index => readBuffer committed (5905584160+32*index.val) 32
+  let opened := (openingResult trapdoor positions).state
   have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
   have small : positions.card ≤ 16777216 := cardinal
-  have registers := check_ready_registers initial
-  have loaded := initial_check_registers submission input
-  have rootPointer : ready.getReg .x26 = BitVec.ofNat 64 4294971392 := registers.2.2.2.2.1.trans loaded.1
-  have valuePointer : ready.getReg .x8 = BitVec.ofNat 64 6576672800 := registers.2.2.1.trans loaded.2.2.1
-  have proofPointer : ready.getReg .x25 = BitVec.ofNat 64 10871640096 := registers.2.2.2.1.trans loaded.2.2.2
-  have indexPointer : ready.getReg .x24 = BitVec.ofNat 64 6442455072 := registers.2.1.trans loaded.2.1
-  have memory : ready.mem = initial.mem := ready_memory initial
-  have rootData : readBuffer ready 4294971392 32 = heap 1 := by
-    rw [read_buffer_memory_congr _ _ memory]
-    exact (check_input_commitment input).trans correct.1
-  have indexData (ordinal : Nat) (present : ordinal < positions.card) :
-      ready.getMem (BitVec.ofNat 64 (6442455072+8*ordinal)) = BitVec.ofNat 64 (indices ordinal).val := by
-    rw [show ready.getMem = initial.getMem from congrArg (fun mem address => mem address) memory]
-    exact check_input_position input ordinal present
-  have valueData (ordinal : Nat) (present : ordinal < positions.card) (block : Nat) (inside : block < 4) :
-      readBuffer ready (6576672800+256*ordinal+64*block) 64 =
-        (message (indices ordinal)).extractLsb' (512*block) 512 := by
-    rw [read_buffer_memory_congr _ _ memory]
-    have value := check_input_value_block input ordinal block present inside
-    have indexSame :
-        ((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val =
-          indices ordinal := Fin.ext (sorted_value_index positions ordinal present)
-    change readBuffer initial (6576672800+256*ordinal+64*block) 64 =
-      (message (((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val)).extractLsb'
-        (512*block) 512 at value
-    rw [indexSame] at value
-    exact value
-  have saltData (ordinal : Nat) (present : ordinal < positions.card) :
-      readBuffer ready (10871640096+800*ordinal) 32 = salts (indices ordinal) := by
-    rw [read_buffer_memory_congr _ _ memory]
-    have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
-      (800*ordinal) (by omega)
-    exact copied.trans (opening_output_records committed positions ordinal present).1
-  have pathData (ordinal : Nat) (present : ordinal < positions.card) (level : Nat) (inside : level < 24) :
-      readBuffer ready (10871640096+800*ordinal+32+32*level) 32 =
-        heap (((LENGTH+(indices ordinal).val)/2^level) ^^^ 1) := by
-    rw [read_buffer_memory_congr _ _ memory]
-    have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
-      (800*ordinal+32+32*level) (by omega)
-    have record := (opening_output_records committed positions ordinal present).2 level inside
-    have joined := copied.trans (by simpa only [Nat.add_assoc] using record)
-    change readBuffer initial (10871640096+(800*ordinal+32+32*level)) 32 =
-      heap (((LENGTH+(indices ordinal).val)/2^level) ^^^ 1) at joined
-    simpa only [Nat.add_assoc] using joined
-  have accepted := check_loop_honest oracle ready message heap salts indices
-    4294971392 6576672800 10871640096 6442455072 positions.card
-    registers.1 rootPointer valuePointer proofPointer indexPointer
-    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by omega) (by omega) (by omega)
-    rootData indexData valueData saltData pathData correct.2.2 correct.2.1
-  exact (scheme_check_acceptance oracle input).mpr ⟨opening_proof_length trapdoor positions, accepted⟩
+  -- every proof digest the checker reads is the one opening wrote
+  have copied (offset : Nat) (inside : offset+32 ≤ 4096+576*positions.card) :
+      readBuffer (submission.initialState .check input) (submission.layout.proof+offset) 32 =
+        readBuffer opened (submission.layout.proof+offset) 32 :=
+    check_opening_proof_digest trapdoor positions root (message.restrict positions) offset inside
+  have capCopied (node : Nat) (inside : node < 128) :
+      recordCap input node = heapCap committed 4294971424 node := by
+    unfold recordCap
+    rw [copied (32*node) (by omega)]
+    exact opening_proof_cap committed positions node inside
+  apply check_input_complete oracle input (opening_proof_length trapdoor positions)
+  · intro _
+    change capRoot oracle.compression (recordCap input) = root
+    rw [show root = capRoot oracle.compression (heapCap committed 4294971424) from correct.1]
+    apply cap_congr
+    intro node below
+    exact capCopied node (by change node < 2*64 at below; omega)
+  · intro ordinal present
+    have present' : ordinal < positions.card := present
+    let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
+    have indexBound : index.val < 16777216 := index.isLt
+    have record := opening_proof_authenticates oracle message committed correct positions ordinal present
+    have value : recordValue input ordinal = message index := by
+      unfold recordValue
+      rw [dif_pos present]
+      exact congrArg message (Fin.ext (sorted_value_index positions ordinal present))
+    have salt : recordSalt input ordinal =
+        readBuffer opened (submission.layout.proof+4096+576*ordinal) 32 := by
+      unfold recordSalt
+      have := copied (4096+576*ordinal) (by omega)
+      simpa only [Nat.add_assoc] using this
+    have path : recordPath (recordIndex input ordinal) (recordSibling input ordinal) =
+        openingProofPath opened (submission.layout.proof+4096+576*ordinal) index.val := by
+      unfold recordPath openingProofPath
+      apply List.map_congr_left
+      intro level member
+      have inside := List.mem_range.mp member
+      have := copied (4096+576*ordinal+32+32*level) (by change level < 17 at inside; omega)
+      unfold recordSibling
+      simp only [Nat.add_assoc] at this ⊢
+      rw [this]
+      rfl
+    have cap : recordCap input ((recordIndex input ordinal).val / 2^PATH_LEVELS) =
+        heapDigest committed 4294971424 (128 + index.val/2^PATH_LEVELS) := by
+      have below : index.val / 2^PATH_LEVELS < 128 := by
+        change index.val / 2^17 < 128; omega
+      rw [show (recordIndex input ordinal).val = index.val from rfl, capCopied _ below]
+      simp only [heapCap, if_pos below]
+    unfold recordRoot
+    rw [value, salt, path, cap]
+    exact record
 
 private theorem scheme_commit (program : Submission) (message : Message) :
     program.scheme.commit message = program.readCommit <$> program.run .commit message := rfl

@@ -1,5 +1,5 @@
 import CommitGolfCandidate.LeafHeap
-import CommitGolfCandidate.ParentRefinement
+import CommitGolfCandidate.ChainRefinement
 import CommitGolfCandidate.BufferRefinement
 import CommitGolfCandidate.CommitInput
 
@@ -115,12 +115,13 @@ theorem commit_input_leaf_heap (oracle : Oracle) (message : Message)
   have same : wrap index.val = index := Fin.ext (wrapped index.val index.isLt)
   simpa only [same] using result
 
-/-- The actual leaf and parent loops together construct a consistent heap whose
-leaves are the salted input digests. No hypothesis about heap contents is required. -/
+/-- The actual leaf and parent loops together construct a heap, consistent above the
+cap level, whose leaves are the salted input digests. No hypothesis about heap
+contents is required. -/
 theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec (256*LENGTH)) :
     let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) (LENGTH/2))).1
-    let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH/2-1))).1
-    HeapParents oracle.compression finished 4294971424 LENGTH 0 ∧
+    let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH/2-64))).1
+    HeapParents oracle.compression finished 4294971424 LENGTH 127 ∧
       ∀ index : Index, heapDigest finished 4294971424 (LENGTH+index.val) =
         leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index) := by
   let ready := commitInputReady message answer
@@ -135,48 +136,34 @@ theorem commit_input_tree (oracle : Oracle) (message : Message) (answer : BitVec
   have start := commit_parents_start_state leaves leafDone.1
   have x9leaves : leaves.getReg .x9 = BitVec.ofNat 64 4294971424 :=
     (leafDone.2 .x9 (by simp)).trans input.2.1
-  have pointers : ParentPointers parents 4294971424 (LENGTH/2-1) := by
-    refine ⟨?_, ?_, ?_⟩
-    · rw [start.2.2.2.2 .x9 (by decide) (by decide) (by decide)]; exact x9leaves
+  have pointers : ParentPointers parents 4294971424 (LENGTH/2-64) := by
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · rw [start.2.2.2.2.2 .x9 (by decide) (by decide) (by decide) (by decide)]; exact x9leaves
     · rw [start.1, x9leaves]; rfl
     · rw [start.2.1, x9leaves]; rfl
-  have size : 2*(LENGTH/2-1)+2 = LENGTH := by rw [hL]
+    · rw [start.2.2.1, x9leaves]; rfl
+  have size : 2*(LENGTH/2-64+63)+2 = LENGTH := by rw [hL]
   constructor
-  · have heap := commit_parents_heap oracle parents 4294971424 (LENGTH/2-1) pointers (by decide)
+  · have heap := commit_parents_heap oracle parents 4294971424 (LENGTH/2-64) pointers (by decide)
       (by rw [size, hL]; decide)
       (fun q _ high => by
-        rw [read_buffer_memory_congr _ _ start.2.2.2.1]
+        rw [read_buffer_memory_congr _ _ start.2.2.2.2.1]
         exact commit_leaves_gap oracle message answer q (by rw [size] at high; exact high))
     rw [size] at heap
     exact heap
   · intro index
     have indexBound : index.val < 2^24 := index.isLt
     have offsetBound := heap_offset_bound index.val (2^23) (by omega)
-    change heapDigest (checkEvaluation oracle (commitParents parents (LENGTH/2-1))).1
+    change heapDigest (checkEvaluation oracle (commitParents parents (LENGTH/2-64))).1
       4294971424 (LENGTH+index.val) = _
-    rw [commit_parents_preserves_digest oracle parents 4294971424 (LENGTH/2-1)
+    rw [commit_parents_preserves_digest oracle parents 4294971424 (LENGTH/2-64)
       (LENGTH+index.val) pointers (by rw [hL]; decide)
-      (by change 2*(16777216/2-1)+1 < 16777216 + index.val; omega)
+      (by change 2*(16777216/2-64+63)+1 < 16777216 + index.val; omega)
       (by rw [heap_offset_leaf]; omega)]
     have address : 4294971424+heapOffset (LENGTH+index.val) = 5100277792+heapOffset index.val := by
       rw [heap_offset_leaf]; omega
     unfold heapDigest
-    rw [read_buffer_memory_congr _ _ start.2.2.2.1, address]
+    rw [read_buffer_memory_congr _ _ start.2.2.2.2.1, address]
     exact commit_input_leaf_heap oracle message answer index
-
-/-- Every path through that constructed heap reconstructs the root from the
-corresponding salted input leaf. -/
-theorem commit_input_tree_reconstruct (oracle : Oracle) (message : Message)
-    (answer : BitVec (256*LENGTH)) (index : Index) :
-    let leaves := (checkEvaluation oracle (commitLeaves (commitInputReady message answer) (LENGTH/2))).1
-    let finished := (checkEvaluation oracle (commitParents (commitParentsStartState leaves) (LENGTH/2-1))).1
-    climb oracle.compression
-      (leafDigest oracle.compression (answer.extractLsb' (256*index.val) 256) (message index))
-      (heapPath (heapDigest finished 4294971424) (LENGTH+index.val) LOG_LENGTH) =
-        heapDigest finished 4294971424 1 := by
-  have tree := commit_input_tree oracle message answer
-  dsimp only
-  rw [← tree.2 index]
-  exact reconstruct_heap_root oracle.compression _ LOG_LENGTH index.val index.isLt tree.1
 
 end CommitGolfCandidate

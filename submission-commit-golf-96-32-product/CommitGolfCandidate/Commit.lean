@@ -121,12 +121,12 @@ theorem commit_ready_register (state : MachineState) (reg : Reg)
   cases reg <;> simp_all [commitReadyState, commitReadyPrefix, commitReadyInstructions,
     execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
 
-/-- The three digest copies: salt of lane 0 (39), salt of lane 1 (59), root (113). -/
+/-- The three digest copies: salt of lane 0 (39), salt of lane 1 (59), commitment (126). -/
 private def commitCopySource (start : Nat) : Reg :=
-  if start = 113 then .x9 else .x18
+  if start = 126 then .x21 else .x18
 private def commitCopyDestination (start : Nat) : Reg :=
-  if start = 113 then .x26 else .x8
-private def commitCopyOffset (start : Nat) : Nat := if start = 39 then 0 else 32
+  if start = 126 then .x26 else .x8
+private def commitCopyOffset (start : Nat) : Nat := if start = 59 then 32 else 0
 private def commitCopyTarget (start : Nat) : Nat := if start = 59 then 256 else 0
 
 private def commitCopyInstructions (start : Nat) : List Instr :=
@@ -147,9 +147,9 @@ def commitCopyState (state : MachineState) (start : Nat) : MachineState := commi
 /-- Expose the decoded salt and root copy instructions for memory refinement. -/
 theorem commit_copy_expansion (state : MachineState) (start : Nat) :
     commitCopyState state start =
-      let source := if start = 113 then Reg.x9 else Reg.x18
-      let destination := if start = 113 then Reg.x26 else Reg.x8
-      let offset := if start = 39 then 0 else 32
+      let source := if start = 126 then Reg.x21 else Reg.x18
+      let destination := if start = 126 then Reg.x26 else Reg.x8
+      let offset := if start = 59 then 32 else 0
       let target := if start = 59 then 256 else 0
       ([.LD .x6 source (BitVec.ofNat 12 offset), .SD destination .x6 (BitVec.ofNat 12 target),
         .LD .x6 source (BitVec.ofNat 12 (offset+8)), .SD destination .x6 (BitVec.ofNat 12 (target+8)),
@@ -218,13 +218,13 @@ set_option maxHeartbeats 4000000 in
 /-- The actual salt stores into the two lanes' slots and the final root copy each take
 eight ordinary instructions. The hypotheses cover every source and destination access. -/
 theorem commit_copy (state : MachineState) (start : Nat)
-    (location : start = 39 ∨ start = 59 ∨ start = 113)
+    (location : start = 39 ∨ start = 59 ∨ start = 126)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (sourceValid : ∀ word : Fin 4,
-      accessValid (state.getReg (if start = 113 then .x9 else .x18) +
-        BitVec.ofNat 64 ((if start = 39 then 0 else 32) + 8 * word.val)) 8 = true)
+      accessValid (state.getReg (if start = 126 then .x21 else .x18) +
+        BitVec.ofNat 64 ((if start = 59 then 32 else 0) + 8 * word.val)) 8 = true)
     (destinationValid : ∀ word : Fin 4,
-      accessValid (state.getReg (if start = 113 then .x26 else .x8) +
+      accessValid (state.getReg (if start = 126 then .x26 else .x8) +
         BitVec.ofNat 64 ((if start = 59 then 256 else 0) + 8 * word.val)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .commit) (8 + fuel) state allowCoins =
@@ -233,7 +233,7 @@ theorem commit_copy (state : MachineState) (start : Nat)
   rcases location with rfl | rfl | rfl
   · commit_copy_tac 39
   · commit_copy_tac 59
-  · commit_copy_tac 113
+  · commit_copy_tac 126
 
 /-- Advance the slot, salt and heap pointers by one pair; loop while pairs remain. Both
 outcomes of the branch are represented. -/

@@ -3,7 +3,7 @@ import CommitGolfCandidate.CompressionSampling
 
 /-! A collision detector whose output contains the actual oracle replies, so its
 winning event no longer needs access to the hidden full compression table.
-The reduction rereads the 56 replay inputs. Its 112-call overhead is proof-only;
+The reduction rereads the 170 replay inputs. Its 340-call overhead is proof-only;
 the submitted images, their execution costs, and the score are unchanged. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec
@@ -55,7 +55,7 @@ theorem reply_collision_of_inputs (compress : Compression) (inputs : List (BitVe
     (second, compress second), List.mem_map_of_mem secondMember, different, equal⟩
 
 theorem claim_inputs_length (compress : Compression) (claim : Scheme.Claim) :
-    (claimInputs compress claim).length = 56 := by
+    (claimInputs compress claim).length = 170 := by
   simp only [claimInputs, List.length_append, record_inputs_length]
 
 /-- Bound the original adversary, replay two records, and read their replies.
@@ -68,12 +68,12 @@ noncomputable def boundedCollisionSearch (adversary : Scheme.Adversary) (budget 
   | none => pure []
   | some claim => do
       let inputs ← replayClaim claim
-      probeInputs (inputs.take 56)
+      probeInputs (inputs.take 170)
 
 theorem bounded_collision_search_bound (adversary : Scheme.Adversary) (budget : Nat) :
-    PublicQueryBound (boundedCollisionSearch adversary budget) (budget + 112) := by
+    PublicQueryBound (boundedCollisionSearch adversary budget) (budget + 340) := by
   unfold boundedCollisionSearch
-  change PublicQueryBound (_ >>= _) (budget + (56 + 56))
+  change PublicQueryBound (_ >>= _) (budget + (170 + 170))
   apply public_query_bound_bind (limit_public_bound _ _)
   intro result
   cases result with
@@ -81,7 +81,7 @@ theorem bounded_collision_search_bound (adversary : Scheme.Adversary) (budget : 
   | some claim =>
     apply public_query_bound_bind (public_query_bound_of_total (replay_claim_query_bound claim))
     intro inputs
-    exact (public_query_bound_of_total (probe_inputs_bound (inputs.take 56))).mono
+    exact (public_query_bound_of_total (probe_inputs_bound (inputs.take 170))).mono
       (List.length_take_le _ _)
 
 theorem bounded_collision_search_run (oracle : Oracle) (adversary : Scheme.Adversary) (budget : Nat) :
@@ -90,7 +90,7 @@ theorem bounded_collision_search_run (oracle : Oracle) (adversary : Scheme.Adver
       match result with
       | none => pure ([], calls)
       | some claim => pure ((claimInputs oracle.compression claim).map
-          (fun input => (input, oracle.compression input)), calls + 112)) := by
+          (fun input => (input, oracle.compression input)), calls + 340)) := by
   unfold boundedCollisionSearch
   rw [oracle_run_bind]
   apply bind_congr
@@ -204,7 +204,7 @@ theorem search_reply_collision_in_cache (permutation : Perm) (adversary : Scheme
     dsimp only at reached
     rw [compression_run_bind] at reached
     obtain ⟨⟨inputs, intermediate⟩, _, reached⟩ := (mem_support_bind_iff _ _ _).mp reached
-    have stored := (probe_inputs_cache permutation (inputs.take 56) intermediate result reached).2
+    have stored := (probe_inputs_cache permutation (inputs.take 170) intermediate result reached).2
     obtain ⟨first, firstMember, second, secondMember, different, equal⟩ := collision
     exact ⟨first.1, second.1, first.2, second.2, different,
       stored first firstMember, stored second secondMember, heq_of_eq equal⟩

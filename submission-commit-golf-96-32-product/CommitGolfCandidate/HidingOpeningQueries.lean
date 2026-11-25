@@ -42,27 +42,35 @@ def queryOpeningDigest (heap : Nat → OracleComp World Digest) (salt : Index �
   if part = 0 then pure (salt index)
   else heap (((LENGTH+index.val)/2^(part-1)) ^^^ 1)
 
+/-- The digest containing proof byte `offset`, matching `referenceProofDigest`. -/
+def queryProofDigest (heap : Nat → OracleComp World Digest) (salt : Index → Digest)
+    (positions : Positions) (offset : Nat) : OracleComp World Digest :=
+  if offset < 4096 then heap (128+offset/32)
+  else queryOpeningDigest heap salt positions ((offset-4096)/576) (((offset-4096)%576)/32)
+
 def queryOpening (heap : Nat → OracleComp World Digest) (salt : Index → Digest)
     (positions : Positions) : OracleComp World Proof :=
   queryList (fun offset => do
-    let digest ← queryOpeningDigest heap salt positions (offset/800) ((offset%800)/32)
-    pure (digest.extractLsb' (8*(offset%32)) 8)) (List.range (800*positions.card))
+    let digest ← queryProofDigest heap salt positions offset
+    pure (digest.extractLsb' (8*(offset%32)) 8)) (List.range (4096+576*positions.card))
 
 theorem query_opening_bound (heap : Nat → OracleComp World Digest) (budget : Nat)
     (bounded : ∀ node, PublicQueryBound (heap node) budget)
     (salt : Index → Digest) (positions : Positions) :
-    PublicQueryBound (queryOpening heap salt positions) (800*positions.card*budget) := by
-  have digestBound (ordinal part : Nat) :
-      PublicQueryBound (queryOpeningDigest heap salt positions ordinal part) budget := by
-    unfold queryOpeningDigest
+    PublicQueryBound (queryOpening heap salt positions) ((4096+576*positions.card)*budget) := by
+  have digestBound (offset : Nat) :
+      PublicQueryBound (queryProofDigest heap salt positions offset) budget := by
+    unfold queryProofDigest queryOpeningDigest
     split
-    · trivial
     · exact bounded _
-  have bytes (offset : Nat) := public_query_bound_bind (digestBound (offset/800) ((offset%800)/32))
+    · split
+      · trivial
+      · exact bounded _
+  have bytes (offset : Nat) := public_query_bound_bind (digestBound offset)
     (fun digest => (show PublicQueryBound
       (pure (digest.extractLsb' (8*(offset%32)) 8) : OracleComp World _) 0 from trivial))
   simpa only [queryOpening, List.length_range, Nat.add_zero] using
-    query_list_bound _ (budget+0) bytes (List.range (800*positions.card))
+    query_list_bound _ (budget+0) bytes (List.range (4096+576*positions.card))
 
 theorem query_opening_reference (oracle : Oracle) (heap : Nat → OracleComp World Digest)
     (values : Nat → Digest)
@@ -74,36 +82,76 @@ theorem query_opening_reference (oracle : Oracle) (heap : Nat → OracleComp Wor
   unfold queryOpening referenceOpening
   apply query_list_reference
   intro offset member
+  have below := List.mem_range.mp member
   rw [fixed_oracle_run_bind]
-  have part : (offset%800)/32 < 25 := by omega
-  let index : Index := ⟨openingIndex positions (offset/800), opening_index_bound positions (offset/800)⟩
-  have digest : fixedOracleRun oracle
-      (queryOpeningDigest heap salt positions (offset/800) ((offset%800)/32)) =
-      pure (referenceOpeningDigest values salt positions (offset/800) ((offset%800)/32)) := by
-    unfold queryOpeningDigest referenceOpeningDigest
+  have digest : fixedOracleRun oracle (queryProofDigest heap salt positions offset) =
+      pure (referenceProofDigest values salt positions offset) := by
+    unfold queryProofDigest referenceProofDigest
     split
-    · exact fixed_oracle_run_pure _ _
-    · have level : (offset%800)/32-1 < LOG_LENGTH := by change _ < 24; omega
-      have valid := opening_sibling_bounds index _ level
-      exact correct _ valid.1 valid.2
+    · exact correct _ (by omega) (by change 128+offset/32 < 2*16777216; omega)
+    · let index : Index := ⟨openingIndex positions ((offset-4096)/576),
+        opening_index_bound positions ((offset-4096)/576)⟩
+      unfold queryOpeningDigest referenceOpeningDigest
+      split
+      · exact fixed_oracle_run_pure _ _
+      · have level : ((offset-4096)%576)/32-1 < 17 := by omega
+        have valid := opening_cap_sibling_bounds index _ level
+        exact correct _ (Nat.lt_of_le_of_lt (Nat.zero_le _) valid.1) valid.2
   rw [digest, pure_bind]
   exact fixed_oracle_run_pure _ _
 
-/-- Compute the root and the exact opening proof from a common oracle. -/
+/-- The commitment as an oracle program: read the 128 cap nodes, then the 64-call chain. -/
+def queryCap (heap : Nat → OracleComp World Digest) : OracleComp World Digest := do
+  let cap ← queryList heap ((List.range 128).map (128 + ·))
+  hashBlocks (capBlocks fun node => cap.getD node 0) 0
+
+theorem query_cap_bound (heap : Nat → OracleComp World Digest) (budget : Nat)
+    (bounded : ∀ node, PublicQueryBound (heap node) budget) :
+    PublicQueryBound (queryCap heap) (128*budget+64) := by
+  have nodes := query_list_bound heap budget bounded ((List.range 128).map (128 + ·))
+  simp only [List.length_map, List.length_range] at nodes
+  have chain (cap : List Digest) := hash_blocks_bound (capBlocks fun node => cap.getD node 0) 0
+  simp only [capBlocks, List.length_map, List.length_range] at chain
+  exact public_query_bound_bind nodes chain
+
+theorem query_cap_reference (oracle : Oracle) (heap : Nat → OracleComp World Digest)
+    (values : Nat → Digest)
+    (correct : ∀ node, 0 < node → node < 2*LENGTH →
+      fixedOracleRun oracle (heap node) = pure (values node)) :
+    fixedOracleRun oracle (queryCap heap) = pure (capRoot oracle.compression (referenceCap values)) := by
+  unfold queryCap
+  rw [fixed_oracle_run_bind, query_list_reference oracle heap values _ (by
+    intro node member
+    obtain ⟨m, inside, rfl⟩ := List.mem_map.mp member
+    have := List.mem_range.mp inside
+    exact correct _ (by omega) (by change 128+m < 2*16777216; omega)), pure_bind]
+  have chained := fixed_hash_blocks oracle
+    (capBlocks fun node => (((List.range 128).map (128 + ·)).map values).getD node 0) 0 pure
+  simp only [bind_pure, fixed_oracle_run_pure] at chained
+  rw [chained]
+  refine congrArg pure ?_
+  change capRoot oracle.compression _ = _
+  apply cap_congr
+  intro node inside
+  have small : node < 128 := inside
+  simp [referenceCap, small, List.getD_eq_getElem?_getD]
+
+/-- Compute the cap-chain commitment and the exact opening proof from a common oracle. -/
 def queryTranscript (heap : Nat → OracleComp World Digest) (salt : Index → Digest)
     (positions : Positions) : OracleComp World (Commitment × Proof) := do
-  let root ← heap 1
+  let root ← queryCap heap
   let proof ← queryOpening heap salt positions
   pure (root, proof)
 
 theorem query_transcript_bound (heap : Nat → OracleComp World Digest) (budget : Nat)
     (bounded : ∀ node, PublicQueryBound (heap node) budget)
     (salt : Index → Digest) (positions : Positions) :
-    PublicQueryBound (queryTranscript heap salt positions) ((1+800*positions.card)*budget) := by
+    PublicQueryBound (queryTranscript heap salt positions)
+      ((4224+576*positions.card)*budget+64) := by
   have rest (root : Commitment) := public_query_bound_bind (query_opening_bound heap budget bounded salt positions)
     (fun proof => (show PublicQueryBound (pure (root, proof) : OracleComp World _) 0 from trivial))
-  have result := public_query_bound_bind (bounded 1) rest
-  simpa only [queryTranscript, Nat.add_zero, Nat.add_mul, Nat.one_mul] using result
+  have result := public_query_bound_bind (query_cap_bound heap budget bounded) rest
+  exact result.mono (le_of_eq (by ring))
 
 theorem query_transcript_reference (oracle : Oracle) (heap : Nat → OracleComp World Digest)
     (values : Nat → Digest)
@@ -111,8 +159,8 @@ theorem query_transcript_reference (oracle : Oracle) (heap : Nat → OracleComp 
       fixedOracleRun oracle (heap node) = pure (values node))
     (salt : Index → Digest) (positions : Positions) :
     fixedOracleRun oracle (queryTranscript heap salt positions) =
-      pure (values 1, referenceOpening values salt positions) := by
-  rw [queryTranscript, fixed_oracle_run_bind, correct 1 (by decide) (by decide), pure_bind]
+      pure (capRoot oracle.compression (referenceCap values), referenceOpening values salt positions) := by
+  rw [queryTranscript, fixed_oracle_run_bind, query_cap_reference oracle heap values correct, pure_bind]
   rw [fixed_oracle_run_bind, query_opening_reference oracle heap values correct salt positions, pure_bind]
   exact fixed_oracle_run_pure _ _
 

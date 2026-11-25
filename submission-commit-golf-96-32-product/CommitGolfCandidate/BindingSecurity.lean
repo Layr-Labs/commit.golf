@@ -2,7 +2,7 @@ import CommitGolfCandidate.Probability
 import CommitGolfCandidate.BindingProbe
 
 /-! Full binding proof for the submitted machine images. The reduction uses at
-most the adversary's public budget plus 112 compression calls, including the
+most the adversary's public budget plus 340 compression calls, including the
 reply-recording pass. This overhead is only in the security proof. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
@@ -11,15 +11,17 @@ open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
 compression outputs and the challenge's 120-bit binding target. -/
 theorem detector_birthday_le_binding_target (budget : Nat)
     (positive : 1 ≤ budget) (small : budget ≤ 2 ^ BINDING_SECURITY_BITS) :
-    ((budget : ENNReal) + 112) ^ 2 / 2 ^ 256 ≤ (budget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
-  have overhead : budget + 112 ≤ 113 * budget := by omega
-  have squared := Nat.pow_le_pow_left overhead 2
+    ((budget : ENNReal) + 340) ^ 2 / 2 ^ 256 ≤ (budget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
   have quadratic := Nat.mul_le_mul_left budget small
-  have arithmetic : (budget + 112) ^ 2 ≤ budget * 2 ^ 136 := by
+  have arithmetic : (budget + 340) ^ 2 ≤ budget * 2 ^ 136 := by
     change budget ≤ 2 ^ 120 at small
     change budget * budget ≤ budget * 2 ^ 120 at quadratic
+    have constant : 115600 ≤ 115600 * budget := by omega
+    have gap : budget * 2 ^ 120 + 116280 * budget ≤ budget * 2 ^ 136 := by
+      have : 2 ^ 120 + 116280 ≤ 2 ^ 136 := by norm_num
+      nlinarith
     nlinarith
-  have castBound : ((budget : ENNReal) + 112) ^ 2 ≤ (budget : ENNReal) * 2 ^ 136 := by
+  have castBound : ((budget : ENNReal) + 340) ^ 2 ≤ (budget : ENNReal) * 2 ^ 136 := by
     exact_mod_cast arithmetic
   calc
     _ ≤ (budget : ENNReal) * 2 ^ 136 / 2 ^ 256 := ENNReal.div_le_div_right castBound _
@@ -45,11 +47,11 @@ theorem fixed_permutation_search_bound (permutation : Perm) (adversary : Scheme.
     prEvent_mono_of_support _ _ _ fun result reached collision =>
       search_reply_collision_in_cache permutation adversary budget result reached collision
   have birthday := compression_collision_bound permutation (boundedCollisionSearch adversary budget)
-    (budget + 112) (bounded_collision_search_bound adversary budget)
-  have loose : (((budget + 112) * (budget + 112 - 1) : Nat) : ENNReal) / (2 * 2 ^ 256) ≤
-      ((budget : ENNReal) + 112) ^ 2 / 2 ^ 256 := by
+    (budget + 340) (bounded_collision_search_bound adversary budget)
+  have loose : (((budget + 340) * (budget + 340 - 1) : Nat) : ENNReal) / (2 * 2 ^ 256) ≤
+      ((budget : ENNReal) + 340) ^ 2 / 2 ^ 256 := by
     apply ENNReal.div_le_div
-    · have product : (budget + 112) * (budget + 112 - 1) ≤ (budget + 112) ^ 2 := by
+    · have product : (budget + 340) * (budget + 340 - 1) ≤ (budget + 340) ^ 2 := by
         rw [pow_two]
         exact Nat.mul_le_mul_left _ (Nat.sub_le _ _)
       exact_mod_cast product

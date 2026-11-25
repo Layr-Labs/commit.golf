@@ -11,18 +11,18 @@ set_option maxRecDepth 20000
 
 /-- Source pointer of the commitment digest copy at instruction `start`. -/
 def commitCopyFrom (state : MachineState) (start : Nat) : Word :=
-  if start = 113 then state.getReg .x9 + 32
+  if start = 126 then state.getReg .x21
   else if start = 39 then state.getReg .x18 else state.getReg .x18 + 32
 
 /-- Destination pointer of the commitment digest copy at instruction `start`. -/
 def commitCopyTo (state : MachineState) (start : Nat) : Word :=
-  if start = 113 then state.getReg .x26
+  if start = 126 then state.getReg .x26
   else if start = 59 then state.getReg .x8 + 256 else state.getReg .x8
 
 /-- Commitment's three digest copies use the same load/store sequence as opening.
 Only the source and destination pointers differ. -/
 theorem commit_copy_memory_as_opening (state : MachineState) (start : Nat)
-    (location : start = 39 ∨ start = 59 ∨ start = 113) :
+    (location : start = 39 ∨ start = 59 ∨ start = 126) :
     (commitCopyState state start).mem =
       (openingCopyState ((state.setReg .x23 (commitCopyFrom state start)).setReg .x25
         (commitCopyTo state start))).mem := by
@@ -44,7 +44,7 @@ private theorem copy_to_register (state : MachineState) (start : Nat) :
 
 /-- Copy a complete digest at one of the three commitment copy sites. -/
 theorem commit_copy_digest (state : MachineState) (start source destination : Nat)
-    (location : start = 39 ∨ start = 59 ∨ start = 113)
+    (location : start = 39 ∨ start = 59 ∨ start = 126)
     (sourcePointer : commitCopyFrom state start = BitVec.ofNat 64 source)
     (destinationPointer : commitCopyTo state start = BitVec.ofNat 64 destination)
     (sourceAligned : source % 8 = 0) (destinationAligned : destination % 8 = 0)
@@ -60,7 +60,7 @@ theorem commit_copy_digest (state : MachineState) (start source destination : Na
 
 /-- The commitment copy preserves every disjoint complete digest. -/
 theorem commit_copy_preserves_digest (state : MachineState) (start destination address : Nat)
-    (location : start = 39 ∨ start = 59 ∨ start = 113)
+    (location : start = 39 ∨ start = 59 ∨ start = 126)
     (destinationPointer : commitCopyTo state start = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0)
     (destinationBound : destination+32 ≤ 2^64) (readBound : address+32 ≤ 2^64)
@@ -74,7 +74,7 @@ theorem commit_copy_preserves_digest (state : MachineState) (start destination a
 
 /-- The commitment copy preserves every disjoint 64-byte block. -/
 theorem commit_copy_preserves_block (state : MachineState) (start destination address : Nat)
-    (location : start = 39 ∨ start = 59 ∨ start = 113)
+    (location : start = 39 ∨ start = 59 ∨ start = 126)
     (destinationPointer : commitCopyTo state start = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0)
     (destinationBound : destination+32 ≤ 2^64) (readBound : address+64 ≤ 2^64)

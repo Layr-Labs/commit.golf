@@ -3,17 +3,19 @@ import CommitGolfCandidate.WriteMemory
 
 /-! Parent construction on the gap heap. Every parent is one direct 96-byte
 compression of the contiguous pair `[left | right | zero gap]`; two parents per loop
-iteration, then the root, the root copy and the successful return. -/
+iteration down to the cap level, then the 64-call chain over the cap pairs, the
+commitment copy and the successful return. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-/-- The three direct parent calls: `j = 0` (odd parent of an iteration), `j = 1` (even
-parent of an iteration) and `j = 2` (the root). -/
-def parentCallIndex (j : Nat) : Nat := if j = 0 then 101 else if j = 1 then 104 else 110
-def parentSourceReg (j : Nat) : Reg := if j = 2 then .x9 else .x21
-def parentTargetReg (j : Nat) : Reg := if j = 2 then .x9 else .x22
-def parentSourceOffset (j : Nat) : Nat := if j = 1 then 0 else 96
-def parentTargetOffset (j : Nat) : Nat := if j = 1 then 0 else 32
+/-- The three direct calls: `j = 0` (odd parent of an iteration), `j = 1` (even
+parent of an iteration) and `j = 2` (one chain call over a cap pair: input at x21,
+output at x21+96). -/
+def parentCallIndex (j : Nat) : Nat := if j = 0 then 107 else if j = 1 then 110 else 120
+def parentSourceReg (_ : Nat) : Reg := .x21
+def parentTargetReg (j : Nat) : Reg := if j = 2 then .x21 else .x22
+def parentSourceOffset (j : Nat) : Nat := if j = 0 then 96 else 0
+def parentTargetOffset (j : Nat) : Nat := if j = 0 then 32 else if j = 1 then 0 else 96
 
 def parentCallInstructions (j : Nat) : List Instr :=
   [.ADDI .x10 (parentSourceReg j) (BitVec.ofNat 12 (parentSourceOffset j)),
@@ -39,7 +41,7 @@ abbrev parentQuery (state : MachineState) (j : Nat) : PublicSpec.Domain :=
 def parentCallState (state : MachineState) (j : Nat) (answer : BitVec 256) : MachineState :=
   writeBits (parentSetupState state j) (parentOutput state j) answer
 
-theorem parent_call_index_bound (j : Nat) : parentCallIndex j ≤ 110 := by
+theorem parent_call_index_bound (j : Nat) : parentCallIndex j ≤ 120 := by
   unfold parentCallIndex; split <;> (try split) <;> omega
 
 theorem parent_setup_memory (state : MachineState) (j : Nat) :
@@ -88,18 +90,18 @@ theorem parent_call_pc (state : MachineState) (j : Nat) (hj : j < 3) (answer : B
   rw [(parent_setup_registers state j hj).2.2.1, BitVec.add_assoc]
   rfl
 
-/-- The call's addresses only depend on the pointer registers x9, x21 and x22. -/
+/-- The call's addresses only depend on the pointer registers x21 and x22. -/
 theorem parent_source_congr (left right : MachineState) (j : Nat)
-    (r9 : left.getReg .x9 = right.getReg .x9) (r21 : left.getReg .x21 = right.getReg .x21) :
+    (r21 : left.getReg .x21 = right.getReg .x21) :
     parentSource left j = parentSource right j := by
   unfold parentSource parentSourceReg
-  split <;> simp [r9, r21]
+  simp [r21]
 
 theorem parent_output_congr (left right : MachineState) (j : Nat)
-    (r9 : left.getReg .x9 = right.getReg .x9) (r22 : left.getReg .x22 = right.getReg .x22) :
+    (r21 : left.getReg .x21 = right.getReg .x21) (r22 : left.getReg .x22 = right.getReg .x22) :
     parentOutput left j = parentOutput right j := by
   unfold parentOutput parentTargetReg
-  split <;> simp [r9, r22]
+  split <;> simp [r21, r22]
 
 /-- Address side conditions of parent call `j`. -/
 def ParentCallValid (state : MachineState) (j : Nat) : Prop :=
@@ -173,11 +175,11 @@ theorem commit_parent_call (state : MachineState) (j : Nat) (hj : j < 3)
     ← Nat.add_assoc]
   congr
 
-/-- Move both pointers down by one parent pair; loop while parents remain, else go to
-the root call. -/
+/-- Move both pointers down by one parent pair; loop while parents above the cap
+remain (x7 is the stop pointer), else go to the cap chain. -/
 def parentNextState (state : MachineState) : MachineState :=
   ((state.setReg .x21 (state.getReg .x21 - 192)).setReg .x22 (state.getReg .x22 - 96)).setPC
-    (if state.getReg .x22 - 96 = state.getReg .x9 then 4536 else 4500)
+    (if state.getReg .x22 - 96 = state.getReg .x7 then 4560 else 4524)
 
 private def parentNextInstructions : List Instr :=
   [.ADDI .x21 .x21 3904, .ADDI .x22 .x22 4000]
@@ -185,7 +187,8 @@ private def parentNextInstructions : List Instr :=
 private def parentNextPrefix (state : MachineState) (count : Nat) : MachineState :=
   (parentNextInstructions.take count).foldl execInstrBr state
 
-theorem commit_parent_next (state : MachineState) (pc : state.pc = 4524) (fuel : Nat) :
+set_option maxRecDepth 20000 in
+theorem commit_parent_next (state : MachineState) (pc : state.pc = 4548) (fuel : Nat) :
     execute (submission.image .commit) (3 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (parentNextState state) true
           return result.charge 3 0) := by
@@ -196,17 +199,17 @@ theorem commit_parent_next (state : MachineState) (pc : state.pc = 4524) (fuel :
     apply execute_unit_steps (states := parentNextPrefix state)
     intro i hi
     refine ⟨.base ((parentNextInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (107 + i) _ (by omega)
+    · apply commit_fetch _ (113 + i) _ (by omega)
       · interval_cases i <;> simp [parentNextPrefix, parentNextInstructions, execInstrBr, pc, MachineState.setPC]
       · interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
   have fetched : fetch (submission.image .commit) (parentNextPrefix state 2) =
-      some (.base (.BNE .x22 .x9 8160)) := by
-    apply commit_fetch _ 109 _ (by decide)
+      some (.base (.BNE .x22 .x7 8160)) := by
+    apply commit_fetch _ 115 _ (by decide)
     · simp [parentNextPrefix, parentNextInstructions, execInstrBr, pc, MachineState.setPC]
     · rfl
-  have stepped : ordinaryStep (parentNextPrefix state 2) (.base (.BNE .x22 .x9 8160)) =
+  have stepped : ordinaryStep (parentNextPrefix state 2) (.base (.BNE .x22 .x7 8160)) =
       some (parentNextState state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, signExtend12,
       parentNextPrefix, parentNextInstructions, parentNextState, MachineState.getReg,
@@ -233,7 +236,7 @@ set_option maxHeartbeats 1600000 in
 /-- One parent loop iteration: nine instructions, 23 cycles and two queries. The
 address conditions of the second call are stated on the iteration's start state; the
 first call does not move the pointer registers. -/
-theorem commit_parent_iteration (state : MachineState) (pc : state.pc = 4500)
+theorem commit_parent_iteration (state : MachineState) (pc : state.pc = 4524)
     (r5 : state.getReg .x5 = 0) (r11 : state.getReg .x11 = 96) (r13 : state.getReg .x13 = 0)
     (first : ParentCallValid state 0) (second : ParentCallValid state 1) (fuel : Nat) :
     execute (submission.image .commit) (9 + fuel) state true =
@@ -252,9 +255,8 @@ theorem commit_parent_iteration (state : MachineState) (pc : state.pc = 4500)
   have s1pc : s1.pc = BitVec.ofNat 64 (4096 + 4 * parentCallIndex 1) := by
     rw [parent_call_pc state 0 (by decide), pc]; rfl
   have valid1 : ParentCallValid s1 1 := by
-    have src := parent_source_congr s1 state 1 (keep .x9 (by decide) (by decide))
-      (keep .x21 (by decide) (by decide))
-    have out := parent_output_congr s1 state 1 (keep .x9 (by decide) (by decide))
+    have src := parent_source_congr s1 state 1 (keep .x21 (by decide) (by decide))
+    have out := parent_output_congr s1 state 1 (keep .x21 (by decide) (by decide))
       (keep .x22 (by decide) (by decide))
     unfold ParentCallValid
     rw [src, out]
@@ -266,7 +268,7 @@ theorem commit_parent_iteration (state : MachineState) (pc : state.pc = 4500)
   apply bind_congr_of_forall_mem_support
   intro b _
   change BitVec 256 at b
-  have s2pc : (parentCallState s1 1 b).pc = 4524 := by
+  have s2pc : (parentCallState s1 1 b).pc = 4548 := by
     rw [parent_call_pc s1 1 (by decide), s1pc]; rfl
   rw [commit_parent_next _ s2pc]
   simp [Execution.charge, ← Nat.add_assoc]
@@ -276,31 +278,34 @@ private def parentStartInstructions : List Instr :=
   [.ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 383, .SLLI .x6 .x6 11,
    .ADDI .x6 .x6 2047, .SLLI .x6 .x6 11, .ADDI .x6 .x6 1856, .ADD .x21 .x9 .x6,
    .ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 191, .SLLI .x6 .x6 11,
-   .ADDI .x6 .x6 2047, .SLLI .x6 .x6 11, .ADDI .x6 .x6 1952, .ADD .x22 .x9 .x6]
+   .ADDI .x6 .x6 2047, .SLLI .x6 .x6 11, .ADDI .x6 .x6 1952, .ADD .x22 .x9 .x6,
+   .ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 2, .SLLI .x6 .x6 11,
+   .ADDI .x6 .x6 1952, .ADD .x7 .x9 .x6]
 
 private def parentStartPrefix (state : MachineState) (count : Nat) : MachineState :=
   (parentStartInstructions.take count).foldl execInstrBr state
 
-/-- Pointer initialization before the parent loop (instructions 84-100):
-x21 = x9 + 96n - 192 and x22 = x9 + 48n - 96, then branch to the loop. -/
+/-- Pointer initialization before the parent loop (instructions 84-106):
+x21 = x9 + 96n - 192, x22 = x9 + 48n - 96 and the stop pointer x7 = x9 + 48*128 - 96,
+then branch to the loop. -/
 def commitParentsStartState (state : MachineState) : MachineState :=
-  execInstrBr (parentStartPrefix state 16) (.BEQ .x22 .x9 40)
+  execInstrBr (parentStartPrefix state 22) (.BEQ .x22 .x7 40)
 
 set_option maxRecDepth 20000 in
 private theorem parent_start_prefix_pc (state : MachineState) (pc : state.pc = 4432) :
-    (parentStartPrefix state 16).pc = 4496 := by
+    (parentStartPrefix state 22).pc = 4520 := by
   simp [parentStartPrefix, parentStartInstructions, execInstrBr, pc, MachineState.setPC]
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 1600000 in
 theorem commit_parents_start (state : MachineState) (pc : state.pc = 4432) (fuel : Nat) :
-    execute (submission.image .commit) (17 + fuel) state true =
+    execute (submission.image .commit) (23 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitParentsStartState state) true
-          return result.charge 17 0) := by
+          return result.charge 23 0) := by
   have setup (remaining : Nat) :
-      execute (submission.image .commit) (16 + remaining) state true =
-        (do let result ← execute (submission.image .commit) remaining (parentStartPrefix state 16) true
-            return result.charge 16 0) := by
+      execute (submission.image .commit) (22 + remaining) state true =
+        (do let result ← execute (submission.image .commit) remaining (parentStartPrefix state 22) true
+            return result.charge 22 0) := by
     apply execute_unit_steps (states := parentStartPrefix state)
     intro i hi
     refine ⟨.base ((parentStartInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
@@ -310,32 +315,34 @@ theorem commit_parents_start (state : MachineState) (pc : state.pc = 4432) (fuel
       · interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
-  have fetched : fetch (submission.image .commit) (parentStartPrefix state 16) =
-      some (.base (.BEQ .x22 .x9 40)) := by
-    apply commit_fetch _ 100 _ (by decide)
+  have fetched : fetch (submission.image .commit) (parentStartPrefix state 22) =
+      some (.base (.BEQ .x22 .x7 40)) := by
+    apply commit_fetch _ 106 _ (by decide)
     · rw [parent_start_prefix_pc state pc]; rfl
     · rfl
-  have stepped : ordinaryStep (parentStartPrefix state 16) (.base (.BEQ .x22 .x9 40)) =
+  have stepped : ordinaryStep (parentStartPrefix state 22) (.base (.BEQ .x22 .x7 40)) =
       some (commitParentsStartState state) := rfl
-  rw [show 17 + fuel = 16 + (fuel + 1) by omega, setup,
+  rw [show 23 + fuel = 22 + (fuel + 1) by omega, setup,
     execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
 private theorem parent_start_prefix_memory (state : MachineState) :
-    (parentStartPrefix state 16).mem = state.mem := rfl
+    (parentStartPrefix state 22).mem = state.mem := rfl
 
 private theorem parent_start_prefix_register (state : MachineState) (reg : Reg)
-    (n6 : reg ≠ .x6) (n21 : reg ≠ .x21) (n22 : reg ≠ .x22) :
-    (parentStartPrefix state 16).getReg reg = state.getReg reg := by
+    (n6 : reg ≠ .x6) (n7 : reg ≠ .x7) (n21 : reg ≠ .x21) (n22 : reg ≠ .x22) :
+    (parentStartPrefix state 22).getReg reg = state.getReg reg := by
   simp only [parentStartPrefix, parentStartInstructions, List.take, List.foldl, execInstrBr,
     MachineState.getReg_setPC, MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n6),
+    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n7),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n21),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n22)]
 
 set_option maxRecDepth 20000 in
 private theorem parent_start_prefix_pointers (state : MachineState) :
-    (parentStartPrefix state 16).getReg .x21 = state.getReg .x9 + 1610612544 ∧
-    (parentStartPrefix state 16).getReg .x22 = state.getReg .x9 + 805306272 := by
+    (parentStartPrefix state 22).getReg .x21 = state.getReg .x9 + 1610612544 ∧
+    (parentStartPrefix state 22).getReg .x22 = state.getReg .x9 + 805306272 ∧
+    (parentStartPrefix state 22).getReg .x7 = state.getReg .x9 + 6048 := by
   dsimp only [parentStartPrefix, parentStartInstructions, List.take, List.foldl, execInstrBr,
     signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
   simp [execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
@@ -345,45 +352,163 @@ always enters the loop (the pointer offset is nonzero). -/
 theorem commit_parents_start_state (state : MachineState) (pc : state.pc = 4432) :
     (commitParentsStartState state).getReg .x21 = state.getReg .x9 + 1610612544 ∧
     (commitParentsStartState state).getReg .x22 = state.getReg .x9 + 805306272 ∧
-    (commitParentsStartState state).pc = 4500 ∧
+    (commitParentsStartState state).getReg .x7 = state.getReg .x9 + 6048 ∧
+    (commitParentsStartState state).pc = 4524 ∧
     (commitParentsStartState state).mem = state.mem ∧
-    ∀ reg, reg ≠ .x6 → reg ≠ .x21 → reg ≠ .x22 →
+    ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x22 →
       (commitParentsStartState state).getReg reg = state.getReg reg := by
   have pointers := parent_start_prefix_pointers state
-  have x9 := parent_start_prefix_register state .x9 (by decide) (by decide) (by decide)
-  have different : (parentStartPrefix state 16).getReg .x22 ≠ (parentStartPrefix state 16).getReg .x9 := by
-    rw [pointers.2, x9]
+  have different : (parentStartPrefix state 22).getReg .x22 ≠ (parentStartPrefix state 22).getReg .x7 := by
+    rw [pointers.2.1, pointers.2.2]
     intro same
-    have zero := BitVec.add_right_eq_self.mp same
-    exact absurd zero (by decide)
+    exact absurd ((BitVec.add_right_inj _).mp same) (by decide)
   have branch : commitParentsStartState state =
-      (parentStartPrefix state 16).setPC ((parentStartPrefix state 16).pc + 4) := by
+      (parentStartPrefix state 22).setPC ((parentStartPrefix state 22).pc + 4) := by
     unfold commitParentsStartState
     simp only [execInstrBr]
     rw [ite_eq_right_iff.mpr (fun h => absurd (by simpa using h) different)]
   rw [branch]
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [MachineState.getReg_setPC]; exact pointers.1
-  · rw [MachineState.getReg_setPC]; exact pointers.2
+  · rw [MachineState.getReg_setPC]; exact pointers.2.1
+  · rw [MachineState.getReg_setPC]; exact pointers.2.2
   · simp only [MachineState.setPC]; rw [parent_start_prefix_pc state pc]; rfl
   · exact parent_start_prefix_memory state
-  · intro reg n6 n21 n22
+  · intro reg n6 n7 n21 n22
     rw [MachineState.getReg_setPC]
-    exact parent_start_prefix_register state reg n6 n21 n22
+    exact parent_start_prefix_register state reg n6 n7 n21 n22
+
+private def capStartInstructions : List Instr :=
+  [.ADDI .x21 .x22 64, .ADDI .x20 .x0 0, .SLLI .x20 .x20 11, .ADDI .x20 .x20 64]
+
+private def capStartPrefix (state : MachineState) (count : Nat) : MachineState :=
+  (capStartInstructions.take count).foldl execInstrBr state
+
+/-- Chain start (instructions 116-119): x21 = x22 + 64 points at the zero gap below cap
+pair 0 (the chain state h0), and the counter x20 = 64. -/
+def capStartState (state : MachineState) : MachineState := capStartPrefix state 4
+
+set_option maxRecDepth 20000 in
+theorem commit_cap_start (state : MachineState) (pc : state.pc = 4560) (fuel : Nat) :
+    execute (submission.image .commit) (4 + fuel) state true =
+      (do let result ← execute (submission.image .commit) fuel (capStartState state) true
+          return result.charge 4 0) := by
+  apply execute_unit_steps (states := capStartPrefix state)
+  intro i hi
+  refine ⟨.base ((capStartInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
+  · apply commit_fetch _ (116 + i) _ (by omega)
+    · interval_cases i <;> simp [capStartPrefix, capStartInstructions, execInstrBr, pc, MachineState.setPC]
+    · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+
+theorem cap_start_state (state : MachineState) (pc : state.pc = 4560) :
+    (capStartState state).getReg .x21 = state.getReg .x22 + 64 ∧
+    (capStartState state).getReg .x20 = 64 ∧
+    (capStartState state).pc = 4576 ∧
+    (capStartState state).mem = state.mem ∧
+    ∀ reg, reg ≠ .x20 → reg ≠ .x21 → (capStartState state).getReg reg = state.getReg reg := by
+  refine ⟨?_, ?_, ?_, rfl, ?_⟩
+  · simp [capStartState, capStartPrefix, capStartInstructions, execInstrBr, signExtend12,
+      MachineState.getReg_setPC, MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq]
+  · simp [capStartState, capStartPrefix, capStartInstructions, execInstrBr, signExtend12,
+      MachineState.getReg, MachineState.setReg, MachineState.setPC]
+  · simp [capStartState, capStartPrefix, capStartInstructions, execInstrBr, pc, MachineState.setPC]
+  · intro reg n20 n21
+    simp only [capStartState, capStartPrefix, capStartInstructions, List.take, List.foldl, execInstrBr,
+      MachineState.getReg_setPC, MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n20),
+      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n21)]
+
+/-- Advance the chain pointer to the gap just written and count down; loop while cap
+pairs remain, else go to the commitment copy. -/
+def chainNextState (state : MachineState) : MachineState :=
+  ((state.setReg .x21 (state.getReg .x21 + 96)).setReg .x20 (state.getReg .x20 - 1)).setPC
+    (if state.getReg .x20 - 1 = 0 then 4600 else 4576)
+
+private def chainNextInstructions : List Instr :=
+  [.ADDI .x21 .x21 96, .ADDI .x20 .x20 4095]
+
+private def chainNextPrefix (state : MachineState) (count : Nat) : MachineState :=
+  (chainNextInstructions.take count).foldl execInstrBr state
+
+set_option maxRecDepth 20000 in
+theorem commit_chain_next (state : MachineState) (pc : state.pc = 4588) (fuel : Nat) :
+    execute (submission.image .commit) (3 + fuel) state true =
+      (do let result ← execute (submission.image .commit) fuel (chainNextState state) true
+          return result.charge 3 0) := by
+  have setup (remaining : Nat) :
+      execute (submission.image .commit) (2 + remaining) state true =
+        (do let result ← execute (submission.image .commit) remaining (chainNextPrefix state 2) true
+            return result.charge 2 0) := by
+    apply execute_unit_steps (states := chainNextPrefix state)
+    intro i hi
+    refine ⟨.base ((chainNextInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
+    · apply commit_fetch _ (123 + i) _ (by omega)
+      · interval_cases i <;> simp [chainNextPrefix, chainNextInstructions, execInstrBr, pc, MachineState.setPC]
+      · interval_cases i <;> rfl
+    · interval_cases i <;> rfl
+    · interval_cases i <;> rfl
+  have fetched : fetch (submission.image .commit) (chainNextPrefix state 2) =
+      some (.base (.BNE .x20 .x0 8172)) := by
+    apply commit_fetch _ 125 _ (by decide)
+    · simp [chainNextPrefix, chainNextInstructions, execInstrBr, pc, MachineState.setPC]
+    · rfl
+  have stepped : ordinaryStep (chainNextPrefix state 2) (.base (.BNE .x20 .x0 8172)) =
+      some (chainNextState state) := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, signExtend12,
+      chainNextPrefix, chainNextInstructions, chainNextState, MachineState.getReg,
+      MachineState.setReg, MachineState.setPC, pc, BitVec.sub_eq_add_neg]
+    split <;> simp_all
+  rw [show 3 + fuel = 2 + (fuel + 1) by omega, setup,
+    execute_ordinary_step _ _ _ _ _ _ fetched stepped]
+  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
+
+/-- One chain iteration: the call over `[h_k | cap 2k | cap 2k+1]`, then advance. -/
+def chainIterationRun (state : MachineState) : OracleComp World MachineState := do
+  let a ← World.query (.inr (parentQuery state 2))
+  return chainNextState (parentCallState state 2 a)
+
+theorem chain_iteration_support (state finished : MachineState)
+    (reachable : finished ∈ support (chainIterationRun state)) :
+    ∃ a, finished = chainNextState (parentCallState state 2 a) := by
+  simp only [chainIterationRun, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
+  obtain ⟨a, _, rfl⟩ := reachable
+  exact ⟨a, rfl⟩
+
+set_option maxHeartbeats 1600000 in
+/-- One chain iteration: six instructions, 13 cycles and one query. -/
+theorem commit_chain_iteration (state : MachineState) (pc : state.pc = 4576)
+    (r5 : state.getReg .x5 = 0) (r11 : state.getReg .x11 = 96) (r13 : state.getReg .x13 = 0)
+    (valid : ParentCallValid state 2) (fuel : Nat) :
+    execute (submission.image .commit) (6 + fuel) state true =
+      (do let finished ← chainIterationRun state
+          let result ← execute (submission.image .commit) fuel finished true
+          return result.charge 13 1) := by
+  rw [show 6 + fuel = 3 + (3 + fuel) by omega,
+    commit_parent_call state 2 (by decide) (by rw [pc]; rfl) r5 r11 r13 valid]
+  simp only [chainIterationRun, bind_assoc, pure_bind]
+  apply bind_congr_of_forall_mem_support
+  intro a _
+  change BitVec 256 at a
+  have s1pc : (parentCallState state 2 a).pc = 4588 := by
+    rw [parent_call_pc state 2 (by decide), pc]; rfl
+  rw [commit_chain_next _ s1pc]
+  simp [Execution.charge, ← Nat.add_assoc]
 
 def commitExitState (state : MachineState) : MachineState :=
-  ((state.setReg .x5 1).setReg .x10 0).setPC 4588
+  ((state.setReg .x5 1).setReg .x10 0).setPC 4640
 
-theorem commit_exit (state : MachineState) (pc : state.pc = 4580) (fuel : Nat) :
+set_option maxRecDepth 20000 in
+theorem commit_exit (state : MachineState) (pc : state.pc = 4632) (fuel : Nat) :
     execute (submission.image .commit) (3 + fuel) state true =
       pure ⟨.success, commitExitState state, 3, 0⟩ := by
-  let next := (state.setReg .x5 1).setPC 4584
+  let next := (state.setReg .x5 1).setPC 4636
   have f0 : fetch (submission.image .commit) state = some (.base (.ADDI .x5 .x0 1)) := by
-    apply commit_fetch _ 121 _ (by decide) pc; rfl
+    apply commit_fetch _ 134 _ (by decide) pc; rfl
   have f1 : fetch (submission.image .commit) next = some (.base (.ADDI .x10 .x0 0)) := by
-    apply commit_fetch _ 122 _ (by decide) rfl; rfl
+    apply commit_fetch _ 135 _ (by decide) rfl; rfl
   have f2 : fetch (submission.image .commit) (commitExitState state) = some (.base .ECALL) := by
-    apply commit_fetch _ 123 _ (by decide) rfl; rfl
+    apply commit_fetch _ 136 _ (by decide) rfl; rfl
   have s0 : ordinaryStep state (.base (.ADDI .x5 .x0 1)) = some next := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       next, pc, MachineState.getReg]

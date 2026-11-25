@@ -59,6 +59,31 @@ theorem reconstruct_heap_ancestor (compress : Compression) (heap : Nat → Diges
         else combine compress (heap node) (heap (node ^^^ 1))) (heapPath heap (node/2) count) = _
     rw [step, ih (node/2) (by omega) parentHeight, Nat.div_div_eq_div_mul, ← power]
 
+/-- Only the parents strictly above slot `low` need be consistent when the climb stops
+at an ancestor above `low` (here: at a cap node). -/
+theorem reconstruct_heap_ancestor_above (compress : Compression) (heap : Nat → Digest)
+    (low leaves : Nat)
+    (parents : ∀ parent, low < parent → parent < leaves →
+      heap parent = combine compress (heap (2*parent)) (heap (2*parent+1)))
+    (count node : Nat) (below : node < 2*leaves) (height : (low+1) * 2^count ≤ node) :
+    climb compress (heap node) (heapPath heap node count) = heap (node / 2^count) := by
+  induction count generalizing node with
+  | zero => simp [heapPath, climb]
+  | succ count ih =>
+    have positive : 0 < 2^count := by positivity
+    have power : (low+1) * 2^(count+1) = 2*((low+1) * 2^count) := by rw [Nat.pow_succ]; ring
+    have least : low + 1 ≤ (low+1) * 2^count := Nat.le_mul_of_pos_right _ positive
+    rw [power] at height
+    have parentBound : node/2 < leaves := by omega
+    have parentAbove : low < node/2 := by omega
+    have parentHeight : (low+1) * 2^count ≤ node/2 := by omega
+    have step := heap_parent_step compress heap node (parents (node/2) parentAbove parentBound)
+    change climb compress
+      (if node.testBit 0 then combine compress (heap (node ^^^ 1)) (heap node)
+        else combine compress (heap node) (heap (node ^^^ 1))) (heapPath heap (node/2) count) = _
+    rw [step, ih (node/2) (by omega) parentHeight, Nat.div_div_eq_div_mul,
+      show 2 * 2^count = 2^(count+1) by rw [Nat.pow_succ]; omega]
+
 /-- A path from any leaf of the complete heap reaches the root at slot 1. -/
 theorem reconstruct_heap_root (compress : Compression) (heap : Nat → Digest) (depth index : Nat)
     (inside : index < 2^depth)

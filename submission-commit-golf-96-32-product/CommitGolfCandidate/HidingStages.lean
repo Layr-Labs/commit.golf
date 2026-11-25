@@ -1,6 +1,6 @@
 import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingLeaf
-import CommitGolfCandidate.BindingProbe
+import CommitGolfCandidate.CompressionSampling
 
 /-! Connect the adaptive first stage to the fixed-cache hiding lemmas. The cache
 and chosen challenge are sampled jointly; there is no independence assumption
@@ -11,6 +11,15 @@ namespace CommitGolfCandidate
 local instance hidingStagesDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
 
+/-- The cache runner respects monadic sequencing (local copy, so the hiding proof does
+not depend on the binding reduction's modules). -/
+private theorem staged_compression_run_bind (permutation : Perm) {α β : Type}
+    (first : OracleComp World α) (next : α → OracleComp World β) (cache : CompressionCache) :
+    compressionRun permutation (first >>= next) cache = (do
+      let (value, after) ← compressionRun permutation first cache
+      compressionRun permutation (next value) after) := by
+  simp [compressionRun, simulateQ_bind, StateT.run_bind]
+
 /-- After any first stage, resample only the cells not fixed by its transcript.
 This preserves the exact distribution of every oracle-aware continuation. -/
 theorem staged_compression_sampling (permutation : Perm) {α β : Type}
@@ -20,7 +29,7 @@ theorem staged_compression_sampling (permutation : Perm) {α β : Type}
     𝒟[do let (value, cache) ← compressionRun permutation first ∅
          let table ← $ᵗ Compression
          fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next value)] := by
-  rw [← compression_sampling_empty, compression_run_bind, map_bind]
+  rw [← compression_sampling_empty, staged_compression_run_bind, map_bind]
   apply _root_.evalDist_bind_congr
   intro result
   cases result with

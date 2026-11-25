@@ -28,11 +28,15 @@ theorem reference_opening_salt_congr (heap : Nat → Digest) (left right : Index
   apply List.map_congr_left
   intro offset member
   have below := List.mem_range.mp member
-  have present : offset/800 < positions.card := (Nat.div_lt_iff_lt_mul (by decide)).mpr (by omega)
-  unfold referenceOpeningDigest
+  unfold referenceProofDigest
   split
-  · rw [agree _ (opening_index_mem positions _ present)]
   · rfl
+  · have present : (offset-4096)/576 < positions.card :=
+      (Nat.div_lt_iff_lt_mul (by decide)).mpr (by omega)
+    unfold referenceOpeningDigest
+    split
+    · rw [agree _ (opening_index_mem positions _ present)]
+    · rfl
 
 theorem reference_opening_hidden_salt (heap : Nat → Digest) (salt : Index → Digest)
     (positions : Positions) (hidden : Index) (unopened : hidden ∉ positions) (fresh : Digest) :
@@ -104,13 +108,17 @@ def queryTranscriptExcept (message : Message) (salt : Index → Digest) (positio
   queryTranscript (queryHeap LENGTH (queryLeafExcept message salt hidden digest) LOG_LENGTH)
     (Function.update salt hidden 0) positions
 
+/-- Loose proof-only query count of one full transcript recomputation: every cap
+node and every proof byte recomputes its heap slot, plus the 64 chain calls. -/
+def transcriptBudget (card : Nat) : Nat := (4224+576*card)*heapQueryBudget 8 LOG_LENGTH+64
+
 attribute [local irreducible] heapQueryBudget queryHeap queryTranscript
 
 theorem query_transcript_except_bound (message : Message) (salt : Index → Digest)
     (positions : Positions) (hidden : Index) (digest : Digest) :
     PublicQueryBound (queryTranscriptExcept message salt positions hidden digest)
-      ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH) := by
-  unfold queryTranscriptExcept
+      (transcriptBudget positions.card) := by
+  unfold queryTranscriptExcept transcriptBudget
   apply query_transcript_bound
   intro node
   exact query_heap_bound LENGTH _ 8 (query_leaf_except_bound message salt hidden digest) LOG_LENGTH node
@@ -120,7 +128,8 @@ theorem query_transcript_except_reference (oracle : Oracle) (message : Message)
     fixedOracleRun oracle (queryTranscriptExcept message salt positions hidden digest) =
       let heap := referenceHeap oracle.compression LENGTH
         (leafValuesExcept oracle.compression message salt hidden digest)
-      pure (heap 1, referenceOpening heap (Function.update salt hidden 0) positions) := by
+      pure (capRoot oracle.compression (referenceCap heap),
+        referenceOpening heap (Function.update salt hidden 0) positions) := by
   apply query_transcript_reference
   intro node positive inside
   apply query_heap_reference oracle LENGTH _ _
@@ -159,8 +168,8 @@ theorem query_transcript_hidden_update (oracle : Oracle) (message : Message)
       pure (referenceTranscript oracle.compression
         (Function.update message hidden value) (Function.update salt hidden fresh) positions) := by
   rw [query_transcript_except_reference, leaf_values_except_update]
-  change pure ((saltedHeap oracle.compression (Function.update message hidden value)
-      (Function.update salt hidden fresh)) 1,
+  change pure (capRoot oracle.compression (referenceCap (saltedHeap oracle.compression
+      (Function.update message hidden value) (Function.update salt hidden fresh))),
     referenceOpening (saltedHeap oracle.compression (Function.update message hidden value)
       (Function.update salt hidden fresh)) (Function.update salt hidden 0) positions) = _
   unfold referenceTranscript
