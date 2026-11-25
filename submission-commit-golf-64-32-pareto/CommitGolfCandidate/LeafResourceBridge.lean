@@ -10,8 +10,8 @@ Its structural budget follows from VCVio's completed-path bound through the exis
 bridge, whose reply types are inhabited. Equality of final values alone would not transfer costs.
 
 The separate machine theorem covers the checker image from PC 4444 through its return to 4196.
-Its 194 abstract cycles include the loop and return, but exclude caller salt/input preparation and
-the continuation. The 138-step segment intentionally ends `unfinished` at that instruction boundary;
+Its 159 abstract cycles include the loop and return, but exclude caller salt/input preparation and
+the continuation. The 103-step segment intentionally ends `unfinished` at that instruction boundary;
 it is not a full commitment, opening or checker runtime, termination, or security theorem.
 -/
 
@@ -58,10 +58,10 @@ theorem check_leaf_subroutine_cost
     (sourceValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (138 + fuel) state allowCoins =
-      (do let finished ← checkLeafLoop ((state.setReg .x28 8).setPC 4448) 8
+    execute (submission.image .check) (103 + fuel) state allowCoins =
+      (do let finished ← checkLeafLoop (checkLeafPrepared state) 8
           let result ← execute (submission.image .check) fuel (finished.setPC 4196) allowCoins
-          return result.charge 194 8) :=
+          return result.charge 159 8) :=
   check_leaf_subroutine state pc link scratch sourceValid fuel allowCoins
 
 private theorem leaf_loop_run (oracle : Oracle) (state : MachineState) (count : Nat) :
@@ -97,20 +97,22 @@ theorem check_leaf_segment
     (bounded : address + 256 < 2^64)
     (initial : readBuffer state 256 32 = salt)
     (data : ∀ i < 8, readBuffer state (address + 32*i) 32 = value.extractLsb' (256*i) 256) :
-    let initialized := (state.setReg .x28 8).setPC 4448
+    let initialized := checkLeafPrepared state
     let finished := (checkEvaluation oracle (checkLeafLoop initialized 8)).1
-    oracle.run (execute (submission.image .check) 138 state false) =
+    oracle.run (execute (submission.image .check) 103 state false) =
         pure (({ exit := .unfinished, state := finished.setPC 4196,
-                 cycles := 194, oracleCalls := 8 } : Execution), 8) ∧
+                 cycles := 159, oracleCalls := 8 } : Execution), 8) ∧
       readBuffer (finished.setPC 4196) 256 32 = Resources.referenceLeaf oracle.compression (salt, value) ∧
       oracle.run (Resources.leafWorld (salt, value)) =
         pure (Resources.referenceLeaf oracle.compression (salt, value), 8) := by
   dsimp only
-  let initialized := (state.setReg .x28 8).setPC 4448
+  let initialized := checkLeafPrepared state
   have initScratch : initialized.getReg .x21 = 256 := by
-    simpa [initialized, MachineState.getReg_setPC, MachineState.getReg_setReg_ne] using scratch
+    rw [checkLeafPrepared_register _ _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
+    exact scratch
   have initPointer : initialized.getReg .x8 = BitVec.ofNat 64 address := by
-    simpa [initialized, MachineState.getReg_setPC, MachineState.getReg_setReg_ne] using pointer
+    rw [checkLeafPrepared_register _ _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
+    exact pointer
   have initSalt : readBuffer initialized 256 32 = salt := initial
   have initData : ∀ i < 8,
       readBuffer initialized (address + 32*i) 32 = value.extractLsb' (256*i) 256 := data

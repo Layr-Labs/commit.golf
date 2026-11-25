@@ -195,6 +195,20 @@ theorem read_digest_eq_iff (left right : MachineState) (leftAddress rightAddress
     rw [w0, w1, w2, w3]
 
 /-- The compression reply is read back as the identical 256-bit digest. -/
+theorem check_leaf_ecall_digest (state : MachineState) (answer : BitVec 256) :
+    readBuffer (checkLeafEcallState state answer) 256 32 = answer := by
+  rw [read_digest_words _ _ (by decide)]
+  have w0 := check_leaf_ecall_word state answer 0 (by decide)
+  have w1 := check_leaf_ecall_word state answer 1 (by decide)
+  have w2 := check_leaf_ecall_word state answer 2 (by decide)
+  have w3 := check_leaf_ecall_word state answer 3 (by decide)
+  simp only [Nat.reduceMul, Nat.reduceAdd] at w0 w1 w2 w3
+  rw [w0, w1, w2, w3]
+  rw [BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide),
+    BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide),
+    BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide)]
+  simp
+
 theorem check_compression_digest (state : MachineState) (answer : BitVec 256) :
     readBuffer (checkCompressionState state answer) 256 32 = answer := by
   rw [read_digest_words _ _ (by decide)]

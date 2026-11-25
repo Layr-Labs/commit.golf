@@ -101,7 +101,7 @@ theorem check_position_proof_pointer (state : MachineState) :
 
 /-- The machine-state distribution at the root comparison for one position. -/
 def checkPositionHash (state : MachineState) : OracleComp World MachineState := do
-  let leaf ← checkLeafLoop (((checkPositionState state).setReg .x28 8).setPC 4448) 8
+  let leaf ← checkLeafLoop (checkLeafPrepared (checkPositionState state)) 8
   checkPathLoop (checkPathInitializedState (leaf.setPC 4196)) 24
 
 set_option maxHeartbeats 300000 in
@@ -117,12 +117,12 @@ theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check)
-        (153 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel) state allowCoins =
+        (118 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel) state allowCoins =
       (do let finished ← checkPositionHash state
           let result ← execute (submission.image .check) fuel finished allowCoins
-          return result.charge (377 + pathInstructions (state.getMem (state.getReg .x24)) 24) 32) := by
+          return result.charge (342 + pathInstructions (state.getMem (state.getReg .x24)) 24) 32) := by
   let ready := checkPositionState state
-  let initialized := (ready.setReg .x28 8).setPC 4448
+  let initialized := checkLeafPrepared ready
   have readyPC : ready.pc = 4444 := rfl
   have readyLink : ready.getReg .x1 = 4196 := by
     simp only [ready, checkPositionState, checkLeafCallState, MachineState.getReg_setPC,
@@ -133,15 +133,15 @@ theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
       accessValid (ready.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true := by
     rw [check_position_register state .x8 (by decide)]
     exact valueValid
-  have initRegister (reg : Reg) (notCounter : reg ≠ .x28) :
-      initialized.getReg reg = ready.getReg reg := by
-    simp only [initialized, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm notCounter)]
+  have initRegister (reg : Reg) (notCounter : reg ≠ .x28) (not5 : reg ≠ .x5)
+      (not10 : reg ≠ .x10) (not11 : reg ≠ .x11) (not12 : reg ≠ .x12) (not13 : reg ≠ .x13) :
+      initialized.getReg reg = ready.getReg reg :=
+    checkLeafPrepared_register ready reg notCounter not5 not10 not11 not12 not13
   have saltValid : ∀ word : Fin 4,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word.val)) 8 = true :=
     fun word => proofValid word.val (by omega)
-  rw [show 153 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel =
-      11 + (138 + (4 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel)) by omega,
+  rw [show 118 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel =
+      11 + (103 + (4 + pathInstructions (state.getMem (state.getReg .x24)) 24 + fuel)) by omega,
     check_position_setup state pc indexValid scratch saltValid,
     check_leaf_subroutine ready readyPC readyLink readyScratch readyValue]
   simp only [checkPositionHash, bind_assoc, pure_bind]
@@ -149,14 +149,17 @@ theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
   intro leaf reached
   have registers := (check_leaf_loop_registers initialized 8 leaf reached).2
   have leafIndex : (leaf.setPC 4196).getReg .x20 = state.getMem (state.getReg .x24) := by
-    rw [MachineState.getReg_setPC, registers .x20 (by decide), initRegister .x20 (by decide)]
+    rw [MachineState.getReg_setPC, registers .x20 (by decide),
+      initRegister .x20 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
     exact check_position_index state
   have leafScratch : (leaf.setPC 4196).getReg .x21 = 256 := by
-    rw [MachineState.getReg_setPC, registers .x21 (by decide), initRegister .x21 (by decide)]
+    rw [MachineState.getReg_setPC, registers .x21 (by decide),
+      initRegister .x21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
     exact readyScratch
   have leafSource : ∀ word < 96,
       accessValid ((leaf.setPC 4196).getReg .x25 + BitVec.ofNat 64 (8 * word)) 8 = true := by
-    rw [MachineState.getReg_setPC, registers .x25 (by decide), initRegister .x25 (by decide),
+    rw [MachineState.getReg_setPC, registers .x25 (by decide),
+      initRegister .x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide),
       check_position_proof_pointer state]
     intro word bounded
     have address : state.getReg .x25 + 32 + BitVec.ofNat 64 (8 * word) =
@@ -169,8 +172,8 @@ theorem check_position_hash (state : MachineState) (pc : state.pc = 4152)
   simp only [leafIndex, bind_assoc, pure_bind]
   have charges (result : Execution) :
       ((result.charge (4 + pathInstructions (state.getMem (state.getReg .x24)) 24 + 168) 24).charge
-        194 8).charge 11 0 =
-      result.charge (377 + pathInstructions (state.getMem (state.getReg .x24)) 24) 32 := by
+        159 8).charge 11 0 =
+      result.charge (342 + pathInstructions (state.getMem (state.getReg .x24)) 24) 32 := by
     cases result
     simp only [Execution.charge, Execution.mk.injEq, true_and]
     omega
@@ -186,21 +189,23 @@ theorem check_position_hash_registers (state finished : MachineState)
     ∀ reg ∈ [Reg.x21, .x24, .x26, .x27], finished.getReg reg = state.getReg reg := by
   simp only [checkPositionHash, mem_support_bind_iff] at reachable
   obtain ⟨leaf, leafReached, pathReached⟩ := reachable
-  let initialized := ((checkPositionState state).setReg .x28 8).setPC 4448
+  let initialized := checkLeafPrepared (checkPositionState state)
   have leafRegs := check_leaf_loop_registers initialized 8 leaf leafReached
   have pathRegs := check_path_loop_registers _ 24 finished pathReached
-  have initRegister (reg : Reg) (notCounter : reg ≠ .x28) :
-      initialized.getReg reg = (checkPositionState state).getReg reg := by
-    simp only [initialized, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm notCounter)]
+  have initRegister (reg : Reg) (notCounter : reg ≠ .x28) (not5 : reg ≠ .x5)
+      (not10 : reg ≠ .x10) (not11 : reg ≠ .x11) (not12 : reg ≠ .x12) (not13 : reg ≠ .x13) :
+      initialized.getReg reg = (checkPositionState state).getReg reg :=
+    checkLeafPrepared_register _ reg notCounter not5 not10 not11 not12 not13
   refine ⟨(check_path_loop_finished _ 24 (by decide)
       (check_path_initialized_counter _) finished pathReached).2 (by decide), ?_, ?_, ?_⟩
   · rw [pathRegs.2 .x8 (by decide), check_path_setup_register _ .x8 (by decide),
-      MachineState.getReg_setPC, leafRegs.1, initRegister .x8 (by decide),
+      MachineState.getReg_setPC, leafRegs.1, initRegister .x8 (by decide) (by decide)
+        (by decide) (by decide) (by decide) (by decide),
       check_position_register state .x8 (by decide)]
     rfl
   · rw [pathRegs.1, check_path_setup_register _ .x25 (by decide), MachineState.getReg_setPC,
-      leafRegs.2 .x25 (by decide), initRegister .x25 (by decide), check_position_proof_pointer]
+      leafRegs.2 .x25 (by decide), initRegister .x25 (by decide) (by decide) (by decide)
+        (by decide) (by decide) (by decide), check_position_proof_pointer]
     change state.getReg .x25 + 32 + 768 = state.getReg .x25 + 800
     rw [BitVec.add_assoc]; rfl
   · intro reg included
@@ -219,8 +224,24 @@ theorem check_position_hash_registers (state finished : MachineState)
     have not28 : reg ≠ .x28 := by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at included
       rcases included with rfl | rfl | rfl | rfl <;> decide
+    have not5 : reg ≠ .x5 := by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at included
+      rcases included with rfl | rfl | rfl | rfl <;> decide
+    have not10 : reg ≠ .x10 := by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at included
+      rcases included with rfl | rfl | rfl | rfl <;> decide
+    have not11 : reg ≠ .x11 := by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at included
+      rcases included with rfl | rfl | rfl | rfl <;> decide
+    have not12 : reg ≠ .x12 := by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at included
+      rcases included with rfl | rfl | rfl | rfl <;> decide
+    have not13 : reg ≠ .x13 := by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at included
+      rcases included with rfl | rfl | rfl | rfl <;> decide
     rw [pathRegs.2 reg pathPreserved, check_path_setup_register _ reg not29,
-      MachineState.getReg_setPC, leafRegs.2 reg leafPreserved, initRegister reg not28,
+      MachineState.getReg_setPC, leafRegs.2 reg leafPreserved,
+      initRegister reg not28 not5 not10 not11 not12 not13,
       check_position_register state reg setupPreserved]
 
 /-- A first mismatching word terminates the real checker, regardless of the remaining fuel. -/
@@ -450,9 +471,9 @@ theorem check_loop_terminates (state : MachineState) (count : Nat)
       fun word smaller => invariant.values word (by omega)
     let steps := pathInstructions (state.getMem (state.getReg .x24)) 24
     have stepBound : steps ≤ 696 := (path_instruction_bounds _ 24).2
-    let extra := fuel + (732 - steps)
+    let extra := fuel + (767 - steps)
     have budget : 900 * (count + 1) + 3 + fuel =
-        153 + steps + (15 + (900 * count + 3 + extra)) := by dsimp [extra]; omega
+        118 + steps + (15 + (900 * count + 3 + extra)) := by dsimp [extra]; omega
     rw [budget, check_position_hash state pc indexValid invariant.scratch proofValid valueValid] at reachable
     simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
     obtain ⟨hashed, hashedReached, continued, continuedReached, rfl⟩ := reachable

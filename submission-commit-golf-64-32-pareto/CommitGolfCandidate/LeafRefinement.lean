@@ -74,16 +74,16 @@ theorem check_leaf_input (state : MachineState)
 /-- The loop latch changes only registers and the PC after writing the reply. -/
 theorem check_leaf_step_digest (state : MachineState) (answer : BitVec 256) :
     readBuffer (checkLeafStepState state answer) 256 32 = answer := by
-  change readBuffer (checkCompressionState (checkLeafCopyState state) answer) 256 32 = answer
-  exact check_compression_digest _ _
+  change readBuffer (checkLeafEcallState (checkLeafCopyState state) answer) 256 32 = answer
+  exact check_leaf_ecall_digest _ _
 
 /-- Each leaf iteration preserves all memory outside the 64-byte scratch region. -/
 theorem check_leaf_step_outside (state : MachineState) (answer : BitVec 256)
     (address : Word) (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256 + 8*i)) :
     (checkLeafStepState state answer).getMem address = state.getMem address := by
-  change (checkCompressionState (checkLeafCopyState state) answer).getMem address = _
-  rw [check_compression_memory_outside]
+  change (checkLeafEcallState (checkLeafCopyState state) answer).getMem address = _
+  rw [check_leaf_ecall_memory_outside]
   · apply check_leaf_copy_outside _ _ scratch
     exact ⟨outside 4 (by decide), outside 5 (by decide), outside 6 (by decide), outside 7 (by decide)⟩
   · exact ⟨outside 0 (by decide), outside 1 (by decide), outside 2 (by decide), outside 3 (by decide)⟩
@@ -101,8 +101,8 @@ theorem commit_leaf_step_memory (state : MachineState) (answer : BitVec 256) :
 
 theorem commit_leaf_step_digest (state : MachineState) (answer : BitVec 256) :
     readBuffer (commitLeafStepState state answer) 256 32 = answer := by
-  change readBuffer (checkCompressionState (checkLeafCopyState state) answer) 256 32 = answer
-  exact check_compression_digest _ _
+  change readBuffer (checkLeafEcallState (checkLeafCopyState state) answer) 256 32 = answer
+  exact check_leaf_ecall_digest _ _
 
 /-- Commitment uses the same input block ordering as checking. -/
 theorem commit_leaf_input (state : MachineState)

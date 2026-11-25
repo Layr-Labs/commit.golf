@@ -9,17 +9,18 @@ permutation price.
 Each leaf absorbs eight 32-byte message blocks starting from a private 32-byte
 salt. Parent nodes compress two child digests. An opening contains a salt and
 24 sibling digests for each opened leaf. Each public oracle call consumes one
-query regardless of its cycle cost.
+query regardless of its cycle cost. The compression calling convention is
+installed once per leaf, then each of the eight blocks is a copy and one syscall.
 
 The claimed bounds for a full commitment and an opening of 128 leaves are:
 
 | Claim | Bound |
 | --- | ---: |
 | Proof bytes | 102,400 |
-| Commitment cycles | 3,959,423,012 |
-| Opening cycles | 48,670 |
+| Commitment cycles | 3,372,220,452 |
+| Opening cycles | 48,414 |
 
-The track scores `[commitCycles + openingCycles, proofBytes]`.
+The track scores `(commitCycles + openingCycles) * proofBytes`.
 
 `programs.json` delivers the three machine images and their ABI. `Solution.lean`
 assembles the complete certificate and proves equality with the generated artifact.

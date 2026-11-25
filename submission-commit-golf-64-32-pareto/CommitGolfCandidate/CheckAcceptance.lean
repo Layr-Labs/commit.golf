@@ -72,7 +72,7 @@ theorem check_loop_acceptance (oracle : Oracle) (state : MachineState) (count : 
       fun word smaller => invariant.values word (by omega)
     let steps := pathInstructions (state.getMem (state.getReg .x24)) 24
     have stepBound : steps ≤ 696 := (path_instruction_bounds _ 24).2
-    let extra := fuel+(732-steps)
+    let extra := fuel+(767-steps)
     let hashed := (checkEvaluation oracle (checkPositionHash state)).1
     have reached : hashed ∈ support (checkPositionHash state) := check_evaluation_support oracle _
     have regs := check_position_hash_registers state hashed reached
@@ -85,7 +85,7 @@ theorem check_loop_acceptance (oracle : Oracle) (state : MachineState) (count : 
         accessValid (hashed.getReg .x26+BitVec.ofNat 64 (8*word)) 8 = true := by
       rw [regs.2.2.2 .x26 (by simp)]
       exact invariant.root
-    have budget : 900*(count+1)+3+fuel = 153+steps+(15+(900*count+3+extra)) := by
+    have budget : 900*(count+1)+3+fuel = 118+steps+(15+(900*count+3+extra)) := by
       dsimp [extra]
       omega
     rw [budget, check_position_hash state pc indexValid invariant.scratch proofValid valueValid,

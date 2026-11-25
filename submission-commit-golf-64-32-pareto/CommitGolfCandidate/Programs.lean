@@ -86,10 +86,13 @@ def compressScratch : List Asm :=
   [addi 5 0 0, mv 10 21, addi 11 0 64, mv 12 21, addi 13 0 0, insn 0x73]
 
 /-- The caller initializes the first scratch half to the salt. Consumes 256 bytes
-from x8, preserves x8's final pointer, and returns through x1. -/
+from x8, preserves x8's final pointer, and returns through x1.
+The compression ABI is installed once; each of the eight blocks is a copy plus
+one syscall. -/
 def leafSubroutine : List Asm :=
-  [.label "leaf", addi 28 0 8, .label "leaf-block"] ++
-  copyDigest 8 21 0 32 ++ compressScratch ++
+  [.label "leaf", addi 28 0 8, addi 5 0 0, mv 10 21, addi 11 0 64, mv 12 21,
+   addi 13 0 0, .label "leaf-block"] ++
+  copyDigest 8 21 0 32 ++ [insn 0x73] ++
   [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
 /-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
@@ -116,7 +119,9 @@ def openingCode (depth : Nat) : List Asm :=
   [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (64*n) ++
   [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
    shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
-  [addi 25 25 32, regop 20 20 19] ++ li 28 depth ++
+  [addi 25 25 32, regop 20 20 19] ++
+  (if depth = 24 then [addi 28 0 24, .word (jumpWord 0 12), addi 28 28 24]
+   else li 28 depth) ++
   [.branch 0 28 0 "open-next", .label "open-path",
    -- XORI x7,x20,1 selects the sibling heap slot.
    insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
