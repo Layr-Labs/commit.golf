@@ -57,8 +57,12 @@ jobs:
           contract = any(path and not path.startswith(submission_paths) for path in paths)
           # Do not check whether candidate files still exist: deletions and root replacements
           # must also reach the full verifier. --no-renames selects both sides of a move.
+          # Shared contract changes must recheck every baseline already shipped.
+          # Missing, untouched tracks are allowed during configuration-first rollout.
+          # Changed roots still run even after deletion or replacement.
           changed_tracks = {
-              name: any(path == directory or path.startswith(directory + b'/') for path in paths)
+              name: (any(path == directory or path.startswith(directory + b'/') for path in paths)
+                     or (contract and os.path.lexists(os.fsdecode(directory))))
               for name, directory in new_tracks.items()
           }
           # A fork or differently cased lookalike is not a Yukon-owned submission branch.
@@ -73,7 +77,7 @@ jobs:
                   output.write(f'changed_{name}={str(changed).lower()}\n')
           print(f'Contract regressions required: {contract}')
           print(f'Yukon submission branch: {solver_branch}')
-          print('Changed new tracks:', ', '.join(name for name, changed in changed_tracks.items()
+          print('Required new tracks:', ', '.join(name for name, changed in changed_tracks.items()
                                                 if changed) or 'none')
           PY
   benchmark:

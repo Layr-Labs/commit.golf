@@ -150,12 +150,14 @@ For each new track whose submission directory changes, PR CI also calls that tra
 `benchmark-commit-golf-<width>-32-<mode>.yml` workflow in parallel and requires full
 certificate and artifact-equality verification. Additions, edits, deletions, and both
 sides of moves between tracks select the affected tracks. An unchanged new-track
-submission is not verified by the PR gate.
+submission is also verified when shared contract code changes and its root exists.
 Differences outside the six submission directories enable the linkage and scale workflows.
 Submission-only PRs on Yukon's same-repository `submissions/*` branches
 leave Benchmark execution to Yukon; contract changes on those branches still run the
 full checks here, including any changed new-track submissions. Forks and other branches
 run the original product and Pareto benchmarks plus every changed new track here.
+Shared contract changes additionally require every existing new-track baseline; an
+untouched track without a baseline root can wait for its later baseline rollout.
 The final `contract-regressions` check waits for all required workflows and fails if
 change detection or any required workload fails, is cancelled, or unexpectedly skips.
 
