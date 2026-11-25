@@ -39,18 +39,16 @@ def honestTranscript (message : Message) (positions : Positions) :
   let proof ← submission.scheme.opening trapdoor positions
   return (root, proof)
 
-/-- Public transcript of the mathematical salted tree for one fixed salt vector:
-the chain over the 128 cap nodes and the serialized cap-and-records proof. -/
+/-- Public transcript of the mathematical salted tree for one fixed salt vector. -/
 def referenceTranscript (compress : Compression) (message : Message)
     (salt : Index → Digest) (positions : Positions) : Commitment × Proof :=
   let heap := saltedHeap compress message salt
-  (capRoot compress (referenceCap heap), referenceOpening heap salt positions)
+  (heap 1, referenceOpening heap salt positions)
 
 private theorem scheme_commit_map (program : Submission) (message : Message) :
     program.scheme.commit message = program.readCommit <$> program.run .commit message := rfl
 
-attribute [local irreducible] commitFinalResult submission readBuffer saltedHeap referenceOpening capRoot referenceCap
-  openingResult openingInitializedState openingPositionState openingExitState
+attribute [local irreducible] commitFinalResult submission readBuffer saltedHeap referenceOpening
 
 private theorem final_transcript (oracle : Oracle) (message : Message) {bits : Nat}
     (answer : BitVec bits) (width : bits = 256*LENGTH) (positions : Positions) :
@@ -61,8 +59,7 @@ private theorem final_transcript (oracle : Oracle) (message : Message) {bits : N
         (fun index => answer.extractLsb' (256*index.val) 256) positions := by
   have contents := commit_final_contents oracle message answer width
   apply Prod.ext
-  · have root := committed_root_reference oracle message _ contents.1 _ contents.2
-    exact root
+  · exact committed_root_reference oracle message _ contents.1 _ contents.2
   · exact opening_reference_bytes oracle message _ contents.1 _ contents.2 positions
 
 /-- For every fixed oracle and input, the actual transcript is exactly a fresh

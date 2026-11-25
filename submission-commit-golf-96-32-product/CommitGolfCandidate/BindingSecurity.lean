@@ -2,8 +2,8 @@ import CommitGolfCandidate.Probability
 import CommitGolfCandidate.BindingProbe
 
 /-! Full binding proof for the submitted machine images. The reduction uses at
-most the adversary's public budget plus 340 compression calls, including the
-reply-recording pass. This overhead is only in the security proof. -/
+most the adversary's public budget plus 352 compression calls, including cap-tree
+sibling replay and the reply-recording pass. This overhead is only in the security proof. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
 
@@ -11,17 +11,18 @@ open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
 compression outputs and the challenge's 120-bit binding target. -/
 theorem detector_birthday_le_binding_target (budget : Nat)
     (positive : 1 ≤ budget) (small : budget ≤ 2 ^ BINDING_SECURITY_BITS) :
-    ((budget : ENNReal) + 340) ^ 2 / 2 ^ 256 ≤ (budget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
-  have quadratic := Nat.mul_le_mul_left budget small
-  have arithmetic : (budget + 340) ^ 2 ≤ budget * 2 ^ 136 := by
-    change budget ≤ 2 ^ 120 at small
-    change budget * budget ≤ budget * 2 ^ 120 at quadratic
-    have constant : 115600 ≤ 115600 * budget := by omega
-    have gap : budget * 2 ^ 120 + 116280 * budget ≤ budget * 2 ^ 136 := by
-      have : 2 ^ 120 + 116280 ≤ 2 ^ 136 := by norm_num
-      nlinarith
-    nlinarith
-  have castBound : ((budget : ENNReal) + 340) ^ 2 ≤ (budget : ENNReal) * 2 ^ 136 := by
+    ((budget : ENNReal) + 352) ^ 2 / 2 ^ 256 ≤ (budget : ENNReal) / 2 ^ BINDING_SECURITY_BITS := by
+  have small120 : budget ≤ 2 ^ 120 := small
+  have quadratic : budget * budget ≤ budget * 2 ^ 120 := Nat.mul_le_mul_left budget small120
+  have arithmetic : (budget + 352) ^ 2 ≤ budget * 2 ^ 136 := by
+    have h1 : (budget + 352) ^ 2 = budget * budget + 704 * budget + 123904 := by ring
+    have h2 : 123904 ≤ 123904 * budget := by omega
+    have h3 : budget * 2 ^ 120 + 704 * budget + 123904 * budget =
+        budget * (2 ^ 120 + 704 + 123904) := by ring
+    have h4 : budget * (2 ^ 120 + 704 + 123904) ≤ budget * 2 ^ 136 :=
+      Nat.mul_le_mul_left budget (by decide)
+    omega
+  have castBound : ((budget : ENNReal) + 352) ^ 2 ≤ (budget : ENNReal) * 2 ^ 136 := by
     exact_mod_cast arithmetic
   calc
     _ ≤ (budget : ENNReal) * 2 ^ 136 / 2 ^ 256 := ENNReal.div_le_div_right castBound _
@@ -47,11 +48,11 @@ theorem fixed_permutation_search_bound (permutation : Perm) (adversary : Scheme.
     prEvent_mono_of_support _ _ _ fun result reached collision =>
       search_reply_collision_in_cache permutation adversary budget result reached collision
   have birthday := compression_collision_bound permutation (boundedCollisionSearch adversary budget)
-    (budget + 340) (bounded_collision_search_bound adversary budget)
-  have loose : (((budget + 340) * (budget + 340 - 1) : Nat) : ENNReal) / (2 * 2 ^ 256) ≤
-      ((budget : ENNReal) + 340) ^ 2 / 2 ^ 256 := by
+    (budget + 352) (bounded_collision_search_bound adversary budget)
+  have loose : (((budget + 352) * (budget + 352 - 1) : Nat) : ENNReal) / (2 * 2 ^ 256) ≤
+      ((budget : ENNReal) + 352) ^ 2 / 2 ^ 256 := by
     apply ENNReal.div_le_div
-    · have product : (budget + 340) * (budget + 340 - 1) ≤ (budget + 340) ^ 2 := by
+    · have product : (budget + 352) * (budget + 352 - 1) ≤ (budget + 352) ^ 2 := by
         rw [pow_two]
         exact Nat.mul_le_mul_left _ (Nat.sub_le _ _)
       exact_mod_cast product

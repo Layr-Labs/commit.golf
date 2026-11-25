@@ -8,7 +8,7 @@ set_option maxRecDepth 10000
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-def paddingCallSite (_checker : Bool) (index : Nat) : Prop := index = 109
+def paddingCallSite (_checker : Bool) (index : Nat) : Prop := index = 59 ∨ index = 132
 
 /-- One jump and the sixteen-instruction adapter cost 24 cycles and one query.
 The final PC is the instruction after the original call site. -/
@@ -33,14 +33,14 @@ theorem padding_call (checker : Bool) (state : MachineState) (index : Nat)
     (BitVec.ofNat 64 (4096+4*paddingEntry checker))
   have fetched : fetch (submission.image (paddingProgram checker)) state =
       some (.base instruction) := by
-    cases checker <;> rcases location with rfl <;>
+    cases checker <;> rcases location with rfl | rfl <;>
       simp only [fetch, pc] <;> rfl
   have stepped : ordinaryStep state (.base instruction) = some next := by
-    cases checker <;> rcases location with rfl <;>
+    cases checker <;> rcases location with rfl | rfl <;>
       simp [instruction, next, paddingEntry, ordinaryStep, memoryArgumentsValid,
         memAccess, execInstrBr, signExtend21, pc, MachineState.setPC]
   have alignedReturn : (state.pc+4) &&& ~~~1 = state.pc+4 := by
-    cases checker <;> rcases location with rfl <;> rw [pc] <;> rfl
+    cases checker <;> rcases location with rfl | rfl <;> rw [pc] <;> rfl
   have separate := padding_output_separate (state.getReg .x10) (state.getReg .x12)
     sourceValid destinationValid beforePadding
   rw [show 17+fuel = (16+fuel)+1 by omega,

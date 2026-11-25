@@ -1,7 +1,7 @@
 import CommitGolfCandidate.Model
 import CommitGolfCandidate.Memory
 import CommitGolfCandidate.Check
-import CommitGolfCandidate.Evaluation
+import CommitGolfCandidate.CheckEvaluation
 import CommitGolfCandidate.WriteMemory
 
 /-! Refinement of the machine's salted leaf hash to the reference computation. -/

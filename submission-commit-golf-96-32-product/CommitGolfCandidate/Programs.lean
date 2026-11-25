@@ -115,27 +115,13 @@ def leafSubroutine : List Asm :=
 def heapOffset (node : Nat) : Nat := 32 * (node + node / 2)
 
 def trapdoorBytes (depth : Nat) : Nat := 128 * 2^depth
+def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
 
-/-- The cap is the level `capLog depth` of the binary tree (`capCount` nodes, heap slots
-`capCount .. 2*capCount-1`). The commitment chains over the cap; each opened record
-authenticates its leaf only up to its cap node. -/
-def capLog (depth : Nat) : Nat := min depth 7
-def capCount (depth : Nat) : Nat := 2^capLog depth
-def capBytes (depth : Nat) : Nat := 32 * capCount depth
-/-- One opened record: the salt and `depth - capLog depth` siblings. -/
-def openingBytes (depth : Nat) : Nat := 32 * (depth - capLog depth + 1)
-def proofBytes (depth positions : Nat) : Nat := capBytes depth + openingBytes depth * positions
-
-/-- Add a nonnegative constant with 12-bit immediates (chunks of at most 2047). -/
-def addConst (rd value : Nat) : List Asm :=
-  List.replicate (value / 2047) (addi rd rd 2047) ++
-    (if value % 2047 = 0 then [] else [addi rd rd (value % 2047)])
-
-/-- Copy 64 bytes, using x6 as scratch. -/
-def copyPair (source destination : Nat) (sourceOffset : Nat := 0)
-    (destinationOffset : Nat := 0) : List Asm :=
-  (List.range 8).flatMap fun j =>
-    [ld 6 source (sourceOffset + 8*j), sd 6 destination (destinationOffset + 8*j)]
+/-- Proof byte length for `k` opened positions at `LOG_LENGTH = 24`:
+a fixed level-7 cap table (128 digests = 4,096 bytes) plus 128 truncated
+17-level paths (`128 * 576 = 73,728` bytes) for `k = BATCH`, and `800 * k` otherwise. -/
+def openingProofBytes (k : Nat) : Nat :=
+  if k = BATCH then 77824 else 800 * k
 
 /-- Four in-place calls for the leaf whose salt slot is `x8+o`; the last writes `x23+h`. -/
 def leafCalls (o h : Nat) : List Asm :=
@@ -144,88 +130,154 @@ def leafCalls (o h : Nat) : List Asm :=
    addi 10 8 (o+128), addi 12 8 (o+192), insn 0x73,
    addi 10 8 (o+192), addi 12 23 h, insn 0x73]
 
-/-- In-place leaf chain, two leaves per iteration, on the gap heap. x8 points at the
-32-byte salt slot just below the pair's first message (free memory for the first pair,
-otherwise the already-consumed last block of the previous leaf); the second leaf's salt
-slot is x8+256. Each call compresses the contiguous 96 bytes [chaining value | next
-64-byte block] and writes over the last 32 bytes it consumed; the fourth call of each
-leaf writes its heap slot (x23 and x23+32). Parents are direct calls on the pair
-`[L | R | 0]`, two per iteration in descending order, down to the cap level; the
-commitment is the 96-byte chain over the cap pairs. -/
-def commitCode (depth : Nat) : List Asm :=
+/-- Small-depth fallback (depth < 5) for tiny executable regression tests. -/
+def commitCodeSmall (depth : Nat) : List Asm :=
   let n := 2^depth
   [addi 8 10 (-32), mv 26 11, mv 9 12] ++ li 6 (96*n) ++
   [regop 18 9 6] ++ li 6 (48*n) ++ [regop 23 9 6] ++
-  -- Sample all salts once; each is an independent uniform 256-bit block.
   [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
   li 20 (n/2) ++ [addi 5 0 0, addi 11 0 96, addi 13 0 0, .label "commit-pair"] ++
   copyDigest 18 8 ++ leafCalls 0 0 ++ copyDigest 18 8 32 256 ++ leafCalls 256 32 ++
   [addi 8 8 512, addi 18 18 64, addi 23 23 96, addi 20 20 (-1), .branch 1 20 0 "commit-pair"] ++
   li 6 (96*n - 192) ++ [regop 21 9 6] ++ li 6 (48*n - 96) ++ [regop 22 9 6] ++
-  li 6 (48*capCount depth - 96) ++ [regop 7 9 6] ++
-  [.branch 0 22 7 "commit-cap", .label "commit-parent",
+  [.branch 0 22 9 "commit-root", .label "commit-parent",
    addi 10 21 96, addi 12 22 32, insn 0x73,
    mv 10 21, mv 12 22, insn 0x73,
-   addi 21 21 (-192), addi 22 22 (-96), .branch 1 22 7 "commit-parent",
-   -- Chain over the cap pairs: h0 is the zero gap below cap pair 0; h(k+1) is written
-   -- into the gap of cap pair k, directly below cap pair k+1.
-   .label "commit-cap", addi 21 22 64] ++ li 20 (capCount depth / 2) ++
-  [.label "commit-chain", mv 10 21, addi 12 21 96, insn 0x73,
-   addi 21 21 96, addi 20 20 (-1), .branch 1 20 0 "commit-chain"] ++
-  copyDigest 21 26 ++ halt true
+   addi 21 21 (-192), addi 22 22 (-96), .branch 1 22 9 "commit-parent",
+   .label "commit-root", addi 10 9 96, addi 12 9 32, insn 0x73] ++
+  copyDigest 9 26 32 ++ halt true
+
+/-- In-place leaf chain unrolled 32x (four 8-leaf chunks per iteration, x29 = 2048),
+and parent loop unrolled 16x (descending) with a 15-node straight-line tail to the root.
+Computes the identical gap-heap tree, commitment, and query sequence as `commitCodeSmall`. -/
+def commitCodeUnrolled (depth : Nat) : List Asm :=
+  let n := 2^depth
+  [addi 8 10 (-32), mv 26 11, mv 9 12] ++ li 6 (96*n) ++
+  [regop 18 9 6] ++ li 6 (48*n) ++ [regop 23 9 6] ++
+  -- Sample all salts once; each is an independent uniform 256-bit block.
+  [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
+  li 20 (n/32) ++ [addi 29 0 1, shift 29 29 11,
+                   addi 5 0 0, addi 11 0 96, addi 13 0 0, .label "commit-pair"] ++
+  ((List.range 4).flatMap fun c =>
+    ((List.range 8).flatMap fun k =>
+      copyDigest 18 8 (256*c + 32*k) (256*k) ++
+      leafCalls (256*k) (384*c + heapOffset k)) ++
+    [regop 8 8 29]) ++
+  [addi 18 18 1024, addi 23 23 1536, addi 20 20 (-1), .branch 1 20 0 "commit-pair"] ++
+  li 6 (96*n - 1536) ++ [regop 21 9 6] ++ li 6 (48*n - 768) ++ [regop 22 9 6] ++
+  [.branch 0 22 9 "commit-root", .label "commit-parent"] ++
+  ((List.range 16).flatMap fun j =>
+    let q : Nat := 15 - j
+    [addi 10 21 (Int.ofNat (96 * q)), addi 12 22 (Int.ofNat (heapOffset q)), insn 0x73]) ++
+  [addi 21 21 (-1536), addi 22 22 (-768), .branch 1 22 9 "commit-parent",
+   .label "commit-root"] ++
+  ((List.range 15).flatMap fun j =>
+    let q : Nat := 15 - j
+    [addi 10 9 (Int.ofNat (96 * q)), addi 12 9 (Int.ofNat (heapOffset q)), insn 0x73]) ++
+  copyDigest 9 26 32 ++ halt true
+
+def commitCode (depth : Nat) : List Asm :=
+  if depth < 5 then commitCodeSmall depth else commitCodeUnrolled depth
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (96*n) ++ [regop 18 9 6] ++
-  -- Emit the cap: pair k of the cap level lives at heap offset 96*(capCount/2 + k).
-  li 6 (48*capCount depth) ++ [regop 23 9 6] ++ li 28 (capCount depth / 2) ++
-  [.label "open-cap"] ++ copyPair 23 25 ++
-  [addi 23 23 96, addi 25 25 64, addi 28 28 (-1), .branch 1 28 0 "open-cap",
-   .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
-   shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
-  [addi 25 25 32, regop 20 20 19] ++ li 28 (depth - capLog depth) ++
-  [.branch 0 28 0 "open-next", .label "open-path",
-   -- XORI x7,x20,1 selects the sibling t; its gap-heap offset is 32*(t + t/2).
-   insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
-   shift 6 20 1 true, regop 7 7 6, shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
-  [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
-   .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
-   .label "open-done"] ++ li 6 (openingBytes depth) ++
-  [regop 11 16 6 0 1] ++ addConst 11 (capBytes depth) ++ halt true
+  if depth < 7 then
+    [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (96*n) ++
+    [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
+     shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
+    [addi 25 25 32, regop 20 20 19] ++ li 28 depth ++
+    [.branch 0 28 0 "open-next", .label "open-path",
+     -- XORI x7,x20,1 selects the sibling t; its gap-heap offset is 32*(t + t/2).
+     insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
+     shift 6 20 1 true, regop 7 7 6, shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
+    [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
+     .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
+     .label "open-done"] ++ li 6 (openingBytes depth) ++
+    [regop 11 16 6 0 1] ++ halt true
+  else
+    let lower := depth - 7
+    let capProofBytes := 128 * (32 + 32 * lower) + 4096
+    [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (96*n) ++
+    [regop 18 9 6, .branch 0 27 0 "open-done",
+     addi 30 0 depth, addi 6 0 128, .branch 1 27 6 "open-position",
+     addi 30 0 lower,
+     .label "open-position", ld 20 24 0,
+     shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
+    [addi 25 25 32, regop 20 20 19, mv 28 30,
+     .label "open-path",
+     -- XORI x7,x20,1 selects the sibling t; its gap-heap offset is 32*(t + t/2).
+     insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
+     shift 6 20 1 true, regop 7 7 6, shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
+    [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
+     .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
+     .label "open-done", addi 6 0 128, .branch 1 16 6 "open-exit-normal",
+     addi 6 0 3, shift 6 6 11, regop 23 9 6, addi 28 0 64,
+     .label "open-cap"] ++ copyDigest 23 25 ++
+    [addi 23 23 32, addi 25 25 32] ++ copyDigest 23 25 ++
+    [addi 23 23 64, addi 25 25 32, addi 28 28 (-1), .branch 1 28 0 "open-cap"] ++
+    li 11 capProofBytes ++ halt true ++
+    [.label "open-exit-normal"] ++ li 6 (openingBytes depth) ++
+    [regop 11 16 6 0 1] ++ halt true
 
 /-- Reject malformed lengths and every mismatching root. Values/indices are supplied
 by the trusted ABI; their validity and sorting do not depend on proof bytes. -/
 def checkCode (depth : Nat) : List Asm :=
-  [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16] ++
-  li 6 (openingBytes depth) ++ [regop 7 16 6 0 1] ++ addConst 7 (capBytes depth) ++
-  [.branch 1 7 17 "reject"] ++
-  li 21 256 ++ [.branch 0 27 0 "accept",
-   -- Chain over the supplied cap in scratch [256, 352), from a zero state; x30 keeps the cap.
-   mv 30 25, sd 0 21 0, sd 0 21 8, sd 0 21 16, sd 0 21 24,
-   addi 5 0 0, addi 11 0 96, addi 13 0 0] ++ li 28 (capCount depth / 2) ++
-  [.label "check-cap"] ++ copyPair 25 21 0 32 ++
-  [mv 10 21, mv 12 21, insn 0x73, addi 25 25 64, addi 28 28 (-1), .branch 1 28 0 "check-cap"] ++
-  ((List.range 4).flatMap fun j =>
-    [ld 6 21 (8*j), ld 7 26 (8*j), .branch 1 6 7 "reject"]) ++
-  [.label "check-position", ld 20 24 0] ++
-  copyDigest 25 21 ++ [addi 25 25 32, .jump 1 "leaf"] ++ li 29 (depth - capLog depth) ++
-  [.branch 0 29 0 "check-root", .label "check-path",
-   -- ANDI x7,x20,1 selects left/right ordering.
-   insn (1 * 2^20 + 20 * 2^15 + 7 * 2^12 + 7 * 2^7 + 0x13),
-   .branch 0 7 0 "check-left"] ++ copyDigest 21 21 0 32 ++ copyDigest 25 21 ++
-  [.jump 0 "check-compress", .label "check-left"] ++ copyDigest 25 21 0 32 ++
-  [.label "check-compress"] ++ compressScratch ++
-  [addi 25 25 32, shift 20 20 1 true, addi 29 29 (-1), .branch 1 29 0 "check-path",
-   -- After the climb x20 is the cap index; compare with the supplied cap node.
-   .label "check-root", shift 7 20 5, regop 22 30 7] ++
-  ((List.range 4).flatMap fun j =>
-    [ld 6 21 (8*j), ld 7 22 (8*j), .branch 1 6 7 "reject"]) ++
-  [addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "check-position",
-   .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++
-  leafSubroutine ++ compression96Routine
+  if depth < 7 then
+    [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16] ++
+    li 6 (openingBytes depth) ++ [regop 7 16 6 0 1, .branch 1 7 17 "reject"] ++
+    li 21 256 ++ [.branch 0 27 0 "accept", .label "check-position", ld 20 24 0] ++
+    copyDigest 25 21 ++ [addi 25 25 32, .jump 1 "leaf"] ++ li 29 depth ++
+    [.branch 0 29 0 "check-root", .label "check-path",
+     -- ANDI x7,x20,1 selects left/right ordering.
+     insn (1 * 2^20 + 20 * 2^15 + 7 * 2^12 + 7 * 2^7 + 0x13),
+     .branch 0 7 0 "check-left"] ++ copyDigest 21 21 0 32 ++ copyDigest 25 21 ++
+    [.jump 0 "check-compress", .label "check-left"] ++ copyDigest 25 21 0 32 ++
+    [.label "check-compress"] ++ compressScratch ++
+    [addi 25 25 32, shift 20 20 1 true, addi 29 29 (-1), .branch 1 29 0 "check-path",
+     .label "check-root"] ++
+    ((List.range 4).flatMap fun j =>
+      [ld 6 21 (8*j), ld 7 26 (8*j), .branch 1 6 7 "reject"]) ++
+    [addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "check-position",
+     .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++
+    leafSubroutine ++ compression96Routine
+  else
+    let lower := depth - 7
+    let capRecordsBytes := 128 * (32 + 32 * lower)
+    let capProofBytes := capRecordsBytes + 4096
+    [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16,
+     addi 6 0 128, .branch 0 27 6 "check-cap"] ++
+    li 6 (openingBytes depth) ++ [regop 7 16 6 0 1, .branch 1 7 17 "reject",
+     addi 30 0 depth, addi 21 0 256, .branch 0 27 0 "accept",
+     .label "check-position", ld 20 24 0] ++
+    copyDigest 25 21 ++ [addi 25 25 32, .jump 1 "leaf", mv 29 30,
+     .label "check-path",
+     -- ANDI x7,x20,1 selects left/right ordering.
+     insn (1 * 2^20 + 20 * 2^15 + 7 * 2^12 + 7 * 2^7 + 0x13),
+     .branch 0 7 0 "check-left"] ++ copyDigest 21 21 0 32 ++ copyDigest 25 21 ++
+    [.jump 0 "check-compress", .label "check-left"] ++ copyDigest 25 21 0 32 ++
+    [.label "check-compress"] ++ compressScratch ++
+    [addi 25 25 32, shift 20 20 1 true, addi 29 29 (-1), .branch 1 29 0 "check-path",
+     .label "check-root", shift 7 20 5, regop 23 26 7] ++
+    ((List.range 4).flatMap fun j =>
+      [ld 6 21 (8*j), ld 7 23 (8*j), .branch 1 6 7 "reject"]) ++
+    [addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "check-position",
+     .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++
+    [.label "check-cap"] ++ li 6 capProofBytes ++ [.branch 1 6 17 "reject"] ++
+    li 6 capRecordsBytes ++ [regop 19 25 6, mv 23 19, addi 22 0 512] ++
+    li 12 4608 ++ [addi 28 0 128, .label "cap-copy"] ++ copyDigest 23 12 ++
+    [addi 23 23 32, addi 12 12 32, addi 28 28 (-1), .branch 1 28 0 "cap-copy",
+     addi 5 0 0, addi 11 0 64, addi 13 0 0] ++
+    li 10 8640 ++ li 12 4576 ++
+    [.label "cap-parent", .jump 31 "compress96",
+     addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 22 "cap-parent",
+     addi 21 22 32, mv 23 26] ++
+    ((List.range 4).flatMap fun j =>
+      [ld 6 21 (8*j), ld 7 23 (8*j), .branch 1 6 7 "reject"]) ++
+    [mv 26 19, addi 30 0 lower, addi 21 0 256, .jump 0 "check-position"] ++
+    leafSubroutine ++ compression96Routine
 
 def sizes (depth : Nat) : Sizes :=
-  ⟨trapdoorBytes depth, proofBytes depth LENGTH⟩
+  ⟨trapdoorBytes depth, openingBytes depth * LENGTH⟩
 
 /-- Reserve the contract's full message and values buffers even for small test trees.
 Scratch memory [256,352) is below all input/output buffers. -/
@@ -247,8 +299,8 @@ def candidate (depth : Nat) : Submission where
     | .check => ⟨assemble (checkCode depth), []⟩
   steps
     | .commit => 512 * 2^depth + 1024
-    | .opening => 32 * (depth + 1) * LENGTH + 4096
-    | .check => 512 * (depth + 1) * LENGTH + 8192
+    | .opening => 32 * (depth + 1) * LENGTH + 1024
+    | .check => 512 * (depth + 1) * LENGTH + 1024
 
 /-- The actual candidate uses the challenge's complete 2^24-leaf vector. -/
 def submission : Submission := candidate LOG_LENGTH

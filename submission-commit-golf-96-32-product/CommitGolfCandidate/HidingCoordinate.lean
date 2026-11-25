@@ -61,7 +61,7 @@ theorem observe_except_bound {α : Type} (message : Message) (salt : Index → D
     (budget : Nat) (bounded : ∀ root proof, PublicQueryBound (observe root proof) budget)
     (digest : Digest) :
     PublicQueryBound (observeExcept message salt positions hidden observe digest)
-      (transcriptBudget positions.card + budget) :=
+      ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) :=
   public_query_bound_bind (query_transcript_except_bound message salt positions hidden digest)
     (fun transcript => bounded transcript.1 transcript.2)
 
@@ -129,7 +129,7 @@ theorem reference_observation_coordinate_distance {α : Type}
     measureTVDist
       (referenceObservation permutation cache (Function.update message hidden left) positions observe)
       (referenceObservation permutation cache (Function.update message hidden right) positions observe) ≤
-      16 * ((keys.card + (transcriptBudget positions.card + budget) + 8 : Nat) : ℝ) / 2^256 := by
+      16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256 := by
   have distance := measureTVDist_bind_left_le_of_forall_le ($ᵗ (Index → Digest))
     (fun salt => do
       let table ← $ᵗ Compression
@@ -143,7 +143,7 @@ theorem reference_observation_coordinate_distance {α : Type}
         (observeExcept message salt positions hidden observe (leafDigest (tableExtending cache table) fresh right)))
     (by positivity) (fun salt => cached_leaf_indistinguishable permutation cache keys covered left right
       (observeExcept message salt positions hidden observe)
-      (transcriptBudget positions.card + budget)
+      ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget)
       (observe_except_bound message salt positions hidden observe budget bounded))
   simpa only [measureTVDist, reference_observation_update permutation cache message positions observe hidden unopened] using distance
 

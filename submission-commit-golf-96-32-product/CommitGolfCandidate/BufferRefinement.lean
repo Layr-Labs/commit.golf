@@ -129,8 +129,7 @@ theorem check_input_proof_byte (input : CheckInput)
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte submission .check input _ (by
     change 10871640096+offset < 2^64
-    rw [submission_proof_capacity] at valid
-    norm_num [LENGTH, LOG_LENGTH] at valid
+    change input.proof.length ≤ 13421772800 at valid
     omega)]
   have outsideRoot : ¬ (submission.layout.commitment ≤ submission.layout.proof+offset ∧
       submission.layout.proof+offset < submission.layout.commitment+(DIGEST_BITS+7)/8) := by
@@ -215,38 +214,38 @@ theorem check_input_value_block (input : CheckInput) (ordinal block : Nat)
       simpa only [Nat.add_assoc] using check_input_value_byte input ordinal (64*block+j) present (by omega))
   simpa only [← Nat.mul_assoc, Nat.reduceMul] using decoded
 
-attribute [local irreducible] openingInitializedState openingPositionState openingExitState
-
 /-- The actual bytes returned by opening are the bytes loaded by verification.
 This covers every honest opening input and does not assume the Merkle proof is valid. -/
 theorem check_opening_proof_byte (trapdoor : BitVec (8*submission.sizes.trapdoor))
     (positions : Positions) (commitment : Commitment) (values : Values positions)
-    (offset : Nat) (inside : offset < (4096+576*positions.card)) :
+    (offset : Nat) (inside : offset < openingProofBytes positions.card) :
     (submission.initialState .check
       ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩).getByte
       (BitVec.ofNat 64 (submission.layout.proof+offset)) =
         (openingResult trapdoor positions).state.getByte
           (BitVec.ofNat 64 (submission.layout.proof+offset)) := by
-  have valid : (submission.readProof (openingResult trapdoor positions)).length ≤
-      submission.sizes.proof := by
-    rw [opening_proof_length, submission_proof_capacity]
+  let input : CheckInput :=
+    ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩
+  have valid : input.proof.length ≤ submission.sizes.proof := by
+    change (submission.readProof _).length ≤ _
+    rw [opening_proof_length]
     have cardinal := positions_card_bound positions
-    norm_num [LENGTH, LOG_LENGTH]
+    have le800 := opening_proof_bytes_le positions.card
+    change openingProofBytes positions.card ≤ 13421772800
     omega
-  have bounded : offset < (submission.readProof (openingResult trapdoor positions)).length := by
+  have bounded : offset < input.proof.length := by
+    change offset < (submission.readProof _).length
     rw [opening_proof_length]
     exact inside
-  have loaded := check_input_proof_byte
-    ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩
-    valid offset bounded
+  have loaded := check_input_proof_byte input valid offset bounded
   apply loaded.trans
-  simp only [Submission.readProof, opening_result_succeeded, if_true,
+  simp only [input, Submission.readProof, opening_result_succeeded, if_true,
     opening_result_length, List.getElem_map, List.getElem_range]
 
 /-- Salt and sibling digests survive the opening-output/check-input boundary exactly. -/
 theorem check_opening_proof_digest (trapdoor : BitVec (8*submission.sizes.trapdoor))
     (positions : Positions) (commitment : Commitment) (values : Values positions)
-    (offset : Nat) (inside : offset+32 ≤ (4096+576*positions.card)) :
+    (offset : Nat) (inside : offset+32 ≤ openingProofBytes positions.card) :
     readBuffer (submission.initialState .check
       ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩)
       (submission.layout.proof+offset) 32 =

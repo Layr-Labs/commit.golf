@@ -11,12 +11,11 @@ open CommitGolf OracleComp OracleComp.DeferredSampling
 
 attribute [local irreducible] heapQueryBudget
 
-/-- Even charging a full tree recomputation for every cap node and every serialized
-proof byte (plus the 64 chain calls) leaves ample room
+/-- Even charging all leaves for all serialized proof bytes leaves ample room
 under the challenge's 120-bit target. This is proof-only query accounting. -/
 theorem hiding_loss_le_target (positions : Positions) (known budget : Nat) (knownBound : known ≤ budget) :
     (LENGTH : ℝ) *
-      (16 * ((known + (transcriptBudget positions.card + budget) + 8 : Nat) : ℝ) / 2^256) ≤
+      (16 * ((known + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) ≤
       ((budget : ℝ)+1) / 2^HIDING_SECURITY_BITS := by
   have cardinal : positions.card ≤ LENGTH := by
     simpa only [Index, Fintype.card_fin] using Finset.card_le_univ positions
@@ -24,13 +23,12 @@ theorem hiding_loss_le_target (positions : Positions) (known budget : Nat) (know
   have treeBound : heapQueryBudget 8 LOG_LENGTH ≤ 9*LENGTH := by
     change heapQueryBudget 8 LOG_LENGTH+1 = 9*LENGTH at treeFormula
     omega
-  have total : known + (transcriptBudget positions.card + budget) + 8 ≤
-      budget + ((4224+576*LENGTH)*(9*LENGTH)+64 + budget) + 8 := by
-    unfold transcriptBudget
+  have total : known + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 ≤
+      budget + ((1+800*LENGTH)*(9*LENGTH) + budget) + 8 := by
     gcongr
   calc
     _ ≤ (LENGTH : ℝ) *
-        (16 * ((budget + ((4224+576*LENGTH)*(9*LENGTH)+64 + budget) + 8 : Nat) : ℝ) / 2^256) := by
+        (16 * ((budget + ((1+800*LENGTH)*(9*LENGTH) + budget) + 8 : Nat) : ℝ) / 2^256) := by
       gcongr
     _ ≤ _ := by
       norm_num [LENGTH, LOG_LENGTH, HIDING_SECURITY_BITS, Nat.cast_add, Nat.cast_mul]

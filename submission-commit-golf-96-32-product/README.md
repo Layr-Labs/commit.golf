@@ -1,57 +1,71 @@
-# commit-golf-96-32-product: in-place 96-byte leaf chain
+# commit-golf-96-32-product: 32×16 unrolled in-place gap-heap commit with level-7 cap table
 
 This is a salted binary Merkle commitment over the track's 96→32-byte compression
-oracle. Compression costs eight cycles; forward and inverse permutation calls
-cost 30. The programs use compression only.
+oracle (`COMPRESSION_INPUT_LENGTH = 768`, 8 cycles per compression call). The programs
+use compression only.
 
-Each 2048-bit leaf is absorbed in four 64-byte message blocks, starting from a
-private 32-byte salt. Every leaf call compresses the full 96-byte input
-`chaining value (32 bytes) || message block (64 bytes)` directly, with no
-padding: four compression calls per leaf instead of the baseline's eight padded
-calls.
+## Commitment
 
-Commitment hashes each leaf in place, without copying message blocks. The
-32-byte slot just below leaf `i`'s message (free memory for `i = 0`, otherwise
-the already consumed last 32 bytes of leaf `i-1`) receives the salt. Call `j`
-then compresses the contiguous 96 bytes `[slot+64j, slot+64j+96)`, which hold
-the current chaining value followed by message block `j`, and writes the new
-chaining value over the last 32 bytes it consumed (`slot+64j+64`). The fourth
-call writes the heap leaf slot directly. One leaf costs 25 instructions and 53
-cycles: an 8-instruction salt copy, four `(2 pointer setup + ECALL)` calls and a
-5-instruction loop latch. The input message memory is overwritten in the
-process; it is not part of the trapdoor. The checker keeps the copy-to-scratch
-leaf subroutine (scratch bytes 256..351), and both compute the same reference
-`leafDigest`.
+Each 2048-bit leaf is absorbed in four 64-byte message blocks starting from a private
+32-byte salt (`chaining value (32 bytes) || message block (64 bytes)`), with no padding:
+four compression calls per leaf.
 
-Parent nodes are unchanged from the baseline: each 64-byte pair of child
-digests is padded with 32 zero bytes before calling the 96-byte oracle. The
-leaf encoding (fixed 96-byte inputs with the chaining value in the low 256 bits)
-is injective, so the collision reduction keeps both inputs. The binding replay
-now uses 28 calls per opened record (4 leaf + 24 path), 56 for a claim pair.
+Commitment hashes each leaf in place without copying message blocks and stores internal
+nodes in a gap-heap layout where every sibling pair `[left | right | 0]` occupies 96
+contiguous bytes with a permanent 32-byte zero gap. To amortize loop control overhead
+while keeping all memory and immediate offsets nonnegative:
 
-The claimed bounds for a full commitment and an opening of 128 leaves are:
+- **32× unrolled leaf loop (`commit-pair`)**: each of the `2^19` iterations processes
+  32 leaves as four 8-leaf chunks (`x29 = 2048` advances `x8` after each chunk),
+  followed by a 4-instruction loop latch (`1544` cycles per 32 leaves, `48.25`
+  cycles/leaf).
+- **16× unrolled parent loop (`commit-parent`)**: each of the `2^20 - 1` iterations
+  computes 16 internal nodes in descending order using direct 96-byte compression calls
+  on the gap heap, followed by a 3-instruction loop latch (`163` cycles per 16 parents,
+  `10.1875` cycles/parent) and a 15-node straight-line tail down to the root.
+
+Commitment cycles are exactly `1,047,527,478` (`28` setup + `67,108,865` salt sampling +
+`10` ready + `809,500,672` leaf loop + `17` parent setup + `170,917,725` parent loop +
+`150` root tail + `11` root copy and halt) with `5 * 2^24 - 1 = 83,886,079` public
+queries.
+
+## Level-7 Fixed Cap Table for Batch Openings (`k = 128`)
+
+For scored batch openings (`k = 128` positions), instead of repeating the top 7 Merkle
+levels across all 128 authentication paths (`128 * 7 * 32 = 28,672` bytes), the opening
+program emits:
+
+1. 128 truncated records of `576` bytes each (`32`-byte salt + `17` lower siblings from
+   leaf level `0` up to level `16`, stopping at heap indices `128..255`): `73,728` bytes.
+2. The fixed level-7 cap table of all `128` digests at heap indices `128..255` in order:
+   `4,096` bytes.
+
+Total batch proof size is `73,728 + 4,096 = 77,824` bytes, and opening cycles are
+`40,614`. For non-batch opening counts (`k ≠ 128`), the opening and checker retain the
+standard `800 * k`-byte format (`32`-byte salt + `24` siblings per position).
+
+The checker verifies a `k = 128` proof by checking the length (`77,824`), copying the
+128 cap digests into a temporary flat heap at scratch `[4608, 8704)`, hashing parents
+127 down to 1 into `[544, 4608)` to verify the root against the commitment, and then
+running the unified per-position loop for 17 levels against the cap table entry
+`cap[index >> 17]` (`127 + 128 * 21 = 2,815` public queries).
+
+## Claimed Bounds (`BATCH = 128`, `LOG_LENGTH = 24`)
 
 | Claim | Bound |
 | --- | ---: |
-| Proof bytes | 102,400 |
-| Commitment cycles | 1,509,949,463 |
-| Opening cycles | 48,670 |
+| Proof bytes | 77,824 |
+| Commitment cycles | 1,047,527,478 |
+| Opening cycles | 40,614 |
 
-Commitment cycles are exactly `90 * 2^24 + 23`: 53 cycles per leaf
-(4 compressions of 8 cycles, salt copy, pointers, latch), 33 per internal node,
-4 per leaf for salt sampling, plus setup. Commitment makes exactly
-`5 * 2^24 - 1` public queries. The opening program and proof layout are
-unchanged from the baseline.
+The product score is `(commitCycles + openingCycles) * proofBytes = 81,525,939,191,808`.
 
-The product score is `(commitCycles + openingCycles) * proofBytes`.
+## Verification
 
-`programs.json` delivers the three machine images and their ABI. `Solution.lean`
-assembles the complete certificate and proves equality with the generated artifact.
-The supporting `CommitGolfCandidate/` modules prove execution, resource bounds,
-completeness, binding, and hiding for those images. `Padding96*.lean` covers the
-padded parent encoding, temporary memory changes, actual instruction trace, and costs.
-The hiding proofs keep the baseline's per-leaf query allowance of eight as an
-upper bound; the actual leaf uses four calls.
+`programs.json` delivers the three machine images and their ABI, `claim.json` states the
+claimed metrics, and `Solution.lean` proves the complete `CommitGolf.Certificate`
+(admission, termination, completeness, budgets, proof size, prover cycles, adaptive
+binding, and hiding) against the generated artifact.
 
 From the repository root, on a supported Linux verifier host:
 

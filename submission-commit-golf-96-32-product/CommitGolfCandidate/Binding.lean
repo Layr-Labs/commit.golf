@@ -174,43 +174,4 @@ theorem collision_of_openings_eq (compress : Compression)
       samePosition leavesEqual sameRoot
     exact ⟨x, List.mem_append_right _ hx, y, List.mem_append_right _ hy, collision⟩
 
-
-theorem capBlocks_length (cap : Nat → Digest) : (capBlocks cap).length = CAP_PAIRS := by
-  simp [capBlocks]
-
-/-- Compression inputs that replay one record up to the commitment: the leaf chain,
-the path to its cap node, and the 64-call chain over the supplied cap. -/
-def capOpeningInputs (compress : Compression) (salt : Digest) (value : Entry)
-    (path : List (Bool × Digest)) (cap : Nat → Digest) : List (BitVec COMPRESSION_INPUT_LENGTH) :=
-  openingInputs compress salt value path ++ chainInputs compress 0 (capBlocks cap)
-
-theorem capOpeningInputs_length (compress : Compression) (salt : Digest) (value : Entry)
-    (path : List (Bool × Digest)) (cap : Nat → Digest) :
-    (capOpeningInputs compress salt value path cap).length = 4 + path.length + CAP_PAIRS := by
-  simp [capOpeningInputs, openingInputs_length, chainInputs_length, capBlocks_length]
-
-/-- Two different opened values at the same position, each authenticated to the same
-cap node index of a supplied cap whose chain gives the same commitment, force a
-collision: either the two caps agree at that node (a leaf-chain or path collision),
-or they differ there and the two cap chains collide. -/
-theorem collision_of_cap_openings_eq (compress : Compression)
-    (salt salt' : Digest) (value value' : Entry) (path path' : List (Bool × Digest))
-    (cap cap' : Nat → Digest) (node : Nat) (inside : node < 2*CAP_PAIRS)
-    (samePosition : path.map Prod.fst = path'.map Prod.fst)
-    (different : value ≠ value')
-    (leftNode : climb compress (leafDigest compress salt value) path = cap node)
-    (rightNode : climb compress (leafDigest compress salt' value') path' = cap' node)
-    (sameRoot : capRoot compress cap = capRoot compress cap') :
-    ∃ input ∈ capOpeningInputs compress salt value path cap,
-      ∃ input' ∈ capOpeningInputs compress salt' value' path' cap',
-        input ≠ input' ∧ compress input = compress input' := by
-  by_cases sameNode : cap node = cap' node
-  · obtain ⟨x, hx, y, hy, collision⟩ := collision_of_openings_eq compress salt salt' value value'
-      path path' samePosition different (leftNode.trans (sameNode.trans rightNode.symm))
-    exact ⟨x, List.mem_append_left _ hx, y, List.mem_append_left _ hy, collision⟩
-  · obtain ⟨x, hx, y, hy, collision⟩ := collision_of_chain_eq compress 0 0
-      (capBlocks cap) (capBlocks cap') (by simp [capBlocks_length])
-      (Or.inr (capBlocks_ne_of_ne inside sameNode)) sameRoot
-    exact ⟨x, List.mem_append_right _ hx, y, List.mem_append_right _ hy, collision⟩
-
 end CommitGolfCandidate

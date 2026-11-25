@@ -30,24 +30,25 @@ private theorem initialized_registers (initial : MachineState) {bits : Nat} (ans
     ready.getReg .x18 = initial.getReg .x12 + 1610612736 ∧
     ready.getReg .x23 = initial.getReg .x12 + 805306368 ∧
     ready.getReg .x26 = initial.getReg .x11 ∧
-    ready.getReg .x20 = 8388608 ∧
+    ready.getReg .x20 = 524288 ∧
+    ready.getReg .x29 = 2048 ∧
     ready.getReg .x5 = 0 ∧ ready.getReg .x11 = 96 ∧ ready.getReg .x13 = 0 := by
   dsimp only
   have regs := commit_setup_registers initial
-  have readyReg (reg : Reg) (notCounter : reg ≠ .x20)
+  have readyReg (reg : Reg) (notCounter : reg ≠ .x20) (not29 : reg ≠ .x29)
       (not5 : reg ≠ .x5) (not11 : reg ≠ .x11) (not13 : reg ≠ .x13) :
       (commitReadyState (writeBits (commitSetupState initial)
         ((commitSetupState initial).getReg .x10) answer)).getReg reg =
           (commitSetupState initial).getReg reg := by
-    rw [commit_ready_register _ reg notCounter not5 not11 not13, writeBits_register]
+    rw [commit_ready_register _ reg notCounter not29 not5 not11 not13, writeBits_register]
   have counters := commit_ready_counters (writeBits (commitSetupState initial)
     ((commitSetupState initial).getReg .x10) answer)
-  exact ⟨(readyReg .x8 (by decide) (by decide) (by decide) (by decide)).trans regs.2.1,
-    (readyReg .x9 (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.1,
-    (readyReg .x18 (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.1,
-    (readyReg .x23 (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
-    (readyReg .x26 (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2,
-    counters.1, counters.2.1, counters.2.2.1, counters.2.2.2⟩
+  exact ⟨(readyReg .x8 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.1,
+    (readyReg .x9 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.1,
+    (readyReg .x18 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.1,
+    (readyReg .x23 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.1,
+    (readyReg .x26 (by decide) (by decide) (by decide) (by decide) (by decide)).trans regs.2.2.2.2.2.2.2,
+    counters.1, counters.2.1, counters.2.2.1, counters.2.2.2.1, counters.2.2.2.2⟩
 
 /-- Fixed ABI pointers and loop registers, independent of sampled salt bytes. -/
 theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec bits) :
@@ -56,7 +57,8 @@ theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec
     (commitInputReady message answer).getReg .x18 = 5905584160 ∧
     (commitInputReady message answer).getReg .x23 = 5100277792 ∧
     (commitInputReady message answer).getReg .x26 = 4294971392 ∧
-    (commitInputReady message answer).getReg .x20 = 8388608 ∧
+    (commitInputReady message answer).getReg .x20 = 524288 ∧
+    (commitInputReady message answer).getReg .x29 = 2048 ∧
     (commitInputReady message answer).getReg .x5 = 0 ∧
     (commitInputReady message answer).getReg .x11 = 96 ∧
     (commitInputReady message answer).getReg .x13 = 0 := by
@@ -74,10 +76,10 @@ theorem commit_input_registers (message : Message) {bits : Nat} (answer : BitVec
 /-- The first iteration has space for every remaining message block, salt, and
 leaf digest, for all actual messages and every private random answer. -/
 theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bits) :
-    CommitLeavesInvariant (commitInputReady message answer) (2 ^ 23) := by
+    CommitLeavesInvariant (commitInputReady message answer) (2 ^ 19) := by
   have regs := commit_input_registers message answer
-  refine ⟨?_, ?_, by norm_num, regs.2.2.2.2.2.2.1, regs.2.2.2.2.2.2.2.1, regs.2.2.2.2.2.2.2.2,
-    ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, by norm_num, regs.2.2.2.2.2.2.1, regs.2.2.2.2.2.2.2.1, regs.2.2.2.2.2.2.2.2.1,
+    regs.2.2.2.2.2.2.2.2.2, ?_, ?_, ?_, ?_, ?_⟩
   · have setupPC := commit_setup_pc (submission.initialState .commit message) rfl
     change (commitReadyState _).pc = _
     rw [if_neg (by norm_num)]
@@ -88,7 +90,7 @@ theorem commit_input_leaves (message : Message) {bits : Nat} (answer : BitVec bi
   · rw [regs.1]; decide
   · rw [regs.1]; decide
   · rw [regs.2.2.1]
-    exact fun word inside => commit_buffer_access 5905584160 (8 * 2 ^ 23) word (by decide) (by decide) inside
+    exact fun word inside => commit_buffer_access 5905584160 (128 * 2 ^ 19) word (by decide) (by decide) inside
   · rw [regs.2.2.2.1]; decide
   · rw [regs.2.2.2.1]; decide
 

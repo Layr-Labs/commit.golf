@@ -20,28 +20,26 @@ theorem commit_counted (oracle : Oracle) (message : Message) (result : Execution
 private theorem scheme_commit (candidate : Submission) (message : Message) :
     candidate.scheme.commit message = candidate.readCommit <$> candidate.run .commit message := rfl
 
-/-- Each honest commitment makes exactly 5*N-64 public queries, including every
+/-- Each honest commitment makes exactly 5*N-1 public queries, including every
 underlying compression call in the four-block salted leaf construction. -/
 theorem scheme_commit_calls (oracle : Oracle) (message : Message)
     (result : (Commitment × submission.scheme.Trapdoor) × Nat)
     (reachable : result ∈ support (oracle.run (submission.scheme.commit message))) :
-    result.2 = 83886016 := by
+    result.2 = 83886079 := by
   rw [scheme_commit] at reachable
   change result ∈ support (oracle.run (submission.readCommit <$>
     submission.run .commit (message : Input submission.sizes .commit))) at reachable
   rw [oracle_run_map] at reachable
   simp only [support_map] at reachable
   obtain ⟨committed, reached, rfl⟩ := reachable
-  change committed.2 = 83886016
+  change committed.2 = 83886079
   rw [← commit_counted oracle message committed reached]
   exact (commit_input_resources message committed.1
     (writer_support (oracle.world.withAddCost Oracle.callCost) _ committed reached)).2.2
 
-attribute [local irreducible] openingInitializedState openingPositionState openingExitState
-
 /-- The complete honest-budget certificate field, for every fixed oracle, message,
-and set of opened positions. Commitment uses 5*N-64 calls, opening uses zero, and
-checking uses at most 85 calls per opened leaf (64 cap-chain calls once, then 21 per leaf). -/
+and set of opened positions. Commitment uses 5*N-1 calls, opening uses zero, and
+checking uses at most 32 calls per opened leaf (28 exactly). -/
 theorem submission_honest_budgets : submission.scheme.HonestBudgets := by
   intro oracle message positions
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
@@ -58,7 +56,7 @@ theorem submission_honest_budgets : submission.scheme.HonestBudgets := by
   refine ⟨?_, ?_, ?_⟩
   · change commitCalls ≤ COMMIT_BUDGET
     rw [commitment]
-    norm_num [COMMIT_BUDGET, LENGTH, LOG_LENGTH]
+    decide
   · change 0 ≤ OPEN_BUDGET positions.card
     exact Nat.zero_le _
   · change (oracle.eval (submission.scheme.check root positions (message.restrict positions)
