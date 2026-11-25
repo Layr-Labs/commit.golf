@@ -18,39 +18,13 @@ private theorem deterministic_pure (oracle : Oracle) {α : Type} (value : α) :
     oracle.run (pure value : OracleComp World α) = pure (checkEvaluation oracle (pure value)) := by
   rw [oracle_run_pure, check_evaluation_pure]
 
-/-- The leaf hash uses only public queries once its salt is supplied. -/
-theorem commit_leaf_loop_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
-    oracle.run (commitLeafLoop state count) = pure (checkEvaluation oracle (commitLeafLoop state count)) := by
-  have blocks (state : MachineState) (cursor count : Nat) :
-      oracle.run (streamingMachineBlocks state cursor count) =
-        pure (checkEvaluation oracle (streamingMachineBlocks state cursor count)) := by
-    induction count generalizing state cursor with
-    | zero => exact deterministic_pure oracle state
-    | succ count ih =>
-      rw [streamingMachineBlocks, oracle_run_public_bind, check_evaluation_public_bind, ih]
-      simp only [pure_bind]
-  unfold commitLeafLoop
-  have heapBlocks :
-      oracle.run (heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count) =
-        pure (checkEvaluation oracle
-          (heapStreamingMachineBlocks state ((state.getReg .x8).toNat - 32) count)) := by
-    cases count with
-    | zero => exact deterministic_pure oracle state
-    | succ count =>
-      unfold heapStreamingMachineBlocks
-      apply deterministic_bind oracle _ _ (blocks _ _ count)
-      intro body
-      rw [oracle_run_public_bind, check_evaluation_public_bind]
-      simp only [oracle_run_pure, check_evaluation_pure, pure_bind]
-  exact deterministic_bind oracle _ _ heapBlocks
-    (fun body => deterministic_pure oracle _)
-
-/-- Salt copying, leaf hashing, and heap storage add no private randomness. -/
+/-- Salt copying, the eight in-place leaf calls, and the heap write use only
+public queries: they add no private randomness. -/
 theorem commit_position_deterministic (oracle : Oracle) (state : MachineState) :
     oracle.run (commitPositionRun state) = pure (checkEvaluation oracle (commitPositionRun state)) := by
   unfold commitPositionRun
-  exact deterministic_bind oracle _ _ (commit_leaf_loop_deterministic oracle _ 8)
-    (fun leaf => deterministic_pure oracle _)
+  simp only [oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
+    check_evaluation_pure, pure_bind]
 
 /-- After salt sampling, the full leaf loop is deterministic for a fixed oracle. -/
 theorem commit_leaves_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
@@ -87,23 +61,10 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, cursorBaseFrame body.1 4096, 3*LENGTH+22282*2^16+838862*200+195, 9*LENGTH-1⟩, body.2)
+  (⟨.success, body.1, 114*LENGTH+39, 9*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
-    (packCommitResult body).1.state = cursorBaseFrame body.1 4096 := rfl
-
-/-- The final inactive-register frame changes no byte in a serialized buffer. -/
-private theorem cursor_final_buffer (state : MachineState) (address bytes : Nat) :
-    readBuffer (cursorBaseFrame state 4096) address bytes =
-      readBuffer state address bytes :=
-  read_buffer_memory_congr _ _ rfl address bytes
-
-/-- Root, salts and heap relations depend only on the unchanged memory. -/
-private theorem cursor_final_committed (oracle : Oracle) (message : Message)
-    (state : MachineState) :
-    CommittedState oracle message (cursorBaseFrame state 4096) ↔
-      CommittedState oracle message state := by
-  simp only [CommittedState, HeapParents, heapDigest, readNonce, cursor_final_buffer]
+    (packCommitResult body).1.state = body.1 := rfl
 
 /-- The deterministic result after one salt reply, including both counters. -/
 def commitFinalResult (oracle : Oracle) (message : Message) {bits : Nat}
@@ -124,31 +85,29 @@ theorem commit_run_distribution (oracle : Oracle) (message : Message) :
 private theorem commit_final_state (oracle : Oracle) (message : Message)
     {bits : Nat} (answer : BitVec bits) :
     (commitFinalResult oracle message answer).1.state =
-      cursorBaseFrame
-        (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 4096 :=
+      (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 :=
   pack_commit_state _
 
 private theorem commit_body_matches_sized (oracle : Oracle) (message : Message)
-    {bits : Nat} (answer : BitVec bits) (width : bits = 192*LENGTH) :
+    {bits : Nat} (answer : BitVec bits) (width : bits = 256*LENGTH) :
     CommittedState oracle message
       (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 := by
   subst bits
   exact commit_body_matches oracle message answer
 
 private theorem commit_final_matches (oracle : Oracle) (message : Message)
-    {bits : Nat} (answer : BitVec bits) (width : bits = 192*LENGTH) :
+    {bits : Nat} (answer : BitVec bits) (width : bits = 256*LENGTH) :
     CommittedState oracle message (commitFinalResult oracle message answer).1.state := by
   rw [commit_final_state]
-  exact (cursor_final_committed oracle message _).mpr
-    (commit_body_matches_sized oracle message answer width)
+  exact commit_body_matches_sized oracle message answer width
 
-private theorem salt_width (setup : MachineState) (bytes : setup.getReg .x11 = 402653184) :
-    8*(setup.getReg .x11).toNat = 192*LENGTH := by
+private theorem salt_width (setup : MachineState) (bytes : setup.getReg .x11 = 536870912) :
+    8*(setup.getReg .x11).toNat = 256*LENGTH := by
   rw [bytes]
   rfl
 
 private theorem setup_salt_width (state : MachineState) :
-    8*((commitSetupState state).getReg .x11).toNat = 192*LENGTH :=
+    8*((commitSetupState state).getReg .x11).toNat = 256*LENGTH :=
   salt_width _ (commit_setup_registers state).2.2.2.2.1
 
 private theorem sampled_witness {α β : Type} (coins : ProbComp α) (output : α → β)
@@ -179,30 +138,28 @@ theorem commit_run_matches (oracle : Oracle) (message : Message) (result : Execu
   exact commit_final_matches oracle message answer
     (setup_salt_width (submission.initialState .commit message))
 
-/-- The RANDOM syscall requests one 192-bit nonce for each vector position. -/
+/-- The RANDOM syscall requests one 256-bit salt for each vector position. -/
 theorem commit_salt_width (message : Message) :
     8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat =
-      192*LENGTH := setup_salt_width _
+      256*LENGTH := setup_salt_width _
 
 /-- Explicit salt contents of the actual final state, for every possible random
 reply. Keeping the reply width as a parameter avoids unfolding the large sampler. -/
 theorem commit_final_salt (oracle : Oracle) (message : Message) {bits : Nat}
-    (answer : BitVec bits) (width : bits = 192*LENGTH) (index : Index) :
-    readNonce (commitFinalResult oracle message answer).1.state
-      (5368713248+24*index.val) = expandNonce192 (answer.extractLsb' (192*index.val) 192) := by
+    (answer : BitVec bits) (width : bits = 256*LENGTH) (index : Index) :
+    readBuffer (commitFinalResult oracle message answer).1.state
+      (5368713248+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 := by
   rw [commit_final_state]
-  unfold readNonce
-  rw [cursor_final_buffer]
   subst bits
   exact commit_body_salt oracle message answer index
 
 /-- Functional correctness together with the identity of the retained salts.
 These are deterministic facts about the machine, separate from the hiding bound. -/
 theorem commit_final_contents (oracle : Oracle) (message : Message) {bits : Nat}
-    (answer : BitVec bits) (width : bits = 192*LENGTH) :
+    (answer : BitVec bits) (width : bits = 256*LENGTH) :
     CommittedState oracle message (commitFinalResult oracle message answer).1.state ∧
-    ∀ index : Index, readNonce (commitFinalResult oracle message answer).1.state
-      (5368713248+24*index.val) = expandNonce192 (answer.extractLsb' (192*index.val) 192) :=
+    ∀ index : Index, readBuffer (commitFinalResult oracle message answer).1.state
+      (5368713248+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 :=
   ⟨commit_final_matches oracle message answer width, commit_final_salt oracle message answer width⟩
 
 end CommitGolfCandidate

@@ -1,5 +1,6 @@
 import CommitGolfCandidate.Model
 import CommitGolfCandidate.Memory
+import CommitGolfCandidate.CommitLeaf
 import CommitGolfCandidate.CheckEvaluation
 
 /-! Refinement of the machine's salted leaf hash to the reference computation. -/
@@ -87,7 +88,8 @@ theorem check_leaf_step_outside (state : MachineState) (answer : BitVec 256)
     exact ⟨outside 4 (by decide), outside 5 (by decide), outside 6 (by decide), outside 7 (by decide)⟩
   · exact ⟨outside 0 (by decide), outside 1 (by decide), outside 2 (by decide), outside 3 (by decide)⟩
 
-/-- The checker loop computes the ordered salted compression fold. -/
+/-- The checker leaf loop computes the reference fold over the message blocks.
+The source region lies above scratch, stays aligned, and does not wrap. -/
 theorem check_leaf_loop_digest (oracle : Oracle) (state : MachineState)
     (address count : Nat) (blocks : Nat → Digest)
     (scratch : state.getReg .x21 = 256)
@@ -150,7 +152,7 @@ theorem check_leaf_loop_digest (oracle : Oracle) (state : MachineState)
       Nat.succ_eq_add_one]
     rfl
 
-/-- The checker loop preserves every memory word outside scratch. -/
+/-- Leaf hashing preserves every memory word outside scratch. -/
 theorem check_leaf_loop_outside (oracle : Oracle) (state : MachineState) (count : Nat)
     (address : Word) (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i)) :
@@ -164,7 +166,8 @@ theorem check_leaf_loop_outside (oracle : Oracle) (state : MachineState) (count 
     rw [ih _ ((check_leaf_block_registers state answer).2.2.1.trans scratch)]
     exact check_leaf_step_outside state answer address scratch outside
 
-/-- The checking leaf loop computes the salted digest in scratch. -/
+/-- The full checker leaf subroutine hashes exactly the eight message blocks
+starting from the supplied salt, as defined by `leafDigest`. -/
 theorem check_leaf_digest (oracle : Oracle) (state : MachineState) (address : Nat)
     (salt : Digest) (value : Entry)
     (scratch : state.getReg .x21 = 256)

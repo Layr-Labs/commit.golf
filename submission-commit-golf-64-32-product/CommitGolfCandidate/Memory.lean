@@ -129,8 +129,8 @@ theorem read_digest_words (state : MachineState) (address : Nat) (aligned : addr
 
 set_option exponentiation.threshold 512 in
 /-- A compression input consists of its upper 32-byte block and lower digest. -/
-theorem read_compression_halves (state : MachineState) (address : Nat)
-    (_aligned : address % 8 = 0) :
+theorem read_compression_halves_unaligned (state : MachineState) (address : Nat)
+    :
     readBuffer state address 64 =
       readBuffer state (address + 32) 32 ++ readBuffer state address 32 := by
   apply BitVec.eq_of_toNat_eq
@@ -142,6 +142,12 @@ theorem read_compression_halves (state : MachineState) (address : Nat)
     Nat.mod_eq_of_lt (read_natural_bound state (address+32) 32),
     Nat.mod_eq_of_lt (read_natural_bound state address 32), read_natural_add state address 32 32]
   ring
+
+theorem read_compression_halves (state : MachineState) (address : Nat)
+    (_aligned : address % 8 = 0) :
+    readBuffer state address 64 =
+      readBuffer state (address + 32) 32 ++ readBuffer state address 32 :=
+  read_compression_halves_unaligned state address
 
 /-- Reads depend only on the words in the addressed digest. -/
 theorem read_digest_congr (left right : MachineState) (address : Nat)
