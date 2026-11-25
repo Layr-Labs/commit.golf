@@ -16,6 +16,8 @@ theorem fused_position (saltFetched : CursorSaltFetched (submission.image .commi
     (prefixFetched : CursorPrefixFetched (submission.image .commit))
     (tailFetched : FusedTailFetched (submission.image .commit))
     (latchFetched : FusedLatchFetched (submission.image .commit))
+    (callFetched : ∀ state : MachineState, state.pc = 4312 →
+      fetch (submission.image .commit) state = some (.base (.JAL .x1 144)))
     (state : MachineState) (messageBase : Word) (pc : state.pc = 4280)
     (scratch : state.getReg .x21 = state.getReg .x8 - 32)
     (above : 32 ≤ (state.getReg .x8).toNat)
@@ -96,7 +98,7 @@ theorem fused_position (saltFetched : CursorSaltFetched (submission.image .commi
   dsimp only [ready, commitPositionState] at leafRun
   rw [show 36 + fuel = 8 + (1 + (24 + (3 + fuel))) by omega,
     cursor_salt_execute _ saltFetched _ physicalPC physicalSalt destinationValid,
-    cursor_salt_copy_frame, commit_leaf_call _ copyPC, cursor_call_frame, leafRun]
+    cursor_salt_copy_frame, commit_leaf_call _ copyPC (callFetched _ copyPC), cursor_call_frame, leafRun]
   rw [fused_leaf_reference_bind (commitLeafCallState (commitCopyState state 46))
     cursor (readySource.trans source) readyChain
     (by

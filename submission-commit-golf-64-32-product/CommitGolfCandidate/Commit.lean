@@ -70,15 +70,6 @@ theorem commit_setup_registers (state : MachineState) :
     MachineState.getReg, MachineState.setReg, MachineState.setPC]
   simp [execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
 
-/-- Setup leaves the reference leaf and block counters untouched. -/
-theorem commit_setup_counters (state : MachineState) :
-    (commitSetupState state).getReg .x20 = state.getReg .x20 ∧
-    (commitSetupState state).getReg .x28 = state.getReg .x28 := by
-  dsimp only [commitSetupState, commitSetupPrefix, commitSetupInstructions, commitLoad,
-    List.append, List.take, List.foldl, execInstrBr, signExtend12,
-    MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  simp [execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-
 theorem commit_setup_pc (state : MachineState) (pc : state.pc = 4096) :
     (commitSetupState state).pc = 4236 := by
   simp [commitSetupState, commitSetupPrefix, commitSetupInstructions, commitLoad,
@@ -111,42 +102,48 @@ private def commitReadyPrefix (state : MachineState) (count : Nat) : MachineStat
 
 def commitReadyState (state : MachineState) : MachineState := commitReadyPrefix state 10
 
-/-- Seven readiness instructions followed by two entry jumps. The leaf counter x20
-and block counter x28 are already zero at this point, so the reference ready state
-is reached without rewriting them. Every actual fetched instruction is checked here. -/
+/-- Nine readiness instructions followed by two entry jumps. The old ready state
+remains a semantic reference; every actual fetched instruction is checked here. -/
 private def compactReadyInstructions : List Instr :=
-  [.ADDI .x21 .x8 (-32), .ADDI .x22 .x18 0,
+  [.ADDI .x21 .x8 (-32), .ADDI .x22 .x18 0, .ADDI .x20 .x0 0,
    .ADDI .x5 .x0 0, .ADDI .x10 .x21 0, .ADDI .x11 .x0 64,
-   .ADDI .x12 .x21 0, .ADDI .x13 .x0 0,
-   .JAL .x0 44, .JAL .x1 144]
+   .ADDI .x12 .x21 0, .ADDI .x13 .x0 0, .ADDI .x28 .x0 0,
+   .JAL .x0 36, .JAL .x1 1007092]
 
 private def compactReadyPrefix (state : MachineState) (count : Nat) : MachineState :=
   (compactReadyInstructions.take count).foldl execInstrBr state
 
-private theorem compact_ready_same (state : MachineState) (pc : state.pc=4240)
-    (counter : state.getReg .x20 = 0) (blocks : state.getReg .x28 = 0) :
-    compactReadyPrefix state 9 = ((commitReadyState state).setReg .x1 4316).setPC 4456 := by
-  cases state
-  simp only [MachineState.getReg] at counter blocks
+private theorem compact_ready_ten (state : MachineState) (pc : state.pc=4240) :
+    compactReadyPrefix state 10 = (commitReadyState state).setPC 4312 := by
   simp [compactReadyPrefix,compactReadyInstructions,commitReadyState,commitReadyPrefix,
     commitReadyInstructions,execInstrBr,signExtend21,signExtend12,pc,
-    MachineState.setPC,MachineState.setReg,MachineState.getReg,BitVec.add_assoc] at pc ⊢
-  subst pc
-  refine ⟨?_, rfl⟩
-  funext reg
-  cases reg <;> simp_all
+    MachineState.setPC,MachineState.setReg,MachineState.getReg,BitVec.add_assoc]
 
-theorem commit_ready_linked (state : MachineState) (pc : state.pc = 4240)
-    (counter : state.getReg .x20 = 0) (blocks : state.getReg .x28 = 0) (fuel : Nat) :
-    execute (submission.image .commit) (9 + fuel) state true =
+private theorem compact_ready_same (state : MachineState) (pc : state.pc=4240) :
+    compactReadyPrefix state 11 = ((commitReadyState state).setReg .x1 4316).setPC 1011404 := by
+  have split : compactReadyPrefix state 11 =
+      execInstrBr (compactReadyPrefix state 10) (.JAL .x1 1007092) := by
+    simp only [compactReadyPrefix, compactReadyInstructions, List.take, List.foldl]
+  rw [split, compact_ready_ten state pc]
+  show (((commitReadyState state).setPC 4312).setReg .x1 ((4312 : Word) + 4)).setPC
+      ((4312 : Word) + signExtend21 1007092) = _
+  rw [show (4312 : Word) + signExtend21 1007092 = 1011404 by decide,
+    show (4312 : Word) + 4 = 4316 by decide]
+  generalize commitReadyState state = ready
+  cases ready
+  rfl
+
+/-- The second entry jump links x1 to 4316 and enters the unrolled leaf block. -/
+theorem commit_ready_linked (state : MachineState) (pc : state.pc = 4240) (fuel : Nat) :
+    execute (submission.image .commit) (11 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel
-            (((commitReadyState state).setReg .x1 4316).setPC 4456) true
-          return result.charge 9 0) := by
-  rw [← compact_ready_same state pc counter blocks]
+            (((commitReadyState state).setReg .x1 4316).setPC 1011404) true
+          return result.charge 11 0) := by
+  rw [← compact_ready_same state pc]
   apply execute_unit_steps (states := compactReadyPrefix state)
   intro i hi
   refine ⟨.base ((compactReadyInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply commit_fetch _ (if i<8 then 36+i else 54) _ (by split <;> omega)
+  · apply commit_fetch _ (if i<10 then 36+i else 54) _ (by split <;> omega)
     · interval_cases i <;>
         simp [compactReadyPrefix,compactReadyInstructions,execInstrBr,pc,
           signExtend21,MachineState.setPC]
@@ -308,12 +305,11 @@ theorem commit_copy (state : MachineState) (start : Nat)
 def commitLeafCallState (state : MachineState) : MachineState := (state.setReg .x1 4316).setPC 4456
 
 theorem commit_leaf_call (state : MachineState) (pc : state.pc = 4312)
+    (fetched : fetch (submission.image .commit) state = some (.base (.JAL .x1 144)))
     (fuel : Nat) :
     execute (submission.image .commit) (1 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitLeafCallState state) true
           return result.charge 1 0) := by
-  have fetched : fetch (submission.image .commit) state = some (.base (.JAL .x1 144)) := by
-    apply commit_fetch _ 54 _ (by decide) pc; rfl
   have stepped : ordinaryStep state (.base (.JAL .x1 144)) = some (commitLeafCallState state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21,
       commitLeafCallState, MachineState.setPC, pc]

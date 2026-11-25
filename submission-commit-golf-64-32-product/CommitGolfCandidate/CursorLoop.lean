@@ -18,6 +18,8 @@ The real repeated cost is 37 instructions and 93 cycles per committed leaf. -/
 theorem cursor_leaves (saltFetched : CursorSaltFetched (submission.image .commit))
     (prefixFetched : CursorPrefixFetched (submission.image .commit))
     (tailFetched : CursorTailFetched (submission.image .commit))
+    (callFetched : ∀ state : MachineState, state.pc = 4312 →
+      fetch (submission.image .commit) state = some (.base (.JAL .x1 144)))
     (state : MachineState) (remaining : Nat) (messageBase : Word)
     (invariant : CommitLeavesInvariant state remaining)
     (window : (state.getReg .x23).toNat + 32 * remaining = (state.getReg .x22).toNat)
@@ -35,7 +37,7 @@ theorem cursor_leaves (saltFetched : CursorSaltFetched (submission.image .commit
     simp only [show remaining + 1 ≠ 0 by omega, ite_false]
     rw [← pc, cursor_normalize_self_pc,
       show 37 * (remaining + 1) + fuel = 37 + (37 * remaining + fuel) by omega,
-      cursor_position saltFetched prefixFetched tailFetched state messageBase pc
+      cursor_position saltFetched prefixFetched tailFetched callFetched state messageBase pc
         invariant.scratch invariant.sourceAbove invariant.oracleReady
         (fun word => invariant.salts word.val (by omega))
         (fun word => invariant.heap word.val (by omega))

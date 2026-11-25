@@ -55,7 +55,7 @@ theorem nonce_program_machine_success : nonceCompressedProgram.MachineSuccess :=
 theorem nonce_machine_support_cycles (message : Message) (positions : Positions)
     (batch : positions.card = BATCH) (result : MachineResult)
     (reachable : result ∈ support (nonceCompressedProgram.honestMachine message positions)) :
-    result.commitCycles ≤ 1728053682 ∧ result.openingCycles ≤ 99225 := by
+    result.commitCycles ≤ 1678377395 ∧ result.openingCycles ≤ 99225 := by
   rw [honest_machine] at reachable
   simp only [mem_support_bind_iff] at reachable
   obtain ⟨committed,committedReached,opened,openedReached,returned⟩ := reachable
@@ -68,7 +68,7 @@ theorem nonce_machine_support_cycles (message : Message) (positions : Positions)
   exact ⟨resources.2.1.le,
     nonce_compressed_batch_cycles (nonceCompressedProgram.readCommit committed).2 positions batch⟩
 
-theorem nonce_program_prover_cycles : nonceCompressedProgram.ProverCycles 1728053682 99225 := by
+theorem nonce_program_prover_cycles : nonceCompressedProgram.ProverCycles 1678377395 99225 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached

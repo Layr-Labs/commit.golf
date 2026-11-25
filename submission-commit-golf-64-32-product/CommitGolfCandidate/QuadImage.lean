@@ -8,16 +8,6 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 4096
 set_option maxHeartbeats 2000000
 
-theorem contiguous_image_entry : ContiguousEntryFetched (submission.image .commit) := by
-  intro state
-  constructor
-  · intro pc
-    apply commit_fetch state 46 _ (by decide) pc
-    rfl
-  · intro pc
-    apply commit_fetch state 54 _ (by decide) pc
-    rfl
-
 /-- The four real salt stores use x10; each intervening load uses x18. -/
 theorem contiguous_image_salt : ContiguousSaltFetched (submission.image .commit) := by
   intro state i hi pc
