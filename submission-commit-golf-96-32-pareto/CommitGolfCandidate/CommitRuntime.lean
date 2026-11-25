@@ -16,9 +16,9 @@ private theorem ready_body (state : MachineState) (count : Nat)
       BitVec.ofNat 64 (32 + 8 * word.val)) 8 = true)
     (output : ∀ word : Fin 4, accessValid ((commitReadyState state).getReg .x26 +
       BitVec.ofNat 64 (8 * word.val)) 8 = true) (fuel : Nat) :
-    execute (submission.image .commit) (4 + (313 * count - 13 + fuel)) state true =
+    execute (submission.image .commit) (7 + (51 * count - 13 + fuel)) state true =
       (do let finished ← commitBody (commitReadyState state) count
-          return ⟨.success, finished, 376 * count - 16, 9 * count - 1⟩) := by
+          return ⟨.success, finished, 86 * count - 13, 5 * count - 1⟩) := by
   rw [commit_ready state pc,
     commit_body (commitReadyState state) count positive bounded leaves total parents root output]
   simp only [bind_assoc, pure_bind]
@@ -32,12 +32,12 @@ private theorem ready_body (state : MachineState) (count : Nat)
 succeed for every possible salt buffer. -/
 theorem commit_after_random (message : Message) {bits : Nat} (answer : BitVec bits) (fuel : Nat) :
     let setup := commitSetupState (submission.initialState .commit message)
-    execute (submission.image .commit) (4 + (313 * 2 ^ 24 - 13 + fuel))
+    execute (submission.image .commit) (7 + (51 * 2 ^ 24 - 13 + fuel))
       (writeBits setup (setup.getReg .x10) answer) true =
         (do let finished ← commitBody (commitReadyState (writeBits
               (commitSetupState (submission.initialState .commit message))
               ((commitSetupState (submission.initialState .commit message)).getReg .x10) answer)) (2 ^ 24)
-            return ⟨.success, finished, 376 * 2 ^ 24 - 16, 9 * 2 ^ 24 - 1⟩) := by
+            return ⟨.success, finished, 86 * 2 ^ 24 - 13, 5 * 2 ^ 24 - 1⟩) := by
   dsimp only
   have pc : (writeBits (commitSetupState (submission.initialState .commit message))
       ((commitSetupState (submission.initialState .commit message)).getReg .x10) answer).pc = 4240 := by
@@ -54,13 +54,13 @@ def commitExecution (message : Message) : OracleComp World Execution := do
   let answer ← liftM ($ᵗ BitVec (8 * (setup.getReg .x11).toNat) :
     ProbComp (BitVec (8 * (setup.getReg .x11).toNat)))
   let finished ← commitBody (commitInputReady message answer) (2 ^ 24)
-  return ⟨.success, finished, 380 * 2 ^ 24 + 20, 9 * 2 ^ 24 - 1⟩
+  return ⟨.success, finished, 90 * 2 ^ 24 + 23, 5 * 2 ^ 24 - 1⟩
 
 set_option maxRecDepth 4096 in
 /-- Exact execution from the real ABI, including salt generation and all setup.
 Additional instruction fuel does not change the successful result. -/
 theorem commit_execute (message : Message) (fuel : Nat) :
-    execute (submission.image .commit) (313 * 2 ^ 24 + 27 + fuel)
+    execute (submission.image .commit) (51 * 2 ^ 24 + 30 + fuel)
       (submission.initialState .commit message) true = commitExecution message := by
   let initial := submission.initialState .commit message
   let setup := commitSetupState initial
@@ -74,7 +74,7 @@ theorem commit_execute (message : Message) (fuel : Nat) :
     have sum : (4294971424 : Word) + 1073741824 = 5368713248#64 := rfl
     rw [sum]
     rfl
-  rw [show 313 * 2 ^ 24 + 27 + fuel = 35 + (1 + (4 + (313 * 2 ^ 24 - 13 + fuel))) by omega,
+  rw [show 51 * 2 ^ 24 + 30 + fuel = 35 + (1 + (7 + (51 * 2 ^ 24 - 13 + fuel))) by omega,
     commit_setup _ rfl, commit_random setup setupPC regs.1 valid]
   simp only [commitExecution, bind_assoc]
   apply bind_congr_of_forall_mem_support
@@ -96,14 +96,14 @@ private theorem run_commit (candidate : Submission) (message : Message) :
 successful execution above; no truncation is used to obtain the cost bound. -/
 theorem commit_execution (message : Message) : submission.run .commit message = commitExecution message := by
   rw [run_commit]
-  have allowance : submission.steps .commit = 313 * 2 ^ 24 + 27 + 3338666981 := by decide
+  have allowance : submission.steps .commit = 51 * 2 ^ 24 + 30 + 7734297570 := by decide
   rw [allowance, commit_execute]
 
 /-- Exact machine resources for every commitment, before interpreting oracle calls.
 These counts include the private-randomness syscall's work. -/
 theorem commit_input_resources (message : Message) (result : Execution)
     (reachable : result ∈ support (submission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 6375342100 ∧ result.oracleCalls = 150994943 := by
+    result.exit = .success ∧ result.cycles = 1509949463 ∧ result.oracleCalls = 83886079 := by
   rw [commit_execution] at reachable
   simp only [commitExecution, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at reachable
   obtain ⟨answer, _, finished, _, rfl⟩ := reachable

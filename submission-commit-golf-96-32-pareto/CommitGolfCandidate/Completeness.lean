@@ -53,17 +53,17 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
       ready.getMem (BitVec.ofNat 64 (5905584160+8*ordinal)) = BitVec.ofNat 64 (indices ordinal).val := by
     rw [show ready.getMem = initial.getMem from congrArg (fun mem address => mem address) memory]
     exact check_input_position input ordinal present
-  have valueData (ordinal : Nat) (present : ordinal < positions.card) (block : Nat) (inside : block < 8) :
-      readBuffer ready (6039801888+256*ordinal+32*block) 32 =
-        (message (indices ordinal)).extractLsb' (256*block) 256 := by
+  have valueData (ordinal : Nat) (present : ordinal < positions.card) (block : Nat) (inside : block < 4) :
+      readBuffer ready (6039801888+256*ordinal+64*block) 64 =
+        (message (indices ordinal)).extractLsb' (512*block) 512 := by
     rw [read_buffer_memory_congr _ _ memory]
     have value := check_input_value_block input ordinal block present inside
     have indexSame :
         ((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val =
           indices ordinal := Fin.ext (sorted_value_index positions ordinal present)
-    change readBuffer initial (6039801888+256*ordinal+32*block) 32 =
+    change readBuffer initial (6039801888+256*ordinal+64*block) 64 =
       (message (((positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present)).val)).extractLsb'
-        (256*block) 256 at value
+        (512*block) 512 at value
     rw [indexSame] at value
     exact value
   have saltData (ordinal : Nat) (present : ordinal < positions.card) :

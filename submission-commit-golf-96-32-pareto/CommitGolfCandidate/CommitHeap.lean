@@ -35,12 +35,12 @@ theorem commit_input_memory (message : Message) {bits : Nat} (answer : BitVec bi
 
 /-- Random salt generation leaves all original message blocks intact. -/
 theorem commit_ready_message_block (message : Message) (answer : BitVec (256*LENGTH))
-    (index : Index) (block : Nat) (inside : block < 8) :
-    readBuffer (commitInputReady message answer) (4096+256*index.val+32*block) 32 =
-      (message index).extractLsb' (256*block) 256 := by
+    (index : Index) (block : Nat) (inside : block < 4) :
+    readBuffer (commitInputReady message answer) (4096+256*index.val+64*block) 64 =
+      (message index).extractLsb' (512*block) 512 := by
   have indexBound : index.val < 2^24 := index.isLt
   rw [read_buffer_memory_congr _ _ (commit_input_memory message answer)]
-  rw [write_bits_read_outside _ answer 5368713248 _ 32 (by decide)
+  rw [write_bits_read_outside _ answer 5368713248 _ 64 (by decide)
     (by omega) (Or.inl (by omega))]
   exact commit_input_block message index block inside
 
@@ -68,14 +68,15 @@ theorem commit_input_leaf_heap (oracle : Oracle) (message : Message)
   have wrapped (i : Nat) (inside : i < LENGTH) : (wrap i).val = i := Nat.mod_eq_of_lt inside
   have regs := commit_input_registers message answer
   have result := commit_leaves_digests oracle (commitInputReady message answer)
-    4096 4831842336 5368713248 LENGTH (fun i => message (wrap i))
+    4064 4831842336 5368713248 LENGTH (fun i => message (wrap i))
     (fun i => answer.extractLsb' (256*i) 256)
-    regs.2.2.2.2.2.2.1 regs.1 regs.2.2.2.2.1 regs.2.2.1
+    regs.1 regs.2.2.2.2.1 regs.2.2.1
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
     (by
       intro i hi block hb
       have loaded := commit_ready_message_block message answer (wrap i) block hb
       rw [wrapped i hi] at loaded
+      rw [show 4064+32+256*i+64*block = 4096+256*i+64*block by omega]
       exact loaded)
     (by
       intro i hi

@@ -1,6 +1,6 @@
 import CommitGolfCandidate.HidingOpeningQueries
 import CommitGolfCandidate.HidingStages
-import CommitGolfCandidate.LeafResourceBridge
+import CommitGolfCandidate.HidingLeaf
 
 /-! Isolate one unopened leaf inside the full root-and-opening continuation.
 Its salt is absent from the public proof, and the continuation uses that leaf only
@@ -42,10 +42,10 @@ theorem reference_opening_hidden_salt (heap : Nat → Digest) (salt : Index → 
   intro index member
   exact Function.update_of_ne (by intro same; subst index; exact unopened member) _ _
 
-/-- The actual eight-block leaf computation, with unused natural indices zeroed. -/
+/-- The actual four-block leaf computation, with unused natural indices zeroed. -/
 def queryLeaf (message : Message) (salt : Index → Digest) (index : Nat) : OracleComp World Digest :=
   if inside : index < LENGTH then
-    hashBlocks ((List.range 8).map fun block => (message ⟨index, inside⟩).extractLsb' (256*block) 256)
+    hashBlocks ((List.range 4).map fun block => (message ⟨index, inside⟩).extractLsb' (512*block) 512)
       (salt ⟨index, inside⟩)
   else pure 0
 
@@ -66,8 +66,9 @@ theorem query_leaf_bound (message : Message) (salt : Index → Digest) (index : 
     PublicQueryBound (queryLeaf message salt index) 8 := by
   unfold queryLeaf
   split
-  · exact ResourceBridge.leaf_public_query_bound
-      (salt ⟨index, by assumption⟩) (message ⟨index, by assumption⟩)
+  · apply PublicQueryBound.mono (hash_blocks_bound _ _)
+    simp only [List.length_map, List.length_range]
+    omega
   · trivial
 
 theorem query_leaf_except_bound (message : Message) (salt : Index → Digest)
@@ -84,7 +85,7 @@ theorem query_leaf_reference (oracle : Oracle) (message : Message) (salt : Index
   unfold queryLeaf leafValues
   split
   · have result := fixed_hash_blocks oracle
-      ((List.range 8).map fun block => (message ⟨index, by assumption⟩).extractLsb' (256*block) 256)
+      ((List.range 4).map fun block => (message ⟨index, by assumption⟩).extractLsb' (512*block) 512)
       (salt ⟨index, by assumption⟩) pure
     simpa only [bind_pure, List.foldl_map, fixed_oracle_run_pure, leafDigest] using result
   · exact fixed_oracle_run_pure _ _

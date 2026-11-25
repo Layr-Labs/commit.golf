@@ -260,7 +260,7 @@ theorem check_path_step (state : MachineState) (pc : state.pc = 4212)
   rw [show pathPreparationSteps (state.getReg .x20) + 26 + fuel =
       pathPreparationSteps (state.getReg .x20) + (22 + (4 + fuel)) by omega,
     check_path_preparation state pc scratch sourceValid,
-    check_compression _ 56 (Or.inl rfl) preparedPC preparedScratch]
+    check_compression _ 56 rfl preparedPC preparedScratch]
   simp only [bind_assoc, pure_bind]
   apply congrArg (fun continuation =>
     (liftM (World.query (.inr (.inl (padInput (readBuffer (checkPathPreparedState state) 256 64))))) :

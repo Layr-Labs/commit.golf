@@ -29,7 +29,7 @@ theorem commit_parent_written_memory (state : MachineState) (answer : BitVec 256
 
 /-- Read two consecutive child digests and write their compression at the parent
 index. Seven setup instructions plus the padded call cost 31 cycles. -/
-theorem commit_parent_compression (state : MachineState) (pc : state.pc = 4348)
+theorem commit_parent_compression (state : MachineState) (pc : state.pc = 4376)
     (sourceValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 6)) 96 = true)
     (destinationValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 5)) 32 = true)
     (sourceAligned : (state.getReg .x9 + (state.getReg .x20 <<< 6)).toNat % 8 = 0)
@@ -48,13 +48,13 @@ theorem commit_parent_compression (state : MachineState) (pc : state.pc = 4348)
     apply execute_unit_steps (states := parentPrefix state)
     intro i hi
     refine ⟨.base ((parentInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply commit_fetch _ (63 + i) _ (by omega)
+    · apply commit_fetch _ (70 + i) _ (by omega)
       · interval_cases i <;> simp [parentPrefix, parentInstructions, execInstrBr, pc, MachineState.setPC]
       · interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
   let ready := parentPrefix state 7
-  have readyPC : ready.pc = 4376 := by
+  have readyPC : ready.pc = 4404 := by
     simp [ready, parentPrefix, parentInstructions, execInstrBr, pc, MachineState.setPC]
   have registers : ready.getReg .x5 = 0 ∧
       ready.getReg .x10 = state.getReg .x9 + (state.getReg .x20 <<< 6) ∧
@@ -63,7 +63,7 @@ theorem commit_parent_compression (state : MachineState) (pc : state.pc = 4348)
       ready.getReg .x13 = 0 := by
     simp [ready, parentPrefix, parentInstructions, execInstrBr, signExtend12,
       MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  have call := padding_call false ready 70 (by simp [paddingCallSite]) readyPC
+  have call := padding_call false ready 77 (by simp [paddingCallSite]) readyPC
     registers.1 registers.2.2.2.2
     (by rw [registers.2.1]; exact sourceValid)
     (by rw [registers.2.2.2.1]; exact destinationValid)
@@ -99,17 +99,17 @@ theorem commit_parent_register (state : MachineState) (answer : BitVec 256) (reg
 
 def commitParentNextState (state : MachineState) : MachineState :=
   (state.setReg .x20 (state.getReg .x20 - 1)).setPC
-    (if state.getReg .x20 - 1 = 0 then 4388 else 4348)
+    (if state.getReg .x20 - 1 = 0 then 4416 else 4376)
 
-theorem commit_parent_next (state : MachineState) (pc : state.pc = 4380) (fuel : Nat) :
+theorem commit_parent_next (state : MachineState) (pc : state.pc = 4408) (fuel : Nat) :
     execute (submission.image .commit) (2 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitParentNextState state) true
           return result.charge 2 0) := by
-  let next := (state.setReg .x20 (state.getReg .x20 - 1)).setPC 4384
+  let next := (state.setReg .x20 (state.getReg .x20 - 1)).setPC 4412
   have f0 : fetch (submission.image .commit) state = some (.base (.ADDI .x20 .x20 4095)) := by
-    apply commit_fetch _ 71 _ (by decide) pc; rfl
+    apply commit_fetch _ 78 _ (by decide) pc; rfl
   have f1 : fetch (submission.image .commit) next = some (.base (.BNE .x20 .x0 8156)) := by
-    apply commit_fetch _ 72 _ (by decide) rfl; rfl
+    apply commit_fetch _ 79 _ (by decide) rfl; rfl
   have s0 : ordinaryStep state (.base (.ADDI .x20 .x20 4095)) = some next := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       next, pc, BitVec.sub_eq_add_neg]
@@ -122,7 +122,7 @@ theorem commit_parent_next (state : MachineState) (pc : state.pc = 4380) (fuel :
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
 /-- One parent costs 33 cycles and one public query. -/
-theorem commit_parent (state : MachineState) (pc : state.pc = 4348)
+theorem commit_parent (state : MachineState) (pc : state.pc = 4376)
     (sourceValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 6)) 96 = true)
     (destinationValid : rangeValid (state.getReg .x9 + (state.getReg .x20 <<< 5)) 32 = true)
     (sourceAligned : (state.getReg .x9 + (state.getReg .x20 <<< 6)).toNat % 8 = 0)
@@ -142,7 +142,7 @@ theorem commit_parent (state : MachineState) (pc : state.pc = 4348)
       OracleComp World (BitVec 256)) >>= continuation)
   funext answer
   change BitVec 256 at answer
-  have nextPC : (commitParentState state answer).pc = 4380 := by rw [commit_parent_pc, pc]; rfl
+  have nextPC : (commitParentState state answer).pc = 4408 := by rw [commit_parent_pc, pc]; rfl
   rw [commit_parent_next _ nextPC]
   simp [Execution.charge, ← Nat.add_assoc]
 
