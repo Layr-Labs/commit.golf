@@ -1,5 +1,9 @@
 name: Benchmark commit-golf-96-32-product
 on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/benchmark-commit-golf-96-32-product.yml'
   workflow_dispatch:
     inputs:
       yukon_evaluation:
