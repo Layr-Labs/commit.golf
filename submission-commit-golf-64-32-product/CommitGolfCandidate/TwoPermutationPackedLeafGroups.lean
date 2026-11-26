@@ -18,7 +18,7 @@ def group (g : Nat) : Nat → Nat → MachineState → OracleComp World MachineS
     let mid ← unitTrace s g u
     group g k (u+1) mid
 
-def progress (cost u : Nat) := cost*u+u/64+u/128
+def progress (cost u : Nat) := cost*u+u/64+u/256
 def span (cost u k : Nat) := progress cost (u+k)-progress cost u
 
 theorem span_step (cost u k : Nat) : span cost u (k+1) = cost + extra u + span cost (u+1) k := by

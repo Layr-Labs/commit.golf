@@ -6,13 +6,13 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 1500000
 def idx (g : Nat) (u : Fin 4096) := 4096*g+u.val
 def heapBase (g pos : Nat) := leafDest (4096*g+64*(pos/64))
-def nonceBase (g pos : Nat) := leafSalt (4096*g+128*(pos/128))
+def nonceBase (g pos : Nat) := leafSalt (4096*g+256*(pos/256))
 
 structure Regs (s : MachineState) (g pos : Nat) : Prop where
   source : s.getReg .x10=wordAddress (leafStart (4096*g+pos)+5)
   heap : s.getReg .x20=wordAddress (heapBase g pos)
-  salts : s.getReg .x22=wordAddress (nonceBase g pos)
-  stride : s.getReg .x7=2048
+  salts : s.getReg .x22=wordAddress (nonceBase g pos+256)
+  stride : s.getReg .x7=4096
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
   primitive : s.getReg .x13=1
@@ -31,8 +31,8 @@ structure RawRegs (s : MachineState) (g : Nat) (u : Fin 4096) : Prop where
   source : s.getReg .x10=wordAddress (leafStart (idx g u+1)+5)
   dest : s.getReg .x12=wordAddress (leafDest (idx g u))
   heap : s.getReg .x20=wordAddress (heapBase g u.val)
-  salts : s.getReg .x22=wordAddress (nonceBase g u.val)
-  stride : s.getReg .x7=2048
+  salts : s.getReg .x22=wordAddress (nonceBase g u.val+256)
+  stride : s.getReg .x7=4096
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
   primitive : s.getReg .x13=1

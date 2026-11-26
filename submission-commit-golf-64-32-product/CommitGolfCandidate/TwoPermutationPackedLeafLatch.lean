@@ -7,7 +7,7 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 1500000
 attribute [local irreducible] execute packedWideCommitImage
 
-def latchPC (g : Nat) : Word := if g+1=2^12 then 184784 else 4168
+def latchPC (g : Nat) : Word := if g+1=2^12 then 184784 else 4176
 def latchCost (g : Nat) := if g+1=2^12 then 1 else 2
 
 theorem latch_run (s : MachineState) (g fuel : Nat) (bound : g<2^12) (r : Regs s g 4096)
@@ -15,7 +15,7 @@ theorem latch_run (s : MachineState) (g fuel : Nat) (bound : g<2^12) (r : Regs s
     execute packedWideCommitImage (latchCost g+fuel) s true =
       (do let y ← execute packedWideCommitImage fuel (s.setPC (latchPC g)) true
           return y.charge (latchCost g) 0) := by
-  have here : s.pc=184776 := r.pc
+  have here : s.pc=184720 := r.pc
   have eq : s.getReg .x20=s.getReg .x21 ↔ g+1=2^12 := by
     rw [r.heap,stop]
     constructor
@@ -28,15 +28,15 @@ theorem latch_run (s : MachineState) (g fuel : Nat) (bound : g<2^12) (r : Regs s
       unfold heapBase leafDest
       omega
   by_cases last : g+1=2^12
-  · have step : ordinaryStep s (.base (.BEQ .x20 .x21 8))=some (s.setPC 184784) := by
+  · have step : ordinaryStep s (.base (.BEQ .x20 .x21 64))=some (s.setPC 184784) := by
       simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,here,eq.mpr last,signExtend13]
     rw [latchCost,if_pos last,latchPC,if_pos last,Nat.add_comm 1 fuel,
       CommitGolfCandidate.execute_ordinary_step _ _ _ _ _ _ (packed_wide_fetch_leaf_branch s here) step];rfl
-  · let middle := s.setPC 184780
+  · let middle := s.setPC 184724
     have diff : s.getReg .x20≠s.getReg .x21 := fun h => last (eq.mp h)
-    have step : ordinaryStep s (.base (.BEQ .x20 .x21 8))=some middle := by
+    have step : ordinaryStep s (.base (.BEQ .x20 .x21 64))=some middle := by
       simp [middle,ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,here,diff]
-    have jump : ordinaryStep middle (.base (.JAL .x0 1916540))=some (s.setPC 4168) := by
+    have jump : ordinaryStep middle (.base (.JAL .x0 1916604))=some (s.setPC 4176) := by
       simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,middle,MachineState.setReg,MachineState.setPC]
       rfl
     rw [latchCost,if_neg last,latchPC,if_neg last,show 2+fuel=(fuel+1)+1 by omega,
@@ -50,7 +50,7 @@ theorem latch_next (s : MachineState) (g : Nat) (more : g+1<2^12) (r : Regs s g 
   refine ⟨?_,?_,?_,r.stride,r.selector,r.size,r.primitive,?_⟩
   · change s.getReg .x10=wordAddress (leafStart _+5);rw [source];exact r.source
   · change s.getReg .x20=wordAddress (heapBase _ _);rw [r.heap];unfold heapBase;rw [show 4096*g+64*(4096/64)=4096*(g+1)+64*(0/64) by omega]
-  · change s.getReg .x22=wordAddress (nonceBase _ _);rw [r.salts];unfold nonceBase;rw [show 4096*g+128*(4096/128)=4096*(g+1)+128*(0/128) by omega]
+  · change s.getReg .x22=wordAddress (nonceBase _ _+256);rw [r.salts];unfold nonceBase;rw [show 4096*g+256*(4096/256)=4096*(g+1)+256*(0/256) by omega]
   · change latchPC g=_;rw [latchPC,if_neg (by omega)];rfl
 
 def batch (g : Nat) (s : MachineState) : OracleComp World MachineState := do
@@ -59,11 +59,11 @@ def batch (g : Nat) (s : MachineState) : OracleComp World MachineState := do
 
 theorem batch_run (s : MachineState) (g fuel : Nat) (bound : g<2^12) (r : Regs s g 0)
     (stop : s.getReg .x21=wordAddress (leafDest (2^24))) :
-    execute packedWideCommitImage (45152+latchCost g+fuel) s true =
+    execute packedWideCommitImage (45136+latchCost g+fuel) s true =
       (do let next ← batch g s
           let result ← execute packedWideCommitImage fuel next true
-          return result.charge (282720+latchCost g) 8192) := by
-  rw [show 45152+latchCost g+fuel=span 11 0 4096+(latchCost g+fuel) by change 45152+_+_=45152+(_+_);omega,
+          return result.charge (282704+latchCost g) 8192) := by
+  rw [show 45136+latchCost g+fuel=span 11 0 4096+(latchCost g+fuel) by change 45136+_+_=45136+(_+_);omega,
     group_run s g 4096 0 _ bound (by decide) r]
   simp only [batch,bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support
@@ -91,18 +91,18 @@ def groups : Nat → Nat → MachineState → OracleComp World MachineState
 
 theorem groups_run (s : MachineState) (cnt g fuel : Nat) (limit : g+cnt=2^12)
     (r : 0<cnt → Regs s g 0) (stop : s.getReg .x21=wordAddress (leafDest (2^24))) :
-    execute packedWideCommitImage ((45154*cnt-1)+fuel) s true =
+    execute packedWideCommitImage ((45138*cnt-1)+fuel) s true =
       (do let next ← groups cnt g s
           let result ← execute packedWideCommitImage fuel next true
-          return result.charge (282722*cnt-1) (8192*cnt)) := by
+          return result.charge (282706*cnt-1) (8192*cnt)) := by
   induction cnt generalizing g s with
   | zero => simp [groups,Execution.charge]
   | succ k ih =>
-    have last : (45154*(k+1)-1)=45152+latchCost g+(45154*k-1) ∧
-        (282722*(k+1)-1)=282720+latchCost g+(282722*k-1) := by
+    have last : (45138*(k+1)-1)=45136+latchCost g+(45138*k-1) ∧
+        (282706*(k+1)-1)=282704+latchCost g+(282706*k-1) := by
       unfold latchCost;split <;> constructor <;> omega
     have valid := r (by omega)
-    rw [last.1,Nat.add_assoc (45152+latchCost g),batch_run s g _ (by omega) valid stop]
+    rw [last.1,Nat.add_assoc (45136+latchCost g),batch_run s g _ (by omega) valid stop]
     simp only [groups,bind_assoc]
     apply bind_congr_of_forall_mem_support
     intro next reached
@@ -133,7 +133,7 @@ theorem entry_regs (s : MachineState) (entry : CommitEntry s) {bits : Nat} (coin
   obtain ⟨pc,stride⟩ := packed_wide_ready_state_entry s entry coins
   have save := packed_wide_ready_state_register s coins
   exact ⟨⟨by rw [packed_wide_ready_source,base.source];rfl,(save .x20 (by decide)).trans base.heap,
-    (save .x22 (by decide)).trans base.salts,stride,(save .x5 (by decide)).trans base.selector,
+    (by rw [packed_wide_ready_salts,base.salts]; exact (wordAddress_add (leafSalt 0) 256).symm),stride,(save .x5 (by decide)).trans base.selector,
     (save .x11 (by decide)).trans base.size,(save .x13 (by decide)).trans base.primitive,pc⟩,
     (save .x21 (by decide)).trans stop⟩
 
@@ -144,7 +144,7 @@ def executableLeaves : PackedLeafExecution where
   finished s entry _ coins out hit := by
     obtain ⟨pc,keep⟩ := groups_post _ (2^12) 0 (by decide) (entry_regs s entry coins).1 (by decide) hit
     obtain ⟨g,stop,x8,x9,x19⟩ := post_random_regs s entry coins
-    have held (reg : Reg) (safe : SavedReg reg) (diff : reg ∉ [Reg.x7,.x10]) :=
+    have held (reg : Reg) (safe : SavedReg reg) (diff : reg ∉ [Reg.x7,.x10,.x22]) :=
       (keep reg safe).trans (packed_wide_ready_state_register s coins reg diff)
     exact ⟨pc,(held .x5 (by simp [SavedReg]) (by decide)).trans g.selector,
       (held .x9 (by simp [SavedReg]) (by decide)).trans x9,(held .x19 (by simp [SavedReg]) (by decide)).trans x19,

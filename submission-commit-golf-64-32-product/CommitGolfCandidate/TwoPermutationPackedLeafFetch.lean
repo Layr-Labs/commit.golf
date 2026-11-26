@@ -7,7 +7,7 @@ set_option maxRecDepth 16384
 set_option maxHeartbeats 6000000
 attribute [local irreducible] ArtifactEncoding.decode
 
-def packed_wideLeafIndex (slot : Nat) : Nat := 18+11*slot+slot/64+slot/128
+def packed_wideLeafIndex (slot : Nat) : Nat := 20+11*slot+slot/64+slot/256
 def packed_wideLeafPC (slot offset : Nat) : Word := BitVec.ofNat 64 (4096+4*(packed_wideLeafIndex slot+offset))
 
 def packed_wideFirstOps (_slot : Nat) : List Instr :=
@@ -15,8 +15,8 @@ def packed_wideFirstOps (_slot : Nat) : List Instr :=
 
 def packed_wideSecondOps (slot : Nat) : List Instr :=
   [.ADDI .x10 .x10 56, .SD .x10 .x10 0,
-   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot%128))), .SD .x10 .x31 8,
-   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot%128)+8)), .SD .x10 .x31 16,
+   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot%256)+2048)), .SD .x10 .x31 8,
+   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot%256)+2056)), .SD .x10 .x31 16,
    .ADDI .x12 .x20 (BitVec.ofNat 12 (32*(slot%64)))]
 
 def packed_wideLeafOp (slot offset : Nat) : Instr :=
@@ -203,13 +203,13 @@ theorem packed_wide_fetch_leaf (slot : Fin 4096) (offset : Fin 11) (state : Mach
   exact packed_wide_fetch_decoded state _ fits pc _ (packed_wide_leaf_decode slot offset)
 
 def packed_heapRebaseIndex (tile : Nat) := packed_wideLeafIndex (64*tile+63)+11
-def packed_nonceRebaseIndex (segment : Nat) := packed_wideLeafIndex (128*segment+127)+12
+def packed_nonceRebaseIndex (segment : Nat) := packed_wideLeafIndex (256*segment+255)+12
 
 private theorem heap_rebase_decoded : ∀ tile : Fin 64,
     Manifest.decodeBase (packed_wideCodeWord (packed_heapRebaseIndex tile.val))=
       some (.ADDI .x20 .x12 32) := by decide +kernel
 
-private theorem nonce_rebase_decoded : ∀ segment : Fin 32,
+private theorem nonce_rebase_decoded : ∀ segment : Fin 16,
     Manifest.decodeBase (packed_wideCodeWord (packed_nonceRebaseIndex segment.val))=
       some (.ADD .x22 .x22 .x7) := by decide +kernel
 
@@ -219,28 +219,28 @@ theorem packed_wide_fetch_heap_rebase (tile : Fin 64) (state : MachineState)
   have fits : packed_heapRebaseIndex tile.val < 262071 := by unfold packed_heapRebaseIndex packed_wideLeafIndex; have := tile.isLt; omega
   exact packed_wide_fetch_decoded state _ fits pc _ (heap_rebase_decoded tile)
 
-theorem packed_wide_fetch_nonce_rebase (segment : Fin 32) (state : MachineState)
+theorem packed_wide_fetch_nonce_rebase (segment : Fin 16) (state : MachineState)
     (pc : state.pc=BitVec.ofNat 64 (4096+4*packed_nonceRebaseIndex segment.val)) :
     fetch packedWideCommitImage state=some (.base (.ADD .x22 .x22 .x7)) := by
   have fits : packed_nonceRebaseIndex segment.val < 262071 := by unfold packed_nonceRebaseIndex packed_wideLeafIndex; have := segment.isLt; omega
   exact packed_wide_fetch_decoded state _ fits pc _ (nonce_rebase_decoded segment)
 
-theorem packed_wide_fetch_leaf_branch (state : MachineState) (pc : state.pc=184776) :
-    fetch packedWideCommitImage state=some (.base (.BEQ .x20 .x21 8)) :=
-  packed_wide_fetch_decoded state 45170 (by decide) pc _ rfl
+theorem packed_wide_fetch_leaf_branch (state : MachineState) (pc : state.pc=184720) :
+    fetch packedWideCommitImage state=some (.base (.BEQ .x20 .x21 64)) :=
+  packed_wide_fetch_decoded state 45156 (by decide) pc _ rfl
 
-theorem packed_wide_fetch_leaf_loop (state : MachineState) (pc : state.pc=184780) :
-    fetch packedWideCommitImage state=some (.base (.JAL .x0 1916540)) :=
-  packed_wide_fetch_decoded state 45171 (by decide) pc _ rfl
+theorem packed_wide_fetch_leaf_loop (state : MachineState) (pc : state.pc=184724) :
+    fetch packedWideCommitImage state=some (.base (.JAL .x0 1916604)) :=
+  packed_wide_fetch_decoded state 45157 (by decide) pc _ rfl
 
 def packed_wideInitialOps : List Instr :=
-  initialInstructions ++ [.ECALL] ++ readyInstructions ++ [.SLLI .x7 .x13 11,.ADDI .x10 .x10 40]
+  initialInstructions ++ [.ECALL] ++ readyInstructions ++ [.SLLI .x7 .x13 11,.ADD .x22 .x22 .x7,.SLLI .x7 .x7 1,.ADDI .x10 .x10 40]
 
-private theorem packed_wide_prelude_decoded : ∀ i : Fin 18,
+private theorem packed_wide_prelude_decoded : ∀ i : Fin 20,
     Manifest.decodeBase (packed_wideCodeWord i.val)=
       some ((packed_wideInitialOps[i.val]?).getD .EBREAK) := by decide +kernel
 
-theorem packed_wide_fetch_initial (i : Fin 18) (state : MachineState)
+theorem packed_wide_fetch_initial (i : Fin 20) (state : MachineState)
     (pc : state.pc=BitVec.ofNat 64 (4096+4*i.val)) :
     fetch packedWideCommitImage state=some (.base ((packed_wideInitialOps[i.val]?).getD .EBREAK)) := by
   have fits : i.val<262071 := by have := i.isLt; omega

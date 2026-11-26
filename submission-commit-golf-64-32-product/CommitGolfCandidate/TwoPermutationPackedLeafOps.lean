@@ -10,21 +10,29 @@ set_option maxHeartbeats 950000
 def firstInstructions (_slot : Fin 4096) : List Instr := [.ADDI .x12 .x10 4064]
 def secondInstructions (slot : Fin 4096) : List Instr :=
   [.ADDI .x10 .x10 56,.SD .x10 .x10 0,
-   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot.val%128))),.SD .x10 .x31 8,
-   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot.val%128)+8)),.SD .x10 .x31 16,
+   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot.val%256)+2048)),.SD .x10 .x31 8,
+   .LD .x31 .x22 (BitVec.ofNat 12 (16*(slot.val%256)+2056)),.SD .x10 .x31 16,
    .ADDI .x12 .x20 (BitVec.ofNat 12 (32*(slot.val%64)))]
 
 def leafInstructions (slot : Fin 4096) : List Instr :=
   firstInstructions slot ++ [.ECALL] ++ secondInstructions slot ++ [.ECALL,.ADDI .x10 .x10 200]
 
-private theorem nonce_offsets_table : ∀ slot : Fin 128,
-    signExtend12 (BitVec.ofNat 12 (16*slot.val)) = BitVec.ofNat 64 (16*slot.val) ∧
-    signExtend12 (BitVec.ofNat 12 (16*slot.val + 8)) = BitVec.ofNat 64 (16*slot.val + 8) := by decide
+private theorem nonce_offsets_table : ∀ slot : Fin 256,
+    signExtend12 (BitVec.ofNat 12 (16*slot.val+2048)) = BitVec.ofNat 64 (16*slot.val)-2048 ∧
+    signExtend12 (BitVec.ofNat 12 (16*slot.val+2056)) = BitVec.ofNat 64 (16*slot.val+8)-2048 := by decide
 
-private theorem nonce_offsets (slot : Fin 4096) :
-    signExtend12 (BitVec.ofNat 12 (16*(slot.val%128))) = BitVec.ofNat 64 (16*(slot.val%128)) ∧
-    signExtend12 (BitVec.ofNat 12 (16*(slot.val%128) + 8)) = BitVec.ofNat 64 (16*(slot.val%128) + 8) :=
-  nonce_offsets_table ⟨slot.val%128, Nat.mod_lt _ (by decide)⟩
+theorem nonce_load_addresses (base : Word) (slot : Fin 4096) :
+    base+signExtend12 (BitVec.ofNat 12 (16*(slot.val%256)+2048)) =
+      (base-2048)+BitVec.ofNat 64 (16*(slot.val%256)) ∧
+    base+signExtend12 (BitVec.ofNat 12 (16*(slot.val%256)+2056)) =
+      (base-2048)+BitVec.ofNat 64 (16*(slot.val%256)+8) := by
+  have offsets := nonce_offsets_table ⟨slot.val%256,Nat.mod_lt _ (by decide)⟩
+  rw [offsets.1,offsets.2]
+  constructor <;> simp only [BitVec.sub_eq_add_neg] <;> ac_rfl
+
+theorem wordAddress_nonce_bias (base : Nat) : wordAddress (base+256)-2048=wordAddress base := by
+  change BitVec.ofNat 64 (8*(base+256))-BitVec.ofNat 64 2048=BitVec.ofNat 64 (8*base)
+  rw [show 8*(base+256)=8*base+2048 by omega,BitVec.ofNat_add,BitVec.add_sub_cancel]
 
 private theorem output_offset_table : ∀ slot : Fin 64,
     signExtend12 (BitVec.ofNat 12 (32*slot.val)) = BitVec.ofNat 64 (32*slot.val) := by decide
@@ -35,8 +43,8 @@ private theorem output_offset (slot : Fin 4096) :
 
 
 def nonceWords (state : MachineState) (slot : Fin 4096) : Words 2 := fun i =>
-  if i.val=0 then state.getMem (state.getReg .x22+BitVec.ofNat 64 (16*(slot.val%128)))
-  else state.getMem (state.getReg .x22+BitVec.ofNat 64 (16*(slot.val%128)+8))
+  if i.val=0 then state.getMem ((state.getReg .x22-2048)+BitVec.ofNat 64 (16*(slot.val%256)))
+  else state.getMem ((state.getReg .x22-2048)+BitVec.ofNat 64 (16*(slot.val%256)+8))
 
 def secondMemory (s : MachineState) (slot : Fin 4096) : MachineState :=
   let tag := s.getReg .x10+56
@@ -66,7 +74,7 @@ private theorem store_regs (s : MachineState) (addr val : Word) (r : Reg) : (s.s
 
 def StampSeparate (s : MachineState) (slot : Fin 4096) : Prop :=
   let base := s.getReg .x10+56
-  let salt := s.getReg .x22+BitVec.ofNat 64 (16*(slot.val%128))
+  let salt := (s.getReg .x22-2048)+BitVec.ofNat 64 (16*(slot.val%256))
   salt≠base ∧ salt+8≠base ∧ salt+8≠base+8
 
 theorem second_execution (s : MachineState) (slot : Fin 4096) (apart : StampSeparate s slot) :
@@ -74,9 +82,9 @@ theorem second_execution (s : MachineState) (slot : Fin 4096) (apart : StampSepa
     before.mem=(secondMemory s slot).mem ∧ before.getReg .x10=s.getReg .x10+56 ∧
     before.getReg .x12=s.getReg .x20+BitVec.ofNat 64 (32*(slot.val%64)) ∧ before.pc=s.pc+28 := by
   have ⟨d0,e0,e1⟩ := apart
-  have offsets := nonce_offsets slot
-  have add8 : s.getReg .x22+BitVec.ofNat 64 (16*(slot.val%128)+8)=
-      (s.getReg .x22+BitVec.ofNat 64 (16*(slot.val%128)))+8 := by
+  have offsets := nonce_load_addresses (s.getReg .x22) slot
+  have add8 : (s.getReg .x22-2048)+BitVec.ofNat 64 (16*(slot.val%256)+8)=
+      ((s.getReg .x22-2048)+BitVec.ofNat 64 (16*(slot.val%256)))+8 := by
     rw [BitVec.ofNat_add,BitVec.add_assoc]
     rfl
   simp only [secondInstructions,secondMemory,List.foldl_cons,List.foldl_nil,execInstrBr,
@@ -86,6 +94,8 @@ theorem second_execution (s : MachineState) (slot : Fin 4096) (apart : StampSepa
     MachineState.getMem_setPC,MachineState.getMem_setReg]
   simp [MachineState.setReg,MachineState.setMem,MachineState.setPC,MachineState.getMem,nonceWords,add8,
     BitVec.add_assoc] at *
+  rw [offsets.1,offsets.2]
+  simp only [BitVec.ofNat_add,BitVec.add_assoc]
   simp only [ite_eq_right d0,ite_eq_right e0,ite_eq_right e1]
 
 theorem second_keeps (s : MachineState) (slot : Fin 4096) (r : Reg) (a : r≠.x10) (b : r≠.x12) (c : r≠.x31) :

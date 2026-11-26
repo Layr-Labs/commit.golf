@@ -8,13 +8,13 @@ set_option maxHeartbeats 1500000
 attribute [local irreducible] execute packedWideCommitImage
 
 def packed_wideFinishReady (state : MachineState) : MachineState :=
-  execInstrBr (execInstrBr state (.SLLI .x7 .x13 11)) (.ADDI .x10 .x10 40)
+  execInstrBr (execInstrBr (execInstrBr (execInstrBr state (.SLLI .x7 .x13 11)) (.ADD .x22 .x22 .x7)) (.SLLI .x7 .x7 1)) (.ADDI .x10 .x10 40)
 
 def packed_wideReadyState (state : MachineState) {bits : Nat} (coins : BitVec bits) : MachineState :=
   packed_wideFinishReady (readyState state coins)
 
 private def packed_wideFinishOps : List Instr :=
-  readyInstructions ++ [.SLLI .x7 .x13 11,.ADDI .x10 .x10 40]
+  readyInstructions ++ [.SLLI .x7 .x13 11,.ADD .x22 .x22 .x7,.SLLI .x7 .x7 1,.ADDI .x10 .x10 40]
 
 private def packed_wideReadyPrefix (state : MachineState) (i : Nat) : MachineState :=
   (packed_wideFinishOps.take i).foldl execInstrBr state
@@ -49,10 +49,10 @@ private theorem packed_wide_draw_run (state : MachineState) (pc : state.pc=4140)
   rfl
 
 private theorem packed_wide_ready_run (state : MachineState) (atReady : state.pc=4144) (fuel : Nat) :
-    execute packedWideCommitImage (6+fuel) state true =
+    execute packedWideCommitImage (8+fuel) state true =
       (do let out ← execute packedWideCommitImage fuel (packed_wideFinishReady (readyPrefix state 4)) true
-          return out.charge 6 0) := by
-  have endState : packed_wideReadyPrefix state 6 = packed_wideFinishReady (readyPrefix state 4) := rfl
+          return out.charge 8 0) := by
+  have endState : packed_wideReadyPrefix state 8 = packed_wideFinishReady (readyPrefix state 4) := rfl
   rw [←endState]
   apply CommitGolfCandidate.execute_unit_steps (states := packed_wideReadyPrefix state)
   intro i inside
@@ -67,12 +67,12 @@ private theorem packed_wide_ready_run (state : MachineState) (atReady : state.pc
   · interval_cases i <;> rfl
 
 theorem packed_execute_wide_setup (state : MachineState) (entry : CommitEntry state) (fuel : Nat) :
-    execute packedWideCommitImage (18+fuel) state true =
+    execute packedWideCommitImage (20+fuel) state true =
       (do let answer ← liftM ($ᵗ BitVec (8*((initialPrefix state 11).getReg .x11).toNat) :
             ProbComp (BitVec (8*((initialPrefix state 11).getReg .x11).toNat)))
           let out ← execute packedWideCommitImage fuel (packed_wideReadyState state answer) true
-          return out.charge 33554450 0) := by
-  rw [show 18+fuel=11+(1+(6+fuel)) by omega,packed_wide_initial_run state entry.pc,
+          return out.charge 33554452 0) := by
+  rw [show 20+fuel=11+(1+(8+fuel)) by omega,packed_wide_initial_run state entry.pc,
     packed_wide_draw_run _ (setup_pc state entry.pc) (setup_registers state entry)]
   simp only [bind_assoc]
   apply bind_congr_of_forall_mem_support
@@ -84,12 +84,12 @@ theorem packed_execute_wide_setup (state : MachineState) (entry : CommitEntry st
   simp [Execution.charge,←Nat.add_assoc,packed_wideReadyState,readyState]
 
 private theorem packed_wide_finish_register (state : MachineState) (reg : Reg)
-    (kept : reg ∉ [Reg.x7,.x10]) :
+    (kept : reg ∉ [Reg.x7,.x10,.x22]) :
     (packed_wideFinishReady state).getReg reg=state.getReg reg := by
   cases reg <;> first | rfl | simp at kept
 
 theorem packed_wide_ready_state_register (state : MachineState) {bits : Nat} (coins : BitVec bits) (reg : Reg)
-    (kept : reg ∉ [Reg.x7,.x10]) :
+    (kept : reg ∉ [Reg.x7,.x10,.x22]) :
     (packed_wideReadyState state coins).getReg reg=(readyState state coins).getReg reg :=
   packed_wide_finish_register (readyState state coins) reg kept
 
@@ -105,15 +105,20 @@ theorem packed_wide_ready_source (state : MachineState) {bits : Nat} (coins : Bi
 
 theorem packed_wide_ready_state_entry (state : MachineState) (entry : CommitEntry state)
     {bits : Nat} (coins : BitVec bits) :
-    (packed_wideReadyState state coins).pc=4168 ∧ (packed_wideReadyState state coins).getReg .x7=2048 := by
+    (packed_wideReadyState state coins).pc=4176 ∧ (packed_wideReadyState state coins).getReg .x7=4096 := by
   have old := (post_random_regs state entry coins).1.pc
   constructor
-  · change (readyState state coins).pc+4+4=_
+  · change (readyState state coins).pc+4+4+4+4=_
     rw [old]
     rfl
-  · change ((readyState state coins).getReg .x13 <<< (11 : Nat)) = _
+  · change (((readyState state coins).getReg .x13 <<< (11 : Nat)) <<< (1 : Nat)) = _
     rw [(post_random_regs state entry coins).1.primitive]
     rfl
+
+theorem packed_wide_ready_salts (state : MachineState) {bits : Nat} (coins : BitVec bits) :
+    (packed_wideReadyState state coins).getReg .x22=(readyState state coins).getReg .x22+2048 := by
+  change (readyState state coins).getReg .x22+((readyState state coins).getReg .x13 <<< (11 : Nat))=_
+  rfl
 
 theorem packed_execute_wide_parent_setup (state : MachineState) (atSetup : state.pc=184784) (fuel : Nat) :
     execute packedWideCommitImage (5+fuel) state true =

@@ -1,4 +1,15 @@
-# One full-width parent level
+# Signed 256-entry nonce window
+
+This candidate reuses promoted submission ca2b16a0-906d-4aa8-b1d4-f845e59cb85a
+(source 84a0186c3d5a5af48b22bdcdba8761a6523c0cbc). It biases the nonce cursor
+by 2,048 bytes and uses both halves of the signed load-immediate range,
+reducing nonce rebases from 32 to 16 per 4,096-leaf block. Two extra setup
+instructions leave a net saving of 65,534 commitment cycles. The leaf hash,
+security scheme, parent code, opening, checker and 67,840-byte proof are unchanged.
+The figures below are the bounds asserted by the complete certificate in
+Solution.lean. The adjacent public note records the validation evidence.
+
+## Inherited construction
 
 The commitment reads the first 200 bytes of each 256-byte entry into the forward permutation.
 The second input contains the position tag, the salt, 88 reply bytes, and the final 88 entry bytes.
@@ -11,11 +22,11 @@ It contains a 16-byte salt, two 32-byte siblings, and fourteen 30-byte siblings.
 The upper tree shares a list of 30-byte siblings across the selected entries.
 The checker reconstructs every selected path and checks the root.
 
-| Certified metric | Bound |
+| Claimed metric | Bound |
 | --- | ---: |
-| Commitment cycles | 1,367,745,656 |
+| Commitment cycles | 1,367,680,122 |
 | Opening cycles for 128 positions | 85,767 |
-| Total prover cycles | 1,367,831,423 |
+| Total prover cycles | 1,367,765,889 |
 | Proof bytes for 128 positions | 67,840 |
 
 The three images are in [programs.json](programs.json).

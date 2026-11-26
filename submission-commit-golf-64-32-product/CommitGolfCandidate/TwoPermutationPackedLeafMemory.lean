@@ -8,11 +8,11 @@ set_option maxHeartbeats 650000
 structure LeafReady (s : MachineState) (slot : Fin 4096) (start index dst salts : Nat) : Prop where
   source : s.getReg .x10=wordAddress (start+5)
   destination : s.getReg .x20+BitVec.ofNat 64 (32*(slot.val%64))=wordAddress dst
-  nonces : s.getReg .x22=wordAddress salts
+  nonces : s.getReg .x22=wordAddress (salts+256)
   tag : firstTag index=wordAddress start
   sourceBound : start+37≤2^33
   heapBound : dst+25≤2^33
-  nonceBound : salts+256≤2^33
+  nonceBound : salts+512≤2^33
   separate : start+37≤salts
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
@@ -38,11 +38,12 @@ theorem after_a_reg (s : MachineState) (slot : Fin 4096) (start : Nat) (a : BitV
     (p : r≠.x10) (q : r≠.x12) : (repliedA s slot start a).getReg r=s.getReg r := by
   rw [repliedA,CommitGolfCandidate.writeBits_register,first_keeps _ _ _ p q]
 
-def saltWord (salts : Nat) (slot : Fin 4096) := salts+2*(slot.val%128)
+def saltWord (salts : Nat) (slot : Fin 4096) := salts+2*(slot.val%256)
 
 private theorem salt_addr (salts : Nat) (slot : Fin 4096) :
-    wordAddress salts+BitVec.ofNat 64 (16*(slot.val%128))=wordAddress (saltWord salts slot) ∧
-    wordAddress salts+BitVec.ofNat 64 (16*(slot.val%128)+8)=wordAddress (saltWord salts slot+1) := by
+    (wordAddress (salts+256)-2048)+BitVec.ofNat 64 (16*(slot.val%256))=wordAddress (saltWord salts slot) ∧
+    (wordAddress (salts+256)-2048)+BitVec.ofNat 64 (16*(slot.val%256)+8)=wordAddress (saltWord salts slot+1) := by
+  rw [wordAddress_nonce_bias]
   unfold saltWord wordAddress
   constructor <;> rw [←BitVec.ofNat_add] <;> congr 1 <;> omega
 
@@ -61,7 +62,7 @@ theorem second_separate (s : MachineState) (slot : Fin 4096) (start index dst sa
   have sBound := ready.sourceBound
   have nb := ready.nonceBound
   have dis := ready.separate
-  have so : salts≤saltWord salts slot ∧ saltWord salts slot+1<salts+256 := by unfold saltWord; omega
+  have so : salts≤saltWord salts slot ∧ saltWord salts slot+1<salts+512 := by unfold saltWord; omega
   have distinct (u v : Nat) (ub : u<2^61) (vb : v<2^61) (ne : u≠v) :
       wordAddress u ≠ wordAddress v := fun eq => ne (wordAddress_injective_of_bound ub vb eq)
   unfold StampSeparate
@@ -81,7 +82,7 @@ theorem after_a_nonce (s : MachineState) (slot : Fin 4096) (start index dst salt
       memoryView (repliedA s slot start a) w=memoryView s w := by
     rw [after_a_memory s slot start index dst salts w ready a hi]
     exact dif_neg (by omega)
-  have so : salts≤saltWord salts slot ∧ saltWord salts slot+1<salts+256 := by unfold saltWord; omega
+  have so : salts≤saltWord salts slot ∧ saltWord salts slot+1<salts+512 := by unfold saltWord; omega
   funext i
   simp only [nonceWords,after_a_reg _ _ _ _ _ (by decide : Reg.x22≠.x10) (by decide),ready.nonces,
     (salt_addr salts slot).1,(salt_addr salts slot).2]

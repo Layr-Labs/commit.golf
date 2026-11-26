@@ -14,7 +14,7 @@ def submission : CommitGolf.Submission := RV64.packedSubmission
 
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
-theorem certificate : CommitGolf.Certificate submission 67840 1367745656 85767 := by
+theorem certificate : CommitGolf.Certificate submission 67840 1367680122 85767 := by
   let leaves := RV64.PackedLeaves.executableLeaves
   let meaning := RV64.PackedLeaves.executableMeaning
   let opening := PackedCertificate.packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)

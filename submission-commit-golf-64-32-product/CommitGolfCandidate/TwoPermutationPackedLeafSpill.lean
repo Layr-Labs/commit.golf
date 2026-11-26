@@ -70,7 +70,7 @@ theorem production_fixed_leaf (oracle : Oracle) (s : MachineState) (g : Nat) (sl
 theorem nonce_memory_window (s : MachineState) (g : Nat) (slot : Fin 4096) (r : Regs s g slot.val) :
     nonceWords s slot = window (memoryView s) (leafSalt (4096*g+slot.val)) := by
   funext k
-  fin_cases k <;> simp only [nonceWords,window,memoryView,r.salts] <;> dsimp <;>
+  fin_cases k <;> simp only [nonceWords,window,memoryView,r.salts,wordAddress_nonce_bias] <;> dsimp <;>
     congr 1 <;> simp only [wordAddress,← BitVec.ofNat_add] <;> congr 1 <;> simp only [nonceBase,leafSalt] <;> omega
 
 theorem production_prefix_step (oracle : Oracle) (before : Memory) (s : MachineState) (g : Nat) (u : Fin 4096)
