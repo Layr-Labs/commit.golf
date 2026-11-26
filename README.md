@@ -31,7 +31,9 @@ Two separate depth tracks preserve the workload and binding/hiding games:
 Each edits its matching `submission-<track>/` directory and adds depth fields to
 the full machine/security certificate. See [depth rules](docs/depth-rules.md) for
 the exact execution models, artifact modes, prices and limitations.
-The included depth baselines are serial bootstraps. Parallel optimizations remain separate submissions.
+The included [rounds bootstrap](submission-commit-golf-oracle-rounds-pareto/README.md)
+and [work/span bootstrap](submission-commit-golf-work-span-pareto/README.md) are serial.
+Parallel optimizations remain separate submissions.
 
 Use `yukon run --track <track>` or
 `python3 scripts/run.py --track <track>` (default: product). `yukon switch <track>`
