@@ -45,3 +45,14 @@ protection and fault branches. `runBody_ordinary_bounds` adds the instruction's
 actual price to work and span over all continuation outcomes. Separate fetch,
 permission and invalid-step rules preserve their exits and charges; no successful
 continuation is assumed. The rule explicitly excludes ECALL dispatch.
+
+System calls have corresponding rules: `runBody_oracle_cases`, `runBody_halt`
+and `runBody_random_cases`, with admitted-call and support-bound corollaries.
+They keep argument/permission rejection before effects, the actual public query or
+private sampler, protected reply writes and the remaining-fuel continuation.
+Oracle calls add their primitive price and one trace query; HALT costs one cycle
+and is terminal for either exit code. RANDOM costs `1 + ceil(bytes/8)`, adds no
+public query and retains the coin-disabled/invalid-buffer rejection paths,
+including the existing zero-byte sampling case. Bounds cover every reply and
+continuation outcome. Unknown selectors also have a fault rule. Actual whole-run
+World-query correspondence remains a separate obligation.

@@ -207,4 +207,71 @@ theorem ordinary_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image :
     (out.val.work ≤ Riscv.instructionCycles instruction + work ∧
       out.val.span ≤ Riscv.instructionCycles instruction + span ∧ out.val.oracleCalls ≤ queries) := @CommitGolfDepth.Span.Proofs.runBody_ordinary_bounds
 
+/-- Syscall rules and bounds, specified solely with live interpreter definitions. -/
+theorem oracle_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 0),
+    runBody children canFork image p coins (fuel + 1) state =
+      (if oracleAllowed p state then
+        match Riscv.oracleInput state with
+        | none => pure (boundedExit fuel .failure state)
+        | some query => do
+          let answer ← World.query (.inr query)
+          let result ← runBody children canFork image p coins fuel
+            (protectWrites p state (Riscv.writeOracleAnswer state (state.getReg .x12) query answer))
+          return boundedCharge result (Riscv.oracleCycles query) 1
+      else pure (boundedExit fuel .failure state)) := @CommitGolfDepth.Span.Proofs.runBody_oracle_cases
+
+theorem oracle_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState) (query : PublicSpec.Domain)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 0)
+    (allowed : oracleAllowed p state = true) (input : Riscv.oracleInput state = some query)
+    (work span queries : Nat)
+    (h : ∀ answer : PublicSpec.Range query, ∀ result ∈ support
+      (runBody children canFork image p coins fuel
+        (protectWrites p state (Riscv.writeOracleAnswer state (state.getReg .x12) query answer))),
+        (result.val.work ≤ work ∧ result.val.span ≤ span ∧ result.val.oracleCalls ≤ queries))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ Riscv.oracleCycles query + work ∧ out.val.span ≤ Riscv.oracleCycles query + span ∧
+      out.val.oracleCalls ≤ 1 + queries) := @CommitGolfDepth.Span.Proofs.runBody_oracle_bounds
+
+theorem halt_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 1),
+    runBody children canFork image p coins (fuel + 1) state =
+      pure (boundedExit fuel (if state.getReg .x10 = 0 then .success else .failure) state) := @CommitGolfDepth.Span.Proofs.runBody_halt
+
+theorem halt_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 1)
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ 1 ∧ out.val.span ≤ 1 ∧ out.val.oracleCalls ≤ 0) := @CommitGolfDepth.Span.Proofs.runBody_halt_bounds
+
+theorem random_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 2),
+    runBody children canFork image p coins (fuel + 1) state =
+      (if coins && randomAllowed p state then do
+        let answer ← liftM ($ᵗ BitVec (8 * (state.getReg .x11).toNat) :
+          ProbComp (BitVec (8 * (state.getReg .x11).toNat)))
+        let result ← runBody children canFork image p coins fuel
+          (protectWrites p state (Riscv.writeBits state (state.getReg .x10) answer))
+        return boundedCharge result (1 + ((state.getReg .x11).toNat + 7) / 8) 0
+      else pure (boundedExit fuel .failure state)) := @CommitGolfDepth.Span.Proofs.runBody_random_cases
+
+theorem random_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 2)
+    (allowed : (coins && randomAllowed p state) = true) (work span queries : Nat)
+    (h : ∀ answer : BitVec (8 * (state.getReg .x11).toNat), ∀ result ∈ support
+      (runBody children canFork image p coins fuel
+        (protectWrites p state (Riscv.writeBits state (state.getReg .x10) answer))),
+        (result.val.work ≤ work ∧ result.val.span ≤ span ∧ result.val.oracleCalls ≤ queries))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ 1 + ((state.getReg .x11).toNat + 7) / 8 + work ∧
+      out.val.span ≤ 1 + ((state.getReg .x11).toNat + 7) / 8 + span ∧ out.val.oracleCalls ≤ queries) := @CommitGolfDepth.Span.Proofs.runBody_random_bounds
+
 end CommitGolf.Challenge

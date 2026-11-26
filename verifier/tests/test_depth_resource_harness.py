@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from artifact import parse_artifact
 from check_submission import check
 from depth_profiles import depth_profile
-from check_depth_resources import (RESOURCE_TARGET, EQUALITY_TARGET, ADMISSION_TARGET, SYMBOLIC_STEP, SYMBOLIC_BOUNDS, ORDINARY_STEP, ORDINARY_BOUNDS,
+from check_depth_resources import (RESOURCE_TARGET, EQUALITY_TARGET, ADMISSION_TARGET, SYMBOLIC_STEP, SYMBOLIC_BOUNDS, ORDINARY_STEP, ORDINARY_BOUNDS, SYSCALL_TARGETS,
                                   make_cases, resource_config, expected_template, case_passes,
                                   protected_snapshot, load_library)
 from depth_resource_fixture import FIXTURES, RESOURCE_FIXTURES
@@ -72,10 +72,10 @@ class ResourceHarnessTests(unittest.TestCase):
 
     def test_actual_mode_images_and_precise_understatements_are_fixed(self):
         cases = make_cases()
-        self.assertEqual(len(cases), 16)
+        self.assertEqual(len(cases), 19)
         for fixture in RESOURCE_FIXTURES:
             selected = [c for c in cases if c.fixture == fixture]
-            positive, work, depth, mode, image, security, symbolic, ordinary = selected
+            positive, work, depth, mode, image, security, symbolic, ordinary = selected[:8]
             value = json.loads(positive.manifest)
             self.assertEqual(value['executionModes']['commit'],
                              'batched' if fixture.model == 'oracle-rounds' else 'forkJoin')
@@ -98,6 +98,10 @@ class ResourceHarnessTests(unittest.TestCase):
             self.assertEqual(symbolic.manifest, positive.manifest)
             self.assertTrue(ordinary.ordinary_mismatch)
             self.assertEqual(ordinary.manifest, positive.manifest)
+            extras = selected[8:]
+            self.assertEqual([case.syscall_mismatch for case in extras],
+                             ["oracle", "halt", "random"] if fixture.model == "work-span" else [])
+            self.assertTrue(all(case.manifest == positive.manifest for case in extras))
             for case in selected:
                 parse_artifact(case.manifest, resource_model=fixture.model)
 
@@ -118,8 +122,14 @@ class ResourceHarnessTests(unittest.TestCase):
         self.assertNotIn('CommitGolf.Challenge.certificate', resource['theorem_names'])
         for key in ('definition_names', 'permitted_axioms', 'enable_nanoda'):
             self.assertEqual(resource[key], production[key])
+        span_resource = resource_config(production, 'work-span')
+        self.assertEqual(span_resource['theorem_names'], resource['theorem_names'] + list(SYSCALL_TARGETS))
+        for key in ('definition_names', 'permitted_axioms', 'enable_nanoda'):
+            self.assertEqual(span_resource[key], production[key])
         with self.assertRaises(ValueError):
             resource_config(resource)
+        with self.assertRaises(ValueError):
+            resource_config(production, 'unknown-model')
 
     def test_templates_name_universal_actual_runs_and_do_not_claim_security(self):
         for fixture in RESOURCE_FIXTURES:
@@ -140,6 +150,9 @@ class ResourceHarnessTests(unittest.TestCase):
             self.assertIn('theorem symbolic_bounds', template)
             self.assertIn('theorem ordinary_step', template)
             self.assertIn('theorem ordinary_bounds', template)
+            for name in SYSCALL_TARGETS:
+                self.assertEqual('theorem ' + name.rsplit('.', 1)[1] + ' ' in template,
+                                 fixture.model == 'work-span')
             self.assertNotIn('import CommitGolfCandidate', template)
             self.assertNotIn('CommitGolfCandidate.', template)
             self.assertNotIn('.Proofs', template)
@@ -175,11 +188,36 @@ class ResourceHarnessTests(unittest.TestCase):
             self.assertEqual(negative, positive.replace(before, after, 1))
             self.assertFalse(ordinary.production_scope)
 
+    def test_syscall_negatives_change_only_their_own_bound_declaration(self):
+        mutations = {
+            'oracle': ('out.val.oracleCalls ≤ 1 + queries', 'out.val.oracleCalls ≤ 0 + queries'),
+            'halt': ('out.val.work ≤ 1', 'out.val.work ≤ 0'),
+            'random': ('out.val.work ≤ 1 + ((state.getReg .x11).toNat + 7) / 8 + work',
+                       'out.val.work ≤ 0 + work'),
+        }
+        for case in make_cases():
+            if not case.syscall_mismatch:
+                continue
+            positive_case = next(c for c in make_cases() if c.fixture == case.fixture and
+                                 c.expected == 'verified')
+            positive, negative = expected_template(positive_case), expected_template(case)
+            marker = 'theorem ' + case.syscall_mismatch + '_bounds'
+            before, declaration = positive.split(marker, 1)
+            other_before, other_declaration = negative.split(marker, 1)
+            declaration, following, after = declaration.partition('\ntheorem ')
+            other_declaration, other_following, other_after = other_declaration.partition('\ntheorem ')
+            old, new = mutations[case.syscall_mismatch]
+            self.assertEqual(declaration.count(old), 1)
+            self.assertEqual(other_declaration, declaration.replace(old, new, 1))
+            self.assertEqual((before, following, after), (other_before, other_following, other_after))
+            self.assertFalse(case.production_scope)
+
     def test_under_bound_requires_specific_completed_comparator_failure(self):
         for case in make_cases():
-            if not case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch', '_ordinary_mismatch')):
+            if not case.syscall_mismatch and not case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch', '_ordinary_mismatch')):
                 continue
-            target = (ORDINARY_BOUNDS if case.ordinary_mismatch else
+            target = ("CommitGolf.Challenge." + case.syscall_mismatch + "_bounds" if case.syscall_mismatch else
+                      ORDINARY_BOUNDS if case.ordinary_mismatch else
                       SYMBOLIC_BOUNDS if case.symbolic_mismatch else RESOURCE_TARGET)
             good = ('Build completed successfully (123 jobs).\nuncaught exception: '
                     "Challenge and solution theorem statement do not match: '" + target + "'\n")
@@ -253,7 +291,7 @@ class ResourceHarnessTests(unittest.TestCase):
                 config = json.loads((args.trusted / 'verifier/comparator.json').read_text())
                 profile = depth_profile(case.fixture.model)
                 template = (args.trusted / 'verifier' / profile.template).read_text()
-                self.assertEqual(config, production if case.production_scope else resource_config(production))
+                self.assertEqual(config, production if case.production_scope else resource_config(production, case.fixture.model))
                 self.assertEqual(template, (root / 'verifier' / profile.template).read_text()
                                  if case.production_scope else expected_template(case))
                 claim = json.loads((args.local / 'claim.json').read_text())
@@ -274,7 +312,7 @@ class ResourceHarnessTests(unittest.TestCase):
                  patch.object(harness, 'case_passes', return_value=True), patch('builtins.print'):
                 self.assertEqual(harness.run(root), 0)
             self.assertEqual(set(observed), set(cases))
-            self.assertEqual(len(observed), 16)
+            self.assertEqual(len(observed), 19)
 
     def test_fixed_clients_pass_static_admission_but_export_no_full_certificate(self):
         # This is static policy validation; actual comparator proof checking is separate.

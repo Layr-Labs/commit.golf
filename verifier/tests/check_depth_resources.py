@@ -35,6 +35,9 @@ ORDINARY_STEP = 'CommitGolf.Challenge.ordinary_step'
 ORDINARY_BOUNDS = 'CommitGolf.Challenge.ordinary_bounds'
 EQUALITY_TARGET = 'CommitGolf.Challenge.submission_matches_artifact'
 ADMISSION_TARGET = 'CommitGolf.Challenge.admission'
+SYSCALL_TARGETS = tuple('CommitGolf.Challenge.' + name for name in
+                       ('oracle_step', 'oracle_bounds', 'halt_step', 'halt_bounds',
+                        'random_step', 'random_bounds'))
 
 
 def load_library(root, relative):
@@ -76,15 +79,19 @@ class Case:
     production_scope: bool = False
     symbolic_mismatch: bool = False
     ordinary_mismatch: bool = False
+    syscall_mismatch: str | None = None
 
 
-def resource_config(production):
+def resource_config(production, model='oracle-rounds'):
+    depth_profile(model)
     if production['definition_names'] != ['CommitGolf.Challenge.submission'] or set(
             production['theorem_names']) != {'CommitGolf.Challenge.certificate', EQUALITY_TARGET}:
         raise ValueError('unexpected production comparator contract')
     result = copy.deepcopy(production)
     result['theorem_names'] = [EQUALITY_TARGET, ADMISSION_TARGET, RESOURCE_TARGET,
                                SYMBOLIC_STEP, SYMBOLIC_BOUNDS, ORDINARY_STEP, ORDINARY_BOUNDS]
+    if model == 'work-span':
+        result['theorem_names'].extend(SYSCALL_TARGETS)
     return result
 
 
@@ -113,6 +120,11 @@ def make_cases():
                           fixture.work, fixture.depth, 'rejected', symbolic_mismatch=True))
         cases.append(Case(prefix + '_ordinary_mismatch', fixture, raw,
                           fixture.work, fixture.depth, 'rejected', ordinary_mismatch=True))
+        if fixture.model == 'work-span':
+            for syscall in ('oracle', 'halt', 'random'):
+                cases.append(Case(prefix + '_' + syscall + '_mismatch', fixture, raw,
+                                  fixture.work, fixture.depth, 'rejected',
+                                  syscall_mismatch=syscall))
     return cases
 
 
@@ -137,6 +149,21 @@ def expected_template(case):
             raise ValueError('unexpected ordinary-step regression template')
         source = before + marker + bounds.replace(old, '0+restWork' if
             case.fixture.model == 'oracle-rounds' else '0 + work', 1)
+    if case.syscall_mismatch:
+        mutations = {
+            'oracle': ('out.val.oracleCalls ≤ 1 + queries', 'out.val.oracleCalls ≤ 0 + queries'),
+            'halt': ('out.val.work ≤ 1', 'out.val.work ≤ 0'),
+            'random': ('out.val.work ≤ 1 + ((state.getReg .x11).toNat + 7) / 8 + work',
+                       'out.val.work ≤ 0 + work'),
+        }
+        if case.fixture.model != 'work-span' or case.syscall_mismatch not in mutations:
+            raise ValueError('unknown syscall regression contract')
+        before, marker, tail = source.partition('theorem ' + case.syscall_mismatch + '_bounds')
+        declaration, following, after = tail.partition('\ntheorem ')
+        old, new = mutations[case.syscall_mismatch]
+        if not marker or declaration.count(old) != 1:
+            raise ValueError('unexpected syscall regression template')
+        source = before + marker + declaration.replace(old, new, 1) + following + after
     return source
 
 
@@ -160,8 +187,9 @@ def case_passes(case, report, log, source):
                 and log.rstrip().splitlines()[-1] in (
                     'uncaught exception: Child exited with 134',
                     'uncaught exception: Child exited with 139'))
-    if case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch', '_ordinary_mismatch')):
-        target = (ORDINARY_BOUNDS if case.ordinary_mismatch else
+    if case.syscall_mismatch or case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch', '_ordinary_mismatch')):
+        target = ('CommitGolf.Challenge.' + case.syscall_mismatch + '_bounds'
+                  if case.syscall_mismatch else ORDINARY_BOUNDS if case.ordinary_mismatch else
                   SYMBOLIC_BOUNDS if case.symbolic_mismatch else RESOURCE_TARGET)
         marker = f"Challenge and solution theorem statement do not match: '{target}'"
         return ('Build completed successfully (' in log and marker in log
@@ -212,7 +240,7 @@ def run(root=ROOT):
             fixture, profile = case.fixture, depth_profile(case.fixture.model)
             source = (FIXTURES / fixture.source).read_text()
             try:
-                config = production if case.production_scope else resource_config(production)
+                config = production if case.production_scope else resource_config(production, fixture.model)
                 (trusted / 'verifier/comparator.json').write_text(json.dumps(config) + '\n')
                 template = ((root / 'verifier' / profile.template).read_text()
                             if case.production_scope else expected_template(case))

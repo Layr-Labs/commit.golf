@@ -25,6 +25,8 @@ types spell out the live interpreter, RAM, fuel and resource fields directly;
 they do not import proof-library predicates as specifications. The shared libraries
 remain available even when a later submission replaces its candidate modules. This checks
 symbolic counts and child/continuation bounds in addition to concrete reductions.
+Span-only targets also spell out the oracle, HALT and RANDOM dispatch branches and
+all corresponding resource bounds, including the actual sampling effects.
 It does not prove table construction or an entire parallel commitment.
 
 Run on the supported Linux verifier after setup:
@@ -40,7 +42,8 @@ understated work bound, an understated depth bound, a changed execution mode and
 a changed code byte. It also checks that the resource client is rejected by the
 original full-security certificate contract. A further negative changes the
 symbolic round/span bound at `symbolic_bounds`; two others remove an ordinary
-instruction's work charge at `ordinary_bounds`. There are 16 cases in total.
+instruction's work charge at `ordinary_bounds`. Three Span-only syscall negatives remove the oracle query increment, HALT work
+or RANDOM work at their respective bound targets. There are 19 cases in total.
 Negative cases require the expected
 linkage or theorem-mismatch diagnostic; timeouts and unrelated failures do not pass.
 
