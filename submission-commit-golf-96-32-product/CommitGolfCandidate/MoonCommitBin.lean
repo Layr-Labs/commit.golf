@@ -228,7 +228,7 @@ private theorem commit_odd_call_240 (h768 : COMPRESSION_INPUT_LENGTH = 768)
 
 private theorem commit_odd_call_238 (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (oracle : Oracle) (msg : Message) (salts : Index → Salt192)
-    (lvlIdx calls qOdd : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 22)
+    (lvlIdx calls qOdd : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 7)
     (hcalls : calls = levelSize (lvlIdx + 1) / 2)
     (hqOdd : 2 * qOdd + 1 = calls)
     (s0 c1 : MachineState)
@@ -347,7 +347,7 @@ private theorem commit_bin_stageC_odd_gen (h768 : COMPRESSION_INPUT_LENGTH = 768
       BitVec.ofNat 64 (0x1000 + 4 * pcNext))
     (hjal_pc : BitVec.ofNat 64 (0x1000 + 4 * (pcCopy + 8)) + signExtend21 (40#21) =
       BitVec.ofNat 64 (0x1000 + 4 * pcNext))
-    (lvlIdx calls prom qOdd : Nat) (hlvl : lvlIdx < 22)
+    (lvlIdx calls prom qOdd : Nat) (hlvl : lvlIdx < 7)
     (hcalls : calls = levelSize (lvlIdx + 1) / 2)
     (hprom : prom = levelSize (lvlIdx + 1) % 2)
     (hqOdd : 2 * qOdd + 1 = calls)
@@ -394,6 +394,9 @@ private theorem commit_bin_stageC_odd_gen (h768 : COMPRESSION_INPUT_LENGTH = 768
       (∀ q < (levelSize (lvlIdx + 2) + 1) / 2, ∀ j < 32,
         sc.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j)) =
         s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j))) ∧
+      (levelSize (lvlIdx + 2) % 2 = 1 → ∀ j < 32,
+        sc.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j)) =
+        s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j))) ∧
       MemPreservedOutside s0 sc (C_TD + levelBase (lvlIdx + 2)) (C_TD + levelBase (lvlIdx + 3)) := by
   have hC_TD : C_TD = 4294971424 := rfl
   have hMB : MEMORY_BYTES = 68719476736 := rfl
@@ -477,7 +480,7 @@ private theorem commit_bin_stageC_odd_gen (h768 : COMPRESSION_INPUT_LENGTH = 768
       exact h
     refine ⟨ojal, hrun_out,
       by simp only [ojal, execInstrBr, pc_setPC, hoc_pc]; exact hjal_pc,
-      fun r h6 h10 h12 => ((hreg_jal r).trans (hoc_reg r h6)).trans (ho5_reg r h6 h10 h12), ?_, ?_, ?_⟩
+      fun r h6 h10 h12 => ((hreg_jal r).trans (hoc_reg r h6)).trans (ho5_reg r h6 h10 h12), ?_, ?_, ?_, ?_⟩
     · intro idx hidx
       rw [readBuffer_of_mem_eq hmem_jal]
       by_cases hold : idx < calls
@@ -491,7 +494,7 @@ private theorem commit_bin_stageC_odd_gen (h768 : COMPRESSION_INPUT_LENGTH = 768
         have hsrc_eq : C_TD + levelBase (lvlIdx + 1) + 96 * (calls - 1) + 96 =
             C_TD + levelBase (lvlIdx + 1) + gapOffset (2 * calls) := by rw [gapOffset_even]; omega
         rw [hsrc_eq, hsrc (2 * calls) (by omega)]
-        exact nodeVal_bin_promoted c96 msg salts lvlIdx calls (by omega) (by omega)
+        exact nodeVal_bin_promoted c96 msg salts lvlIdx calls hlvl (by omega) (by omega)
     · intro q hq j hj
       rw [getByte_of_mem_eq hmem_jal]
       have hsep : C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j <
@@ -500,6 +503,7 @@ private theorem commit_bin_stageC_odd_gen (h768 : COMPRESSION_INPUT_LENGTH = 768
             C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j := by omega
       exact (hoc_pres (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j)
         (by rw [hdstBytes] at hdstB; omega) hsep).trans (ho5_gap q hq j hj)
+    · intro hmod; omega
     · exact (ho5_pres_all.trans (hoc_pres.mono (by omega) (by omega))).trans
         (MemPreservedOutside.of_mem_eq hmem_jal _ _)
   · have hpr0 : prom = 0 := by omega
@@ -513,7 +517,15 @@ private theorem commit_bin_stageC_odd_gen (h768 : COMPRESSION_INPUT_LENGTH = 768
       rw [show callSteps + 1 + 9 * prom = callSteps + 1 by omega,
           show callCyc + 1 + 9 * prom = callCyc + 1 by omega]
       exact ho5_run
-    exact ⟨o5, hrun_out, ho5_pc, ho5_reg, fun idx hidx => ho5_dig idx (by omega), ho5_gap, ho5_pres_all⟩
+    refine ⟨o5, hrun_out, ho5_pc, ho5_reg, fun idx hidx => ho5_dig idx (by omega), ho5_gap, ?_, ho5_pres_all⟩
+    intro _ j hj
+    have hdiv : levelSize (lvlIdx + 2) / 2 = qOdd := by omega
+    rw [hdiv]
+    have h1 := ho5_pres (C_TD + levelBase (lvlIdx + 2) + 96 * qOdd + 32 + j)
+      (by rw [hdstBytes] at hdstB; omega) (Or.inr (by omega))
+    have h2 := hpresT (C_TD + levelBase (lvlIdx + 2) + 96 * qOdd + 32 + j)
+      (by rw [hdstBytes] at hdstB; omega) (Or.inr (by omega))
+    exact h1.trans h2
 
 private theorem commit_bin_stageC_even_gen (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (oracle : Oracle) (msg : Message) (salts : Index → Salt192)
@@ -522,7 +534,7 @@ private theorem commit_bin_stageC_even_gen (h768 : COMPRESSION_INPUT_LENGTH = 76
     (hpc_end : pcCopy + 8 = pcNext)
     (hbeq_pc : BitVec.ofNat 64 (0x1000 + 4 * pcEven) + signExtend13 (36#13) =
       BitVec.ofNat 64 (0x1000 + 4 * pcNext))
-    (lvlIdx calls prom qEv : Nat) (hlvl : lvlIdx < 22)
+    (lvlIdx calls prom qEv : Nat) (hlvl : lvlIdx < 7)
     (hcalls : calls = levelSize (lvlIdx + 1) / 2)
     (hprom : prom = levelSize (lvlIdx + 1) % 2)
     (hqEv : 2 * qEv = calls)
@@ -558,6 +570,9 @@ private theorem commit_bin_stageC_even_gen (h768 : COMPRESSION_INPUT_LENGTH = 76
       (∀ q < (levelSize (lvlIdx + 2) + 1) / 2, ∀ j < 32,
         sc.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j)) =
         s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j))) ∧
+      (levelSize (lvlIdx + 2) % 2 = 1 → ∀ j < 32,
+        sc.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j)) =
+        s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j))) ∧
       MemPreservedOutside s0 sc (C_TD + levelBase (lvlIdx + 2)) (C_TD + levelBase (lvlIdx + 3)) := by
   have hC_TD : C_TD = 4294971424 := rfl
   have hMB : MEMORY_BYTES = 68719476736 := rfl
@@ -608,7 +623,7 @@ private theorem commit_bin_stageC_even_gen (h768 : COMPRESSION_INPUT_LENGTH = 76
       have h := hc2_run.trans hcopy_run
       rw [show 1 + 8 * prom = 1 + 8 by omega]
       exact h
-    refine ⟨oc, hrun_out, by rw [← hpc_end]; exact hoc_pc, fun r h6 => (hoc_reg r h6).trans (hc2_reg r), ?_, ?_, ?_⟩
+    refine ⟨oc, hrun_out, by rw [← hpc_end]; exact hoc_pc, fun r h6 => (hoc_reg r h6).trans (hc2_reg r), ?_, ?_, ?_, ?_⟩
     · intro idx hidx
       by_cases hold : idx < calls
       · have hgo : gapOffset idx + 32 ≤ 96 * qEv := by unfold gapOffset; omega
@@ -621,7 +636,7 @@ private theorem commit_bin_stageC_even_gen (h768 : COMPRESSION_INPUT_LENGTH = 76
         have hsrc_eq : C_TD + levelBase (lvlIdx + 1) + 96 * calls =
             C_TD + levelBase (lvlIdx + 1) + gapOffset (2 * calls) := by rw [gapOffset_even]
         rw [hsrc_eq, hsrc (2 * calls) (by omega)]
-        exact nodeVal_bin_promoted c96 msg salts lvlIdx calls (by omega) (by omega)
+        exact nodeVal_bin_promoted c96 msg salts lvlIdx calls hlvl (by omega) (by omega)
     · intro q hq j hj
       have hsep : C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j <
             C_TD + levelBase (lvlIdx + 2) + 96 * qEv ∨
@@ -630,6 +645,15 @@ private theorem commit_bin_stageC_even_gen (h768 : COMPRESSION_INPUT_LENGTH = 76
       rw [hoc_pres (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j)
         (by rw [hdstBytes] at hdstB; omega) hsep, getByte_of_mem_eq hc2_mem]
       exact hgapT q hq j hj
+    · intro _ j hj
+      have hdiv : levelSize (lvlIdx + 2) / 2 = qEv := by omega
+      rw [hdiv]
+      have h1 := hoc_pres (C_TD + levelBase (lvlIdx + 2) + 96 * qEv + 32 + j)
+        (by rw [hdstBytes] at hdstB; omega) (Or.inr (by omega))
+      have h2 := getByte_of_mem_eq hc2_mem (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * qEv + 32 + j))
+      have h3 := hpresT (C_TD + levelBase (lvlIdx + 2) + 96 * qEv + 32 + j)
+        (by rw [hdstBytes] at hdstB; omega) (Or.inr (by omega))
+      exact (h1.trans h2).trans h3
     · exact hc2_pres_all.trans (hoc_pres.mono (by omega) (by omega))
   · have hpr0 : prom = 0 := by omega
     have heq_pr : (c1.getReg .x21 == c1.getReg .x0) = true := by
@@ -640,7 +664,7 @@ private theorem commit_bin_stageC_even_gen (h768 : COMPRESSION_INPUT_LENGTH = 76
     have hrun_out : DetRun oracle (submission.image .commit) c1 (1 + 8 * prom) c2 (1 + 8 * prom) 0 := by
       rw [show 1 + 8 * prom = 1 by omega]
       exact hc2_run
-    refine ⟨c2, hrun_out, hc2_pc, fun r _ => hc2_reg r, ?_, ?_, hc2_pres_all⟩
+    refine ⟨c2, hrun_out, hc2_pc, fun r _ => hc2_reg r, ?_, ?_, fun hmod => by omega, hc2_pres_all⟩
     · intro idx hidx; rw [readBuffer_of_mem_eq hc2_mem]; exact hdigT idx (by omega)
     · intro q hq j hj; rw [getByte_of_mem_eq hc2_mem]; exact hgapT q hq j hj
 
@@ -659,7 +683,7 @@ private theorem commit_bin_stageC_gen (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (hpc_endE : pcCopyEven + 8 = pcNext)
     (hbeqE_pc : BitVec.ofNat 64 (0x1000 + 4 * pcEven) + signExtend13 (36#13) =
       BitVec.ofNat 64 (0x1000 + 4 * pcNext))
-    (lvlIdx calls prom qDone oddCall : Nat) (hlvl : lvlIdx < 22)
+    (lvlIdx calls prom qDone oddCall : Nat) (hlvl : lvlIdx < 7)
     (hcalls : calls = levelSize (lvlIdx + 1) / 2)
     (hprom : prom = levelSize (lvlIdx + 1) % 2)
     (hqDone : 2 * qDone + oddCall = calls) (hodd_def : oddCall = calls % 2)
@@ -732,6 +756,9 @@ private theorem commit_bin_stageC_gen (h768 : COMPRESSION_INPUT_LENGTH = 768)
       (∀ q < (levelSize (lvlIdx + 2) + 1) / 2, ∀ j < 32,
         sc.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j)) =
         s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j))) ∧
+      (levelSize (lvlIdx + 2) % 2 = 1 → ∀ j < 32,
+        sc.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j)) =
+        s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j))) ∧
       MemPreservedOutside s0 sc (C_TD + levelBase (lvlIdx + 2)) (C_TD + levelBase (lvlIdx + 3)) := by
   have hsrcSize_le := levelSize_le_max (lvlIdx + 1) (by omega)
   let c0 := execInstrBr st (.ANDI .x22 .x20 (1#12))
@@ -765,7 +792,7 @@ private theorem commit_bin_stageC_gen (h768 : COMPRESSION_INPUT_LENGTH = 768)
       simp only [c1, execInstrBr, hne0, Bool.false_eq_true, ite_false, pc_setPC]
       rw [← hpc_odd]
       exact pc_step_idx c0 (pcChk + 1) hc0_pc
-    obtain ⟨sc, hrunO, hpcC, hregO, hdigC, hgapC, hpresC⟩ :=
+    obtain ⟨sc, hrunO, hpcC, hregO, hdigC, hgapC, hoddSlotC, hpresC⟩ :=
       commit_bin_stageC_odd_gen h768 oracle msg salts pcOdd pcBeqOdd pcCopyOdd pcNext callSteps callCyc
         hpc_copyO hbeqO_pc hjalO_pc lvlIdx calls prom qDone hlvl hcalls hprom (by omega)
         s0 c1 hc1_pc ((hc1_reg .x21 (by decide)).trans hx21T) hsrc hdig1 hgap1 hpres1
@@ -785,14 +812,14 @@ private theorem commit_bin_stageC_gen (h768 : COMPRESSION_INPUT_LENGTH = 768)
           show oddCall = 0 + 1 by omega]
       exact h
     exact ⟨sc, hrun_all, hpcC, fun r h6 h10 h12 h22 => (hregO r h6 h10 h12).trans (hc1_reg r h22),
-      hdigC, hgapC, hpresC⟩
+      hdigC, hgapC, hoddSlotC, hpresC⟩
   · have hodd0 : oddCall = 0 := by omega
     have heq0 : (c0.getReg .x22 == c0.getReg .x0) = true := by
       rw [hc0_x22, hodd0, c_getReg_x0]; exact beq_self_eq_true _
     have hc1_pc : c1.pc = BitVec.ofNat 64 (0x1000 + 4 * pcEven) := by
       simp only [c1, execInstrBr, heq0, ite_true, pc_setPC, hc0_pc]
       exact hchk_pc
-    obtain ⟨sc, hrunE, hpcC, hregE, hdigC, hgapC, hpresC⟩ :=
+    obtain ⟨sc, hrunE, hpcC, hregE, hdigC, hgapC, hoddSlotC, hpresC⟩ :=
       commit_bin_stageC_even_gen h768 oracle msg salts pcEven pcCopyEven pcNext hpc_copyE hpc_endE hbeqE_pc
         lvlIdx calls prom qDone hlvl hcalls hprom (by omega) s0 c1 hc1_pc
         ((hc1_reg .x21 (by decide)).trans hx21T)
@@ -809,7 +836,7 @@ private theorem commit_bin_stageC_gen (h768 : COMPRESSION_INPUT_LENGTH = 768)
           show oddCall = 0 + 0 by omega]
       exact h
     exact ⟨sc, hrun_all, hpcC, fun r h6 _ _ h22 => (hregE r h6).trans (hc1_reg r h22),
-      hdigC, hgapC, hpresC⟩
+      hdigC, hgapC, hoddSlotC, hpresC⟩
 
 private theorem commit_bin_header_ptrs_gen (oracle : Oracle) (pcHdr lvlIdx : Nat) (hlvl : lvlIdx < 22)
     (s0 : MachineState)
@@ -914,7 +941,7 @@ private theorem commit_bin_header_gen (oracle : Oracle) (msg : Message)
     (hpc_A : pcHdr + 10 = pcA)
     (hbeq_pc : BitVec.ofNat 64 (0x1000 + 4 * (pcHdr + 9)) + signExtend13 beqImm =
       BitVec.ofNat 64 (0x1000 + 4 * pcB))
-    (lvlIdx calls prom chunks : Nat) (hlvl : lvlIdx < 22)
+    (lvlIdx calls prom chunks : Nat) (hlvl : lvlIdx < 7)
     (hcalls : calls = levelSize (lvlIdx + 1) / 2)
     (hprom : prom = levelSize (lvlIdx + 1) % 2)
     (hchunks : chunks = calls / 128)
@@ -960,18 +987,18 @@ private theorem commit_bin_header_gen (oracle : Oracle) (msg : Message)
   have hsrcSize_le := levelSize_le_max (lvlIdx + 1) (by omega)
   have hd0 : s0.getMem (BitVec.ofNat 64 (C_DB + 32 * lvlIdx)) = BitVec.ofNat 64 (levelBase (lvlIdx + 1)) := by
     have h := hdata 0 (by omega) (by omega); simp only [Nat.add_zero] at h
-    rw [h, commit_initial_data_dword msg (32 * lvlIdx) (by omega)]; exact commitData_dword_0 ⟨lvlIdx, hlvl⟩
+    rw [h, commit_initial_data_dword msg (32 * lvlIdx) (by omega)]; exact commitData_dword_0 ⟨lvlIdx, by omega⟩
   have hd1 : s0.getMem (BitVec.ofNat 64 (C_DB + 32 * lvlIdx + 8)) = BitVec.ofNat 64 (levelBase (lvlIdx + 2)) := by
     rw [hdata 8 (by omega) (by omega), Nat.add_assoc, commit_initial_data_dword msg (32 * lvlIdx + 8) (by omega)]
-    exact commitData_dword_1 ⟨lvlIdx, hlvl⟩
+    exact commitData_dword_1 ⟨lvlIdx, by omega⟩
   have hd2 : s0.getMem (BitVec.ofNat 64 (C_DB + 32 * lvlIdx + 16)) = BitVec.ofNat 64 calls := by
     rw [hdata 16 (by omega) (by omega), Nat.add_assoc, commit_initial_data_dword msg (32 * lvlIdx + 16) (by omega), hcalls]
-    exact commitData_dword_2 ⟨lvlIdx, hlvl⟩
+    exact commitData_dword_2_lo ⟨lvlIdx, hlvl⟩
   have hd3 : s0.getMem (BitVec.ofNat 64 (C_DB + 32 * lvlIdx + 24)) = BitVec.ofNat 64 prom := by
     rw [hdata 24 (by omega) (by omega), Nat.add_assoc, commit_initial_data_dword msg (32 * lvlIdx + 24) (by omega), hprom]
-    exact commitData_dword_3 ⟨lvlIdx, hlvl⟩
+    exact commitData_dword_3_lo ⟨lvlIdx, hlvl⟩
   obtain ⟨h5, hrun1, hh5_pc, hh5_mem, hh5_reg, hh5_x10, hh5_x12⟩ :=
-    commit_bin_header_ptrs_gen oracle pcHdr lvlIdx hlvl s0 hpc hx9 hx24 hd0 hd1 hf0 hf1 hf2 hf3 hf4 hf5
+    commit_bin_header_ptrs_gen oracle pcHdr lvlIdx (by omega) s0 hpc hx9 hx24 hd0 hd1 hf0 hf1 hf2 hf3 hf4 hf5
   let h6 := execInstrBr h5 (.LD .x20 .x24 (16#12))
   let h7 := execInstrBr h6 (.LD .x21 .x24 (24#12))
   let h8 := execInstrBr h7 (.SRLI .x22 .x20 (7#6))
@@ -1133,10 +1160,10 @@ private theorem commit_bin_header_3A (oracle : Oracle) (msg : Message)
     exact commitData_dword_1 ⟨lvlIdx, hlvl22⟩
   have hd2 : s0.getMem (BitVec.ofNat 64 (C_DB + 32 * lvlIdx + 16)) = BitVec.ofNat 64 calls := by
     rw [hdata 16 (by omega) (by omega), Nat.add_assoc, commit_initial_data_dword msg (32 * lvlIdx + 16) (by omega), hcalls]
-    exact commitData_dword_2 ⟨lvlIdx, hlvl22⟩
+    exact commitData_dword_2_lo ⟨lvlIdx, by omega⟩
   have hd3 : s0.getMem (BitVec.ofNat 64 (C_DB + 32 * lvlIdx + 24)) = BitVec.ofNat 64 prom := by
     rw [hdata 24 (by omega) (by omega), Nat.add_assoc, commit_initial_data_dword msg (32 * lvlIdx + 24) (by omega), hprom]
-    exact commitData_dword_3 ⟨lvlIdx, hlvl22⟩
+    exact commitData_dword_3_lo ⟨lvlIdx, by omega⟩
   obtain ⟨h5, hrun1, hh5_pc, hh5_mem, hh5_reg, hh5_x10, hh5_x12⟩ :=
     commit_bin_header_ptrs_gen oracle 139329 lvlIdx hlvl22 s0 hpc hx9 hx24 hd0 hd1
       (commit_fetch_commitMid2Instr s0 139329 (by omega) (by omega) hpc)
@@ -1356,7 +1383,7 @@ theorem commit_bin_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
         ((hh9_reg .x13 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans hx13))
       ((hregA .x20 (by decide) (by decide) (by decide) (by decide) (by decide)).trans hh9_x20)
       hx10B hx12B hsrc hsrcGap hdigB hgapB hpresB
-  obtain ⟨sc, hrunC, hpcC, hregC, hdigC, hgapC, hpresC⟩ :=
+  obtain ⟨sc, hrunC, hpcC, hregC, hdigC, hgapC, _, hpresC⟩ :=
     commit_bin_stageC_gen h768 oracle msg salts 147551 147553 147557 147558 147567 147568 147576 4 11 (60#13)
       rfl pc_beq_147552 rfl pc_beq_147557 pc_jal_147566 rfl rfl pc_beq_147567
       lvlIdx calls prom qDone oddCall (by omega) rfl rfl (by omega) rfl s0 st hpcT
@@ -1419,17 +1446,17 @@ theorem commit_bin_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
     fun q hq j hj => (getByte_of_mem_eq he2_mem _).trans (hgapC q hq j hj),
     hpresC.trans (MemPreservedOutside.of_mem_eq he2_mem _ _)⟩
 
-/-- One full iteration of Phase 3B `bin238_driver` (words `147583..148411`) for `4 ≤ lvlIdx < 22`
-building 238-bit masked `L_{lvlIdx+2}` (`L6..L23`). -/
+/-- One full iteration of Phase 3B `bin238_driver` (words `147583..148411`) for `4 ≤ lvlIdx < 7`
+building 238-bit masked `L_{lvlIdx+2}` (`L6..L8`). -/
 theorem commit_bin238_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (oracle : Oracle) (msg : Message) (salts : Index → Salt192)
-    (lvlIdx : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 22) (s0 : MachineState)
+    (lvlIdx : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 7) (s0 : MachineState)
     (hpc : s0.pc = BitVec.ofNat 64 (0x1000 + 4 * 147583))
     (hx2 : s0.getReg .x2 = BitVec.ofNat 64 C_DB)
     (hx5 : s0.getReg .x5 = 0#64) (hx9 : s0.getReg .x9 = BitVec.ofNat 64 C_TD)
     (hx11 : s0.getReg .x11 = 96#64) (hx13 : s0.getReg .x13 = 0#64)
     (hx24 : s0.getReg .x24 = BitVec.ofNat 64 (C_DB + 32 * lvlIdx))
-    (hx25 : s0.getReg .x25 = BitVec.ofNat 64 (C_DB + 704))
+    (hx25 : s0.getReg .x25 = BitVec.ofNat 64 (C_DB + 224))
     (hx26 : s0.getReg .x26 = BitVec.ofNat 64 C_CMT)
     (hx27 : s0.getReg .x27 = mask238Word)
     (hdata : ∀ off < 32, off % 8 = 0 →
@@ -1443,14 +1470,14 @@ theorem commit_bin238_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
     ∃ s1,
       DetRun oracle (submission.image .commit) s0
         (bin238LevelSteps lvlIdx) s1 (bin238LevelCycles lvlIdx) (bin238LevelCalls lvlIdx) ∧
-      s1.pc = BitVec.ofNat 64 (0x1000 + 4 * (if lvlIdx + 1 < 22 then 147583 else 148412)) ∧
+      s1.pc = BitVec.ofNat 64 (0x1000 + 4 * (if lvlIdx + 1 < 7 then 147583 else 148412)) ∧
       s1.getReg .x2 = BitVec.ofNat 64 C_DB ∧
       s1.getReg .x5 = 0#64 ∧
       s1.getReg .x9 = BitVec.ofNat 64 C_TD ∧
       s1.getReg .x11 = 96#64 ∧
       s1.getReg .x13 = 0#64 ∧
       s1.getReg .x24 = BitVec.ofNat 64 (C_DB + 32 * (lvlIdx + 1)) ∧
-      s1.getReg .x25 = BitVec.ofNat 64 (C_DB + 704) ∧
+      s1.getReg .x25 = BitVec.ofNat 64 (C_DB + 224) ∧
       s1.getReg .x26 = BitVec.ofNat 64 C_CMT ∧
       s1.getReg .x27 = mask238Word ∧
       (∀ idx < levelSize (lvlIdx + 2),
@@ -1459,6 +1486,9 @@ theorem commit_bin238_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
       (∀ q < (levelSize (lvlIdx + 2) + 1) / 2, ∀ j < 32,
         s1.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j)) =
         s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * q + 64 + j))) ∧
+      (levelSize (lvlIdx + 2) % 2 = 1 → ∀ j < 32,
+        s1.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j)) =
+        s0.getByte (BitVec.ofNat 64 (C_TD + levelBase (lvlIdx + 2) + 96 * (levelSize (lvlIdx + 2) / 2) + 32 + j))) ∧
       MemPreservedOutside s0 s1 (C_TD + levelBase (lvlIdx + 2)) (C_TD + levelBase (lvlIdx + 3)) := by
   let calls := levelSize (lvlIdx + 1) / 2
   let prom := levelSize (lvlIdx + 1) % 2
@@ -1503,7 +1533,7 @@ theorem commit_bin238_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
       hx10B hx12B hsrc hsrcGap hdigB hgapB hpresB
   have hst_x27 : st.getReg .x27 = mask238Word :=
     (hregB .x27 (by decide) (by decide) (by decide) (by decide)).trans hsb_x27
-  obtain ⟨sc, hrunC, hpcC, hregC, hdigC, hgapC, hpresC⟩ :=
+  obtain ⟨sc, hrunC, hpcC, hregC, hdigC, hgapC, hoddSlotC, hpresC⟩ :=
     commit_bin_stageC_gen h768 oracle msg salts 148383 148385 148391 148392 148401 148402 148410 6 13 (68#13)
       rfl pc_beq_148384 rfl pc_beq_148391 pc_jal_148400 rfl rfl pc_beq_148401
       lvlIdx calls prom qDone oddCall hhi rfl rfl (by omega) rfl s0 st hpcT
@@ -1537,7 +1567,7 @@ theorem commit_bin238_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (((hregC r h6 h10 h12 h22).trans (hregB r h6 h10 h12 h22)).trans
       (hregA r h6 h7 h10 h12 h19)).trans (hh9_reg r h6 h10 h12 h20 h21 h22)
   obtain ⟨e2, he_run, he2_pc, he2_mem, he2_x24, he2_reg⟩ :=
-    commit_bin_tail_gen oracle 148410 147583 148412 22 (4880#13) rfl pc_bne_148411 lvlIdx hhi (le_refl _) sc hpcC
+    commit_bin_tail_gen oracle 148410 147583 148412 7 (4880#13) rfl pc_bne_148411 lvlIdx hhi (by omega) sc hpcC
       ((hsc_reg .x24 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans hx24)
       ((hsc_reg .x25 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans hx25)
       (commit_fetch_commitTailInstr sc 148410 (by omega) (by omega) hpcC)
@@ -1565,6 +1595,7 @@ theorem commit_bin238_level (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (he2_reg .x27 (by decide)).trans ((hsc_reg .x27 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans hx27),
     fun idx hidx => (readBuffer_of_mem_eq he2_mem _ _).trans (hdigC idx hidx),
     fun q hq j hj => (getByte_of_mem_eq he2_mem _).trans (hgapC q hq j hj),
+    fun hmod j hj => (getByte_of_mem_eq he2_mem _).trans (hoddSlotC hmod j hj),
     hpresC.trans (MemPreservedOutside.of_mem_eq he2_mem _ _)⟩
 
 end CommitGolfCandidate

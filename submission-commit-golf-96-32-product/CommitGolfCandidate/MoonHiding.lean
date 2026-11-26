@@ -76,7 +76,7 @@ theorem referenceProof_congr_opened (nodes : Nat → Nat → Digest)
   unfold referenceProof referenceProofFwd
   split
   · rfl
-  · apply congrArg (· ++ pack6BitsRev (referenceProofTails nodes positions))
+  · apply congrArg (· ++ packVarBitsRev (referenceProofTails nodes positions))
     apply congrArg (· ++ capFrontierFwd nodes positions)
     apply List.flatMap_congr
     intro i hi

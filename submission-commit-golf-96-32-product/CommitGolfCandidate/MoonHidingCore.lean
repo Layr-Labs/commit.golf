@@ -608,7 +608,7 @@ theorem compression_run_hits_slice192_bound (start : Nat) (hstart : start = 0 �
 
 /-! ### 4. Pre-Salt Unsalted Leaf Calls (`queryAllUnsalted`, `3 * LENGTH` Queries) -/
 
-def IDEAL_TREE_BUDGET : Nat := LENGTH + 11184810
+def IDEAL_TREE_BUDGET : Nat := LENGTH + 11344428
 
 theorem public_query_bound_pure' {α : Type} (x : α) (n : Nat) :
     PublicQueryBound (pure x : OracleComp World α) n := trivial
@@ -869,14 +869,34 @@ def queryLevel1Aux (h768 : COMPRESSION_INPUT_LENGTH = 768) (l0 : Nat → Digest)
       let d ← queryCompress h768 (ternaryInput (l0 (3 * n)) (l0 (3 * n + 1)) (l0 (3 * n + 2)))
       pure (Function.update prev n d)
 
+def queryChainIter (h768 : COMPRESSION_INPUT_LENGTH = 768) (l : Nat) :
+    Nat → Digest → OracleComp World Digest
+  | 0, d => pure d
+  | k + 1, d => do
+      let prev ← queryChainIter h768 l k d
+      queryCompress h768 (chainStepInput prev (levelTag l (k + 2)))
+
+def queryChainHash (h768 : COMPRESSION_INPUT_LENGTH = 768) (l : Nat) (left right : Digest) :
+    OracleComp World Digest := do
+  let raw ←
+    if levelChain l ≤ 1 then
+      queryCompress h768 (binaryInput left right)
+    else do
+      let d1 ← queryCompress h768 (binaryTaggedInput left right (levelTag l 1))
+      queryChainIter h768 l (levelChain l - 1) d1
+  pure (maskLevel l raw)
+
+def binLevelNodeCount (lvl : Nat) : Nat :=
+  if lvl < 9 then levelSize (lvl - 1) / 2 else levelSize lvl
+
 def queryBinLevelAux (h768 : COMPRESSION_INPUT_LENGTH = 768) (prevLevel : Nat → Digest)
     (prevSize : Nat) (lvl : Nat) : Nat → OracleComp World (Nat → Digest)
   | 0 => pure (fun idx =>
-      if prevSize % 2 = 1 ∧ idx = prevSize / 2 then prevLevel (2 * idx) else 0)
+      if lvl < 9 ∧ prevSize % 2 = 1 ∧ idx = prevSize / 2 then prevLevel (2 * idx) else 0)
   | n + 1 => do
       let prev ← queryBinLevelAux h768 prevLevel prevSize lvl n
-      let raw ← queryCompress h768 (binaryInput (prevLevel (2 * n)) (prevLevel (2 * n + 1)))
-      let d := maskLevel lvl raw
+      let right := if 2 * n + 1 < prevSize then prevLevel (2 * n + 1) else 0
+      let d ← queryChainHash h768 lvl (prevLevel (2 * n)) right
       pure (Function.update prev n d)
 
 def queryUpperLevels (h768 : COMPRESSION_INPUT_LENGTH = 768)
@@ -885,7 +905,7 @@ def queryUpperLevels (h768 : COMPRESSION_INPUT_LENGTH = 768)
   | k + 1 => do
       let prev ← queryUpperLevels h768 l0 l1 k
       let prevLvl := k + 1
-      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (k + 2) (levelSize prevLvl / 2)
+      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (k + 2) (binLevelNodeCount (k + 2))
       pure (Function.update prev (k + 2) cur)
 
 def queryTreeFromLeafFn (h768 : COMPRESSION_INPUT_LENGTH = 768)
@@ -917,14 +937,14 @@ private theorem queryLevel1Aux_succ (h768 : COMPRESSION_INPUT_LENGTH = 768) (l0 
 private theorem queryBinLevelAux_zero (h768 : COMPRESSION_INPUT_LENGTH = 768) (prevLevel : Nat → Digest)
     (prevSize : Nat) (lvl : Nat) :
     queryBinLevelAux h768 prevLevel prevSize lvl 0 =
-      pure (fun idx => if prevSize % 2 = 1 ∧ idx = prevSize / 2 then prevLevel (2 * idx) else 0) := rfl
+      pure (fun idx => if lvl < 9 ∧ prevSize % 2 = 1 ∧ idx = prevSize / 2 then prevLevel (2 * idx) else 0) := rfl
 
 private theorem queryBinLevelAux_succ (h768 : COMPRESSION_INPUT_LENGTH = 768) (prevLevel : Nat → Digest)
     (prevSize : Nat) (lvl : Nat) (n : Nat) :
     queryBinLevelAux h768 prevLevel prevSize lvl (n + 1) = (do
       let prev ← queryBinLevelAux h768 prevLevel prevSize lvl n
-      let raw ← queryCompress h768 (binaryInput (prevLevel (2 * n)) (prevLevel (2 * n + 1)))
-      let d := maskLevel lvl raw
+      let right := if 2 * n + 1 < prevSize then prevLevel (2 * n + 1) else 0
+      let d ← queryChainHash h768 lvl (prevLevel (2 * n)) right
       pure (Function.update prev n d)) := rfl
 
 private theorem queryUpperLevels_zero (h768 : COMPRESSION_INPUT_LENGTH = 768) (l0 l1 : Nat → Digest) :
@@ -934,7 +954,7 @@ private theorem queryUpperLevels_succ (h768 : COMPRESSION_INPUT_LENGTH = 768) (l
     queryUpperLevels h768 l0 l1 (k + 1) = (do
       let prev ← queryUpperLevels h768 l0 l1 k
       let prevLvl := k + 1
-      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (k + 2) (levelSize prevLvl / 2)
+      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (k + 2) (binLevelNodeCount (k + 2))
       pure (Function.update prev (k + 2) cur)) := rfl
 
 private theorem queryTreeFromLeafFn_def (h768 : COMPRESSION_INPUT_LENGTH = 768)
@@ -946,10 +966,63 @@ private theorem queryTreeFromLeafFn_def (h768 : COMPRESSION_INPUT_LENGTH = 768)
 
 attribute [irreducible] queryLevel0Aux queryLevel1Aux queryBinLevelAux queryUpperLevels queryTreeFromLeafFn
 
+private theorem queryChainIter_bound (h768 : COMPRESSION_INPUT_LENGTH = 768) (l k : Nat) (d : Digest) :
+    PublicQueryBound (queryChainIter h768 l k d) k := by
+  induction k with
+  | zero => exact public_query_bound_pure' _ _
+  | succ k ih =>
+    unfold queryChainIter
+    exact public_query_bound_bind ih (fun _ => queryCompress_bound h768 _)
+
+private theorem levelChain_pos (l : Nat) : 1 ≤ levelChain l := by
+  by_cases h : l < 17
+  · interval_cases l <;> decide
+  · match l with
+    | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 => omega
+    | n + 17 => simp [levelChain]
+
+private theorem queryChainHash_bound (h768 : COMPRESSION_INPUT_LENGTH = 768) (l : Nat) (left right : Digest) :
+    PublicQueryBound (queryChainHash h768 l left right) (levelChain l) := by
+  unfold queryChainHash
+  have hpos := levelChain_pos l
+  split_ifs with hle
+  · have h1 : levelChain l = 1 := by omega
+    rw [h1]
+    simpa only [Nat.add_zero] using
+      public_query_bound_bind (queryCompress_bound h768 _) (fun _ => public_query_bound_pure' _ 0)
+  · have hsub : 1 + (levelChain l - 1) = levelChain l := by omega
+    have h1 : PublicQueryBound (do
+        let d1 ← queryCompress h768 (binaryTaggedInput left right (levelTag l 1))
+        let raw ← queryChainIter h768 l (levelChain l - 1) d1
+        pure (maskLevel l raw)) (1 + (levelChain l - 1)) :=
+      public_query_bound_bind (queryCompress_bound h768 _) fun d1 => by
+        simpa only [Nat.add_zero] using
+          public_query_bound_bind (queryChainIter_bound h768 l (levelChain l - 1) d1)
+            (fun _ => public_query_bound_pure' _ 0)
+    rwa [hsub] at h1
+
+private theorem queryChainIter_fixed (h768 : COMPRESSION_INPUT_LENGTH = 768) (oracle : Oracle)
+    (l k : Nat) (d : Digest) :
+    fixedOracleRun oracle (queryChainIter h768 l k d) = pure (chainIter (oracleComp96 h768 oracle) l k d) := by
+  induction k with
+  | zero => exact fixed_oracle_run_pure oracle d
+  | succ k ih =>
+    unfold queryChainIter chainIter
+    rw [fixed_oracle_run_bind, ih, pure_bind, queryCompress_fixed]
+
+private theorem queryChainHash_fixed (h768 : COMPRESSION_INPUT_LENGTH = 768) (oracle : Oracle)
+    (l : Nat) (left right : Digest) :
+    fixedOracleRun oracle (queryChainHash h768 l left right) =
+      pure (chainHash (oracleComp96 h768 oracle) l left right) := by
+  unfold queryChainHash chainHash chainEval
+  split_ifs
+  · rw [fixed_oracle_run_bind, queryCompress_fixed, pure_bind, fixed_oracle_run_pure]
+  · rw [fixed_oracle_run_bind, queryCompress_fixed, pure_bind,
+      fixed_oracle_run_bind, queryChainIter_fixed, pure_bind, fixed_oracle_run_pure]
+
 private theorem sum_bin_calls_eq :
-    (∑ k ∈ Finset.range 23, levelSize (k + 1) / 2) = 5592405 := by
-  simp only [Finset.sum_range_succ, Finset.sum_range_zero]
-  norm_num [levelSize, LENGTH, LOG_LENGTH]
+    (∑ k ∈ Finset.range 23, binLevelNodeCount (k + 2) * levelChain (k + 2)) = 5752023 := by
+  decide
 
 theorem queryTreeFromLeafFn_bound_one (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (leafFn : Index → OracleComp World Digest)
@@ -973,15 +1046,17 @@ theorem queryTreeFromLeafFn_bound_one (h768 : COMPRESSION_INPUT_LENGTH = 768)
       apply public_query_bound_bind ih
       intro _
       simpa only [Nat.add_zero] using public_query_bound_bind (queryCompress_bound h768 _) (fun _ => public_query_bound_pure' _ 0)
-  have hbin : ∀ pl ps ir n, PublicQueryBound (queryBinLevelAux h768 pl ps ir n) n := by
-    intro pl ps ir n; induction n with
-    | zero => rw [queryBinLevelAux_zero]; exact public_query_bound_pure' _ _
+  have hbin : ∀ pl ps lvl n, PublicQueryBound (queryBinLevelAux h768 pl ps lvl n) (n * levelChain lvl) := by
+    intro pl ps lvl n; induction n with
+    | zero => rw [queryBinLevelAux_zero, Nat.zero_mul]; exact public_query_bound_pure' _ _
     | succ n ih =>
-      rw [queryBinLevelAux_succ]
+      rw [Nat.succ_mul, queryBinLevelAux_succ]
       apply public_query_bound_bind ih
       intro _
-      simpa only [Nat.add_zero] using public_query_bound_bind (queryCompress_bound h768 _) (fun _ => public_query_bound_pure' _ 0)
-  have hup : ∀ l0 l1 k, PublicQueryBound (queryUpperLevels h768 l0 l1 k) (∑ j ∈ Finset.range k, levelSize (j + 1) / 2) := by
+      simpa only [Nat.add_zero] using
+        public_query_bound_bind (queryChainHash_bound h768 lvl _ _) (fun _ => public_query_bound_pure' _ 0)
+  have hup : ∀ l0 l1 k, PublicQueryBound (queryUpperLevels h768 l0 l1 k)
+      (∑ j ∈ Finset.range k, binLevelNodeCount (j + 2) * levelChain (j + 2)) := by
     intro l0 l1 k; induction k with
     | zero =>
       rw [queryUpperLevels_zero]
@@ -993,7 +1068,7 @@ theorem queryTreeFromLeafFn_bound_one (h768 : COMPRESSION_INPUT_LENGTH = 768)
       intro prev
       simpa only [Nat.add_zero] using public_query_bound_bind (hbin _ _ _ _) (fun _ => public_query_bound_pure' _ 0)
   rw [queryTreeFromLeafFn_def]
-  have hbudget : IDEAL_TREE_BUDGET = LENGTH + (FULL_TRIPLETS + 5592405) := by
+  have hbudget : IDEAL_TREE_BUDGET = LENGTH + (FULL_TRIPLETS + 5752023) := by
     unfold IDEAL_TREE_BUDGET; rw [full_triplets_eq]
   rw [hbudget]
   refine public_query_bound_bind (hl0 LENGTH) fun l0 =>
@@ -1066,34 +1141,57 @@ theorem queryTreeFromLeafFn_fixed (h768 : COMPRESSION_INPUT_LENGTH = 768)
       subst heq; exact hl1_prom
   have hbin : ∀ (prevLvl : Nat) (hge1 : 1 ≤ prevLvl) (hlt24 : prevLvl < 24)
       (prevArr : Nat → Digest) (hprev : ∀ idx < levelSize prevLvl, prevArr idx = nodeValFromLeaves c leaves prevLvl idx)
-      (n : Nat) (hn : n ≤ levelSize prevLvl / 2),
+      (n : Nat) (hn : n ≤ binLevelNodeCount (prevLvl + 1)),
       ∃ f, fixedOracleRun oracle (queryBinLevelAux h768 prevArr (levelSize prevLvl) (prevLvl + 1) n) = pure f ∧
         (∀ idx < n, f idx = nodeValFromLeaves c leaves (prevLvl + 1) idx) ∧
-        (levelSize prevLvl % 2 = 1 → f (levelSize prevLvl / 2) = nodeValFromLeaves c leaves (prevLvl + 1) (levelSize prevLvl / 2)) := by
+        (prevLvl + 1 < 9 → levelSize prevLvl % 2 = 1 →
+          f (levelSize prevLvl / 2) = nodeValFromLeaves c leaves (prevLvl + 1) (levelSize prevLvl / 2)) := by
     intro prevLvl hge1 hlt24 prevArr hprev n hn
     obtain ⟨m, rfl⟩ : ∃ m, prevLvl = m + 1 := ⟨prevLvl - 1, by omega⟩
+    have hcnt_le : binLevelNodeCount (m + 2) ≤ levelSize (m + 2) := by
+      unfold binLevelNodeCount
+      have hstep : levelSize (m + 2) = (levelSize (m + 1) + 1) / 2 := levelSize_step (m + 1) (by omega)
+      rw [show m + 2 - 1 = m + 1 by omega]
+      split_ifs <;> omega
     induction n with
     | zero =>
       rw [queryBinLevelAux_zero]
       refine ⟨_, fixed_oracle_run_pure _ _, fun _ h => (Nat.not_lt_zero _ h).elim, ?_⟩
-      intro hodd
-      simp only [hodd, true_and, ite_true, nodeValFromLeaves]
+      intro hlt9 hodd
+      simp only [hlt9, hodd, true_and, ite_true, nodeValFromLeaves]
       rw [if_neg (by omega), if_pos (by omega)]
       exact hprev (2 * (levelSize (m + 1) / 2)) (by omega)
     | succ n ih =>
       obtain ⟨f, hrun, hval, hprom⟩ := ih (by omega)
       rw [queryBinLevelAux_succ, fixed_oracle_run_bind, hrun, pure_bind, fixed_oracle_run_bind,
-        queryCompress_fixed, pure_bind, fixed_oracle_run_pure]
+        queryChainHash_fixed, pure_bind, fixed_oracle_run_pure]
       refine ⟨Function.update f n _, rfl, ?_, ?_⟩
       · intro idx hlt
         by_cases heq : idx = n
         · subst heq
-          simp only [Function.update_self, nodeValFromLeaves, show 2 * idx + 1 < levelSize (m + 1) by omega,
-            ite_true]
-          rw [hprev (2 * idx) (by omega), hprev (2 * idx + 1) (by omega)]
+          simp only [Function.update_self, nodeValFromLeaves]
+          have hstep : levelSize (m + 2) = (levelSize (m + 1) + 1) / 2 := levelSize_step (m + 1) (by omega)
+          by_cases hpair : 2 * idx + 1 < levelSize (m + 1)
+          · simp only [hpair, ite_true]
+            rw [hprev (2 * idx) (by omega), hprev (2 * idx + 1) (by omega)]
+          · have hge9 : ¬ (m + 2 < 9) := by
+              intro hlt9
+              unfold binLevelNodeCount at hn
+              simp only [hlt9, ite_true, Nat.add_sub_cancel] at hn
+              omega
+            have h2lt : 2 * idx < levelSize (m + 1) := by
+              have hlt_sz : idx < levelSize (m + 2) := by
+                change idx + 1 ≤ binLevelNodeCount (m + 2) at hn; omega
+              omega
+            simp only [hpair, ite_false, h2lt, ite_true, hge9]
+            rw [hprev (2 * idx) h2lt]
         · rw [Function.update_of_ne heq]; exact hval idx (by omega)
-      · intro hodd
-        rw [Function.update_of_ne (by omega)]; exact hprom hodd
+      · intro hlt9 hodd
+        have hne : levelSize (m + 1) / 2 ≠ n := by
+          unfold binLevelNodeCount at hn
+          simp only [hlt9, ite_true, Nat.add_sub_cancel] at hn
+          omega
+        rw [Function.update_of_ne hne]; exact hprom hlt9 hodd
   have hup : ∀ k ≤ 23, ∃ arr, fixedOracleRun oracle (queryUpperLevels h768 l0 l1 k) = pure arr ∧
       ∀ l ≤ k + 1, ∀ idx < levelSize l, arr l idx = nodeValFromLeaves c leaves l idx := by
     intro k hk; induction k with
@@ -1108,19 +1206,25 @@ theorem queryTreeFromLeafFn_fixed (h768 : COMPRESSION_INPUT_LENGTH = 768)
       obtain ⟨arr, hrun, hval⟩ := ih (by omega)
       rw [queryUpperLevels_succ, fixed_oracle_run_bind, hrun, pure_bind]
       obtain ⟨cur, hcur_run, hcur_lt, hcur_prom⟩ := hbin (k + 1) (by omega) (by omega)
-        (arr (k + 1)) (hval (k + 1) (by omega)) (levelSize (k + 1) / 2) (le_refl _)
+        (arr (k + 1)) (hval (k + 1) (by omega)) (binLevelNodeCount (k + 2)) (le_refl _)
       rw [fixed_oracle_run_bind, hcur_run, pure_bind, fixed_oracle_run_pure]
       refine ⟨Function.update arr (k + 2) cur, rfl, ?_⟩
       intro l hl idx hidx
       by_cases hltop : l = k + 2
       · subst hltop
         rw [Function.update_self]
-        rw [levelSize_step (k + 1) (by omega)] at hidx
-        by_cases hlt : idx < levelSize (k + 1) / 2
-        · exact hcur_lt idx hlt
-        · have hodd : levelSize (k + 1) % 2 = 1 := by omega
-          have heq : idx = levelSize (k + 1) / 2 := by omega
-          subst heq; exact hcur_prom hodd
+        by_cases hlt9 : k + 2 < 9
+        · have hcnt : binLevelNodeCount (k + 2) = levelSize (k + 1) / 2 := by
+            simp [binLevelNodeCount, hlt9]
+          rw [levelSize_step (k + 1) (by omega)] at hidx
+          by_cases hlt : idx < levelSize (k + 1) / 2
+          · exact hcur_lt idx (by omega)
+          · have hodd : levelSize (k + 1) % 2 = 1 := by omega
+            have heq : idx = levelSize (k + 1) / 2 := by omega
+            subst heq; exact hcur_prom hlt9 hodd
+        · have hcnt : binLevelNodeCount (k + 2) = levelSize (k + 2) := by
+            simp [binLevelNodeCount, hlt9]
+          exact hcur_lt idx (by omega)
       · rw [Function.update_of_ne hltop]
         exact hval l (by omega) idx hidx
   obtain ⟨nodes, hup_run, hup_val⟩ := hup 23 (le_refl _)
@@ -1375,66 +1479,155 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
           · exact List.mem_append_left _ h1
           · exact List.mem_append_right _ (List.mem_append_left _ h2)
   obtain ⟨l1, tr1, htr1_run, htr1_good, htr1_lt, htr1_prom⟩ := hl1 FULL_TRIPLETS (le_refl _)
+  have hchain : ∀ (prevTr : CompressionReplies) (hpg : GoodIdealTrace h768 aVec bVec sOpen leafRand positions prevTr)
+      (lvl : Nat) (left right : Digest)
+      (hleft : (∃ k ∉ positions, left.extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
+        (∃ p ∈ prevTr, left.extractLsb' 0 192 = p.2.extractLsb' 0 192)),
+      ∃ d tr,
+        fixedOracleRun oracle (traceCompressionReplies (queryChainHash h768 lvl left right)) = pure (d, tr) ∧
+        GoodIdealTrace h768 aVec bVec sOpen leafRand positions (prevTr ++ tr) ∧
+        (∃ p ∈ prevTr ++ tr, d.extractLsb' 0 192 = p.2.extractLsb' 0 192) := by
+    intro prevTr hpg lvl left right hleft
+    have hiter : ∀ (baseTr : CompressionReplies) (hbg : GoodIdealTrace h768 aVec bVec sOpen leafRand positions baseTr)
+        (k : Nat) (d0 : Digest)
+        (hd0 : ∃ p ∈ baseTr, d0.extractLsb' 0 192 = p.2.extractLsb' 0 192),
+        ∃ d tr,
+          fixedOracleRun oracle (traceCompressionReplies (queryChainIter h768 lvl k d0)) = pure (d, tr) ∧
+          GoodIdealTrace h768 aVec bVec sOpen leafRand positions (baseTr ++ tr) ∧
+          (∃ p ∈ baseTr ++ tr, d.extractLsb' 0 192 = p.2.extractLsb' 0 192) := by
+      intro baseTr hbg k d0 hd0
+      induction k with
+      | zero =>
+        refine ⟨d0, [], by simp [queryChainIter, traceReplies_pure, fixed_oracle_run_pure],
+          by simpa using hbg, by simpa using hd0⟩
+      | succ k ih =>
+        obtain ⟨dPrev, trPrev, hrunP, hgoodP, hdP⟩ := ih
+        unfold queryChainIter
+        let x := (chainStepInput dPrev (levelTag lvl (k + 2))).cast h768.symm
+        let dOut : Digest := oracle.compression x
+        have hrun1 :
+            fixedOracleRun oracle (traceCompressionReplies (do
+              let prev ← queryChainIter h768 lvl k d0
+              queryCompress h768 (chainStepInput prev (levelTag lvl (k + 2))))) =
+            pure (dOut, trPrev ++ [(x, dOut)]) := by
+          simp only [traceReplies_bind, fixed_oracle_run_bind, hrunP, pure_bind,
+            traceReplies_queryCompress_fixed, fixed_oracle_run_pure]
+          rfl
+        refine ⟨dOut, trPrev ++ [(x, dOut)], hrun1, ?_, ?_⟩
+        · intro p hp
+          have hsub : ∀ q ∈ baseTr ++ trPrev, q ∈ baseTr ++ (trPrev ++ [(x, dOut)]) := by
+            intro q hq
+            rcases List.mem_append.mp hq with h1 | h2
+            · exact List.mem_append_left _ h1
+            · exact List.mem_append_right _ (List.mem_append_left _ h2)
+          simp only [List.mem_append, List.mem_singleton] at hp
+          rcases hp with h1 | (h2 | rfl)
+          · exact good_ideal_query_mono hsub (hgoodP p (List.mem_append_left _ h1))
+          · exact good_ideal_query_mono hsub (hgoodP p (List.mem_append_right _ h2))
+          · right
+            refine ⟨?_, Or.inl (by dsimp only [x]; rw [hcast576, chainStepInput_hi])⟩
+            obtain ⟨q, hq, hqeq⟩ := hdP
+            right; refine ⟨q, hsub q hq, ?_⟩
+            dsimp only [x]; rw [hcast0, ← hqeq]; unfold chainStepInput; exact extractLsb'_0_192_append_digest _ _
+        · exact ⟨(x, dOut), by simp, rfl⟩
+    unfold queryChainHash
+    split_ifs
+    · let x := (binaryInput left right).cast h768.symm
+      let raw : Digest := oracle.compression x
+      have hrun1 : fixedOracleRun oracle (traceCompressionReplies (do
+          let r ← queryCompress h768 (binaryInput left right)
+          pure (maskLevel lvl r))) = pure (maskLevel lvl raw, [(x, raw)]) := by
+        simp only [traceReplies_bind, traceReplies_pure, fixed_oracle_run_bind, fixed_oracle_run_pure,
+          traceReplies_queryCompress_fixed, pure_bind, List.append_nil]; rfl
+      refine ⟨maskLevel lvl raw, [(x, raw)], hrun1, ?_, ⟨(x, raw), by simp, extractLsb'_192_maskLevel lvl raw⟩⟩
+      intro p hp
+      simp only [List.mem_append, List.mem_singleton] at hp
+      rcases hp with h1 | rfl
+      · exact good_ideal_query_mono (fun q hq => List.mem_append_left _ hq) (hpg p h1)
+      · right
+        refine ⟨?_, Or.inl (by dsimp only [x]; rw [hcast576, extractLsb'_576_192_binary])⟩
+        rcases hleft with ⟨k, hk, hkeq⟩ | ⟨q, hq, hqeq⟩
+        · left; refine ⟨k, hk, ?_⟩
+          dsimp only [x]; rw [hcast0, ← hkeq]; unfold binaryInput; exact extractLsb'_0_192_append_digest _ _
+        · right; refine ⟨q, List.mem_append_left _ hq, ?_⟩
+          dsimp only [x]; rw [hcast0, ← hqeq]; unfold binaryInput; exact extractLsb'_0_192_append_digest _ _
+    · let x1 := (binaryTaggedInput left right (levelTag lvl 1)).cast h768.symm
+      let d1 : Digest := oracle.compression x1
+      have hgood1 : GoodIdealTrace h768 aVec bVec sOpen leafRand positions (prevTr ++ [(x1, d1)]) := by
+        intro p hp
+        simp only [List.mem_append, List.mem_singleton] at hp
+        rcases hp with h1 | rfl
+        · exact good_ideal_query_mono (fun q hq => List.mem_append_left _ hq) (hpg p h1)
+        · right
+          refine ⟨?_, Or.inl (by dsimp only [x1]; rw [hcast576, binaryTaggedInput_hi])⟩
+          rcases hleft with ⟨k, hk, hkeq⟩ | ⟨q, hq, hqeq⟩
+          · left; refine ⟨k, hk, ?_⟩
+            dsimp only [x1]; rw [hcast0, ← hkeq]; unfold binaryTaggedInput; exact extractLsb'_0_192_append_digest _ _
+          · right; refine ⟨q, List.mem_append_left _ hq, ?_⟩
+            dsimp only [x1]; rw [hcast0, ← hqeq]; unfold binaryTaggedInput; exact extractLsb'_0_192_append_digest _ _
+      obtain ⟨raw, trRest, hrunR, hgoodR, hdR⟩ := hiter (prevTr ++ [(x1, d1)]) hgood1
+        (levelChain lvl - 1) d1 ⟨(x1, d1), by simp, rfl⟩
+      have hrun2 : fixedOracleRun oracle (traceCompressionReplies (do
+          let raw' ← (do
+            let d1' ← queryCompress h768 (binaryTaggedInput left right (levelTag lvl 1))
+            queryChainIter h768 lvl (levelChain lvl - 1) d1')
+          pure (maskLevel lvl raw'))) = pure (maskLevel lvl raw, (x1, d1) :: trRest) := by
+        simp only [traceReplies_bind, traceReplies_pure, fixed_oracle_run_bind, fixed_oracle_run_pure,
+          traceReplies_queryCompress_fixed, pure_bind, List.append_nil, List.singleton_append]
+        change (do let value ← (do let value ← fixedOracleRun oracle (traceCompressionReplies (queryChainIter h768 lvl (levelChain lvl - 1) d1))
+                                   pure (value.1, (x1, d1) :: value.2))
+                   pure (maskLevel lvl value.1, value.2)) = _
+        rw [hrunR, pure_bind, pure_bind]
+      refine ⟨maskLevel lvl raw, (x1, d1) :: trRest, hrun2, ?_, ?_⟩
+      · simpa [List.append_assoc] using hgoodR
+      · obtain ⟨p, hp, hpeq⟩ := hdR
+        exact ⟨p, by simpa [List.append_assoc] using hp, (extractLsb'_192_maskLevel lvl raw).trans hpeq⟩
   have hbin : ∀ (prevTr : CompressionReplies) (hpg : GoodIdealTrace h768 aVec bVec sOpen leafRand positions prevTr)
       (prevArr : Nat → Digest) (ps : Nat) (lvl : Nat)
       (hprev : ∀ idx < ps, (∃ k ∉ positions, (prevArr idx).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
         (∃ p ∈ prevTr, (prevArr idx).extractLsb' 0 192 = p.2.extractLsb' 0 192))
-      (n : Nat) (hn : n ≤ ps / 2),
+      (n : Nat) (hn : n ≤ (ps + 1) / 2),
       ∃ f tr,
         fixedOracleRun oracle (traceCompressionReplies (queryBinLevelAux h768 prevArr ps lvl n)) = pure (f, tr) ∧
         GoodIdealTrace h768 aVec bVec sOpen leafRand positions (prevTr ++ tr) ∧
         (∀ idx < n, (∃ k ∉ positions, (f idx).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
           (∃ p ∈ prevTr ++ tr, (f idx).extractLsb' 0 192 = p.2.extractLsb' 0 192)) ∧
-        (ps % 2 = 1 → (∃ k ∉ positions, (f (ps / 2)).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
+        (lvl < 9 → ps % 2 = 1 → n ≤ ps / 2 →
+          (∃ k ∉ positions, (f (ps / 2)).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
           (∃ p ∈ prevTr ++ tr, (f (ps / 2)).extractLsb' 0 192 = p.2.extractLsb' 0 192)) := by
     intro prevTr hpg prevArr ps lvl hprev n hn
     induction n with
     | zero =>
-      refine ⟨fun idx => if ps % 2 = 1 ∧ idx = ps / 2 then prevArr (2 * idx) else 0, [],
+      refine ⟨fun idx => if lvl < 9 ∧ ps % 2 = 1 ∧ idx = ps / 2 then prevArr (2 * idx) else 0, [],
         by simp only [queryBinLevelAux_zero, traceReplies_pure, fixed_oracle_run_pure], by simpa using hpg,
         fun _ h => (Nat.not_lt_zero _ h).elim, ?_⟩
-      intro hodd
-      simp only [List.append_nil, hodd, true_and, ite_true]
+      intro hlt9 hodd _
+      simp only [List.append_nil, hlt9, hodd, true_and, ite_true]
       exact hprev (2 * (ps / 2)) (by omega)
     | succ n ih =>
       obtain ⟨f, tr, hrun, hgood, hval, hprom⟩ := ih (by omega)
       rw [queryBinLevelAux_succ]
-      let x := (binaryInput (prevArr (2 * n)) (prevArr (2 * n + 1))).cast h768.symm
-      let raw : Digest := oracle.compression x
-      let d : Digest := maskLevel lvl raw
+      have hleftN : (∃ k ∉ positions, (prevArr (2 * n)).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
+          (∃ p ∈ prevTr ++ tr, (prevArr (2 * n)).extractLsb' 0 192 = p.2.extractLsb' 0 192) := by
+        rcases hprev (2 * n) (by omega) with h1 | ⟨p, hp, hpeq⟩
+        · exact Or.inl h1
+        · exact Or.inr ⟨p, List.mem_append_left _ hp, hpeq⟩
+      obtain ⟨d, trc, hcrun, hcgood, hcd⟩ := hchain (prevTr ++ tr) hgood lvl (prevArr (2 * n))
+        (if 2 * n + 1 < ps then prevArr (2 * n + 1) else 0) hleftN
       have hrunb :
           fixedOracleRun oracle (traceCompressionReplies (do
             let prev ← queryBinLevelAux h768 prevArr ps lvl n
-            let raw' ← queryCompress h768 (binaryInput (prevArr (2 * n)) (prevArr (2 * n + 1)))
-            let d' := maskLevel lvl raw'
+            let right := if 2 * n + 1 < ps then prevArr (2 * n + 1) else 0
+            let d' ← queryChainHash h768 lvl (prevArr (2 * n)) right
             pure (Function.update prev n d'))) =
-          pure (Function.update f n d, tr ++ [(x, raw)]) := by
+          pure (Function.update f n d, tr ++ trc) := by
         simp only [traceReplies_bind, traceReplies_pure, fixed_oracle_run_bind, fixed_oracle_run_pure,
-          traceReplies_queryCompress_fixed, hrun, pure_bind, List.append_nil]
-        rfl
-      refine ⟨Function.update f n d, tr ++ [(x, raw)], hrunb, ?_, ?_, ?_⟩
-      · intro p hp
-        have hmem_sub : ∀ q ∈ prevTr ++ tr, q ∈ prevTr ++ (tr ++ [(x, raw)]) := by
-          intro q hq
-          rcases List.mem_append.mp hq with h1 | h2
-          · exact List.mem_append_left _ h1
-          · exact List.mem_append_right _ (List.mem_append_left _ h2)
-        simp only [List.mem_append, List.mem_singleton] at hp
-        rcases hp with h1 | (h2 | rfl)
-        · exact good_ideal_query_mono hmem_sub (hgood p (List.mem_append_left _ h1))
-        · exact good_ideal_query_mono hmem_sub (hgood p (List.mem_append_right _ h2))
-        · right
-          refine ⟨?_, Or.inl (by dsimp only [x]; rw [hcast576, extractLsb'_576_192_binary])⟩
-          rcases hprev (2 * n) (by omega) with ⟨k, hk, hkeq⟩ | ⟨q, hq, hqeq⟩
-          · left; refine ⟨k, hk, ?_⟩
-            dsimp only [x]; rw [hcast0, ← hkeq]; unfold binaryInput; exact extractLsb'_0_192_append_digest _ _
-          · right; refine ⟨q, List.mem_append_left _ hq, ?_⟩
-            dsimp only [x]; rw [hcast0, ← hqeq]; unfold binaryInput; exact extractLsb'_0_192_append_digest _ _
+          hrun, hcrun, pure_bind, List.append_nil]
+      refine ⟨Function.update f n d, tr ++ trc, hrunb, by simpa [List.append_assoc] using hcgood, ?_, ?_⟩
       · intro idx hlt
         by_cases heq : idx = n
         · subst heq; rw [Function.update_self]
-          right; refine ⟨(x, raw), by simp, ?_⟩
-          exact extractLsb'_192_maskLevel lvl raw
+          exact Or.inr (by simpa [List.append_assoc] using hcd)
         · rw [Function.update_of_ne heq]
           rcases hval idx (by omega) with hlr | ⟨p, hp, hpeq⟩
           · exact Or.inl hlr
@@ -1442,9 +1635,9 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
             rcases List.mem_append.mp hp with h1 | h2
             · exact List.mem_append_left _ h1
             · exact List.mem_append_right _ (List.mem_append_left _ h2)
-      · intro hodd
+      · intro hlt9 hodd hnle
         rw [Function.update_of_ne (by omega)]
-        rcases hprom hodd with hlr | ⟨p, hp, hpeq⟩
+        rcases hprom hlt9 hodd (by omega) with hlr | ⟨p, hp, hpeq⟩
         · exact Or.inl hlr
         · refine Or.inr ⟨p, ?_, hpeq⟩
           rcases List.mem_append.mp hp with h1 | h2
@@ -1479,9 +1672,14 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
       obtain ⟨arr, tr, hrun, hgood, hval⟩ := ih (by omega)
       rw [queryUpperLevels_succ, traceReplies_bind, fixed_oracle_run_bind, hrun, pure_bind]
       dsimp only
+      have hcnt_le : binLevelNodeCount (k + 2) ≤ (levelSize (k + 1) + 1) / 2 := by
+        unfold binLevelNodeCount
+        have hstep : levelSize (k + 2) = (levelSize (k + 1) + 1) / 2 := levelSize_step (k + 1) (by omega)
+        rw [show k + 2 - 1 = k + 1 by omega]
+        split_ifs <;> omega
       obtain ⟨cur, trc, hcrun, hcgood, hclt, hcprom⟩ := hbin ((tr0 ++ tr1) ++ tr) hgood
         (arr (k + 1)) (levelSize (k + 1)) (k + 2) (hval (k + 1) (by omega))
-        (levelSize (k + 1) / 2) (le_refl _)
+        (binLevelNodeCount (k + 2)) hcnt_le
       simp only [traceReplies_bind, traceReplies_pure, fixed_oracle_run_bind, fixed_oracle_run_pure,
         hcrun, pure_bind, List.append_nil]
       refine ⟨Function.update arr (k + 2) cur, tr ++ trc, rfl, ?_, ?_⟩
@@ -1489,12 +1687,18 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
       · intro l hl idx hidx
         by_cases htop : l = k + 2
         · subst htop; rw [Function.update_self]
-          rw [levelSize_step (k + 1) (by omega)] at hidx
-          by_cases hlt : idx < levelSize (k + 1) / 2
-          · simpa [List.append_assoc] using hclt idx hlt
-          · have hodd : levelSize (k + 1) % 2 = 1 := by omega
-            have heq : idx = levelSize (k + 1) / 2 := by omega
-            subst heq; simpa [List.append_assoc] using hcprom hodd
+          by_cases hlt9 : k + 2 < 9
+          · have hcnt : binLevelNodeCount (k + 2) = levelSize (k + 1) / 2 := by
+              simp [binLevelNodeCount, hlt9]
+            rw [levelSize_step (k + 1) (by omega)] at hidx
+            by_cases hlt : idx < levelSize (k + 1) / 2
+            · simpa [List.append_assoc] using hclt idx (by omega)
+            · have hodd : levelSize (k + 1) % 2 = 1 := by omega
+              have heq : idx = levelSize (k + 1) / 2 := by omega
+              subst heq; simpa [List.append_assoc] using hcprom hlt9 hodd (by omega)
+          · have hcnt : binLevelNodeCount (k + 2) = levelSize (k + 2) := by
+              simp [binLevelNodeCount, hlt9]
+            simpa [List.append_assoc] using hclt idx (by omega)
         · rw [Function.update_of_ne htop]
           rcases hval l (by omega) idx hidx with hlr | ⟨p, hp, hpeq⟩
           · exact Or.inl hlr

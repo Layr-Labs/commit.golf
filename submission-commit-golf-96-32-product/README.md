@@ -1,4 +1,4 @@
-# commit-golf-96-32-product: Shared-Midpoint 40-Byte Paired Late Salts, 3-Ary Bottom Layer, Selective 240/238-Bit Binary Tree, and Two-End 6-Bit Packed L15 Cap
+# commit-golf-96-32-product: Shared-Midpoint 40-Byte Paired Late Salts, 3-Ary Bottom Layer, Domain-Separated Hash-Chained Binary Tree, and Two-End Variable-Bit L14 Cap
 
 This submission implements a statistically hiding, adaptively position-binding vector commitment over the track's 96→32-byte compression oracle (`C`, 8 cycles per call). The permutation oracles are unused.
 
@@ -17,36 +17,38 @@ This submission implements a statistically hiding, adaptively position-binding v
    - Phases 0, 1A, 1B, and 1C execute four constant-body streaming passes with single-instruction `bne` latches and zero base-pointer rebases (`512`-pair `RANDOM(40)`, `256`-leaf Call 0, `64`-pair Calls 1–2, `128`-pair Call 3).
    - Level 1 compresses `5,592,405` contiguous triplets `C(L0[3g] || L0[3g+1] || L0[3g+2])` directly into the zero-gapped `L1` layout (`128`-pair unrolled bulk loop with alternating `+64/+32` strides and zero gap-skip instructions, plus tail and promoted rightmost leaf `L0[16,777,215]`), giving `|L1| = 5,592,406`.
 
-3. **Selective 240/238-bit left-aligned zero-gapped binary upper tree (`L1 -> L24`).**
+3. **Adaptive variable-width binary upper tree with domain-separated iterated hash chains (`L1 -> L24`).**
    - Levels `L0`, `L1`, and the root `L24` retain full 256-bit digests.
    - Levels `L2..L5` (`4` levels) are byte-truncated to 240 bits (`sh zero, 30(a2)`).
-   - Levels `L6..L23` (`18` levels, `349,533` nodes) are bit-truncated to 238 bits (`ld x6, 24(a2); and x6, x6, x27; sd x6, 24(a2)` with `x27 = 2^46 - 1`), saving 2 bits per sibling on `L6..L23`.
-   - Adaptive 120-bit position binding (`≤ q / 2^120` for all `1 ≤ q ≤ 2^120`) holds via the exact survival-product birthday bound on 238-bit projected digests (`1 - ∏_{i < M} (1 - i / 2^238) ≤ q / 2^120` with `M ≤ q + 2^37`).
+   - Levels `L6..L8` (`3` levels) are bit-truncated to 238 bits.
+   - Levels `L9..L16` (`8` levels) use domain-separated iterated hash chains of length `c_l` (`3, 4, 8, 8, 16, 16, 16, 6`) with stage tags `256 * l + s` in `[512..576)`, compressing digests down to `235, 234, 232, 232, 230, 230, 230, 233` bits while preserving `c_l^2 * 2^{w_l} >= 2^238`.
+   - Levels `L17..L23` (`7` levels) are unchained 238-bit digests.
+   - Adaptive 120-bit position binding (`≤ q / 2^120` for all `1 ≤ q ≤ 2^120`) holds via a banked-credit survival-product induction in the lazy compression ROM charging weight `1` to unchained binary queries and weight `c_l` to final-stage chained queries (bounded by total cache size via stage-parent injectivity).
 
-4. **Unified deduplicated `L15` cap with two-end 6-bit packed tail stream (`70,080` bytes at `k = 128`).**
+4. **Unified deduplicated `L14` cap with two-end variable-bit packed tail stream (`69,365` bytes at `k = 128`).**
    For any nonempty sorted position set `positions`:
-   - Each opened position `i` emits its 24-byte salt, level-0 sibling(s) (`64 B` for triplet leaves, `0 B` for the promoted leaf), 32-byte level-1 sibling, four 30-byte siblings on `L2..L5`, and nine 29-byte low parts for `L6..L14` (skipping absent right siblings of promoted nodes), totaling at most `501` forward bytes per record.
-   - Above `L15` (`342` cap leaves, `≤ 171` emitted cap siblings at `k = 128`), each emitted cap sibling writes its 29 low bytes forward.
-   - The 6-bit top slices (`(d >>> 232) & 0x3f`) of every emitted `L6..L23` sibling (`≤ 1,323` slices at `k = 128`) are packed sequentially 6 bits at a time into `ceil(6 * n / 8)` bytes (`≤ 993 B` at `k = 128`) and appended in reverse byte order at the end of the proof (`64,128 + 4,959 + 993 = 70,080` bytes).
-   - The checker reads low bytes forward from `p_lo` and pops 6-bit tails backward from `p_hi = proofEnd` in a single pass, accepting iff `p_lo == p_hi`, zero unused padding bits remain in the tail buffer, and the reconstructed `L24` root matches the claimed commitment.
+   - Each opened position `i` emits its 24-byte salt, level-0 sibling(s) (`64 B` for triplet leaves, `0 B` for the promoted leaf), 32-byte level-1 sibling, and the floor-byte low parts (`levelBodyBytes l` bytes) of each present sibling on `L2..L13`.
+   - Above `L14` (`683` cap leaves, `≤ 68,904` total cap frontier bits at `k = 128`), each emitted cap frontier sibling writes its `levelBodyBytes l` low bytes forward.
+   - All sub-byte tail slices (`levelTailBits l = levelWidth l % 8` bits) across `L2..L23` are packed sequentially LSB-first into `ceil(totalTailBits / 8)` bytes and appended in reverse byte order at the end of the proof (`(3,797 * 128 + 68,904 + 7) / 8 = 69,365` bytes at `k = 128`).
+   - The checker reads low bytes forward from `p_lo` and pops variable-width tails backward from `p_hi = proofEnd` in a single pass, accepting iff `p_lo == p_hi`, zero unused padding bits remain in the tail buffer, and the reconstructed `L24` root matches the claimed commitment.
 
 ## Certified Claim
 
 | Claim | Bound |
 | --- | ---: |
-| Proof bytes (`k = 128`) | 70,080 |
-| Commitment cycles | 847,977,552 |
-| Opening cycles (`k = 128`) | 65,740 |
-| Product score | 59,430,873,903,360 |
+| Proof bytes (`k = 128`) | 69,365 |
+| Commitment cycles | 850,256,070 |
+| Opening cycles (`k = 128`) | 160,000 |
+| Product score | 58,989,110,695,550 |
 
-Commitment executes `257,978,794` instructions (`847,977,552` cycles) and `78,293,674` compression calls (`0` permutation calls). Opening uses an alignment-specialized 8-residue word-buffered stream serializer (`0` oracle calls, `≤ 65,740` cycles at `k = 128`).
+Commitment executes `850,256,070` cycles and `78,453,292` compression calls (`0` permutation calls). Opening executes `0` oracle calls, and checking executes at most `100 * k` compression calls.
 
 ## Artifacts and Verification
 
 - `programs.json` contains the three RV64IM machine images, embedded level tables, and memory layout.
 - `claim.json` declares the certified resource bounds.
-- `Solution.lean` assembles `CommitGolf.Certificate submission 70080 847977552 65740` and proves `submission = CommitGolf.Artifact.submission` by reflexivity.
-- `CommitGolfCandidate/` contains the complete formal proofs of instruction decoding, exact machine execution, termination, completeness, query budgets, worst-case proof size, prover cycles, adaptive 120-bit position binding (exact 238-bit survival-product birthday bound), and 120-bit statistical hiding.
+- `Solution.lean` assembles `CommitGolf.Certificate submission 69365 850256070 160000` and proves `submission = CommitGolf.Artifact.submission` by reflexivity.
+- `CommitGolfCandidate/` contains the complete formal proofs of instruction decoding, exact machine execution, termination, completeness, query budgets, worst-case proof size, prover cycles, adaptive 120-bit position binding (banked-credit lazy-ROM survival-product bound), and 120-bit statistical hiding.
 
 From the repository root, on a supported Linux verifier host:
 

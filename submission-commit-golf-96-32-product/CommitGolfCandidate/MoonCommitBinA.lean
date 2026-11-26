@@ -75,38 +75,34 @@ theorem nodeVal_bin_masked (c96 : Comp96) (msg : Message) (salts : Index → Sal
   symm
   show nodeValFromLeaves c96 (fun i => leafDigest c96 i (salts i) (msg i)) (lvlIdx + 2) idx = _
   rw [nodeValFromLeaves]
-  dsimp only
-  unfold maskLevel
-  have h1 : ¬ (lvlIdx + 2 < 2 ∨ lvlIdx + 2 = 24) := by omega
-  have h2 : lvlIdx + 2 < 6 := by omega
-  simp only [hlt, ite_true, h1, ite_false, h2]
+  simp only [hlt, ite_true]
+  have hch : levelChain (lvlIdx + 2) ≤ 1 := by interval_cases lvlIdx <;> decide
+  rw [chainHash_unchained c96 (lvlIdx + 2) hch, maskLevel_eq_mask240 (lvlIdx + 2) (by omega) (by omega)]
   rfl
 
 theorem nodeVal_bin_masked238 (c96 : Comp96) (msg : Message) (salts : Index → Salt192)
     (lvlIdx idx : Nat) (hlt : 2 * idx + 1 < levelSize (lvlIdx + 1))
-    (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 22) :
+    (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 7) :
     mask238 (c96 (binaryInput (nodeVal c96 msg salts (lvlIdx + 1) (2 * idx))
       (nodeVal c96 msg salts (lvlIdx + 1) (2 * idx + 1)))) =
       nodeVal c96 msg salts (lvlIdx + 2) idx := by
   symm
   show nodeValFromLeaves c96 (fun i => leafDigest c96 i (salts i) (msg i)) (lvlIdx + 2) idx = _
   rw [nodeValFromLeaves]
-  dsimp only
-  unfold maskLevel
-  have h1 : ¬ (lvlIdx + 2 < 2 ∨ lvlIdx + 2 = 24) := by omega
-  have h2 : ¬ (lvlIdx + 2 < 6) := by omega
-  simp only [hlt, ite_true, h1, ite_false, h2]
+  simp only [hlt, ite_true]
+  have hch : levelChain (lvlIdx + 2) ≤ 1 := by interval_cases lvlIdx <;> decide
+  rw [chainHash_unchained c96 (lvlIdx + 2) hch, maskLevel_eq_mask238_lo (lvlIdx + 2) (by omega) (by omega)]
   rfl
 
 theorem nodeVal_bin_promoted (c96 : Comp96) (msg : Message) (salts : Index → Salt192)
-    (lvlIdx idx : Nat) (h1 : ¬ (2 * idx + 1 < levelSize (lvlIdx + 1)))
+    (lvlIdx idx : Nat) (hlvl7 : lvlIdx < 7) (h1 : ¬ (2 * idx + 1 < levelSize (lvlIdx + 1)))
     (h2 : 2 * idx < levelSize (lvlIdx + 1)) :
     nodeVal c96 msg salts (lvlIdx + 1) (2 * idx) = nodeVal c96 msg salts (lvlIdx + 2) idx := by
   symm
   show nodeValFromLeaves c96 (fun i => leafDigest c96 i (salts i) (msg i)) (lvlIdx + 2) idx = _
   rw [nodeValFromLeaves]
-  dsimp only
-  simp only [h1, ite_false, h2, ite_true]
+  have hlt9 : lvlIdx + 2 < 9 := by omega
+  simp only [h1, ite_false, h2, hlt9, ite_true]
   rfl
 
 theorem nodeVal_root_eq (c96 : Comp96) (msg : Message) (salts : Index → Salt192) :
@@ -115,12 +111,10 @@ theorem nodeVal_root_eq (c96 : Comp96) (msg : Message) (salts : Index → Salt19
   symm
   show nodeValFromLeaves c96 (fun i => leafDigest c96 i (salts i) (msg i)) (22 + 2) 0 = _
   rw [nodeValFromLeaves]
-  dsimp only
-  unfold maskLevel
   have hlt : 2 * 0 + 1 < levelSize (22 + 1) := by
     rw [show 22 + 1 = 23 from rfl, levelSize_23]; omega
-  have h24 : 22 + 2 < 2 ∨ (22 + 2 : Nat) = 24 := Or.inr rfl
-  simp only [hlt, h24, ite_true]
+  simp only [hlt, ite_true]
+  rw [chainHash_unchained c96 24 (by decide), maskLevel_24]
   rfl
 
 /-- Single-step wrappers for the non-parametric v4 slices (`commitMid2`, `commitMid3`, `commitTail`). -/
@@ -147,7 +141,7 @@ theorem commit_step1_mid3 {oracle : Oracle} {s : MachineState} {idx : Nat} {ins 
   exact DetRun.step1 hf hstep hcyc
 
 theorem commit_step1_tail {oracle : Oracle} {s : MachineState} {idx : Nat} {ins : Instr}
-    (hlo : 148365 ≤ idx) (hhi : idx < 148434)
+    (hlo : 148365 ≤ idx) (hhi : idx < 148474)
     (hpc : s.pc = BitVec.ofNat 64 (0x1000 + 4 * idx))
     (hins : commitTailInstr idx = .base ins)
     (hstep : ordinaryStep s (.base ins) = some (execInstrBr s ins) := by rfl)
@@ -482,7 +476,7 @@ theorem commit_mask238_step (oracle : Oracle) (s : MachineState)
 
 theorem commit_bin238_pair (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (oracle : Oracle) (msg : Message) (salts : Index → Salt192)
-    (lvlIdx basePc q : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 22)
+    (lvlIdx basePc q : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 7)
     (hq : 2 * q + 1 < levelSize (lvlIdx + 1) / 2) (s : MachineState)
     (hfetch : ∀ j < 12, ∀ st : MachineState,
       st.pc = BitVec.ofNat 64 (0x1000 + 4 * (basePc + j)) →
@@ -1840,7 +1834,7 @@ theorem commit_bin_level_stageB (h768 : COMPRESSION_INPUT_LENGTH = 768)
 /-- Phase 3B Stage A (238-bit bulk chunks, words `147593..148365`). -/
 theorem commit_bin238_level_stageA (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (oracle : Oracle) (msg : Message) (salts : Index → Salt192)
-    (lvlIdx calls chunks : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 22)
+    (lvlIdx calls chunks : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 7)
     (hcalls : calls = levelSize (lvlIdx + 1) / 2)
     (hchunks : chunks = calls / 128)
     (s0 h9 : MachineState)
@@ -1873,7 +1867,7 @@ theorem commit_bin238_level_stageA (h768 : COMPRESSION_INPUT_LENGTH = 768)
       MemPreservedOutside s0 sb (C_TD + levelBase (lvlIdx + 2))
         (C_TD + levelBase (lvlIdx + 2) + 96 * (64 * chunks)) :=
   commit_bin_stageA_gen h768 oracle msg salts 147593 147597 148366 12 26 (5120#13) rfl rfl pc_bne_148365
-    lvlIdx calls chunks hhi hcalls hchunks s0 h9 hh_mem hh9_pc hx5 hx11 hx13 hx10 hx12 hx22
+    lvlIdx calls chunks (by omega) hcalls hchunks s0 h9 hh_mem hh9_pc hx5 hx11 hx13 hx10 hx12 hx22
     hsrc hsrcGap
     (fun st hst => commit_fetch_commitMid3Instr st 147593 (by omega) (by omega) hst)
     (fun st hst => commit_fetch_commitMid3Instr st 147594 (by omega) (by omega) hst)
@@ -1888,7 +1882,7 @@ theorem commit_bin238_level_stageA (h768 : COMPRESSION_INPUT_LENGTH = 768)
 /-- Phase 3B Stage B (238-bit tail pairs, words `148366..148382`). -/
 theorem commit_bin238_level_stageB (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (oracle : Oracle) (msg : Message) (salts : Index → Salt192)
-    (lvlIdx calls chunks remPairs : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 22)
+    (lvlIdx calls chunks remPairs : Nat) (hlo : 4 ≤ lvlIdx) (hhi : lvlIdx < 7)
     (hcalls : calls = levelSize (lvlIdx + 1) / 2)
     (hchunks : chunks = calls / 128)
     (hrem : remPairs = (calls % 128) / 2)
@@ -1929,7 +1923,7 @@ theorem commit_bin238_level_stageB (h768 : COMPRESSION_INPUT_LENGTH = 768)
   have h128 : 2 * (64 * chunks) = 128 * chunks := by omega
   simpa only [h128] using
     commit_bin_stageB_gen h768 oracle msg salts 148366 148369 148383 12 26 128 (127#12) (60#13) (8140#13)
-      rfl rfl pc_beq_148368 pc_bne_148382 bv64_and_127 lvlIdx calls (64 * chunks) remPairs hhi
+      rfl rfl pc_beq_148368 pc_bne_148382 bv64_and_127 lvlIdx calls (64 * chunks) remPairs (by omega)
       hcalls hrem (by omega) s0 sb hpcB hx5B hx11B hx13B hx20B
       (by rw [h128]; exact hx10B) hx12B hsrc hsrcGap
       (by rw [h128]; exact hdigB) hgapB hpresB

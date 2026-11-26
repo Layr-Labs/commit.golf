@@ -647,8 +647,8 @@ theorem opening_initial_zero_low (trapdoor : BitVec (8 * submission.sizes.trapdo
   rw [ite_eq_right_of_eq_false _ _ (eq_false (by omega))]
 
 theorem opening_initial_data_dword (trapdoor : BitVec (8 * submission.sizes.trapdoor))
-    (positions : Positions) (off : Nat) (hoff : off + 8 ≤ 800) :
-    (submission.initialState .opening (trapdoor, positions)).getMem (BitVec.ofNat 64 (68719475936 + off)) =
+    (positions : Positions) (off : Nat) (hoff : off + 8 ≤ 1008) :
+    (submission.initialState .opening (trapdoor, positions)).getMem (BitVec.ofNat 64 (68719475728 + off)) =
       packedDword MoonArtifact.openingData off hoff := by
   have hcard := positions_card_le_length positions
   rw [initial_input_word submission .opening (trapdoor, positions) _ (by omega)]
@@ -657,16 +657,16 @@ theorem opening_initial_data_dword (trapdoor : BitVec (8 * submission.sizes.trap
   apply Finset.sum_congr rfl
   intro j hj
   have hjlt : j < 8 := Finset.mem_range.mp hj
-  have h1 : ¬ (submission.layout.trapdoor ≤ 68719475936 + off + j ∧
-      68719475936 + off + j < submission.layout.trapdoor + (8 * submission.sizes.trapdoor + 7) / 8) := by
+  have h1 : ¬ (submission.layout.trapdoor ≤ 68719475728 + off + j ∧
+      68719475728 + off + j < submission.layout.trapdoor + (8 * submission.sizes.trapdoor + 7) / 8) := by
     change ¬ (4294971424 ≤ _ ∧ _ < 4294971424 + (8 * 2617246752 + 7) / 8); omega
-  have h2 : ¬ (submission.layout.indices ≤ 68719475936 + off + j ∧
-      68719475936 + off + j < submission.layout.indices + 8 * (positions.sort (· ≤ ·)).length) := by
+  have h2 : ¬ (submission.layout.indices ≤ 68719475728 + off + j ∧
+      68719475728 + off + j < submission.layout.indices + 8 * (positions.sort (· ≤ ·)).length) := by
     rw [Finset.length_sort]; change ¬ (6912218176 ≤ _ ∧ _ < 6912218176 + 8 * positions.card); omega
   simp only [inputByte, Submission.inputBuffers, List.find?_cons, fixedBuffer, positionsBuffer,
     h1, h2, decide_false, List.find?_nil, opening_dataBase,
-    show 68719475936 ≤ 68719475936 + off + j by omega, ite_true,
-    show 68719475936 + off + j - 68719475936 = off + j by omega]
+    show 68719475728 ≤ 68719475728 + off + j by omega, ite_true,
+    show 68719475728 + off + j - 68719475728 = off + j by omega]
   rw [opening_image_data, getElem?_decode 8 MoonArtifact.openingData (off + j) (by omega), Option.getD_some,
     dif_pos (by omega)]
 
@@ -798,8 +798,8 @@ theorem check_initial_zero_low (input : CheckInput) (addr : Nat) (haddr : addr <
   rw [if_neg (by omega)]
 
 theorem check_initial_data_dword (input : CheckInput)
-    (hvalid : input.proof.length ≤ submission.sizes.proof) (off : Nat) (hoff : off + 8 ≤ 800) :
-    (submission.initialState .check input).getMem (BitVec.ofNat 64 (68719475936 + off)) =
+    (hvalid : input.proof.length ≤ submission.sizes.proof) (off : Nat) (hoff : off + 8 ≤ 1008) :
+    (submission.initialState .check input).getMem (BitVec.ofNat 64 (68719475728 + off)) =
       packedDword MoonArtifact.openingData off hoff := by
   have hcard := positions_card_le_length input.positions
   change input.proof.length ≤ 8556390424 at hvalid
@@ -809,52 +809,66 @@ theorem check_initial_data_dword (input : CheckInput)
   apply Finset.sum_congr rfl
   intro j hj
   have hjlt : j < 8 := Finset.mem_range.mp hj
-  have h1 : ¬ (submission.layout.commitment ≤ 68719475936 + off + j ∧
-      68719475936 + off + j < submission.layout.commitment + (DIGEST_BITS + 7) / 8) := by
+  have h1 : ¬ (submission.layout.commitment ≤ 68719475728 + off + j ∧
+      68719475728 + off + j < submission.layout.commitment + (DIGEST_BITS + 7) / 8) := by
     change ¬ (4294971392 ≤ _ ∧ _ < 4294971392 + 32); omega
-  have h2 : ¬ (submission.layout.indices ≤ 68719475936 + off + j ∧
-      68719475936 + off + j < submission.layout.indices + 8 * (input.positions.sort (· ≤ ·)).length) := by
+  have h2 : ¬ (submission.layout.indices ≤ 68719475728 + off + j ∧
+      68719475728 + off + j < submission.layout.indices + 8 * (input.positions.sort (· ≤ ·)).length) := by
     rw [Finset.length_sort]; change ¬ (6912218176 ≤ _ ∧ _ < 6912218176 + 8 * input.positions.card); omega
-  have h3 : ¬ (submission.layout.values ≤ 68719475936 + off + j ∧
-      68719475936 + off + j < submission.layout.values + (LEAF_SIZE / 8) * (input.positions.attach.sort (fun i j => i.val ≤ j.val)).length) := by
+  have h3 : ¬ (submission.layout.values ≤ 68719475728 + off + j ∧
+      68719475728 + off + j < submission.layout.values + (LEAF_SIZE / 8) * (input.positions.attach.sort (fun i j => i.val ≤ j.val)).length) := by
     rw [Finset.length_sort, Finset.card_attach]
     change ¬ (7046435904 ≤ _ ∧ _ < 7046435904 + 256 * input.positions.card); omega
-  have h4 : ¬ (submission.layout.proof ≤ 68719475936 + off + j ∧
-      68719475936 + off + j < submission.layout.proof + input.proof.length) := by
+  have h4 : ¬ (submission.layout.proof ≤ 68719475728 + off + j ∧
+      68719475728 + off + j < submission.layout.proof + input.proof.length) := by
     change ¬ (11341403200 ≤ _ ∧ _ < 11341403200 + input.proof.length); omega
   simp only [inputByte, Submission.inputBuffers, List.find?_cons, fixedBuffer, positionsBuffer,
     valuesBuffer, h1, h2, h3, h4, decide_false, List.find?_nil, check_dataBase,
-    show 68719475936 ≤ 68719475936 + off + j by omega, ite_true,
-    show 68719475936 + off + j - 68719475936 = off + j by omega]
+    show 68719475728 ≤ 68719475728 + off + j by omega, ite_true,
+    show 68719475728 + off + j - 68719475728 = off + j by omega]
   rw [check_image_data, getElem?_decode 8 MoonArtifact.openingData (off + j) (by omega),
     Option.getD_some, dif_pos (by omega)]
 
-/-! ### Shared Contract: Honest Committed Trapdoor Contents & 238-Bit Masking Helpers -/
+/-! ### Shared Contract: Honest Committed Trapdoor Contents, Generic Width Masking, & Tagged Buffers -/
 
 def mask238Word : Word := BitVec.ofNat 64 (2 ^ 46 - 1)
 
 theorem mask238Word_eq : mask238Word = ((1#64 <<< 46) + BitVec.ofNat 64 (2 ^ 64 - 1)) := by
   decide
 
-/-- `ld t1, 24(a2); and t1, t1, mask238Word; sd t1, 24(a2)` truncates an aligned 32-byte digest at
-`addr` to `mask238`. -/
-theorem sd_and_mask238 (state : MachineState) (addr : Nat)
-    (halign : addr % 8 = 0) (hbound : addr + 32 ≤ 2 ^ 64) :
+/-- Generic top-word mask `(-1 : Word) >>> (256 - w)` for any width `192 ≤ w ≤ 256`. -/
+def maskTopWord (w : Nat) : Word :=
+  BitVec.allOnes 64 >>> (256 - w)
+
+theorem maskTopWord_getLsbD (w : Nat) (hw1 : 192 ≤ w) (hw2 : w ≤ 256) (n : Nat) (hn : n < 64) :
+    (maskTopWord w).getLsbD n = decide (n < w - 192) := by
+  unfold maskTopWord
+  rw [BitVec.getLsbD_ushiftRight]
+  by_cases hlt : n < w - 192
+  · rw [BitVec.getLsbD_allOnes]
+    simp [hlt, show 256 - w + n < 64 by omega]
+  · rw [BitVec.getLsbD_of_ge _ _ (by omega)]
+    simp [hlt]
+
+/-- `ld t, 24(a2); and t, t, (-1 >>> (256 - w)); sd t, 24(a2)` truncates an aligned 32-byte digest at
+`addr` to exact `maskWidth w`. -/
+theorem sd_and_maskWidth (state : MachineState) (addr w : Nat)
+    (hw1 : 192 ≤ w) (hw2 : w ≤ 256) (halign : addr % 8 = 0) (hbound : addr + 32 ≤ 2 ^ 64) :
     readBuffer
       (state.setMem (BitVec.ofNat 64 (addr + 24))
-        (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& mask238Word))
+        (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& maskTopWord w))
       addr 32 =
-      mask238 (readBuffer state addr 32) := by
+      maskWidth w (readBuffer state addr 32) := by
   have halign24 : (addr + 24) % 8 = 0 := by omega
   have hbytes : ∀ j < 32,
       (state.setMem (BitVec.ofNat 64 (addr + 24))
-        (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& mask238Word)).getByte
+        (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& maskTopWord w)).getByte
         (BitVec.ofNat 64 (addr + j)) =
-      (mask238 (readBuffer state addr 32)).extractLsb' (8 * j) 8 := by
+      (maskWidth w (readBuffer state addr 32)).extractLsb' (8 * j) 8 := by
     intro j hj
     by_cases hlt24 : j < 24
     · rw [setMem_getByte_ofNat state (addr + 24) (addr + j) _ halign24 (by omega) (by omega) (by omega),
-        mask238_byte_lt29 _ j (by omega), read_buffer_byte state addr 32 j hj]
+        maskWidth_byte_lt w _ j (by omega), read_buffer_byte state addr 32 j hj]
     · have hk : j - 24 < 8 := by omega
       have hadd : addr + 24 + (j - 24) = addr + j := by omega
       rw [← hadd, setMem_getByte_inside state (addr + 24) (j - 24) _ halign24 hk]
@@ -871,49 +885,97 @@ theorem sd_and_mask238 (state : MachineState) (addr : Nat)
         simp [BitVec.truncate, hb, Nat.mul_comm]
       apply BitVec.eq_of_getLsbD_eq; intro b hb
       simp only [BitVec.getLsbD_extractLsb', hb, decide_true, Bool.true_and,
-        BitVec.getLsbD_and, mask238_getLsbD]
+        BitVec.getLsbD_and, maskWidth_getLsbD]
       have hbit := congrArg (fun v : BitVec 8 => v.getLsbD b) hsrc
       simp only [BitVec.getLsbD_extractLsb', hb, decide_true, Bool.true_and] at hbit
       rw [hbit]
-      have hmb : mask238Word.getLsbD (8 * (j - 24) + b) = decide (8 * j + b < 238) := by
-        have hidx_lt : 8 * (j - 24) + b < 64 := by omega
-        have hiff : 8 * (j - 24) + b < 46 ↔ 8 * j + b < 238 := by omega
-        have hml : ∀ n < 64, mask238Word.getLsbD n = decide (n < 46) := by
-          intro n hn
-          revert n; decide
-        rw [hml _ hidx_lt]
-        simp [hiff]
+      have hmb : (maskTopWord w).getLsbD (8 * (j - 24) + b) = decide (8 * j + b < w) := by
+        rw [maskTopWord_getLsbD w hw1 hw2 (8 * (j - 24) + b) (by omega)]
+        congr 1; exact propext (by omega)
       rw [hmb, Bool.and_comm]
   have hr := read_serialized_slice
     (state.setMem (BitVec.ofNat 64 (addr + 24))
-      (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& mask238Word))
-    (mask238 (readBuffer state addr 32)) addr 0 32 (by simpa only [Nat.zero_add] using hbytes)
+      (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& maskTopWord w))
+    (maskWidth w (readBuffer state addr 32)) addr 0 32 (by simpa only [Nat.zero_add] using hbytes)
   simpa using hr
 
-/-- Reconstruct a `mask238` digest from 29 low bytes + 6-bit tail byte at +29 + two zero bytes. -/
-theorem readBuffer_eq_mask238_of_bytes (state : MachineState) (addr : Nat) (d : Digest)
-    (hlo : ∀ j < 29, state.getByte (BitVec.ofNat 64 (addr + j)) = d.extractLsb' (8 * j) 8)
-    (h29 : state.getByte (BitVec.ofNat 64 (addr + 29)) = (0#2) ++ tail6 d)
-    (h30 : state.getByte (BitVec.ofNat 64 (addr + 30)) = 0)
-    (h31 : state.getByte (BitVec.ofNat 64 (addr + 31)) = 0) :
-    readBuffer state addr 32 = mask238 d := by
-  have hr := read_serialized_slice state (mask238 d) addr 0 32 (by
+theorem sd_and_mask238 (state : MachineState) (addr : Nat)
+    (halign : addr % 8 = 0) (hbound : addr + 32 ≤ 2 ^ 64) :
+    readBuffer
+      (state.setMem (BitVec.ofNat 64 (addr + 24))
+        (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& mask238Word))
+      addr 32 =
+      mask238 (readBuffer state addr 32) := by
+  have heq : mask238Word = maskTopWord 238 := by decide
+  rw [heq, ← maskWidth_238]
+  exact sd_and_maskWidth state addr 238 (by omega) (by omega) halign hbound
+
+/-- Tagged 96-byte buffer decomposition for Stage 1 of a hash chain. -/
+theorem readBuffer_binaryTagged (s : MachineState) (addr : Nat) (tag : BitVec 64)
+    (htag : readBuffer s (addr + 64) 8 = tag)
+    (hhi : readBuffer s (addr + 72) 24 = 0) :
+    readBuffer s addr 96 =
+      binaryTaggedInput (readBuffer s addr 32) (readBuffer s (addr + 32) 32) tag := by
+  have htop : readBuffer s (addr + 64) 32 = (0#192) ++ tag := by
+    apply BitVec.eq_of_getLsbD_eq; intro b hb
+    have hbyte : ∀ j < 32, (readBuffer s (addr + 64) 32).extractLsb' (8 * j) 8 =
+        ((0#192) ++ tag).extractLsb' (8 * j) 8 := by
+      intro j hj
+      rw [read_buffer_byte s (addr + 64) 32 j hj]
+      by_cases hj8 : j < 8
+      · have h1 := read_buffer_byte s (addr + 64) 8 j hj8
+        rw [htag] at h1
+        rw [← h1]
+        apply BitVec.eq_of_getLsbD_eq; intro k hk
+        rw [BitVec.getLsbD_extractLsb', BitVec.getLsbD_extractLsb', BitVec.getLsbD_append]
+        simp [hk, show 8 * j + k < 64 by omega]
+      · have h2 := read_buffer_byte s (addr + 72) 24 (j - 8) (by omega)
+        rw [hhi] at h2
+        have hadd : addr + 64 + j = addr + 72 + (j - 8) := by omega
+        rw [hadd, ← h2]
+        apply BitVec.eq_of_getLsbD_eq; intro k hk
+        rw [BitVec.getLsbD_extractLsb', BitVec.getLsbD_extractLsb', BitVec.getLsbD_append]
+        simp [hk, show ¬ (8 * j + k < 64) by omega]
+    have h := congrArg (fun v : BitVec 8 => v.getLsbD (b % 8)) (hbyte (b / 8) (by omega))
+    simpa only [BitVec.getLsbD_extractLsb', Nat.mod_lt b (by decide : 0 < 8), decide_true, Bool.true_and,
+      show 8 * (b / 8) + b % 8 = b by omega] using h
+  rw [readBuffer_ternary, htop]
+  rfl
+
+/-- Tagged 96-byte buffer decomposition for Stages `2..c_l` of a hash chain (`[prev, 0^32, tag, 0^24]`). -/
+theorem readBuffer_chainStep (s : MachineState) (addr : Nat) (tag : BitVec 64)
+    (hmid : readBuffer s (addr + 32) 32 = 0)
+    (htag : readBuffer s (addr + 64) 8 = tag)
+    (hhi : readBuffer s (addr + 72) 24 = 0) :
+    readBuffer s addr 96 = chainStepInput (readBuffer s addr 32) tag := by
+  rw [readBuffer_binaryTagged s addr tag htag hhi, hmid]; rfl
+
+/-- Reconstruct a `maskWidth w` digest from its low `w / 8` bytes, optional partial byte at `w / 8`,
+and trailing zero bytes up to byte 31. -/
+theorem readBuffer_eq_maskWidth_of_bytes (state : MachineState) (addr w : Nat) (hw : w ≤ 256) (d : Digest)
+    (hlo : ∀ j < w / 8, state.getByte (BitVec.ofNat 64 (addr + j)) = d.extractLsb' (8 * j) 8)
+    (hpart : w % 8 ≠ 0 →
+      state.getByte (BitVec.ofNat 64 (addr + w / 8)) =
+        BitVec.ofNat 8 (d.extractLsb' (8 * (w / 8)) (w % 8)).toNat)
+    (hzero : ∀ j, (w + 7) / 8 ≤ j → j < 32 → state.getByte (BitVec.ofNat 64 (addr + j)) = 0) :
+    readBuffer state addr 32 = maskWidth w d := by
+  have hr := read_serialized_slice state (maskWidth w d) addr 0 32 (by
     intro j hj
     simp only [Nat.zero_add]
-    by_cases hlt : j < 29
-    · rw [hlo j hlt, mask238_byte_lt29 d j hlt]
-    · by_cases h29' : j = 29
-      · subst h29'; rw [h29, mask238_byte_29 d]
-      · by_cases h30' : j = 30
-        · subst h30'; rw [h30, mask238_byte_ge30 d 30 (by omega)]
-        · have h31' : j = 31 := by omega
-          subst h31'; rw [h31, mask238_byte_ge30 d 31 (by omega)])
+    by_cases hlt : j < w / 8
+    · rw [hlo j hlt, maskWidth_byte_lt w d j hlt]
+    · by_cases hge : (w + 7) / 8 ≤ j
+      · rw [hzero j hge hj, maskWidth_byte_gt w d j hge]
+      · have hmod : w % 8 ≠ 0 := by omega
+        have heq : j = w / 8 := by omega
+        subst heq
+        rw [hpart hmod, maskWidth_byte_partial w hw d])
   simpa using hr
 
 /-- In `opening`, the scratch tail buffer region `[tailBufBase, opening_dataBase)` is initially zero. -/
 theorem opening_initial_zero_tailBuf (td : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (addr : Nat)
-    (hlo : tailBufBase ≤ addr) (hhi : addr < 68719475936) :
+    (hlo : tailBufBase ≤ addr) (hhi : addr < 68719475728) :
     (submission.initialState .opening (td, positions)).getByte (BitVec.ofNat 64 addr) = 0 := by
   have hcard := positions_card_le_length positions
   rw [initial_input_byte submission .opening (td, positions) _ (by unfold tailBufBase at hlo; omega)]

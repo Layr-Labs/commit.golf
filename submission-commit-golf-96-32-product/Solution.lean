@@ -12,7 +12,7 @@ set_option maxRecDepth 100000 in
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
   rfl
 
-theorem certificate : CommitGolf.Certificate submission 70080 847977552 65740 :=
+theorem certificate : CommitGolf.Certificate submission 69365 850256070 160000 :=
   CommitGolfCandidate.moon_certificate rfl
 
 end CommitGolf.Challenge
