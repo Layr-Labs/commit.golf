@@ -42,7 +42,7 @@ private theorem uniform_coordinate_probability {Domain Range : Type}
     (fun value => value = guess)
   simpa only [prEvent_map, SampleableType.prEvent_uniformSample_eq_singleton] using same
 
-private theorem uniform_bitvector_guess (count width : Nat) (index : Fin count)
+theorem uniform_bitvector_guess (count width : Nat) (index : Fin count)
     (guess : BitVec width) :
     (prEvent ((fun salt : Fin count → BitVec width => salt index = guess) <$> (($ᵗ (Fin count → BitVec width))))) =
       1 / (2^width : ENNReal) := by
@@ -50,6 +50,12 @@ private theorem uniform_bitvector_guess (count width : Nat) (index : Fin count)
   have cardinal : Fintype.card (BitVec width) = 2^width := by simp
   rw [cardinal]
   simp only [Nat.cast_pow, Nat.cast_ofNat, one_div]
+
+/-- A fixed 128-bit guess hits one newly sampled 128-bit salt with probability exactly `2^-128`. -/
+theorem salt128_guess_probability (index : Index) (guess : Salt) :
+    (prEvent ((fun salt : Index → Salt => salt index = guess) <$> (($ᵗ (Index → Salt))))) =
+      1 / (2^128 : ENNReal) :=
+  uniform_bitvector_guess LENGTH 128 index guess
 
 /-- A fixed guess hits one newly sampled salt with probability exactly 2^-256. -/
 theorem salt_guess_probability (index : Index) (guess : Digest) :

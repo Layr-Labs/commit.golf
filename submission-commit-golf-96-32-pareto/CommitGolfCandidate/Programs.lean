@@ -1,13 +1,14 @@
 import CommitGolfCandidate.CompressionInput
 import CommitGolf.Programs
 
-/-! A salted binary Merkle baseline, implemented as RV64IM images.
+/-! A salted binary Merkle scheme with 128-bit position-tagged salts and 32x32 unrolled
+commitment loops, implemented as RV64IM images.
 
-Each leaf uses eight compression calls, starting from a private 256-bit salt and
-absorbing eight 256-bit blocks. Internal nodes compress two child digests. The private
-trapdoor stores a heap-indexed tree followed by the salts. Each opening contains the
-salt and the copath, in increasing position order. This module constructs programs;
-it does not assert their security or supply a challenge certificate. -/
+Each leaf uses four direct 96-byte compression calls, starting from a private 128-bit salt
+paired with its unique 64-bit leaf-slot tag `4072 + 256*i` and absorbing the first 72 message
+bytes, followed by three 64-byte message blocks. Internal nodes compress two child digests
+on the zero-gapped heap. The private trapdoor stores the gap heap followed by the 16-byte
+salts. Each opening contains the 16-byte salt and the 24-digest copath (784 bytes/leaf). -/
 
 namespace CommitGolfCandidate
 open CommitGolf
@@ -38,14 +39,24 @@ def li (rd value : Nat) : List Asm :=
   [addi rd 0 0] ++ ((Nat.digits 2048 value).reverse.flatMap fun digit =>
     [shift rd rd 11, addi rd rd digit])
 
-/-- Copy one digest, using x6 as scratch. Source/destination may coincide. -/
+/-- Copy one 32-byte digest, using x6 as scratch. Source/destination may coincide. -/
 def copyDigest (source destination : Nat) (sourceOffset : Nat := 0)
     (destinationOffset : Nat := 0) : List Asm :=
   (List.range 4).flatMap fun j =>
     [ld 6 source (sourceOffset + 8*j), sd 6 destination (destinationOffset + 8*j)]
 
+/-- Copy one 16-byte salt, using x6 as scratch. -/
+def copySalt (source destination : Nat) (sourceOffset : Nat := 0)
+    (destinationOffset : Nat := 0) : List Asm :=
+  (List.range 2).flatMap fun j =>
+    [ld 6 source (sourceOffset + 8*j), sd 6 destination (destinationOffset + 8*j)]
+
 def halt (success : Bool) : List Asm :=
   [addi 5 0 1, addi 10 0 (if success then 0 else 1), insn 0x73]
+
+def isNotLabel : Asm → Bool
+  | .label _ => false
+  | _ => true
 
 def labelPositions (code : List Asm) : List (String × Nat) :=
   (code.foldl (fun (state : Nat × List (String × Nat)) instruction =>
@@ -66,8 +77,7 @@ def jumpWord (link : Nat) (offset : Int) : BitVec 32 :=
 
 def assemble (code : List Asm) : List (BitVec 32) :=
   let labels := labelPositions code
-  let words := code.filter fun instruction => match instruction with
-    | .label _ => false | _ => true
+  let words := code.filter isNotLabel
   words.zipIdx |>.map fun (instruction, pc) =>
     let target := fun name => labels.find? (fun pair => pair.1 == name)
     match instruction with
@@ -82,6 +92,18 @@ def assemble (code : List Asm) : List (BitVec 32) :=
       | none => 0x00100073
     | .label _ => 0x00100073
 
+theorem assemble_length (code : List Asm) :
+    (assemble code).length = (code.filter isNotLabel).length := by
+  simp [assemble]
+
+theorem assemble_word_getElem? (code : List Asm) (i : Nat) (w : BitVec 32)
+    (h : (code.filter isNotLabel)[i]? = some (.word w)) :
+    (assemble code)[i]? = some w := by
+  unfold assemble
+  simp only [List.getElem?_map, List.getElem?_zipIdx]
+  rw [h]
+  rfl
+
 /-- x21 points to two digest words. The adapter appends a zero third word
 for the actual 96-byte compression call and restores the temporary padding. -/
 def compressScratch : List Asm :=
@@ -91,7 +113,7 @@ def compressScratch : List Asm :=
 /-- One query to the 96-byte oracle. The third digest-sized word is saved,
 zeroed for the call, then restored. x14..x17 hold the saved words and x31
 holds the return address. The caller's digest output is disjoint from this
-temporary padding. This keeps the binary Merkle encoding unchanged. -/
+temporary padding. -/
 def compression96Routine : List Asm :=
   [.label "compress96",
    ld 14 10 64, ld 15 10 72, ld 16 10 80, ld 17 10 88,
@@ -100,73 +122,176 @@ def compression96Routine : List Asm :=
    sd 14 10 64, sd 15 10 72, sd 16 10 80, sd 17 10 88,
    addi 11 0 64, insn 0x000f8067]
 
-/-- The caller initializes the first scratch half to the salt. Consumes 256 bytes
-from x8, preserves x8's final pointer, and returns through x1. -/
+/-- The caller initializes x21[0..16) to the 16-byte salt and x21[16..24) to the 8-byte
+leaf tag `4072 + 256*index`. Call 0 copies the first 72 message bytes to x21[24..96),
+compresses to x21[0..32), and advances x8 by 64. Three loop iterations then absorb the
+remaining three 64-byte message blocks. Consumes 256 bytes from x8, returns through x1. -/
 def leafSubroutine : List Asm :=
-  [.label "leaf", addi 28 0 8, .label "leaf-block"] ++
-  copyDigest 8 21 0 32 ++ compressScratch ++
-  [addi 8 8 32, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
+  [.label "leaf"] ++
+  ((List.range 9).flatMap fun j => [ld 6 8 (8*j), sd 6 21 (24 + 8*j)]) ++
+  [addi 5 0 0, mv 10 21, addi 11 0 96, mv 12 21, addi 13 0 0, insn 0x73,
+   addi 8 8 64, addi 28 0 3, .label "leaf-block"] ++
+  ((List.range 8).flatMap fun j => [ld 6 8 (8*j), sd 6 21 (32 + 8*j)]) ++
+  [addi 5 0 0, mv 10 21, addi 11 0 96, mv 12 21, addi 13 0 0, insn 0x73,
+   addi 8 8 64, addi 28 28 (-1), .branch 1 28 0 "leaf-block", insn 0x00008067]
 
-/-- Heap slots 1..2*n-1 contain tree nodes; slot 0 is unused. -/
-def trapdoorBytes (depth : Nat) : Nat := 96 * 2^depth
-def openingBytes (depth : Nat) : Nat := 32 * (depth + 1)
+/-- Gap heap: node `s` lives at byte offset `32*(s + s/2)` of the trapdoor, so the pair
+`2q, 2q+1` occupies `[96q, 96q+64)` and the 32 bytes `[96q+64, 96q+96)` are never written
+(they stay zero). Slot 0 is unused. The 16-byte salts follow the heap at offset `96*n`. -/
+def heapOffset (node : Nat) : Nat := 32 * (node + node / 2)
 
+def trapdoorBytes (depth : Nat) : Nat := 128 * 2^depth
+def openingBytes (depth : Nat) : Nat := 16 + 32 * depth
+
+/-- Proof byte length for `k` opened positions at `LOG_LENGTH = 24`:
+a fixed level-7 cap table (128 digests = 4,096 bytes) plus 128 truncated
+17-level paths (`128 * 560 = 71,680` bytes) for `k = BATCH`, and `784 * k` otherwise. -/
+def openingProofBytes (k : Nat) : Nat :=
+  if k = BATCH then 75776 else 784 * k
+
+/-- Seventeen instructions for lane `j` (`0 ≤ j < 32`) of the unrolled leaf block:
+copy the 16-byte salt from `x18 + 16*j` and write the unique 8-byte leaf tag `x10`
+into `[x10, x10+24)`, run four in-place 96-byte compressions (the fourth writing heap
+slot `x23 + heapOffset j`), and advance `x10` by 256 total (`56 + 64 + 64 + 72`). -/
+def leafChunk (j : Nat) : List Asm :=
+  [ld 6 18 (16 * j), sd 6 10 0, ld 6 18 (16 * j + 8), sd 6 10 8, sd 10 10 16,
+   addi 12 10 56, insn 0x73,
+   addi 10 10 56, addi 12 10 64, insn 0x73,
+   addi 10 10 64, addi 12 10 64, insn 0x73,
+   addi 10 10 64, addi 12 23 (heapOffset j), insn 0x73,
+   addi 10 10 72]
+
+/-- Three instructions for parent offset `u` (`0 ≤ u < 32`) inside a 32-parent block
+(or tail `1 ≤ u < 32`): compress `[x21 + 96*u - 1536, +96)` into `x22 + heapOffset u`. -/
+def parentChunk (u : Nat) : List Asm :=
+  [addi 10 21 ((96 * u : Int) - 1536), addi 12 22 (heapOffset u), insn 0x73]
+
+/-- In-place leaf chain, 32 leaves (16 pairs) per iteration, on the gap heap, followed by
+32-parent descending loop and 31-parent tail. Requires `depth ≥ 5` (`2^depth ≥ 32`). -/
 def commitCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 8 10, mv 26 11, mv 9 12] ++ li 19 n ++ li 6 (64*n) ++
-  [regop 18 9 6] ++ li 6 (32*n) ++ [regop 23 9 6] ++
-  -- Sample all salts once; each is an independent uniform 256-bit block.
-  [addi 5 0 2, mv 10 18] ++ li 11 (32*n) ++ [insn 0x73] ++
-  li 21 256 ++ [addi 20 0 0, .label "commit-leaf"] ++
-  copyDigest 18 21 ++ [.jump 1 "leaf"] ++ copyDigest 21 23 ++
-  [addi 18 18 32, addi 23 23 32, addi 20 20 1, .branch 6 20 19 "commit-leaf",
-   addi 20 19 (-1), .branch 0 20 0 "commit-root", .label "commit-parent",
-   shift 6 20 6, regop 10 9 6, shift 7 20 5, regop 12 9 7,
-   addi 5 0 0, addi 11 0 64, addi 13 0 0, .jump 31 "compress96",
-   addi 20 20 (-1), .branch 1 20 0 "commit-parent", .label "commit-root"] ++
-  copyDigest 9 26 32 ++ halt true ++ leafSubroutine ++ compression96Routine
+  [addi 8 10 (-24), mv 26 11, mv 9 12] ++ li 6 (96*n) ++
+  [regop 18 9 6] ++ li 6 (48*n) ++ [regop 23 9 6] ++
+  -- Sample all 128-bit salts once; x20 marks the end of the salt buffer.
+  [addi 5 0 2, mv 10 18] ++ li 11 (16*n) ++ [regop 20 18 11, insn 0x73] ++
+  [mv 10 8, addi 5 0 0, addi 11 0 96, addi 13 0 0, .label "commit-block"] ++
+  ((List.range 32).flatMap leafChunk) ++
+  [addi 18 18 512, addi 23 23 1536, .branch 1 18 20 "commit-block"] ++
+  -- x23 has reached x9 + 96*n; x21 starts at x9 + 96*n - 1536, x24 = 3072.
+  [addi 21 23 (-1536), addi 24 0 1536, addi 24 24 1536] ++
+  li 6 (48*n - 1536) ++ [regop 22 9 6, .branch 0 22 9 "commit-tail", .label "commit-parent"] ++
+  ((List.range 32).flatMap fun j => parentChunk (31 - j)) ++
+  [regop 21 21 24 0 0x20, addi 22 22 (-1536), .branch 1 22 9 "commit-parent",
+   .label "commit-tail"] ++
+  ((List.range 31).flatMap fun j => parentChunk (31 - j)) ++
+  copyDigest 9 26 32 ++ halt true
 
 def openingCode (depth : Nat) : List Asm :=
   let n := 2^depth
-  [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (64*n) ++
-  [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
-   shift 6 20 5, regop 23 18 6] ++ copyDigest 23 25 ++
-  [addi 25 25 32, regop 20 20 19] ++ li 28 depth ++
-  [.branch 0 28 0 "open-next", .label "open-path",
-   -- XORI x7,x20,1 selects the sibling heap slot.
-   insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
-   shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
-  [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
-   .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
-   .label "open-done"] ++ li 6 (openingBytes depth) ++
-  [regop 11 16 6 0 1] ++ halt true
+  if depth < 7 then
+    [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (96*n) ++
+    [regop 18 9 6, .branch 0 27 0 "open-done", .label "open-position", ld 20 24 0,
+     shift 6 20 4, regop 23 18 6] ++ copySalt 23 25 ++
+    [addi 25 25 16, regop 20 20 19] ++ li 28 depth ++
+    [.branch 0 28 0 "open-next", .label "open-path",
+     -- XORI x7,x20,1 selects the sibling t; its gap-heap offset is 32*(t + t/2).
+     insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
+     shift 6 20 1 true, regop 7 7 6, shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
+    [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
+     .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
+     .label "open-done"] ++ li 6 (openingBytes depth) ++
+    [regop 11 16 6 0 1] ++ halt true
+  else
+    let lower := depth - 7
+    let capProofBytes := 128 * (16 + 32 * lower) + 4096
+    [mv 9 12, mv 24 13, mv 25 15, mv 27 16] ++ li 19 n ++ li 6 (96*n) ++
+    [regop 18 9 6, .branch 0 27 0 "open-done",
+     addi 30 0 depth, addi 6 0 128, .branch 1 27 6 "open-position",
+     addi 30 0 lower,
+     .label "open-position", ld 20 24 0,
+     shift 6 20 4, regop 23 18 6] ++ copySalt 23 25 ++
+    [addi 25 25 16, regop 20 20 19, mv 28 30,
+     .label "open-path",
+     -- XORI x7,x20,1 selects the sibling t; its gap-heap offset is 32*(t + t/2).
+     insn (1 * 2^20 + 20 * 2^15 + 4 * 2^12 + 7 * 2^7 + 0x13),
+     shift 6 20 1 true, regop 7 7 6, shift 7 7 5, regop 23 9 7] ++ copyDigest 23 25 ++
+    [addi 25 25 32, shift 20 20 1 true, addi 28 28 (-1), .branch 1 28 0 "open-path",
+     .label "open-next", addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "open-position",
+     .label "open-done", addi 6 0 128, .branch 1 16 6 "open-exit-normal",
+     addi 6 0 3, shift 6 6 11, regop 23 9 6, addi 28 0 64,
+     .label "open-cap"] ++ copyDigest 23 25 ++
+    [addi 23 23 32, addi 25 25 32] ++ copyDigest 23 25 ++
+    [addi 23 23 64, addi 25 25 32, addi 28 28 (-1), .branch 1 28 0 "open-cap"] ++
+    li 11 capProofBytes ++ halt true ++
+    [.label "open-exit-normal"] ++ li 6 (openingBytes depth) ++
+    [regop 11 16 6 0 1] ++ halt true
 
 /-- Reject malformed lengths and every mismatching root. Values/indices are supplied
 by the trusted ABI; their validity and sorting do not depend on proof bytes. -/
 def checkCode (depth : Nat) : List Asm :=
-  [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16] ++
-  li 6 (openingBytes depth) ++ [regop 7 16 6 0 1, .branch 1 7 17 "reject"] ++
-  li 21 256 ++ [.branch 0 27 0 "accept", .label "check-position", ld 20 24 0] ++
-  copyDigest 25 21 ++ [addi 25 25 32, .jump 1 "leaf"] ++ li 29 depth ++
-  [.branch 0 29 0 "check-root", .label "check-path",
-   -- ANDI x7,x20,1 selects left/right ordering.
-   insn (1 * 2^20 + 20 * 2^15 + 7 * 2^12 + 7 * 2^7 + 0x13),
-   .branch 0 7 0 "check-left"] ++ copyDigest 21 21 0 32 ++ copyDigest 25 21 ++
-  [.jump 0 "check-compress", .label "check-left"] ++ copyDigest 25 21 0 32 ++
-  [.label "check-compress"] ++ compressScratch ++
-  [addi 25 25 32, shift 20 20 1 true, addi 29 29 (-1), .branch 1 29 0 "check-path",
-   .label "check-root"] ++
-  ((List.range 4).flatMap fun j =>
-    [ld 6 21 (8*j), ld 7 26 (8*j), .branch 1 6 7 "reject"]) ++
-  [addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "check-position",
-   .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++
-  leafSubroutine ++ compression96Routine
+  if depth < 7 then
+    [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16] ++
+    li 6 (openingBytes depth) ++ [regop 7 16 6 0 1, .branch 1 7 17 "reject"] ++
+    li 21 256 ++ [.branch 0 27 0 "accept", .label "check-position", ld 20 24 0] ++
+    -- Copy 16-byte salt and compute 8-byte leaf tag 4072 + 256*index (8 instructions total).
+    copySalt 25 21 ++ [addi 6 20 16, shift 6 6 8, addi 6 6 (-24), sd 6 21 16] ++
+    [addi 25 25 16, .jump 1 "leaf"] ++ li 29 depth ++
+    [.branch 0 29 0 "check-root", .label "check-path",
+     -- ANDI x7,x20,1 selects left/right ordering.
+     insn (1 * 2^20 + 20 * 2^15 + 7 * 2^12 + 7 * 2^7 + 0x13),
+     .branch 0 7 0 "check-left"] ++ copyDigest 21 21 0 32 ++ copyDigest 25 21 ++
+    [.jump 0 "check-compress", .label "check-left"] ++ copyDigest 25 21 0 32 ++
+    [.label "check-compress"] ++ compressScratch ++
+    [addi 25 25 32, shift 20 20 1 true, addi 29 29 (-1), .branch 1 29 0 "check-path",
+     .label "check-root"] ++
+    ((List.range 4).flatMap fun j =>
+      [ld 6 21 (8*j), ld 7 26 (8*j), .branch 1 6 7 "reject"]) ++
+    [addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "check-position",
+     .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++
+    leafSubroutine ++ compression96Routine
+  else
+    let lower := depth - 7
+    let capRecordsBytes := 128 * (16 + 32 * lower)
+    let capProofBytes := capRecordsBytes + 4096
+    [mv 26 11, mv 24 13, mv 8 14, mv 25 15, mv 27 16,
+     addi 6 0 128, .branch 0 27 6 "check-cap"] ++
+    li 6 (openingBytes depth) ++ [regop 7 16 6 0 1, .branch 1 7 17 "reject",
+     addi 30 0 depth, addi 21 0 256, .branch 0 27 0 "accept",
+     .label "check-position", ld 20 24 0] ++
+    -- Copy 16-byte salt and compute 8-byte leaf tag 4072 + 256*index (8 instructions total).
+    copySalt 25 21 ++ [addi 6 20 16, shift 6 6 8, addi 6 6 (-24), sd 6 21 16] ++
+    [addi 25 25 16, .jump 1 "leaf", mv 29 30,
+     .label "check-path",
+     -- ANDI x7,x20,1 selects left/right ordering.
+     insn (1 * 2^20 + 20 * 2^15 + 7 * 2^12 + 7 * 2^7 + 0x13),
+     .branch 0 7 0 "check-left"] ++ copyDigest 21 21 0 32 ++ copyDigest 25 21 ++
+    [.jump 0 "check-compress", .label "check-left"] ++ copyDigest 25 21 0 32 ++
+    [.label "check-compress"] ++ compressScratch ++
+    [addi 25 25 32, shift 20 20 1 true, addi 29 29 (-1), .branch 1 29 0 "check-path",
+     .label "check-root", shift 7 20 5, regop 23 26 7] ++
+    ((List.range 4).flatMap fun j =>
+      [ld 6 21 (8*j), ld 7 23 (8*j), .branch 1 6 7 "reject"]) ++
+    [addi 24 24 8, addi 27 27 (-1), .branch 1 27 0 "check-position",
+     .label "accept"] ++ halt true ++ [.label "reject"] ++ halt false ++
+    [.label "check-cap"] ++ li 6 capProofBytes ++ [.branch 1 6 17 "reject"] ++
+    li 6 capRecordsBytes ++ [regop 19 25 6, mv 23 19, addi 22 0 512] ++
+    li 12 4608 ++ [addi 28 0 128, .label "cap-copy"] ++ copyDigest 23 12 ++
+    [addi 23 23 32, addi 12 12 32, addi 28 28 (-1), .branch 1 28 0 "cap-copy",
+     addi 5 0 0, addi 11 0 64, addi 13 0 0] ++
+    li 10 8640 ++ li 12 4576 ++
+    [.label "cap-parent", .jump 31 "compress96",
+     addi 10 10 (-64), addi 12 12 (-32), .branch 1 12 22 "cap-parent",
+     addi 21 22 32, mv 23 26] ++
+    ((List.range 4).flatMap fun j =>
+      [ld 6 21 (8*j), ld 7 23 (8*j), .branch 1 6 7 "reject"]) ++
+    [mv 26 19, addi 30 0 lower, addi 21 0 256, .jump 0 "check-position"] ++
+    leafSubroutine ++ compression96Routine
 
 def sizes (depth : Nat) : Sizes :=
   ⟨trapdoorBytes depth, openingBytes depth * LENGTH⟩
 
 /-- Reserve the contract's full message and values buffers even for small test trees.
-Scratch memory [256,320) is below all input/output buffers. -/
+Scratch memory [256,352) is below all input/output buffers. -/
 def layout (depth : Nat) : Layout :=
   let message := 4096
   let commitment := message + LENGTH * (LEAF_SIZE / 8)

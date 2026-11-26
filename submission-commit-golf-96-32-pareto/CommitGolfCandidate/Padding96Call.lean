@@ -8,8 +8,7 @@ set_option maxRecDepth 10000
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-def paddingCallSite (checker : Bool) (index : Nat) : Prop :=
-  if checker then index = 61 ∨ index = 101 else index = 70 ∨ index = 98
+def paddingCallSite (_checker : Bool) (index : Nat) : Prop := index = 59 ∨ index = 132
 
 /-- One jump and the sixteen-instruction adapter cost 24 cycles and one query.
 The final PC is the instruction after the original call site. -/
