@@ -1,15 +1,17 @@
 import CommitGolfDepth.Span
 
-/-! Solver-side rules for symbolic fork/join executions.
+/-! Solver-side rules for symbolic guarded RV64 executions.
 
-The step rule opens one valid FORK in the real interpreter. Its two child computations
+The fork step rule opens one valid FORK in the real interpreter. Its two child computations
 remain in canonical order and use their reserved fuel. The continuation is taken only
 when both children succeed; exhaustion still dominates failure. Resource rules quantify
 over syntactic support, hence over every possible oracle reply and private coin outcome.
 Instantiate `children` with the real `executeBudgeted` runner for machine proofs.
 The query coordinate below counts trace annotations, not the independent `Oracle.run`
 counter for an arbitrary supplied runner. Honest query budgets remain separate obligations.
-These are proof helpers, not changes to the machine or extra certificate assumptions.
+Ordinary-step rules retain permission checks, write protection and instruction prices,
+including the zero-fuel and fault cases. These are proof helpers, not changes to the
+machine or extra certificate assumptions.
 -/
 namespace CommitGolfDepth.Span.Proofs
 open CommitGolf RiscvZkvm.Rv64 OracleComp OracleSpec
@@ -245,5 +247,112 @@ theorem executeBudgeted_succ_bounds (image : Riscv.Image) (coins : Bool) (depth 
   rw [executeBudgeted] at reached
   obtain ⟨result, member, rfl⟩ := mem_support_map_peel _ _ reached
   exact h result member
+
+/-- Fetch/decode failure retains the machine's zero-cost fault marker. This is
+separate from a permission or ordinary-step fault, which consumes one charged instruction. -/
+theorem runBody_fetch_failure (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = none) :
+    runBody children canFork image p coins (fuel + 1) state =
+      pure (boundedStop (fuel + 1) .failure state) := by
+  rw [runBody, fetched]
+
+/-- All branches for a fetched non-ECALL instruction, with permission checks and
+write protection retained. The classification premise prevents treating a syscall as CPU work. -/
+theorem runBody_ordinary_cases (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) :
+    runBody children canFork image p coins (fuel + 1) state =
+      (if ordinaryAllowed p state instruction then
+        match Riscv.ordinaryStep state instruction with
+        | none => pure (boundedExit fuel .failure state)
+        | some next => do
+          let result ← runBody children canFork image p coins fuel (protectWrites p state next)
+          return boundedCharge result (Riscv.instructionCycles instruction) 0
+      else pure (boundedExit fuel .failure state)) := by
+  rw [runBody, fetched]
+  split <;> simp_all
+  rfl
+
+/-- A valid ordinary instruction consumes one unit of fuel, charges its actual price,
+and resumes under the same policy, fork setting and coin setting. -/
+theorem runBody_ordinary (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state next : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) (allowed : ordinaryAllowed p state instruction = true)
+    (stepped : Riscv.ordinaryStep state instruction = some next) :
+    runBody children canFork image p coins (fuel + 1) state = (do
+      let result ← runBody children canFork image p coins fuel (protectWrites p state next)
+      return boundedCharge result (Riscv.instructionCycles instruction) 0) := by
+  rw [runBody_ordinary_cases children canFork image p coins fuel state instruction fetched ordinary]
+  simp only [allowed, ite_true, stepped]
+
+/-- Core-only projection of the valid ordinary step, suitable for comparator checks. -/
+theorem runBody_ordinary_val (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state next : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) (allowed : ordinaryAllowed p state instruction = true)
+    (stepped : Riscv.ordinaryStep state instruction = some next) :
+    Subtype.val <$> runBody children canFork image p coins (fuel + 1) state = (do
+      let result ← runBody children canFork image p coins fuel (protectWrites p state next)
+      return result.val.charge (Riscv.instructionCycles instruction) 0) := by
+  rw [runBody_ordinary children canFork image p coins fuel state next instruction
+    fetched ordinary allowed stepped]
+  simp only [map_bind, map_pure]
+  rfl
+
+/-- A denied ordinary memory access faults without running the continuation. -/
+theorem runBody_ordinary_denied (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) (denied : ordinaryAllowed p state instruction = false) :
+    runBody children canFork image p coins (fuel + 1) state =
+      pure (boundedExit fuel .failure state) := by
+  rw [runBody_ordinary_cases children canFork image p coins fuel state instruction fetched ordinary]
+  simp only [denied, Bool.false_eq_true, ite_false]
+
+/-- An admitted but unsupported/faulting ordinary step also stops before continuation. -/
+theorem runBody_ordinary_invalid (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) (allowed : ordinaryAllowed p state instruction = true)
+    (invalid : Riscv.ordinaryStep state instruction = none) :
+    runBody children canFork image p coins (fuel + 1) state =
+      pure (boundedExit fuel .failure state) := by
+  rw [runBody_ordinary_cases children canFork image p coins fuel state instruction fetched ordinary]
+  simp only [allowed, ite_true, invalid]
+
+/-- Add one sequential trace vertex to a resource bound. Query annotations are explicit,
+so this rule does not equate annotations with an arbitrary runner's actual oracle calls. -/
+theorem boundedCharge_bounds {fuel : Nat} (result : BoundedResult fuel)
+    (cost calls work span queries : Nat) (h : Bounds result.val work span queries) :
+    Bounds (boundedCharge result cost calls).val (cost + work) (cost + span) (calls + queries) := by
+  rcases h with ⟨hw, hs, hq⟩
+  change cost + result.val.work ≤ cost + work ∧ cost + result.val.span ≤ cost + span ∧
+    calls + result.val.oracleCalls ≤ calls + queries
+  exact ⟨Nat.add_le_add_left hw _, Nat.add_le_add_left hs _, Nat.add_le_add_left hq _⟩
+
+/-- Worst-case support bounds compose through a real ordinary instruction, retaining
+faults and exhaustion in the continuation. Success requires a separate proof. -/
+theorem runBody_ordinary_bounds (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state next : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) (allowed : ordinaryAllowed p state instruction = true)
+    (stepped : Riscv.ordinaryStep state instruction = some next)
+    (work span queries : Nat)
+    (h : ∀ result ∈ support (runBody children canFork image p coins fuel
+      (protectWrites p state next)), Bounds result.val work span queries)
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)) :
+    Bounds out.val (Riscv.instructionCycles instruction + work)
+      (Riscv.instructionCycles instruction + span) queries := by
+  rw [runBody_ordinary children canFork image p coins fuel state next instruction
+    fetched ordinary allowed stepped] at reached
+  obtain ⟨result, member, last⟩ := mem_support_bind_peel _ _ reached
+  have equal := eq_of_mem_support_pure _ last
+  subst out
+  simpa only [Nat.zero_add] using boundedCharge_bounds result
+    (Riscv.instructionCycles instruction) 0 work span queries (h result member)
 
 end CommitGolfDepth.Span.Proofs

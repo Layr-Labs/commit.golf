@@ -38,3 +38,10 @@ do not by themselves prove a complete parallel commitment or its security.
 With an arbitrary child runner the query coordinate bounds **trace queries**.
 It does not prove that runner's actual `Oracle.run` call count. The full
 certificate's actual oracle-query budget remains a separate obligation.
+
+For instructions between forks, `runBody_ordinary_cases` preserves the permission
+check, actual `ordinaryStep` next state (including branch/jump targets), write
+protection and fault branches. `runBody_ordinary_bounds` adds the instruction's
+actual price to work and span over all continuation outcomes. Separate fetch,
+permission and invalid-step rules preserve their exits and charges; no successful
+continuation is assumed. The rule explicitly excludes ECALL dispatch.

@@ -3,6 +3,8 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -14,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from artifact import parse_artifact
 from check_submission import check
 from depth_profiles import depth_profile
-from check_depth_resources import (RESOURCE_TARGET, EQUALITY_TARGET, ADMISSION_TARGET, SYMBOLIC_STEP, SYMBOLIC_BOUNDS,
+from check_depth_resources import (RESOURCE_TARGET, EQUALITY_TARGET, ADMISSION_TARGET, SYMBOLIC_STEP, SYMBOLIC_BOUNDS, ORDINARY_STEP, ORDINARY_BOUNDS,
                                   make_cases, resource_config, expected_template, case_passes,
                                   protected_snapshot, load_library)
 from depth_resource_fixture import FIXTURES, RESOURCE_FIXTURES
@@ -24,6 +26,21 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ResourceHarnessTests(unittest.TestCase):
+    def test_ci_connects_setup_and_actual_resource_comparator(self):
+        setup = (ROOT / 'scripts/setup.sh').read_text()
+        builds = [shlex.split(line) for line in setup.replace('\\\n', ' ').splitlines()
+                  if line.startswith('lake build ')]
+        for model in ('Rounds', 'Span'):
+            self.assertTrue(any('CommitGolfDepth.' + model + '.Proofs' in command
+                                for command in builds))
+        workflow = (ROOT / '.github/workflows/test-linkage.yml').read_text()
+        self.assertIn('run: bash scripts/blacksmith.sh test-linkage', workflow)
+        parent = (ROOT / '.github/workflows/test-pr.yml').read_text()
+        self.assertIn('uses: ./.github/workflows/test-linkage.yml', parent)
+        script = (ROOT / 'scripts/blacksmith.sh').read_text()
+        body = re.search(r'\n  test-linkage\)\n(.*?)\n    ;;', script, re.S).group(1)
+        self.assertIn('python3 verifier/tests/check_depth_resources.py', body)
+
     def test_helper_capture_rejects_symlinks_special_files_and_oversize(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -55,10 +72,10 @@ class ResourceHarnessTests(unittest.TestCase):
 
     def test_actual_mode_images_and_precise_understatements_are_fixed(self):
         cases = make_cases()
-        self.assertEqual(len(cases), 14)
+        self.assertEqual(len(cases), 16)
         for fixture in RESOURCE_FIXTURES:
             selected = [c for c in cases if c.fixture == fixture]
-            positive, work, depth, mode, image, security, symbolic = selected
+            positive, work, depth, mode, image, security, symbolic, ordinary = selected
             value = json.loads(positive.manifest)
             self.assertEqual(value['executionModes']['commit'],
                              'batched' if fixture.model == 'oracle-rounds' else 'forkJoin')
@@ -79,6 +96,8 @@ class ResourceHarnessTests(unittest.TestCase):
             self.assertEqual(security.manifest, positive.manifest)
             self.assertTrue(symbolic.symbolic_mismatch)
             self.assertEqual(symbolic.manifest, positive.manifest)
+            self.assertTrue(ordinary.ordinary_mismatch)
+            self.assertEqual(ordinary.manifest, positive.manifest)
             for case in selected:
                 parse_artifact(case.manifest, resource_model=fixture.model)
 
@@ -95,7 +114,7 @@ class ResourceHarnessTests(unittest.TestCase):
         resource = resource_config(production)
         self.assertEqual(production, before)
         self.assertEqual(resource['theorem_names'], [EQUALITY_TARGET, ADMISSION_TARGET, RESOURCE_TARGET,
-                                                  SYMBOLIC_STEP, SYMBOLIC_BOUNDS])
+                                                  SYMBOLIC_STEP, SYMBOLIC_BOUNDS, ORDINARY_STEP, ORDINARY_BOUNDS])
         self.assertNotIn('CommitGolf.Challenge.certificate', resource['theorem_names'])
         for key in ('definition_names', 'permitted_axioms', 'enable_nanoda'):
             self.assertEqual(resource[key], production[key])
@@ -119,6 +138,8 @@ class ResourceHarnessTests(unittest.TestCase):
             self.assertNotIn('observer', template)
             self.assertIn('theorem symbolic_step', template)
             self.assertIn('theorem symbolic_bounds', template)
+            self.assertIn('theorem ordinary_step', template)
+            self.assertIn('theorem ordinary_bounds', template)
             self.assertNotIn('import CommitGolfCandidate', template)
             self.assertNotIn('CommitGolfCandidate.', template)
             self.assertNotIn('.Proofs', template)
@@ -130,20 +151,36 @@ class ResourceHarnessTests(unittest.TestCase):
     def test_symbolic_negatives_change_only_the_generic_bound_target(self):
         for fixture in RESOURCE_FIXTURES:
             selected = [case for case in make_cases() if case.fixture == fixture]
-            positive, negative = expected_template(selected[0]), expected_template(selected[-1])
+            symbolic = next(case for case in selected if case.symbolic_mismatch)
+            positive, negative = expected_template(selected[0]), expected_template(symbolic)
             self.assertEqual(positive.split('theorem symbolic_bounds')[0],
                              negative.split('theorem symbolic_bounds')[0])
             before, after = (('rounds requests+depth', '0+depth')
                              if fixture.model == 'oracle-rounds' else ('max ls rs', 'min ls rs'))
             self.assertEqual(positive.count(before), 1)
             self.assertEqual(negative, positive.replace(before, after, 1))
-            self.assertFalse(selected[-1].production_scope)
+            self.assertFalse(symbolic.production_scope)
+
+    def test_ordinary_negatives_remove_only_the_tick_work_charge(self):
+        for fixture in RESOURCE_FIXTURES:
+            selected = [case for case in make_cases() if case.fixture == fixture]
+            ordinary = next(case for case in selected if case.ordinary_mismatch)
+            positive, negative = expected_template(selected[0]), expected_template(ordinary)
+            self.assertEqual(positive.split('theorem ordinary_bounds')[0],
+                             negative.split('theorem ordinary_bounds')[0])
+            before, after = (('tickWork+restWork', '0+restWork')
+                             if fixture.model == 'oracle-rounds' else
+                             ('Riscv.instructionCycles instruction + work', '0 + work'))
+            self.assertEqual(positive.count(before), 1)
+            self.assertEqual(negative, positive.replace(before, after, 1))
+            self.assertFalse(ordinary.production_scope)
 
     def test_under_bound_requires_specific_completed_comparator_failure(self):
         for case in make_cases():
-            if not case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch')):
+            if not case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch', '_ordinary_mismatch')):
                 continue
-            target = SYMBOLIC_BOUNDS if case.symbolic_mismatch else RESOURCE_TARGET
+            target = (ORDINARY_BOUNDS if case.ordinary_mismatch else
+                      SYMBOLIC_BOUNDS if case.symbolic_mismatch else RESOURCE_TARGET)
             good = ('Build completed successfully (123 jobs).\nuncaught exception: '
                     "Challenge and solution theorem statement do not match: '" + target + "'\n")
             self.assertTrue(case_passes(case, {'status': 'rejected'}, good, ''))
@@ -237,7 +274,7 @@ class ResourceHarnessTests(unittest.TestCase):
                  patch.object(harness, 'case_passes', return_value=True), patch('builtins.print'):
                 self.assertEqual(harness.run(root), 0)
             self.assertEqual(set(observed), set(cases))
-            self.assertEqual(len(observed), 14)
+            self.assertEqual(len(observed), 16)
 
     def test_fixed_clients_pass_static_admission_but_export_no_full_certificate(self):
         # This is static policy validation; actual comparator proof checking is separate.

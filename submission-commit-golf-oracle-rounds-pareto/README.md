@@ -35,3 +35,10 @@ and `executeBatched_regular`. `compression_quote` gives `1 + 13*k` macro cycles
 for `k` compression requests; descriptor/input preparation is additional machine
 work. Empty batches pay one entry cycle and zero rounds. The helpers neither build
 the table for free nor prove a complete tree construction or its security.
+
+For setup and loop instructions, `executeBatched_nonbatch` exposes the real
+one-instruction `Riscv.execute` computation. Deterministic unfinished/terminal
+corollaries reuse existing one-tick proofs; `executeBatched_nonbatch_bounds`
+composes support bounds. This branch includes ordinary ORACLE/RANDOM calls,
+HALTs and faults. It enters the continuation only for an unfinished tick and
+charges public calls as rounds. Terminal paths retain their actual costs.

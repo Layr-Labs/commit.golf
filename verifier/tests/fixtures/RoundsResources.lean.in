@@ -55,4 +55,28 @@ theorem symbolic_bounds : ∀ (image : Image) (state : MachineState) (steps : Na
     (result.result.cycles ≤ (quote requests).priced batchFees + work ∧
       result.result.oracleCalls ≤ requests.length+queries ∧ result.oracleRounds ≤ rounds requests+depth) := sorry
 
+/-- Ordinary instruction equations and bounds, stated with core machine definitions. -/
+theorem ordinary_step : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false),
+    executeBatched image (steps+1) state coins = (do
+      let tick ← Riscv.execute image 1 state coins
+      if tick.exit = .unfinished then do
+        let rest ← executeBatched image steps tick.state coins
+        pure (charge rest tick.cycles tick.oracleCalls tick.oracleCalls)
+      else pure (⟨tick, tick.oracleCalls⟩ : CommitGolfDepth.Rounds.RoundMachine.Execution)) := sorry
+
+theorem ordinary_bounds : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false)
+    (tickWork tickQueries restWork restQueries restDepth : Nat)
+    (ticks : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.cycles ≤ tickWork ∧ tick.oracleCalls ≤ tickQueries)
+    (continuation : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.exit = .unfinished →
+      ∀ rest ∈ support (executeBatched image steps tick.state coins),
+        (rest.result.cycles ≤ restWork ∧ rest.result.oracleCalls ≤ restQueries ∧ rest.oracleRounds ≤ restDepth))
+    (result : CommitGolfDepth.Rounds.RoundMachine.Execution)
+    (reached : result ∈ support (executeBatched image (steps+1) state coins)),
+    (result.result.cycles ≤ tickWork+restWork ∧ result.result.oracleCalls ≤ tickQueries+restQueries ∧
+      result.oracleRounds ≤ tickQueries+restDepth) := sorry
+
 end CommitGolf.Challenge

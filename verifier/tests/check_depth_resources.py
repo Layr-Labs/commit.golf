@@ -31,6 +31,8 @@ import verify
 RESOURCE_TARGET = 'CommitGolf.Challenge.resource_fixture'
 SYMBOLIC_STEP = 'CommitGolf.Challenge.symbolic_step'
 SYMBOLIC_BOUNDS = 'CommitGolf.Challenge.symbolic_bounds'
+ORDINARY_STEP = 'CommitGolf.Challenge.ordinary_step'
+ORDINARY_BOUNDS = 'CommitGolf.Challenge.ordinary_bounds'
 EQUALITY_TARGET = 'CommitGolf.Challenge.submission_matches_artifact'
 ADMISSION_TARGET = 'CommitGolf.Challenge.admission'
 
@@ -73,6 +75,7 @@ class Case:
     expected: str
     production_scope: bool = False
     symbolic_mismatch: bool = False
+    ordinary_mismatch: bool = False
 
 
 def resource_config(production):
@@ -81,7 +84,7 @@ def resource_config(production):
         raise ValueError('unexpected production comparator contract')
     result = copy.deepcopy(production)
     result['theorem_names'] = [EQUALITY_TARGET, ADMISSION_TARGET, RESOURCE_TARGET,
-                               SYMBOLIC_STEP, SYMBOLIC_BOUNDS]
+                               SYMBOLIC_STEP, SYMBOLIC_BOUNDS, ORDINARY_STEP, ORDINARY_BOUNDS]
     return result
 
 
@@ -108,6 +111,8 @@ def make_cases():
                           fixture.work, fixture.depth, 'rejected', True))
         cases.append(Case(prefix + '_symbolic_mismatch', fixture, raw,
                           fixture.work, fixture.depth, 'rejected', symbolic_mismatch=True))
+        cases.append(Case(prefix + '_ordinary_mismatch', fixture, raw,
+                          fixture.work, fixture.depth, 'rejected', ordinary_mismatch=True))
     return cases
 
 
@@ -124,6 +129,14 @@ def expected_template(case):
         if not marker or bounds.count(old) != 1:
             raise ValueError('unexpected symbolic-bound regression template')
         source = before + marker + bounds.replace(old, new, 1)
+    if case.ordinary_mismatch:
+        before, marker, bounds = source.partition('theorem ordinary_bounds')
+        old = ('tickWork+restWork' if case.fixture.model == 'oracle-rounds' else
+               'Riscv.instructionCycles instruction + work')
+        if not marker or bounds.count(old) != 1:
+            raise ValueError('unexpected ordinary-step regression template')
+        source = before + marker + bounds.replace(old, '0+restWork' if
+            case.fixture.model == 'oracle-rounds' else '0 + work', 1)
     return source
 
 
@@ -147,8 +160,9 @@ def case_passes(case, report, log, source):
                 and log.rstrip().splitlines()[-1] in (
                     'uncaught exception: Child exited with 134',
                     'uncaught exception: Child exited with 139'))
-    if case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch')):
-        target = SYMBOLIC_BOUNDS if case.symbolic_mismatch else RESOURCE_TARGET
+    if case.name.endswith(('_under_work', '_under_depth', '_symbolic_mismatch', '_ordinary_mismatch')):
+        target = (ORDINARY_BOUNDS if case.ordinary_mismatch else
+                  SYMBOLIC_BOUNDS if case.symbolic_mismatch else RESOURCE_TARGET)
         marker = f"Challenge and solution theorem statement do not match: '{target}'"
         return ('Build completed successfully (' in log and marker in log
                 and not re.search(r'(?m)^(?:error: |PANIC )', log))

@@ -61,7 +61,7 @@ class SetupTests(unittest.TestCase):
 
     def assert_build_finished(self, calls):
         self.assertEqual(calls[-4:], ['tools', 'lake exe cache get',
-                                     'lake build CommitGolf CommitGolfTests CommitGolfDepth.Rounds.Tests CommitGolfDepth.Span.Tests', 'preflight'])
+                                     'lake build CommitGolf CommitGolfTests CommitGolfDepth.Rounds.Tests CommitGolfDepth.Span.Tests CommitGolfDepth.Rounds.Proofs CommitGolfDepth.Span.Proofs', 'preflight'])
 
     def assert_build_not_started(self, calls):
         self.assertFalse(any(call == 'tools' or call.startswith('lake ') or
@@ -107,7 +107,7 @@ class SetupTests(unittest.TestCase):
         status, calls = self.run_setup('build_failure')
         self.assertEqual(status, 23)
         self.assertEqual(calls[-3:], ['tools', 'lake exe cache get',
-                                     'lake build CommitGolf CommitGolfTests CommitGolfDepth.Rounds.Tests CommitGolfDepth.Span.Tests'])
+                                     'lake build CommitGolf CommitGolfTests CommitGolfDepth.Rounds.Tests CommitGolfDepth.Span.Tests CommitGolfDepth.Rounds.Proofs CommitGolfDepth.Span.Proofs'])
         self.assertNotIn('preflight', calls)
 
 

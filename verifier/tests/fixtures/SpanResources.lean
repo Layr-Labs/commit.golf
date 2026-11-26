@@ -180,4 +180,31 @@ theorem symbolic_bounds : ∀ (children : ChildRunner) (image : Riscv.Image) (p 
       out.val.span ≤ FORK_CYCLES + max ls rs + JOIN_CYCLES + cs ∧
       out.val.oracleCalls ≤ lq + rq + cq) := @CommitGolfDepth.Span.Proofs.runBody_fork_bounds
 
+/-- Ordinary instruction equations and bounds, stated with core machine definitions. -/
+theorem ordinary_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL),
+    runBody children canFork image p coins (fuel + 1) state =
+      (if ordinaryAllowed p state instruction then
+        match Riscv.ordinaryStep state instruction with
+        | none => pure (boundedExit fuel .failure state)
+        | some next => do
+          let result ← runBody children canFork image p coins fuel (protectWrites p state next)
+          return boundedCharge result (Riscv.instructionCycles instruction) 0
+      else pure (boundedExit fuel .failure state)) := @CommitGolfDepth.Span.Proofs.runBody_ordinary_cases
+
+theorem ordinary_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state next : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) (allowed : ordinaryAllowed p state instruction = true)
+    (stepped : Riscv.ordinaryStep state instruction = some next)
+    (work span queries : Nat)
+    (h : ∀ result ∈ support (runBody children canFork image p coins fuel
+      (protectWrites p state next)), (result.val.work ≤ work ∧ result.val.span ≤ span ∧ result.val.oracleCalls ≤ queries))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ Riscv.instructionCycles instruction + work ∧
+      out.val.span ≤ Riscv.instructionCycles instruction + span ∧ out.val.oracleCalls ≤ queries) := @CommitGolfDepth.Span.Proofs.runBody_ordinary_bounds
+
 end CommitGolf.Challenge

@@ -6,8 +6,9 @@ These theorems do not modify its semantics or any security certificate. A table 
 specified by four word-read facts per index, not by expanding its length. Snapshot
 hypotheses concern the common pre-call state, including when outputs alias inputs.
 The continuation rules preserve every possible oracle reply, failure and coin path.
-They begin at the ECALL; callers must separately charge construction of the table
-and input buffers and prove their continuation invariants.
+Batch rules begin at the ECALL; ordinary rules expose each real nonbatch tick.
+Callers must separately charge construction of the table and input buffers and
+prove their continuation invariants.
 -/
 
 namespace CommitGolfDepth.Rounds.Proofs
@@ -180,5 +181,86 @@ theorem compression_quote (indices : List Nat)
   rw [batch_price]
   simp [preparationCycles, requestCost, oracleCycles, COMPRESSION_CYCLES, List.map_map, Function.comp_def]
   omega
+
+/-- Every nonbatch instruction runs through one actual legacy-machine tick. Only
+an unfinished tick enters the remaining fuel; HALT and faults return immediately.
+A single ordinary oracle call contributes one round, while private coins add none. -/
+theorem executeBatched_nonbatch (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false) :
+    executeBatched image (steps+1) state coins = (do
+      let tick ← Riscv.execute image 1 state coins
+      if tick.exit = .unfinished then do
+        let rest ← executeBatched image steps tick.state coins
+        pure (charge rest tick.cycles tick.oracleCalls tick.oracleCalls)
+      else pure (⟨tick, tick.oracleCalls⟩ : CommitGolfDepth.Rounds.RoundMachine.Execution)) := by
+  rw [executeBatched, nonbatch]
+  simp only [Bool.false_eq_true, ite_false]
+
+/-- Reuse any deterministic one-tick machine theorem without reducing a whole
+batched execution. The terminal branch includes both successful HALT and faults. -/
+theorem executeBatched_tick (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (tick : Riscv.Execution)
+    (nonbatch : isBatchCall image state = false)
+    (oneTick : Riscv.execute image 1 state coins = pure tick) :
+    executeBatched image (steps+1) state coins =
+      if tick.exit = .unfinished then (do
+        let rest ← executeBatched image steps tick.state coins
+        pure (charge rest tick.cycles tick.oracleCalls tick.oracleCalls))
+      else pure (⟨tick, tick.oracleCalls⟩ : CommitGolfDepth.Rounds.RoundMachine.Execution) := by
+  rw [executeBatched_nonbatch image state steps coins nonbatch, oneTick]
+  simp only [pure_bind]
+
+/-- The usual setup/loop step: its one-tick theorem has no terminal result yet.
+The continuation retains the remaining fuel, including zero fuel. -/
+theorem executeBatched_tick_unfinished (image : Image) (state next : MachineState)
+    (steps cost calls : Nat) (coins : Bool)
+    (nonbatch : isBatchCall image state = false)
+    (oneTick : Riscv.execute image 1 state coins = pure ⟨.unfinished, next, cost, calls⟩) :
+    executeBatched image (steps+1) state coins = (do
+      let rest ← executeBatched image steps next coins
+      pure (charge rest cost calls calls)) := by
+  rw [executeBatched_tick image state steps coins _ nonbatch oneTick]
+  simp only [ite_true]
+
+/-- A terminal one-tick proof does not require or charge any continuation. -/
+theorem executeBatched_tick_terminal (image : Image) (state : MachineState)
+    (steps : Nat) (coins : Bool) (tick : Riscv.Execution)
+    (nonbatch : isBatchCall image state = false)
+    (oneTick : Riscv.execute image 1 state coins = pure tick)
+    (terminal : tick.exit ≠ .unfinished) :
+    executeBatched image (steps+1) state coins =
+      pure (⟨tick, tick.oracleCalls⟩ : CommitGolfDepth.Rounds.RoundMachine.Execution) := by
+  rw [executeBatched_tick image state steps coins tick nonbatch oneTick, ite_eq_right terminal]
+
+/-- Resource induction for ordinary instructions, including public queries, private
+coins, successful HALTs and faults. Tick bounds cover every possible reply. Only
+unfinished ticks require a continuation bound; no terminal path is discarded. -/
+theorem executeBatched_nonbatch_bounds (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false)
+    (tickWork tickQueries restWork restQueries restDepth : Nat)
+    (ticks : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.cycles ≤ tickWork ∧ tick.oracleCalls ≤ tickQueries)
+    (continuation : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.exit = .unfinished →
+      ∀ rest ∈ support (executeBatched image steps tick.state coins),
+        Bounds rest restWork restQueries restDepth)
+    (result : CommitGolfDepth.Rounds.RoundMachine.Execution)
+    (reached : result ∈ support (executeBatched image (steps+1) state coins)) :
+    Bounds result (tickWork+restWork) (tickQueries+restQueries) (tickQueries+restDepth) := by
+  rw [executeBatched_nonbatch image state steps coins nonbatch] at reached
+  obtain ⟨tick, ht, reached⟩ := (mem_support_bind_iff _ _ _).mp reached
+  obtain ⟨hw, hq⟩ := ticks tick ht
+  by_cases unfinished : tick.exit = .unfinished
+  · simp only [unfinished, ite_true] at reached
+    obtain ⟨rest, hr, final⟩ := (mem_support_bind_iff _ _ _).mp reached
+    simp only [support_pure, Set.mem_singleton_iff] at final
+    subst result
+    have bounded := continuation tick ht unfinished rest hr
+    rcases bounded with ⟨rw, rq, rd⟩
+    exact ⟨Nat.add_le_add hw rw, Nat.add_le_add hq rq, Nat.add_le_add hq rd⟩
+  · simp only [unfinished, ite_false, support_pure, Set.mem_singleton_iff] at reached
+    subst result
+    exact ⟨hw.trans (Nat.le_add_right _ _), hq.trans (Nat.le_add_right _ _),
+      hq.trans (Nat.le_add_right _ _)⟩
 
 end CommitGolfDepth.Rounds.Proofs

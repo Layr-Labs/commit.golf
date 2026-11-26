@@ -148,12 +148,14 @@ theorem run_queries :
       let second ← (World.query (.inr (.inl 0)) : OracleComp World (BitVec COMPRESSION_OUTPUT_LENGTH))
       pure (finished first second)) := by
   change executeBatched (fixtureCore.image .commit) 7 initial true = _
-  rw [executeBatched, prefix0]
-  simp only [Bool.false_eq_true, ite_false, tick0, pure_bind, ite_true]
-  rw [executeBatched, prefix1]
-  simp only [Bool.false_eq_true, ite_false, tick1, pure_bind, ite_true]
-  rw [executeBatched, prefix2]
-  simp only [Bool.false_eq_true, ite_false, tick2, pure_bind, ite_true]
+  rw [CommitGolfDepth.Rounds.Proofs.executeBatched_tick_unfinished
+    (fixtureCore.image .commit) initial s1 6 1 0 true prefix0 tick0]
+  rw [CommitGolfDepth.Rounds.Proofs.executeBatched_tick_unfinished
+    (fixtureCore.image .commit) s1 s2 5 1 0 true prefix1 tick1]
+  simp only [bind_assoc, pure_bind]
+  rw [CommitGolfDepth.Rounds.Proofs.executeBatched_tick_unfinished
+    (fixtureCore.image .commit) s2 s3 4 1 0 true prefix2 tick2]
+  simp only [bind_assoc, pure_bind]
   rw [executeBatched, batch_flag]
   simp only [ite_true, loaded, snapshot]
   simp only [runFrozenWorld, pure_bind, bind_assoc]
@@ -237,5 +239,29 @@ theorem symbolic_bounds : ∀ (image : Image) (state : MachineState) (steps : Na
       (executeBatched image (steps+1) state coins)),
     (result.result.cycles ≤ (quote requests).priced batchFees + work ∧
       result.result.oracleCalls ≤ requests.length+queries ∧ result.oracleRounds ≤ rounds requests+depth) := @CommitGolfDepth.Rounds.Proofs.executeBatched_batch_bounds
+
+/-- Ordinary instruction equations and bounds, stated with core machine definitions. -/
+theorem ordinary_step : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false),
+    executeBatched image (steps+1) state coins = (do
+      let tick ← Riscv.execute image 1 state coins
+      if tick.exit = .unfinished then do
+        let rest ← executeBatched image steps tick.state coins
+        pure (charge rest tick.cycles tick.oracleCalls tick.oracleCalls)
+      else pure (⟨tick, tick.oracleCalls⟩ : CommitGolfDepth.Rounds.RoundMachine.Execution)) := @CommitGolfDepth.Rounds.Proofs.executeBatched_nonbatch
+
+theorem ordinary_bounds : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false)
+    (tickWork tickQueries restWork restQueries restDepth : Nat)
+    (ticks : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.cycles ≤ tickWork ∧ tick.oracleCalls ≤ tickQueries)
+    (continuation : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.exit = .unfinished →
+      ∀ rest ∈ support (executeBatched image steps tick.state coins),
+        (rest.result.cycles ≤ restWork ∧ rest.result.oracleCalls ≤ restQueries ∧ rest.oracleRounds ≤ restDepth))
+    (result : CommitGolfDepth.Rounds.RoundMachine.Execution)
+    (reached : result ∈ support (executeBatched image (steps+1) state coins)),
+    (result.result.cycles ≤ tickWork+restWork ∧ result.result.oracleCalls ≤ tickQueries+restQueries ∧
+      result.oracleRounds ≤ tickQueries+restDepth) := @CommitGolfDepth.Rounds.Proofs.executeBatched_nonbatch_bounds
 
 end CommitGolf.Challenge

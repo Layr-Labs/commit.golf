@@ -15,5 +15,7 @@ fi
 elan run "$toolchain" lean --version
 bash verifier/setup_tools.sh
 lake exe cache get
-lake build CommitGolf CommitGolfTests CommitGolfDepth.Rounds.Tests CommitGolfDepth.Span.Tests
+lake build CommitGolf CommitGolfTests \
+  CommitGolfDepth.Rounds.Tests CommitGolfDepth.Span.Tests \
+  CommitGolfDepth.Rounds.Proofs CommitGolfDepth.Span.Proofs
 python3 -c 'import sys; from pathlib import Path; sys.path.insert(0, "verifier"); from verify import linux_preflight, tools_env; linux_preflight(tools_env(Path(".").resolve()))'
