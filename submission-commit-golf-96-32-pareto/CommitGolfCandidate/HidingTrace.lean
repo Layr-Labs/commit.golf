@@ -94,7 +94,7 @@ theorem flagged_run_query_bind (oracle : Oracle) (marked : World.Domain → Bool
     OracleQuery.cont_query, id_map, StateT.run_bind, flagged_handler_run, bind_assoc, pure_bind]
 
 /-- The marker is exactly membership of the salt among low halves of traced inputs. -/
-theorem flagged_run_trace (oracle : Oracle) (salt : Digest) {α : Type}
+theorem flagged_run_trace (oracle : Oracle) (salt : BitVec 256) {α : Type}
     (computation : OracleComp World α) (flag : Bool) :
     flaggedRun oracle (marksSalt salt) computation flag =
       ((fun result : α × List (BitVec COMPRESSION_INPUT_LENGTH) =>
