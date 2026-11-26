@@ -141,7 +141,11 @@ practical. The verifier regenerates the artifact and invalidates cached copies.
 
 The initial baselines are **serial bootstraps**, preserving the old salted-Merkle
 bytes and complete proof. Rounds are 150,994,943 for commitment and zero for
-opening; legacy span equals work. They do not demonstrate parallel optimization.
+opening; legacy span equals work. They do not demonstrate parallel optimization. Separate
+[resource-only clients](../verifier/tests/fixtures/README.md) exercise actual batched
+and fork/join images on a fixed zero message, for every fixed oracle. They test
+resource proof feasibility and artifact linkage, without supplying security
+certificates or a parallel secure baseline.
 A level-wise version of that tree would need eight leaf-hash stages plus 24 tree
 levels (32 rounds), assuming a whole layer fits one batch and salts are already
 available without extra oracle dependencies; this is a design estimate,

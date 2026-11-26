@@ -92,6 +92,9 @@ CLOUD
     guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_artifact_linkage.py'
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
     guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_depth_linkage.py'
+    # Resource-only actual new-mode clients; never produce a benchmark score.
+    # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_depth_resources.py'
     ;;
   test-scale)
     # Admission and byte-read checks at the image limit; this produces no security score.

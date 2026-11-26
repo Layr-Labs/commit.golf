@@ -2,16 +2,22 @@
 
 - Solvers edit only their selected track: `submission/` (product), `submission-pareto/` (Pareto),
   `submission-commit-golf-64-32-product/`, `submission-commit-golf-64-32-pareto/`,
-  `submission-commit-golf-96-32-product/`, or `submission-commit-golf-96-32-pareto/`:
+  `submission-commit-golf-96-32-product/`, `submission-commit-golf-96-32-pareto/`,
+  `submission-commit-golf-oracle-rounds-pareto/`, or `submission-commit-golf-work-span-pareto/`:
   `claim.json`, `programs.json`, `Solution.lean`, and
   supporting modules under the selected directory’s `CommitGolfCandidate/`, and the optional README.
   No other repository directory is solver-editable. Everything else is the contract; preserve it.
 - Submissions prove `CommitGolf.Certificate submission proofBytes commitCycles openingCycles`
   about a `CommitGolf.Submission` of machine images. The security-game scheme must be
   derived from those images; do not accept unrelated abstract functions or claimed timings.
+- The oracle-rounds and work/span tracks use their respective `CommitGolfDepth` full
+  certificates, adding rounds or work/span bounds to the inherited security requirements.
+  Their schema-v2 artifacts bind execution modes as well as bytes. Both rank three
+  objectives by Pareto minimization; see `docs/depth-rules.md` for fields and prices.
+  Resource-only regression clients under `verifier/tests/fixtures/` are not scored submissions.
 - `programs.json` delivers the instruction bytes, embedded data and ABI. The verifier generates
-  `CommitGolf.Artifact.submission`; `submission_matches_artifact` must prove that the certified
-  submission equals this exact value. The generated artifact is not a comparator definition hole.
+  `CommitGolf.Artifact.submission` (or `depthSubmission` on depth tracks);
+  `submission_matches_artifact` must prove that the certified submission equals this exact value. The generated artifact is not a comparator definition hole.
 - The product score is `(commitCycles + openingCycles) * proofBytes` for a full commitment
   and one opening of 128 leaves. Binding and hiding target 120 bits; leaves are 2,048 bits.
 - The Pareto track minimizes `[commitCycles + openingCycles, proofBytes]` independently

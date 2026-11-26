@@ -1,0 +1,21 @@
+import CommitGolfDepth.Span
+import CommitGolf.Artifact
+
+/-! Resource-only regression contract. This is not a production security certificate. -/
+namespace CommitGolf.Challenge
+open OracleComp CommitGolfDepth.Span CommitGolfDepth.Span.SpanMachine
+
+noncomputable def submission : CommitGolfDepth.Span.Submission := sorry
+
+theorem submission_matches_artifact : submission = Artifact.depthSubmission := sorry
+
+theorem admission : submission.core.Admission := sorry
+
+theorem resource_fixture (oracle : Oracle) :
+    Pr{let result ← oracle.run (submission.run .commit (fun _ => 0))}[
+      result.1.exit = .success ∧ result.1.work ≤ {{work}} ∧ result.1.span ≤ {{depth}} ∧
+      result.1.oracleCalls = 0 ∧ result.2 = 0 ∧
+      result.1.trace.instructions = 16 ∧ result.1.span < result.1.work ∧
+      result.1.state.mem 512 = 49 ∧ result.1.state.mem 520 = 81] = 1 := sorry
+
+end CommitGolf.Challenge
