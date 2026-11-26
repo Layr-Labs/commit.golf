@@ -1,37 +1,172 @@
-import CommitGolfCandidate.Properties
-import CommitGolfCandidate.Binding
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.OpeningInput
-import CommitGolfCandidate.CheckInput
-import CommitGolfCandidate.Budgets
-import CommitGolfCandidate.CheckAcceptance
-import CommitGolfCandidate.Completeness
-import CommitGolfCandidate.BindingSecurity
-import CommitGolfCandidate.HidingSecurity
-import CommitGolf.Artifact
-import CommitGolfCandidate.LeafResourceBridge
-import CommitGolfCandidate.ResourceTests
+import CommitGolfCandidate.S5TrialJudge
+import CommitGolfCandidate.S5BatchCap
+import CommitGolfCandidate.S5RootJudge
+import CommitGolfCandidate.S5UpperLoop
+import CommitGolfCandidate.S5UpperArgs
+import CommitGolfCandidate.S5CapPairs
+import CommitGolfCandidate.S5CapUpperMemory
+import CommitGolfCandidate.S5CapPairBody
+import CommitGolfCandidate.S5CapChooseChild
+import CommitGolfCandidate.S5CapData
+import CommitGolfCandidate.S5CapLayout
+import CommitGolfCandidate.S5SlotLoop
+import CommitGolfCandidate.S5SlotRead
+import CommitGolfCandidate.S5BatchJudge
+import CommitGolfCandidate.S5BucketCheck
+import CommitGolfCandidate.S5BucketUpdate
+import CommitGolfCandidate.S5BucketHeader
+import CommitGolfCandidate.S5BucketMemory
+import CommitGolfCandidate.S5BucketState
+import CommitGolfCandidate.S5CheckSystem
+import CommitGolfCandidate.S5Trials
+import CommitGolfCandidate.S5ReplaySound
+import CommitGolfCandidate.S5ReplayCap
+import CommitGolfCandidate.S5CheckOrdinary
+import CommitGolfCandidate.S5ReplayRecord
+import CommitGolfCandidate.S5ReplayWalk
+import CommitGolfCandidate.S5CheckAdvance
+import CommitGolfCandidate.S5CheckRecord
+import CommitGolfCandidate.S5ReplayCode
+import CommitGolfCandidate.S5CheckSaltRead
+import CommitGolfCandidate.S5CheckRecordInput
+import CommitGolfCandidate.S5CheckCompare
+import CommitGolfCandidate.S5CheckDispatch
+import CommitGolfCandidate.S5CheckBoot
+import CommitGolfCandidate.S5CheckPath
+import CommitGolfCandidate.S5CheckPeers
+import CommitGolfCandidate.S5CheckRowBounds
+import CommitGolfCandidate.S5CheckRowHash
+import CommitGolfCandidate.S5CheckFetchPeer
+import CommitGolfCandidate.S5CheckPickPeer
+import CommitGolfCandidate.S5CheckRowHeader
+import CommitGolfCandidate.S5CheckPeerRead
+import CommitGolfCandidate.S5CheckCursor
+import CommitGolfCandidate.S5CheckCells
+import CommitGolfCandidate.S5CheckRowSites
+import CommitGolfCandidate.S5HonestNormalWire
+import CommitGolfCandidate.S5CheckNode
+import CommitGolfCandidate.S5HonestBatchWire
+import CommitGolfCandidate.S5FieldLocation
+import CommitGolfCandidate.S5WireBytes
+import CommitGolfCandidate.S5ChainCheckEnd
+import CommitGolfCandidate.S5ChainCheckRound
+import CommitGolfCandidate.S5ChainCheckArm
+import CommitGolfCandidate.S5ChainCheckFirst
+import CommitGolfCandidate.S5ChainCheckEntry
+import CommitGolfCandidate.S5CheckEdges
+import CommitGolfCandidate.S5CheckChainInit
+import CommitGolfCandidate.S5ClearOffset
+import CommitGolfCandidate.S5CheckLeaf
+import CommitGolfCandidate.S5CheckInput
+import CommitGolfCandidate.S5CheckLeafSalt
+import CommitGolfCandidate.S5CheckLeafPrefix
+import CommitGolfCandidate.S5CheckLeafCalls
+import CommitGolfCandidate.S5CheckLeafData
+import CommitGolfCandidate.S5CheckProjection
+import CommitGolfCandidate.S5CheckRegisters
+import CommitGolfCandidate.S5CheckCopy
+import CommitGolfCandidate.S5ReadField
+import CommitGolfCandidate.S5ReadEnter
+import CommitGolfCandidate.S5ReadWordsData
+import CommitGolfCandidate.S5ClearWords
+import CommitGolfCandidate.S5ReadStore
+import CommitGolfCandidate.S5CheckStore
+import CommitGolfCandidate.S5ReadStart
+import CommitGolfCandidate.S5ReadWord
+import CommitGolfCandidate.S5ReadChunk
+import CommitGolfCandidate.S5ReadSelect
+import CommitGolfCandidate.S5ReadTake
+import CommitGolfCandidate.S5ReadFill
+import CommitGolfCandidate.S5ReadCursor
+import CommitGolfCandidate.S5CheckCalc
+import CommitGolfCandidate.S5CheckFlow
+import CommitGolfCandidate.S5Resources
+import CommitGolfCandidate.S5Admission
+import CommitGolfCandidate.S5CheckNarrow
+import CommitGolfCandidate.S5CheckMask
+import CommitGolfCandidate.S5BatchPeers
+import CommitGolfCandidate.S5BatchSalt
+import CommitGolfCandidate.S5BatchRecordFields
+import CommitGolfCandidate.S5BatchRecord
+import CommitGolfCandidate.S5BatchCycle
+import CommitGolfCandidate.S5BatchLoop
+import CommitGolfCandidate.S5BatchStart
+import CommitGolfCandidate.S5BatchPath
+import CommitGolfCandidate.S5BatchField
+import CommitGolfCandidate.S5BatchFrame
+import CommitGolfCandidate.S5Mark
+import CommitGolfCandidate.S5FlushBytes
+import CommitGolfCandidate.S5FlushStep
+import CommitGolfCandidate.S5FlushEnd
+import CommitGolfCandidate.S5CapMarks
+import CommitGolfCandidate.S5CapLatch
+import CommitGolfCandidate.S5CapChoose
+import CommitGolfCandidate.S5CapBranch
+import CommitGolfCandidate.S5CapField
+import CommitGolfCandidate.S5CapEnter
+import CommitGolfCandidate.S5BatchCharge
+import CommitGolfCandidate.S5BatchOpen
+import CommitGolfCandidate.S5OpeningLaw
+import CommitGolfCandidate.S5RecordBranch
+import CommitGolfCandidate.S5EmitField
+import CommitGolfCandidate.S5WriterFrame
+import CommitGolfCandidate.S5FieldPayload
+import CommitGolfCandidate.S5Binding
+import CommitGolfCandidate.S5StreamPayload
+import CommitGolfCandidate.S5NormalOpen
+import CommitGolfCandidate.S5OrdinaryRecords
+import CommitGolfCandidate.S5WritePrefix
+import CommitGolfCandidate.S5TernaryRecord
+import CommitGolfCandidate.S5ReadRefill
+import CommitGolfCandidate.S5WireWords
+import CommitGolfCandidate.S5NormalPeer
+import CommitGolfCandidate.S5NormalBytes
+import CommitGolfCandidate.S5OpenInitial
+import CommitGolfCandidate.S5BottomLookup
+import CommitGolfCandidate.S5ChunkPayload
+import CommitGolfCandidate.S5OrdinaryPath
+import CommitGolfCandidate.S5SaltLookup
+import CommitGolfCandidate.S5OpenEnter
+import CommitGolfCandidate.S5OpenSources
+import CommitGolfCandidate.S5Empty
+import CommitGolfCandidate.S5Tail
+import CommitGolfCandidate.S5HonestCap
+import CommitGolfCandidate.S5CommittedTrapdoor
+import CommitGolfCandidate.S5PlainPass
+import CommitGolfCandidate.S5PlainEffect
+import CommitGolfCandidate.S5ChainPass
+import CommitGolfCandidate.S5PlainNode
+import CommitGolfCandidate.S5Exit
+import CommitGolfCandidate.S5PlainValue
+import CommitGolfCandidate.S5Auth
+import CommitGolfCandidate.S5FieldCall
+import CommitGolfCandidate.S5LastRound
+import CommitGolfCandidate.S5TreeStart
+import CommitGolfCandidate.S5HidingTransfer
+import CommitGolfCandidate.S5NodeFrame
+import CommitGolfCandidate.S5TreeFrame
+import CommitGolfCandidate.S5CachedTree
+import CommitGolfCandidate.S5InputBlock
+import CommitGolfCandidate.S5ReadWindow
+import CommitGolfCandidate.S5Writer
+import CommitGolfCandidate.S5PlainSites
+import CommitGolfCandidate.S5PassEntry
+import CommitGolfCandidate.S5Padding
+import CommitGolfCandidate.S5Prefix
+import CommitGolfCandidate.S5Witness
+import CommitGolfCandidate.S5HidingGame
+import CommitGolfCandidate.S5Model
+import CommitGolfCandidate.Stage3cRowWitness
 
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
 namespace CommitGolf.Challenge
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+def submission := CommitGolf.Artifact.submission
 
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
-theorem certificate : CommitGolf.Certificate submission 102400 6375342100 48670 where
-  admission := CommitGolfCandidate.submission_admission
-  machineSuccess := CommitGolfCandidate.submission_machine_success
-  termination := CommitGolfCandidate.submission_termination
-  completeness := CommitGolfCandidate.submission_completeness
-  honestBudgets := CommitGolfCandidate.submission_honest_budgets
-  proofSize := CommitGolfCandidate.submission_proof_size
-  proverCycles := CommitGolfCandidate.submission_prover_cycles
-  binding := CommitGolfCandidate.submission_binding
-  hidingProperty := CommitGolfCandidate.submission_hiding
+theorem certificate : Certificate submission 69396 860276380 191023 :=
+  CommitGolfCandidate.S5Machine.from_checker
+    (CommitGolfCandidate.S5Machine.Check.checker_of_batch
+      (CommitGolfCandidate.S5Machine.Check.batch_of_cap CommitGolfCandidate.S5Machine.Check.cap_judgment))
 
 end CommitGolf.Challenge
