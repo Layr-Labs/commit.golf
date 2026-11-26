@@ -232,15 +232,25 @@ theorem check_path_next (state : MachineState) (pc : state.pc = 4336)
 def checkPathStepState (state : MachineState) (answer : BitVec 256) : MachineState :=
   checkPathNextState (checkCompressionState (checkPathPreparedState state) answer)
 
+/-- Instructions of one truncating compression call (`jal` .. `jalr`), by bit 0 of the mask. -/
+def maskSteps (mask : Word) : Nat := if mask &&& 1 = 0 then 20 else 21
+
+theorem tcomp_steps_mask (state : MachineState) : tcompSteps state = maskSteps (state.getReg .x9) := rfl
+
+theorem check_path_prepared_x9 (state : MachineState) :
+    (checkPathPreparedState state).getReg .x9 = state.getReg .x9 :=
+  check_path_prepared_register state .x9 (by decide) (by decide)
+
 theorem check_path_step (state : MachineState) (pc : state.pc = 4204)
     (scratch : state.getReg .x21 = 256)
     (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (checkerImage) (pathPreparationSteps (state.getReg .x20) + 26 + fuel) state allowCoins =
+    execute (checkerImage) (pathPreparationSteps (state.getReg .x20) + 9 + maskSteps (state.getReg .x9) + fuel)
+        state allowCoins =
       (do let answer ← World.query (.inr (.inl (padInput (readBuffer (checkPathPreparedState state) 256 64))))
           let result ← execute (checkerImage) fuel (checkPathStepState state answer) allowCoins
-          return result.charge (pathPreparationSteps (state.getReg .x20) + 33) 1) := by
+          return result.charge (pathPreparationSteps (state.getReg .x20) + 16 + maskSteps (state.getReg .x9)) 1) := by
   have preparedPC := check_path_prepared_pc state
   have preparedScratch : (checkPathPreparedState state).getReg .x21 = 256 :=
     (check_path_prepared_register state .x21 (by decide) (by decide)).trans scratch
@@ -248,26 +258,33 @@ theorem check_path_step (state : MachineState) (pc : state.pc = 4204)
       (checkCompressionState (checkPathPreparedState state) answer).pc = 4336 := by
     rw [check_compression_pc, preparedPC]
     rfl
-  rw [show pathPreparationSteps (state.getReg .x20) + 26 + fuel =
-      pathPreparationSteps (state.getReg .x20) + (22 + (4 + fuel)) by omega,
+  have steps : tcompSteps (checkPathPreparedState state) = maskSteps (state.getReg .x9) := by
+    rw [tcomp_steps_mask, check_path_prepared_x9]
+  rw [show pathPreparationSteps (state.getReg .x20) + 9 + maskSteps (state.getReg .x9) + fuel =
+      pathPreparationSteps (state.getReg .x20) + (5 + tcompSteps (checkPathPreparedState state) + (4 + fuel)) by
+        rw [steps]; omega,
     check_path_preparation state pc scratch sourceValid,
-    check_compression _ 54 rfl preparedPC preparedScratch]
+    check_compression _ 54 (Or.inl rfl) preparedPC preparedScratch]
   simp only [bind_assoc, pure_bind]
   apply congrArg (fun continuation =>
     (liftM (World.query (.inr (.inl (padInput (readBuffer (checkPathPreparedState state) 256 64))))) :
       OracleComp World (BitVec 256)) >>= continuation)
   funext answer
-  rw [check_path_next _ (compressionPC answer)]
+  rw [check_path_next _ (compressionPC answer), steps]
   simp [checkPathStepState, Execution.charge, ← Nat.add_assoc]
+  congr 1
+  funext a
+  congr 1
+  omega
 
 theorem path_compression_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
     (not5 : reg ≠ .x5) (not6 : reg ≠ .x6) (not7 : reg ≠ .x7) (not10 : reg ≠ .x10)
     (not11 : reg ≠ .x11) (not12 : reg ≠ .x12) (not13 : reg ≠ .x13)
     (not14 : reg ≠ .x14 := by decide) (not15 : reg ≠ .x15 := by decide)
     (not16 : reg ≠ .x16 := by decide) (not17 : reg ≠ .x17 := by decide)
-    (not31 : reg ≠ .x31 := by decide) :
+    (not31 : reg ≠ .x31 := by decide) (not9 : reg ≠ .x9 := by decide) :
     (checkCompressionState (checkPathPreparedState state) answer).getReg reg = state.getReg reg :=
-  (check_compression_register _ answer reg not5 not10 not11 not12 not13 not14 not15 not16 not17 not31).trans
+  (check_compression_register _ answer reg not5 not10 not11 not12 not13 not14 not15 not16 not17 not31 not7 not9).trans
     (check_path_prepared_register state reg not6 not7)
 
 theorem check_path_step_registers (state : MachineState) (answer : BitVec 256) :
@@ -302,9 +319,18 @@ theorem check_path_step_pc (state : MachineState) (answer : BitVec 256) :
   rw [path_compression_register state answer .x29 (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide)]
 
-def pathInstructions (index : Word) : Nat → Nat
+theorem check_path_step_x9 (state : MachineState) (answer : BitVec 256) :
+    (checkPathStepState state answer).getReg .x9 = state.getReg .x9 >>> 1 := by
+  simp only [checkPathStepState, checkPathNextState, MachineState.getReg_setPC,
+    MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x29 ≠ .x9),
+    MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x20 ≠ .x9),
+    MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x25 ≠ .x9)]
+  rw [check_compression_x9, check_path_prepared_x9]
+
+/-- Path instructions for `count` levels, from the index bits (x20) and the cut mask (x9). -/
+def pathInstructions (index mask : Word) : Nat → Nat
   | 0 => 0
-  | count + 1 => pathPreparationSteps index + 26 + pathInstructions (index >>> 1) count
+  | count + 1 => pathPreparationSteps index + 9 + maskSteps mask + pathInstructions (index >>> 1) (mask >>> 1) count
 
 def checkPathLoop (state : MachineState) : Nat → OracleComp World MachineState
   | 0 => pure state
@@ -312,14 +338,14 @@ def checkPathLoop (state : MachineState) : Nat → OracleComp World MachineState
       let answer ← World.query (.inr (.inl (padInput (readBuffer (checkPathPreparedState state) 256 64))))
       checkPathLoop (checkPathStepState state answer) count
 
-theorem path_instruction_bounds (index : Word) (count : Nat) :
-    36 * count ≤ pathInstructions index count ∧ pathInstructions index count ≤ 45 * count := by
-  induction count generalizing index with
+theorem path_instruction_bounds (index mask : Word) (count : Nat) :
+    39 * count ≤ pathInstructions index mask count ∧ pathInstructions index mask count ≤ 49 * count := by
+  induction count generalizing index mask with
   | zero => simp [pathInstructions]
   | succ count ih =>
-    have tail := ih (index >>> 1)
-    simp only [pathInstructions, pathPreparationSteps]
-    split <;> omega
+    have tail := ih (index >>> 1) (mask >>> 1)
+    simp only [pathInstructions, pathPreparationSteps, maskSteps]
+    split <;> split <;> omega
 
 theorem check_path_loop (state : MachineState) (count : Nat) (bounded : count ≤ 24)
     (pc : 0 < count → state.pc = 4204) (counter : state.getReg .x29 = BitVec.ofNat 64 count)
@@ -327,10 +353,10 @@ theorem check_path_loop (state : MachineState) (count : Nat) (bounded : count �
     (sourceValid : ∀ word < 4 * count,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (checkerImage) (pathInstructions (state.getReg .x20) count + fuel) state allowCoins =
+    execute (checkerImage) (pathInstructions (state.getReg .x20) (state.getReg .x9) count + fuel) state allowCoins =
       (do let finished ← checkPathLoop state count
           let result ← execute (checkerImage) fuel finished allowCoins
-          return result.charge (pathInstructions (state.getReg .x20) count + 7 * count) count) := by
+          return result.charge (pathInstructions (state.getReg .x20) (state.getReg .x9) count + 7 * count) count) := by
   induction count generalizing state with
   | zero => simp [pathInstructions, checkPathLoop, Execution.charge]
   | succ count ih =>
@@ -370,15 +396,15 @@ theorem check_path_loop (state : MachineState) (count : Nat) (bounded : count �
       (liftM (World.query (.inr (.inl (padInput (readBuffer (checkPathPreparedState state) 256 64))))) :
         OracleComp World (BitVec 256)) >>= continuation)
     funext answer
-    rw [← (check_path_step_registers state answer).2.1,
+    rw [← (check_path_step_registers state answer).2.1, ← check_path_step_x9 state answer,
       ih _ (by omega) (nextPC answer) (nextCounter answer)
         ((check_path_step_registers state answer).2.2.2.trans scratch) (nextValid answer)]
-    simp only [(check_path_step_registers state answer).2.1, bind_assoc, pure_bind]
+    simp only [(check_path_step_registers state answer).2.1, check_path_step_x9 state answer, bind_assoc, pure_bind]
     have charges (result : Execution) :
-        (result.charge (pathInstructions (state.getReg .x20 >>> 1) count + 7 * count) count).charge
-          (pathPreparationSteps (state.getReg .x20) + 33) 1 =
-        result.charge (pathPreparationSteps (state.getReg .x20) + 26 +
-          pathInstructions (state.getReg .x20 >>> 1) count + 7 * (count + 1)) (count + 1) := by
+        (result.charge (pathInstructions (state.getReg .x20 >>> 1) (state.getReg .x9 >>> 1) count + 7 * count)
+          count).charge (pathPreparationSteps (state.getReg .x20) + 16 + maskSteps (state.getReg .x9)) 1 =
+        result.charge (pathPreparationSteps (state.getReg .x20) + 9 + maskSteps (state.getReg .x9) +
+          pathInstructions (state.getReg .x20 >>> 1) (state.getReg .x9 >>> 1) count + 7 * (count + 1)) (count + 1) := by
       cases result
       simp only [Execution.charge, Execution.mk.injEq, true_and]
       constructor <;> omega
@@ -413,21 +439,21 @@ theorem check_path_loop_finished (state : MachineState) (count : Nat) (bounded :
     · exact rest.2 (by omega)
 
 theorem path_step_preserves (state : MachineState) (answer : BitVec 256) (reg : Reg)
-    (preserved : reg ∉ [.x5, .x6, .x7, .x10, .x11, .x12, .x13, .x20, .x25, .x29, .x14, .x15, .x16, .x17, .x31]) :
+    (preserved : reg ∉ [.x5, .x6, .x7, .x9, .x10, .x11, .x12, .x13, .x20, .x25, .x29, .x14, .x15, .x16, .x17, .x31]) :
     (checkPathStepState state answer).getReg reg = state.getReg reg := by
   simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at preserved
-  rcases preserved with ⟨not5, not6, not7, not10, not11, not12, not13, not20, not25, not29, not14, not15, not16, not17, not31⟩
+  rcases preserved with ⟨not5, not6, not7, not9, not10, not11, not12, not13, not20, not25, not29, not14, not15, not16, not17, not31⟩
   simp only [checkPathStepState, checkPathNextState, MachineState.getReg_setPC,
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not29),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not20),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not25)]
-  exact path_compression_register state answer reg not5 not6 not7 not10 not11 not12 not13 not14 not15 not16 not17 not31
+  exact path_compression_register state answer reg not5 not6 not7 not10 not11 not12 not13 not14 not15 not16 not17 not31 not9
 
 theorem check_path_loop_registers (state : MachineState) (count : Nat) (finished : MachineState)
     (reachable : finished ∈ support (checkPathLoop state count)) :
     finished.getReg .x25 = state.getReg .x25 + BitVec.ofNat 64 (32 * count) ∧
     finished.getReg .x20 = state.getReg .x20 >>> count ∧
-    ∀ reg ∉ [.x5, .x6, .x7, .x10, .x11, .x12, .x13, .x20, .x25, .x29, .x14, .x15, .x16, .x17, .x31],
+    ∀ reg ∉ [.x5, .x6, .x7, .x9, .x10, .x11, .x12, .x13, .x20, .x25, .x29, .x14, .x15, .x16, .x17, .x31],
       finished.getReg reg = state.getReg reg := by
   induction count generalizing state with
   | zero =>
@@ -450,27 +476,70 @@ theorem check_path_loop_registers (state : MachineState) (count : Nat) (finished
     · intro reg preserved
       exact (rest.2.2 reg preserved).trans (path_step_preserves state answer reg preserved)
 
+/-- The cut mask: bit l set iff the node produced at path level l (height l+1) is stored in 240 bits. -/
+def cutMask : Word := 0x1FFFC
+
+/-- `jal x0,nstub` (26); nstub: `mv x29,x30; li x9,0x1FFFC; jal x0,27`. -/
 def checkPathInitializedState (state : MachineState) : MachineState :=
-  (state.setReg .x29 (state.getReg .x30)).setPC 4204
+  ((state.setReg .x29 (state.getReg .x30)).setReg .x9 cutMask).setPC 4204
 
 theorem check_path_setup (state : MachineState) (pc : state.pc = 4200)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (checkerImage) (1 + fuel) state allowCoins =
+    execute (checkerImage) (6 + fuel) state allowCoins =
       (do let result ← execute (checkerImage) fuel (checkPathInitializedState state) allowCoins
-          return result.charge 1 0) := by
-  have fetched : fetch (checkerImage) state = some (.base (.ADDI .x29 .x30 0)) := by
+          return result.charge 6 0) := by
+  let a := state.setPC 5828
+  let b := (state.setReg .x29 (state.getReg .x30)).setPC 5832
+  let c := ((state.setReg .x29 (state.getReg .x30)).setReg .x9 63).setPC 5836
+  let d := ((state.setReg .x29 (state.getReg .x30)).setReg .x9 129024).setPC 5840
+  let e := ((state.setReg .x29 (state.getReg .x30)).setReg .x9 131068).setPC 5844
+  have f0 : fetch (checkerImage) state = some (.base (.JAL .x0 1628)) := by
     apply check_fetch _ 26 _ (by decide) pc; rfl
-  have stepped : ordinaryStep state (.base (.ADDI .x29 .x30 0)) =
-      some (checkPathInitializedState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
-      checkPathInitializedState, pc]
-  rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  rfl
+  have f1 : fetch (checkerImage) a = some (.base (.ADDI .x29 .x30 0)) := by
+    apply check_fetch _ 433 _ (by decide) rfl; rfl
+  have f2 : fetch (checkerImage) b = some (.base (.ADDI .x9 .x0 63)) := by
+    apply check_fetch _ 434 _ (by decide) rfl; rfl
+  have f3 : fetch (checkerImage) c = some (.base (.SLLI .x9 .x9 11)) := by
+    apply check_fetch _ 435 _ (by decide) rfl; rfl
+  have f4 : fetch (checkerImage) d = some (.base (.ADDI .x9 .x9 2044)) := by
+    apply check_fetch _ 436 _ (by decide) rfl; rfl
+  have f5 : fetch (checkerImage) e = some (.base (.JAL .x0 2095512)) := by
+    apply check_fetch _ 437 _ (by decide) rfl; rfl
+  have s0 : ordinaryStep state (.base (.JAL .x0 1628)) = some a := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21,
+      MachineState.setReg, a, pc]
+  have s1 : ordinaryStep a (.base (.ADDI .x29 .x30 0)) = some b := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, a, b,
+      MachineState.getReg, MachineState.setReg, MachineState.setPC]
+  have s2 : ordinaryStep b (.base (.ADDI .x9 .x0 63)) = some c := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, b, c,
+      MachineState.getReg, MachineState.setReg, MachineState.setPC]
+  have s3 : ordinaryStep c (.base (.SLLI .x9 .x9 11)) = some d := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, c, d,
+      MachineState.getReg, MachineState.setReg, MachineState.setPC]
+    funext r; split <;> rfl
+  have s4 : ordinaryStep d (.base (.ADDI .x9 .x9 2044)) = some e := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, d, e,
+      MachineState.getReg, MachineState.setReg, MachineState.setPC]
+    funext r; split <;> rfl
+  have s5 : ordinaryStep e (.base (.JAL .x0 2095512)) = some (checkPathInitializedState state) := by
+    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend21, e,
+      checkPathInitializedState, cutMask, MachineState.setReg, MachineState.setPC]
+  rw [Nat.add_comm 6 fuel]
+  simp only [execute, f0, s0, f1, s1, f2, s2, f3, s3, f4, s4, f5, s5, instructionCycles, bind_assoc, pure_bind]
+  simp [Execution.charge, ← Nat.add_assoc]
 
-theorem check_path_setup_register (state : MachineState) (reg : Reg) (notCounter : reg ≠ .x29) :
+theorem check_path_setup_register (state : MachineState) (reg : Reg) (notCounter : reg ≠ .x29)
+    (notMask : reg ≠ .x9) :
     (checkPathInitializedState state).getReg reg = state.getReg reg := by
   simp only [checkPathInitializedState, MachineState.getReg_setPC,
+    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm notMask),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm notCounter)]
+
+theorem check_path_initialized_x9 (state : MachineState) :
+    (checkPathInitializedState state).getReg .x9 = cutMask := by
+  simp only [checkPathInitializedState, MachineState.getReg_setPC,
+    MachineState.getReg_setReg_eq (by decide : Reg.x9 ≠ .x0)]
 
 theorem check_path_subroutine (pathDepth : Nat) (depthBound : pathDepth ≤ 24)
     (state : MachineState) (pc : state.pc = 4200)
@@ -479,23 +548,24 @@ theorem check_path_subroutine (pathDepth : Nat) (depthBound : pathDepth ≤ 24)
     (sourceValid : ∀ word < 4 * pathDepth,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (checkerImage) (1 + pathInstructions (state.getReg .x20) pathDepth + fuel)
+    execute (checkerImage) (6 + pathInstructions (state.getReg .x20) cutMask pathDepth + fuel)
         state allowCoins =
       (do let finished ← checkPathLoop (checkPathInitializedState state) pathDepth
           let result ← execute (checkerImage) fuel finished allowCoins
-          return result.charge (1 + pathInstructions (state.getReg .x20) pathDepth + 7 * pathDepth) pathDepth) := by
+          return result.charge (6 + pathInstructions (state.getReg .x20) cutMask pathDepth + 7 * pathDepth) pathDepth) := by
   have initialPC : (checkPathInitializedState state).pc = 4204 := rfl
   have counter : (checkPathInitializedState state).getReg .x29 = BitVec.ofNat 64 pathDepth :=
     depthReg
-  have initialScratch := (check_path_setup_register state .x21 (by decide)).trans scratch
+  have initialScratch := (check_path_setup_register state .x21 (by decide) (by decide)).trans scratch
   have initialSource : ∀ word < 4 * pathDepth,
       accessValid ((checkPathInitializedState state).getReg .x25 + BitVec.ofNat 64 (8 * word)) 8 = true := by
-    rw [check_path_setup_register state .x25 (by decide)]
+    rw [check_path_setup_register state .x25 (by decide) (by decide)]
     exact sourceValid
   rw [Nat.add_assoc, check_path_setup state pc,
-    ← check_path_setup_register state .x20 (by decide),
+    ← check_path_setup_register state .x20 (by decide) (by decide), ← check_path_initialized_x9 state,
     check_path_loop _ pathDepth depthBound (fun _ => initialPC) counter initialScratch initialSource]
-  simp only [bind_assoc, pure_bind, check_path_setup_register state .x20 (by decide)]
+  simp only [bind_assoc, pure_bind, check_path_setup_register state .x20 (by decide) (by decide),
+    check_path_initialized_x9]
   simp [Execution.charge, Nat.add_assoc]
 
 end CommitGolfCandidate.Late.Check.Normal

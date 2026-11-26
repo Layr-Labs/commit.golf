@@ -6,17 +6,21 @@ namespace CommitGolfCandidate.Late.Open
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 inductive Test where | empty | depth | morePath | moreRecords | batch | moreCap | moreOverrides
+  | bMorePathA | bMorePathB | bMoreRecords | bMoreCap | bMoreOverrides
 deriving DecidableEq
 
 def Test.start : Test → Nat
   | .empty=>14 | .depth=>17 | .morePath=>56 | .moreRecords=>59 | .batch=>61 | .moreCap=>89 | .moreOverrides=>128
+  | .bMorePathA=>219 | .bMorePathB=>261 | .bMoreRecords=>264 | .bMoreCap=>336 | .bMoreOverrides=>399
 
 def Test.target : Test → Nat
   | .empty=>60 | .depth=>19 | .morePath=>38 | .moreRecords=>19 | .batch=>135 | .moreCap=>68 | .moreOverrides=>108
+  | .bMorePathA=>177 | .bMorePathB=>221 | .bMoreRecords=>140 | .bMoreCap=>271 | .bMoreOverrides=>355
 
 def Test.args : Test → Reg × Reg
   | .empty => (.x27,.x0) | .depth => (.x27,.x6) | .morePath => (.x28,.x0)
   | .moreRecords => (.x27,.x0) | .batch => (.x16,.x6) | .moreCap | .moreOverrides => (.x28,.x0)
+  | .bMorePathA | .bMorePathB | .bMoreCap | .bMoreOverrides => (.x28,.x0) | .bMoreRecords => (.x27,.x0)
 
 def Test.bits (b : Test) : BitVec 13 := BitVec.ofInt 13 (4*((b.target : Int)-(b.start : Int)))
 def Test.instr (b : Test) := if b=.empty then Instr.BEQ b.args.1 b.args.2 b.bits else Instr.BNE b.args.1 b.args.2 b.bits
@@ -27,7 +31,7 @@ def Test.after (b : Test) (s : MachineState) :=
 
 theorem test_run (b : Test) (s : MachineState) (pc : s.pc=pcAt b.start) : Runs s (b.after s) 1 1 := by
   have enc : decodeInstruction (openWord b.start)=some (.base b.instr) := by cases b <;> rfl
-  have bound : b.start<140 := by cases b <;> decide
+  have bound : b.start<406 := by cases b <;> decide
   have rs : Runs s (execInstrBr s b.instr) 1 1 := by
     have st : ordinaryStep s (.base b.instr)=some (execInstrBr s b.instr) := by cases b <;> rfl
     have cost : instructionCycles (.base b.instr)=1 := by cases b <;> rfl
@@ -46,10 +50,20 @@ theorem test_run (b : Test) (s : MachineState) (pc : s.pc=pcAt b.start) : Runs s
       exact choose (s.getReg b.args.1 != s.getReg b.args.2)
   exact same ▸ rs
 
-theorem halt_run (s : MachineState) (pc : s.pc=pcAt 139)
+theorem halt_run (n : Nat) (atHalt : n=405 ∨ n=139) (s : MachineState) (pc : s.pc=pcAt n)
     (mode : s.getReg .x5=1) (code : s.getReg .x10=0) (fuel : Nat) :
     execute image (fuel+1) s true = pure ⟨.success,s,1,0⟩ := by
-  rw [execute,fetched 139 (by decide) .ECALL (by rfl) s pc,mode,code];rfl
+  obtain rfl|rfl := atHalt <;>
+    rw [execute, fetched _ (by decide) .ECALL (by rfl) _ pc,mode,code] <;> rfl
+
+/-- Word 18 jumps to the appended batch code at word 140. -/
+theorem jump_run (s : MachineState) (pc : s.pc=pcAt 18) : Runs s (s.setPC (pcAt 140)) 1 1 := by
+  have enc : decodeInstruction (openWord 18)=some (.base (.JAL .x0 ((488 : BitVec 21)))) := by rfl
+  have st : ordinaryStep s (.base (.JAL .x0 ((488 : BitVec 21))))=some (s.setPC (pcAt 140)) := by
+    simp only [ordinaryStep,memoryArgumentsValid,memAccess,↓reduceIte]
+    change some ((s.setReg .x0 (s.pc+4)).setPC (s.pc+signExtend21 ((488 : BitVec 21))))=_
+    rw [pc];rfl
+  exact one 18 (by decide) _ enc s _ pc st
 
 theorem access_at (a : Nat) (range : a+8≤MEMORY_BYTES) (align : a%8=0) :
     accessValid (BitVec.ofNat 64 a) 8=true := by

@@ -9,7 +9,7 @@ def authPath (h : Compression) (input : CheckInput) (r : Nat) : List (Bool × Di
 theorem accepted_root (law : AcceptsValid) (o : Oracle) (input : CheckInput)
     (accepted : (evaluation o input).1 = true) (r : Nat) (hr : r < input.positions.card) :
     let i := recordIndex input.positions r
-    climb o.compression (leaf o.compression (i.val.testBit 0) (salt input r) (recordValue input r))
+    climbAt o.compression 0 (leaf o.compression (i.val.testBit 0) (salt input r) (recordValue input r))
       (authPath o.compression input r) = input.commitment := by
   have valid := law o input accepted
   by_cases b : input.positions.card = BATCH

@@ -105,25 +105,25 @@ theorem mapM_bound {ι β γ : Type} (items : List ι) (f : ι → OracleComp Wo
 
 /-! ### Internal nodes -/
 
-def parents (compress : Compression) : List Late.Digest → List Late.Digest
-  | left :: right :: rest => compress (Late.parentBlock left right) :: parents compress rest
+def parents (compress : Compression) (height : Nat) : List Late.Digest → List Late.Digest
+  | left :: right :: rest => cut height (compress (Late.parentBlock left right)) :: parents compress height rest
   | _ => []
 
 def levels (compress : Compression) : Nat → List Late.Digest → Late.Levels
   | 0, layer => [layer]
-  | depth + 1, layer => layer :: levels compress depth ((parents compress layer).map (Late.retain depth))
+  | depth + 1, layer => layer :: levels compress depth (parents compress (LOG_LENGTH - depth) layer)
 
-theorem run_parents (oracle : Oracle) {α : Type} (layer : List Late.Digest)
+theorem run_parents (oracle : Oracle) {α : Type} (height : Nat) (layer : List Late.Digest)
     (next : List Late.Digest → OracleComp World α) :
-    fixedOracleRun oracle (Late.parentsM Late.hash layer >>= next) =
-      fixedOracleRun oracle (next (parents oracle.compression layer)) := by
+    fixedOracleRun oracle (Late.parentsM Late.hash height layer >>= next) =
+      fixedOracleRun oracle (next (parents oracle.compression height layer)) := by
   match layer with
   | [] => simp only [Late.parentsM, parents, pure_bind]
   | [_] => simp only [Late.parentsM, parents, pure_bind]
   | left :: right :: rest =>
     simp only [Late.parentsM, parents, bind_assoc, pure_bind]
     rw [run_hash]
-    exact run_parents oracle rest _
+    exact run_parents oracle height rest _
 
 theorem run_levels (oracle : Oracle) {α : Type} (depth : Nat) (layer : List Late.Digest)
     (next : Late.Levels → OracleComp World α) :
@@ -135,17 +135,17 @@ theorem run_levels (oracle : Oracle) {α : Type} (depth : Nat) (layer : List Lat
     simp only [Late.levelsM, levels, bind_assoc, pure_bind]
     rw [run_parents, ih]
 
-theorem parents_bound {α : Type} (layer : List Late.Digest)
+theorem parents_bound {α : Type} (height : Nat) (layer : List Late.Digest)
     (next : List Late.Digest → OracleComp World α) (after : Nat)
     (nextBounded : ∀ above, above.length = layer.length / 2 → PublicQueryBound (next above) after) :
-    PublicQueryBound (Late.parentsM Late.hash layer >>= next) (layer.length / 2 + after) := by
+    PublicQueryBound (Late.parentsM Late.hash height layer >>= next) (layer.length / 2 + after) := by
   match layer with
   | [] => simpa [Late.parentsM] using nextBounded [] rfl
   | [_] => simpa [Late.parentsM] using nextBounded [] (by simp)
   | left :: right :: rest =>
     simp only [Late.parentsM, bind_assoc, pure_bind]
-    have tail (parent : Late.Digest) := parents_bound rest (fun above => next (parent :: above)) after
-      (fun above size => nextBounded (parent :: above) (by simp only [List.length_cons, size]; omega))
+    have tail (parent : Late.Digest) := parents_bound height rest (fun above => next (cut height parent :: above)) after
+      (fun above size => nextBounded (cut height parent :: above) (by simp only [List.length_cons, size]; omega))
     convert public_query_bound_bind (hash_bound (Late.parentBlock left right)) tail using 1
     simp only [List.length_cons]
     omega
@@ -158,14 +158,14 @@ theorem levels_bound (depth : Nat) (layer : List Late.Digest) :
   | succ depth ih =>
     simp only [Late.levelsM]
     have above (upper : List Late.Digest) (size : upper.length = layer.length / 2) :
-        PublicQueryBound (do let rest ← Late.levelsM Late.hash depth (upper.map (Late.retain depth)); pure (layer :: rest))
+        PublicQueryBound (do let rest ← Late.levelsM Late.hash depth upper; pure (layer :: rest))
           (layer.length / 2) := by
-      have chained := public_query_bound_bind (ih (upper.map (Late.retain depth)))
+      have chained := public_query_bound_bind (ih upper)
         (fun rest => (show PublicQueryBound (pure (layer :: rest) : OracleComp World Late.Levels) 0
           from trivial))
-      rw [List.length_map, size, Nat.add_zero] at chained
+      rw [size, Nat.add_zero] at chained
       exact chained
-    exact (parents_bound layer _ _ above).mono (by omega)
+    exact (parents_bound _ layer _ _ above).mono (by omega)
 
 /-! ### The whole tree, and the tree with one leaf supplied -/
 
@@ -263,14 +263,14 @@ theorem leaf_layer_eq (compress : Compression) (message : Message) (salt : Late.
     leafLayer compress message salt = (List.finRange LENGTH).map fun index =>
       leafDigest compress (index.val.testBit 0) (salt index) (message index) := rfl
 
-theorem parents_eq_model (compress : Compression) (layer : List Late.Digest) :
-    parents compress layer = Late.parentsM (M := Id) compress layer := by
+theorem parents_eq_model (compress : Compression) (height : Nat) (layer : List Late.Digest) :
+    parents compress height layer = Late.parentsM (M := Id) compress height layer := by
   match layer with
   | [] => rfl
   | [_] => rfl
   | left :: right :: rest =>
     simp only [parents, Late.parentsM]
-    rw [parents_eq_model compress rest]
+    rw [parents_eq_model compress height rest]
     rfl
 
 theorem levels_eq_model (compress : Compression) (depth : Nat) (layer : List Late.Digest) :
@@ -320,8 +320,18 @@ theorem opening_salt_congr (retained : Late.Levels) (left right : Late.SaltTape)
     have opened : index ∈ positions := by simpa only [Finset.mem_sort] using member
     unfold Late.record
     rw [agree index opened]
-  unfold Late.opening Late.wideOpening
-  simp only [records]
+  have batch :
+      (positions.sort (· ≤ ·)).flatMap (Late.batchRecord retained left) =
+        (positions.sort (· ≤ ·)).flatMap (Late.batchRecord retained right) := by
+    rw [List.flatMap_def, List.flatMap_def]
+    congr 1
+    apply List.map_congr_left
+    intro index member
+    have opened : index ∈ positions := by simpa only [Finset.mem_sort] using member
+    unfold Late.batchRecord
+    rw [agree index opened]
+  unfold Late.opening
+  simp only [records, batch]
 
 theorem opening_hidden_salt (retained : Late.Levels) (salt : Late.SaltTape)
     (positions : Positions) (hidden : Index) (unopened : hidden ∉ positions)

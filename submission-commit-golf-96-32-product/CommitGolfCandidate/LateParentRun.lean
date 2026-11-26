@@ -42,7 +42,7 @@ theorem parent_site_run {s : MachineState} {d : Fin 24} {p : Nat} (regs : Parent
           return out.charge 10 1) := by
   let j : Fin 16 := ⟨p%16,by omega⟩
   have htile : j.val < tileWidth d := by unfold tileWidth; dsimp [j]; omega
-  obtain ⟨f0,f1,f2⟩ := parent_sites d j htile
+  obtain ⟨f0,f1,f2,_⟩ := parent_sites d j htile
   obtain ⟨s0,d0⟩ := parent_addresses regs
   have outEnd := parent_below_salts (d.val+1) p inside
   have rowEnd := parent_row_disjoint d p p d.isLt inside

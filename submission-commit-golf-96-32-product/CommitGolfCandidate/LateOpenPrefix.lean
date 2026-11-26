@@ -11,7 +11,7 @@ def beforeMode (s : MachineState) (k : Nat) :=
 def gate (s : MachineState) := Test.batch.after (Part.mode.after s)
 def afterRecords (s : MachineState) (k : Nat) := gate (beforeMode s k)
 
-def prefixCost (k : Nat) := if k=0 then 17 else (if k=128 then 19 else 18)+(22+19*depth k)*k+2
+def prefixCost (k : Nat) := if k=0 then 17 else 18+(22+19*depth k)*k+2
 
 private theorem mode_run (s : MachineState) (k : Nat) (pc : s.pc=pcAt 60) (count : s.getReg .x16=W k)
     (small : k≤LENGTH) :
@@ -36,18 +36,18 @@ def prefixBytes (tree : Levels) (salts : SaltTape) (xs : List Index) :=
 
 structure PrefixResult (s : MachineState) (xs : List Index) (tree : Levels) (salts : SaltTape) : Prop where
   run : Runs s (afterRecords s xs.length) (prefixCost xs.length) (prefixCost xs.length)
-  pc : (afterRecords s xs.length).pc=pcAt (if xs.length=128 then 62 else 135)
+  pc : (afterRecords s xs.length).pc=pcAt 135
   count : (afterRecords s xs.length).getReg .x16=W xs.length
-  cap : xs.length=128 → (afterRecords s xs.length).getReg .x25=W capBase
   bytes : Written s (afterRecords s xs.length) proofBase (prefixBytes tree salts xs)
 
 theorem open_prefix (s : MachineState) (xs : List Index) (tree : Levels) (salts : SaltTape)
-    (abi : ABI s xs.length) (size : xs.length≤LENGTH) (src : Sources s xs tree salts) : PrefixResult s xs tree salts := by
+    (abi : ABI s xs.length) (size : xs.length≤LENGTH) (src : Sources s xs tree salts) (normal : xs.length≠128) :
+    PrefixResult s xs tree salts := by
   by_cases empty : xs=[]
   · subst xs
     obtain ⟨head,pc,c,mem⟩ := start_empty s abi
     obtain ⟨tail,fin,stay,cnt,_⟩ := mode_run (dispatch s) 0 pc c (by decide)
-    refine ⟨head.trans tail,fin,cnt,fun bad => False.elim ((by decide : (0:Nat)≠128) bad),?_⟩
+    refine ⟨head.trans tail,fin.trans (by rfl),cnt,?_⟩
     exact (Written.empty s proofBase).congr_mem rfl (stay.trans mem)
   · have pos : 0<xs.length := List.length_pos_iff.mpr empty
     let k := xs.length
@@ -56,7 +56,7 @@ theorem open_prefix (s : MachineState) (xs : List Index) (tree : Levels) (salts 
     let b := runRecords d k a
     have dpos : 0<d := by dsimp [d,depth];split <;> decide
     have bound : d≤LOG_LENGTH := by dsimp [d,depth];split <;> decide
-    have later := start_records s k pos size abi
+    have later := start_records s k pos size abi normal
     obtain ⟨head,pc,fr,mem⟩ := later
     have r := records_run a tree salts xs d 0 k (by simpa only [if_pos pos] using pc) fr
       (by simp [k]) dpos bound size (src.same_mem mem)
@@ -66,15 +66,12 @@ theorem open_prefix (s : MachineState) (xs : List Index) (tree : Levels) (salts 
     have total := mode_run b k finishPC r.frame.count size
     obtain ⟨tail,fin,stay,cnt,ptr⟩ := total
     have done : afterRecords s k=gate b := by simp only [afterRecords,beforeMode,if_neg (show k≠0 by omega),b,a,d]
-    refine ⟨?_,?_,?_,?_,?_⟩
+    refine ⟨?_,?_,?_,?_⟩
     · rw [done];unfold prefixCost;rw [if_neg (by omega : k≠0)]
       exact (head.trans r.run).trans tail
-    · rw [done];exact fin
+    · have e : (if k=128 then 62 else 135) = 135 := if_neg normal
+      rw [done];rw [e] at fin;exact fin
     · rw [done];exact cnt
-    · intro batch
-      rw [done,ptr,r.frame.dest]
-      change W (recordAddr (depth k) (0+k))=W capBase
-      rw [show k=128 from batch];rfl
     · rw [done]
       have seq := r.data.congr_mem mem.symm stay
       rw [all_records_eq] at seq

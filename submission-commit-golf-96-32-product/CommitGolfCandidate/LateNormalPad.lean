@@ -200,7 +200,7 @@ theorem padding_execute (checker : Bool) (state : MachineState)
   simp [oracleCycles, COMPRESSION_CYCLES, Execution.charge, ← Nat.add_assoc]
   rfl
 
-def paddingCallSite (_checker : Bool) (index : Nat) : Prop := index = 59 ∨ index = 132
+def paddingCallSite (_checker : Bool) (index : Nat) : Prop := index = 132
 
 theorem padding_call (checker : Bool) (state : MachineState) (index : Nat)
     (location : paddingCallSite checker index)
@@ -223,14 +223,14 @@ theorem padding_call (checker : Bool) (state : MachineState) (index : Nat)
     (BitVec.ofNat 64 (4096+4*paddingEntry checker))
   have fetched : fetch (checkerImage) state =
       some (.base instruction) := by
-    cases checker <;> rcases location with rfl | rfl <;>
+    cases checker <;> subst location <;>
       simp only [fetch, pc] <;> rfl
   have stepped : ordinaryStep state (.base instruction) = some next := by
-    cases checker <;> rcases location with rfl | rfl <;>
+    cases checker <;> subst location <;>
       simp [instruction, next, paddingEntry, ordinaryStep, memoryArgumentsValid,
         memAccess, execInstrBr, signExtend21, pc, MachineState.setPC]
   have alignedReturn : (state.pc+4) &&& ~~~1 = state.pc+4 := by
-    cases checker <;> rcases location with rfl | rfl <;> rw [pc] <;> rfl
+    cases checker <;> subst location <;> rw [pc] <;> rfl
   have separate := padding_output_separate (state.getReg .x10) (state.getReg .x12)
     sourceValid destinationValid beforePadding
   rw [show 17+fuel = (16+fuel)+1 by omega,

@@ -40,11 +40,9 @@ theorem level_keeps_gaps (h : Compression) (s : MachineState) (d n : Nat)
   apply (fill_preserves _ _ _ _ _ 32 bound (by unfold rowBase at valid; omega)
     (fun j _ => (node_gap _ j p).symm)).trans (g p hp)
 
-def layerHash (h : Compression) (d : Nat) : Compression := fun b=>retain (23-d) (h b)
-
 def treeNode (h : Compression) (base : Nat → Digest) : Nat → Nat → Digest
   | 0,j => base j
-  | d+1,j => layerHash h d (parentBlock (treeNode h base d (2*j)) (treeNode h base d (2*j+1)))
+  | d+1,j => cut (d+1) (h (parentBlock (treeNode h base d (2*j)) (treeNode h base d (2*j+1))))
 
 def LevelsThrough (h : Compression) (base : Nat → Digest) (d : Nat) (s : MachineState) :=
   ∀ level ≤ d, ∀ i < levelCount level, readBuffer s (nodeAddress level i) 32 = treeNode h base level i
@@ -59,7 +57,7 @@ private theorem earlier_node (d level i j : Nat) (le : level ≤ d) (ht : d < LO
 
 theorem fill_correct (h : Compression) (base : Nat → Digest) (s : MachineState) (d : Nat)
     (ht : d < LOG_LENGTH) (st : LevelsThrough h base d s) (g : Gaps s) :
-    LevelsThrough h base (d+1) (fillLevel (layerHash h d) d (levelCount (d+1)) s) := by
+    LevelsThrough h base (d+1) (fillLevel h d (levelCount (d+1)) s) := by
   intro level hl i hi
   by_cases last : level=d+1
   · subst level

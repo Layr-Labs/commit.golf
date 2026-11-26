@@ -1,8 +1,5 @@
-import CommitGolfCandidate.LateNormalPathFacts
-import CommitGolfCandidate.LateMemoryStep
-import CommitGolfCandidate.InputMemory
-import CommitGolfCandidate.HeapLayout
-import CommitGolfCandidate.LateBinding
+import CommitGolfCandidate.LateOrdinary
+import CommitGolfCandidate.LateHidingTransfer
 
 namespace CommitGolfCandidate.PairCap
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp

@@ -11,8 +11,8 @@ def transcript (s : Scheme) (m : Message) (p : Positions) :
   pure (root,pf)
 
 def ViewRefinement : Prop :=
-  ∀ o m p, view o (transcript CommitGolf.Artifact.submission.scheme m p) =
-    view o (transcript (scheme CommitGolf.Artifact.submission.scheme.check) m p)
+  ∀ o m p, view o (transcript submission.scheme m p) =
+    view o (transcript (scheme submission.scheme.check) m p)
 
 private theorem factor {S O : Type} {k : Nat} (s : Scheme) (a : Hiding.HidingAdversary S O k)
     (b : Bool) :
@@ -31,12 +31,12 @@ attribute [local irreducible] Artifact.submission Submission.scheme scheme trans
 /-- Transport a proof of the model's single hiding goal to the exact machine
 using equality of the joint commitment-and-opening view for each fixed oracle. -/
 theorem machine_hiding (refines : ViewRefinement) (late_hiding : HidingGoal) :
-    CommitGolf.Artifact.submission.scheme.Hiding HIDING_ERROR := by
-  have hidden := late_hiding CommitGolf.Artifact.submission.scheme.check
+    submission.scheme.Hiding HIDING_ERROR := by
+  have hidden := late_hiding submission.scheme.check
   refine ⟨hidden.1, ?_⟩
   intro k t le S O adv bound
-  have same (b : Bool) : Hiding.runHiding (Hiding.hidingExperiment CommitGolf.Artifact.submission.scheme adv b) =
-      Hiding.runHiding (Hiding.hidingExperiment (scheme CommitGolf.Artifact.submission.scheme.check) adv b) := by
+  have same (b : Bool) : Hiding.runHiding (Hiding.hidingExperiment submission.scheme adv b) =
+      Hiding.runHiding (Hiding.hidingExperiment (scheme submission.scheme.check) adv b) := by
     rw [run_view, run_view]
     apply bind_congr
     intro o

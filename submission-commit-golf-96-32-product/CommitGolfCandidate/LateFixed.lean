@@ -33,12 +33,12 @@ private theorem view_mapM {α β : Type} (o : Oracle) (xs : List α) (f : α →
   | nil => exact view_pure _ _
   | cons x xs ih => simp only [List.mapM_cons, view_bind, agree, ih, pure_bind, view_pure, List.map_cons]
 
-theorem view_parents (o : Oracle) (xs : List Digest) :
-    view o (parentsM hash xs) = pure (parentsM (M := Id) o.compression xs) := by
+theorem view_parents (o : Oracle) (height : Nat) (xs : List Digest) :
+    view o (parentsM hash height xs) = pure (parentsM (M := Id) o.compression height xs) := by
   match xs with
   | [] | [_] => exact view_pure _ _
   | a::b::xs =>
-    simp only [parentsM, view_bind, view_hash, pure_bind, view_parents o xs, view_pure]
+    simp only [parentsM, view_bind, view_hash, pure_bind, view_parents o height xs, view_pure]
     rfl
 
 theorem view_levels (o : Oracle) (d : Nat) (xs : List Digest) :

@@ -3,11 +3,11 @@ import CommitGolfCandidate.LateOpenCode
 namespace CommitGolfCandidate.Late.Open
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-inductive Bin where | add | mul | and | xor | shl | shr deriving DecidableEq
+inductive Bin where | add | mul | and | xor | shl | shr | sub deriving DecidableEq
 
 def Bin.apply : Bin → Word → Word → Word
   | .add,a,b => a+b | .mul,a,b => a*b | .and,a,b => a &&& b | .xor,a,b => a ^^^ b
-  | .shl,a,b => a <<< b.toNat | .shr,a,b => a >>> b.toNat
+  | .shl,a,b => a <<< b.toNat | .shr,a,b => a >>> b.toNat | .sub,a,b => a-b
 
 inductive Expr where
   | reg (r : Reg) | lit (w : Word) | op (b : Bin) (x y : Expr) | load (addr : Expr)
@@ -27,16 +27,16 @@ theorem eval_mkOp (s : MachineState) (b : Bin) (x y : Expr) :
 inductive Calc where
   | addi (d r : Reg) (i : BitVec 12) | andi (d r : Reg) (i : BitVec 12) | xori (d r : Reg) (i : BitVec 12)
   | slli (d r : Reg) (i : BitVec 6) | srli (d r : Reg) (i : BitVec 6)
-  | add (d a b : Reg) | mul (d a b : Reg) | ld (d r : Reg) (i : BitVec 12)
+  | add (d a b : Reg) | mul (d a b : Reg) | ld (d r : Reg) (i : BitVec 12) | sub (d a b : Reg)
 deriving DecidableEq
 
 def Calc.instr : Calc → Instr
   | .addi d r i => .ADDI d r i | .andi d r i => .ANDI d r i | .xori d r i => .XORI d r i
   | .slli d r i => .SLLI d r i | .srli d r i => .SRLI d r i | .add d a b => .ADD d a b
-  | .mul d a b => .MUL d a b | .ld d r i => .LD d r i
+  | .mul d a b => .MUL d a b | .ld d r i => .LD d r i | .sub d a b => .SUB d a b
 
 def Calc.dst : Calc → Reg
-  | .addi d .. | .andi d .. | .xori d .. | .slli d .. | .srli d .. | .add d .. | .mul d .. | .ld d .. => d
+  | .addi d .. | .andi d .. | .xori d .. | .slli d .. | .srli d .. | .add d .. | .mul d .. | .ld d .. | .sub d .. => d
 
 def Calc.value (f : Reg → Expr) : Calc → Expr
   | .addi _ r i => mkOp .add (f r) (.lit (signExtend12 i))
@@ -44,7 +44,7 @@ def Calc.value (f : Reg → Expr) : Calc → Expr
   | .xori _ r i => mkOp .xor (f r) (.lit (signExtend12 i))
   | .slli _ r i => mkOp .shl (f r) (.lit (BitVec.ofNat 64 i.toNat))
   | .srli _ r i => mkOp .shr (f r) (.lit (BitVec.ofNat 64 i.toNat))
-  | .add _ a b => mkOp .add (f a) (f b) | .mul _ a b => mkOp .mul (f a) (f b)
+  | .add _ a b => mkOp .add (f a) (f b) | .mul _ a b => mkOp .mul (f a) (f b) | .sub _ a b => mkOp .sub (f a) (f b)
   | .ld _ r i => .load (mkOp .add (f r) (.lit (signExtend12 i)))
 
 def Calc.reads (f : Reg → Expr) : Calc → List Expr
@@ -93,7 +93,7 @@ def price (cs : List Calc) := (cs.map fun c => instructionCycles (.base c.instr)
 
 theorem evaluate_block (cs : List Calc) (start : Nat) (s origin : MachineState) (f : Reg → Expr)
     (regs : live origin s f) (mem : s.mem=origin.mem) (pc : s.pc=pcAt start)
-    (bound : start+cs.length≤140) (nz : ∀ c ∈ cs, c.dst≠.x0)
+    (bound : start+cs.length≤406) (nz : ∀ c ∈ cs, c.dst≠.x0)
     (valid : ∀ a ∈ requirements f cs, accessValid (a.eval origin) 8=true)
     (code : ∀ j (hj : j<cs.length), decodeInstruction (openWord (start+j))=some (.base cs[j].instr)) :
     let t := evaluated cs s

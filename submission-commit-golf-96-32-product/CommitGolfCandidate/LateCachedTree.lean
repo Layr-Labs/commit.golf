@@ -4,26 +4,28 @@ import CommitGolfCandidate.LateFixed
 namespace CommitGolfCandidate.Late
 open CommitGolf
 
-def parents (h : Compression) (xs : List Digest) : List Digest := parentsM (M := Id) h xs
+def parents (h : Compression) (height : Nat) (xs : List Digest) : List Digest :=
+  parentsM (M := Id) h height xs
 
-theorem parent_length (h : Compression) (xs : List Digest) : (parents h xs).length = xs.length/2 := by
+theorem parent_length (h : Compression) (height : Nat) (xs : List Digest) :
+    (parents h height xs).length = xs.length/2 := by
   match xs with
   | [] => rfl
   | [_] => change 0 = 1/2; decide
   | l::r::tail =>
-    change (parents h tail).length+1 = (tail.length+1+1)/2
-    rw [parent_length h tail]; omega
+    change (parents h height tail).length+1 = (tail.length+1+1)/2
+    rw [parent_length h height tail]; omega
 
-theorem parent_index (h : Compression) (xs : List Digest) (j : Nat) (inside : 2*j+1 < xs.length) :
-    (parents h xs)[j]?.getD 0 =
-      h (parentBlock (xs[2*j]?.getD 0) (xs[2*j+1]?.getD 0)) := by
+theorem parent_index (h : Compression) (height : Nat) (xs : List Digest) (j : Nat) (inside : 2*j+1 < xs.length) :
+    (parents h height xs)[j]?.getD 0 =
+      cut height (h (parentBlock (xs[2*j]?.getD 0) (xs[2*j+1]?.getD 0))) := by
   match xs, j with
   | [], _ | [_], _ => simp only [List.length_nil,List.length_cons] at inside; omega
   | _::_::_, 0 => rfl
   | l::r::tail, j+1 =>
     simp only [List.length_cons] at inside
-    change (parents h tail)[j]?.getD 0 = _
-    rw [parent_index h tail j (by omega)]
+    change (parents h height tail)[j]?.getD 0 = _
+    rw [parent_index h height tail j (by omega)]
     rw [show 2*(j+1)=2*j+1+1 by omega,
       show 2*j+1+1+1 = (2*j+1)+1+1 by omega]
     rfl
@@ -31,55 +33,59 @@ theorem parent_index (h : Compression) (xs : List Digest) (j : Nat) (inside : 2*
 def initialList (h : Compression) (m : Message) (salt : SaltTape) :=
   (List.finRange LENGTH).map fun i => leaf h (i.val.testBit 0) (salt i) (m i)
 
-def layerList (h : Compression) (depth : Nat) (xs : List Digest) : Nat → List Digest
+/-- Layers above a list at height `base`: layer `n` sits at height `base+n`. -/
+def layerFrom (h : Compression) (xs : List Digest) (base : Nat) : Nat → List Digest
   | 0 => xs
-  | n+1 => (parents h (layerList h depth xs n)).map (retain (depth-(n+1)))
+  | n+1 => parents h (base+n+1) (layerFrom h xs base n)
 
-theorem shifted (h : Compression) (d : Nat) (xs : List Digest) (n : Nat) :
-    layerList h d ((parents h xs).map (retain d)) n = layerList h (d+1) xs (n+1) := by
+theorem shifted (h : Compression) (xs : List Digest) (base n : Nat) :
+    layerFrom h (parents h (base+1) xs) (base+1) n = layerFrom h xs base (n+1) := by
   induction n with
-  | zero => simp [layerList]
+  | zero => rfl
   | succ n ih =>
-    simp only [layerList] at ih ⊢
-    rw [ih,show d+1-(n+1+1)=d-(n+1) by omega]
+    change parents h (base+1+n+1) (layerFrom h (parents h (base+1) xs) (base+1) n) =
+      parents h (base+(n+1)+1) (layerFrom h xs base (n+1))
+    rw [ih, show base+1+n+1 = base+(n+1)+1 by omega]
 
 def cached (h : Compression) (d : Nat) (xs : List Digest) : Levels := levelsM (M := Id) h d xs
 
-theorem stored_layer (h : Compression) (xs : List Digest) (d n : Nat) (hi : n ≤ d) :
-    ((cached h d xs)[n]?).getD [] = layerList h d xs n := by
+theorem stored_layer (h : Compression) (xs : List Digest) (d n : Nat) (hi : n ≤ d) (hd : d ≤ LOG_LENGTH) :
+    ((cached h d xs)[n]?).getD [] = layerFrom h xs (LOG_LENGTH-d) n := by
   induction d generalizing xs n with
   | zero =>
     have e : n=0 := by omega
-    subst n;rfl
+    subst n
+    rfl
   | succ d ih =>
     cases n with
     | zero => rfl
-    | succ n => exact (ih ((parents h xs).map (retain d)) n (by omega)).trans (shifted h d xs n)
+    | succ n =>
+      have base : LOG_LENGTH-d = (LOG_LENGTH-(d+1))+1 := by omega
+      change ((cached h d (parents h (LOG_LENGTH-d) xs))[n]?).getD [] = _
+      rw [ih (parents h (LOG_LENGTH-d) xs) n (by omega) (by omega), base]
+      exact shifted h xs _ n
 
 theorem width (h : Compression) (xs : List Digest) (size : xs.length=LENGTH) (n : Nat) (hi : n≤LOG_LENGTH) :
-    (layerList h LOG_LENGTH xs n).length = levelCount n := by
+    (layerFrom h xs 0 n).length = levelCount n := by
   induction n with
   | zero => exact size
   | succ n ih =>
-    simp only [layerList,List.length_map,parent_length,ih (by omega),level_successor n (by omega)]
+    change (parents h (0+n+1) (layerFrom h xs 0 n)).length = _
+    rw [parent_length, ih (by omega), level_successor n (by omega)]
     omega
 
 theorem layer_node (h : Compression) (xs : List Digest) (size : xs.length=LENGTH) (n j : Nat)
     (ht : n≤LOG_LENGTH) (inside : j<levelCount n) :
-    (layerList h LOG_LENGTH xs n)[j]?.getD 0 = treeNode h (fun k => xs[k]?.getD 0) n j := by
+    (layerFrom h xs 0 n)[j]?.getD 0 = treeNode h (fun k => xs[k]?.getD 0) n j := by
   induction n generalizing j with
   | zero => rfl
   | succ n ih =>
     have e := level_successor n (by omega)
     have w := width h xs size n (by omega)
-    let ys:=parents h (layerList h LOG_LENGTH xs n)
-    have fit : j<ys.length := by unfold ys;rw [parent_length,w];omega
-    have atJ : ((ys.map (retain (LOG_LENGTH-(n+1))))[j]?).getD 0=retain (LOG_LENGTH-(n+1)) (ys[j]?.getD 0) := by
-      simp only [List.getElem?_map,List.getElem?_eq_getElem fit,Option.map_some,Option.getD_some]
-    rw [show (layerList h LOG_LENGTH xs (n+1))[j]?.getD 0=_ from atJ]
-    unfold ys
-    rw [parent_index h _ j (by omega),ih (2*j) (by omega) (by omega),ih (2*j+1) (by omega) (by omega)]
-    rw [show LOG_LENGTH-(n+1)=23-n by change 24-(n+1)=23-n;omega];rfl
+    change (parents h (0+n+1) (layerFrom h xs 0 n))[j]?.getD 0 = _
+    rw [parent_index h _ _ j (by omega),ih (2*j) (by omega) (by omega), ih (2*j+1) (by omega) (by omega),
+      Nat.zero_add]
+    rfl
 
 attribute [local irreducible] List.finRange
 
@@ -96,7 +102,7 @@ theorem fixed_tree_node (h : Compression) (m : Message) (salt : SaltTape) (n j :
     rw [mapId]; rfl
   rw [ls,node]
   change ((cached h LOG_LENGTH (initialList h m salt))[n]?.getD [])[j]?.getD 0 = _
-  rw [stored_layer h _ LOG_LENGTH n ht]
+  rw [stored_layer h _ LOG_LENGTH n ht le_rfl, Nat.sub_self]
   exact layer_node h _ (by simp [initialList]) n j ht inside
 
 end CommitGolfCandidate.Late

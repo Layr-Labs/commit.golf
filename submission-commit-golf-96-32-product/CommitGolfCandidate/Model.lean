@@ -1,4 +1,5 @@
 import CommitGolfCandidate.Programs
+import CommitGolfCandidate.Cut
 
 /-! Pure reference functions for the machine's byte ordering and Merkle construction.
 The compression function is an explicit argument, so correctness can be stated for
@@ -107,5 +108,46 @@ theorem reconstruct_root (compress : Compression) {depth : Nat} (tree : Tree dep
         (congrArg (fun digest => combine compress digest (right.root compress)) (ihLeft rest))
     | right rest => simpa [Tree.value, Tree.opening, Tree.root, climb, List.foldl_append] using
         (congrArg (fun digest => combine compress (left.root compress) digest) (ihRight rest))
+
+
+/-- One climbing step from a node at `height`: the parent (at `height+1`) is stored in cut form. -/
+def climbStep (compress : Compression) (height : Nat) (digest : Digest) (step : Bool × Digest) : Digest :=
+  cut (height+1) (if step.1 then combine compress step.2 digest else combine compress digest step.2)
+
+/-- Climb from a node at `height` along a path, storing every computed ancestor in cut form. -/
+def climbAt (compress : Compression) : Nat → Digest → List (Bool × Digest) → Digest
+  | _, digest, [] => digest
+  | height, digest, step :: rest => climbAt compress (height+1) (climbStep compress height digest step) rest
+
+@[simp] theorem climbAt_nil (compress : Compression) (height : Nat) (digest : Digest) :
+    climbAt compress height digest [] = digest := rfl
+
+theorem climbAt_cons (compress : Compression) (height : Nat) (digest : Digest) (step : Bool × Digest)
+    (rest : List (Bool × Digest)) :
+    climbAt compress height digest (step :: rest) =
+      climbAt compress (height+1) (climbStep compress height digest step) rest := rfl
+
+theorem climbAt_append (compress : Compression) (height : Nat) (digest : Digest)
+    (first second : List (Bool × Digest)) :
+    climbAt compress height digest (first ++ second) =
+      climbAt compress (height + first.length) (climbAt compress height digest first) second := by
+  induction first generalizing height digest with
+  | nil => rfl
+  | cons step rest ih =>
+    simp only [List.cons_append, climbAt_cons, ih, List.length_cons]
+    congr 1; omega
+
+/-- Above height 17 nothing is cut, so climbing there is the plain `climb`. -/
+theorem climbAt_eq_climb (compress : Compression) (height : Nat) (above : 17 ≤ height)
+    (digest : Digest) (path : List (Bool × Digest)) :
+    climbAt compress height digest path = climb compress digest path := by
+  induction path generalizing height digest with
+  | nil => rfl
+  | cons step rest ih =>
+    rw [climbAt_cons, ih (height+1) (by omega)]
+    unfold climb climbStep
+    rw [cut_of_not (by unfold CutHeight; omega)]
+    rcases step with ⟨right, sibling⟩
+    rfl
 
 end CommitGolfCandidate

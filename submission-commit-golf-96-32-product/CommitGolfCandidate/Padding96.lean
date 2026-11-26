@@ -115,4 +115,17 @@ theorem padding_finish_shape (state : MachineState) :
     execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC,
     MachineState.setMem, MachineState.getMem]
 
+/-! ### The truncating adapter `tcomp` (A96): the padded compression, then
+`andi x7,x9,1; srli x9,x9,1; beq x7,x0,+8; sh x0,30(x12); jalr x0,0(x31)`. -/
+
+def tcompBit (state : MachineState) : Word := state.getReg .x9 &&& 1
+
+/-- Instructions from the caller's `jal` to the return: 20, or 21 with the store. -/
+def tcompSteps (state : MachineState) : Nat := if tcompBit state = 0 then 20 else 21
+
+def tcompState (state : MachineState) (answer : BitVec 256) : MachineState :=
+  let base := ((paddedCompressionState state answer).setReg .x7 (tcompBit state)).setReg .x9
+    (state.getReg .x9 >>> 1)
+  if tcompBit state = 0 then base else base.setHalfword (state.getReg .x12 + 30) 0
+
 end CommitGolfCandidate

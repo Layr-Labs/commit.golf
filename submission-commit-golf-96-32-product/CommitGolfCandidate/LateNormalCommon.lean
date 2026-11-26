@@ -1,4 +1,6 @@
 import CommitGolfCandidate.LateNormalPad
+import CommitGolfCandidate.CKBTcomp
+import CommitGolfCandidate.CKNHalf
 
 namespace CommitGolfCandidate.Late.Check.Normal
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
@@ -6,7 +8,7 @@ set_option maxRecDepth 12000
 set_option maxHeartbeats 1500000
 
 theorem check_fetch (state : MachineState) (index : Nat) (instruction : Instr)
-    (indexBound : index < 200) (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * index))
+    (indexBound : index < 814) (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * index))
     (decoded : ((checkerImage).code[index]?).bind decodeInstruction =
       some (.base instruction)) :
     fetch (checkerImage) state = some (.base instruction) := by
@@ -324,18 +326,30 @@ def checkCompressionInstructions : List Instr :=
 def checkCompressionPrefix (state : MachineState) (count : Nat) : MachineState :=
   (checkCompressionInstructions.take count).foldl execInstrBr state
 
-def checkCompressionState (state : MachineState) (answer : BitVec 256) : MachineState :=
+/-- The padded compression written at 256 (before the truncation tail). -/
+def checkPaddedState (state : MachineState) (answer : BitVec 256) : MachineState :=
   let ready := checkCompressionPrefix state 5
   writeBits ((savePaddingRegisters (ready.setReg .x31 (ready.pc+4))).setReg .x11 64) 256 answer
 
+/-- The 5-instruction setup followed by the truncating adapter `tcomp` (438): bit 0 of x9 selects
+the 240-bit store (`sh x0,30(x12)` clears bytes 286, 287); x9 shifts right; x7 is the bit. -/
+def checkCompressionState (state : MachineState) (answer : BitVec 256) : MachineState :=
+  let base := ((checkPaddedState state answer).setReg .x7 (tcompBit state)).setReg .x9 (state.getReg .x9 >>> 1)
+  if tcompBit state = 0 then base else base.setHalfword (BitVec.ofNat 64 286) 0
+
+theorem check_compression_prefix_x9 (state : MachineState) :
+    (checkCompressionPrefix state 5).getReg .x9 = state.getReg .x9 := by
+  simp [checkCompressionPrefix, checkCompressionInstructions, execInstrBr,
+    MachineState.getReg_setPC, MachineState.getReg_setReg_ne]
+
 theorem check_compression (state : MachineState) (start : Nat)
-    (location : start = 54)
+    (location : start = 54 ∨ start = 537 ∨ start = 621)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (scratch : state.getReg .x21 = 256) (fuel : Nat) (allowCoins : Bool) :
-    execute (checkerImage) (22 + fuel) state allowCoins =
+    execute (checkerImage) (5 + tcompSteps state + fuel) state allowCoins =
       (do let answer ← World.query (.inr (.inl (padInput (readBuffer state 256 64))))
           let result ← execute (checkerImage) fuel (checkCompressionState state answer) allowCoins
-          return result.charge 29 1) := by
+          return result.charge (12 + tcompSteps state) 1) := by
   have setup (remaining : Nat) :
       execute (checkerImage) (5 + remaining) state allowCoins =
         (do let result ← execute (checkerImage) remaining
@@ -344,16 +358,16 @@ theorem check_compression (state : MachineState) (start : Nat)
     apply execute_unit_steps (states := checkCompressionPrefix state)
     intro i hi
     refine ⟨.base ((checkCompressionInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply check_fetch _ (start + i) _ (by rcases location with rfl <;> omega)
-      · rcases location with rfl <;> interval_cases i <;>
+    · apply check_fetch _ (start + i) _ (by rcases location with rfl | rfl | rfl <;> omega)
+      · rcases location with rfl | rfl | rfl <;> interval_cases i <;>
           simp [checkCompressionPrefix, checkCompressionInstructions, execInstrBr, pc, MachineState.setPC]
-      · rcases location with rfl <;> interval_cases i <;> rfl
+      · rcases location with rfl | rfl | rfl <;> interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
   let ready := checkCompressionPrefix state 5
   have readyPC : ready.pc = BitVec.ofNat 64 (4096 + 4 * (start+5)) := by
     dsimp only [ready]
-    rcases location with rfl <;>
+    rcases location with rfl | rfl | rfl <;>
         simp [checkCompressionPrefix, checkCompressionInstructions, execInstrBr, pc, MachineState.setPC]
   have registers : ready.getReg .x5 = 0 ∧ ready.getReg .x10 = 256 ∧
       ready.getReg .x11 = 64 ∧ ready.getReg .x12 = 256 ∧ ready.getReg .x13 = 0 := by
@@ -361,12 +375,16 @@ theorem check_compression (state : MachineState) (start : Nat)
       signExtend12, MachineState.getReg_setPC, MachineState.getReg_setReg_eq,
       MachineState.getReg_setReg_ne, scratch]
     rfl
-  have call := padding_call true ready (start+5) (by rcases location with rfl; exact Or.inl rfl) readyPC
+  have mask : ready.getReg .x9 = state.getReg .x9 := check_compression_prefix_x9 state
+  have steps : tcompSteps ready = tcompSteps state := by
+    unfold tcompSteps tcompBit; rw [mask]
+  have call := tcomp_call ready (start+5)
+    (by rcases location with rfl | rfl | rfl <;> simp) readyPC
     registers.1 registers.2.2.2.2
     (by rw [registers.2.1]; rfl) (by rw [registers.2.2.2.1]; rfl)
     (by rw [registers.2.1]; rfl) (by rw [registers.2.2.2.1]; rfl)
     (by rw [registers.2.1, registers.2.2.2.1]; decide) fuel allowCoins
-  rw [show 22 + fuel = 5 + (17 + fuel) by omega, setup]
+  rw [show 5 + tcompSteps state + fuel = 5 + (tcompSteps ready + fuel) by rw [steps]; omega, setup]
   erw [call]
   simp only [bind_assoc, pure_bind]
   rw [registers.2.1]
@@ -376,26 +394,33 @@ theorem check_compression (state : MachineState) (start : Nat)
       OracleComp World (BitVec 256)) >>= continuation)
   funext answer
   change BitVec 256 at answer
-  have resultState : paddedCompressionState ready answer = checkCompressionState state answer := by
-    unfold paddedCompressionState
-    rw [registers.2.2.2.1]
+  have bit : tcompBit ready = tcompBit state := by simp only [tcompBit, mask]
+  have resultState : tcompState ready answer = checkCompressionState state answer := by
+    unfold tcompState paddedCompressionState checkCompressionState checkPaddedState
+    rw [registers.2.2.2.1, bit, mask]
     rfl
-  rw [resultState]
+  rw [resultState, steps]
   simp [Execution.charge, ← Nat.add_assoc]
+  congr 1
+  funext a
+  congr 1
+  omega
 
 theorem check_compression_pc (state : MachineState) (answer : BitVec 256) :
     (checkCompressionState state answer).pc = state.pc + 24 := by
-  simp [checkCompressionState, writeBits, savePaddingRegisters, checkCompressionPrefix, checkCompressionInstructions,
-    execInstrBr, MachineState.setPC, BitVec.add_assoc]
+  unfold checkCompressionState
+  split <;>
+  simp [checkPaddedState, writeBits, savePaddingRegisters, checkCompressionPrefix, checkCompressionInstructions,
+    execInstrBr, MachineState.setPC, BitVec.add_assoc, MachineState.pc_setReg, MachineState.setHalfword]
 
-theorem check_compression_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
+theorem check_padded_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
     (not5 : reg ≠ .x5) (not10 : reg ≠ .x10) (not11 : reg ≠ .x11)
     (not12 : reg ≠ .x12) (not13 : reg ≠ .x13)
     (not14 : reg ≠ .x14 := by decide) (not15 : reg ≠ .x15 := by decide)
     (not16 : reg ≠ .x16 := by decide) (not17 : reg ≠ .x17 := by decide)
     (not31 : reg ≠ .x31 := by decide) :
-    (checkCompressionState state answer).getReg reg = state.getReg reg := by
-  rw [checkCompressionState, writeBits_register]
+    (checkPaddedState state answer).getReg reg = state.getReg reg := by
+  rw [checkPaddedState, writeBits_register]
   simp only [savePaddingRegisters, checkCompressionPrefix, checkCompressionInstructions, List.take, List.foldl, execInstrBr,
     MachineState.getReg_setPC,
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not5),
@@ -409,15 +434,42 @@ theorem check_compression_register (state : MachineState) (answer : BitVec 256) 
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not17),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not31)]
 
-theorem check_compression_word (state : MachineState) (answer : BitVec 256)
+theorem check_compression_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
+    (not5 : reg ≠ .x5) (not10 : reg ≠ .x10) (not11 : reg ≠ .x11)
+    (not12 : reg ≠ .x12) (not13 : reg ≠ .x13)
+    (not14 : reg ≠ .x14 := by decide) (not15 : reg ≠ .x15 := by decide)
+    (not16 : reg ≠ .x16 := by decide) (not17 : reg ≠ .x17 := by decide)
+    (not31 : reg ≠ .x31 := by decide) (not7 : reg ≠ .x7 := by decide) (not9 : reg ≠ .x9 := by decide) :
+    (checkCompressionState state answer).getReg reg = state.getReg reg := by
+  have base : (((checkPaddedState state answer).setReg .x7 (tcompBit state)).setReg .x9
+      (state.getReg .x9 >>> 1)).getReg reg = state.getReg reg := by
+    rw [MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not9),
+      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not7)]
+    exact check_padded_register state answer reg not5 not10 not11 not12 not13 not14 not15 not16 not17 not31
+  unfold checkCompressionState
+  split
+  · exact base
+  · exact (CKNHalf.ckn_set_halfword_reg _ _ _ _).trans base
+
+theorem check_compression_x9 (state : MachineState) (answer : BitVec 256) :
+    (checkCompressionState state answer).getReg .x9 = state.getReg .x9 >>> 1 := by
+  have base : (((checkPaddedState state answer).setReg .x7 (tcompBit state)).setReg .x9
+      (state.getReg .x9 >>> 1)).getReg .x9 = state.getReg .x9 >>> 1 :=
+    MachineState.getReg_setReg_eq (by decide)
+  unfold checkCompressionState
+  split
+  · exact base
+  · exact (CKNHalf.ckn_set_halfword_reg _ _ _ _).trans base
+
+theorem check_padded_word (state : MachineState) (answer : BitVec 256)
     (word : Nat) (bounded : word < 4) :
-    (checkCompressionState state answer).getMem (BitVec.ofNat 64 (256 + 8 * word)) =
+    (checkPaddedState state answer).getMem (BitVec.ofNat 64 (256 + 8 * word)) =
       answer.extractLsb' (64 * word) 64 := by
   have byte (i : Nat) : BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i)) =
       answer.extractLsb' (8 * i) 8 := by
     apply BitVec.toNat_inj.mp
     simp [Nat.shiftRight_eq_div_pow]
-  unfold checkCompressionState writeBits
+  unfold checkPaddedState writeBits
   simp_rw [byte]
   interval_cases word <;>
     simp [List.range_succ, MachineState.setPC, MachineState.setByte,
@@ -427,14 +479,53 @@ theorem check_compression_word (state : MachineState) (answer : BitVec 256)
     interval_cases bit <;>
     simp
 
-theorem check_compression_memory_outside (state : MachineState) (answer : BitVec 256)
+theorem check_padded_digest (state : MachineState) (answer : BitVec 256) :
+    readBuffer (checkPaddedState state answer) 256 32 = answer := by
+  rw [read_digest_words _ _ (by decide)]
+  have w0 := check_padded_word state answer 0 (by decide)
+  have w1 := check_padded_word state answer 1 (by decide)
+  have w2 := check_padded_word state answer 2 (by decide)
+  have w3 := check_padded_word state answer 3 (by decide)
+  simp only [Nat.reduceMul, Nat.reduceAdd] at w0 w1 w2 w3
+  rw [w0, w1, w2, w3]
+  rw [BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide),
+    BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide),
+    BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide)]
+  simp
+
+/-- The digest left at 256: full, or its low 240 bits when bit 0 of x9 was set. -/
+def tcompDigest (bit : Word) (answer : BitVec 256) : BitVec 256 :=
+  if bit = 0 then answer else widen (low240 answer)
+
+theorem check_compression_digest (state : MachineState) (answer : BitVec 256) :
+    readBuffer (checkCompressionState state answer) 256 32 = tcompDigest (tcompBit state) answer := by
+  have base : readBuffer (((checkPaddedState state answer).setReg .x7 (tcompBit state)).setReg .x9
+      (state.getReg .x9 >>> 1)) 256 32 = answer :=
+    (CKNHalf.ckn_read_set_reg _ _ _ _ _).trans ((CKNHalf.ckn_read_set_reg _ _ _ _ _).trans (check_padded_digest state answer))
+  unfold checkCompressionState tcompDigest
+  split
+  · exact base
+  · rw [CKNHalf.ckn_zero_top_digest, base]
+
+theorem check_padded_memory_outside (state : MachineState) (answer : BitVec 256)
     (address : Word) (outside : address ≠ 256 ∧ address ≠ 264 ∧ address ≠ 272 ∧ address ≠ 280) :
-    (checkCompressionState state answer).getMem address = state.getMem address := by
-  unfold checkCompressionState
+    (checkPaddedState state answer).getMem address = state.getMem address := by
+  unfold checkPaddedState
   rw [writeBits_memory_outside]
   · rfl
   · intro i hi
     change i < 32 at hi
     interval_cases i <;> norm_num [alignToDword] <;> tauto
+
+theorem check_compression_memory_outside (state : MachineState) (answer : BitVec 256)
+    (address : Word) (outside : address ≠ 256 ∧ address ≠ 264 ∧ address ≠ 272 ∧ address ≠ 280) :
+    (checkCompressionState state answer).getMem address = state.getMem address := by
+  have base : (((checkPaddedState state answer).setReg .x7 (tcompBit state)).setReg .x9
+      (state.getReg .x9 >>> 1)).getMem address = state.getMem address :=
+    check_padded_memory_outside state answer address outside
+  unfold checkCompressionState
+  split
+  · exact base
+  · exact (CKNHalf.ckn_zero_top_mem _ _ outside.2.2.2).trans base
 
 end CommitGolfCandidate.Late.Check.Normal

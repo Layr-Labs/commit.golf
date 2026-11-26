@@ -5,7 +5,7 @@ namespace CommitGolfCandidate.Late.Open
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 def image := Late.submission.image .opening
-def openWord (n : Nat) : BitVec 32 := if h : n<140 then Artifact.openingCode.get 32 ⟨n,by omega⟩ else 0
+def openWord (n : Nat) : BitVec 32 := if h : n<406 then Artifact.openingCode.get 32 ⟨n,h⟩ else 0
 
 private theorem packed_lookup {m : Nat} (a : ArtifactEncoding.Packed m) (j : Nat) (h : j<m) :
     (ArtifactEncoding.decode 32 a)[j]? = some (a.get 32 ⟨j,h⟩) := by
@@ -13,11 +13,11 @@ private theorem packed_lookup {m : Nat} (a : ArtifactEncoding.Packed m) (j : Nat
 
 attribute [local irreducible] ArtifactEncoding.decode
 
-theorem fetched (n : Nat) (hi : n<140) (op : Instr) (encoded : decodeInstruction (openWord n)=some (.base op))
+theorem fetched (n : Nat) (hi : n<406) (op : Instr) (encoded : decodeInstruction (openWord n)=some (.base op))
     (s : MachineState) (pc : s.pc=pcAt n) : fetch image s=some (.base op) := by
   have atWord : image.code[n]?=some (openWord n) := by
     rw [openWord,dif_pos hi]
-    exact packed_lookup Artifact.openingCode n (by omega)
+    exact packed_lookup Artifact.openingCode n hi
   simp only [fetch,pc,pcAt,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (show 4096+4*n<2^64 by omega)]
   rw [if_pos (by constructor <;> omega)]
   simp only [Nat.add_sub_cancel_left,Nat.mul_div_cancel_left _ (by decide : 0<4),atWord,encoded]
@@ -34,7 +34,7 @@ theorem Runs.trans {s t u : MachineState} {a b c d : Nat} (left : Runs s t a c) 
 
 theorem Runs.refl (s : MachineState) : Runs s s 0 0 := by intro fuel; simp [Execution.charge]
 
-theorem one (n : Nat) (hi : n<140) (op : Instr) (encoded : decodeInstruction (openWord n)=some (.base op))
+theorem one (n : Nat) (hi : n<406) (op : Instr) (encoded : decodeInstruction (openWord n)=some (.base op))
     (s t : MachineState) (pc : s.pc=pcAt n) (step : ordinaryStep s (.base op)=some t) :
     Runs s t 1 (instructionCycles (.base op)) :=
   fun f => execute_ordinary_step _ _ _ _ f _ (fetched _ hi _ encoded _ pc) step
@@ -53,7 +53,7 @@ def before (ops : List Instr) (s : MachineState) (i : Nat) := (ops.take i).foldl
 
 theorem block (ops : List Instr) (n : Nat) (s : MachineState) (pc : s.pc=pcAt n)
     (enc : ∀ j : Fin ops.length, decodeInstruction (openWord (n+j.val))=some (.base ops[j.val]))
-    (within : n+ops.length≤140) (valid : ∀ j : Fin ops.length, permitted ops[j.val])
+    (within : n+ops.length≤406) (valid : ∀ j : Fin ops.length, permitted ops[j.val])
     (safe : ∀ j : Fin ops.length, memoryArgumentsValid (before ops s j.val) ops[j.val]) :
     Runs s (ops.foldl execInstrBr s) ops.length ops.length := by
   intro fuel

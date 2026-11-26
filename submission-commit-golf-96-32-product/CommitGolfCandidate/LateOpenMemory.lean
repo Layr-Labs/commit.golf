@@ -4,8 +4,6 @@ import CommitGolfCandidate.InputMemory
 namespace CommitGolfCandidate.Late.Open
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
-def W (n : Nat) := BitVec.ofNat 64 n
-
 def wordAt (s : MachineState) (a : Nat) := s.getMem (BitVec.ofNat 64 a)
 def byteAt (s : MachineState) (a : Nat) := s.getByte (BitVec.ofNat 64 a)
 

@@ -17,21 +17,19 @@ theorem parents_frame (h : Compression) (s : MachineState) (d : Fin 24)
 
 theorem parents_memory (h : Compression) (s : MachineState) (d : Fin 24)
     (start : ParentFrame s d 0) (n : Nat) (le : n ≤ levelSize d) :
-    (parentFold h s d n).mem = (fillLevel (layerHash h d) d n s).mem := by
+    (parentFold h s d n).mem = (fillLevel h d n s).mem := by
   induction n with
   | zero => rfl
   | succ n ih =>
     let t := parentFold h s d n
-    let u := fillLevel (layerHash h d) d n s
+    let u := fillLevel h d n s
     have old : t.mem = u.mem := ih (by omega)
     have read := read_congr_mem t u (nodeAddress d (2*n)) 96 old
     apply (tick_mem h (parents_frame h s d start n (by omega)).toParentRegs).trans
-    change (store t _ (layerHash h d (readBuffer t _ 96))).mem = (store u _ (layerHash h d (readBuffer u _ 96))).mem
-    rw [read]
-    exact write_bits_memory_congr _ _ _ _ old
+    exact write_parent_mem_congr h t u d n old
 
-def levelSteps (d : Fin 24) (n : Nat) := laneWidth d*n+4*(n/16)
-def levelCycles (d : Fin 24) (n : Nat) := (10+laneExtra d)*n+4*(n/16)
+def levelSteps (d n : Nat) := siteWidth d*n+4*(n/16)
+def levelCycles (d n : Nat) := (7+siteWidth d)*n+4*(n/16)
 
 theorem parents_run (o : Oracle) (s : MachineState) (d : Fin 24) (start : ParentFrame s d 0)
     (n : Nat) (le : n≤levelSize d) (fuel : Nat) :
@@ -46,13 +44,14 @@ theorem parents_run (o : Oracle) (s : MachineState) (d : Fin 24) (start : Parent
     have pc := frame.pc
     rw [parentNextPC,if_pos hi] at pc
     have steps : fuel+levelSteps d (n+1) =
-        (fuel+(laneWidth d+if n%16=15 then 4 else 0))+levelSteps d n := by unfold levelSteps;rw [Nat.mul_succ]; split <;> omega
+        (fuel+(siteWidth d+if n%16=15 then 4 else 0))+levelSteps d n := by
+      unfold levelSteps; rw [Nat.mul_succ]; split <;> omega
     rw [steps,ih (by omega), parent_tick_run o frame.toParentRegs hi pc]
     simp only [bind_assoc,pure_bind,parentFold,Execution.charge]
     apply bind_congr
     rintro ⟨out,c⟩
-    have price : levelCycles d (n+1) = levelCycles d n + ((10+laneExtra d) + if n%16=15 then 4 else 0) := by
-      unfold levelCycles; rw [Nat.mul_succ];split <;> omega
+    have price : levelCycles d (n+1) = levelCycles d n + (7+siteWidth d + if n%16=15 then 4 else 0) := by
+      unfold levelCycles; rw [Nat.mul_succ]; split <;> omega
     simp only [price,Nat.succ_eq_add_one, Nat.add_assoc]
 
 end CommitGolfCandidate.Late

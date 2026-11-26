@@ -17,18 +17,24 @@ def depth (input : CheckInput) : Nat := if input.positions.card = BATCH then 16 
 def proofAt (input : CheckInput) (off n : Nat) := readBuffer
   (Late.submission.initialState .check input) (Late.submission.layout.proof+off) n
 
-def start (input : CheckInput) (r : Nat) := r*(24+32*depth input)
+/-- Record stride: 510 bytes at 128 positions (24 + 3 x 32 + 13 x 30), 792 otherwise. -/
+def stride (input : CheckInput) : Nat := if input.positions.card = BATCH then 510 else 792
+
+def start (input : CheckInput) (r : Nat) := r*stride input
 
 def salt (input : CheckInput) (r : Nat) : Salt := proofAt input (start input r) 24
-def sibling (input : CheckInput) (r l : Nat) : Digest := proofAt input (start input r+24+32*l) 32
-def supplied (input : CheckInput) (p : Nat) : Digest := proofAt input (68608+32*p) 32
+/-- Batch siblings of levels 3..15 are 30-byte fields, zero-extended. -/
+def sibling (input : CheckInput) (r l : Nat) : Digest :=
+  if input.positions.card = BATCH ∧ 3 ≤ l then widen (proofAt input (start input r+120+30*(l-3)) 30)
+  else proofAt input (start input r+24+32*l) 32
+def supplied (input : CheckInput) (p : Nat) : Digest := widen (proofAt input (65280+30*p) 30)
 
 def path (i : Index) (d : Nat) (nodes : Nat → Digest) : List (Bool × Digest) :=
   (List.range d).map fun l => (i.val.testBit l, nodes l)
 
 def lower (h : Compression) (input : CheckInput) (r d : Nat) : Digest :=
   let i := recordIndex input.positions r
-  climb h (leaf h (i.val.testBit 0) (salt input r) (recordValue input r))
+  climbAt h 0 (leaf h (i.val.testBit 0) (salt input r) (recordValue input r))
     (path i d (sibling input r))
 
 def first (input : CheckInput) (bucket : Nat) :=
@@ -38,15 +44,16 @@ def children (h : Compression) (input : CheckInput) (pair : Nat) : PairCap.Child
   ⟨(first input (2*pair)).map fun r => lower h input r 16,
    (first input (2*pair+1)).map fun r => lower h input r 16⟩
 
+/-- The height-17 node of a pair, stored in cut form. -/
 def parent (h : Compression) (input : CheckInput) (pair : Nat) :=
-  (children h input pair).parent h (supplied input pair)
+  cut 17 ((children h input pair).parent h (supplied input pair))
 
 def capTable (h : Compression) (input : CheckInput) (p : Nat) := if p < 128 then parent h input p else 0
 
 def upper (h : Compression) (input : CheckInput) := referenceHeap h 128 (capTable h input)
 
 structure BatchValid (h : Compression) (input : CheckInput) : Prop where
-  length : input.proof.length = 72704
+  length : input.proof.length = 69120
   agree : ∀ r < 128, let i := (recordIndex input.positions r).val
     (children h input (i/131072)).child (i.testBit 16) = some (lower h input r 16)
   root : upper h input 1 = input.commitment
@@ -78,7 +85,7 @@ def capPath (h : Compression) (input : CheckInput) (r : Nat) : List (Bool × Dig
 theorem batch_path_root (o : Oracle) (input : CheckInput) (h : BatchValid o.compression input)
     (r : Nat) (hr : r < 128) :
     let i := recordIndex input.positions r
-    climb o.compression (leaf o.compression (i.val.testBit 0) (salt input r) (recordValue input r))
+    climbAt o.compression 0 (leaf o.compression (i.val.testBit 0) (salt input r) (recordValue input r))
       (capPath o.compression input r) = input.commitment := by
   let i := recordIndex input.positions r
   let p := i.val/131072
@@ -89,10 +96,16 @@ theorem batch_path_root (o : Oracle) (input : CheckInput) (h : BatchValid o.comp
     reference_heap_parent H 128 (capTable H input) n hp hn)
   have eq := reference_heap_leaf H 128 (capTable H input) p inside
   simp only [capTable, if_pos inside] at eq
-  unfold capPath climb
-  simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
-  change climb H (if i.val.testBit 16 then combine H _ (lower H input r 16)
-    else combine H (lower H input r 16) _) (heapPath (upper H input) (128+p) 7) = _
+  have len : (path i 16 (sibling input r) ++ [(i.val.testBit 16,
+      (children H input p).sibling (i.val.testBit 16) (supplied input p))]).length = 17 := by
+    simp [path]
+  show climbAt H 0 _ (path i 16 (sibling input r) ++ [(i.val.testBit 16,
+      (children H input p).sibling (i.val.testBit 16) (supplied input p))] ++
+      heapPath (upper H input) (128+p) 7) = _
+  rw [climbAt_append, len, climbAt_append, climbAt_eq_climb H _ (by omega)]
+  simp only [path, List.length_map, List.length_range, Nat.zero_add, climbAt_cons, climbAt_nil]
+  change climb H (cut 17 (if i.val.testBit 16 then combine H _ (lower H input r 16)
+    else combine H (lower H input r 16) _)) (heapPath (upper H input) (128+p) 7) = _
   rw [hit]
   exact (congrArg (fun x => climb H x (heapPath (upper H input) (128+p) 7)) eq.symm).trans
     (root.trans h.root)

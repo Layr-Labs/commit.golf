@@ -1,4 +1,5 @@
 import CommitGolfCandidate.LateOpenRecord
+import CommitGolfCandidate.OPBatchRecord
 
 namespace CommitGolfCandidate.Late.Open
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
@@ -50,7 +51,9 @@ theorem eq_test (a b : Nat) (ha : a<2^64) (hb : b<2^64) :
 
 def dispatch (s : MachineState) := Test.empty.after (Part.init.after s)
 def chooseDepth (s : MachineState) := Test.depth.after (Part.depth.after (dispatch s))
-def begun (s : MachineState) (k : Nat) := if k=128 then Part.batchDepth.after (chooseDepth s) else chooseDepth s
+def begun (s : MachineState) (_k : Nat) := chooseDepth s
+/-- The batch path: word 18 jumps to the appended batch code at word 140. -/
+def jumped (s : MachineState) := (chooseDepth s).setPC (pcAt 140)
 
 theorem start_empty (s : MachineState) (f : ABI s 0) :
     Runs s (dispatch s) 15 15 ∧ (dispatch s).pc=pcAt 60 ∧ (dispatch s).getReg .x16=0 ∧
@@ -74,8 +77,9 @@ private theorem frame_of_seed (s : MachineState) (k d : Nat) (f : Seed s k) (hd 
   ⟨⟨⟨f.base,f.count,f.row,f.span,hd⟩,by simpa only [Nat.mul_zero,Nat.add_zero] using f.cursor,
     by simpa only [Nat.sub_zero] using f.left⟩,by simpa only [recordAddr,Nat.mul_zero,Nat.add_zero] using f.dest⟩
 
-theorem start_records (s : MachineState) (k : Nat) (nonempty : 0<k) (small : k≤LENGTH) (f : ABI s k) :
-    Runs s (begun s k) (if k=128 then 19 else 18) (if k=128 then 19 else 18) ∧
+theorem start_records (s : MachineState) (k : Nat) (nonempty : 0<k) (small : k≤LENGTH) (f : ABI s k)
+    (normal : k≠128) :
+    Runs s (begun s k) 18 18 ∧
     (begun s k).pc=pcAt 19 ∧ RecordFrame (begun s k) k (depth k) 0 ∧ (begun s k).mem=s.mem := by
   have kb : k≤16777216 := small
   let a := Part.init.after s
@@ -100,13 +104,40 @@ theorem start_records (s : MachineState) (k : Nat) (nonempty : 0<k) (small : k�
   have run := ((ba.runs.trans (test_run .empty _ ba.pc)).trans bc.runs).trans (test_run .depth c bc.pc)
   have keep := seed_branch .depth c k sc
   have mem : t.mem=s.mem := bc.mem.trans ba.mem
-  by_cases batch : k=128
-  · have pc : t.pc=pcAt 18 := by change pcAt (if Test.depth.taken c then _ else _)=_; rw [selected];simp [batch,Test.start]
-    have bt := no_load .batchDepth t pc rfl
-    simp only [begun,depth,if_pos batch]
-    exact ⟨run.trans bt.runs,bt.pc,frame_of_seed _ _ 16 (seed_after bt keep (by decide)) (bt.regs .x30),bt.mem.trans mem⟩
-  · have pc : t.pc=pcAt 19 := by change pcAt (if Test.depth.taken c then _ else _)=_;rw [selected];simp [batch,Test.target]
-    simp only [begun,depth,if_neg batch]
-    exact ⟨run,pc,frame_of_seed t k 24 keep (MachineState.getReg_setPC.trans (bc.regs .x30)),mem⟩
+  have pc : t.pc=pcAt 19 := by change pcAt (if Test.depth.taken c then _ else _)=_;rw [selected];simp [normal,Test.target]
+  simp only [begun,depth,if_neg normal]
+  exact ⟨run,pc,frame_of_seed t k 24 keep (MachineState.getReg_setPC.trans (bc.regs .x30)),mem⟩
+
+theorem start_batch (s : MachineState) (f : ABI s 128) :
+    Runs s (jumped s) 19 19 ∧ (jumped s).pc=pcAt 140 ∧ BAnchor (jumped s) 0 ∧ (jumped s).mem=s.mem := by
+  let a := Part.init.after s
+  let b := dispatch s
+  let c := Part.depth.after b
+  let t := chooseDepth s
+  have ba := no_load .init s f.pc rfl
+  have sa := init_seed _ _ f ba
+  have neq : Test.empty.taken a=false := by
+    change (a.getReg .x27 == W 0)=false
+    rw [sa.left,eq_test _ _ (by decide) (by decide)]
+    decide
+  have pb : b.pc=pcAt 15 := by change pcAt (if Test.empty.taken a then _ else _)=_;rw [neq];rfl
+  have bc := no_load .depth b pb rfl
+  have sc := seed_after bc (seed_branch .empty a 128 sa) (by decide)
+  have curr : c.getReg .x6=W 128 := bc.regs .x6
+  have selected : Test.depth.taken c=false := by
+    change (c.getReg .x27 != c.getReg .x6)=_
+    rw [sc.left,curr]; decide
+  have run := ((ba.runs.trans (test_run .empty _ ba.pc)).trans bc.runs).trans (test_run .depth c bc.pc)
+  have keep := seed_branch .depth c 128 sc
+  have mem : t.mem=s.mem := bc.mem.trans ba.mem
+  have pc : t.pc=pcAt 18 := by change pcAt (if Test.depth.taken c then _ else _)=_; rw [selected];rfl
+  have jr := jump_run t pc
+  have kj := seed_branch .depth c 128 sc
+  refine ⟨run.trans jr,rfl,?_,mem⟩
+  have g (r : Reg) : (jumped s).getReg r = t.getReg r := MachineState.getReg_setPC
+  exact ⟨(g _).trans keep.base,(g _).trans keep.count,(g _).trans keep.row,(g _).trans keep.span,
+    by simpa only [Nat.mul_zero,Nat.add_zero] using (g _).trans keep.cursor,
+    by simpa only [Nat.sub_zero] using (g _).trans keep.left,
+    by simpa only [bRecAddr,Nat.mul_zero,Nat.add_zero] using (g _).trans keep.dest⟩
 
 end CommitGolfCandidate.Late.Open

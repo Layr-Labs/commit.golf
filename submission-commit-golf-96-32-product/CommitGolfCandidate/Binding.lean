@@ -174,4 +174,71 @@ theorem collision_of_openings_eq (compress : Compression)
       samePosition leavesEqual sameRoot
     exact ⟨x, List.mem_append_right _ hx, y, List.mem_append_right _ hy, collision⟩
 
+/-! ### Climbing with cut parents (heights 3..17 stored as their low 240 bits) -/
+
+/-- Compression inputs of a bottom-up path climbed from `height` with cut parents (`climbAt`). -/
+def pathInputsAt (compress : Compression) : Nat → Digest → List (Bool × Digest) →
+    List (BitVec COMPRESSION_INPUT_LENGTH)
+  | _, _, [] => []
+  | height, digest, (right, sibling) :: rest =>
+      (if right then padInput (digest ++ sibling) else padInput (sibling ++ digest)) ::
+        pathInputsAt compress (height+1) (climbStep compress height digest (right, sibling)) rest
+
+theorem pathInputsAt_length (compress : Compression) (height : Nat) (digest : Digest)
+    (path : List (Bool × Digest)) : (pathInputsAt compress height digest path).length = path.length := by
+  induction path generalizing height digest with
+  | nil => rfl
+  | cons head rest ih =>
+    rcases head with ⟨right, sibling⟩
+    simp only [pathInputsAt, List.length_cons]
+    exact congrArg (fun n : Nat => n + 1) (ih _ _)
+
+/-- Conflicting digests at the same position that climb (with cut parents) to one node give two
+distinct compression inputs whose replies agree on their low 240 bits. The inputs are the full
+encodings, so equal inputs force equal children; the cut only weakens the output comparison. -/
+theorem collision_of_climbAt_eq (compress : Compression) (height : Nat)
+    (leaf leaf' : Digest) (path path' : List (Bool × Digest))
+    (samePosition : path.map Prod.fst = path'.map Prod.fst)
+    (different : leaf ≠ leaf')
+    (sameRoot : climbAt compress height leaf path = climbAt compress height leaf' path') :
+    ∃ input ∈ pathInputsAt compress height leaf path,
+      ∃ input' ∈ pathInputsAt compress height leaf' path',
+        input ≠ input' ∧ low240 (compress input) = low240 (compress input') := by
+  induction path generalizing height leaf leaf' path' with
+  | nil =>
+    cases path' with
+    | nil => exact different sameRoot |>.elim
+    | cons head rest => simp at samePosition
+  | cons head rest ih =>
+    cases path' with
+    | nil => simp at samePosition
+    | cons head' rest' =>
+      rcases head with ⟨right, sibling⟩
+      rcases head' with ⟨right', sibling'⟩
+      simp only [List.map_cons, List.cons.injEq] at samePosition
+      obtain ⟨rfl, tailsEqual⟩ := samePosition
+      let input : BitVec COMPRESSION_INPUT_LENGTH :=
+        if right then padInput (leaf ++ sibling) else padInput (sibling ++ leaf)
+      let input' : BitVec COMPRESSION_INPUT_LENGTH :=
+        if right then padInput (leaf' ++ sibling') else padInput (sibling' ++ leaf')
+      let next : Digest := climbStep compress height leaf (right, sibling)
+      let next' : Digest := climbStep compress height leaf' (right, sibling')
+      have inputsDifferent : input ≠ input' := by
+        intro h
+        cases right <;> simp only [input, input', if_true, Bool.false_eq_true, if_false] at h
+        · exact different (append_injective (padInput_injective h)).1
+        · exact different (append_injective (padInput_injective h)).2
+      have tailRoots : climbAt compress (height+1) next rest = climbAt compress (height+1) next' rest' := by
+        simpa only [climbAt_cons] using sameRoot
+      by_cases nextEqual : next = next'
+      · have lowEqual : low240 (compress input) = low240 (compress input') := by
+          have := congrArg low240 nextEqual
+          simp only [next, next', climbStep] at this
+          rw [low240_cut, low240_cut] at this
+          cases right <;>
+            simpa [input, input', combine] using this
+        exact ⟨_, List.mem_cons_self .., _, List.mem_cons_self .., inputsDifferent, lowEqual⟩
+      · obtain ⟨x, hx, y, hy, hCollision⟩ := ih (height+1) next next' rest' tailsEqual nextEqual tailRoots
+        exact ⟨x, List.mem_cons_of_mem _ hx, y, List.mem_cons_of_mem _ hy, hCollision⟩
+
 end CommitGolfCandidate

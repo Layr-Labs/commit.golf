@@ -43,7 +43,7 @@ theorem copy_pair_run (site : CopySite) (i : Fin 4) (lt : i.val<site.words) (s :
   have pt : t.pc=pcAt (site.pc+2*i.val+1) := by change s.pc+4=_;rw [pc,pc_succ]
   have dp' : t.getReg .x25=BitVec.ofNat 64 dst := dp
   obtain ⟨x,y⟩ := enc site i lt
-  have small : site.pc+2*i.val+1 < 140 := by have h:=i.isLt; cases site <;> simp only [CopySite.pc] <;> omega
+  have small : site.pc+2*i.val+1 < 406 := by have h:=i.isLt; cases site <;> simp only [CopySite.pc] <;> omega
   have sv : memoryArgumentsValid s (.LD .x6 .x23 off)=true := by
     change accessValid (s.getReg .x23+signExtend12 (BitVec.ofNat 12 (8*i.val))) 8 = true
     rw [sp,offset_eq _ i.isLt,←BitVec.ofNat_add];exact access_word _ _ sa

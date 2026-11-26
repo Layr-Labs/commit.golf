@@ -5,6 +5,7 @@ import CommitGolfCandidate.LateOpenWrites
 namespace CommitGolfCandidate.Late.Open
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
+def W (n : Nat) := BitVec.ofNat 64 n
 def layerBase (l : Nat) := tdBase+levelOffset l
 def stride (l : Nat) := 48*levelCount l
 def indexAbove (i : Index) (l : Nat) := i.val/2^l

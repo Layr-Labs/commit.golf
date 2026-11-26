@@ -27,23 +27,26 @@ theorem replay_run (o : Oracle) (odd : Bool) (s : Salt) (v : Entry) :
 
 def recordInputs (h : Compression) (odd : Bool) (s : Salt) (v : Entry)
     (path : List (Bool × Digest)) :=
-  inputs h odd s v ++ pathInputs h (leaf h odd s v) path
+  inputs h odd s v ++ pathInputsAt h 0 (leaf h odd s v) path
 
+/-- Two different entries at one position that climb (with cut parents from height 0) to one
+root give distinct queried inputs whose replies agree on their low 240 bits. -/
 theorem record_collision (h : Compression) (odd : Bool) (s t : Salt) (v w : Entry)
     (p q : List (Bool × Digest)) (position : p.map Prod.fst = q.map Prod.fst)
     (different : v ≠ w)
-    (root : climb h (leaf h odd s v) p = climb h (leaf h odd t w) q) :
-    ∃ x ∈ recordInputs h odd s v p, ∃ y ∈ recordInputs h odd t w q, x ≠ y ∧ h x = h y := by
+    (root : climbAt h 0 (leaf h odd s v) p = climbAt h 0 (leaf h odd t w) q) :
+    ∃ x ∈ recordInputs h odd s v p, ∃ y ∈ recordInputs h odd t w q, x ≠ y ∧
+      low240 (h x) = low240 (h y) := by
   by_cases eq : leaf h odd s v = leaf h odd t w
-  · obtain ⟨x, hx, y, hy, coll⟩ := leaf_collision h odd s t v w different eq
-    exact ⟨x, List.mem_append_left _ hx, y, List.mem_append_left _ hy, coll⟩
-  · obtain ⟨x, hx, y, hy, coll⟩ := collision_of_climb_eq h _ _ p q position eq root
+  · obtain ⟨x, hx, y, hy, ne, coll⟩ := leaf_collision h odd s t v w different eq
+    exact ⟨x, List.mem_append_left _ hx, y, List.mem_append_left _ hy, ne, congrArg low240 coll⟩
+  · obtain ⟨x, hx, y, hy, coll⟩ := collision_of_climbAt_eq h 0 _ _ p q position eq root
     exact ⟨x, List.mem_append_right _ hx, y, List.mem_append_right _ hy, coll⟩
 
 theorem record_inputs_length (h : Compression) (odd : Bool) (s : Salt) (v : Entry)
     (p : List (Bool × Digest)) :
     (recordInputs h odd s v p).length = 4+p.length := by
-  simp [recordInputs, inputs, pathInputs_length]
+  simp [recordInputs, inputs, pathInputsAt_length]
   omega
 
 end CommitGolfCandidate.Late

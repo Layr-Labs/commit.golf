@@ -16,18 +16,16 @@ theorem fill_preserves (h : Compression) (height n : Nat) (s : MachineState) (ad
   induction n with
   | zero => rfl
   | succ n ih =>
-    have b := parent_below_salts (height+1) n (by omega)
-    change _ ≤ 5905584160 at b
-    unfold fillLevel writeParent compressAt
-    exact (store_away _ _ _ _ _ (by omega) valid (sep n (by omega))).trans
+    unfold fillLevel
+    exact (write_parent_away _ _ _ _ (by omega) _ _ valid (sep n (by omega))).trans
       (ih (by omega) (fun j hj => sep j (by omega)))
 
 theorem filled_parent (h : Compression) (height n p : Nat) (s : MachineState)
     (ht : height < LOG_LENGTH) (bound : n ≤ levelCount (height+1)) (inside : p < n)
     (gap : readBuffer s (nodeAddress height (2*p)+64) 32 = 0) :
     readBuffer (fillLevel h height n s) (nodeAddress (height+1) p) 32 =
-      h (parentBlock (readBuffer s (nodeAddress height (2*p)) 32)
-                     (readBuffer s (nodeAddress height (2*p+1)) 32)) := by
+      cut (height+1) (h (parentBlock (readBuffer s (nodeAddress height (2*p)) 32)
+                     (readBuffer s (nodeAddress height (2*p+1)) 32))) := by
   induction n with
   | zero => omega
   | succ n ih =>
@@ -50,7 +48,7 @@ theorem filled_parent (h : Compression) (height n p : Nat) (s : MachineState)
       rw [Nat.add_zero] at left
       have eq : base+32 = nodeAddress height (2*p+1) := (children_contiguous height p).1.symm
       rw [eq] at right
-      exact parent_output _ _ _ _ _ _ left right (zero.trans gap)
+      exact parent_output _ _ _ _ _ _ (by omega) left right (zero.trans gap)
     · exact (parent_separate _ h height n ht (by omega) p (by omega)).trans (ih (by omega) (by omega))
 
 theorem all_salts_survive (h : Compression) (height n : Nat) (s : MachineState) (i : Index)

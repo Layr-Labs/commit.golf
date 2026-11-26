@@ -8,7 +8,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 def pcAt (i : Nat) := BitVec.ofNat 64 (4096+4*i)
 
 theorem fetch_word {s : MachineState} {i : Nat} (ip : s.pc = pcAt i)
-    (small : i < 3000) {w : BitVec 32} (atWord : commitImage.code[i]? = some w) :
+    (small : i < 2600) {w : BitVec 32} (atWord : commitImage.code[i]? = some w) :
     fetch commitImage s = decodeInstruction w := by
   have bound : 4096 + 4*i < 2^64 := by omega
   simp only [fetch, ip, pcAt, BitVec.toNat_ofNat, Nat.mod_eq_of_lt bound]

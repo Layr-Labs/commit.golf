@@ -6,20 +6,6 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
 set_option maxRecDepth 12000
 set_option maxHeartbeats 4000000
 
-theorem check_compression_digest (state : MachineState) (answer : BitVec 256) :
-    readBuffer (checkCompressionState state answer) 256 32 = answer := by
-  rw [read_digest_words _ _ (by decide)]
-  have w0 := check_compression_word state answer 0 (by decide)
-  have w1 := check_compression_word state answer 1 (by decide)
-  have w2 := check_compression_word state answer 2 (by decide)
-  have w3 := check_compression_word state answer 3 (by decide)
-  simp only [Nat.reduceMul, Nat.reduceAdd] at w0 w1 w2 w3
-  rw [w0, w1, w2, w3]
-  rw [BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide),
-    BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide),
-    BitVec.extractLsb'_append_extractLsb'_eq_extractLsb' (by decide)]
-  simp
-
 theorem register_set_mem (state : MachineState) (address value : Word) (reg : Reg) :
     (state.setMem address value).getReg reg = state.getReg reg := by cases reg <;> rfl
 
@@ -171,10 +157,30 @@ theorem check_path_input (state : MachineState) (address : Nat)
     rw [branchScratch]
     rfl
 
+theorem low_bit_zero (index : Word) :
+    (index &&& 1 = 0) ↔ index.getLsbD 0 = false := by
+  change (index &&& 1#64 = 0#64) ↔ _
+  rw [BitVec.and_one_eq_setWidth_ofBool_getLsbD]
+  cases h : index.getLsbD 0 <;> simp [BitVec.ofBool]
+
 theorem check_path_step_digest (state : MachineState) (answer : Digest) :
-    readBuffer (checkPathStepState state answer) 256 32 = answer := by
-  change readBuffer (checkCompressionState (checkPathPreparedState state) answer) 256 32 = answer
-  exact check_compression_digest _ _
+    readBuffer (checkPathStepState state answer) 256 32 = tcompDigest (tcompBit state) answer := by
+  change readBuffer (checkCompressionState (checkPathPreparedState state) answer) 256 32 = _
+  rw [check_compression_digest]
+  simp only [tcompBit, check_path_prepared_x9]
+
+/-- The adapter stores a node in cut form when bit 0 of the mask flags its height. -/
+theorem tcomp_digest_cut (state : MachineState) (height : Nat) (answer : Digest)
+    (flag : (state.getReg .x9).getLsbD 0 = decide (CutHeight height)) :
+    tcompDigest (tcompBit state) answer = cut height answer := by
+  unfold tcompDigest tcompBit cut
+  by_cases inside : CutHeight height
+  · have bit : ¬ (state.getReg .x9 &&& 1 = 0) := by
+      rw [low_bit_zero, flag]; simp [inside]
+    rw [if_neg bit, if_pos inside]
+  · have bit : state.getReg .x9 &&& 1 = 0 := by
+      rw [low_bit_zero, flag]; simp [inside]
+    rw [if_pos bit, if_neg inside]
 
 theorem check_path_step_outside (state : MachineState) (answer : Digest)
     (address : Word) (scratch : state.getReg .x21 = 256)
@@ -205,26 +211,21 @@ theorem check_path_step_outside (state : MachineState) (answer : Digest)
       copy_block_outside _ .x21 32 _ (by decide) (Or.inr rfl) branchScratch upper]
     rfl
 
-theorem low_bit_zero (index : Word) :
-    (index &&& 1 = 0) ↔ index.getLsbD 0 = false := by
-  change (index &&& 1#64 = 0#64) ↔ _
-  rw [BitVec.and_one_eq_setWidth_ofBool_getLsbD]
-  cases h : index.getLsbD 0 <;> simp [BitVec.ofBool]
-
 attribute [local irreducible] checkPathStepState checkPathPreparedState checkPathLoop checkEvaluation
 
 theorem check_path_loop_digest (oracle : Oracle) (state : MachineState)
-    (address : Nat) (path : List (Bool × Digest))
+    (address height : Nat) (path : List (Bool × Digest))
     (scratch : state.getReg .x21 = 256)
     (pointer : state.getReg .x25 = BitVec.ofNat 64 address)
     (aligned : address % 8 = 0) (above : 320 ≤ address)
     (bounded : address + 32 * path.length < 2^64)
     (data : ∀ i (hi : i < path.length), readBuffer state (address + 32*i) 32 = (path[i]'hi).2)
-    (directions : ∀ i (hi : i < path.length), (state.getReg .x20).getLsbD i = (path[i]'hi).1) :
+    (directions : ∀ i (hi : i < path.length), (state.getReg .x20).getLsbD i = (path[i]'hi).1)
+    (masks : ∀ i < path.length, (state.getReg .x9).getLsbD i = decide (CutHeight (height + i + 1))) :
     readBuffer (checkEvaluation oracle (checkPathLoop state path.length)).1 256 32 =
-      climb oracle.compression (readBuffer state 256 32) path := by
-  induction path generalizing state address with
-  | nil => simp [checkPathLoop, check_evaluation_pure, climb]
+      climbAt oracle.compression height (readBuffer state 256 32) path := by
+  induction path generalizing state address height with
+  | nil => simp [checkPathLoop, check_evaluation_pure, climbAt]
   | cons pair rest ih =>
     rcases pair with ⟨right, sibling⟩
     have input := check_path_input state address scratch pointer aligned above (by simp only [List.length_cons] at bounded; omega)
@@ -262,8 +263,16 @@ theorem check_path_loop_digest (oracle : Oracle) (state : MachineState)
         BitVec.getLsbD_ushiftRight]
       rw [show 1 + i = i + 1 by omega]
       exact directions (i+1) (by simp; omega)
-    have induction := ih next (address+32) nextScratch nextPointer (by omega) (by omega)
-      (by simp only [List.length_cons] at bounded; omega) nextData nextDirections
+    have nextMasks (i : Nat) (hi : i < rest.length) :
+        (next.getReg .x9).getLsbD i = decide (CutHeight (height + 1 + i + 1)) := by
+      rw [show next.getReg .x9 = state.getReg .x9 >>> 1 from check_path_step_x9 state answer,
+        BitVec.getLsbD_ushiftRight, show 1 + i = i + 1 by omega,
+        show height + 1 + i + 1 = height + (i+1) + 1 by omega]
+      exact masks (i+1) (by simp; omega)
+    have headMask : (state.getReg .x9).getLsbD 0 = decide (CutHeight (height + 1)) := by
+      simpa using masks 0 (by simp)
+    have induction := ih next (address+32) (height+1) nextScratch nextPointer (by omega) (by omega)
+      (by simp only [List.length_cons] at bounded; omega) nextData nextDirections nextMasks
     rw [List.length_cons, checkPathLoop, check_evaluation_public_bind]
     change readBuffer (checkEvaluation oracle (checkPathLoop
       (checkPathStepState state (oracle.compression (padInput (readBuffer (checkPathPreparedState state) 256 64))))
@@ -272,8 +281,8 @@ theorem check_path_loop_digest (oracle : Oracle) (state : MachineState)
     cases right <;>
       change readBuffer (checkEvaluation oracle (checkPathLoop next rest.length)).1 256 32 = _
     all_goals
-      rw [induction, check_path_step_digest]
-      simp only [answer, climb, List.foldl_cons, Bool.false_eq_true, ite_false, ite_true]
+      rw [induction, check_path_step_digest, tcomp_digest_cut state (height+1) _ headMask]
+      simp only [answer, climbAt_cons, climbStep, Bool.false_eq_true, ite_false, ite_true]
 
 theorem check_path_loop_outside (oracle : Oracle) (state : MachineState) (count : Nat)
     (address : Word) (scratch : state.getReg .x21 = 256)
