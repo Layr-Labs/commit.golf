@@ -5,13 +5,13 @@ import CommitGolfCandidate.MoonBinding
 /-! End-to-end verification of the submitted `check` image:
 - `check_run_termination`: universal termination on all inputs within step fuel and `28 * k` oracle calls.
 - `check_honest_accepts`: perfect completeness and `CHECK_BUDGET` bound on `referenceProof`.
-- `check_sound`: `CheckSound h768` witness-path and compression-trace extraction for adaptive 240-bit binding. -/
+- `check_sound`: `CheckSound h768` witness-path and compression-trace extraction for adaptive 238-bit binding. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
 
 /-! ### 1. Initial Invariant and Master Pipeline Composition -/
 
-private theorem check_steps_eq : submission.steps .check = 68719476736 := rfl
+private theorem check_steps_eq : submission.steps .check = 274877906944 := rfl
 
 private theorem submission_run_check_valid (s : Submission) (input : CheckInput)
     (h : input.proof.length ≤ s.sizes.proof) :
@@ -32,29 +32,27 @@ private theorem submission_run_check_invalid (s : Submission) (input : CheckInpu
 
 private theorem posLoopInv_init (h768 : COMPRESSION_INPUT_LENGTH = 768) (oracle : Oracle)
     (input : CheckInput) (hne : input.positions.card ≠ 0)
-    (s1 : MachineState) (hpc1 : s1.pc = pcWord 17)
+    (s1 : MachineState) (hpc1 : s1.pc = pcWord 22)
     (hmem1 : s1.mem = (submission.initialState .check input).mem)
-    (hfix1 : CheckFixedRegs s1 input.proof.length)
+    (hfix1 : CheckFixedRegs s1)
+    (hcur1 : ProofCursor (submission.initialState .check input) input.proof.length 0 0 s1)
     (hx24 : s1.getReg .x24 = BitVec.ofNat 64 6912218176)
     (hx8  : s1.getReg .x8  = BitVec.ofNat 64 7046435904)
-    (hx25 : s1.getReg .x25 = BitVec.ofNat 64 11341403200)
     (hx27 : s1.getReg .x27 = BitVec.ofNat 64 input.positions.card) :
     PosLoopInv h768 oracle input 0 s1 [] := by
   have hbyte0 : ∀ a < 4294971392, s1.getByte (BitVec.ofNat 64 a) = 0#8 := fun a ha => by
     simp only [MachineState.getByte, MachineState.getMem, hmem1]
     exact check_initial_zero_low input a ha
-  refine ⟨hfix1, MemEqOutside.of_mem_eq hmem1 0 4294971392,
+  refine ⟨hfix1, by simpa [posRecordOff, posTailOff] using hcur1,
+    MemEqOutside.of_mem_eq hmem1 0 4294971392,
     by simp [Nat.ne_of_lt (Nat.pos_of_ne_zero hne), hpc1],
-    by simpa using hx24, by simpa using hx8,
-    by simpa [posRecordOff] using hx25, by simpa using hx27,
-    by simp [posRecordOff], ?_, ?_, ?_, ?_, ?_, fun _ h => (Nat.not_lt_zero _ h).elim⟩
+    by simpa using hx24, by simpa using hx8, by simpa using hx27,
+    ?_, ?_, ?_, ?_, fun _ h => (Nat.not_lt_zero _ h).elim⟩
   · intro c hc
     rw [posMarked15_zero, if_neg (by decide)]
     exact hbyte0 (4096 + c) (by omega)
   · intro a ha1 ha2
     exact hbyte0 a (by omega)
-  · intro c hc _ b hb
-    exact hbyte0 (8192 + gapOffset c + b) (by unfold gapOffset; omega)
   · intro q hq b hb
     exact hbyte0 (8192 + 96 * q + 64 + b) (by omega)
   · intro a ha1 ha2
@@ -67,11 +65,12 @@ private theorem check_pipeline_nonempty (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (hne : input.positions.card ≠ 0) :
     let s0 := submission.initialState .check input
     let c96 : Comp96 := fun x => oracle.compression (x.cast h768.symm)
-    let pTotal := posRecordOff input.positions input.positions.card + 30 * capFrontierCount input.positions
+    let pTotal := posRecordOff input.positions input.positions.card + 29 * capFrontierCount input.positions
+    let tTotal := posTailOff input.positions input.positions.card + capFrontierCount input.positions
     (¬ PosConsistent c96 s0 input input.positions.card ∧
       ∃ k q tr, k ≤ submission.steps .check ∧ q ≤ 28 * input.positions.card ∧
         HaltsWith oracle s0 k q .failure tr) ∨
-    (input.proof.length < pTotal ∧
+    (input.proof.length < pTotal + tailBytes tTotal ∧
       ∃ k q tr, k ≤ submission.steps .check ∧ q ≤ 28 * input.positions.card ∧
         HaltsWith oracle s0 k q .failure tr) ∨
     (∃ sPos sCap qPos qCap trPos trCap kFin,
@@ -80,24 +79,25 @@ private theorem check_pipeline_nonempty (h768 : COMPRESSION_INPUT_LENGTH = 768)
       PosLoopInv h768 oracle input input.positions.card sPos trPos ∧
       CapWalkInv h768 oracle input sPos 9 sCap trCap ∧
       HaltsWith oracle s0 kFin (qPos + qCap)
-        (if pTotal == input.proof.length &&
+        (if pTotal + tailBytes tTotal == input.proof.length &&
+            tailBuf s0 input.proof.length tTotal == 0 &&
             readBuffer sCap (8192 + capValOff 24) 32 == (input.commitment : BitVec (8 * 32))
          then Exit.success else Exit.failure)
         (trPos ++ trCap)) := by
-  intro s0 c96 pTotal
+  intro s0 c96 pTotal tTotal
   have hcard_bd : input.positions.card ≤ 16777216 := by
     have h : input.positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ input.positions
     unfold LENGTH LOG_LENGTH at h; omega
-  have hsteps_bd : 15 + 1100 * input.positions.card + 30000 + 25 ≤ submission.steps .check := by
+  have hsteps_bd : 20 + 3668 * input.positions.card + 80000 + 25 ≤ submission.steps .check := by
     rw [check_steps_eq]; omega
-  obtain ⟨s1, hs1, hpc1, hmem1, hfix1, hx24, hx8, hx25, hx27⟩ :=
+  obtain ⟨s1, hs1, hpc1, hmem1, hfix1, hcur1, hx24, hx8, hx27⟩ :=
     step_prologue_nonempty oracle input hne
-  have hinit := posLoopInv_init h768 oracle input hne s1 hpc1 hmem1 hfix1 hx24 hx8 hx25 hx27
+  have hinit := posLoopInv_init h768 oracle input hne s1 hpc1 hmem1 hfix1 hcur1 hx24 hx8 hx27
   have hpos := step_pos_loop h768 oracle input hvalid hne s1 hinit
   cases hpos with
   | rejected kPos qPos trPos hnot hkPos hqPos hhPos =>
     left
-    refine ⟨hnot, 15 + kPos, qPos, trPos, by omega, by omega, ?_⟩
+    refine ⟨hnot, 20 + kPos, qPos, trPos, by omega, by omega, ?_⟩
     simpa using hs1.halt hhPos
   | continued sPos kPos qPos trPos hkPos hqPos hsPos hpPos =>
     obtain ⟨hqPos_le, hinvPos⟩ := hpPos
@@ -105,19 +105,17 @@ private theorem check_pipeline_nonempty (h768 : COMPRESSION_INPUT_LENGTH = 768)
     cases hcap with
     | rejected kCap qCap trCap hshort hkCap hqCap hhCap =>
       right; left
-      refine ⟨hshort, 15 + kPos + kCap, qPos + qCap, trPos ++ trCap, by omega, by omega, ?_⟩
+      refine ⟨hshort, 20 + kPos + kCap, qPos + qCap, trPos ++ trCap, by omega, by omega, ?_⟩
       simpa [Nat.add_assoc] using (hs1.trans hsPos).halt hhCap
     | continued sCap kCap qCap trCap hkCap hqCap hsCap hpCap =>
       obtain ⟨hqCap_le, hinvCap⟩ := hpCap
-      have hpc318 : sCap.pc = pcWord 278 := by have := hinvCap.pc; rwa [if_pos rfl] at this
-      have hx25_fin : sCap.getReg .x25 = BitVec.ofNat 64 (11341403200 + pTotal) := by
-        simpa only [capFrontierPrefix_9, pTotal] using hinvCap.x25
-      have hple_fin : pTotal ≤ input.proof.length := by
-        simpa only [capFrontierPrefix_9, pTotal] using hinvCap.poff_le
-      have hepi := step_epilogue oracle input hvalid pTotal hple_fin sCap hpc318
-        hinvCap.fixed hinvCap.high hx25_fin
+      have hpc311 : sCap.pc = pcWord 311 := by have := hinvCap.pc; rwa [if_pos rfl] at this
+      have hcur_fin : ProofCursor s0 input.proof.length pTotal tTotal sCap := by
+        simpa only [capFrontierPrefix_9, pTotal, tTotal] using hinvCap.cursor
+      have hepi := step_epilogue oracle input hvalid pTotal tTotal sCap hpc311
+        hinvCap.fixed hcur_fin hinvCap.high
       right; right
-      refine ⟨sPos, sCap, qPos, qCap, trPos, trCap, 15 + kPos + kCap + 25,
+      refine ⟨sPos, sCap, qPos, qCap, trPos, trCap, 20 + kPos + kCap + 25,
         by omega, by omega, hinvPos, hinvCap, ?_⟩
       simpa [Nat.add_assoc] using ((hs1.trans hsPos).trans hsCap).halt hepi
 
@@ -182,8 +180,7 @@ private theorem evalLevel_succ_of_ge1 (c : Comp96) (w : WitnessPath) (l : Nat) (
       if (idx ^^^ 1) < levelSize l then
         let inp := if idx % 2 = 0 then binaryInput cur (w.binSib l)
                    else binaryInput (w.binSib l) cur
-        let raw := c inp
-        if l + 1 = 24 then raw else mask240 raw
+        maskLevel (l + 1) (c inp)
       else cur := by
   obtain ⟨m, rfl⟩ : ∃ m, l = m + 1 := ⟨l - 1, by omega⟩
   rfl
@@ -192,11 +189,18 @@ private theorem nodeVal_succ_of_ge1 (c : Comp96) (msg : Message) (salts : Index 
     (l idx : Nat) (hl : 1 ≤ l) :
     nodeVal c msg salts (l + 1) idx =
       if 2 * idx + 1 < levelSize l then
-        let raw := c (binaryInput (nodeVal c msg salts l (2 * idx)) (nodeVal c msg salts l (2 * idx + 1)))
-        if l + 1 = 24 then raw else mask240 raw
+        maskLevel (l + 1)
+          (c (binaryInput (nodeVal c msg salts l (2 * idx)) (nodeVal c msg salts l (2 * idx + 1))))
       else if 2 * idx < levelSize l then nodeVal c msg salts l (2 * idx) else 0 := by
   obtain ⟨m, rfl⟩ : ∃ m, l = m + 1 := ⟨l - 1, by omega⟩
   rfl
+
+private theorem maskLevel_cap_eq (l : Nat) (hl1 : 15 ≤ l) (hl2 : l < 24) (d : Digest) :
+    maskLevel (l + 1) d = if l = 23 then d else mask238 d := by
+  unfold maskLevel
+  by_cases h23 : l = 23
+  · simp [h23]
+  · rw [if_neg (by omega), if_neg (by omega), if_neg h23]
 
 private theorem getElem_eq_of_idx {α : Type} {l : List α} {i1 i2 : Nat} (h : i1 = i2)
     (h1 : i1 < l.length) (h2 : i2 < l.length) : l[i1]'h1 = l[i2]'h2 := by
@@ -263,8 +267,7 @@ private theorem check_sound_cap_climb (h768 : COMPRESSION_INPUT_LENGTH = 768)
         if (idx ^^^ 1) < levelSize l then
           let inp := if idx % 2 = 0 then binaryInput (w.evalLevel c96 l) (w.binSib l)
                      else binaryInput (w.binSib l) (w.evalLevel c96 l)
-          let raw := c96 inp
-          if l + 1 = 24 then raw else mask240 raw
+          maskLevel (l + 1) (c96 inp)
         else w.evalLevel c96 l := by
       rw [evalLevel_succ_of_ge1 c96 w l (by omega)]
       simp only [hw_idx, show l - 1 = 14 + d by omega, idx]
@@ -314,8 +317,8 @@ private theorem check_sound_cap_climb (h768 : COMPRESSION_INPUT_LENGTH = 768)
           rw [if_neg hodd_i, heval_d', hsib_eq, h2q1, h2q]
       refine ⟨by simpa only [hidx_next, show 15 + (d + 1) = l + 1 by omega] using hq_lt,
         by simpa only [hidx_next, show 15 + (d + 1) = l + 1 by omega] using hcm_next, ?_, ?_⟩
-      · simp only [hidx_next, show 15 + (d + 1) = l + 1 by omega, heval_unfold, hpair, ite_true,
-          hinp_eq, show (l + 1 = 24) ↔ (l = 23) by omega]
+      · simp only [hidx_next, show 15 + (d + 1) = l + 1 by omega, heval_unfold, hpair, ite_true, hinp_eq]
+        rw [maskLevel_cap_eq l (by omega) (by omega)]
         exact hcap_val.symm
       · intro d' hd' x hx
         by_cases hlt : d' < d
@@ -444,7 +447,8 @@ theorem check_sound (h768 : COMPRESSION_INPUT_LENGTH = 768) : CheckSound h768 :=
         simp only [posAt, dif_pos hord, hget]
       have hval_eq : valAt input ord = input.values ⟨i, hi⟩ :=
         valAt_eq_of_posAt input ord hord i hi hpos_eq
-      let pw := parsePartialWitness (submission.initialState .check input) (posRecordOff input.positions ord)
+      let pw := parsePartialWitness (submission.initialState .check input) input.proof.length
+        (posRecordOff input.positions ord) (posTailOff input.positions ord)
         (posAt input.positions ord) (valAt input ord)
       let w : WitnessPath := {
         index := pw.index
@@ -541,16 +545,141 @@ private theorem bitsToBytes_getElem {w : Nat} (v : BitVec w) (n j : Nat) (_hj : 
     (bitsToBytes v n)[j]'hbd = v.extractLsb' (8 * j) 8 := by
   simp [bitsToBytes]
 
+/-! #### Exact Backward 6-Bit Tail Stream Inversion -/
+
+private theorem bytesToNat_eq_sum_getD (bs : List Byte) :
+    bytesToNat bs = ∑ j ∈ Finset.range bs.length, (bs.getD j 0#8).toNat * 2 ^ (8 * j) := by
+  induction bs using List.reverseRecOn with
+  | nil => simp [bytesToNat]
+  | append_singleton l b ih =>
+    rw [bytesToNat_append_singleton, List.length_append, List.length_singleton,
+      Finset.sum_range_succ, ih]
+    congr 1
+    · apply Finset.sum_congr rfl
+      intro j hj
+      have hjl : j < l.length := Finset.mem_range.mp hj
+      simp [List.getD_eq_getElem?_getD, List.getElem?_append_left hjl]
+    · simp [List.getD_eq_getElem?_getD]
+
+private theorem bitsOf6_extract (tails : List (BitVec 6)) (t : Nat) (ht : t < tails.length) :
+    (bitsOf6 tails / 2 ^ (6 * t)) % 64 = (tails[t]'ht).toNat := by
+  induction tails generalizing t with
+  | nil => simp at ht
+  | cons hd tl ih =>
+    cases t with
+    | zero =>
+      simp only [Nat.mul_zero, Nat.pow_zero, Nat.div_one, bitsOf6_cons, List.getElem_cons_zero]
+      have hlt : hd.toNat < 64 := hd.isLt
+      omega
+    | succ t' =>
+      simp only [bitsOf6_cons, List.getElem_cons_succ]
+      have hpow : 2 ^ (6 * (t' + 1)) = 64 * 2 ^ (6 * t') := by
+        rw [show 6 * (t' + 1) = 6 + 6 * t' by omega, Nat.pow_add]
+      have hlt : hd.toNat < 64 := hd.isLt
+      rw [hpow, ← Nat.div_div_eq_div_mul,
+        show (hd.toNat + 64 * bitsOf6 tl) / 64 = bitsOf6 tl by omega]
+      exact ih t' (by simp at ht; omega)
+
+private theorem backBytesNat_split (s0 : MachineState) (proofLen k K : Nat) (hk : k ≤ K) :
+    ∃ Q, backBytesNat s0 proofLen K = backBytesNat s0 proofLen k + 2 ^ (8 * k) * Q := by
+  induction hk with
+  | refl => exact ⟨0, by simp⟩
+  | @step m hm ih =>
+    obtain ⟨Q, hQ⟩ := ih
+    rw [backBytesNat_succ, hQ]
+    have hkm : k ≤ m := hm
+    have hpow : 2 ^ (8 * m) = 2 ^ (8 * k) * 2 ^ (8 * (m - k)) := by
+      rw [← Nat.pow_add, show 8 * k + 8 * (m - k) = 8 * m by omega]
+    refine ⟨Q + (s0.getByte (BitVec.ofNat 64 (11341403200 + (proofLen - 1 - m)))).toNat * 2 ^ (8 * (m - k)), ?_⟩
+    rw [hpow]; ring
+
+private theorem backBytesNat_pack6BitsRev (input : CheckInput)
+    (hvalid : input.proof.length ≤ submission.sizes.proof)
+    (fwd : List Byte) (tails : List (BitVec 6))
+    (hpf : input.proof = fwd ++ pack6BitsRev tails) :
+    backBytesNat (submission.initialState .check input) input.proof.length (tailBytes tails.length) =
+      bitsOf6 tails := by
+  let s0 := submission.initialState .check input
+  let bs := pack6Bits tails
+  have hbs_len : bs.length = tailBytes tails.length := pack6Bits_length tails
+  have hrev_len : (pack6BitsRev tails).length = tailBytes tails.length := pack6BitsRev_length tails
+  have hpf_len : input.proof.length = fwd.length + tailBytes tails.length := by
+    rw [hpf, List.length_append, hrev_len]
+  rw [← pack6Bits_bytesToNat tails, bytesToNat_eq_sum_getD]
+  unfold backBytesNat
+  rw [hbs_len]
+  apply Finset.sum_congr rfl
+  intro j hj
+  have hjt : j < tailBytes tails.length := Finset.mem_range.mp hj
+  have hidx_lt : input.proof.length - 1 - j < input.proof.length := by omega
+  have hb0 := check_initial_proof_byte input hvalid (input.proof.length - 1 - j) hidx_lt
+  have hget_pf : input.proof[input.proof.length - 1 - j]'hidx_lt = bs[j]'(by omega) := by
+    have hge : fwd.length ≤ input.proof.length - 1 - j := by omega
+    have hsub_lt : input.proof.length - 1 - j - fwd.length < (pack6BitsRev tails).length := by omega
+    have hsub_eq : input.proof.length - 1 - j - fwd.length = bs.length - 1 - j := by omega
+    have h1 : input.proof[input.proof.length - 1 - j]'hidx_lt =
+        (fwd ++ pack6BitsRev tails)[input.proof.length - 1 - j]'(by rwa [← hpf]) := by
+      simp [hpf]
+    rw [h1, List.getElem_append_right hge]
+    have hpk_len : (pack6Bits tails).length = bs.length := rfl
+    unfold pack6BitsRev
+    rw [getElem_eq_of_idx hsub_eq _ (by rw [List.length_reverse, hpk_len]; omega), List.getElem_reverse]
+    exact getElem_eq_of_idx (by rw [hpk_len]; omega) _ (by rw [hpk_len]; omega)
+  have hgetD : bs.getD j 0#8 = bs[j]'(by omega) := by
+    simp [List.getD_eq_getElem?_getD, show j < bs.length by omega]
+  rw [hb0, hget_pf, hgetD]
+
+private theorem honest_tailBuf_zero (input : CheckInput)
+    (hvalid : input.proof.length ≤ submission.sizes.proof)
+    (fwd : List Byte) (tails : List (BitVec 6))
+    (hpf : input.proof = fwd ++ pack6BitsRev tails) :
+    tailBuf (submission.initialState .check input) input.proof.length tails.length = 0 := by
+  unfold tailBuf
+  rw [backBytesNat_pack6BitsRev input hvalid fwd tails hpf]
+  exact Nat.div_eq_of_lt (bitsOf6_lt tails)
+
+private theorem honest_tailAt_eq (input : CheckInput)
+    (hvalid : input.proof.length ≤ submission.sizes.proof)
+    (fwd : List Byte) (tails : List (BitVec 6))
+    (hpf : input.proof = fwd ++ pack6BitsRev tails)
+    (t : Nat) (ht : t < tails.length) :
+    tailAt (submission.initialState .check input) input.proof.length t = tails[t]'ht := by
+  let s0 := submission.initialState .check input
+  have hK := backBytesNat_pack6BitsRev input hvalid fwd tails hpf
+  have hk_le : tailBytes (t + 1) ≤ tailBytes tails.length := tailBytes_mono (by omega)
+  obtain ⟨Q, hQ⟩ := backBytesNat_split s0 input.proof.length (tailBytes (t + 1)) (tailBytes tails.length) hk_le
+  rw [hK] at hQ
+  have hbits : 6 * t + 6 ≤ 8 * tailBytes (t + 1) := by unfold tailBytes; omega
+  have hpow : 2 ^ (8 * tailBytes (t + 1)) = 2 ^ (6 * t) * (64 * 2 ^ (8 * tailBytes (t + 1) - (6 * t + 6))) := by
+    rw [show 64 = 2 ^ 6 by decide, ← Nat.pow_add, ← Nat.pow_add]
+    congr 1; omega
+  have hdiv : bitsOf6 tails / 2 ^ (6 * t) =
+      backBytesNat s0 input.proof.length (tailBytes (t + 1)) / 2 ^ (6 * t) +
+        64 * (2 ^ (8 * tailBytes (t + 1) - (6 * t + 6)) * Q) := by
+    rw [hQ, hpow, show 2 ^ (6 * t) * (64 * 2 ^ (8 * tailBytes (t + 1) - (6 * t + 6))) * Q =
+      (64 * (2 ^ (8 * tailBytes (t + 1) - (6 * t + 6)) * Q)) * 2 ^ (6 * t) by ring,
+      Nat.add_mul_div_right _ _ (Nat.pow_pos (by decide : 0 < 2))]
+  have hmod : (backBytesNat s0 input.proof.length (tailBytes (t + 1)) / 2 ^ (6 * t)) % 64 = (tails[t]'ht).toNat := by
+    have h1 := bitsOf6_extract tails t ht
+    rw [hdiv] at h1
+    omega
+  apply BitVec.eq_of_toNat_eq
+  simp only [tailAt, BitVec.toNat_ofNat]
+  exact hmod
+
+/-! #### Prefix Length and Element Extraction Lemmas for `referenceProofFwd` & `referenceProofTails` -/
+
 private theorem l0SiblingsProof_length (nodes : Nat → Nat → Digest) (i : Index) :
     (l0SiblingsProof nodes i).length = l0Bytes i := by
   unfold l0SiblingsProof l0Bytes
   dsimp only
   split_ifs <;> simp [bitsToBytes]
 
-private theorem binPathProof_prefix_len (nodes : Nat → Nat → Digest) (g n : Nat) (hn : n ≤ 13) :
+private theorem binPathFwd_prefix_len (nodes : Nat → Nat → Digest) (g n : Nat) (hn : n ≤ 13) :
     (((List.range 13).take n).map fun step =>
       (if ((g >>> (step + 1)) ^^^ 1) < levelSize (2 + step)
-       then bitsToBytes (nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)) 30 else []).length).sum =
+       then bitsToBytes (nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)) (if 2 + step < 6 then 30 else 29)
+       else []).length).sum =
     binPathOff g n := by
   induction n with
   | zero => simp [binPathOff]
@@ -564,52 +693,119 @@ private theorem binPathProof_prefix_len (nodes : Nat → Nat → Digest) (g n : 
     · simp [hlt, bitsToBytes_length]
     · simp [hlt]
 
-private theorem binPathProof_length (nodes : Nat → Nat → Digest) (g : Nat) :
-    (binPathProof nodes g).length = binPathOff g 13 := by
-  unfold binPathProof
+private theorem binPathFwd_length (nodes : Nat → Nat → Digest) (g : Nat) :
+    (binPathFwd nodes g).length = binPathOff g 13 := by
+  unfold binPathFwd
   rw [List.length_flatMap]
-  simpa using binPathProof_prefix_len nodes g 13 (le_refl 13)
+  simpa using binPathFwd_prefix_len nodes g 13 (le_refl 13)
 
-private theorem recordProof_length (nodes : Nat → Nat → Digest) (salts : Index → Salt192) (i : Index) :
-    (recordProof nodes salts i).length = recordLen i := by
-  unfold recordProof recordLen
-  simp only [List.length_append, bitsToBytes_length, l0SiblingsProof_length, binPathProof_length]
+private theorem binPathTails_prefix_len (nodes : Nat → Nat → Digest) (g n : Nat) (hn : n ≤ 9) :
+    (((List.range 9).take n).map fun step =>
+      (if ((g >>> (step + 5)) ^^^ 1) < levelSize (6 + step)
+       then [tail6 (nodes (6 + step) ((g >>> (step + 5)) ^^^ 1))]
+       else []).length).sum =
+    binTailOff g n := by
+  induction n with
+  | zero => simp [binTailOff]
+  | succ k ih =>
+    have htake : (List.range 9).take (k + 1) = (List.range 9).take k ++ [k] := by
+      rw [List.take_succ_eq_append_getElem (by simp; omega)]
+      simp [List.getElem_range]
+    rw [htake, List.map_append, List.sum_append, List.map_singleton, List.sum_singleton, ih (by omega)]
+    simp only [binTailOff, binStepTails]
+    by_cases hlt : ((g >>> (k + 5)) ^^^ 1) < levelSize (6 + k)
+    · simp [hlt]
+    · simp [hlt]
 
-private theorem records_prefix_len (nodes : Nat → Nat → Digest) (salts : Index → Salt192)
+private theorem binPathTails_length (nodes : Nat → Nat → Digest) (g : Nat) :
+    (binPathTails nodes g).length = binTailOff g 9 := by
+  unfold binPathTails
+  rw [List.length_flatMap]
+  simpa using binPathTails_prefix_len nodes g 9 (le_refl 9)
+
+private theorem recordFwd_length (nodes : Nat → Nat → Digest) (salts : Index → Salt192) (i : Index) :
+    (recordFwd nodes salts i).length = recordLen i := by
+  unfold recordFwd recordLen
+  simp only [List.length_append, bitsToBytes_length, l0SiblingsProof_length, binPathFwd_length]
+
+private theorem recordTails_length (nodes : Nat → Nat → Digest) (i : Index) :
+    (recordTails nodes i).length = recordTailCount i :=
+  binPathTails_length nodes (i.val / 3)
+
+private theorem recordsFwd_prefix_len (nodes : Nat → Nat → Digest) (salts : Index → Salt192)
     (positions : Positions) (n : Nat) (hn : n ≤ positions.card) :
-    (((positions.sort (· ≤ ·)).take n).map fun i => (recordProof nodes salts i).length).sum =
+    (((positions.sort (· ≤ ·)).take n).map fun i => (recordFwd nodes salts i).length).sum =
       posRecordOff positions n := by
   induction n with
   | zero => simp [posRecordOff]
   | succ k ih =>
     have hlt : k < (positions.sort (· ≤ ·)).length := by simpa using Nat.lt_of_lt_of_le (Nat.lt_succ_self k) hn
     rw [List.take_succ_eq_append_getElem hlt, List.map_append, List.sum_append, List.map_singleton,
-      List.sum_singleton, ih (by omega), posRecordOff_succ, recordProof_length]
+      List.sum_singleton, ih (by omega), posRecordOff_succ, recordFwd_length]
     congr 1
     simp only [posAt, dif_pos (show k < positions.card by omega)]
 
-private theorem records_flatMap_length (nodes : Nat → Nat → Digest)
+private theorem recordsFwd_flatMap_length (nodes : Nat → Nat → Digest)
     (salts : Index → Salt192) (positions : Positions) :
-    ((positions.sort (· ≤ ·)).flatMap (recordProof nodes salts)).length =
+    ((positions.sort (· ≤ ·)).flatMap (recordFwd nodes salts)).length =
       posRecordOff positions positions.card := by
   rw [List.length_flatMap]
-  have h1 := records_prefix_len nodes salts positions positions.card (le_refl _)
+  have h1 := recordsFwd_prefix_len nodes salts positions positions.card (le_refl _)
   have htake_eq : (positions.sort (· ≤ ·)).take positions.card = positions.sort (· ≤ ·) := by
     have hlen : (positions.sort (· ≤ ·)).length = positions.card := by simp
     rw [← hlen, List.take_length]
   rwa [htake_eq] at h1
 
+private theorem recordsTails_prefix_len (nodes : Nat → Nat → Digest)
+    (positions : Positions) (n : Nat) (hn : n ≤ positions.card) :
+    (((positions.sort (· ≤ ·)).take n).map fun i => (recordTails nodes i).length).sum =
+      posTailOff positions n := by
+  induction n with
+  | zero => simp [posTailOff]
+  | succ k ih =>
+    have hlt : k < (positions.sort (· ≤ ·)).length := by simpa using Nat.lt_of_lt_of_le (Nat.lt_succ_self k) hn
+    rw [List.take_succ_eq_append_getElem hlt, List.map_append, List.sum_append, List.map_singleton,
+      List.sum_singleton, ih (by omega), posTailOff_succ, recordTails_length]
+    congr 1
+    simp only [posAt, dif_pos (show k < positions.card by omega)]
+
+private theorem recordsTails_flatMap_length (nodes : Nat → Nat → Digest) (positions : Positions) :
+    ((positions.sort (· ≤ ·)).flatMap (recordTails nodes)).length =
+      posTailOff positions positions.card := by
+  rw [List.length_flatMap]
+  have h1 := recordsTails_prefix_len nodes positions positions.card (le_refl _)
+  have htake_eq : (positions.sort (· ≤ ·)).take positions.card = positions.sort (· ≤ ·) := by
+    have hlen : (positions.sort (· ≤ ·)).length = positions.card := by simp
+    rw [← hlen, List.take_length]
+  rwa [htake_eq] at h1
+
+private theorem referenceProofFwd_length (nodes : Nat → Nat → Digest)
+    (salts : Index → Salt192) (positions : Positions) :
+    (referenceProofFwd nodes salts positions).length =
+      posRecordOff positions positions.card + 29 * capFrontierCount positions := by
+  unfold referenceProofFwd
+  rw [List.length_append, recordsFwd_flatMap_length, capFrontierFwd_length]
+
+private theorem referenceProofTails_length (nodes : Nat → Nat → Digest) (positions : Positions) :
+    (referenceProofTails nodes positions).length =
+      posTailOff positions positions.card + capFrontierCount positions := by
+  unfold referenceProofTails
+  rw [List.length_append, recordsTails_flatMap_length, capFrontierTails_length]
+
 private theorem referenceProof_length_nonempty (nodes : Nat → Nat → Digest)
     (salts : Index → Salt192) (positions : Positions) (hne : positions.card ≠ 0) :
     (referenceProof nodes salts positions).length =
-      posRecordOff positions positions.card + 30 * capFrontierCount positions := by
+      posRecordOff positions positions.card + 29 * capFrontierCount positions +
+      tailBytes (posTailOff positions positions.card + capFrontierCount positions) := by
   unfold referenceProof
-  rw [if_neg hne, List.length_append, records_flatMap_length, capFrontierProof_length]
+  rw [if_neg hne, List.length_append, referenceProofFwd_length, pack6BitsRev_length,
+    referenceProofTails_length]
+  rfl
 
-private theorem capFrontier_prefix_len (nodes : Nat → Nat → Digest) (positions : Positions)
+private theorem capFrontierFwd_prefix_len (nodes : Nat → Nat → Digest) (positions : Positions)
     (d : Nat) (hd : d ≤ 9) :
-    (((List.range 9).take d).map fun step => (capLevelFrontierProof nodes positions (15 + step)).length).sum =
-      30 * capFrontierPrefix positions d := by
+    (((List.range 9).take d).map fun step => (capLevelFrontierFwd nodes positions (15 + step)).length).sum =
+      29 * capFrontierPrefix positions d := by
   induction d with
   | zero => simp [capFrontierPrefix_zero]
   | succ k ih =>
@@ -617,17 +813,30 @@ private theorem capFrontier_prefix_len (nodes : Nat → Nat → Digest) (positio
       rw [List.take_succ_eq_append_getElem (by simp; omega)]
       simp [List.getElem_range]
     rw [htake, List.map_append, List.sum_append, List.map_singleton, List.sum_singleton,
-      ih (by omega), capLevelFrontierProof_length, capFrontierPrefix_succ, Nat.mul_add]
+      ih (by omega), capLevelFrontierFwd_length, capFrontierPrefix_succ, Nat.mul_add]
 
-private theorem capLevel_pair_prefix_len (nodes : Nat → Nat → Digest) (positions : Positions)
+private theorem capFrontierTails_prefix_len (nodes : Nat → Nat → Digest) (positions : Positions)
+    (d : Nat) (hd : d ≤ 9) :
+    (((List.range 9).take d).map fun step => (capLevelFrontierTails nodes positions (15 + step)).length).sum =
+      capFrontierPrefix positions d := by
+  induction d with
+  | zero => simp [capFrontierPrefix_zero]
+  | succ k ih =>
+    have htake : (List.range 9).take (k + 1) = (List.range 9).take k ++ [k] := by
+      rw [List.take_succ_eq_append_getElem (by simp; omega)]
+      simp [List.getElem_range]
+    rw [htake, List.map_append, List.sum_append, List.map_singleton, List.sum_singleton,
+      ih (by omega), capLevelFrontierTails_length, capFrontierPrefix_succ]
+
+private theorem capLevelFwd_pair_prefix_len (nodes : Nat → Nat → Digest) (positions : Positions)
     (l n : Nat) (hn : n ≤ levelSize l / 2) :
     (((List.range (levelSize l / 2)).take n).map fun q =>
       (let mL := capMark positions l (2 * q)
        let mR := capMark positions l (2 * q + 1)
        if mL = mR then []
-       else if !mL then bitsToBytes (nodes l (2 * q)) 30
-       else bitsToBytes (nodes l (2 * q + 1)) 30).length).sum =
-      30 * pairFrontierCount positions l n := by
+       else if !mL then bitsToBytes (nodes l (2 * q)) 29
+       else bitsToBytes (nodes l (2 * q + 1)) 29).length).sum =
+      29 * pairFrontierCount positions l n := by
   induction n with
   | zero => simp [pairFrontierCount_zero]
   | succ q ih =>
@@ -638,6 +847,26 @@ private theorem capLevel_pair_prefix_len (nodes : Nat → Nat → Digest) (posit
       ih (by omega), pairFrontierCount_succ, Nat.mul_add]
     dsimp only
     cases capMark positions l (2 * q) <;> cases capMark positions l (2 * q + 1) <;> simp [bitsToBytes]
+
+private theorem capLevelTails_pair_prefix_len (nodes : Nat → Nat → Digest) (positions : Positions)
+    (l n : Nat) (hn : n ≤ levelSize l / 2) :
+    (((List.range (levelSize l / 2)).take n).map fun q =>
+      (let mL := capMark positions l (2 * q)
+       let mR := capMark positions l (2 * q + 1)
+       if mL = mR then []
+       else if !mL then [tail6 (nodes l (2 * q))]
+       else [tail6 (nodes l (2 * q + 1))]).length).sum =
+      pairFrontierCount positions l n := by
+  induction n with
+  | zero => simp [pairFrontierCount_zero]
+  | succ q ih =>
+    have htake : (List.range (levelSize l / 2)).take (q + 1) = (List.range (levelSize l / 2)).take q ++ [q] := by
+      rw [List.take_succ_eq_append_getElem (by simp; omega)]
+      simp [List.getElem_range]
+    rw [htake, List.map_append, List.sum_append, List.map_singleton, List.sum_singleton,
+      ih (by omega), pairFrontierCount_succ]
+    dsimp only
+    cases capMark positions l (2 * q) <;> cases capMark positions l (2 * q + 1) <;> simp
 
 private theorem readBuffer_proof_of_bitsToBytes (input : CheckInput)
     (hvalid : input.proof.length ≤ submission.sizes.proof)
@@ -662,136 +891,286 @@ private theorem proofDigest30_of_proof_bytes (input : CheckInput)
   have h1 := check_initial_proof_byte input hvalid (off + j) (by omega)
   simpa only [Nat.add_assoc] using h1.trans (hbytes j hj)
 
-/-- Extract byte `j` of `recordProof` for position `ord` inside `referenceProof`. -/
-private theorem referenceProof_record_getElem (nodes : Nat → Nat → Digest)
+private theorem proofDigest238_of_proof_bytes (input : CheckInput)
+    (hvalid : input.proof.length ≤ submission.sizes.proof)
+    (off t : Nat) (d : Digest) (hbd : off + 29 ≤ input.proof.length)
+    (hbytes : ∀ j (hj : j < 29), input.proof[off + j]'(by omega) = d.extractLsb' (8 * j) 8)
+    (htail : tailAt (submission.initialState .check input) input.proof.length t = tail6 d) :
+    proofDigest238 (submission.initialState .check input) input.proof.length (11341403200 + off) t = mask238 d := by
+  apply proofDigest238_of_bytes_eq
+  · intro j hj
+    have h1 := check_initial_proof_byte input hvalid (off + j) (by omega)
+    simpa only [Nat.add_assoc] using h1.trans (hbytes j hj)
+  · exact htail
+
+/-- Extract byte `j` of `recordFwd` for position `ord` inside `referenceProof`. -/
+private theorem referenceProof_recordFwd_getElem (nodes : Nat → Nat → Digest)
     (salts : Index → Salt192) (positions : Positions) (hne : positions.card ≠ 0)
     (ord j : Nat) (hord : ord < positions.card) (hj : j < recordLen (posAt positions ord))
     (hbd : posRecordOff positions ord + j < (referenceProof nodes salts positions).length) :
     (referenceProof nodes salts positions)[posRecordOff positions ord + j]'hbd =
-      (recordProof nodes salts (posAt positions ord))[j]'(by rw [recordProof_length]; exact hj) := by
-  have hrec_len := records_flatMap_length nodes salts positions
-  have hlt_rec : posRecordOff positions ord + j < ((positions.sort (· ≤ ·)).flatMap (recordProof nodes salts)).length := by
+      (recordFwd nodes salts (posAt positions ord))[j]'(by rw [recordFwd_length]; exact hj) := by
+  have hrec_len := recordsFwd_flatMap_length nodes salts positions
+  have hlt_rec : posRecordOff positions ord + j < ((positions.sort (· ≤ ·)).flatMap (recordFwd nodes salts)).length := by
     rw [hrec_len]
     have h1 := posRecordOff_mono positions (show ord + 1 ≤ positions.card by omega)
     rw [posRecordOff_succ] at h1
     omega
+  have hlt_fwd : posRecordOff positions ord + j < (referenceProofFwd nodes salts positions).length := by
+    unfold referenceProofFwd; rw [List.length_append]; omega
   simp only [referenceProof, hne, ite_false]
+  rw [List.getElem_append_left hlt_fwd]
+  unfold referenceProofFwd at hlt_fwd ⊢
   rw [List.getElem_append_left hlt_rec]
-  have hpref := records_prefix_len nodes salts positions ord (by omega)
+  have hpref := recordsFwd_prefix_len nodes salts positions ord (by omega)
   have hord' : ord < (positions.sort (· ≤ ·)).length := by simpa using hord
   have hpos_get : (positions.sort (· ≤ ·))[ord]'hord' = posAt positions ord := by
     simp only [posAt, dif_pos hord]
-  have hj' : j < (recordProof nodes salts ((positions.sort (· ≤ ·))[ord]'hord')).length := by
-    rw [hpos_get, recordProof_length]; exact hj
-  have hfm := flatMap_getElem_at (recordProof nodes salts) (positions.sort (· ≤ ·)) ord j hord' hj'
+  have hj' : j < (recordFwd nodes salts ((positions.sort (· ≤ ·))[ord]'hord')).length := by
+    rw [hpos_get, recordFwd_length]; exact hj
+  have hfm := flatMap_getElem_at (recordFwd nodes salts) (positions.sort (· ≤ ·)) ord j hord' hj'
     (by rwa [hpref])
   simpa only [hpref, hpos_get] using hfm
 
-/-- Extract byte `j < 30` of the frontier digest for pair `q` at cap level `15 + d` inside `referenceProof`. -/
-private theorem referenceProof_cap_getElem (nodes : Nat → Nat → Digest)
+/-- Extract tail `j` of `recordTails` for position `ord` inside `referenceProofTails`. -/
+private theorem referenceProof_recordTails_getElem (nodes : Nat → Nat → Digest)
+    (positions : Positions) (ord j : Nat) (hord : ord < positions.card)
+    (hj : j < recordTailCount (posAt positions ord))
+    (hbd : posTailOff positions ord + j < (referenceProofTails nodes positions).length) :
+    (referenceProofTails nodes positions)[posTailOff positions ord + j]'hbd =
+      (recordTails nodes (posAt positions ord))[j]'(by rw [recordTails_length]; exact hj) := by
+  have hrec_len := recordsTails_flatMap_length nodes positions
+  have hlt_rec : posTailOff positions ord + j < ((positions.sort (· ≤ ·)).flatMap (recordTails nodes)).length := by
+    rw [hrec_len]
+    have h1 := posTailOff_mono positions (show ord + 1 ≤ positions.card by omega)
+    rw [posTailOff_succ] at h1
+    omega
+  unfold referenceProofTails at hbd ⊢
+  rw [List.getElem_append_left hlt_rec]
+  have hpref := recordsTails_prefix_len nodes positions ord (by omega)
+  have hord' : ord < (positions.sort (· ≤ ·)).length := by simpa using hord
+  have hpos_get : (positions.sort (· ≤ ·))[ord]'hord' = posAt positions ord := by
+    simp only [posAt, dif_pos hord]
+  have hj' : j < (recordTails nodes ((positions.sort (· ≤ ·))[ord]'hord')).length := by
+    rw [hpos_get, recordTails_length]; exact hj
+  have hfm := flatMap_getElem_at (recordTails nodes) (positions.sort (· ≤ ·)) ord j hord' hj'
+    (by rwa [hpref])
+  simpa only [hpref, hpos_get] using hfm
+
+/-- Extract forward byte `j < 29` of the frontier digest for pair `q` at cap level `15 + d`. -/
+private theorem referenceProof_capFwd_getElem (nodes : Nat → Nat → Digest)
     (salts : Index → Salt192) (positions : Positions) (hne : positions.card ≠ 0)
-    (d q j : Nat) (hd : d < 9) (hq : q < levelSize (15 + d) / 2) (hj : j < 30)
+    (d q j : Nat) (hd : d < 9) (hq : q < levelSize (15 + d) / 2) (hj : j < 29)
     (hdiff : capMark positions (15 + d) (2 * q) ≠ capMark positions (15 + d) (2 * q + 1))
     (hbd : posRecordOff positions positions.card +
-        30 * (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) + j <
+        29 * (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) + j <
       (referenceProof nodes salts positions).length) :
     (referenceProof nodes salts positions)[posRecordOff positions positions.card +
-        30 * (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) + j]'hbd =
+        29 * (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) + j]'hbd =
       (nodes (15 + d) (if !capMark positions (15 + d) (2 * q) then 2 * q else 2 * q + 1)).extractLsb' (8 * j) 8 := by
   let l := 15 + d
   have hq' : q < levelSize l / 2 := hq
   have hdiff' : capMark positions l (2 * q) ≠ capMark positions l (2 * q + 1) := hdiff
-  have hrec_len := records_flatMap_length nodes salts positions
-  simp only [referenceProof, hne, ite_false]
-  rw [List.getElem_append_right (by rw [hrec_len]; omega)]
-  unfold capFrontierProof
-  have hd_len : d < (List.range 9).length := by simp; omega
-  have hget_d : (List.range 9)[d]'hd_len = d := by simp
-  have hpref_d := capFrontier_prefix_len nodes positions d (by omega)
+  have hrec_len := recordsFwd_flatMap_length nodes salts positions
   have hq_lt_f : pairFrontierCount positions l q + 1 ≤ levelFrontierCount positions l := by
     have h1 := pairFrontierCount_mono positions l (show q + 1 ≤ levelSize l / 2 by omega)
     rw [pairFrontierCount_full, pairFrontierCount_succ, if_pos (bne_iff_ne.mpr hdiff')] at h1
     exact h1
-  have hlt_lvl : 30 * pairFrontierCount positions l q + j <
-      (capLevelFrontierProof nodes positions (15 + (List.range 9)[d]'hd_len)).length := by
-    rw [hget_d, capLevelFrontierProof_length]
-    change 30 * pairFrontierCount positions l q + j < 30 * levelFrontierCount positions l
-    omega
-  have hfm1_bd : (((List.range 9).take d).map fun step => (capLevelFrontierProof nodes positions (15 + step)).length).sum +
-      (30 * pairFrontierCount positions l q + j) <
-      ((List.range 9).flatMap fun step => capLevelFrontierProof nodes positions (15 + step)).length := by
-    rw [hpref_d, List.length_flatMap]
-    have h9 := capFrontier_prefix_len nodes positions 9 (le_refl 9)
-    rw [show (List.range 9).take 9 = List.range 9 by simp] at h9
-    rw [h9, capFrontierPrefix_9]
+  have hcap_lt : capFrontierPrefix positions d + levelFrontierCount positions l ≤ capFrontierCount positions := by
     have h1 := capFrontierPrefix_mono positions (show d + 1 ≤ 9 by omega)
     rw [capFrontierPrefix_succ, capFrontierPrefix_9] at h1
-    change capFrontierPrefix positions d + levelFrontierCount positions l ≤ capFrontierCount positions at h1
+    exact h1
+  have hlt_fwd : posRecordOff positions positions.card +
+      29 * (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) + j <
+      (referenceProofFwd nodes salts positions).length := by
+    rw [referenceProofFwd_length]; dsimp only [l] at hq_lt_f hcap_lt; omega
+  simp only [referenceProof, hne, ite_false]
+  rw [List.getElem_append_left hlt_fwd]
+  unfold referenceProofFwd at hlt_fwd ⊢
+  rw [List.getElem_append_right (by rw [hrec_len]; omega)]
+  unfold capFrontierFwd
+  have hd_len : d < (List.range 9).length := by simp; omega
+  have hget_d : (List.range 9)[d]'hd_len = d := by simp
+  have hpref_d := capFrontierFwd_prefix_len nodes positions d (by omega)
+  have hlt_lvl : 29 * pairFrontierCount positions l q + j <
+      (capLevelFrontierFwd nodes positions (15 + (List.range 9)[d]'hd_len)).length := by
+    rw [hget_d, capLevelFrontierFwd_length]
+    change 29 * pairFrontierCount positions l q + j < 29 * levelFrontierCount positions l
     omega
+  have hfm1_bd : (((List.range 9).take d).map fun step => (capLevelFrontierFwd nodes positions (15 + step)).length).sum +
+      (29 * pairFrontierCount positions l q + j) <
+      ((List.range 9).flatMap fun step => capLevelFrontierFwd nodes positions (15 + step)).length := by
+    rw [hpref_d, List.length_flatMap]
+    have h9 := capFrontierFwd_prefix_len nodes positions 9 (le_refl 9)
+    rw [show (List.range 9).take 9 = List.range 9 by simp] at h9
+    rw [h9, capFrontierPrefix_9]; omega
   have hidx_sub : posRecordOff positions positions.card +
-      30 * (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) + j -
-      ((positions.sort (· ≤ ·)).flatMap (recordProof nodes salts)).length =
-      (((List.range 9).take d).map fun step => (capLevelFrontierProof nodes positions (15 + step)).length).sum +
-      (30 * pairFrontierCount positions l q + j) := by
+      29 * (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) + j -
+      ((positions.sort (· ≤ ·)).flatMap (recordFwd nodes salts)).length =
+      (((List.range 9).take d).map fun step => (capLevelFrontierFwd nodes positions (15 + step)).length).sum +
+      (29 * pairFrontierCount positions l q + j) := by
     rw [hrec_len, hpref_d]; dsimp only [l]; omega
-  have hfm1 := flatMap_getElem_at (fun step => capLevelFrontierProof nodes positions (15 + step))
-    (List.range 9) d (30 * pairFrontierCount positions l q + j) hd_len hlt_lvl hfm1_bd
+  have hfm1 := flatMap_getElem_at (fun step => capLevelFrontierFwd nodes positions (15 + step))
+    (List.range 9) d (29 * pairFrontierCount positions l q + j) hd_len hlt_lvl hfm1_bd
   rw [getElem_eq_of_idx hidx_sub _ hfm1_bd, hfm1]
-  have hlt_lvl' : 30 * pairFrontierCount positions l q + j < (capLevelFrontierProof nodes positions l).length := by
-    rw [capLevelFrontierProof_length]; omega
+  have hlt_lvl' : 29 * pairFrontierCount positions l q + j < (capLevelFrontierFwd nodes positions l).length := by
+    rw [capLevelFrontierFwd_length]; omega
   have hget_d_lvl :
-      (capLevelFrontierProof nodes positions (15 + (List.range 9)[d]'hd_len))[30 * pairFrontierCount positions l q + j]'hlt_lvl =
-      (capLevelFrontierProof nodes positions l)[30 * pairFrontierCount positions l q + j]'hlt_lvl' := by
+      (capLevelFrontierFwd nodes positions (15 + (List.range 9)[d]'hd_len))[29 * pairFrontierCount positions l q + j]'hlt_lvl =
+      (capLevelFrontierFwd nodes positions l)[29 * pairFrontierCount positions l q + j]'hlt_lvl' := by
     simp only [hget_d, l]
   rw [hget_d_lvl]
-  unfold capLevelFrontierProof at hlt_lvl' ⊢
+  unfold capLevelFrontierFwd at hlt_lvl' ⊢
   have hq_len : q < (List.range (levelSize l / 2)).length := by simp; omega
   have hget_q : (List.range (levelSize l / 2))[q]'hq_len = q := by simp
-  have hpref_q := capLevel_pair_prefix_len nodes positions l q (by omega)
+  have hpref_q := capLevelFwd_pair_prefix_len nodes positions l q (by omega)
   have hpair_len : (have mL := capMark positions l (2 * q)
       have mR := capMark positions l (2 * q + 1)
       if mL = mR then []
-      else if !mL then bitsToBytes (nodes l (2 * q)) 30
-      else bitsToBytes (nodes l (2 * q + 1)) 30).length = 30 := by
+      else if !mL then bitsToBytes (nodes l (2 * q)) 29
+      else bitsToBytes (nodes l (2 * q + 1)) 29).length = 29 := by
     simp only [hdiff', ite_false]; split <;> simp [bitsToBytes]
   have hfm2_bd : (((List.range (levelSize l / 2)).take q).map fun q0 =>
       (have mL := capMark positions l (2 * q0)
        have mR := capMark positions l (2 * q0 + 1)
        if mL = mR then []
-       else if !mL then bitsToBytes (nodes l (2 * q0)) 30
-       else bitsToBytes (nodes l (2 * q0 + 1)) 30).length).sum + j <
+       else if !mL then bitsToBytes (nodes l (2 * q0)) 29
+       else bitsToBytes (nodes l (2 * q0 + 1)) 29).length).sum + j <
       ((List.range (levelSize l / 2)).flatMap fun q0 =>
        have mL := capMark positions l (2 * q0)
        have mR := capMark positions l (2 * q0 + 1)
        if mL = mR then []
-       else if !mL then bitsToBytes (nodes l (2 * q0)) 30
-       else bitsToBytes (nodes l (2 * q0 + 1)) 30).length := by
-    rw [hpref_q]; change 30 * pairFrontierCount positions l q + j < (capLevelFrontierProof nodes positions l).length
-    rw [capLevelFrontierProof_length]; omega
+       else if !mL then bitsToBytes (nodes l (2 * q0)) 29
+       else bitsToBytes (nodes l (2 * q0 + 1)) 29).length := by
+    rw [hpref_q]; change 29 * pairFrontierCount positions l q + j < (capLevelFrontierFwd nodes positions l).length
+    rw [capLevelFrontierFwd_length]; omega
   have hfm2 := flatMap_getElem_at (fun q0 =>
       have mL := capMark positions l (2 * q0)
       have mR := capMark positions l (2 * q0 + 1)
       if mL = mR then []
-      else if !mL then bitsToBytes (nodes l (2 * q0)) 30
-      else bitsToBytes (nodes l (2 * q0 + 1)) 30)
+      else if !mL then bitsToBytes (nodes l (2 * q0)) 29
+      else bitsToBytes (nodes l (2 * q0 + 1)) 29)
     (List.range (levelSize l / 2)) q j hq_len (by rw [hget_q, hpair_len]; exact hj) hfm2_bd
-  have hidx_q : 30 * pairFrontierCount positions l q + j =
+  have hidx_q : 29 * pairFrontierCount positions l q + j =
       (((List.range (levelSize l / 2)).take q).map fun q0 =>
         (have mL := capMark positions l (2 * q0)
          have mR := capMark positions l (2 * q0 + 1)
          if mL = mR then []
-         else if !mL then bitsToBytes (nodes l (2 * q0)) 30
-         else bitsToBytes (nodes l (2 * q0 + 1)) 30).length).sum + j := by
+         else if !mL then bitsToBytes (nodes l (2 * q0)) 29
+         else bitsToBytes (nodes l (2 * q0 + 1)) 29).length).sum + j := by
     rw [hpref_q]
   rw [getElem_eq_of_idx hidx_q hlt_lvl' hfm2_bd, hfm2]
   simp only [hget_q, hdiff', ite_false]
   dsimp only [l]
   by_cases hmL : capMark positions (15 + d) (2 * q) = true
   · simp only [hmL, Bool.not_true, Bool.false_eq_true, ite_false]
-    exact bitsToBytes_getElem (nodes (15 + d) (2 * q + 1)) 30 j hj _
+    exact bitsToBytes_getElem (nodes (15 + d) (2 * q + 1)) 29 j hj _
   · have hmLf : capMark positions (15 + d) (2 * q) = false := Bool.eq_false_iff.mpr hmL
     simp only [hmLf, Bool.not_false, ite_true]
-    exact bitsToBytes_getElem (nodes (15 + d) (2 * q)) 30 j hj _
+    exact bitsToBytes_getElem (nodes (15 + d) (2 * q)) 29 j hj _
+
+/-- Extract the 6-bit tail of the frontier digest for pair `q` at cap level `15 + d`. -/
+private theorem referenceProof_capTails_getElem (nodes : Nat → Nat → Digest)
+    (positions : Positions) (d q : Nat) (hd : d < 9) (hq : q < levelSize (15 + d) / 2)
+    (hdiff : capMark positions (15 + d) (2 * q) ≠ capMark positions (15 + d) (2 * q + 1))
+    (hbd : posTailOff positions positions.card +
+        (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) <
+      (referenceProofTails nodes positions).length) :
+    (referenceProofTails nodes positions)[posTailOff positions positions.card +
+        (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q)]'hbd =
+      tail6 (nodes (15 + d) (if !capMark positions (15 + d) (2 * q) then 2 * q else 2 * q + 1)) := by
+  let l := 15 + d
+  have hq' : q < levelSize l / 2 := hq
+  have hdiff' : capMark positions l (2 * q) ≠ capMark positions l (2 * q + 1) := hdiff
+  have hrec_len := recordsTails_flatMap_length nodes positions
+  have hq_lt_f : pairFrontierCount positions l q + 1 ≤ levelFrontierCount positions l := by
+    have h1 := pairFrontierCount_mono positions l (show q + 1 ≤ levelSize l / 2 by omega)
+    rw [pairFrontierCount_full, pairFrontierCount_succ, if_pos (bne_iff_ne.mpr hdiff')] at h1
+    exact h1
+  have hcap_lt : capFrontierPrefix positions d + levelFrontierCount positions l ≤ capFrontierCount positions := by
+    have h1 := capFrontierPrefix_mono positions (show d + 1 ≤ 9 by omega)
+    rw [capFrontierPrefix_succ, capFrontierPrefix_9] at h1
+    exact h1
+  unfold referenceProofTails at hbd ⊢
+  rw [List.getElem_append_right (by rw [hrec_len]; omega)]
+  unfold capFrontierTails
+  have hd_len : d < (List.range 9).length := by simp; omega
+  have hget_d : (List.range 9)[d]'hd_len = d := by simp
+  have hpref_d := capFrontierTails_prefix_len nodes positions d (by omega)
+  have hlt_lvl : pairFrontierCount positions l q <
+      (capLevelFrontierTails nodes positions (15 + (List.range 9)[d]'hd_len)).length := by
+    rw [hget_d, capLevelFrontierTails_length]
+    change pairFrontierCount positions l q < levelFrontierCount positions l
+    omega
+  have hfm1_bd : (((List.range 9).take d).map fun step => (capLevelFrontierTails nodes positions (15 + step)).length).sum +
+      pairFrontierCount positions l q <
+      ((List.range 9).flatMap fun step => capLevelFrontierTails nodes positions (15 + step)).length := by
+    rw [hpref_d, List.length_flatMap]
+    have h9 := capFrontierTails_prefix_len nodes positions 9 (le_refl 9)
+    rw [show (List.range 9).take 9 = List.range 9 by simp] at h9
+    rw [h9, capFrontierPrefix_9]; omega
+  have hidx_sub : posTailOff positions positions.card +
+      (capFrontierPrefix positions d + pairFrontierCount positions (15 + d) q) -
+      ((positions.sort (· ≤ ·)).flatMap (recordTails nodes)).length =
+      (((List.range 9).take d).map fun step => (capLevelFrontierTails nodes positions (15 + step)).length).sum +
+      pairFrontierCount positions l q := by
+    rw [hrec_len, hpref_d]; dsimp only [l]; omega
+  have hfm1 := flatMap_getElem_at (fun step => capLevelFrontierTails nodes positions (15 + step))
+    (List.range 9) d (pairFrontierCount positions l q) hd_len hlt_lvl hfm1_bd
+  rw [getElem_eq_of_idx hidx_sub _ hfm1_bd, hfm1]
+  have hlt_lvl' : pairFrontierCount positions l q < (capLevelFrontierTails nodes positions l).length := by
+    rw [capLevelFrontierTails_length]; omega
+  have hget_d_lvl :
+      (capLevelFrontierTails nodes positions (15 + (List.range 9)[d]'hd_len))[pairFrontierCount positions l q]'hlt_lvl =
+      (capLevelFrontierTails nodes positions l)[pairFrontierCount positions l q]'hlt_lvl' := by
+    simp only [hget_d, l]
+  rw [hget_d_lvl]
+  unfold capLevelFrontierTails at hlt_lvl' ⊢
+  have hq_len : q < (List.range (levelSize l / 2)).length := by simp; omega
+  have hget_q : (List.range (levelSize l / 2))[q]'hq_len = q := by simp
+  have hpref_q := capLevelTails_pair_prefix_len nodes positions l q (by omega)
+  have hpair_len : (have mL := capMark positions l (2 * q)
+      have mR := capMark positions l (2 * q + 1)
+      if mL = mR then []
+      else if !mL then [tail6 (nodes l (2 * q))]
+      else [tail6 (nodes l (2 * q + 1))]).length = 1 := by
+    simp only [hdiff', ite_false]; split <;> simp
+  have hfm2_bd : (((List.range (levelSize l / 2)).take q).map fun q0 =>
+      (have mL := capMark positions l (2 * q0)
+       have mR := capMark positions l (2 * q0 + 1)
+       if mL = mR then []
+       else if !mL then [tail6 (nodes l (2 * q0))]
+       else [tail6 (nodes l (2 * q0 + 1))]).length).sum + 0 <
+      ((List.range (levelSize l / 2)).flatMap fun q0 =>
+       have mL := capMark positions l (2 * q0)
+       have mR := capMark positions l (2 * q0 + 1)
+       if mL = mR then []
+       else if !mL then [tail6 (nodes l (2 * q0))]
+       else [tail6 (nodes l (2 * q0 + 1))]).length := by
+    rw [hpref_q, Nat.add_zero]; change pairFrontierCount positions l q < (capLevelFrontierTails nodes positions l).length
+    rw [capLevelFrontierTails_length]; omega
+  have hfm2 := flatMap_getElem_at (fun q0 =>
+      have mL := capMark positions l (2 * q0)
+      have mR := capMark positions l (2 * q0 + 1)
+      if mL = mR then []
+      else if !mL then [tail6 (nodes l (2 * q0))]
+      else [tail6 (nodes l (2 * q0 + 1))])
+    (List.range (levelSize l / 2)) q 0 hq_len (by rw [hget_q, hpair_len]; decide) hfm2_bd
+  have hidx_q : pairFrontierCount positions l q =
+      (((List.range (levelSize l / 2)).take q).map fun q0 =>
+        (have mL := capMark positions l (2 * q0)
+         have mR := capMark positions l (2 * q0 + 1)
+         if mL = mR then []
+         else if !mL then [tail6 (nodes l (2 * q0))]
+         else [tail6 (nodes l (2 * q0 + 1))]).length).sum + 0 := by
+    rw [hpref_q, Nat.add_zero]
+  rw [getElem_eq_of_idx hidx_q hlt_lvl' hfm2_bd, hfm2]
+  simp only [hget_q, hdiff', ite_false]
+  dsimp only [l]
+  by_cases hmL : capMark positions (15 + d) (2 * q) = true
+  · simp [hmL]
+  · have hmLf : capMark positions (15 + d) (2 * q) = false := Bool.eq_false_iff.mpr hmL
+    simp [hmLf]
 
 /-- On an honest `referenceProof`, every parsed per-position witness evaluates to `nodeVal` up to L15. -/
 private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENGTH = 768)
@@ -804,30 +1183,42 @@ private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENG
       ⟨rt, positions, msg.restrict positions, referenceProof nodes salts positions⟩
     let s0 := submission.initialState .check input
     let i := posAt positions ord
-    let pw := parsePartialWitness s0 (posRecordOff positions ord) i (valAt input ord)
+    let pw := parsePartialWitness s0 input.proof.length (posRecordOff positions ord) (posTailOff positions ord)
+      i (valAt input ord)
     pw.evalLevel c96 15 = nodes 15 (capLeafOf i) := by
   intro c96 nodes input s0 i pw
   have hvalid : input.proof.length ≤ submission.sizes.proof :=
     referenceProof_length_le_cap nodes salts positions
+  have hpf_eq : input.proof = referenceProofFwd nodes salts positions ++
+      pack6BitsRev (referenceProofTails nodes positions) := by
+    change referenceProof nodes salts positions = _
+    unfold referenceProof; exact if_neg hne
   have hplen := referenceProof_length_nonempty nodes salts positions hne
+  have htlen := referenceProofTails_length nodes positions
   let pOff := posRecordOff positions ord
+  let tOff := posTailOff positions ord
   have hpOff_rec : pOff + recordLen i ≤ input.proof.length := by
     have h1 := posRecordOff_mono positions (show ord + 1 ≤ positions.card by omega)
     rw [posRecordOff_succ] at h1
     change pOff + recordLen i ≤ posRecordOff positions positions.card at h1
     change pOff + recordLen i ≤ (referenceProof nodes salts positions).length
     rw [hplen]; omega
+  have htOff_rec : tOff + recordTailCount i ≤ (referenceProofTails nodes positions).length := by
+    have h1 := posTailOff_mono positions (show ord + 1 ≤ positions.card by omega)
+    rw [posTailOff_succ] at h1
+    change tOff + recordTailCount i ≤ posTailOff positions positions.card at h1
+    rw [htlen]; omega
   let g := i.val / 3
   have hrec_eq : recordLen i = 24 + l0Bytes i + 32 + binPathOff g 13 := rfl
   have hi_lt : i.val < 16777216 := i.isLt
   have hg_le : g ≤ FULL_TRIPLETS := by rw [full_triplets_eq]; omega
   have hrec_byte : ∀ off (hoff : off < recordLen i),
       input.proof[pOff + off]'(by omega) =
-        (recordProof nodes salts i)[off]'(by rw [recordProof_length]; exact hoff) := by
+        (recordFwd nodes salts i)[off]'(by rw [recordFwd_length]; exact hoff) := by
     intro off hoff
     have hbd_ref : posRecordOff positions ord + off < (referenceProof nodes salts positions).length := by
       change pOff + off < input.proof.length; omega
-    exact referenceProof_record_getElem nodes salts positions hne ord off hord hoff hbd_ref
+    exact referenceProof_recordFwd_getElem nodes salts positions hne ord off hord hoff hbd_ref
   -- Value at ord equals msg i
   have hval_msg : valAt input ord = msg i := by
     have hmem : i ∈ positions := posAt_mem positions ord hord
@@ -838,7 +1229,7 @@ private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENG
     have h := readBuffer_proof_of_bitsToBytes input hvalid pOff 24 (salts i)
       (by unfold recordLen at hpOff_rec; omega) (fun j hj => by
         rw [hrec_byte j (by unfold recordLen; omega)]
-        unfold recordProof
+        unfold recordFwd
         rw [List.getElem_append_left (by simp [bitsToBytes_length]; omega),
           List.getElem_append_left (by simp [bitsToBytes_length]; omega),
           List.getElem_append_left (by simp [bitsToBytes_length]; omega)]
@@ -871,7 +1262,7 @@ private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENG
             (by unfold recordLen at hpOff_rec; omega) (fun j hj => by
               have hrb := hrec_byte (24 + j) (by unfold recordLen; omega)
               rw [getElem_eq_of_idx (show pOff + 24 + j = pOff + (24 + j) by omega) _ (by omega), hrb]
-              unfold recordProof
+              unfold recordFwd
               rw [List.getElem_append_left (by simp [bitsToBytes_length, l0SiblingsProof_length, hl0_64]; omega),
                 List.getElem_append_left (by simp [bitsToBytes_length, l0SiblingsProof_length, hl0_64]; omega),
                 List.getElem_append_right (by simp [bitsToBytes_length])]
@@ -883,7 +1274,7 @@ private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENG
             (by unfold recordLen at hpOff_rec; omega) (fun j hj => by
               have hrb := hrec_byte (56 + j) (by unfold recordLen; omega)
               rw [getElem_eq_of_idx (show pOff + 56 + j = pOff + (56 + j) by omega) _ (by omega), hrb]
-              unfold recordProof
+              unfold recordFwd
               rw [List.getElem_append_left (by simp [bitsToBytes_length, l0SiblingsProof_length, hl0_64]; omega),
                 List.getElem_append_left (by simp [bitsToBytes_length, l0SiblingsProof_length, hl0_64]; omega),
                 List.getElem_append_right (by simp [bitsToBytes_length]; omega)]
@@ -920,22 +1311,27 @@ private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENG
       (by unfold recordLen at hpOff_rec; omega) (fun j hj => by
         have hrb := hrec_byte (24 + l0Bytes i + j) (by unfold recordLen; omega)
         rw [getElem_eq_of_idx (show pOff + 24 + l0Bytes i + j = pOff + (24 + l0Bytes i + j) by omega) _ (by omega), hrb]
-        unfold recordProof
+        unfold recordFwd
         rw [List.getElem_append_left (by simp [bitsToBytes_length, l0SiblingsProof_length]; omega),
           List.getElem_append_right (by simp [bitsToBytes_length, l0SiblingsProof_length])]
         simp only [List.length_append, bitsToBytes_length, l0SiblingsProof_length,
           show 24 + l0Bytes i + j - (24 + l0Bytes i) = j by omega]
         exact bitsToBytes_getElem (nodes 1 (g ^^^ 1)) 32 j hj _)
     simpa [pw, parsePartialWitness, Nat.add_assoc] using h
-  -- L2..L14 siblings match nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)
-  have hsib_bin_eq : ∀ step < 13,
+  -- Shared forward-byte extraction for L2..L14 siblings
+  have hbin_fwd_byte : ∀ step < 13,
       let l := 2 + step
       let sib := (g >>> (step + 1)) ^^^ 1
-      sib < levelSize l → pw.binSib l = nodes l sib := by
-    intro step hstep l sib hsib_lt
+      let nb := if l < 6 then 30 else 29
+      sib < levelSize l →
+      ∃ hbin_le : binPathOff g step + nb ≤ binPathOff g 13,
+      ∀ j (hj : j < nb),
+        input.proof[pOff + 24 + l0Bytes i + 32 + binPathOff g step + j]'(by rw [hrec_eq] at hpOff_rec; omega) =
+          (nodes l sib).extractLsb' (8 * j) 8 := by
+    intro step hstep l sib nb hsib_lt
     have hsib_lt' : ((g >>> (step + 1)) ^^^ 1) < levelSize (2 + step) := hsib_lt
-    have hstep_b : binStepBytes g step = 30 := by unfold binStepBytes; exact if_pos hsib_lt'
-    have hbin_le : binPathOff g step + 30 ≤ binPathOff g 13 := by
+    have hstep_b : binStepBytes g step = nb := by unfold binStepBytes; exact if_pos hsib_lt'
+    have hbin_le : binPathOff g step + nb ≤ binPathOff g 13 := by
       have h1 : binPathOff g (step + 1) ≤ binPathOff g 13 := by
         have hm : ∀ a b, a ≤ b → binPathOff g a ≤ binPathOff g b := by
           intro a b hab; induction hab with
@@ -943,48 +1339,124 @@ private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENG
           | step _ ih => simp only [binPathOff]; omega
         exact hm (step + 1) 13 (by omega)
       simp only [binPathOff] at h1; rw [hstep_b] at h1; exact h1
-    have hpd := proofDigest30_of_proof_bytes input hvalid
-      (pOff + 24 + l0Bytes i + 32 + binPathOff g step) (nodes l sib)
-      (by rw [hrec_eq] at hpOff_rec; omega) (fun j hj => by
-        have hrb := hrec_byte (24 + l0Bytes i + 32 + binPathOff g step + j) (by rw [hrec_eq]; omega)
-        rw [getElem_eq_of_idx (show pOff + 24 + l0Bytes i + 32 + binPathOff g step + j =
-            pOff + (24 + l0Bytes i + 32 + binPathOff g step + j) by omega) _ (by rw [hrec_eq] at hpOff_rec; omega), hrb]
-        unfold recordProof
-        rw [List.getElem_append_right (by simp [List.length_append, bitsToBytes_length, l0SiblingsProof_length]; omega)]
-        simp only [List.length_append, bitsToBytes_length, l0SiblingsProof_length,
-          show 24 + l0Bytes i + 32 + binPathOff g step + j - (24 + l0Bytes i + 32) = binPathOff g step + j by omega]
-        unfold binPathProof
-        have hst_len : step < (List.range 13).length := by simp; omega
-        have hget_st : (List.range 13)[step]'hst_len = step := by simp
-        have hpref := binPathProof_prefix_len nodes g step (by omega)
-        have hfm_bd : (((List.range 13).take step).map fun st =>
-            (if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
-             then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) 30 else []).length).sum + j <
-            ((List.range 13).flatMap fun st =>
-             if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
-             then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) 30 else []).length := by
-          rw [hpref]; change binPathOff g step + j < (binPathProof nodes g).length
-          rw [binPathProof_length]; omega
+    refine ⟨hbin_le, fun j hj => ?_⟩
+    have hrb := hrec_byte (24 + l0Bytes i + 32 + binPathOff g step + j) (by rw [hrec_eq]; omega)
+    rw [getElem_eq_of_idx (show pOff + 24 + l0Bytes i + 32 + binPathOff g step + j =
+        pOff + (24 + l0Bytes i + 32 + binPathOff g step + j) by omega) _ (by rw [hrec_eq] at hpOff_rec; omega), hrb]
+    unfold recordFwd
+    rw [List.getElem_append_right (by simp [List.length_append, bitsToBytes_length, l0SiblingsProof_length]; omega)]
+    simp only [List.length_append, bitsToBytes_length, l0SiblingsProof_length,
+      show 24 + l0Bytes i + 32 + binPathOff g step + j - (24 + l0Bytes i + 32) = binPathOff g step + j by omega]
+    unfold binPathFwd
+    have hst_len : step < (List.range 13).length := by simp; omega
+    have hget_st : (List.range 13)[step]'hst_len = step := by simp
+    have hpref := binPathFwd_prefix_len nodes g step (by omega)
+    have hfm_bd : (((List.range 13).take step).map fun st =>
+        (if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
+         then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) (if 2 + st < 6 then 30 else 29) else []).length).sum + j <
+        ((List.range 13).flatMap fun st =>
+         if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
+         then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) (if 2 + st < 6 then 30 else 29) else []).length := by
+      rw [hpref]; change binPathOff g step + j < (binPathFwd nodes g).length
+      rw [binPathFwd_length]; omega
+    have hfm := flatMap_getElem_at (fun st =>
+        if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
+        then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) (if 2 + st < 6 then 30 else 29) else [])
+      (List.range 13) step j hst_len
+      (by rw [hget_st, if_pos hsib_lt', bitsToBytes_length]; exact hj) hfm_bd
+    have hidx_st : binPathOff g step + j =
+        (((List.range 13).take step).map fun st =>
+          (if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
+           then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) (if 2 + st < 6 then 30 else 29) else []).length).sum + j := by
+      rw [hpref]
+    rw [getElem_eq_of_idx hidx_st _ hfm_bd, hfm]
+    simp only [hget_st, hsib_lt', ite_true]
+    exact bitsToBytes_getElem (nodes l sib) nb j hj _
+  -- L2..L14 siblings match nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)
+  have hsib_bin_eq : ∀ step < 13,
+      let l := 2 + step
+      let sib := (g >>> (step + 1)) ^^^ 1
+      sib < levelSize l → pw.binSib l = nodes l sib := by
+    intro step hstep l sib hsib_lt
+    obtain ⟨hbin_le, hbytes⟩ := hbin_fwd_byte step hstep hsib_lt
+    by_cases hlt6 : l < 6
+    · have hnb : (if l < 6 then 30 else 29) = 30 := if_pos hlt6
+      rw [hnb] at hbin_le
+      have hpd := proofDigest30_of_proof_bytes input hvalid
+        (pOff + 24 + l0Bytes i + 32 + binPathOff g step) (nodes l sib)
+        (by rw [hrec_eq] at hpOff_rec; omega) (fun j hj => by simpa only [hnb] using hbytes j (by rw [hnb]; exact hj))
+      have hmask : mask240 (nodes l sib) = nodes l sib :=
+        nodeValFromLeaves_masked c96 _ l sib (by omega) (by omega) hsib_lt
+      have hpw_b : pw.binSib l = proofDigest30 s0 (11341403200 + pOff + 24 + l0Bytes i + 32 + binPathOff g step) := by
+        dsimp only [pw, parsePartialWitness, pOff, g]
+        rw [if_neg (by omega), if_pos (by omega), show l - 2 = step by omega]
+      rw [hpw_b, show 11341403200 + pOff + 24 + l0Bytes i + 32 + binPathOff g step =
+          11341403200 + (pOff + 24 + l0Bytes i + 32 + binPathOff g step) by omega, hpd, hmask]
+    · have hnb : (if l < 6 then 30 else 29) = 29 := if_neg hlt6
+      rw [hnb] at hbin_le
+      let step' := step - 4
+      have hstep'_lt : step' < 9 := by omega
+      have h6_eq : 6 + step' = l := by omega
+      have hsib_lt' : ((g >>> (step' + 5)) ^^^ 1) < levelSize (6 + step') := by
+        simpa only [show step' + 5 = step + 1 by omega, h6_eq] using hsib_lt
+      have ht_le : binTailOff g step' + 1 ≤ binTailOff g 9 := by
+        have hm : ∀ a b, a ≤ b → binTailOff g a ≤ binTailOff g b := by
+          intro a b hab; induction hab with
+          | refl => exact le_refl _
+          | step _ ih => simp only [binTailOff]; omega
+        have h1 := hm (step' + 1) 9 (by omega)
+        simp only [binTailOff, binStepTails, hsib_lt', ite_true] at h1
+        exact h1
+      have htail_lt : tOff + binTailOff g step' < (referenceProofTails nodes positions).length := by
+        change tOff + binTailOff g step' < _
+        have : recordTailCount i = binTailOff g 9 := rfl
+        omega
+      have htail_eq : tailAt s0 input.proof.length (tOff + binTailOff g step') = tail6 (nodes l sib) := by
+        rw [honest_tailAt_eq input hvalid _ _ hpf_eq (tOff + binTailOff g step') htail_lt]
+        rw [referenceProof_recordTails_getElem nodes positions ord (binTailOff g step') hord (by change binTailOff g step' < binTailOff g 9; omega) htail_lt]
+        unfold recordTails binPathTails
+        have hst_len : step' < (List.range 9).length := by simp; omega
+        have hget_st : (List.range 9)[step']'hst_len = step' := by simp
+        have hpref := binPathTails_prefix_len nodes g step' (by omega)
+        have hfm_bd : (((List.range 9).take step').map fun st =>
+            (if ((g >>> (st + 5)) ^^^ 1) < levelSize (6 + st)
+             then [tail6 (nodes (6 + st) ((g >>> (st + 5)) ^^^ 1))] else []).length).sum + 0 <
+            ((List.range 9).flatMap fun st =>
+             if ((g >>> (st + 5)) ^^^ 1) < levelSize (6 + st)
+             then [tail6 (nodes (6 + st) ((g >>> (st + 5)) ^^^ 1))] else []).length := by
+          rw [hpref, Nat.add_zero]; change binTailOff g step' < (binPathTails nodes g).length
+          rw [binPathTails_length]; omega
         have hfm := flatMap_getElem_at (fun st =>
-            if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
-            then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) 30 else [])
-          (List.range 13) step j hst_len
-          (by rw [hget_st, if_pos hsib_lt', bitsToBytes_length]; exact hj) hfm_bd
-        have hidx_st : binPathOff g step + j =
-            (((List.range 13).take step).map fun st =>
-              (if ((g >>> (st + 1)) ^^^ 1) < levelSize (2 + st)
-               then bitsToBytes (nodes (2 + st) ((g >>> (st + 1)) ^^^ 1)) 30 else []).length).sum + j := by
-          rw [hpref]
+            if ((g >>> (st + 5)) ^^^ 1) < levelSize (6 + st)
+            then [tail6 (nodes (6 + st) ((g >>> (st + 5)) ^^^ 1))] else [])
+          (List.range 9) step' 0 hst_len (by rw [hget_st, if_pos hsib_lt']; simp) hfm_bd
+        have hidx_st : binTailOff g step' =
+            (((List.range 9).take step').map fun st =>
+              (if ((g >>> (st + 5)) ^^^ 1) < levelSize (6 + st)
+               then [tail6 (nodes (6 + st) ((g >>> (st + 5)) ^^^ 1))] else []).length).sum + 0 := by
+          rw [hpref, Nat.add_zero]
         rw [getElem_eq_of_idx hidx_st _ hfm_bd, hfm]
-        simp only [hget_st, hsib_lt', ite_true]
-        exact bitsToBytes_getElem (nodes l sib) 30 j hj _)
-    have hmask : mask240 (nodes l sib) = nodes l sib :=
-      nodeValFromLeaves_masked c96 _ l sib (by omega) (by omega) hsib_lt
-    have hpw_b : pw.binSib l = proofDigest30 s0 (11341403200 + pOff + 24 + l0Bytes i + 32 + binPathOff g step) := by
-      dsimp only [pw, parsePartialWitness, pOff, g]
-      rw [if_neg (by omega), if_pos (by omega), show l - 2 = step by omega]
-    rw [hpw_b, show 11341403200 + pOff + 24 + l0Bytes i + 32 + binPathOff g step =
-        11341403200 + (pOff + 24 + l0Bytes i + 32 + binPathOff g step) by omega, hpd, hmask]
+        have h0 : ∀ (n : Nat) (hn : ((g >>> (n + 5)) ^^^ 1) < levelSize (6 + n))
+            (h0lt : 0 < (if ((g >>> (n + 5)) ^^^ 1) < levelSize (6 + n)
+                         then [tail6 (nodes (6 + n) ((g >>> (n + 5)) ^^^ 1))] else []).length),
+            (if ((g >>> (n + 5)) ^^^ 1) < levelSize (6 + n)
+             then [tail6 (nodes (6 + n) ((g >>> (n + 5)) ^^^ 1))] else [])[0]'h0lt =
+              tail6 (nodes (6 + n) ((g >>> (n + 5)) ^^^ 1)) := by
+          intro n hn h0lt; simp [hn]
+        rw [h0 _ (by rw [hget_st]; exact hsib_lt'), hget_st, h6_eq, show step' + 5 = step + 1 by omega]
+      have hpd := proofDigest238_of_proof_bytes input hvalid
+        (pOff + 24 + l0Bytes i + 32 + binPathOff g step) (tOff + binTailOff g step') (nodes l sib)
+        (by rw [hrec_eq] at hpOff_rec; omega)
+        (fun j hj => by simpa only [hnb] using hbytes j (by rw [hnb]; exact hj)) htail_eq
+      have hmask : mask238 (nodes l sib) = nodes l sib :=
+        nodeValFromLeaves_masked238 c96 _ l sib (by omega) (by omega) hsib_lt
+      have hpw_b : pw.binSib l = proofDigest238 s0 input.proof.length
+          (11341403200 + pOff + 24 + l0Bytes i + 32 + binPathOff g step) (tOff + binTailOff g step') := by
+        dsimp only [pw, parsePartialWitness, pOff, tOff, g]
+        rw [if_neg (by omega), if_neg (by omega), if_pos (by omega),
+          show l - 2 = step by omega, show l - 6 = step' by omega]
+      rw [hpw_b, show 11341403200 + pOff + 24 + l0Bytes i + 32 + binPathOff g step =
+          11341403200 + (pOff + 24 + l0Bytes i + 32 + binPathOff g step) by omega, hpd, hmask]
   -- Induction on m = 0..14: pw.evalLevel c96 (1 + m) = nodes (1 + m) (g >>> m)
   have hclimb : ∀ m ≤ 14, g >>> m < levelSize (1 + m) ∧ pw.evalLevel c96 (1 + m) = nodes (1 + m) (g >>> m) := by
     intro m hm
@@ -1006,18 +1478,16 @@ private theorem honest_parsePartialWitness_eval15 (h768 : COMPRESSION_INPUT_LENG
           if (idx ^^^ 1) < levelSize prev then
             let inp := if idx % 2 = 0 then binaryInput (pw.evalLevel c96 prev) (pw.binSib prev)
                        else binaryInput (pw.binSib prev) (pw.evalLevel c96 prev)
-            mask240 (c96 inp)
+            maskLevel (prev + 1) (c96 inp)
           else pw.evalLevel c96 prev := by
         rw [evalLevel_succ_of_ge1 c96 pw prev (by omega)]
-        simp only [show prev + 1 ≠ 24 by omega, ite_false, show prev - 1 = k by omega,
-          show pw.index.val / 3 = g from rfl, idx]
+        simp only [show prev - 1 = k by omega, show pw.index.val / 3 = g from rfl, idx]
       have hnd_unfold : nodes (prev + 1) q =
           if 2 * q + 1 < levelSize prev then
-            mask240 (c96 (binaryInput (nodes prev (2 * q)) (nodes prev (2 * q + 1))))
+            maskLevel (prev + 1) (c96 (binaryInput (nodes prev (2 * q)) (nodes prev (2 * q + 1))))
           else if 2 * q < levelSize prev then nodes prev (2 * q) else 0 := by
         dsimp only [nodes]
-        rw [nodeVal_succ_of_ge1 c96 msg salts prev q (by omega)]
-        simp only [show prev + 1 ≠ 24 by omega, ite_false]
+        exact nodeVal_succ_of_ge1 c96 msg salts prev q (by omega)
       refine ⟨by simpa only [hidx_next, show 1 + (k + 1) = prev + 1 by omega] using hq_lt, ?_⟩
       simp only [hidx_next, show 1 + (k + 1) = prev + 1 by omega, hpw_unfold, hnd_unfold]
       by_cases hpair : (idx ^^^ 1) < levelSize prev
@@ -1080,7 +1550,12 @@ private theorem check_honest_cap_eq (h768 : COMPRESSION_INPUT_LENGTH = 768)
   let input : CheckInput := ⟨rt, positions, msg.restrict positions, pf⟩
   have hvalid : input.proof.length ≤ submission.sizes.proof :=
     referenceProof_length_le_cap nodes salts positions
+  have hpf_eq : input.proof = referenceProofFwd nodes salts positions ++
+      pack6BitsRev (referenceProofTails nodes positions) := by
+    change referenceProof nodes salts positions = _
+    unfold referenceProof; exact if_neg hempty
   have hplen := referenceProof_length_nonempty nodes salts positions hempty
+  have htlen := referenceProofTails_length nodes positions
   intro d hd
   induction d with
   | zero =>
@@ -1108,8 +1583,7 @@ private theorem check_honest_cap_eq (h768 : COMPRESSION_INPUT_LENGTH = 768)
     rw [nodeVal_succ_of_ge1 c96 msg salts l idx (by omega)]
     change readBuffer sCap (8192 + capValOff (l + 1) + gapOffset idx) 32 =
       if 2 * idx + 1 < levelSize l then
-        if l + 1 = 24 then c96 (binaryInput (nodes l (2 * idx)) (nodes l (2 * idx + 1)))
-        else mask240 (c96 (binaryInput (nodes l (2 * idx)) (nodes l (2 * idx + 1))))
+        maskLevel (l + 1) (c96 (binaryInput (nodes l (2 * idx)) (nodes l (2 * idx + 1))))
       else if 2 * idx < levelSize l then nodes l (2 * idx) else 0
     by_cases hq_pair : idx < levelSize l / 2
     · have h2q1 : 2 * idx + 1 < levelSize l := by omega
@@ -1124,35 +1598,52 @@ private theorem check_honest_cap_eq (h768 : COMPRESSION_INPUT_LENGTH = 768)
           have hdiff : capMark positions l (2 * idx) ≠ capMark positions l (2 * idx + 1) := by
             rw [hmL, hmR]; decide
           have hfrL' : readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx)) 32 =
-              proofDigest30 (submission.initialState .check input)
+              proofDigest238 (submission.initialState .check input) input.proof.length
                 (11341403200 + (posRecordOff positions positions.card +
-                  30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx))) :=
+                  29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx)))
+                (posTailOff positions positions.card +
+                  (capFrontierPrefix positions d + pairFrontierCount positions l idx)) :=
             hfrL hmL
           rw [hfrL']
-          have hpd_bd : posRecordOff positions positions.card +
-              30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + 30 ≤ input.proof.length := by
-            change _ + 30 ≤ (referenceProof nodes salts positions).length
-            rw [hplen]
+          have hf_step : capFrontierPrefix positions d + pairFrontierCount positions l idx + 1 ≤
+              capFrontierCount positions := by
             have h1 := pairFrontierCount_mono positions l (show idx + 1 ≤ levelSize l / 2 by omega)
             rw [pairFrontierCount_full, pairFrontierCount_succ, if_pos (bne_iff_ne.mpr hdiff)] at h1
             have h2 := capFrontierPrefix_mono positions (show d + 1 ≤ 9 by omega)
             rw [capFrontierPrefix_succ, capFrontierPrefix_9] at h2
             change capFrontierPrefix positions d + levelFrontierCount positions l ≤ capFrontierCount positions at h2
             omega
+          have hpd_bd : posRecordOff positions positions.card +
+              29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + 29 ≤ input.proof.length := by
+            change _ + 29 ≤ (referenceProof nodes salts positions).length
+            rw [hplen]; omega
+          have htd_bd : posTailOff positions positions.card +
+              (capFrontierPrefix positions d + pairFrontierCount positions l idx) <
+              (referenceProofTails nodes positions).length := by
+            rw [htlen]; omega
           have hmL' : capMark positions (15 + d) (2 * idx) = false := hmL
-          have hpd := proofDigest30_of_proof_bytes input hvalid
+          have htail_eq : tailAt (submission.initialState .check input) input.proof.length
+              (posTailOff positions positions.card +
+                (capFrontierPrefix positions d + pairFrontierCount positions l idx)) =
+              tail6 (nodes l (2 * idx)) := by
+            rw [honest_tailAt_eq input hvalid _ _ hpf_eq _ htd_bd]
+            have ht := referenceProof_capTails_getElem nodes positions d idx (by omega) hq_pair hdiff htd_bd
+            simpa only [l, hmL', Bool.not_false, ite_true] using ht
+          have hpd := proofDigest238_of_proof_bytes input hvalid
             (posRecordOff positions positions.card +
-              30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx))
+              29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx))
+            (posTailOff positions positions.card +
+              (capFrontierPrefix positions d + pairFrontierCount positions l idx))
             (nodes l (2 * idx)) hpd_bd
             (fun j hj => by
-              have h := referenceProof_cap_getElem nodes salts positions hempty d idx j
+              have h := referenceProof_capFwd_getElem nodes salts positions hempty d idx j
                 (by omega) hq_pair hj hdiff (by
                   change posRecordOff positions positions.card +
-                    30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + j < input.proof.length
+                    29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + j < input.proof.length
                   omega)
-              simpa only [l, hmL', Bool.not_false, ite_true] using h)
+              simpa only [l, hmL', Bool.not_false, ite_true] using h) htail_eq
           rw [hpd]
-          exact nodeValFromLeaves_masked c96 _ l (2 * idx) (by omega) (by omega) (by omega)
+          exact nodeValFromLeaves_masked238 c96 _ l (2 * idx) (by omega) (by omega) (by omega)
       have hdR_eq : readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx + 1)) 32 = nodes l (2 * idx + 1) := by
         cases hmR : capMark positions l (2 * idx + 1) with
         | true => exact ih (by omega) (2 * idx + 1) (by change 2 * idx + 1 < levelSize l; omega) hmR
@@ -1162,44 +1653,60 @@ private theorem check_honest_cap_eq (h768 : COMPRESSION_INPUT_LENGTH = 768)
           have hdiff : capMark positions l (2 * idx) ≠ capMark positions l (2 * idx + 1) := by
             rw [hmL, hmR]; decide
           have hfrR' : readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx + 1)) 32 =
-              proofDigest30 (submission.initialState .check input)
+              proofDigest238 (submission.initialState .check input) input.proof.length
                 (11341403200 + (posRecordOff positions positions.card +
-                  30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx))) :=
+                  29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx)))
+                (posTailOff positions positions.card +
+                  (capFrontierPrefix positions d + pairFrontierCount positions l idx)) :=
             hfrR hmR
           rw [hfrR']
-          have hpd_bd : posRecordOff positions positions.card +
-              30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + 30 ≤ input.proof.length := by
-            change _ + 30 ≤ (referenceProof nodes salts positions).length
-            rw [hplen]
+          have hf_step : capFrontierPrefix positions d + pairFrontierCount positions l idx + 1 ≤
+              capFrontierCount positions := by
             have h1 := pairFrontierCount_mono positions l (show idx + 1 ≤ levelSize l / 2 by omega)
             rw [pairFrontierCount_full, pairFrontierCount_succ, if_pos (bne_iff_ne.mpr hdiff)] at h1
             have h2 := capFrontierPrefix_mono positions (show d + 1 ≤ 9 by omega)
             rw [capFrontierPrefix_succ, capFrontierPrefix_9] at h2
             change capFrontierPrefix positions d + levelFrontierCount positions l ≤ capFrontierCount positions at h2
             omega
+          have hpd_bd : posRecordOff positions positions.card +
+              29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + 29 ≤ input.proof.length := by
+            change _ + 29 ≤ (referenceProof nodes salts positions).length
+            rw [hplen]; omega
+          have htd_bd : posTailOff positions positions.card +
+              (capFrontierPrefix positions d + pairFrontierCount positions l idx) <
+              (referenceProofTails nodes positions).length := by
+            rw [htlen]; omega
           have hmL' : capMark positions (15 + d) (2 * idx) = true := hmL
-          have hpd := proofDigest30_of_proof_bytes input hvalid
+          have htail_eq : tailAt (submission.initialState .check input) input.proof.length
+              (posTailOff positions positions.card +
+                (capFrontierPrefix positions d + pairFrontierCount positions l idx)) =
+              tail6 (nodes l (2 * idx + 1)) := by
+            rw [honest_tailAt_eq input hvalid _ _ hpf_eq _ htd_bd]
+            have ht := referenceProof_capTails_getElem nodes positions d idx (by omega) hq_pair hdiff htd_bd
+            simpa only [l, hmL', Bool.not_true, Bool.false_eq_true, ite_false] using ht
+          have hpd := proofDigest238_of_proof_bytes input hvalid
             (posRecordOff positions positions.card +
-              30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx))
+              29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx))
+            (posTailOff positions positions.card +
+              (capFrontierPrefix positions d + pairFrontierCount positions l idx))
             (nodes l (2 * idx + 1)) hpd_bd
             (fun j hj => by
-              have h := referenceProof_cap_getElem nodes salts positions hempty d idx j
+              have h := referenceProof_capFwd_getElem nodes salts positions hempty d idx j
                 (by omega) hq_pair hj hdiff (by
                   change posRecordOff positions positions.card +
-                    30 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + j < input.proof.length
+                    29 * (capFrontierPrefix positions d + pairFrontierCount positions l idx) + j < input.proof.length
                   omega)
-              simpa only [l, hmL', Bool.not_true, Bool.false_eq_true, ite_false] using h)
+              simpa only [l, hmL', Bool.not_true, Bool.false_eq_true, ite_false] using h) htail_eq
           rw [hpd]
-          exact nodeValFromLeaves_masked c96 _ l (2 * idx + 1) (by omega) (by omega) (by omega)
+          exact nodeValFromLeaves_masked238 c96 _ l (2 * idx + 1) (by omega) (by omega) (by omega)
       have hcap_val' : readBuffer sCap (8192 + capValOff (l + 1) + gapOffset idx) 32 =
           if l = 23 then
             c96 (binaryInput (readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx)) 32)
               (readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx + 1)) 32))
           else
-            mask240 (c96 (binaryInput (readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx)) 32)
+            mask238 (c96 (binaryInput (readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx)) 32)
               (readBuffer sCap (8192 + capValOff l + gapOffset (2 * idx + 1)) 32))) := hcap_val
-      rw [hcap_val', hdL_eq, hdR_eq]
-      simp only [show (l = 23) ↔ (l + 1 = 24) by omega]
+      rw [hcap_val', hdL_eq, hdR_eq, maskLevel_cap_eq l hl1 hl2]
     · -- Odd promoted tail
       have hodd : levelSize l % 2 = 1 := by omega
       have hidx_eq : idx = levelSize l / 2 := by omega
@@ -1223,7 +1730,11 @@ private theorem check_honest_consistent (h768 : COMPRESSION_INPUT_LENGTH = 768)
     PosConsistent c96 (submission.initialState .check input) input positions.card := by
   intro c96 nodes input
   have hplen := referenceProof_length_nonempty nodes salts positions hempty
-  refine ⟨by change posRecordOff positions positions.card ≤ (referenceProof nodes salts positions).length
+  have ht_mono : tailBytes (posTailOff positions positions.card) ≤
+      tailBytes (posTailOff positions positions.card + capFrontierCount positions) :=
+    tailBytes_mono (by omega)
+  refine ⟨by change posRecordOff positions positions.card + tailBytes (posTailOff positions positions.card) ≤
+               (referenceProof nodes salts positions).length
              rw [hplen]; omega, ?_⟩
   intro j1 j2 hj1 hj2 hc_eq
   have h1 := honest_parsePartialWitness_eval15 h768 oracle msg salts positions hempty rt j1 hj1
@@ -1297,9 +1808,20 @@ private theorem check_honest_accepts_core (h768 : COMPRESSION_INPUT_LENGTH = 768
       ((oracle.eval (submission.scheme.check input.commitment input.positions input.values input.proof)).2 ≤ CHECK_BUDGET positions.card)
     rw [scheme_check_eval_eq, hrun, checkEval_execute_false]
     dsimp only
-    have hplen : pf.length = posRecordOff positions positions.card + 30 * capFrontierCount positions := by
+    have hplen : pf.length =
+        posRecordOff positions positions.card + 29 * capFrontierCount positions +
+        tailBytes (posTailOff positions positions.card + capFrontierCount positions) := by
       rw [hpf]
       exact referenceProof_length_nonempty nodes salts positions hempty
+    have hpf_split : input.proof = referenceProofFwd nodes salts positions ++
+        pack6BitsRev (referenceProofTails nodes positions) := by
+      change pf = _
+      rw [hpf]; unfold referenceProof; exact if_neg hempty
+    have hbuf0 : tailBuf (submission.initialState .check input) input.proof.length
+        (posTailOff input.positions input.positions.card + capFrontierCount input.positions) = 0 := by
+      have htlen := referenceProofTails_length nodes positions
+      rw [← htlen]
+      exact honest_tailBuf_zero input hvalid _ _ hpf_split
     have hcons : PosConsistent c96 (submission.initialState .check input) input positions.card := by
       have h := check_honest_consistent h768 oracle msg salts positions hempty rt
       dsimp only at h
@@ -1307,7 +1829,8 @@ private theorem check_honest_accepts_core (h768 : COMPRESSION_INPUT_LENGTH = 768
     rcases check_pipeline_nonempty h768 oracle input hvalid hempty with
       ⟨hnot, _⟩ | ⟨hshort, _⟩ | ⟨sPos, sCap, qPos, qCap, trPos, trCap, kFin, hk, hq, hinvPos, hinvCap, hh⟩
     · exact (hnot hcons).elim
-    · change pf.length < posRecordOff positions positions.card + 30 * capFrontierCount positions at hshort
+    · change pf.length < posRecordOff positions positions.card + 29 * capFrontierCount positions +
+        tailBytes (posTailOff positions positions.card + capFrontierCount positions) at hshort
       rw [hplen] at hshort; omega
     · have hinvPos' : PosLoopInv h768 oracle
           ⟨rt, positions, msg.restrict positions, referenceProof nodes salts positions⟩
@@ -1320,13 +1843,18 @@ private theorem check_honest_accepts_core (h768 : COMPRESSION_INPUT_LENGTH = 768
       have hroot_eq : readBuffer sCap (8192 + capValOff 24) 32 = rt :=
         check_honest_nonempty_root h768 oracle msg salts positions hempty rt hrt sPos sCap trPos trCap hinvPos' hinvCap'
       have hev := hh.eval_of_le hk
-      have hlen_eq : posRecordOff input.positions input.positions.card + 30 * capFrontierCount input.positions =
+      have hlen_eq : posRecordOff input.positions input.positions.card + 29 * capFrontierCount input.positions +
+          tailBytes (posTailOff input.positions input.positions.card + capFrontierCount input.positions) =
           input.proof.length := hplen.symm
       have hcmt_eq : readBuffer sCap (8192 + capValOff 24) 32 = (input.commitment : BitVec (8 * 32)) := hroot_eq
-      have hcond : (posRecordOff input.positions input.positions.card + 30 * capFrontierCount input.positions ==
+      have hcond : (posRecordOff input.positions input.positions.card + 29 * capFrontierCount input.positions +
+          tailBytes (posTailOff input.positions input.positions.card + capFrontierCount input.positions) ==
           input.proof.length &&
+          tailBuf (submission.initialState .check input) input.proof.length
+            (posTailOff input.positions input.positions.card + capFrontierCount input.positions) == 0 &&
           readBuffer sCap (8192 + capValOff 24) 32 == (input.commitment : BitVec (8 * 32))) = true :=
-        (Bool.and_eq_true _ _).mpr ⟨beq_iff_eq.mpr hlen_eq, beq_iff_eq.mpr hcmt_eq⟩
+        (Bool.and_eq_true _ _).mpr ⟨(Bool.and_eq_true _ _).mpr ⟨beq_iff_eq.mpr hlen_eq, beq_iff_eq.mpr hbuf0⟩,
+          beq_iff_eq.mpr hcmt_eq⟩
       have hcard_eq : input.positions.card = positions.card := rfl
       rw [hcard_eq] at hq
       refine ⟨?_, ?_⟩

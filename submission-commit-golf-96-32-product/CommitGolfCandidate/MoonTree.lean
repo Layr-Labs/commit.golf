@@ -8,8 +8,9 @@ import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.Ring
 
 /-! Mathematical model of the r=1 3-ary-bottom, left-aligned binary, cap c=9 (342 cap leaves)
-vector commitment tree with paired 192-bit late salts (shared-midpoint 40-byte pair rows)
-and byte-aligned 256b/240b digests. Parameterized over any 768->256 compression function. -/
+vector commitment tree with paired 192-bit late salts (shared-midpoint 40-byte pair rows),
+256b/240b/238b digests (`L6..L23` truncated to 238 bits), and two-end 6-bit tail stream proofs.
+Parameterized over any 768->256 compression function. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
@@ -70,6 +71,133 @@ theorem mask240_byte_ge30 (d : Digest) (j : Nat) (hj : 30 ≤ j) :
   have hge : ¬ (8 * j + b < 240) := by omega
   simp [BitVec.getLsbD_extractLsb', hb, mask240_getLsbD, hge]
 
+/-! ### 238-bit truncation (top 18 bits zeroed) and per-level masking (`L2..L5`: 240b, `L6..L23`: 238b) -/
+
+def low238 (d : Digest) : BitVec 238 := d.extractLsb' 0 238
+
+def mask238 (d : Digest) : Digest := (0#18) ++ low238 d
+
+def tail6 (d : Digest) : BitVec 6 := d.extractLsb' 232 6
+
+def maskLevel (l : Nat) (d : Digest) : Digest :=
+  if l < 2 ∨ l = 24 then d else if l < 6 then mask240 d else mask238 d
+
+theorem low238_mask238 (d : Digest) : low238 (mask238 d) = low238 d := by
+  unfold low238 mask238
+  exact BitVec.extractLsb'_append_eq_right
+
+theorem mask238_idempotent (d : Digest) : mask238 (mask238 d) = mask238 d := by
+  change (0#18) ++ low238 (mask238 d) = mask238 d
+  rw [low238_mask238]
+  rfl
+
+theorem mask238_eq_iff (a b : Digest) : mask238 a = mask238 b ↔ low238 a = low238 b := by
+  constructor
+  · intro h
+    have := congrArg low238 h
+    simpa only [low238_mask238] using this
+  · intro h
+    simp only [mask238, h]
+
+theorem mask238_getLsbD (d : Digest) (i : Nat) :
+    (mask238 d).getLsbD i = (decide (i < 238) && d.getLsbD i) := by
+  unfold mask238 low238
+  rw [BitVec.getLsbD_append]
+  by_cases hi : i < 238
+  · simp [hi]
+  · simp [hi]
+
+theorem low238_mask240 (d : Digest) : low238 (mask240 d) = low238 d := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [low238, BitVec.getLsbD_extractLsb', hi, decide_true, Bool.true_and, Nat.zero_add,
+    mask240_getLsbD, show i < 240 by omega]
+
+theorem mask240_mask238 (d : Digest) : mask240 (mask238 d) = mask238 d := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [mask240_getLsbD, mask238_getLsbD]
+  by_cases h238 : i < 238
+  · simp [h238, show i < 240 by omega]
+  · simp [h238]
+
+theorem low238_maskLevel (l : Nat) (d : Digest) : low238 (maskLevel l d) = low238 d := by
+  unfold maskLevel
+  split_ifs
+  · rfl
+  · exact low238_mask240 d
+  · exact low238_mask238 d
+
+theorem extractLsb'_192_mask238 (d : Digest) :
+    (mask238 d).extractLsb' 0 192 = d.extractLsb' 0 192 := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [BitVec.getLsbD_extractLsb', hi, decide_true, Bool.true_and, Nat.zero_add,
+    mask238_getLsbD, show i < 238 by omega]
+
+theorem extractLsb'_192_maskLevel (l : Nat) (d : Digest) :
+    (maskLevel l d).extractLsb' 0 192 = d.extractLsb' 0 192 := by
+  unfold maskLevel
+  split_ifs
+  · rfl
+  · exact extractLsb'_192_mask240 d
+  · exact extractLsb'_192_mask238 d
+
+theorem mask238_byte_lt29 (d : Digest) (j : Nat) (hj : j < 29) :
+    (mask238 d).extractLsb' (8 * j) 8 = d.extractLsb' (8 * j) 8 := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro b hb
+  simp only [BitVec.getLsbD_extractLsb', hb, decide_true, Bool.true_and, mask238_getLsbD,
+    show 8 * j + b < 238 by omega]
+
+theorem mask238_byte_29 (d : Digest) :
+    (mask238 d).extractLsb' (8 * 29) 8 = (0#2) ++ tail6 d := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro b hb
+  unfold tail6
+  rw [BitVec.getLsbD_extractLsb', BitVec.getLsbD_append]
+  simp only [hb, decide_true, Bool.true_and, mask238_getLsbD]
+  by_cases h6 : b < 6
+  · simp [h6, show 8 * 29 + b < 238 by omega, show 232 + b = 8 * 29 + b by omega]
+  · simp [h6, show ¬ (8 * 29 + b < 238) by omega]
+
+theorem mask238_byte_ge30 (d : Digest) (j : Nat) (hj : 30 ≤ j) :
+    (mask238 d).extractLsb' (8 * j) 8 = 0 := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro b hb
+  have hge : ¬ (8 * j + b < 238) := by omega
+  simp [BitVec.getLsbD_extractLsb', hb, mask238_getLsbD, hge]
+
+theorem tail6_mask238 (d : Digest) : tail6 (mask238 d) = tail6 d := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro b hb
+  simp only [tail6, BitVec.getLsbD_extractLsb', hb, decide_true, Bool.true_and, mask238_getLsbD,
+    show 232 + b < 238 by omega]
+
+theorem mask238_eq_of_bytes (d d' : Digest)
+    (hlo : ∀ j < 29, d.extractLsb' (8 * j) 8 = d'.extractLsb' (8 * j) 8)
+    (h29 : d.extractLsb' (8 * 29) 8 = (0#2) ++ tail6 d')
+    (h30 : d.extractLsb' (8 * 30) 8 = 0)
+    (h31 : d.extractLsb' (8 * 31) 8 = 0) :
+    d = mask238 d' := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro k hk
+  have hbyte : ∀ j < 32, d.extractLsb' (8 * j) 8 = (mask238 d').extractLsb' (8 * j) 8 := by
+    intro j hj
+    by_cases hlt : j < 29
+    · rw [hlo j hlt, mask238_byte_lt29 d' j hlt]
+    · by_cases h29' : j = 29
+      · subst h29'; rw [h29, mask238_byte_29 d']
+      · by_cases h30' : j = 30
+        · subst h30'; rw [h30, mask238_byte_ge30 d' 30 (by omega)]
+        · have h31' : j = 31 := by omega
+          subst h31'; rw [h31, mask238_byte_ge30 d' 31 (by omega)]
+  have hj : k / 8 < 32 := by omega
+  have hb : k % 8 < 8 := Nat.mod_lt k (by decide)
+  have h := congrArg (fun v : BitVec 8 => v.getLsbD (k % 8)) (hbyte (k / 8) hj)
+  simpa only [BitVec.getLsbD_extractLsb', hb, decide_true, Bool.true_and,
+    show 8 * (k / 8) + k % 8 = k by omega] using h
+
 /-! ### Exact r=1 Tree Geometry and Paired Late-Salt Row Layout -/
 
 def FULL_TRIPLETS : Nat := LENGTH / 3
@@ -96,6 +224,7 @@ def rowOff : Nat := treeBytes
 def rowBytes : Nat := (LENGTH / 2) * PAIR_STRIDE
 def trapdoorBytes : Nat := rowOff + rowBytes
 def proofCap : Nat := 8556390424
+def tailBufBase : Nat := 20000000000
 
 def saltOff (i : Index) : Nat :=
   rowOff + PAIR_STRIDE * (i.val / 2) + if i.val % 2 = 0 then 72 else 88
@@ -121,6 +250,7 @@ theorem full_triplets_eq : FULL_TRIPLETS = 5592405 := by decide
 theorem levelSize_0 : levelSize 0 = 16777216 := by decide
 theorem levelSize_1 : levelSize 1 = 5592406 := by decide
 theorem levelSize_2 : levelSize 2 = 2796203 := by decide
+theorem levelSize_5 : levelSize 5 = 349526 := by decide
 theorem levelSize_15 : levelSize 15 = 342 := by decide
 theorem levelSize_23 : levelSize 23 = 2 := by decide
 theorem levelSize_24 : levelSize 24 = 1 := by decide
@@ -405,7 +535,7 @@ def nodeValFromLeaves (c : Comp96) (leaves : Index → Digest) : Nat → Nat →
         let raw := c (binaryInput
           (nodeValFromLeaves c leaves prev (2 * idx))
           (nodeValFromLeaves c leaves prev (2 * idx + 1)))
-        if l + 2 = 24 then raw else mask240 raw
+        maskLevel (l + 2) raw
       else if 2 * idx < levelSize prev then
         nodeValFromLeaves c leaves prev (2 * idx)
       else 0
@@ -416,8 +546,7 @@ def nodeVal (c : Comp96) (msg : Message) (salts : Index → Salt192) : Nat → N
 def rootVal (c : Comp96) (msg : Message) (salts : Index → Salt192) : Digest :=
   nodeVal c msg salts 24 0
 
-/-- Every node on levels 2..23 (including promoted rightmost nodes) is already 240-bit clean,
-because level 1 has even size 5,592,406 so every level-2 node comes from a masked binary call. -/
+/-- Every node on levels 2..23 (including promoted rightmost nodes) is 240-bit clean. -/
 theorem nodeValFromLeaves_masked (c : Comp96) (leaves : Index → Digest)
     (l idx : Nat) (hl1 : 2 ≤ l) (hl2 : l ≤ 23) (hidx : idx < levelSize l) :
     mask240 (nodeValFromLeaves c leaves l idx) = nodeValFromLeaves c leaves l idx := by
@@ -428,9 +557,14 @@ theorem nodeValFromLeaves_masked (c : Comp96) (leaves : Index → Digest)
     | zero => omega
     | succ m =>
       have hne24 : m + 2 ≠ 24 := by omega
-      simp only [nodeValFromLeaves, hne24, ite_false]
+      have hge2 : ¬ (m + 2 < 2) := by omega
+      simp only [nodeValFromLeaves]
       split
-      · exact mask240_idempotent _
+      · unfold maskLevel
+        simp only [hge2, hne24, or_self, ite_false]
+        split
+        · exact mask240_idempotent _
+        · exact mask240_mask238 _
       · split
         · rename_i hnot hlt
           cases m with
@@ -441,6 +575,35 @@ theorem nodeValFromLeaves_masked (c : Comp96) (leaves : Index → Digest)
           | succ m' =>
             exact ih (2 * idx) (by omega) (by omega) hlt
         · unfold mask240 low240; decide
+
+/-- Every node on levels 6..23 (including promoted rightmost nodes) is 238-bit clean,
+because level 5 has even size 349,526 so every level-6 node comes from a 238-bit masked binary call. -/
+theorem nodeValFromLeaves_masked238 (c : Comp96) (leaves : Index → Digest)
+    (l idx : Nat) (hl1 : 6 ≤ l) (hl2 : l ≤ 23) (hidx : idx < levelSize l) :
+    mask238 (nodeValFromLeaves c leaves l idx) = nodeValFromLeaves c leaves l idx := by
+  induction l generalizing idx with
+  | zero => omega
+  | succ k ih =>
+    cases k with
+    | zero => omega
+    | succ m =>
+      have hne24 : m + 2 ≠ 24 := by omega
+      have hge2 : ¬ (m + 2 < 2) := by omega
+      have hge6 : ¬ (m + 2 < 6) := by omega
+      simp only [nodeValFromLeaves]
+      split
+      · unfold maskLevel
+        simp only [hge2, hne24, or_self, ite_false, hge6]
+        exact mask238_idempotent _
+      · split
+        · rename_i hnot hlt
+          by_cases hm : m = 4
+          · subst hm
+            change ¬ (2 * idx + 1 < 349526) at hnot
+            change 2 * idx < 349526 at hlt
+            omega
+          · exact ih (2 * idx) (by omega) (by omega) hlt
+        · unfold mask238 low238; decide
 
 /-! ### Cap Marking (c = 9, L15 = 342 cap leaves) and Exact Telescoping Bounds -/
 
@@ -684,7 +847,7 @@ theorem levelMarked_le_card (positions : Positions) (l : Nat) (hl : 15 ≤ l) :
   | succ d ih =>
     exact (levelMarked_succ_le positions (15 + d) (by omega)).trans ih
 
-/-! ### Exact Byte-Aligned Proof Serialization and Size Bounds -/
+/-! ### Exact Two-End 6-Bit Tail Stream Proof Serialization and Size Bounds -/
 
 def bitsToBytes {w : Nat} (v : BitVec w) (n : Nat) : List Byte :=
   (List.range n).map fun j => v.extractLsb' (8 * j) 8
@@ -692,6 +855,209 @@ def bitsToBytes {w : Nat} (v : BitVec w) (n : Nat) : List Byte :=
 theorem bitsToBytes_length {w : Nat} (v : BitVec w) (n : Nat) :
     (bitsToBytes v n).length = n := by
   simp [bitsToBytes]
+
+/-- Little-endian integer encoding of a list of 6-bit tail chunks (`6 * tails.length` bits). -/
+def bitsOf6 (tails : List (BitVec 6)) : Nat :=
+  tails.foldr (fun t acc => t.toNat + 64 * acc) 0
+
+/-- Little-endian integer encoding of a list of bytes (`8 * bs.length` bits). -/
+def bytesToNat (bs : List Byte) : Nat :=
+  bs.foldr (fun b acc => b.toNat + 256 * acc) 0
+
+theorem bitsOf6_nil : bitsOf6 [] = 0 := rfl
+
+theorem bitsOf6_cons (t : BitVec 6) (ts : List (BitVec 6)) :
+    bitsOf6 (t :: ts) = t.toNat + 64 * bitsOf6 ts := rfl
+
+theorem bitsOf6_append_singleton (ts : List (BitVec 6)) (t : BitVec 6) :
+    bitsOf6 (ts ++ [t]) = bitsOf6 ts + t.toNat * 2 ^ (6 * ts.length) := by
+  induction ts with
+  | nil => simp [bitsOf6]
+  | cons a rest ih =>
+    simp only [List.cons_append, bitsOf6_cons, ih, List.length_cons]
+    have hpow : 64 * 2 ^ (6 * rest.length) = 2 ^ (6 * (rest.length + 1)) := by
+      rw [show 6 * (rest.length + 1) = 6 + 6 * rest.length by omega, Nat.pow_add]
+    calc
+      a.toNat + 64 * (bitsOf6 rest + t.toNat * 2 ^ (6 * rest.length))
+        = (a.toNat + 64 * bitsOf6 rest) + t.toNat * (64 * 2 ^ (6 * rest.length)) := by ring
+      _ = (a.toNat + 64 * bitsOf6 rest) + t.toNat * 2 ^ (6 * (rest.length + 1)) := by rw [hpow]
+
+theorem bytesToNat_nil : bytesToNat [] = 0 := rfl
+
+theorem bytesToNat_cons (b : Byte) (bs : List Byte) :
+    bytesToNat (b :: bs) = b.toNat + 256 * bytesToNat bs := rfl
+
+theorem bytesToNat_append_singleton (bs : List Byte) (b : Byte) :
+    bytesToNat (bs ++ [b]) = bytesToNat bs + b.toNat * 2 ^ (8 * bs.length) := by
+  induction bs with
+  | nil => simp [bytesToNat]
+  | cons a rest ih =>
+    simp only [List.cons_append, bytesToNat_cons, ih, List.length_cons]
+    have hpow : 256 * 2 ^ (8 * rest.length) = 2 ^ (8 * (rest.length + 1)) := by
+      rw [show 8 * (rest.length + 1) = 8 + 8 * rest.length by omega, Nat.pow_add]
+    calc
+      a.toNat + 256 * (bytesToNat rest + b.toNat * 2 ^ (8 * rest.length))
+        = (a.toNat + 256 * bytesToNat rest) + b.toNat * (256 * 2 ^ (8 * rest.length)) := by ring
+      _ = (a.toNat + 256 * bytesToNat rest) + b.toNat * 2 ^ (8 * (rest.length + 1)) := by rw [hpow]
+
+theorem bitsOf6_lt (tails : List (BitVec 6)) : bitsOf6 tails < 2 ^ (6 * tails.length) := by
+  induction tails with
+  | nil => simp [bitsOf6]
+  | cons t rest ih =>
+    simp only [bitsOf6_cons, List.length_cons]
+    have ht : t.toNat < 64 := t.isLt
+    have hpow : 2 ^ (6 * (rest.length + 1)) = 64 * 2 ^ (6 * rest.length) := by
+      rw [show 6 * (rest.length + 1) = 6 + 6 * rest.length by omega, Nat.pow_add]
+    rw [hpow]
+    omega
+
+/-- Exact streaming 6-bit LSB-first packer state `(emittedBytes, bitBuf, bitCnt)`. -/
+def pack6Step (st : List Byte × Nat × Nat) (t : BitVec 6) : List Byte × Nat × Nat :=
+  let (acc, buf, cnt) := st
+  let buf' := buf + t.toNat * 2 ^ cnt
+  let cnt' := cnt + 6
+  if 8 ≤ cnt' then
+    (acc ++ [BitVec.ofNat 8 buf'], buf' / 256, cnt' - 8)
+  else
+    (acc, buf', cnt')
+
+def pack6Finish (st : List Byte × Nat × Nat) : List Byte :=
+  let (acc, buf, cnt) := st
+  if 0 < cnt then acc ++ [BitVec.ofNat 8 buf] else acc
+
+def pack6Bits (tails : List (BitVec 6)) : List Byte :=
+  pack6Finish (tails.foldl pack6Step ([], 0, 0))
+
+/-- Reversed packed 6-bit tail stream appended to the end of the proof for backward reading. -/
+def pack6BitsRev (tails : List (BitVec 6)) : List Byte :=
+  (pack6Bits tails).reverse
+
+private theorem pack6Step_inv (acc : List Byte) (buf cnt n v : Nat) (t : BitVec 6)
+    (hcnt : cnt < 8) (hbuf : buf < 2 ^ cnt)
+    (hbits : 8 * acc.length + cnt = 6 * n)
+    (hval : bytesToNat acc + 2 ^ (8 * acc.length) * buf = v) :
+    let (acc', buf', cnt') := pack6Step (acc, buf, cnt) t
+    cnt' < 8 ∧ buf' < 2 ^ cnt' ∧
+    8 * acc'.length + cnt' = 6 * (n + 1) ∧
+    bytesToNat acc' + 2 ^ (8 * acc'.length) * buf' = v + t.toNat * 2 ^ (6 * n) := by
+  unfold pack6Step
+  dsimp only
+  have ht : t.toNat < 64 := t.isLt
+  have hbuf' : buf + t.toNat * 2 ^ cnt < 2 ^ (cnt + 6) := by
+    rw [Nat.pow_add]
+    have : 2 ^ 6 = 64 := by decide
+    rw [this]
+    have h1 : t.toNat ≤ 63 := by omega
+    calc
+      buf + t.toNat * 2 ^ cnt < 2 ^ cnt + 63 * 2 ^ cnt := by
+        have hm := Nat.mul_le_mul_right (2 ^ cnt) h1; omega
+      _ = 2 ^ cnt * 64 := by ring
+  have hterm : 2 ^ (8 * acc.length) * (buf + t.toNat * 2 ^ cnt) =
+      2 ^ (8 * acc.length) * buf + t.toNat * 2 ^ (6 * n) := by
+    rw [Nat.mul_add, ← hbits, Nat.pow_add]
+    ring
+  split_ifs with hge
+  · dsimp only
+    refine ⟨by omega, ?_, ?_, ?_⟩
+    · have hdiv : (buf + t.toNat * 2 ^ cnt) / 256 < 2 ^ (cnt + 6 - 8) := by
+        rw [Nat.div_lt_iff_lt_mul (by decide : 0 < 256)]
+        rw [show 2 ^ (cnt + 6 - 8) * 256 = 2 ^ (cnt + 6) by
+          rw [show 256 = 2 ^ 8 by decide, ← Nat.pow_add, show cnt + 6 - 8 + 8 = cnt + 6 by omega]]
+        exact hbuf'
+      exact hdiv
+    · simp only [List.length_append, List.length_singleton]; omega
+    · rw [bytesToNat_append_singleton, List.length_append, List.length_singleton]
+      have hof : (BitVec.ofNat 8 (buf + t.toNat * 2 ^ cnt)).toNat = (buf + t.toNat * 2 ^ cnt) % 256 := by
+        simp [BitVec.toNat_ofNat]
+      rw [hof]
+      have hpow : 2 ^ (8 * (acc.length + 1)) = 2 ^ (8 * acc.length) * 256 := by
+        rw [show 8 * (acc.length + 1) = 8 * acc.length + 8 by omega, Nat.pow_add]
+      rw [hpow]
+      have hdm : (buf + t.toNat * 2 ^ cnt) % 256 + 256 * ((buf + t.toNat * 2 ^ cnt) / 256) =
+          buf + t.toNat * 2 ^ cnt := by
+        omega
+      calc
+        bytesToNat acc + (buf + t.toNat * 2 ^ cnt) % 256 * 2 ^ (8 * acc.length) +
+            2 ^ (8 * acc.length) * 256 * ((buf + t.toNat * 2 ^ cnt) / 256)
+          = bytesToNat acc + 2 ^ (8 * acc.length) *
+              ((buf + t.toNat * 2 ^ cnt) % 256 + 256 * ((buf + t.toNat * 2 ^ cnt) / 256)) := by ring
+        _ = bytesToNat acc + 2 ^ (8 * acc.length) * (buf + t.toNat * 2 ^ cnt) := by rw [hdm]
+        _ = bytesToNat acc + 2 ^ (8 * acc.length) * buf + t.toNat * 2 ^ (6 * n) := by rw [hterm, Nat.add_assoc]
+        _ = v + t.toNat * 2 ^ (6 * n) := by rw [hval]
+  · dsimp only
+    refine ⟨by omega, hbuf', by omega, ?_⟩
+    rw [hterm, ← Nat.add_assoc, hval]
+
+private theorem pack6_foldl_inv (tails : List (BitVec 6)) :
+    ∀ acc buf cnt prev,
+      cnt < 8 → buf < 2 ^ cnt →
+      8 * acc.length + cnt = 6 * prev.length →
+      bytesToNat acc + 2 ^ (8 * acc.length) * buf = bitsOf6 prev →
+      let (acc', buf', cnt') := tails.foldl pack6Step (acc, buf, cnt)
+      cnt' < 8 ∧ buf' < 2 ^ cnt' ∧
+      8 * acc'.length + cnt' = 6 * (prev ++ tails).length ∧
+      bytesToNat acc' + 2 ^ (8 * acc'.length) * buf' = bitsOf6 (prev ++ tails) := by
+  induction tails with
+  | nil =>
+    intro acc buf cnt prev hcnt hbuf hbits hval
+    simpa using And.intro hcnt (And.intro hbuf (And.intro hbits hval))
+  | cons t rest ih =>
+    intro acc buf cnt prev hcnt hbuf hbits hval
+    simp only [List.foldl_cons]
+    have hstep := pack6Step_inv acc buf cnt prev.length (bitsOf6 prev) t hcnt hbuf hbits hval
+    rcases hst : pack6Step (acc, buf, cnt) t with ⟨acc1, buf1, cnt1⟩
+    rw [hst] at hstep
+    rcases hstep with ⟨hcnt1, hbuf1, hbits1, hval1⟩
+    have hlen1 : (prev ++ [t]).length = prev.length + 1 := by simp
+    have hbits1' : 8 * acc1.length + cnt1 = 6 * (prev ++ [t]).length := by rw [hlen1]; exact hbits1
+    have hval1' : bytesToNat acc1 + 2 ^ (8 * acc1.length) * buf1 = bitsOf6 (prev ++ [t]) := by
+      rw [bitsOf6_append_singleton]; exact hval1
+    have hres := ih acc1 buf1 cnt1 (prev ++ [t]) hcnt1 hbuf1 hbits1' hval1'
+    simpa only [List.append_assoc, List.singleton_append] using hres
+
+theorem pack6Bits_spec (tails : List (BitVec 6)) :
+    (pack6Bits tails).length = (6 * tails.length + 7) / 8 ∧
+    bytesToNat (pack6Bits tails) = bitsOf6 tails := by
+  have h := pack6_foldl_inv tails [] 0 0 [] (by omega) (by decide) (by simp) (by simp [bytesToNat, bitsOf6])
+  unfold pack6Bits pack6Finish
+  rcases hfold : tails.foldl pack6Step ([], 0, 0) with ⟨acc, buf, cnt⟩
+  rw [hfold] at h
+  simp only [List.nil_append] at h
+  rcases h with ⟨hcnt, hbuf, hbits, hval⟩
+  dsimp only
+  split_ifs with hpos
+  · constructor
+    · simp only [List.length_append, List.length_singleton]; omega
+    · rw [bytesToNat_append_singleton]
+      have hbuf256 : buf < 256 := by
+        have hle : 2 ^ cnt ≤ 2 ^ 7 := Nat.pow_le_pow_right (by decide) (by omega)
+        have : 2 ^ 7 = 128 := by decide
+        omega
+      have hof : (BitVec.ofNat 8 buf).toNat = buf := by
+        simp [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hbuf256]
+      rw [hof, Nat.mul_comm buf]
+      exact hval
+  · have hcnt0 : cnt = 0 := by omega
+    subst hcnt0
+    have hbuf0 : buf = 0 := by omega
+    subst hbuf0
+    constructor
+    · omega
+    · simpa using hval
+
+theorem pack6Bits_length (tails : List (BitVec 6)) :
+    (pack6Bits tails).length = (6 * tails.length + 7) / 8 :=
+  (pack6Bits_spec tails).1
+
+theorem pack6BitsRev_length (tails : List (BitVec 6)) :
+    (pack6BitsRev tails).length = (6 * tails.length + 7) / 8 := by
+  unfold pack6BitsRev
+  rw [List.length_reverse]
+  exact pack6Bits_length tails
+
+theorem pack6Bits_bytesToNat (tails : List (BitVec 6)) :
+    bytesToNat (pack6Bits tails) = bitsOf6 tails :=
+  (pack6Bits_spec tails).2
 
 def l0SiblingsProof (nodes : Nat → Nat → Digest) (i : Index) : List Byte :=
   let g := i.val / 3
@@ -701,37 +1067,69 @@ def l0SiblingsProof (nodes : Nat → Nat → Digest) (i : Index) : List Byte :=
   else if r = 1 then bitsToBytes (nodes 0 (3 * g)) 32 ++ bitsToBytes (nodes 0 (3 * g + 2)) 32
   else bitsToBytes (nodes 0 (3 * g)) 32 ++ bitsToBytes (nodes 0 (3 * g + 1)) 32
 
-def binPathProof (nodes : Nat → Nat → Digest) (g : Nat) : List Byte :=
+/-- Forward bytes of `L2..L14` siblings (`L2..L5`: 30 B each, `L6..L14`: 29 B each). -/
+def binPathFwd (nodes : Nat → Nat → Digest) (g : Nat) : List Byte :=
   (List.range 13).flatMap fun step =>
     let l := 2 + step
     let idx := g >>> (step + 1)
     let sib := idx ^^^ 1
-    if sib < levelSize l then bitsToBytes (nodes l sib) 30 else []
+    if sib < levelSize l then bitsToBytes (nodes l sib) (if l < 6 then 30 else 29) else []
 
-def recordProof (nodes : Nat → Nat → Digest) (salts : Index → Salt192) (i : Index) : List Byte :=
+/-- 6-bit tails of `L6..L14` siblings in canonical order. -/
+def binPathTails (nodes : Nat → Nat → Digest) (g : Nat) : List (BitVec 6) :=
+  (List.range 9).flatMap fun step =>
+    let l := 6 + step
+    let idx := g >>> (step + 5)
+    let sib := idx ^^^ 1
+    if sib < levelSize l then [tail6 (nodes l sib)] else []
+
+def recordFwd (nodes : Nat → Nat → Digest) (salts : Index → Salt192) (i : Index) : List Byte :=
   let g := i.val / 3
   bitsToBytes (salts i) 24 ++
   l0SiblingsProof nodes i ++
   bitsToBytes (nodes 1 (g ^^^ 1)) 32 ++
-  binPathProof nodes g
+  binPathFwd nodes g
 
-def capLevelFrontierProof (nodes : Nat → Nat → Digest) (positions : Positions) (l : Nat) : List Byte :=
+def recordTails (nodes : Nat → Nat → Digest) (i : Index) : List (BitVec 6) :=
+  binPathTails nodes (i.val / 3)
+
+def capLevelFrontierFwd (nodes : Nat → Nat → Digest) (positions : Positions) (l : Nat) : List Byte :=
   (List.range (levelSize l / 2)).flatMap fun q =>
     let mL := capMark positions l (2 * q)
     let mR := capMark positions l (2 * q + 1)
     if mL = mR then []
-    else if !mL then bitsToBytes (nodes l (2 * q)) 30
-    else bitsToBytes (nodes l (2 * q + 1)) 30
+    else if !mL then bitsToBytes (nodes l (2 * q)) 29
+    else bitsToBytes (nodes l (2 * q + 1)) 29
 
-def capFrontierProof (nodes : Nat → Nat → Digest) (positions : Positions) : List Byte :=
-  (List.range 9).flatMap fun step => capLevelFrontierProof nodes positions (15 + step)
+def capLevelFrontierTails (nodes : Nat → Nat → Digest) (positions : Positions) (l : Nat) : List (BitVec 6) :=
+  (List.range (levelSize l / 2)).flatMap fun q =>
+    let mL := capMark positions l (2 * q)
+    let mR := capMark positions l (2 * q + 1)
+    if mL = mR then []
+    else if !mL then [tail6 (nodes l (2 * q))]
+    else [tail6 (nodes l (2 * q + 1))]
+
+def capFrontierFwd (nodes : Nat → Nat → Digest) (positions : Positions) : List Byte :=
+  (List.range 9).flatMap fun step => capLevelFrontierFwd nodes positions (15 + step)
+
+def capFrontierTails (nodes : Nat → Nat → Digest) (positions : Positions) : List (BitVec 6) :=
+  (List.range 9).flatMap fun step => capLevelFrontierTails nodes positions (15 + step)
+
+def referenceProofFwd (nodes : Nat → Nat → Digest) (salts : Index → Salt192)
+    (positions : Positions) : List Byte :=
+  (positions.sort (· ≤ ·)).flatMap (recordFwd nodes salts) ++
+  capFrontierFwd nodes positions
+
+def referenceProofTails (nodes : Nat → Nat → Digest) (positions : Positions) : List (BitVec 6) :=
+  (positions.sort (· ≤ ·)).flatMap (recordTails nodes) ++
+  capFrontierTails nodes positions
 
 def referenceProof (nodes : Nat → Nat → Digest) (salts : Index → Salt192)
     (positions : Positions) : Proof :=
   if positions.card = 0 then []
   else
-    (positions.sort (· ≤ ·)).flatMap (recordProof nodes salts) ++
-    capFrontierProof nodes positions
+    referenceProofFwd nodes salts positions ++
+    pack6BitsRev (referenceProofTails nodes positions)
 
 private theorem list_map_sum_le {α : Type} (l : List α) (f g : α → Nat)
     (h : ∀ x ∈ l, f x ≤ g x) : (l.map f).sum ≤ (l.map g).sum := by
@@ -757,45 +1155,86 @@ theorem l0SiblingsProof_length_le (nodes : Nat → Nat → Digest) (i : Index) :
   dsimp only
   split_ifs <;> simp [bitsToBytes]
 
-theorem binPathProof_length_le (nodes : Nat → Nat → Digest) (g : Nat) :
-    (binPathProof nodes g).length ≤ 390 := by
-  unfold binPathProof
+theorem binPathFwd_length_le (nodes : Nat → Nat → Digest) (g : Nat) :
+    (binPathFwd nodes g).length ≤ 381 := by
+  unfold binPathFwd
+  rw [List.length_flatMap]
+  dsimp only
   have hle : ∀ step ∈ List.range 13,
       (if ((g >>> (step + 1)) ^^^ 1) < levelSize (2 + step)
-       then bitsToBytes (nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)) 30 else []).length ≤ 30 := by
+       then bitsToBytes (nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)) (if 2 + step < 6 then 30 else 29)
+       else []).length ≤ (if 2 + step < 6 then 30 else 29) := by
     intro step _
     split <;> simp [bitsToBytes]
   have hsum := list_map_sum_le (List.range 13)
     (fun step => (if ((g >>> (step + 1)) ^^^ 1) < levelSize (2 + step)
-       then bitsToBytes (nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)) 30 else []).length)
-    (fun _ => 30) hle
+       then bitsToBytes (nodes (2 + step) ((g >>> (step + 1)) ^^^ 1)) (if 2 + step < 6 then 30 else 29)
+       else []).length)
+    (fun step => if 2 + step < 6 then 30 else 29) hle
+  have hconst : ((List.range 13).map (fun step => if 2 + step < 6 then 30 else 29)).sum = 381 := by
+    decide
+  exact hsum.trans (le_of_eq hconst)
+
+theorem binPathTails_length_le (nodes : Nat → Nat → Digest) (g : Nat) :
+    (binPathTails nodes g).length ≤ 9 := by
+  unfold binPathTails
   rw [List.length_flatMap]
+  have hle : ∀ step ∈ List.range 9,
+      (if ((g >>> (step + 5)) ^^^ 1) < levelSize (6 + step)
+       then [tail6 (nodes (6 + step) ((g >>> (step + 5)) ^^^ 1))] else []).length ≤ 1 := by
+    intro step _
+    split <;> simp
+  have hsum := list_map_sum_le (List.range 9)
+    (fun step => (if ((g >>> (step + 5)) ^^^ 1) < levelSize (6 + step)
+       then [tail6 (nodes (6 + step) ((g >>> (step + 5)) ^^^ 1))] else []).length)
+    (fun _ => 1) hle
   simpa using hsum
 
-theorem recordProof_length_le_510 (nodes : Nat → Nat → Digest) (salts : Index → Salt192) (i : Index) :
-    (recordProof nodes salts i).length ≤ 510 := by
-  unfold recordProof
+theorem recordFwd_length_le_501 (nodes : Nat → Nat → Digest) (salts : Index → Salt192) (i : Index) :
+    (recordFwd nodes salts i).length ≤ 501 := by
+  unfold recordFwd
   simp only [List.length_append, bitsToBytes_length]
   have h0 := l0SiblingsProof_length_le nodes i
-  have h1 := binPathProof_length_le nodes (i.val / 3)
+  have h1 := binPathFwd_length_le nodes (i.val / 3)
   omega
 
-theorem capLevelFrontierProof_length (nodes : Nat → Nat → Digest) (positions : Positions) (l : Nat) :
-    (capLevelFrontierProof nodes positions l).length = 30 * levelFrontierCount positions l := by
-  unfold capLevelFrontierProof levelFrontierCount
+theorem recordTails_length_le_9 (nodes : Nat → Nat → Digest) (i : Index) :
+    (recordTails nodes i).length ≤ 9 :=
+  binPathTails_length_le nodes (i.val / 3)
+
+theorem capLevelFrontierFwd_length (nodes : Nat → Nat → Digest) (positions : Positions) (l : Nat) :
+    (capLevelFrontierFwd nodes positions l).length = 29 * levelFrontierCount positions l := by
+  unfold capLevelFrontierFwd levelFrontierCount
   rw [List.length_flatMap, card_filter_eq_sum, Finset.mul_sum, list_sum_range]
   apply Finset.sum_congr rfl
   intro q _
   dsimp only
   cases capMark positions l (2 * q) <;> cases capMark positions l (2 * q + 1) <;> simp [bitsToBytes]
 
-theorem capFrontierProof_length (nodes : Nat → Nat → Digest) (positions : Positions) :
-    (capFrontierProof nodes positions).length = 30 * capFrontierCount positions := by
-  unfold capFrontierProof capFrontierCount
+theorem capLevelFrontierTails_length (nodes : Nat → Nat → Digest) (positions : Positions) (l : Nat) :
+    (capLevelFrontierTails nodes positions l).length = levelFrontierCount positions l := by
+  unfold capLevelFrontierTails levelFrontierCount
+  rw [List.length_flatMap, card_filter_eq_sum, list_sum_range]
+  apply Finset.sum_congr rfl
+  intro q _
+  dsimp only
+  cases capMark positions l (2 * q) <;> cases capMark positions l (2 * q + 1) <;> simp
+
+theorem capFrontierFwd_length (nodes : Nat → Nat → Digest) (positions : Positions) :
+    (capFrontierFwd nodes positions).length = 29 * capFrontierCount positions := by
+  unfold capFrontierFwd capFrontierCount
   rw [List.length_flatMap, list_sum_range, Finset.mul_sum]
   apply Finset.sum_congr rfl
   intro step _
-  exact capLevelFrontierProof_length nodes positions (15 + step)
+  exact capLevelFrontierFwd_length nodes positions (15 + step)
+
+theorem capFrontierTails_length (nodes : Nat → Nat → Digest) (positions : Positions) :
+    (capFrontierTails nodes positions).length = capFrontierCount positions := by
+  unfold capFrontierTails capFrontierCount
+  rw [List.length_flatMap, list_sum_range]
+  apply Finset.sum_congr rfl
+  intro step _
+  exact capLevelFrontierTails_length nodes positions (15 + step)
 
 theorem xor_one_even (q : Nat) : (2 * q) ^^^ 1 = 2 * q + 1 := by
   apply Nat.eq_of_testBit_eq
@@ -822,19 +1261,37 @@ theorem xor_one_lt_even {k m : Nat} (hk : k < 2 * m) : (k ^^^ 1) < 2 * m := by
   · rw [xor_one_even]; omega
   · rw [xor_one_odd]; omega
 
+theorem referenceProofTails_length_le (nodes : Nat → Nat → Digest) (positions : Positions) :
+    (referenceProofTails nodes positions).length ≤ 9 * positions.card + 171 := by
+  unfold referenceProofTails
+  rw [List.length_append, List.length_flatMap, capFrontierTails_length]
+  have hrec := list_map_sum_le (positions.sort (· ≤ ·))
+    (fun i => (recordTails nodes i).length) (fun _ => 9)
+    (fun i _ => recordTails_length_le_9 nodes i)
+  have hrec2 : ((positions.sort (· ≤ ·)).map fun _ => 9).sum = 9 * positions.card := by
+    simp [Nat.mul_comm]
+  have hcap := cap_frontier_le_171 positions
+  omega
+
 theorem referenceProof_length_le (nodes : Nat → Nat → Digest) (salts : Index → Salt192)
     (positions : Positions) :
-    (referenceProof nodes salts positions).length ≤ 510 * positions.card + 5130 := by
-  unfold referenceProof
+    (referenceProof nodes salts positions).length ≤
+      501 * positions.card + 4959 + (6 * (9 * positions.card + 171) + 7) / 8 := by
+  unfold referenceProof referenceProofFwd
   split
   · simp
-  · rw [List.length_append, List.length_flatMap, capFrontierProof_length]
+  · rw [List.length_append, List.length_append, List.length_flatMap, capFrontierFwd_length,
+      pack6BitsRev_length]
     have hrec := list_map_sum_le (positions.sort (· ≤ ·))
-      (fun i => (recordProof nodes salts i).length) (fun _ => 510)
-      (fun i _ => recordProof_length_le_510 nodes salts i)
-    have hrec2 : ((positions.sort (· ≤ ·)).map fun _ => 510).sum = 510 * positions.card := by
+      (fun i => (recordFwd nodes salts i).length) (fun _ => 501)
+      (fun i _ => recordFwd_length_le_501 nodes salts i)
+    have hrec2 : ((positions.sort (· ≤ ·)).map fun _ => 501).sum = 501 * positions.card := by
       simp [Nat.mul_comm]
     have hcap := cap_frontier_le_171 positions
+    have htails := referenceProofTails_length_le nodes positions
+    have hdiv : (6 * (referenceProofTails nodes positions).length + 7) / 8 ≤
+        (6 * (9 * positions.card + 171) + 7) / 8 :=
+      Nat.div_le_div_right (by omega)
     omega
 
 theorem referenceProof_congr_nodes (n1 n2 : Nat → Nat → Digest)
@@ -844,58 +1301,80 @@ theorem referenceProof_congr_nodes (n1 n2 : Nat → Nat → Digest)
   unfold referenceProof
   split_ifs
   · rfl
-  · refine congrArg₂ List.append ?_ ?_
-    · apply List.flatMap_congr; intro i _
-      unfold recordProof l0SiblingsProof binPathProof
-      dsimp only
-      have h0 := hagree 0 (by omega)
-      have h1 := hagree 1 (by omega)
+  · refine congrArg₂ List.append ?_ (congrArg pack6BitsRev ?_)
+    · unfold referenceProofFwd
       refine congrArg₂ List.append ?_ ?_
-      · refine congrArg₂ List.append ?_ ?_
-        · apply congrArg (bitsToBytes (salts i) 24 ++ ·)
-          split_ifs
-          · rfl
-          · have hb1 : 3 * (i.val / 3) + 1 < levelSize 0 := by
-              have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
-            have hb2 : 3 * (i.val / 3) + 2 < levelSize 0 := by
-              have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
-            rw [h0 _ hb1, h0 _ hb2]
-          · have hb0 : 3 * (i.val / 3) < levelSize 0 := by
-              have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
-            have hb2 : 3 * (i.val / 3) + 2 < levelSize 0 := by
-              have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
-            rw [h0 _ hb0, h0 _ hb2]
-          · have hb0 : 3 * (i.val / 3) < levelSize 0 := by
-              have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
-            have hb1 : 3 * (i.val / 3) + 1 < levelSize 0 := by
-              have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
-            rw [h0 _ hb0, h0 _ hb1]
-        · exact congrArg (fun d => bitsToBytes d 32) (h1 _ (by
-            rw [levelSize_1]
-            exact xor_one_lt_even (m := 2796203) (by
-              have := i.isLt; unfold LENGTH LOG_LENGTH at this; omega)))
-      · apply List.flatMap_congr; intro step hstep
-        have hs : step < 13 := List.mem_range.mp hstep
-        split_ifs with hlt
-        · rw [hagree (2 + step) (by omega) _ hlt]
+      · apply List.flatMap_congr; intro i _
+        unfold recordFwd l0SiblingsProof binPathFwd
+        dsimp only
+        have h0 := hagree 0 (by omega)
+        have h1 := hagree 1 (by omega)
+        refine congrArg₂ List.append ?_ ?_
+        · refine congrArg₂ List.append ?_ ?_
+          · apply congrArg (bitsToBytes (salts i) 24 ++ ·)
+            split_ifs
+            · rfl
+            · have hb1 : 3 * (i.val / 3) + 1 < levelSize 0 := by
+                have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
+              have hb2 : 3 * (i.val / 3) + 2 < levelSize 0 := by
+                have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
+              rw [h0 _ hb1, h0 _ hb2]
+            · have hb0 : 3 * (i.val / 3) < levelSize 0 := by
+                have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
+              have hb2 : 3 * (i.val / 3) + 2 < levelSize 0 := by
+                have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
+              rw [h0 _ hb0, h0 _ hb2]
+            · have hb0 : 3 * (i.val / 3) < levelSize 0 := by
+                have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
+              have hb1 : 3 * (i.val / 3) + 1 < levelSize 0 := by
+                have := i.isLt; rw [levelSize_0, full_triplets_eq] at *; unfold LENGTH LOG_LENGTH at *; omega
+              rw [h0 _ hb0, h0 _ hb1]
+          · exact congrArg (fun d => bitsToBytes d 32) (h1 _ (by
+              rw [levelSize_1]
+              exact xor_one_lt_even (m := 2796203) (by
+                have := i.isLt; unfold LENGTH LOG_LENGTH at this; omega)))
+        · apply List.flatMap_congr; intro step hstep
+          have hs : step < 13 := List.mem_range.mp hstep
+          by_cases hlt : ((i.val / 3) >>> (step + 1) ^^^ 1) < levelSize (2 + step)
+          · simp only [hlt, ite_true, hagree (2 + step) (by omega) _ hlt]
+          · simp only [hlt, ite_false]
+      · unfold capFrontierFwd capLevelFrontierFwd
+        apply List.flatMap_congr; intro step hstep
+        have hs : step < 9 := List.mem_range.mp hstep
+        apply List.flatMap_congr; intro q hq
+        have hq' : q < levelSize (15 + step) / 2 := List.mem_range.mp hq
+        dsimp only
+        split_ifs
         · rfl
-    · unfold capFrontierProof capLevelFrontierProof
-      apply List.flatMap_congr; intro step hstep
-      have hs : step < 9 := List.mem_range.mp hstep
-      apply List.flatMap_congr; intro q hq
-      have hq' : q < levelSize (15 + step) / 2 := List.mem_range.mp hq
-      dsimp only
-      split_ifs
-      · rfl
-      · rw [hagree (15 + step) (by omega) (2 * q) (by omega)]
-      · rw [hagree (15 + step) (by omega) (2 * q + 1) (by omega)]
+        · rw [hagree (15 + step) (by omega) (2 * q) (by omega)]
+        · rw [hagree (15 + step) (by omega) (2 * q + 1) (by omega)]
+    · unfold referenceProofTails
+      refine congrArg₂ List.append ?_ ?_
+      · apply List.flatMap_congr; intro i _
+        unfold recordTails binPathTails
+        apply List.flatMap_congr; intro step hstep
+        have hs : step < 9 := List.mem_range.mp hstep
+        dsimp only
+        split_ifs with hlt
+        · rw [hagree (6 + step) (by omega) _ hlt]
+        · rfl
+      · unfold capFrontierTails capLevelFrontierTails
+        apply List.flatMap_congr; intro step hstep
+        have hs : step < 9 := List.mem_range.mp hstep
+        apply List.flatMap_congr; intro q hq
+        have hq' : q < levelSize (15 + step) / 2 := List.mem_range.mp hq
+        dsimp only
+        split_ifs
+        · rfl
+        · rw [hagree (15 + step) (by omega) (2 * q) (by omega)]
+        · rw [hagree (15 + step) (by omega) (2 * q + 1) (by omega)]
 
 theorem referenceProof_length_128_le (nodes : Nat → Nat → Digest) (salts : Index → Salt192)
     (positions : Positions) (hcard : positions.card = BATCH) :
-    (referenceProof nodes salts positions).length ≤ 70410 := by
+    (referenceProof nodes salts positions).length ≤ 70080 := by
   have h := referenceProof_length_le nodes salts positions
   rw [hcard] at h
-  change _ ≤ 510 * 128 + 5130 at h
+  change _ ≤ 501 * 128 + 4959 + (6 * (9 * 128 + 171) + 7) / 8 at h
   omega
 
 theorem referenceProof_length_le_cap (nodes : Nat → Nat → Digest) (salts : Index → Salt192)

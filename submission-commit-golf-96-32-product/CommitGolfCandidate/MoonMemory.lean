@@ -644,7 +644,7 @@ theorem opening_initial_zero_low (trapdoor : BitVec (8 * submission.sizes.trapdo
     change ¬ (6912218176 ≤ addr ∧ _); omega
   simp only [inputByte, Submission.inputBuffers, List.find?_cons, fixedBuffer, positionsBuffer,
     h1, h2, decide_false, List.find?_nil, opening_dataBase]
-  rw [if_neg (by omega)]
+  rw [ite_eq_right_of_eq_false _ _ (eq_false (by omega))]
 
 theorem opening_initial_data_dword (trapdoor : BitVec (8 * submission.sizes.trapdoor))
     (positions : Positions) (off : Nat) (hoff : off + 8 ≤ 800) :
@@ -829,7 +829,105 @@ theorem check_initial_data_dword (input : CheckInput)
   rw [check_image_data, getElem?_decode 8 MoonArtifact.openingData (off + j) (by omega),
     Option.getD_some, dif_pos (by omega)]
 
-/-! ### Shared Contract: Honest Committed Trapdoor Contents -/
+/-! ### Shared Contract: Honest Committed Trapdoor Contents & 238-Bit Masking Helpers -/
+
+def mask238Word : Word := BitVec.ofNat 64 (2 ^ 46 - 1)
+
+theorem mask238Word_eq : mask238Word = ((1#64 <<< 46) + BitVec.ofNat 64 (2 ^ 64 - 1)) := by
+  decide
+
+/-- `ld t1, 24(a2); and t1, t1, mask238Word; sd t1, 24(a2)` truncates an aligned 32-byte digest at
+`addr` to `mask238`. -/
+theorem sd_and_mask238 (state : MachineState) (addr : Nat)
+    (halign : addr % 8 = 0) (hbound : addr + 32 ≤ 2 ^ 64) :
+    readBuffer
+      (state.setMem (BitVec.ofNat 64 (addr + 24))
+        (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& mask238Word))
+      addr 32 =
+      mask238 (readBuffer state addr 32) := by
+  have halign24 : (addr + 24) % 8 = 0 := by omega
+  have hbytes : ∀ j < 32,
+      (state.setMem (BitVec.ofNat 64 (addr + 24))
+        (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& mask238Word)).getByte
+        (BitVec.ofNat 64 (addr + j)) =
+      (mask238 (readBuffer state addr 32)).extractLsb' (8 * j) 8 := by
+    intro j hj
+    by_cases hlt24 : j < 24
+    · rw [setMem_getByte_ofNat state (addr + 24) (addr + j) _ halign24 (by omega) (by omega) (by omega),
+        mask238_byte_lt29 _ j (by omega), read_buffer_byte state addr 32 j hj]
+    · have hk : j - 24 < 8 := by omega
+      have hadd : addr + 24 + (j - 24) = addr + j := by omega
+      rw [← hadd, setMem_getByte_inside state (addr + 24) (j - 24) _ halign24 hk]
+      have hsrc : (state.getMem (BitVec.ofNat 64 (addr + 24))).extractLsb' (8 * (j - 24)) 8 =
+          (readBuffer state addr 32).extractLsb' (8 * j) 8 := by
+        have hrb := read_buffer_byte state addr 32 j hj
+        rw [hrb, ← hadd]
+        have hal := alignToDword_ofNat_eq (addr + 24) (j - 24) hk halign24
+        have hbo : byteOffset (BitVec.ofNat 64 (addr + 24 + (j - 24))) = j - 24 := by
+          rw [byteOffset_eq_mod, BitVec.toNat_ofNat]; omega
+        simp only [MachineState.getByte, hal, hbo]
+        unfold extractByte
+        apply BitVec.eq_of_getLsbD_eq; intro b hb
+        simp [BitVec.truncate, hb, Nat.mul_comm]
+      apply BitVec.eq_of_getLsbD_eq; intro b hb
+      simp only [BitVec.getLsbD_extractLsb', hb, decide_true, Bool.true_and,
+        BitVec.getLsbD_and, mask238_getLsbD]
+      have hbit := congrArg (fun v : BitVec 8 => v.getLsbD b) hsrc
+      simp only [BitVec.getLsbD_extractLsb', hb, decide_true, Bool.true_and] at hbit
+      rw [hbit]
+      have hmb : mask238Word.getLsbD (8 * (j - 24) + b) = decide (8 * j + b < 238) := by
+        have hidx_lt : 8 * (j - 24) + b < 64 := by omega
+        have hiff : 8 * (j - 24) + b < 46 ↔ 8 * j + b < 238 := by omega
+        have hml : ∀ n < 64, mask238Word.getLsbD n = decide (n < 46) := by
+          intro n hn
+          revert n; decide
+        rw [hml _ hidx_lt]
+        simp [hiff]
+      rw [hmb, Bool.and_comm]
+  have hr := read_serialized_slice
+    (state.setMem (BitVec.ofNat 64 (addr + 24))
+      (state.getMem (BitVec.ofNat 64 (addr + 24)) &&& mask238Word))
+    (mask238 (readBuffer state addr 32)) addr 0 32 (by simpa only [Nat.zero_add] using hbytes)
+  simpa using hr
+
+/-- Reconstruct a `mask238` digest from 29 low bytes + 6-bit tail byte at +29 + two zero bytes. -/
+theorem readBuffer_eq_mask238_of_bytes (state : MachineState) (addr : Nat) (d : Digest)
+    (hlo : ∀ j < 29, state.getByte (BitVec.ofNat 64 (addr + j)) = d.extractLsb' (8 * j) 8)
+    (h29 : state.getByte (BitVec.ofNat 64 (addr + 29)) = (0#2) ++ tail6 d)
+    (h30 : state.getByte (BitVec.ofNat 64 (addr + 30)) = 0)
+    (h31 : state.getByte (BitVec.ofNat 64 (addr + 31)) = 0) :
+    readBuffer state addr 32 = mask238 d := by
+  have hr := read_serialized_slice state (mask238 d) addr 0 32 (by
+    intro j hj
+    simp only [Nat.zero_add]
+    by_cases hlt : j < 29
+    · rw [hlo j hlt, mask238_byte_lt29 d j hlt]
+    · by_cases h29' : j = 29
+      · subst h29'; rw [h29, mask238_byte_29 d]
+      · by_cases h30' : j = 30
+        · subst h30'; rw [h30, mask238_byte_ge30 d 30 (by omega)]
+        · have h31' : j = 31 := by omega
+          subst h31'; rw [h31, mask238_byte_ge30 d 31 (by omega)])
+  simpa using hr
+
+/-- In `opening`, the scratch tail buffer region `[tailBufBase, opening_dataBase)` is initially zero. -/
+theorem opening_initial_zero_tailBuf (td : BitVec (8 * submission.sizes.trapdoor))
+    (positions : Positions) (addr : Nat)
+    (hlo : tailBufBase ≤ addr) (hhi : addr < 68719475936) :
+    (submission.initialState .opening (td, positions)).getByte (BitVec.ofNat 64 addr) = 0 := by
+  have hcard := positions_card_le_length positions
+  rw [initial_input_byte submission .opening (td, positions) _ (by unfold tailBufBase at hlo; omega)]
+  have h1 : ¬ (submission.layout.trapdoor ≤ addr ∧
+      addr < submission.layout.trapdoor + (8 * submission.sizes.trapdoor + 7) / 8) := by
+    change ¬ (4294971424 ≤ addr ∧ addr < 4294971424 + (8 * 2617246752 + 7) / 8)
+    unfold tailBufBase at hlo; omega
+  have h2 : ¬ (submission.layout.indices ≤ addr ∧
+      addr < submission.layout.indices + 8 * (positions.sort (· ≤ ·)).length) := by
+    rw [Finset.length_sort]; change ¬ (6912218176 ≤ addr ∧ addr < 6912218176 + 8 * positions.card)
+    unfold tailBufBase at hlo; omega
+  simp only [inputByte, Submission.inputBuffers, List.find?_cons, fixedBuffer, positionsBuffer,
+    h1, h2, decide_false, List.find?_nil, opening_dataBase]
+  rw [ite_eq_right_of_eq_false _ _ (eq_false (by omega))]
 
 def CommittedTrapdoor (h768 : COMPRESSION_INPUT_LENGTH = 768) (c : Compression)
     (msg : Message) (salts : Index → Salt192)
