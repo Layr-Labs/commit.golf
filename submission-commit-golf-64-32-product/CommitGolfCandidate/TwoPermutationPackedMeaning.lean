@@ -42,7 +42,7 @@ theorem packed_wide_counted_body (leaves : PackedLeafExecution) (meaning : Packe
 
 def packed_widePackedOutput (leaves : PackedLeafExecution) (oracle : Oracle) (initial : MachineState)
     {bits : Nat} (packed : BitVec bits) : Execution :=
-  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1367680122,50331647⟩
+  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1367549052,50331647⟩
 
 theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (oracle : Oracle) (initial : MachineState) :
@@ -61,10 +61,10 @@ theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : Pack
 private theorem packed_wide_output_eq (leaves : PackedLeafExecution) (oracle : Oracle)
     (initial : MachineState) {bits : Nat} (packed : BitVec bits) :
     packed_widePackedOutput leaves oracle initial packed =
-      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1367680122,50331647⟩ := rfl
+      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1367549052,50331647⟩ := rfl
 
 private theorem execution_state (state : MachineState) :
-    (⟨.success,state,1367680122,50331647⟩ : Execution).state = state := rfl
+    (⟨.success,state,1367549052,50331647⟩ : Execution).state = state := rfl
 
 attribute [local irreducible] packed_widePackedOutput
 

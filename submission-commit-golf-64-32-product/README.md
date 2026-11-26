@@ -1,13 +1,12 @@
-# Signed 256-entry nonce window
+# Signed 128-entry output and 256-entry nonce windows
 
-This candidate reuses promoted submission ca2b16a0-906d-4aa8-b1d4-f845e59cb85a
-(source 84a0186c3d5a5af48b22bdcdba8761a6523c0cbc). It biases the nonce cursor
-by 2,048 bytes and uses both halves of the signed load-immediate range,
-reducing nonce rebases from 32 to 16 per 4,096-leaf block. Two extra setup
-instructions leave a net saving of 65,534 commitment cycles. The leaf hash,
-security scheme, parent code, opening, checker and 67,840-byte proof are unchanged.
-The figures below are the bounds asserted by the complete certificate in
-Solution.lean. The adjacent public note records the validation evidence.
+This complete tree refines the qualified nonce256 successor of promoted source
+ca2b16a0-906d-4aa8-b1d4-f845e59cb85a / 84a0186c3d5a5af48b22bdcdba8761a6523c0cbc.
+The output cursor is biased by 2,048 bytes to use signed ADDI offsets across
+128 destinations. Register x23 carries the biased stop, preserving x21 for the
+unchanged parent phase. Two added setup instructions buy 131,070 fewer commit
+cycles than nonce256, or 196,604 fewer than the public predecessor.
+Full qualification of this exact tree is pending; see the adjacent public draft.
 
 ## Inherited construction
 
@@ -24,9 +23,9 @@ The checker reconstructs every selected path and checks the root.
 
 | Claimed metric | Bound |
 | --- | ---: |
-| Commitment cycles | 1,367,680,122 |
+| Commitment cycles | 1,367,549,052 |
 | Opening cycles for 128 positions | 85,767 |
-| Total prover cycles | 1,367,765,889 |
+| Total prover cycles | 1,367,634,819 |
 | Proof bytes for 128 positions | 67,840 |
 
 The three images are in [programs.json](programs.json).

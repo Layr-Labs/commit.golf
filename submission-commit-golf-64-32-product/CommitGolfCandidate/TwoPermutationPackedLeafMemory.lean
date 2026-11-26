@@ -7,7 +7,7 @@ set_option maxHeartbeats 650000
 
 structure LeafReady (s : MachineState) (slot : Fin 4096) (start index dst salts : Nat) : Prop where
   source : s.getReg .x10=wordAddress (start+5)
-  destination : s.getReg .x20+BitVec.ofNat 64 (32*(slot.val%64))=wordAddress dst
+  destination : (s.getReg .x20-2048)+BitVec.ofNat 64 (32*(slot.val%128))=wordAddress dst
   nonces : s.getReg .x22=wordAddress (salts+256)
   tag : firstTag index=wordAddress start
   sourceBound : start+37≤2^33
