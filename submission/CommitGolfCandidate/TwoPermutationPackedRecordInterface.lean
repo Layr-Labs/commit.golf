@@ -42,7 +42,7 @@ structure RecordBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat
   trace :
     let index := honestIndex input.positions ordinal present
     Nonempty (RecordedLower oracle index.val (input.values index) (readBuffer block.state 12288 32) block.rows)
-  honest : ∀ message salts, NearHonest input (honestCheckInput oracle message input.positions salts) →
+  honest : ∀ message salts, input=honestCheckInput oracle message input.positions salts →
     readBuffer block.state 12288 32=honestHeap oracle message salts (capGroup (honestIndex input.positions ordinal present).val)
 
 def RecordRefines (record : Oracle → Nat → Index → MachineState → RecordBlock) : Prop :=

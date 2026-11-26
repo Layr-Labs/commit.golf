@@ -43,7 +43,7 @@ theorem packed_input_address_after (input : CheckInput) (ordinal word : Nat)
 
 theorem record_proof_frame (input : CheckInput) (ordinal offset count : Nat) (state : MachineState)
     (frame : RecordInputFrame input ordinal state) (before : ordinal ≤ input.positions.card)
-    (bounded : checkProofByte ordinal+offset+count ≤ 2^35) :
+    (bounded : checkProofByte ordinal+offset+count ≤ 2^36) :
     readBuffer state (checkProofByte ordinal+offset) count =
       readBuffer (QAssembly.submission.initialState .check input) (checkProofByte ordinal+offset) count := by
   apply buffer_byte_frame

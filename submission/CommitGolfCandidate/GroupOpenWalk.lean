@@ -7,29 +7,6 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate
 set_option maxRecDepth 16000
 set_option maxHeartbeats 1600000
 
-/-- `packed_fetch_all` for every row of the image below word 6144 (the V2a pass phases sit at 3078..3387). -/
-theorem packed_fetch_far (state : MachineState) (index : Nat) (instruction : Instr)
-    (bounded : index < 6144) (pc : state.pc = BitVec.ofNat 64 (4096+4*index))
-    (decoded : (openingImage.code[index]?).bind Opening.decodeBase = some instruction) :
-    fetch openingImage state = some (.base instruction) := by
-  have current : state.pc.toNat = 4096+4*index := by
-    rw [pc, BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
-    omega
-  rw [fetch, current, ite_eq_left (by omega), show (4096+4*index-4096)/4=index by omega]
-  cases code : openingImage.code[index]? with
-  | none => simp [code] at decoded
-  | some word =>
-    simp [code, Opening.decodeBase] at decoded
-    cases dec : decodeInstruction word with
-    | none => simp [dec] at decoded
-    | some result =>
-      cases result with
-      | base inst =>
-        simp [dec] at decoded
-        simpa [decoded] using dec
-      | word op rd rs₁ rs₂ => simp [dec] at decoded
-      | sraiw rd rs sh => simp [dec] at decoded
-
 def address (i : Nat) := BitVec.ofNat 64 (4096+4*i)
 abbrev Row := Nat × Instr
 
@@ -126,15 +103,65 @@ def pairRows (start : Nat) (src dst : Reg) : List (Nat × Nat) → List Row
   | (a,b)::rest => (start,.LD .x31 src (BitVec.ofNat 12 (8*a))) :: (start+1,.SD dst .x31 (BitVec.ofNat 12 (8*b))) ::
       pairRows (start+2) src dst rest
 
-private theorem row_fetch (row : Row) (bounded : row.1<6144) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
+/-! K3-lite prefix, one position `i` (quartet `g = i >> 2`, even block `B = B_{2 (g >> 1)}`), rows 740..812.
+Head paths (rows 740..776): `skip` when `g` equals the previous position's quartet (`x4`); otherwise `x4 := g`, the
+parity selects the reply (`B+168` even, `B-32` odd), the rebuilt block (`B+512` even, `B+1536` odd, both
+`Q+512+1024 g`) and the level-22 sibling node (`B+136` even, `B+168` odd); the inverse of the reply lands in the
+rebuilt block (call at 761), rows 762..764 restore `x13, x12, x10` and rows 765..776 copy the sibling to
+`heap[2^22 + (g ^ 1)]`. Then the chained salt generator (777..795, `K3OpenChain`) and the K1 salt rows (796..812). -/
+
+def headRows : List Row := [(740,.LD .x6 .x14 0),(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]
+def newRows : List Row := [(743,.ADDI .x4 .x28 0),(744,.SRLI .x7 .x6 3),(745,.SLLI .x7 .x7 11),(746,.ADD .x7 .x7 .x24),
+  (747,.ANDI .x30 .x6 4),(748,.BNE .x30 .x0 36)]
+/-- Even quartet: reply_E at `B+168`, rebuilt block at `B+512`, sibling G_O at `B+136`; jump to 760. -/
+def evenSel : List Row := [(749,.ADDI .x10 .x7 168),(750,.ADDI .x12 .x7 512),(751,.ADDI .x30 .x7 136),(752,.JAL .x0 32)]
+/-- Odd quartet: reply_O at `B-32` (immediate `4064 = -32` in 12 bits), rebuilt block at `B+1536`, sibling G_E at `B+168`. -/
+def oddSel : List Row := [(757,.ADDI .x10 .x7 4064),(758,.ADDI .x12 .x7 1536),(759,.ADDI .x30 .x7 168)]
+def selRows (odd : Bool) : List Row := if odd then oddSel else evenSel
+def callRow : List Row := [(760,.ADDI .x13 .x0 2)]
+/-- A new quartet before its inverse call (row 761). -/
+def preRows (odd : Bool) : List Row := headRows ++ newRows ++ selRows odd ++ callRow
+def restoreRows : List Row := [(762,.ADDI .x13 .x0 1),(763,.ADDI .x12 .x0 1536),(764,.ADDI .x10 .x0 1024)]
+def sibPairs : List (Nat × Nat) := [(0,0),(1,1),(2,2),(3,3)]
+def sibRows : List Row :=
+  [(765,.XORI .x28 .x28 1),(766,.ADD .x28 .x28 .x19),(767,.SLLI .x28 .x28 5),(768,.ADD .x28 .x28 .x9)] ++
+  pairRows 769 .x30 .x28 sibPairs
+/-- A new quartet after its inverse call: rows 762..776. -/
+def headPost : List Row := restoreRows ++ sibRows
+
+/-- Reply-offset rows by rank class `k` (0: rank 0, 1: rank 1, 2: rank ≥ 2), ending with the salt destination.
+Ranks 0 and 1 branch to the shared base addition; rank ≥ 2 forms `16*r + 1520` and skips it. -/
+def selectRows (k : Fin 3) : List Row :=
+  [(796,.SLLI .x7 .x28 4),(797,.BEQ .x28 .x23 16)] ++
+  (if k.val = 1 then [(801,.ADDI .x7 .x0 184),(802,.ADD .x7 .x7 .x12)] else
+    [(798,.BEQ .x28 .x0 16)] ++
+    (if k.val = 0 then [(802,.ADD .x7 .x7 .x12)]
+      else [(799,.ADDI .x7 .x7 1520),(800,.JAL .x0 12)])) ++
+  [(803,.SLLI .x30 .x6 4),(804,.ADD .x30 .x30 .x22)]
+def copyRows : List Row := [(805,.LD .x31 .x7 0),(806,.SD .x30 .x31 0),(807,.LD .x31 .x7 8),(808,.SD .x30 .x31 8)]
+def nextRows (last : Bool) : List Row := [(809,.ADDI .x14 .x14 8),(810,.ADDI .x17 .x17 (-1)),(811,.BNE .x17 .x0 7908)] ++
+  (if last then [(812,.JAL .x0 2093964)] else [])
+
+def postRows (k : Fin 3) (last : Bool) : List Row := selectRows k ++ copyRows ++ nextRows last
+
+private theorem row_fetch (row : Row) (bounded : row.1<813) (dec : (openingImage.code[row.1]?).bind Opening.decodeBase=some row.2) :
     ∀ st : MachineState, st.pc=address row.1 → fetch openingImage st=some (.base row.2) :=
-  fun st pc => packed_fetch_far st _ _ (by omega) pc dec
+  fun st pc => packed_fetch_base st _ _ (by omega) pc dec
 
 theorem rows_present (rows : List Row)
-    (raw : ∀ i : Fin rows.length, rows[i].1<6144 ∧ (openingImage.code[rows[i].1]?).bind Opening.decodeBase=some rows[i].2) :
+    (raw : ∀ i : Fin rows.length, rows[i].1<813 ∧ (openingImage.code[rows[i].1]?).bind Opening.decodeBase=some rows[i].2) :
     presentRows rows := by
   intro p hp;obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp hp
   subst p
   exact row_fetch _ (raw ⟨i,hi⟩).1 (raw ⟨i,hi⟩).2
+
+theorem skip_row_fetch : presentRows headRows := by apply rows_present; decide +kernel
+theorem pre_row_fetch (odd : Bool) : presentRows (preRows odd) := by apply rows_present; revert odd; decide +kernel
+theorem head_post_fetch : presentRows headPost := by apply rows_present; decide +kernel
+theorem post_row_fetch (k : Fin 3) (last : Bool) : presentRows (postRows k last) := by
+  apply rows_present; revert k last; decide +kernel
+
+theorem inverse_fetch (s : MachineState) (pc : s.pc=address 761) : fetch openingImage s=some (.base .ECALL) :=
+  packed_fetch_base _ 761 _ (by decide) pc (by decide +kernel)
 
 end TwoPermutationPrototype.GroupedOpening

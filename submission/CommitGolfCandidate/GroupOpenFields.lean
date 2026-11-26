@@ -50,7 +50,18 @@ theorem execute_nonce_setup (state : MachineState) (pc : state.pc = 0x103c)
       simp [execPrefix, nonceSetupCode, ordinaryStep, memoryArgumentsValid, memAccess, signExtend12, readable] <;> rfl
   · interval_cases i <;> rfl
 
-/- (`execute_cap_source`, the old emit_node rows 668..669, was removed: those words now hold the chunk dispatch.) -/
+theorem execute_cap_source (state : MachineState) (pc : state.pc = 0x1a70) (fuel : Nat) (coins : Bool) :
+    execute openingImage (2+fuel) state coins =
+      (do let result ← execute openingImage fuel (capSource state) coins
+          return result.charge 2 0) := by
+  apply execute_unit_steps (states := execPrefix capSourceCode state)
+  intro i inside
+  refine ⟨.base (capSourceCode[i]?.getD .EBREAK), ?_, ?_, ?_⟩
+  · apply packed_fetch_base _ (668+i) _ (by omega)
+    · interval_cases i <;> simp [execPrefix, capSourceCode, execInstrBr, pc]
+    · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
+  · interval_cases i <;> rfl
 
 theorem execute_cap_advance (state : MachineState) (pc : state.pc = 0x1af0) (fuel : Nat) (coins : Bool) :
     execute openingImage (1+fuel) state coins =

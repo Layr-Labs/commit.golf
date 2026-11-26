@@ -51,7 +51,7 @@ def finish (s t : MachineState) (i : Nat) : Prop :=
   t.getReg .x29=s.getReg .x29 ∧ t.getReg .x30=s.getReg .x30 ∧ t.getReg .x6=s.getReg .x6 ∧
   t.getReg .x1=s.getReg .x1 ∧ t.getReg .x2=s.getReg .x2 ∧ t.getReg .x3=s.getReg .x3 ∧
   t.getReg .x18=s.getReg .x18 ∧ t.getReg .x22=s.getReg .x22 ∧ t.getReg .x4=s.getReg .x4 ∧
-  t.getReg .x7=s.getReg .x7 ∧ t.getReg .x31=s.getReg .x31 ∧ t.getReg .x15=s.getReg .x15
+  t.getReg .x7=s.getReg .x7 ∧ t.getReg .x31=s.getReg .x31
 
 theorem word_getReg (s : MachineState) (addr : Nat) (v : Word) (reg : Reg) :
     (putWord s addr v).getReg reg = s.getReg reg := by cases reg <;> rfl
@@ -73,8 +73,7 @@ theorem imm_facts :
     signExtend12 3912#12+wordAddress 23=0 ∧ signExtend12 16#12=wordAddress 2 ∧
     signExtend12 368#12=wordAddress 46 ∧ signExtend12 56#12=wordAddress 7 ∧ signExtend12 8#12=wordAddress 1 ∧
     signExtend12 2248#12+wordAddress 231=0 ∧ signExtend12 2256#12+wordAddress 230=0 ∧
-    signExtend12 2264#12+wordAddress 229=0 ∧ signExtend12 2272#12+wordAddress 228=0 ∧
-    signExtend12 2088#12+wordAddress 251=0 := by decide
+    signExtend12 2264#12+wordAddress 229=0 ∧ signExtend12 2272#12+wordAddress 228=0 := by decide
 
 theorem source_bounds (i : Nat) (limit : i<16777216) : sourceWord i+2≤2^33 ∧ genWord i+20≤2^33 := by
   unfold sourceWord genWord msgWord rank;constructor <;> omega
@@ -100,16 +99,8 @@ theorem prefetch_addresses (i : Nat) (h : rank i=8) :
   have g := genWord_rank i 8 h
   have low : 512≤msgWord i := by unfold msgWord;omega
   refine ⟨(addr_back _ 231 _ imm_facts.2.2.2.2.2.2.2.2.2.1 (by omega)).trans ?_,(addr_back _ 230 _ imm_facts.2.2.2.2.2.2.2.2.2.2.1 (by omega)).trans ?_,
-    (addr_back _ 229 _ imm_facts.2.2.2.2.2.2.2.2.2.2.2.1 (by omega)).trans ?_,(addr_back _ 228 _ imm_facts.2.2.2.2.2.2.2.2.2.2.2.2.1 (by omega)).trans ?_⟩
+    (addr_back _ 229 _ imm_facts.2.2.2.2.2.2.2.2.2.2.2.1 (by omega)).trans ?_,(addr_back _ 228 _ imm_facts.2.2.2.2.2.2.2.2.2.2.2.2 (by omega)).trans ?_⟩
   all_goals congr 1;omega
-
-/-- Rank 9 loads the second salt word through x12 = `w-4` (the follower's first-call output). -/
-theorem rank9_address (i : Nat) (h : rank i=9) :
-    wordAddress (msgWord i-4)+signExtend12 2088#12=wordAddress (sourceWord i+1) := by
-  have g := genWord_rank i 9 h
-  have low : 512≤msgWord i := by unfold msgWord;omega
-  refine (addr_back _ 251 _ imm_facts.2.2.2.2.2.2.2.2.2.2.2.2.2 (by omega)).trans ?_
-  unfold sourceWord;rw [h];congr 1;omega
 
 theorem rreg_x14 (n : Nat) : (Reg.x14=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
 theorem rreg_x15 (n : Nat) : (Reg.x15=rreg n)=False := eq_false (by unfold rreg;split_ifs <;> decide)
@@ -321,27 +312,26 @@ theorem walk_follower (s : MachineState) (i : Nat) (limit : i<16777216) (r : Pac
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,sa1,sa2,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
         all_goals omega
   · by_cases e9 : rank i=9
-    · have l9 := rank9_address i e9
-      rcases q with q|q|q|q
+    · rcases q with q|q|q|q
       · skip
-        simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,l9,walk,finish,
+        simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,walk,finish,
           Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
       · skip
-        simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,l9,walk,finish,
+        simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,walk,finish,
           Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
       · skip
-        simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,l9,walk,finish,
+        simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,walk,finish,
           Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,tr]
         all_goals omega
       · have gi := group_input i q
         have rs := restore_forms i q s r
         by_cases e : i%4096/4%2=0
-        all_goals simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,e,l9,walk,finish,
+        all_goals simp [plan,bodyPlan,tailPlan,saltPlan,eq_false h0,eq_false h1,eq_false r8,eq_true e9,e,walk,finish,
           Action.valid,offset_getReg,word_getReg,writeBits_register,x10,r.counter,sreg_val s i r,sreg_x10,sreg_x12,sreg_x14,sreg_x15,sreg_x16,sreg_x17,m4,q,
           r.selector,r.size,r.primitive,h0',f1,f2,c2,f8,z,gi,rs,rreg_x10,rreg_x12,rreg_x14,rreg_x15,rreg_x16,rreg_x17]
         all_goals omega

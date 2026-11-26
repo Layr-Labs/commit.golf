@@ -10,8 +10,8 @@ import CommitGolfCandidate.K3CBDefs
 
 * `MsgGood` (message area and key block): later messages intact (the C message of a pending pair
   excepted), key block intact, the group's generator reply at `genWord n` (ranks ≥ 1), the pending
-  C leaf's first reply tail and message tail (rank 1), x14, x16, x17 = generator words 16, 18, 19 (ranks 9,
-  10; rank 9 reads word 17 from the reply in memory), and, before a linked head, the previous head's generator reply at `msgWord n - 336` (the
+  C leaf's first reply tail and message tail (rank 1), x14..x17 = generator words 16..19 (ranks 9,
+  10), and, before a linked head, the previous head's generator reply at `msgWord n - 336` (the
   linked generator call reads it in place).
 * `CellGood` (quartet blocks): the digests of all earlier leaves at `qLeaf`, except the fourth leaf
   of an even quartet (its digest is overwritten by the group reply `reply_E`); the group reply of
@@ -41,7 +41,7 @@ structure MsgGood (o : Oracle) (k : BitVec 192) (msg : Message) (regs : Reg → 
     (∀ j : Fin 11, m (msgWord n+10+j.val)=replyWords (firstOf o msg i) ⟨14+j.val,by omega⟩) ∧
     (∀ j : Fin 11, m (msgWord n+21+j.val)=messageWords msg i ⟨21+j.val,by omega⟩)
   prefetched : ∀ i : Index, n=i.val → 9 ≤ rank n →
-    regs .x14=replyWords (groupReply o k i) ⟨16,by omega⟩ ∧
+    regs .x14=replyWords (groupReply o k i) ⟨16,by omega⟩ ∧ regs .x15=replyWords (groupReply o k i) ⟨17,by omega⟩ ∧
     regs .x16=replyWords (groupReply o k i) ⟨18,by omega⟩ ∧ regs .x17=replyWords (groupReply o k i) ⟨19,by omega⟩
   previous : ∀ i j : Index, n=i.val → j.val+11=n → rank n=0 → n%4096/11%34≠0 →
     window m (genWord (n-11))=replyWords (groupReply o k j)
@@ -287,12 +287,11 @@ theorem msg_follower (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i
     split
     · unfold sourceWord;rw [Nat.add_assoc,gen (2*(rank i.val-1)+d.val) (by omega)]
     split
-    · obtain ⟨p14,_,_⟩ := h.prefetched i rfl (by omega)
+    · obtain ⟨p14,p15,_,_⟩ := h.prefetched i rfl (by omega)
       split
       · rw [p14];congr 1;apply Fin.ext;simp only [Fin.val_mk];omega
-      · unfold sourceWord;rw [Nat.add_assoc,gen (2*(rank i.val-1)+1) (by omega)]
-        congr 1;apply Fin.ext;simp only [Fin.val_mk];omega
-    · obtain ⟨_,p16,p17⟩ := h.prefetched i rfl (by omega)
+      · rw [p15];congr 1;apply Fin.ext;simp only [Fin.val_mk];omega
+    · obtain ⟨_,_,p16,p17⟩ := h.prefetched i rfl (by omega)
       split
       · rw [p16];congr 1;apply Fin.ext;simp only [Fin.val_mk];omega
       · rw [p17];congr 1;apply Fin.ext;simp only [Fin.val_mk];omega
@@ -331,19 +330,20 @@ theorem msg_follower (o : Oracle) (k : BitVec 192) (msg : Message) (v : View) (i
       unfold groupReply;rw [next_coord i j eq.symm (by rw [←eq];omega)]
     rw [grp]
     by_cases e8 : rank i.val=8
-    · obtain ⟨p14,p16,p17⟩ := pf.1 e8
+    · obtain ⟨p14,p15,p16,p17⟩ := pf.1 e8
       have at16 (t : Nat) (ht : t<4) : preSecond o v.regs v.mem i.val (genWord i.val+16+t)=
           replyWords (groupReply o k i) ⟨16+t,by omega⟩ := by
         have gs : genWord i.val+25≤msgWord i.val := by omega
         rw [pre_packet o v.regs v.mem i.val (genWord i.val+16+t)
             (Or.inl (by simp only [qLeaf,qsrc] at b3 ⊢;omega)),
           keepLow (genWord i.val+16+t) (by omega),Nat.add_assoc,gen (16+t) (by omega)]
-      refine ⟨p14.trans (at16 0 (by decide)),p16.trans ?_,p17.trans ?_⟩
+      refine ⟨p14.trans (at16 0 (by decide)),p15.trans ?_,p16.trans ?_,p17.trans ?_⟩
+      · exact at16 1 (by decide)
       · exact at16 2 (by decide)
       · exact at16 3 (by decide)
-    · obtain ⟨p14,p16,p17⟩ := pf.2.1 e8
-      obtain ⟨q14,q16,q17⟩ := h.prefetched i rfl (by omega)
-      exact ⟨p14.trans q14,p16.trans q16,p17.trans q17⟩
+    · obtain ⟨p14,p15,p16,p17⟩ := pf.2 e8
+      obtain ⟨q14,q15,q16,q17⟩ := h.prefetched i rfl (by omega)
+      exact ⟨p14.trans q14,p15.trans q15,p16.trans q16,p17.trans q17⟩
   · intro c j eq step rk linked
     -- the next leaf is a linked head: slot `i` is the rank-10 leaf of the previous group
     have nz : (i.val+1)%4096≠0 := by intro z;rw [z] at linked;exact linked (by decide)
@@ -541,8 +541,8 @@ theorem good_congr (o : Oracle) (k : BitVec 192) (msg : Message) (regs regs' : R
     msg_congr o k msg regs m m' n (fun w _ hw => eq w hw) bound h.msgs
   refine ⟨⟨mg.messages,mg.key,mg.group,mg.pending,?_,mg.previous⟩,⟨?_,?_,?_⟩⟩
   · intro i hi a
-    obtain ⟨p1,p3,p4⟩ := h.msgs.prefetched i hi a
-    exact ⟨(er _).trans p1,(er _).trans p3,(er _).trans p4⟩
+    obtain ⟨p1,p2,p3,p4⟩ := h.msgs.prefetched i hi a
+    exact ⟨(er _).trans p1,(er _).trans p2,(er _).trans p3,(er _).trans p4⟩
   · intro i lo hi;apply Eq.trans _ (h.cells.children i lo hi);funext j
     apply eq;have := j.isLt;have ix : i.val<16777216:=i.isLt;unfold qLeaf qSource;split_ifs <;> omega
   · intro g hg;apply Eq.trans _ (h.cells.replies g hg);funext j

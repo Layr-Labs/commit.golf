@@ -2,9 +2,8 @@ import CommitGolfCandidate.K3OpenCopy
 import CommitGolfCandidate.K3OpenCall
 import CommitGolfCandidate.K1OpenSalt
 import CommitGolfCandidate.GroupOpenMemory
-import CommitGolfCandidate.GroupOpenTable
 
-/-! First pass, one position: addresses, entry registers and the head paths (rows 3077..3096). -/
+/-! K3-lite prefix, one position: addresses, entry registers and the head paths (rows 740..776). -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp CommitGolfCandidate TwoPermutationPrototype.RV64
 set_option maxRecDepth 22000
@@ -125,27 +124,28 @@ theorem output_address (i : Index) (two : 2≤rank i.val) :
   rw [if_neg (show rank i.val≠0 by omega),if_neg (show rank i.val≠1 by omega)];congr 1 <;> omega
 
 structure Registers (s : MachineState) (ord left : Nat) : Prop where
+  input : s.getReg .x10=1024
   output : s.getReg .x12=1536
   selector : s.getReg .x5=0
   width : s.getReg .x11=200
   primitive : s.getReg .x13=1
   index : s.getReg .x14=indexAt ord
-  endReg : s.getReg .x17=indexAt (ord+left)
-  shift : s.getReg .x25=if left=0 then s.getReg .x9 else BitVec.ofNat 64 (8*(ord+left))
+  leftReg : s.getReg .x17=countWord left
   salt : s.getReg .x22=9126809632
   base : s.getReg .x26=4096
+  divReg : s.getReg .x29=11
 
 /-- Entry of position `i` at ordinal `ord` (`left` to go), `x4` = the previous position's quartet `last`. -/
-structure Base (s : MachineState) (p : Positions) : Prop where
-  indices : s.getReg .x8=BitVec.ofNat 64 indicesBase
+structure Input (s : MachineState) (i : Index) (ord left last : Nat) extends Registers s ord left where
+  pc : s.pc=address 740
+  one : s.getReg .x23=1
   heap : s.getReg .x9=BitVec.ofNat 64 trapdoorBase
-  count : s.getReg .x18=8192
   leaves : s.getReg .x19=4194304
-  start : s.getReg .x20=BitVec.ofNat 64 proofBase
-  dest : s.getReg .x21=BitVec.ofNat 64 proofBase
-  mark : s.getReg .x23=1
   slots : s.getReg .x24=BitVec.ofNat 64 groupSlots
-  capLeaves : s.getReg .x27=256
+  quartet : s.getReg .x4=BitVec.ofNat 64 last
+  small : last<2^64
+  loaded : s.getMem (indexAt ord)=BitVec.ofNat 64 i.val
+  access : accessValid (indexAt ord) 8=true
 
 attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem MachineState.getReg_setPC
 attribute [local simp] pc_of_set mem_of_set mem_of_reg mem_of_store open_zero
@@ -153,10 +153,14 @@ attribute [local simp] pc_of_set mem_of_set mem_of_reg mem_of_store open_zero
 theorem reply_pc {bits : Nat} (s : MachineState) (dst : Word) (coins : BitVec bits) :
     (writeBits s dst coins).pc = s.pc + 4 := by simp only [writeBits,MachineState.setPC]
 
+private theorem load_ok (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last) :
+    memoryArgumentsValid s (.LD .x6 .x14 0)=true := by
+  simpa [memoryArgumentsValid,memAccess,r.index,show signExtend12 0#12=0#64 by decide] using r.access
+
 theorem plain_step (s : MachineState) (op : Instr) (yes : plain op=true) (free : memoryArgumentsValid s op=true) :
     ordinaryStep s (.base op)=some (execInstrBr s op) := (ord_iff s op yes).mpr free
 
-theorem quarter (i : Index) : (BitVec.ofNat 64 i.val >>> (2:Nat))=BitVec.ofNat 64 (i.val/4) := by
+private theorem quarter (i : Index) : (BitVec.ofNat 64 i.val >>> (2:Nat))=BitVec.ofNat 64 (i.val/4) := by
   have : i.val<16777216 := i.isLt; rw [shift_right_nat _ _ (by omega)]; rfl
 
 private theorem same_quartet (i : Index) (last : Nat) (small : last<2^64) :
@@ -170,29 +174,127 @@ private theorem same_quartet (i : Index) (last : Nat) (small : last<2^64) :
       exact h this
     simp [h, ne]
 
-theorem tile16' (i : Index) :
-    (BitVec.ofNat 64 i.val <<< (4:Nat)) &&& 65535#64=BitVec.ofNat 64 (16*(i.val%4096)) := by
-  have hi : i.val<16777216 := i.isLt
-  apply BitVec.eq_of_toNat_eq
-  rw [BitVec.toNat_and, BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
-    Nat.mod_eq_of_lt (by omega : i.val<2^64), show (65535:Nat)%2^64=2^16-1 by norm_num,
-    Nat.and_two_pow_sub_one_eq_mod, Nat.shiftLeft_eq]
-  norm_num
-  omega
-
-theorem entry_address' (e : Nat) :
-    BitVec.ofNat 64 (16*e)+BitVec.ofNat 64 tableBase=wordAddress (tableWord e) := by
-  rw [← BitVec.ofNat_add]; unfold wordAddress; congr 1; simp only [tableBase, tableWord]; omega
+/-- Rows 740..742 when the quartet repeats: nothing but `x6`, `x28`, then on to row 777. -/
+theorem head_skip (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+    (same : i.val/4=last) :
+    let t:=walkRows s headRows
+    legal headRows s ∧ t.pc=address 777 ∧ t.mem=s.mem ∧ t.getReg .x6=BitVec.ofNat 64 i.val ∧
+      (∀ k, k≠.x6 → k≠.x28 → t.getReg k=s.getReg k) := by
+  have ld := load_ok s i ord left last r
+  have eq := same_quartet i last r.small
+  rw [same] at eq; simp only [decide_true] at eq
+  have q := quarter i
+  rw [same] at q
+  refine ⟨?_,?_,?_,?_,?_⟩
+  · show legal ((740,.LD .x6 .x14 0)::[(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]) s
+    exact ⟨r.pc,plain_step _ _ rfl ld,legal_of_chain _ _ (by decide) (by simp [pcChain,execInstrBr,r.pc,address])⟩
+  all_goals simp [headRows,walkRows,execInstrBr,r.pc,r.index,r.loaded,r.quartet,address,
+    q,eq,show signExtend12 0#12=0#64 by decide,show signExtend13 140#13=140#64 by decide]
+  all_goals first | (intro k a b; simp [Ne.symm a,Ne.symm b]) | rfl
 
 theorem block_value (i : Index) :
-    ((BitVec.ofNat 64 (i.val/4)) <<< (10:Nat))+BitVec.ofNat 64 groupSlots=
-      wordAddress (blockWord (i.val/4)) := by
-  rw [shift_left_nat, ← BitVec.ofNat_add]
+    ((BitVec.ofNat 64 i.val >>> (3:Nat)) <<< (11:Nat))+BitVec.ofNat 64 groupSlots=
+      wordAddress (blockWord (2*(i.val/4/2))) := by
+  have hi : i.val<16777216 := i.isLt
+  rw [shift_right_nat _ _ (by omega), shift_left_nat, ← BitVec.ofNat_add]
   unfold wordAddress blockWord groupSlots trapdoorBase LENGTH LOG_LENGTH
   congr 1; omega
 
 theorem word_add (w c : Nat) (h : c%8=0) : wordAddress w+BitVec.ofNat 64 c=wordAddress (w+c/8) := by
   unfold wordAddress; rw [← BitVec.ofNat_add]; congr 1; omega
+
+/-- Rows 740..748 of a new quartet (`x4 := q`), up to the parity branch at 748. -/
+private def newPart : List Row := headRows ++ newRows
+private def aluRows : List Row := [(743,.ADDI .x4 .x28 0),(744,.SRLI .x7 .x6 3),(745,.SLLI .x7 .x7 11),
+  (746,.ADD .x7 .x7 .x24),(747,.ANDI .x30 .x6 4)]
+
+private theorem new_head (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+    (fresh : i.val/4≠last) :
+    let t:=walkRows s headRows
+    legal headRows s ∧ t.pc=address 743 ∧ t.mem=s.mem ∧ t.getReg .x6=BitVec.ofNat 64 i.val ∧
+      t.getReg .x28=BitVec.ofNat 64 (i.val/4) ∧ (∀ k, k≠.x6 → k≠.x28 → t.getReg k=s.getReg k) := by
+  have ld := load_ok s i ord left last r
+  have eq := same_quartet i last r.small
+  simp only [fresh, decide_false] at eq
+  have q := quarter i
+  have hi : i.val<16777216 := i.isLt
+  have ne : BitVec.ofNat 64 (i.val/4)≠BitVec.ofNat 64 last := by
+    intro e; have := congrArg BitVec.toNat e
+    simp only [BitVec.toNat_ofNat,Nat.mod_eq_of_lt r.small,Nat.mod_eq_of_lt (show i.val/4<2^64 by omega)] at this
+    exact fresh this
+  refine ⟨?_,?_,?_,?_,?_,?_⟩
+  · show legal ((740,.LD .x6 .x14 0)::[(741,.SRLI .x28 .x6 2),(742,.BEQ .x28 .x4 140)]) s
+    exact ⟨r.pc,plain_step _ _ rfl ld,legal_of_chain _ _ (by decide) (by simp [pcChain,execInstrBr,r.pc,address])⟩
+  all_goals simp [headRows,walkRows,execInstrBr,r.pc,r.index,r.loaded,r.quartet,address,
+    q,eq,ne,show signExtend12 0#12=0#64 by decide]
+  all_goals first | (intro k a b; simp [Ne.symm a,Ne.symm b]) | rfl
+
+private theorem alu_part (u : MachineState) (pc : u.pc=address 743) :
+    let v:=walkRows u aluRows
+    legal aluRows u ∧ v.pc=address 748 ∧ v.mem=u.mem ∧ v.getReg .x4=u.getReg .x28 ∧
+      v.getReg .x7=((u.getReg .x6 >>> (3:Nat)) <<< (11:Nat))+u.getReg .x24 ∧
+      v.getReg .x30=(u.getReg .x6 &&& signExtend12 4#12) ∧
+      (∀ k, k≠.x4 → k≠.x7 → k≠.x30 → v.getReg k=u.getReg k) := by
+  refine ⟨legal_of_chain _ _ (by decide) (by simp [aluRows,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_,?_,?_⟩
+  · simp [aluRows,walkRows,execInstrBr,pc,address]
+  · simp [aluRows,walkRows,execInstrBr]
+  · simp [aluRows,walkRows,execInstrBr,show signExtend12 0#12=0#64 by decide]
+  · simp [aluRows,walkRows,execInstrBr]
+  · simp [aluRows,walkRows,execInstrBr]
+  · intro k a b c; simp [aluRows,walkRows,execInstrBr,Ne.symm a,Ne.symm b,Ne.symm c]
+
+private theorem new_part (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+    (fresh : i.val/4≠last) :
+    let t:=walkRows s newPart
+    legal newPart s ∧ t.pc=(if i.val/4%2=1 then address 757 else address 749) ∧ t.mem=s.mem ∧
+      t.getReg .x6=BitVec.ofNat 64 i.val ∧ t.getReg .x28=BitVec.ofNat 64 (i.val/4) ∧
+      t.getReg .x4=BitVec.ofNat 64 (i.val/4) ∧ t.getReg .x7=wordAddress (blockWord (2*(i.val/4/2))) ∧
+      (∀ k, k≠.x4 → k≠.x6 → k≠.x7 → k≠.x28 → k≠.x30 → t.getReg k=s.getReg k) := by
+  obtain ⟨hl,hpc,hmem,h6,h28,hkeep⟩ := new_head s i ord left last r fresh
+  set u:=walkRows s headRows with hu
+  obtain ⟨al,apc,amem,a4,a7,a30,akeep⟩ := alu_part u hpc
+  set v:=walkRows u aluRows with hv
+  have v6 : v.getReg .x6=BitVec.ofNat 64 i.val := (akeep _ (by decide) (by decide) (by decide)).trans h6
+  have v28 : v.getReg .x28=BitVec.ofNat 64 (i.val/4) := (akeep _ (by decide) (by decide) (by decide)).trans h28
+  have v7 : v.getReg .x7=wordAddress (blockWord (2*(i.val/4/2))) := by
+    rw [a7,h6,hkeep _ (by decide) (by decide),r.slots]; exact block_value i
+  have v30 : v.getReg .x30=BitVec.ofNat 64 (4*(i.val/4%2)) := by rw [a30,h6]; exact and_four i.val
+  let br : List Row := [(748,.BNE .x30 .x0 36)]
+  have taken (nz : v.getReg .x30≠0#64) : execInstrBr v (.BNE .x30 .x0 36)=v.setPC (address 757) := by
+    have yes : (v.getReg .x30 != v.getReg .x0)=true := by simp [open_zero,nz]
+    simp only [execInstrBr,yes,ite_true,apc]
+    exact congrArg v.setPC (by decide : address 748+signExtend13 36=address 757)
+  have fall (z : v.getReg .x30=0#64) : execInstrBr v (.BNE .x30 .x0 36)=v.setPC (address 749) := by
+    simp only [execInstrBr,open_zero,z,beq_self_eq_true,ite_true,apc]
+    exact congrArg v.setPC (by decide : address 748+4=address 749)
+  have bl : legal br v ∧ (walkRows v br).pc=(if i.val/4%2=1 then address 757 else address 749) ∧
+      (walkRows v br).mem=v.mem ∧ (∀ k, (walkRows v br).getReg k=v.getReg k) := by
+    refine ⟨⟨apc,plain_step _ _ rfl (no_mem_valid _ _ rfl),trivial⟩,?_,?_,?_⟩
+    · show (execInstrBr v (.BNE .x30 .x0 36)).pc=_
+      rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h
+      · rw [fall (by rw [v30,h]), if_neg (by omega)]; rfl
+      · rw [taken (by rw [v30,h]; decide), if_pos h]; rfl
+    · exact bne_mem' v _ _ _
+    · intro k; exact bne_reg' v _ _ _ _
+  have split : newPart=headRows++aluRows++br := rfl
+  have at_t : walkRows s newPart=walkRows v br := by rw [split,walk_join,walk_join]
+  obtain ⟨bl1,bpc,bmem,bkeep⟩ := bl
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_⟩
+  · rw [split]; exact legal_append _ _ _ (legal_append _ _ _ hl al) bl1
+  · rw [at_t]; exact bpc
+  · rw [at_t,bmem,amem,hmem]
+  · rw [at_t,bkeep]; exact v6
+  · rw [at_t,bkeep]; exact v28
+  · rw [at_t,bkeep,a4]; exact h28
+  · rw [at_t,bkeep]; exact v7
+  · intro k h4 h6 h7 h28 h30
+    rw [at_t,bkeep,akeep k h4 h7 h30]; exact hkeep k h6 h28
+
+/-- `x7 - 32` (row 757) as a word address. -/
+theorem word_sub (w : Nat) (h : 4≤w) (small : w<2^33) : wordAddress w+signExtend12 4064#12=wordAddress (w-4) := by
+  rw [show signExtend12 4064#12=BitVec.ofNat 64 18446744073709551584 by decide]
+  unfold wordAddress; rw [← BitVec.ofNat_add]
+  apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
 
 theorem even_addresses (g : Nat) (even : g%2=0) :
     replyWord g=blockWord g+21 ∧ rebuiltWord g=blockWord g+64 ∧ nodeWordOf (g^^^1)=blockWord g+17 := by
@@ -201,90 +303,199 @@ theorem even_addresses (g : Nat) (even : g%2=0) :
   refine ⟨?_,rfl,?_⟩ <;> unfold blockWord <;> omega
 
 theorem odd_addresses (g : Nat) (odd : g%2=1) :
-    replyWord g=blockWord g-132 ∧ rebuiltWord g=blockWord g+64 ∧ nodeWordOf (g^^^1)=blockWord g-107 := by
+    replyWord g=blockWord (g-1)-4 ∧ rebuiltWord g=blockWord (g-1)+192 ∧ nodeWordOf (g^^^1)=blockWord (g-1)+21 := by
   obtain ⟨d,m⟩ := xor_one g
   unfold replyWord rebuiltWord nodeWordOf; rw [d,m]
   refine ⟨?_,?_,?_⟩ <;> unfold blockWord <;> omega
 
-/-- The entry's reply offset added to the quartet block (row 3088). -/
-theorem reply_offset (i : Index) :
-    (BitVec.ofNat 16 (tabR (i.val%4096))).signExtend 64+wordAddress (blockWord (i.val/4))=
-      wordAddress (replyWord (i.val/4)) := by
-  have hi : i.val<16777216 := i.isLt
-  have par : (i.val%4096)/4%2=(i.val/4)%2 := by omega
-  unfold tabR; rw [par]
-  rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h
-  · rw [if_neg (by omega), (even_addresses _ h).1,
-      show (BitVec.ofNat 16 168).signExtend 64=BitVec.ofNat 64 168 by decide]
-    unfold wordAddress blockWord; rw [← BitVec.ofNat_add]; congr 1; omega
-  · rw [if_pos h, (odd_addresses _ h).1,
-      show (BitVec.ofNat 16 64480).signExtend 64=BitVec.ofNat 64 18446744073709550560 by decide]
-    unfold wordAddress blockWord; rw [← BitVec.ofNat_add]
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
+/-- Rows 749..752 (even quartet). -/
+private theorem even_sel (n : MachineState) (g : Nat) (pc : n.pc=address 749) (even : g%2=0)
+    (b7 : n.getReg .x7=wordAddress (blockWord g)) :
+    let v:=walkRows n evenSel
+    legal evenSel n ∧ v.pc=address 760 ∧ v.mem=n.mem ∧ v.getReg .x10=wordAddress (replyWord g) ∧
+      v.getReg .x12=wordAddress (rebuiltWord g) ∧ v.getReg .x30=wordAddress (nodeWordOf (g^^^1)) ∧
+      (∀ k, k≠.x10 → k≠.x12 → k≠.x30 → v.getReg k=n.getReg k) := by
+  obtain ⟨e10,e12,e30⟩ := even_addresses g even
+  have r10 : n.getReg .x7+signExtend12 168#12=wordAddress (replyWord g) := by
+    rw [b7, show signExtend12 168#12=BitVec.ofNat 64 168 by decide, word_add _ _ (by decide), e10]
+  have r12 : n.getReg .x7+signExtend12 512#12=wordAddress (rebuiltWord g) := by
+    rw [b7, show signExtend12 512#12=BitVec.ofNat 64 512 by decide, word_add _ _ (by decide), e12]
+  have r30 : n.getReg .x7+signExtend12 136#12=wordAddress (nodeWordOf (g^^^1)) := by
+    rw [b7, show signExtend12 136#12=BitVec.ofNat 64 136 by decide, word_add _ _ (by decide), e30]
+  refine ⟨legal_of_chain _ _ (by decide) (by simp [evenSel,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_,?_,?_⟩
+  all_goals simp [evenSel,walkRows,execInstrBr,pc,address,show signExtend21 32#21=32#64 by decide]
+  all_goals first | (intro k a b c; simp [Ne.symm a,Ne.symm b,Ne.symm c]) | exact r10 | exact r12 | exact r30 | rfl
 
-/-- The entry's sibling-node offset added to the quartet block (row 3090). -/
-theorem node_offset (i : Index) :
-    (BitVec.ofNat 16 (tabG (i.val%4096))).signExtend 64+wordAddress (blockWord (i.val/4))=
-      wordAddress (nodeWordOf (i.val/4^^^1)) := by
-  have hi : i.val<16777216 := i.isLt
-  have par : (i.val%4096)/4%2=(i.val/4)%2 := by omega
-  unfold tabG; rw [par]
-  rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h
-  · rw [if_neg (by omega), (even_addresses _ h).2.2,
-      show (BitVec.ofNat 16 136).signExtend 64=BitVec.ofNat 64 136 by decide]
-    unfold wordAddress blockWord; rw [← BitVec.ofNat_add]; congr 1; omega
-  · rw [if_pos h, (odd_addresses _ h).2.2,
-      show (BitVec.ofNat 16 64680).signExtend 64=BitVec.ofNat 64 18446744073709550760 by decide]
-    unfold wordAddress blockWord; rw [← BitVec.ofNat_add]
-    apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
+/-- Rows 757..759 (odd quartet). -/
+private theorem odd_sel (n : MachineState) (g : Nat) (pc : n.pc=address 757) (odd : g%2=1) (hg : g<4194304)
+    (b7 : n.getReg .x7=wordAddress (blockWord (g-1))) :
+    let v:=walkRows n oddSel
+    legal oddSel n ∧ v.pc=address 760 ∧ v.mem=n.mem ∧ v.getReg .x10=wordAddress (replyWord g) ∧
+      v.getReg .x12=wordAddress (rebuiltWord g) ∧ v.getReg .x30=wordAddress (nodeWordOf (g^^^1)) ∧
+      (∀ k, k≠.x10 → k≠.x12 → k≠.x30 → v.getReg k=n.getReg k) := by
+  obtain ⟨e10,e12,e30⟩ := odd_addresses g odd
+  have r10 : n.getReg .x7+signExtend12 4064#12=wordAddress (replyWord g) := by
+    rw [b7, word_sub _ (by unfold blockWord; omega) (by unfold blockWord; omega), e10]
+  have r12 : n.getReg .x7+signExtend12 1536#12=wordAddress (rebuiltWord g) := by
+    rw [b7, show signExtend12 1536#12=BitVec.ofNat 64 1536 by decide, word_add _ _ (by decide), e12]
+  have r30 : n.getReg .x7+signExtend12 168#12=wordAddress (nodeWordOf (g^^^1)) := by
+    rw [b7, show signExtend12 168#12=BitVec.ofNat 64 168 by decide, word_add _ _ (by decide), e30]
+  refine ⟨legal_of_chain _ _ (by decide) (by simp [oddSel,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_,?_,?_⟩
+  all_goals simp [oddSel,walkRows,execInstrBr,pc,address]
+  all_goals first | (intro k a b c; simp [Ne.symm a,Ne.symm b,Ne.symm c]) | skip
+  exacts [r10, r12, r30]
 
-/-- Signed halfword `j` (2 or 3) of an entry's dword 0. -/
-theorem entry_half (s : MachineState) (e : Nat) (he : e<4096) (tab : TableAt s) :
-    (s.getHalfword (wordAddress (tableWord e)+signExtend12 4#12)).signExtend 64=
-        (BitVec.ofNat 16 (tabR e)).signExtend 64 ∧
-      (s.getHalfword (wordAddress (tableWord e)+signExtend12 6#12)).signExtend 64=
-        (BitVec.ofNat 16 (tabG e)).signExtend 64 := by
-  have fit : 8*tableWord e+8 ≤ 2^64 := by simp only [tableWord]; omega
-  have w0 := tab e he 0 (by decide)
-  rw [Nat.add_zero] at w0
-  have low : tabEntry e 0=tabT e+65536*tabS e+4294967296*tabR e+281474976710656*tabG e := by simp [tabEntry]
-  constructor
-  · rw [show wordAddress (tableWord e)+signExtend12 4#12=BitVec.ofNat 64 (8*tableWord e+2*2) by
-      rw [show signExtend12 4#12=BitVec.ofNat 64 4 by decide]; unfold wordAddress; rw [← BitVec.ofNat_add],
-      table_half s _ 2 fit (by decide)]
-    change ((memoryView s (tableWord e) >>> (2*16)).truncate 16).signExtend 64=_
-    rw [w0, low, half2 _ _ _ _ (tab_t_lt _) (tab_s_lt _) (tab_r_lt _) (tab_g_lt _)]
-  · rw [show wordAddress (tableWord e)+signExtend12 6#12=BitVec.ofNat 64 (8*tableWord e+2*3) by
-      rw [show signExtend12 6#12=BitVec.ofNat 64 6 by decide]; unfold wordAddress; rw [← BitVec.ofNat_add],
-      table_half s _ 3 fit (by decide)]
-    change ((memoryView s (tableWord e) >>> (3*16)).truncate 16).signExtend 64=_
-    rw [w0, low, half3 _ _ _ _ (tab_t_lt _) (tab_s_lt _) (tab_r_lt _) (tab_g_lt _)]
+private theorem call_row (v : MachineState) (pc : v.pc=address 760) :
+    let c:=walkRows v callRow
+    legal callRow v ∧ c.pc=address 761 ∧ c.mem=v.mem ∧ c.getReg .x13=2 ∧ (∀ k, k≠.x13 → c.getReg k=v.getReg k) := by
+  refine ⟨legal_of_chain _ _ (by decide) (by simp [callRow,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_⟩
+  all_goals simp [callRow,walkRows,execInstrBr,pc,address,show signExtend12 2#12=2#64 by decide]
+  all_goals first | (intro k a; simp [Ne.symm a]) | rfl
 
-theorem half_setPC' (s : MachineState) (p a : Word) : (s.setPC p).getHalfword a=s.getHalfword a := rfl
-theorem half_setReg' (s : MachineState) (r : Reg) (v a : Word) : (s.setReg r v).getHalfword a=s.getHalfword a := by
-  cases r <;> rfl
-
-/-- The parity flag (kept for the downstream names; the head no longer branches on it). -/
+/-- The parity flag the head branches on. -/
 def oddOf (i : Index) : Bool := decide (i.val/4%2=1)
 
-/-- The word after the rebuilt block of quartet `q` (`B_q + 712`): the address of its level-22 sibling node. -/
-abbrev pointerWord (q : Nat) := rebuiltWord q+25
+/-- A new quartet before its inverse call: rows 740..760 (`x10` = its reply, `x12` = its rebuilt block,
+`x13 = 2`, `x30` = the sibling group's node). -/
+theorem head_pre (s : MachineState) (i : Index) (ord left last : Nat) (r : Input s i ord left last)
+    (fresh : i.val/4≠last) :
+    let t:=walkRows s (preRows (oddOf i))
+    legal (preRows (oddOf i)) s ∧ t.pc=address 761 ∧ t.mem=s.mem ∧
+      t.getReg .x10=wordAddress (replyWord (i.val/4)) ∧ t.getReg .x12=wordAddress (rebuiltWord (i.val/4)) ∧
+      t.getReg .x13=2 ∧ t.getReg .x30=wordAddress (nodeWordOf (i.val/4^^^1)) ∧
+      t.getReg .x6=BitVec.ofNat 64 i.val ∧ t.getReg .x28=BitVec.ofNat 64 (i.val/4) ∧
+      t.getReg .x4=BitVec.ofNat 64 (i.val/4) ∧
+      (∀ k, k≠.x4 → k≠.x6 → k≠.x7 → k≠.x10 → k≠.x12 → k≠.x13 → k≠.x28 → k≠.x30 → t.getReg k=s.getReg k) := by
+  have hi : i.val<16777216 := i.isLt
+  obtain ⟨nl,npc,nmem,n6,n28,n4,n7,nkeep⟩ := new_part s i ord left last r fresh
+  set n:=walkRows s newPart with hn
+  have sel : ∃ v, v=walkRows n (selRows (oddOf i)) ∧ legal (selRows (oddOf i)) n ∧ v.pc=address 760 ∧
+      v.mem=n.mem ∧ v.getReg .x10=wordAddress (replyWord (i.val/4)) ∧
+      v.getReg .x12=wordAddress (rebuiltWord (i.val/4)) ∧ v.getReg .x30=wordAddress (nodeWordOf (i.val/4^^^1)) ∧
+      (∀ k, k≠.x10 → k≠.x12 → k≠.x30 → v.getReg k=n.getReg k) := by
+    rcases Nat.mod_two_eq_zero_or_one (i.val/4) with h|h
+    · rw [if_neg (by omega)] at npc
+      rw [show 2*(i.val/4/2)=i.val/4 by omega] at n7
+      have sr : selRows (oddOf i)=evenSel := by simp [selRows,oddOf,h]
+      rw [sr]; exact ⟨_,rfl,even_sel n _ npc h n7⟩
+    · rw [if_pos h] at npc
+      rw [show 2*(i.val/4/2)=i.val/4-1 by omega] at n7
+      have sr : selRows (oddOf i)=oddSel := by simp [selRows,oddOf,h]
+      rw [sr]; exact ⟨_,rfl,odd_sel n _ npc h (by omega) n7⟩
+  obtain ⟨v,hv,sl,vpc,vmem,v10,v12,v30,vkeep⟩ := sel
+  obtain ⟨cl,cpc,cmem,c13,ckeep⟩ := call_row v vpc
+  have split : preRows (oddOf i)=newPart++selRows (oddOf i)++callRow := rfl
+  have mid : walkRows s (newPart++selRows (oddOf i))=v := by rw [walk_join, hv]
+  have at_t : walkRows s (preRows (oddOf i))=walkRows v callRow := by rw [split, walk_join, mid]
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  · rw [split]; refine legal_append _ _ _ (legal_append _ _ _ nl sl) ?_; rw [mid]; exact cl
+  · rw [at_t]; exact cpc
+  · rw [at_t, cmem, vmem]; exact nmem
+  · rw [at_t, ckeep _ (by decide)]; exact v10
+  · rw [at_t, ckeep _ (by decide)]; exact v12
+  · rw [at_t]; exact c13
+  · rw [at_t, ckeep _ (by decide)]; exact v30
+  · rw [at_t, ckeep _ (by decide), vkeep _ (by decide) (by decide) (by decide)]; exact n6
+  · rw [at_t, ckeep _ (by decide), vkeep _ (by decide) (by decide) (by decide)]; exact n28
+  · rw [at_t, ckeep _ (by decide), vkeep _ (by decide) (by decide) (by decide)]; exact n4
+  · intro k h4 h6 h7 h10 h12 h13 h28 h30
+    rw [at_t, ckeep k h13, vkeep k h10 h12 h30]; exact nkeep k h4 h6 h7 h28 h30
 
-theorem pointer_word_eq (q : Nat) : wordAddress (blockWord q)+signExtend12 712#12=wordAddress (pointerWord q) := by
-  rw [show signExtend12 712#12=BitVec.ofNat 64 712 by decide, word_add _ _ (by decide)]
-  unfold pointerWord rebuiltWord; rfl
+theorem sib_args (q : Nat) (hq : q<4194304) :
+    PairArgs (nodeWordOf (q^^^1)) (heapWord (4194304+(q^^^1))) sibPairs := by
+  have gx := xor_one_lt q 22 hq (by decide)
+  obtain ⟨d,m⟩ := xor_one q
+  refine ⟨by decide,?_,?_⟩
+  · intro p hp
+    simp only [sibPairs,List.mem_cons,List.not_mem_nil,or_false] at hp
+    unfold nodeWordOf blockWord heapWord
+    rcases hp with rfl|rfl|rfl|rfl <;> constructor <;> omega
+  · intro p hp p' hp'
+    simp only [sibPairs,List.mem_cons,List.not_mem_nil,or_false] at hp hp'
+    unfold nodeWordOf blockWord heapWord
+    rcases hp with rfl|rfl|rfl|rfl <;> rcases hp' with rfl|rfl|rfl|rfl <;> omega
 
-/-- The writer's pointer address (`GroupOpenMemory.pointerAddress`) is the pointer word of the quartet. -/
-theorem pointer_address_word (i : Nat) : BitVec.ofNat 64 (pointerAddress i)=wordAddress (pointerWord (i/4)) := by
-  unfold pointerAddress pointerWord rebuiltWord blockWord wordAddress groupSlots trapdoorBase LENGTH LOG_LENGTH
-  congr 1; omega
+/-- Rows 765..776: heap slot of the level-22 sibling and its 32-byte copy from `x30`. -/
+theorem sib_rows (u : MachineState) (i : Index) (pc : u.pc=address 765) (q28 : u.getReg .x28=BitVec.ofNat 64 (i.val/4))
+    (lv : u.getReg .x19=4194304) (hp : u.getReg .x9=BitVec.ofNat 64 trapdoorBase)
+    (src : u.getReg .x30=wordAddress (nodeWordOf (i.val/4^^^1))) :
+    let v:=walkRows u sibRows
+    legal sibRows u ∧ v.pc=address 777 ∧
+      (∀ k, k≠.x28 → k≠.x31 → v.getReg k=u.getReg k) ∧
+      (∀ w, w<2^33 → memoryView v w=pairView (memoryView u) (memoryView u) (nodeWordOf (i.val/4^^^1))
+        (heapWord (4194304+(i.val/4^^^1))) sibPairs w) := by
+  have hi : i.val<16777216 := i.isLt
+  have gx := xor_one_lt (i.val/4) 22 (by omega) (by decide)
+  have x := xor_low (i.val/4)
+  have value : ((BitVec.ofNat 64 (i.val/4^^^1)+4194304) <<< (5:Nat))+BitVec.ofNat 64 trapdoorBase=
+      wordAddress (heapWord (4194304+(i.val/4^^^1))) := by
+    rw [show (4194304 : Word)=BitVec.ofNat 64 4194304 from rfl, ← BitVec.ofNat_add, shift_left_nat, ← BitVec.ofNat_add]
+    unfold wordAddress heapWord trapdoorBase LENGTH LOG_LENGTH; congr 1; omega
+  set a:=walkRows u [(765,.XORI .x28 .x28 1),(766,.ADD .x28 .x28 .x19),(767,.SLLI .x28 .x28 5),(768,.ADD .x28 .x28 .x9)]
+    with ha
+  have al : legal [(765,.XORI .x28 .x28 1),(766,.ADD .x28 .x28 .x19),(767,.SLLI .x28 .x28 5),(768,.ADD .x28 .x28 .x9)] u ∧
+      a.pc=address 769 ∧ a.mem=u.mem ∧
+      a.getReg .x28=(((u.getReg .x28 ^^^ signExtend12 1#12)+u.getReg .x19) <<< (5:Nat))+u.getReg .x9 ∧
+      (∀ k, k≠.x28 → a.getReg k=u.getReg k) := by
+    refine ⟨legal_of_chain _ _ (by decide) (by simp [pcChain,execInstrBr,pc,address]),?_,?_,?_,?_⟩
+    · simp [ha,walkRows,execInstrBr,pc,address]
+    · simp [ha,walkRows,execInstrBr]
+    · simp [ha,walkRows,execInstrBr]
+    · intro k h; simp [ha,walkRows,execInstrBr,Ne.symm h]
+  obtain ⟨l1,apc,amem,a28',akeep⟩ := al
+  have a28 : a.getReg .x28=wordAddress (heapWord (4194304+(i.val/4^^^1))) := by
+    rw [a28',q28,lv,hp,x]; exact value
+  obtain ⟨pl,ppc,pkeep,pview⟩ := pair_rows_run sibPairs a 769 .x30 .x28 _ _ (by decide) (by decide) apc
+    ((akeep .x30 (by decide)).trans src) a28 (sib_args _ (by omega))
+  have split : sibRows=[(765,.XORI .x28 .x28 1),(766,.ADD .x28 .x28 .x19),(767,.SLLI .x28 .x28 5),(768,.ADD .x28 .x28 .x9)]
+    ++pairRows 769 .x30 .x28 sibPairs := rfl
+  refine ⟨?_,?_,?_,?_⟩
+  · rw [split]; exact legal_append _ _ _ l1 pl
+  · rw [split, walk_join]; have h := ppc; simp only [sibPairs,List.length_cons,List.length_nil] at h; exact h
+  · intro k h28 h31; rw [split, walk_join, pkeep k h31]; exact akeep k h28
+  · intro w hw
+    rw [split, walk_join, pview w hw]
+    refine pair_view_congr sibPairs _ _ _ _ _ _ (sib_args _ (by omega)).room ?_ ?_ w hw
+    · intro w' _; change a.mem _=u.mem _; rw [amem]
+    · intro q _; change a.mem _=u.mem _; rw [amem]
 
-/-- The writer's level-0 source (`GroupOpenMemory.quadAddress`) is the commit's node of the sibling quartet. -/
-theorem quad_address_node (i : Nat) : quadAddress i=8*nodeWordOf (i/4^^^1) := by
-  obtain ⟨d,m⟩ := xor_one (i/4)
-  have r : i/4%2<2 := Nat.mod_lt _ (by decide)
-  unfold quadAddress nodeWordOf blockWord groupSlots trapdoorBase LENGTH LOG_LENGTH
-  rw [d,m]
-  omega
+/-- A new quartet after its inverse reply landed in the rebuilt block: rows 762..776 (`x13 := 1`,
+`x12 := 1536`, `x10 := 1024`, the sibling group's node to `heap[2^22 + (q ^ 1)]`). -/
+theorem head_post (a : MachineState) (i : Index) (pc : a.pc=address 762)
+    (q28 : a.getReg .x28=BitVec.ofNat 64 (i.val/4)) (lv : a.getReg .x19=4194304)
+    (hp : a.getReg .x9=BitVec.ofNat 64 trapdoorBase) (src : a.getReg .x30=wordAddress (nodeWordOf (i.val/4^^^1))) :
+    let t:=walkRows a headPost
+    legal headPost a ∧ t.pc=address 777 ∧ t.getReg .x10=1024 ∧ t.getReg .x12=1536 ∧ t.getReg .x13=1 ∧
+      (∀ k, k≠.x10 → k≠.x12 → k≠.x13 → k≠.x28 → k≠.x31 → t.getReg k=a.getReg k) ∧
+      (∀ w, w<2^33 → memoryView t w=pairView (memoryView a) (memoryView a) (nodeWordOf (i.val/4^^^1))
+        (heapWord (4194304+(i.val/4^^^1))) sibPairs w) := by
+  have hi : i.val<16777216 := i.isLt
+  set u:=walkRows a restoreRows with hu
+  have ul : legal restoreRows a ∧ u.pc=address 765 ∧ u.mem=a.mem ∧ u.getReg .x10=1024 ∧ u.getReg .x12=1536 ∧
+      u.getReg .x13=1 ∧ (∀ k, k≠.x10 → k≠.x12 → k≠.x13 → u.getReg k=a.getReg k) := by
+    refine ⟨legal_of_chain _ _ (by decide) (by simp [restoreRows,pcChain,execInstrBr,pc,address]),?_,?_,?_,?_,?_,?_⟩
+    all_goals simp [hu,restoreRows,walkRows,execInstrBr,pc,address,
+      show signExtend12 1024#12=1024#64 by decide,show signExtend12 1536#12=1536#64 by decide,
+      show signExtend12 1#12=1#64 by decide]
+    all_goals first | (intro k a b c; simp [Ne.symm a,Ne.symm b,Ne.symm c]) | rfl
+  obtain ⟨ul1,upc,umem,u10,u12,u13,ukeep⟩ := ul
+  obtain ⟨sl,spc,skeep,sview⟩ := sib_rows u i upc
+    ((ukeep _ (by decide) (by decide) (by decide)).trans q28) ((ukeep _ (by decide) (by decide) (by decide)).trans lv)
+    ((ukeep _ (by decide) (by decide) (by decide)).trans hp) ((ukeep _ (by decide) (by decide) (by decide)).trans src)
+  have split : headPost=restoreRows++sibRows := rfl
+  have at_t : walkRows a headPost=walkRows u sibRows := by rw [split, walk_join]
+  refine ⟨?_,?_,?_,?_,?_,?_,?_⟩
+  · rw [split]; exact legal_append _ _ _ ul1 sl
+  · rw [at_t]; exact spc
+  · rw [at_t, skeep _ (by decide) (by decide)]; exact u10
+  · rw [at_t, skeep _ (by decide) (by decide)]; exact u12
+  · rw [at_t, skeep _ (by decide) (by decide)]; exact u13
+  · intro k h10 h12 h13 h28 h31
+    rw [at_t, skeep k h28 h31]; exact ukeep k h10 h12 h13
+  · intro w hw
+    rw [at_t, sview w hw]
+    refine pair_view_congr sibPairs _ _ _ _ _ _ (sib_args _ (by omega)).room ?_ ?_ w hw
+    · intro w' _; change u.mem _=a.mem _; rw [umem]
+    · intro q _; change u.mem _=a.mem _; rw [umem]
 
 end TwoPermutationPrototype.GroupedOpening

@@ -2,7 +2,6 @@ import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationCollectTable
 import CommitGolfCandidate.TwoPermutationPackedPaths
 import CommitGolfCandidate.TwoPermutationPackedHonestInput
-import CommitGolfCandidate.TwoPermutationPackedNearHonest
 import CommitGolfCandidate.QuadBinding
 import CommitGolfCandidate.QuartetOpeningSchedule
 
@@ -65,16 +64,19 @@ structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) 
     Nonempty (RecordedLower oracle index.val (input.values index)
       (capRootAt state (capGroup index.val)) rows)
   honest : ∀ (message : Message) (salts : CompleteSaltTape),
-    NearHonest input (honestCheckInput oracle message input.positions salts) →
+    input = honestCheckInput oracle message input.positions salts →
     ∀ group ∈ Opening.groupsBefore input.positions ordinal,
       capRootAt state group = honestHeap oracle message salts group
 
 theorem collected_table_empty (oracle : Oracle) (input : CheckInput) (state : MachineState)
-    (zero : ∀ group < 512, machineMarks state group=0) :
+    (memory : state.mem = (QAssembly.submission.initialState .check input).mem) :
     CollectedTable oracle input 0 state [] := by
   constructor
   · intro group inside
-    simpa [Opening.groupsBefore, List.take_zero, List.map_nil, List.not_mem_nil, ite_false] using zero group inside
+    have framed := congrFun memory (wordAddress (512+group))
+    have mark := check_mark_zero input group inside
+    have clean : machineMarks state group = 0 := (checker_marks_as_word _ _).trans (framed.trans mark)
+    simpa only [Opening.groupsBefore, List.take_zero, List.map_nil, List.not_mem_nil, ite_false] using clean
   · intro earlier before
     omega
   · intro message salts honest group belongs
@@ -93,7 +95,7 @@ theorem collected_table_append (oracle : Oracle) (input : CheckInput) (ordinal :
     (latest : let idx := honestIndex input.positions ordinal present
       Nonempty (RecordedLower oracle idx.val (input.values idx) (capRootAt next (capGroup idx.val)) extra))
     (honestLatest : ∀ (message : Message) (salts : CompleteSaltTape),
-      NearHonest input (honestCheckInput oracle message input.positions salts) →
+      input = honestCheckInput oracle message input.positions salts →
       capRootAt next (capGroup (honestIndex input.positions ordinal present).val) =
         honestHeap oracle message salts (capGroup (honestIndex input.positions ordinal present).val)) :
     CollectedTable oracle input (ordinal+1) next (rows++extra) := by

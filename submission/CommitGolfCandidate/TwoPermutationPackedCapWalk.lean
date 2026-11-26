@@ -56,42 +56,6 @@ def CapHeapCorrect (oracle : Oracle) (heap : Nat → BitVec 256) : Prop :=
   ∀ node, 0 < node → node < 256 → heap node =
     pad238 (oracle.compression (heap (2*node+1) ++ heap (2*node)))
 
-/-- One-byte search: the slots of walk(`node`, `height`) whose final values last to the end of the walk. They are
-the node itself and, for a marked node, its left child and the survivors of its right subtree (the walk frames keep
-the slots below the current node, and a parent hash writes only its own slot). -/
-def CapSurvivor (groups : List Nat) : Nat → Nat → Nat → Nat → Prop
-  | node, 0, m, hm => m = node ∧ hm = 0
-  | node, h+1, m, hm => (m = node ∧ hm = h+1) ∨
-      (capIsMarked groups node (h+1) = true ∧ ((m = 2*node ∧ hm = h) ∨ CapSurvivor groups (2*node+1) h m hm))
-
-theorem CapSurvivor.self (groups : List Nat) (node height : Nat) : CapSurvivor groups node height node height := by
-  cases height with
-  | zero => exact ⟨rfl, rfl⟩
-  | succ h => exact Or.inl ⟨rfl, rfl⟩
-
-theorem CapSurvivor.span {groups : List Nat} {node height m hm : Nat} (survivor : CapSurvivor groups node height m hm)
-    (span : Opening.CapSpan node height) : Opening.CapSpan m hm ∧ node ≤ m := by
-  induction height generalizing node with
-  | zero =>
-    simp only [CapSurvivor] at survivor
-    obtain ⟨rfl, rfl⟩ := survivor
-    exact ⟨span, Nat.le_refl _⟩
-  | succ h ih =>
-    obtain ⟨leftSpan, rightSpan⟩ := Opening.cap_span_children node h span
-    simp only [CapSurvivor] at survivor
-    rcases survivor with ⟨rfl, rfl⟩ | ⟨_, ⟨rfl, rfl⟩ | right⟩
-    · exact ⟨span, Nat.le_refl _⟩
-    · exact ⟨leftSpan, by omega⟩
-    · have := ih right rightSpan
-      exact ⟨this.1, by omega⟩
-
-/-- A heap's correctness on the marked internal nodes of the subtree at `node` with `height` levels. -/
-def CapHeapCorrectAt (oracle : Oracle) (groups : List Nat) (heap : Nat → BitVec 256) : Nat → Nat → Prop
-  | _, 0 => True
-  | node, h+1 => capIsMarked groups node (h+1) = true →
-      heap node = pad238 (oracle.compression (heap (2*node+1) ++ heap (2*node))) ∧
-      CapHeapCorrectAt oracle groups heap (2*node) h ∧ CapHeapCorrectAt oracle groups heap (2*node+1) h
-
 structure CapWalkResult (oracle : Oracle) (groups : List Nat) (before : MachineState)
     (node height start first : Nat) where
   state : MachineState
@@ -109,13 +73,6 @@ structure CapWalkResult (oracle : Oracle) (groups : List Nat) (before : MachineS
     (before.getReg .x22).toNat → done = true
   realizes : done = true → ∀ heap, CapHeapCorrect oracle heap →
     CapContents groups before node height start first heap → capRootAt state node = heap node
-  /-- One-byte search: every survivor keeps its path and its value to the end of the walk; its value needs the
-  heap correct only on the survivor's own marked subtree. -/
-  survivors : done = true → ∀ m hm, CapSurvivor groups node height m hm →
-    (∀ leaf ∈ groups, 256 ≤ leaf → leaf < 512 → leaf / 2^hm = m →
-      ProjectedPath segment.rows leaf hm (capRootAt before leaf) (capRootAt state m)) ∧
-    (∀ heap, CapHeapCorrectAt oracle groups heap m hm → CapContents groups before node height start first heap →
-      capRootAt state m = heap m)
 
 private theorem mark_of_group (groups : List Nat) (node height group : Nat)
     (active : group ∈ groups) (belongs : group/2^height = node) :
@@ -139,7 +96,7 @@ noncomputable def cap_walk_known_leaf {groups : List Nat} {before : MachineState
   refine ⟨after, segment, true, by simpa [marked] using target,
     fun _ => by simpa [marked, none] using nextPosition, ?_,
     by simp [segment, capLookupSegment, Segment.ordinary, capHashCount],
-    cap_lookup_stable before, fun word _ _ => congrFun mem _, ?_, fun _ => rfl, ?_, ?_⟩
+    cap_lookup_stable before, fun word _ _ => congrFun mem _, ?_, fun _ => rfl, ?_⟩
   · exact (cap_lookup_limit before).trans (by have := walk_limit 0; omega)
   · intro _ leaf _ _ _ belongs
     have atNode : leaf = node := by simpa using belongs
@@ -159,26 +116,6 @@ noncomputable def cap_walk_known_leaf {groups : List Nat} {before : MachineState
     have member : node ∈ groups := by
       simpa [capIsMarked, List.any_eq_true, beq_iff_eq] using marked
     exact contents.leaves node member low high (by simp)
-  · intro _ m hm survivor
-    simp only [CapSurvivor] at survivor
-    obtain ⟨e1, e2⟩ := survivor
-    rw [e1, e2]
-    have stable : capRootAt after node = capRootAt before node := by
-      unfold capRootAt
-      exact read_digest_congr _ _ _ (by omega) (fun _ _ => congrFun mem _)
-    refine ⟨?_, ?_⟩
-    · intro leaf _ _ _ belongs
-      have atNode : leaf = node := by simpa using belongs
-      subst leaf
-      rw [stable]
-      exact .done _ _
-    · intro heap _ contents
-      rw [stable]
-      have low := Opening.cap_span_is_leaf node span
-      have high := (Opening.cap_span_node node 0 span).2
-      have member : node ∈ groups := by
-        simpa [capIsMarked, List.any_eq_true, beq_iff_eq] using marked
-      exact contents.leaves node member low high (by simp)
 
 private theorem unmarked_frontier (groups : List Nat) (node height : Nat)
     (unmarked : capIsMarked groups node height = false) :
@@ -216,7 +153,7 @@ noncomputable def cap_walk_frontier (codec : FrontierKernel) {groups : List Nat}
   · let after := codec.rejected looked
     let shortPath := capShortSegment codec oracle ready short
     refine ⟨after, lookup.append shortPath, false, by simpa using codec.shortPC looked node start first ready short,
-      by simp, ?_, ?_, (cap_lookup_stable before).trans (cap_short_stable codec looked), ?_, by simp, ?_, by simp, by simp⟩
+      by simp, ?_, ?_, (cap_lookup_stable before).trans (cap_short_stable codec looked), ?_, by simp, ?_, by simp⟩
     · have bound := cap_lookup_limit before
       have shortLimit := frontier_short_steps_le first
       change capLookupSteps before+frontierShortSteps first ≤ _
@@ -237,7 +174,7 @@ noncomputable def cap_walk_frontier (codec : FrontierKernel) {groups : List Nat}
     have stable := (cap_lookup_stable before).trans (cap_frontier_stable codec looked)
     refine ⟨after, lookup.append read, true, (codec.pointer looked node start first ready short).1,
       fun _ => by simpa [actual] using cap_frontier_position codec lookPos ready short, ?_, ?_, stable, ?_, ?_,
-      fun _ => rfl, ?_, ?_⟩
+      fun _ => rfl, ?_⟩
     · have bound := cap_lookup_limit before
       have readLimit := frontier_steps_le first
       change capLookupSteps before+frontierSteps first ≤ _
@@ -273,29 +210,6 @@ noncomputable def cap_walk_frontier (codec : FrontierKernel) {groups : List Nat}
       rw [loaded, cap_frontier_value_mem memory]
       have first := contents.frontier 0 (by simp [actual])
       simpa [actual] using first
-    · intro _ m hm survivor
-      have isNode : m = node ∧ hm = height := by
-        cases height with
-        | zero => simpa only [CapSurvivor] using survivor
-        | succ h =>
-          simp only [CapSurvivor] at survivor
-          rcases survivor with own | ⟨marked, _⟩
-          · exact own
-          · rw [marked] at unmarked
-            contradiction
-      obtain ⟨e1, e2⟩ := isNode
-      rw [e1, e2]
-      refine ⟨?_, ?_⟩
-      · intro leaf active _ _ belongs
-        have marked := mark_of_group groups node height leaf active belongs
-        rw [marked] at unmarked
-        contradiction
-      · intro heap _ contents
-        have loaded := codec.digest looked node start first ready short
-        have memory : looked.mem = before.mem := mem
-        rw [loaded, cap_frontier_value_mem memory]
-        have first := contents.frontier 0 (by simp [actual])
-        simpa [actual] using first
 
 /-- A cap parent sits below level 8. -/
 private theorem cap_parent_low {node height : Nat} (span : Opening.CapSpan node (height+1)) : node < 256 := by
@@ -416,9 +330,16 @@ theorem execute_cap_subtree (codec : FrontierKernel) (oracle : Oracle) (groups :
               (first+(capFrontierNodes groups node (height+1)).length) := by
             rw [total]
             exact parent.position
-          have authenticNode : ∀ leaf ∈ groups, 256 ≤ leaf → leaf < 512 → leaf/2^(height+1) = node →
-              ProjectedPath segment.rows leaf (height+1) (capRootAt before leaf) (capRootAt parent.state node) := by
-            intro leaf group low high covered
+          refine ⟨⟨parent.state, segment, true, parent.pc,
+            fun _ => finalPosition, ?_, ?_, stablePrefix.trans parent.stable,
+            framePrefix.join parentFrame (Nat.le_refl _) (Nat.le_refl _), ?_, fun _ => rfl, ?_⟩⟩
+          · change combined.steps+parent.segment.steps ≤ _
+            rw [prefixSteps, parent.steps, ← spread]
+            omega
+          · change (combined.rows ++ parent.segment.rows).length ≤ _
+            rw [prefixRows, parent.row, List.length_append, List.length_append, List.length_singleton, budget]
+            omega
+          · intro _ leaf group low high covered
             have lhs Row (member : Row ∈ left.segment.rows) : Row ∈ segment.rows := by
               change Row ∈ combined.rows ++ parent.segment.rows
               rw [prefixRows]
@@ -454,15 +375,6 @@ theorem execute_cap_subtree (codec : FrontierKernel) (oracle : Oracle) (groups :
               apply joined_parent_path recorded rightLeaf (sibling := capRootAt right.state (2*node))
                 (inCap := by have := cap_parent_low span; omega)
               simpa [pathPair, show (2*node+1)%2 ≠ 0 by omega] using row
-          refine ⟨⟨parent.state, segment, true, parent.pc,
-            fun _ => finalPosition, ?_, ?_, stablePrefix.trans parent.stable,
-            framePrefix.join parentFrame (Nat.le_refl _) (Nat.le_refl _), fun _ => authenticNode, fun _ => rfl, ?_, ?_⟩⟩
-          · change combined.steps+parent.segment.steps ≤ _
-            rw [prefixSteps, parent.steps, ← spread]
-            omega
-          · change (combined.rows ++ parent.segment.rows).length ≤ _
-            rw [prefixRows, parent.row, List.length_append, List.length_append, List.length_singleton, budget]
-            omega
           · intro _ heap model contents
             have leftIn (leaf : Nat) (under : leaf/2^height = 2*node) : leaf/2^(height+1) = node := by
               rw [Nat.pow_succ, ← Nat.div_div_eq_div_mul, under]
@@ -517,116 +429,9 @@ theorem execute_cap_subtree (codec : FrontierKernel) (oracle : Oracle) (groups :
               exact read_digest_congr _ _ _ (by omega) (fun _ _ => congrFun acrossMem _)
             rw [parent.digest, rightRoot, leftRetained, leftAcross, leftRoot,
               ← model node nodePositive (Opening.cap_span_is_internal node height span)]
-          · intro _ m hm survivor
-            have leftBound := (Opening.cap_span_node _ _ leftSpan).2
-            have rightBound := (Opening.cap_span_node _ _ rightSpan).2
-            have parentKeep (x : Nat) (hx : node < x) (hb : x < 512) :
-                capRootAt parent.state x = capRootAt right.state x := by
-              unfold capRootAt
-              apply read_digest_congr _ _ _ (by omega)
-              intro word small
-              simp only [← Nat.mul_add]
-              change memoryView parent.state (2048+4*x+word) = memoryView right.state (2048+4*x+word)
-              exact parent.frame _ (by omega) (Or.inr (by omega))
-            have leftAcross : capRootAt middle (2*node) = capRootAt left.state (2*node) := by
-              unfold capRootAt
-              exact read_digest_congr _ _ _ (by omega) (fun _ _ => congrFun acrossMem _)
-            have leftRetained := cap_retained_digest right.frame (2*node) leftBound
-              (Or.inl (by omega : 2*node < 2*node+1))
-            have leftCarry : capRootAt parent.state (2*node) = capRootAt left.state (2*node) := by
-              rw [parentKeep (2*node) (by omega) leftBound, leftRetained, leftAcross]
-            have lhs Row (member : Row ∈ left.segment.rows) : Row ∈ segment.rows := by
-              change Row ∈ combined.rows ++ parent.segment.rows
-              rw [prefixRows]
-              exact List.mem_append_left _ (List.mem_append_left _ member)
-            have rhs Row (member : Row ∈ right.segment.rows) : Row ∈ segment.rows := by
-              change Row ∈ combined.rows ++ parent.segment.rows
-              rw [prefixRows]
-              exact List.mem_append_left _ (List.mem_append_right _ member)
-            have initial (leaf : Nat) (high : leaf < 512) : capRootAt looked leaf = capRootAt before leaf := by
-              unfold capRootAt
-              exact read_digest_congr _ _ _ (by omega) (fun _ _ => congrFun lookupMem _)
-            have beforeRight := leftFrame.join frameAcross (Nat.le_refl _) (Nat.le_refl _)
-            have leftIn (leaf : Nat) (under : leaf/2^height = 2*node) : leaf/2^(height+1) = node := by
-              rw [Nat.pow_succ, ← Nat.div_div_eq_div_mul, under]
-              omega
-            have rightIn (leaf : Nat) (under : leaf/2^height = 2*node+1) : leaf/2^(height+1) = node := by
-              rw [Nat.pow_succ, ← Nat.div_div_eq_div_mul, under]
-              omega
-            have leftContentsOf (heap : Nat → BitVec 256)
-                (contents : CapContents groups before node (height+1) start first heap) :
-                CapContents groups looked (2*node) height start first heap := by
-              constructor
-              · intro leaf group low high under
-                rw [initial leaf high]
-                exact contents.leaves leaf group low high (leftIn leaf under)
-              · intro i high
-                change i < leftNodes.length at high
-                have indexHigh : i < (capFrontierNodes groups node (height+1)).length := by rw [length]; omega
-                have expected := contents.frontier i indexHigh
-                simp only [frontier, List.getElem_append_left (show i < leftNodes.length from high)] at expected
-                have memory : looked.mem = before.mem := lookupMem
-                rw [cap_frontier_value_mem memory]
-                exact expected
-            have rightContentsOf (heap : Nat → BitVec 256)
-                (contents : CapContents groups before node (height+1) start first heap) :
-                CapContents groups middle (2*node+1) height start (first+leftNodes.length) heap := by
-              constructor
-              · intro leaf group low high under
-                rw [cap_retained_digest beforeRight leaf high (Or.inr ⟨group,low⟩)]
-                exact contents.leaves leaf group low high (rightIn leaf under)
-              · intro i high
-                change i < rightNodes.length at high
-                have indexHigh : leftNodes.length+i < (capFrontierNodes groups node (height+1)).length := by
-                  rw [length]
-                  omega
-                have expected := contents.frontier (leftNodes.length+i) indexHigh
-                simp only [frontier, List.getElem_append_right (by omega : leftNodes.length ≤ leftNodes.length+i),
-                  Nat.add_sub_cancel_left] at expected
-                have stable : capFrontierValue middle start (first+leftNodes.length+i) =
-                    capFrontierValue before start (first+leftNodes.length+i) := by
-                  apply cap_frontier_value_frame before middle _ _ position.above
-                    (frontier_fits proofRoom (by rw [length]; omega))
-                  intro word after bounded
-                  exact beforeRight _ bounded (Or.inr (Or.inl after))
-                rw [stable, Nat.add_assoc]
-                exact expected
-            have leftSelf := left.survivors leftDone (2*node) height (CapSurvivor.self _ _ _)
-            have rightSelf := right.survivors rightDone (2*node+1) height (CapSurvivor.self _ _ _)
-            simp only [CapSurvivor] at survivor
-            rcases survivor with ⟨e1, e2⟩ | ⟨_, ⟨e1, e2⟩ | rightSurvivor⟩
-            · rw [e1, e2]
-              refine ⟨authenticNode, ?_⟩
-              intro heap model contents
-              simp only [CapHeapCorrectAt] at model
-              obtain ⟨nodeEq, leftModel, rightModel⟩ := model marked
-              have leftRoot := leftSelf.2 heap leftModel (leftContentsOf heap contents)
-              have rightRoot := rightSelf.2 heap rightModel (rightContentsOf heap contents)
-              rw [parent.digest, rightRoot, leftRetained, leftAcross, leftRoot, ← nodeEq]
-            · rw [e1, e2]
-              refine ⟨?_, ?_⟩
-              · intro leaf group low high under
-                have recorded := (leftSelf.1 leaf group low high under).mono lhs
-                rw [initial leaf high, ← leftCarry] at recorded
-                exact recorded
-              · intro heap model contents
-                rw [leftCarry]
-                exact leftSelf.2 heap model (leftContentsOf heap contents)
-            · obtain ⟨mSpan, above⟩ := CapSurvivor.span rightSurvivor rightSpan
-              have mBound := (Opening.cap_span_node _ _ mSpan).2
-              have rightOf := right.survivors rightDone m hm rightSurvivor
-              refine ⟨?_, ?_⟩
-              · intro leaf group low high under
-                have recorded := (rightOf.1 leaf group low high under).mono rhs
-                rw [cap_retained_digest beforeRight leaf high (Or.inr ⟨group,low⟩),
-                  ← parentKeep m (by omega) mBound] at recorded
-                exact recorded
-              · intro heap model contents
-                rw [parentKeep m (by omega) mBound]
-                exact rightOf.2 heap model (rightContentsOf heap contents)
         · have failed : right.done = false := Bool.eq_false_iff.mpr rightDone
           refine ⟨⟨right.state, combined, false, by simpa [failed] using right.pc,
-            by simp, ?_, ?_, stablePrefix, framePrefix, by simp, ?_, by simp, by simp⟩⟩
+            by simp, ?_, ?_, stablePrefix, framePrefix, by simp, ?_, by simp⟩⟩
           · rw [prefixSteps, ← spread]
             omega
           · rw [prefixRows, List.length_append, budget]
@@ -642,7 +447,7 @@ theorem execute_cap_subtree (codec : FrontierKernel) (oracle : Oracle) (groups :
       · have failed : left.done = false := Bool.eq_false_iff.mpr leftDone
         let segment := lookup.append left.segment
         refine ⟨⟨left.state, segment, false, by simpa [failed] using left.pc,
-          by simp, ?_, ?_, preStable, leftFrame, by simp, ?_, by simp, by simp⟩⟩
+          by simp, ?_, ?_, preStable, leftFrame, by simp, ?_, by simp⟩⟩
         · change capLookupSteps before+left.segment.steps ≤ _
           rw [← spread]
           omega

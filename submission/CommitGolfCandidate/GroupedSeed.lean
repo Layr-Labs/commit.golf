@@ -34,7 +34,7 @@ private theorem high_word_zero (msg : Message) (w : Nat) (lo : 4294971392≤8*w)
 
 theorem seed_memory (s : MachineState) (k : Key) : (readyState s k).mem=
     (writeBits s (BitVec.ofNat 64 (8*qSalt 0+8)) k).mem := by
-  let a := prePrefix s 13
+  let a := prePrefix s 15
   have adr : wordAddress (qSalt 0)+8=BitVec.ofNat 64 (8*qSalt 0+8) := by decide
   change (writeBits a (wordAddress (qSalt 0)+8) k).mem=_
   rw [adr]
@@ -85,13 +85,13 @@ def fixedLeaf (o : Oracle) (s : MachineState) (i : Nat) :=
 theorem latch_good (o : Oracle) (k : Key) (msg : Message) (t : MachineState) (i : Nat) (pc : Word) (n : Nat)
     (h : Good o k msg t.getReg (memoryView t) n) :
     Good o k msg ((latchReg t i).setPC pc).getReg (memoryView ((latchReg t i).setPC pc)) n := by
-  have mem : memoryView ((latchReg t i).setPC pc)=memoryView t := rfl
+  have mem : memoryView ((latchReg t i).setPC pc)=memoryView t := by unfold latchReg;split <;> rfl
   have r (reg : Reg) (hr : reg≠.x12) : ((latchReg t i).setPC pc).getReg reg=t.getReg reg :=
     MachineState.getReg_setPC.trans (latch_getReg t i reg hr)
   rw [mem]
   exact ⟨⟨h.msgs.messages,h.msgs.key,h.msgs.group,h.msgs.pending,
     fun j hj hr => by
-      rw [r .x14 (by decide),r .x16 (by decide),r .x17 (by decide)]
+      rw [r .x14 (by decide),r .x15 (by decide),r .x16 (by decide),r .x17 (by decide)]
       exact h.msgs.prefetched j hj hr,
     h.msgs.previous⟩,h.cells⟩
 

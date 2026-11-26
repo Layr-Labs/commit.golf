@@ -1,7 +1,5 @@
 import CommitGolfCandidate.TwoPermutationPackedRecordInterface
 
-/-! One-byte search: the honest record data hold for any input that agrees with the honest input on its records
-(`NearHonest`); the frame is on that input. -/
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.ShortTree RiscvZkvm.Rv64
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
@@ -17,18 +15,15 @@ set_option maxHeartbeats 1100000
 
 theorem packed_record_nonce (oracle : Oracle) (message : Message) (positions : Positions) (salts : CompleteSaltTape)
     (ordinal : Nat) (present : ordinal < positions.card) (state : MachineState)
-    {actual : CheckInput} (near : NearHonest actual (honestCheckInput oracle message positions salts))
-    (framed : RecordInputFrame actual ordinal state) :
+    (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state) :
     readBuffer state (checkProofByte ordinal) 16 = salts (honestIndex positions ordinal present) := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
-  have fit : checkProofByte ordinal+0+16 ≤ 2^35 := by
+  have fit : checkProofByte ordinal+0+16 ≤ 2^36 := by
     change positions.card ≤ 16777216 at card
     unfold checkProofByte
     omega
-  have frame := near_proof_frame near (honest_input_admitted oracle message positions salts)
-    (honest_input_records_fit oracle message positions salts) ordinal 0 16 state framed (Nat.le_of_lt present)
-    (by have := Nat.mul_le_mul_left 534 present; change _ ≤ 534*positions.card; omega)
+  have frame := record_proof_frame input ordinal 0 16 state framed (Nat.le_of_lt present) fit
   have loaded := honest_input_nonce oracle message positions salts ordinal present
   rw [PackedChecker.initial_state] at loaded
   rw [Nat.add_zero] at frame
@@ -37,19 +32,16 @@ theorem packed_record_nonce (oracle : Oracle) (message : Message) (positions : P
 theorem packed_record_quartet_sibling (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal slot : Nat) (present : ordinal < positions.card) (valid : slot < 3)
     (state : MachineState)
-    {actual : CheckInput} (near : NearHonest actual (honestCheckInput oracle message positions salts))
-    (framed : RecordInputFrame actual ordinal state) :
+    (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state) :
     readBuffer state (checkProofByte ordinal+(16+32*slot)) 32 =
       leafAt (honestLeaves oracle message salts) ((honestIndex positions ordinal present).val.val ^^^ (slot+1)) := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
-  have fit : checkProofByte ordinal+(16+32*slot)+32 ≤ 2^35 := by
+  have fit : checkProofByte ordinal+(16+32*slot)+32 ≤ 2^36 := by
     change positions.card ≤ 16777216 at card
     unfold checkProofByte
     omega
-  have frame := near_proof_frame near (honest_input_admitted oracle message positions salts)
-    (honest_input_records_fit oracle message positions salts) ordinal (16+32*slot) 32 state framed (Nat.le_of_lt present)
-    (by have := Nat.mul_le_mul_left 534 present; change _ ≤ 534*positions.card; omega)
+  have frame := record_proof_frame input ordinal (16+32*slot) 32 state framed (Nat.le_of_lt present) fit
   have loaded := honest_input_quartet_sibling oracle message positions salts ordinal slot present valid
   rw [PackedChecker.initial_state] at loaded
   have addr : PackedChecker.submission.layout.proof+(534*ordinal+16+32*slot) = checkProofByte ordinal+(16+32*slot) := by
@@ -60,19 +52,16 @@ theorem packed_record_quartet_sibling (oracle : Oracle) (message : Message) (pos
 
 theorem packed_record_first_sibling (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) (state : MachineState)
-    {actual : CheckInput} (near : NearHonest actual (honestCheckInput oracle message positions salts))
-    (framed : RecordInputFrame actual ordinal state) :
+    (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state) :
     readBuffer state (checkProofByte ordinal+112) 32 =
       honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) 2 ^^^ 1) := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
-  have fit : checkProofByte ordinal+112+32 ≤ 2^35 := by
+  have fit : checkProofByte ordinal+112+32 ≤ 2^36 := by
     change positions.card ≤ 16777216 at card
     unfold checkProofByte
     omega
-  have frame := near_proof_frame near (honest_input_admitted oracle message positions salts)
-    (honest_input_records_fit oracle message positions salts) ordinal 112 32 state framed (Nat.le_of_lt present)
-    (by have := Nat.mul_le_mul_left 534 present; change _ ≤ 534*positions.card; omega)
+  have frame := record_proof_frame input ordinal 112 32 state framed (Nat.le_of_lt present) fit
   have loaded := honest_input_first_sibling oracle message positions salts ordinal present
   rw [PackedChecker.initial_state] at loaded
   have addr : PackedChecker.submission.layout.proof+(534*ordinal+112) = checkProofByte ordinal+112 := by
@@ -83,19 +72,16 @@ theorem packed_record_first_sibling (oracle : Oracle) (message : Message) (posit
 
 theorem packed_record_second_sibling (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) (state : MachineState)
-    {actual : CheckInput} (near : NearHonest actual (honestCheckInput oracle message positions salts))
-    (framed : RecordInputFrame actual ordinal state) :
+    (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state) :
     readBuffer state (checkProofByte ordinal+144) 32 =
       honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) 3 ^^^ 1) := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
-  have fit : checkProofByte ordinal+144+32 ≤ 2^35 := by
+  have fit : checkProofByte ordinal+144+32 ≤ 2^36 := by
     change positions.card ≤ 16777216 at card
     unfold checkProofByte
     omega
-  have frame := near_proof_frame near (honest_input_admitted oracle message positions salts)
-    (honest_input_records_fit oracle message positions salts) ordinal 144 32 state framed (Nat.le_of_lt present)
-    (by have := Nat.mul_le_mul_left 534 present; change _ ≤ 534*positions.card; omega)
+  have frame := record_proof_frame input ordinal 144 32 state framed (Nat.le_of_lt present) fit
   have loaded := honest_input_second_sibling oracle message positions salts ordinal present
   rw [PackedChecker.initial_state] at loaded
   have addr : PackedChecker.submission.layout.proof+(534*ordinal+144) = checkProofByte ordinal+144 := by
@@ -107,20 +93,17 @@ theorem packed_record_second_sibling (oracle : Oracle) (message : Message) (posi
 /-- The 30-byte sibling of loop level `slot+2` (`slot < 4`). -/
 theorem packed_record_mid_sibling (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) (state : MachineState)
-    {actual : CheckInput} (near : NearHonest actual (honestCheckInput oracle message positions salts))
-    (framed : RecordInputFrame actual ordinal state)
+    (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state)
     (slot : Nat) (valid : slot < 4) :
     readBuffer state (checkProofByte ordinal+176+30*slot) 30 =
       (honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (slot+4) ^^^ 1)).extractLsb' 0 240 := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
-  have fit : checkProofByte ordinal+(176+30*slot)+30 ≤ 2^35 := by
+  have fit : checkProofByte ordinal+(176+30*slot)+30 ≤ 2^36 := by
     change positions.card ≤ 16777216 at card
     unfold checkProofByte
     omega
-  have frame := near_proof_frame near (honest_input_admitted oracle message positions salts)
-    (honest_input_records_fit oracle message positions salts) ordinal (176+30*slot) 30 state framed (Nat.le_of_lt present)
-    (by have := Nat.mul_le_mul_left 534 present; change _ ≤ 534*positions.card; omega)
+  have frame := record_proof_frame input ordinal (176+30*slot) 30 state framed (Nat.le_of_lt present) fit
   have loaded := honest_input_mid_sibling oracle message positions salts ordinal slot present valid
   rw [PackedChecker.initial_state] at loaded
   have addr : PackedChecker.submission.layout.proof+(534*ordinal+176+30*slot) =
@@ -134,21 +117,18 @@ theorem packed_record_mid_sibling (oracle : Oracle) (message : Message) (positio
 /-- The packed block of loop levels `6..13`, byte by byte: GQ's `packEight` of the honest siblings. -/
 theorem packed_record_block_byte (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card) (state : MachineState)
-    {actual : CheckInput} (near : NearHonest actual (honestCheckInput oracle message positions salts))
-    (framed : RecordInputFrame actual ordinal state)
+    (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state)
     (offset : Nat) (inside : offset < 238) :
     state.getByte (BitVec.ofNat 64 (checkProofByte ordinal+296+offset)) =
       (packEight ((List.range 8).map (fun k =>
         honestHeap oracle message salts (Opening.lowerNode (QuartetCheck.flipIndex (honestIndex positions ordinal present).val) (k+8) ^^^ 1))))[offset]! := by
   let input := honestCheckInput oracle message positions salts
   have card := checker_positions_bound input
-  have fit : checkProofByte ordinal+296+238 ≤ 2^35 := by
+  have fit : checkProofByte ordinal+296+238 ≤ 2^36 := by
     change positions.card ≤ 16777216 at card
     unfold checkProofByte
     omega
-  have frame := near_proof_frame near (honest_input_admitted oracle message positions salts)
-    (honest_input_records_fit oracle message positions salts) ordinal 296 238 state framed (Nat.le_of_lt present)
-    (by have := Nat.mul_le_mul_left 534 present; change _ ≤ 534*positions.card; omega)
+  have frame := record_proof_frame input ordinal 296 238 state framed (Nat.le_of_lt present) fit
   have after := read_buffer_byte state (checkProofByte ordinal+296) 238 offset inside
   have before := read_buffer_byte (QAssembly.submission.initialState .check input) (checkProofByte ordinal+296) 238
     offset inside

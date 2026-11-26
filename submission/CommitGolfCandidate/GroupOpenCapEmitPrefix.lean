@@ -1,10 +1,9 @@
 import CommitGolfCandidate.K3OpenCapSpec
 import CommitGolfCandidate.GroupOpenSiblingRun
 import CommitGolfCandidate.GroupOpenFields
-import CommitGolfCandidate.GroupOpenCapCopy
 
-/-! T238 cap emit, the part both node kinds share: `x7 := x25+32·node`, the alignment-dispatched 28-byte copy,
-`lhu x31,28(x7)` and the `jal` to WK (word 855); `CapCopy.cycles dest+4` cycles.
+/-! T238 cap emit, the part both node kinds share (opener rows 668..699): `x7 := x25+32·node`, the 14 `lhu/sh`
+pairs (bytes 0..27 of the node's digest to `dest`), `lhu x31,28(x7)` and the `jal` to WK (word 855); 32 cycles.
 Also the single-step, halfword and position helpers the two emit cases use. -/
 namespace TwoPermutationPrototype.GroupedOpening
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
@@ -139,7 +138,7 @@ theorem cap_position_kept {groups : List Nat} {before after : MachineState} {nod
   apply position.context.of_preserved
   · intro reg member
     simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-    rcases member with rfl | rfl | rfl | rfl | rfl <;>
+    rcases member with rfl | rfl | rfl | rfl <;>
       exact regs _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
   · intro n _ inside
     have below : Opening.markBase+8*n < Opening.proofBase := by
@@ -148,7 +147,90 @@ theorem cap_position_kept {groups : List Nat} {before after : MachineState} {nod
       omega
     exact words _ below
 
-/- (`cap_emit_prefix`, the old emit_node from word 668, was removed: dead since CAP-B, and words 668..671 now hold
-the chunk dispatch.) -/
+/-- Rows 668..699: source pointer, 14 halfword copies, `lhu x31,28(x7)`, `jal` to WK. -/
+theorem cap_emit_prefix (groups : List Nat) (state : MachineState) (node dest : Nat)
+    (bounded : node < 512) (position : CapPosition groups state node dest) (pc : state.pc = 0x1a70)
+    (separate : Opening.proofBase ≤ dest) (aligned : dest % 2 = 0) (fits : dest+30 ≤ MEMORY_BYTES) :
+    ∃ mid, RunsOpeningBlock state mid 32 ∧ mid.pc = BitVec.ofNat 64 (4096+4*855) ∧
+      mid.getReg .x21 = BitVec.ofNat 64 dest ∧
+      mid.getReg .x31 = (halfAt state (capDigestAddress node+28)).zeroExtend 64 ∧
+      (∀ r, r ≠ .x7 → r ≠ .x31 → mid.getReg r = state.getReg r) ∧
+      (∀ b < 28, mid.getByte (BitVec.ofNat 64 (dest+b)) =
+        state.getByte (BitVec.ofNat 64 (capDigestAddress node+b))) ∧
+      (∀ a < 2^64, (a < dest ∨ dest+28 ≤ a) →
+        mid.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a)) ∧
+      (∀ a < Opening.proofBase, mid.getMem (BitVec.ofNat 64 a) = state.getMem (BitVec.ofNat 64 a)) := by
+  have ram : MEMORY_BYTES < 2^64 := by decide
+  obtain ⟨srcAlign, srcBelow⟩ := cap_digest_bounds node bounded
+  have initial := cap_source_post state
+  let s1 := capSource state
+  have source : s1.getReg .x7 = BitVec.ofNat 64 (capDigestAddress node) := by
+    rw [initial.2.2.1, position.context.heap, position.nodeWord, BitVec.shiftLeft_eq_mul_twoPow]
+    change BitVec.ofNat 64 Opening.trapdoorBase + BitVec.ofNat 64 node * BitVec.ofNat 64 32 = _
+    rw [← BitVec.ofNat_mul, Nat.mul_comm node, ← BitVec.ofNat_add]
+    rfl
+  have destination : s1.getReg .x21 = BitVec.ofNat 64 dest :=
+    (initial.2.2.2 .x21 (by decide)).trans position.destWord
+  have place : FieldInputs .cap s1 (capDigestAddress node) dest := by
+    refine ⟨by rw [initial.1, pc]; rfl, source, by simpa [CopySite.destOffset] using destination, ?_, ?_, ?_,
+      aligned, fun w => absurd w (by decide)⟩
+    · simp only [CopySite.halfwords]; omega
+    · simp only [CopySite.halfwords]; omega
+    · omega
+  have setupRun : RunsOpeningBlock state s1 2 := fun fuel coins => execute_cap_source state pc fuel coins
+  let s2 := copyState .cap s1
+  have copy : ByteCopy s1 s2 (capDigestAddress node) dest 28 := place.bytes
+  have pc2 : s2.pc = BitVec.ofNat 64 (4096+4*698) := place.final_pc
+  have reg2 (r : Reg) (keep : r ≠ .x31) : s2.getReg r = s1.getReg r := copy_register .cap s1 r keep (.inl rfl)
+  have capRun : RunsOpeningBlock s1 s2 28 := place.run
+  have frame2 : ∀ a < 2^64, (a < dest ∨ dest+28 ≤ a) →
+      s2.getByte (BitVec.ofNat 64 a) = state.getByte (BitVec.ofNat 64 a) := by
+    intro a small away
+    have ne : ∀ i < 28, BitVec.ofNat 64 a ≠ BitVec.ofNat 64 (dest+i) := fun i hi e => by
+      have := Opening.nat_address_injective small (by omega) e
+      omega
+    rw [copy.frame _ ne]
+    exact emit_byte_of_mem initial.2.1 _
+  have addr3 : s2.getReg .x7 + signExtend12 (28#12) = BitVec.ofNat 64 (capDigestAddress node+28) := by
+    rw [reg2 .x7 (by decide), source, show signExtend12 (28#12) = BitVec.ofNat 64 28 by decide,
+      ← BitVec.ofNat_add]
+  have step3 := row_step s2 698 (.LHU .x31 .x7 28#12) (by decide) pc2 (by decide +kernel) rfl
+    (by change accessValid (s2.getReg .x7 + signExtend12 (28#12)) 2 = true
+        rw [addr3]; exact half_access _ (by omega) (by omega))
+  let s3 := execInstrBr s2 (.LHU .x31 .x7 28#12)
+  have pc3 : s3.pc = BitVec.ofNat 64 (4096+4*699) := step3.2
+  have step4 := row_step s3 699 (.JAL .x0 624#21) (by decide) pc3 (by decide +kernel) rfl rfl
+  let s4 := execInstrBr s3 (.JAL .x0 624#21)
+  have mem4 : s4.mem = s2.mem := by simp [s4, s3, execInstrBr]
+  have reg4 (r : Reg) (keep : r ≠ .x31) : s4.getReg r = s2.getReg r := by
+    simp [s4, s3, execInstrBr, Ne.symm keep]
+  have top4 : s4.getReg .x31 = (s2.getHalfword (BitVec.ofNat 64 (capDigestAddress node+28))).zeroExtend 64 := by
+    rw [← addr3]
+    simp [s4, s3, execInstrBr]
+  have half2 : s2.getHalfword (BitVec.ofNat 64 (capDigestAddress node+28)) = halfAt state (capDigestAddress node+28) := by
+    rw [← half_at_eq s2 (capDigestAddress node+28) (by omega) (by omega)]
+    unfold halfAt
+    rw [frame2 (capDigestAddress node+28+1) (by omega) (Or.inl (by omega)),
+      frame2 (capDigestAddress node+28) (by omega) (Or.inl (by omega))]
+  refine ⟨s4, ((setupRun.next capRun).next step3.1).next step4.1, step4.2.trans (by decide +kernel), ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [reg4 .x21 (by decide), reg2 .x21 (by decide), destination]
+  · rw [top4, half2]
+  · intro r a b
+    rw [reg4 r b, reg2 r b]
+    exact initial.2.2.2 r a
+  · intro b inside
+    rw [emit_byte_of_mem mem4, copy.copied b inside]
+    exact emit_byte_of_mem initial.2.1 _
+  · intro a small away
+    rw [emit_byte_of_mem mem4]
+    exact frame2 a small away
+  · intro a below
+    have stable : s2.getMem (BitVec.ofNat 64 a) = s1.getMem (BitVec.ofNat 64 a) :=
+      place.words_before Opening.proofBase a below separate (by decide)
+    have m1 : s1.mem = state.mem := initial.2.1
+    calc s4.getMem (BitVec.ofNat 64 a) = s2.getMem (BitVec.ofNat 64 a) := by
+          simp only [MachineState.getMem, mem4]
+      _ = s1.getMem (BitVec.ofNat 64 a) := stable
+      _ = state.getMem (BitVec.ofNat 64 a) := by simp only [MachineState.getMem, m1]
 
 end TwoPermutationPrototype.GroupedOpening

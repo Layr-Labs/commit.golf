@@ -27,7 +27,7 @@ def RecordInputAddress (input : CheckInput) (ordinal word : Nat) : Prop :=
     checkSourceWord ordinal ≤ word
 
 def RecordInputFrame (input : CheckInput) (ordinal : Nat) (state : MachineState) : Prop :=
-  ∀ word < 2^32, RecordInputAddress input ordinal word →
+  ∀ word < 2^33, RecordInputAddress input ordinal word →
     memoryView state word = memoryView (QAssembly.submission.initialState .check input) word
 
 theorem record_input_frame_initial (input : CheckInput) :
@@ -61,7 +61,7 @@ theorem record_input_frame_step (input : CheckInput) (ordinal : Nat) (before aft
       memoryView after word = memoryView before word) :
     RecordInputFrame input (ordinal+1) after := by
   intro word bounded used
-  exact (words word (by omega) used).trans
+  exact (words word bounded used).trans
     (previous word bounded (record_input_address_mono input ordinal (ordinal+1) word (by omega) used))
 
 theorem record_input_index (input : CheckInput) (ordinal : Nat) (present : ordinal < input.positions.card)

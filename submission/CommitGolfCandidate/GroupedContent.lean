@@ -58,8 +58,7 @@ def followerMem (o : Oracle) (regs : Reg → Word) (m : Memory) (i : Nat) : Memo
   if rank i≤8 then
     writeWord (writeWord (fMem1 o m i) (msgWord i+7) (fMem1 o m i (sourceWord i))) (msgWord i+8)
       (writeWord (fMem1 o m i) (msgWord i+7) (fMem1 o m i (sourceWord i)) (sourceWord i+1))
-  else if rank i=9 then writeWord (writeWord (fMem1 o m i) (msgWord i+7) (regs .x14)) (msgWord i+8)
-      (writeWord (fMem1 o m i) (msgWord i+7) (regs .x14) (sourceWord i+1))
+  else if rank i=9 then writeWord (writeWord (fMem1 o m i) (msgWord i+7) (regs .x14)) (msgWord i+8) (regs .x15)
   else writeWord (writeWord (fMem1 o m i) (msgWord i+7) (regs .x16)) (msgWord i+8) (regs .x17)
 
 def preSecond (o : Oracle) (regs : Reg → Word) (m : Memory) (i : Nat) :=
@@ -122,18 +121,18 @@ theorem plan_meaning (o : Oracle) (v : View) (i : Nat) :
   unfold plan;rw [List.foldl_append,(tail_meaning ..).1,body_meaning]
   unfold packetMem tailReply;rfl
 
-/-- Registers x14, x16, x17 after the body of a slot: loaded from the generator reply by rank 8, kept otherwise;
-x15 (the latch bound) is kept by every slot. -/
+/-- Registers x14..x17 after the body of a slot: loaded from the generator reply by rank 8, kept otherwise. -/
 theorem body_prefetch (o : Oracle) (v : View) (i : Nat) :
     (rank i=8 → ((bodyPlan i).foldl (viewStep o) v).regs .x14=preSecond o v.regs v.mem i (genWord i+16) ∧
+      ((bodyPlan i).foldl (viewStep o) v).regs .x15=preSecond o v.regs v.mem i (genWord i+17) ∧
       ((bodyPlan i).foldl (viewStep o) v).regs .x16=preSecond o v.regs v.mem i (genWord i+18) ∧
       ((bodyPlan i).foldl (viewStep o) v).regs .x17=preSecond o v.regs v.mem i (genWord i+19)) ∧
     (rank i≠8 → ((bodyPlan i).foldl (viewStep o) v).regs .x14=v.regs .x14 ∧
+      ((bodyPlan i).foldl (viewStep o) v).regs .x15=v.regs .x15 ∧
       ((bodyPlan i).foldl (viewStep o) v).regs .x16=v.regs .x16 ∧
-      ((bodyPlan i).foldl (viewStep o) v).regs .x17=v.regs .x17) ∧
-    ((bodyPlan i).foldl (viewStep o) v).regs .x15=v.regs .x15 := by
+      ((bodyPlan i).foldl (viewStep o) v).regs .x17=v.regs .x17) := by
   have hr := rank_lt i
-  refine ⟨?_,?_,?_⟩
+  constructor
   · intro e8
     have r0 : rank i≠0 := by omega
     have r1 : rank i≠1 := by omega
@@ -149,25 +148,17 @@ theorem body_prefetch (o : Oracle) (v : View) (i : Nat) :
     · simp [bodyPlan,saltPlan,eq_false r0,eq_false r1,eq_true r8,eq_false n8,viewStep,View.reg,View.store,View.reply]
     · by_cases e9 : rank i=9 <;>
         simp [bodyPlan,saltPlan,eq_false r0,eq_false r1,eq_false r8,e9,viewStep,View.reg,View.store,View.reply]
-  · by_cases r0 : rank i=0
-    · by_cases kd : keyed (i%4096) <;> simp [bodyPlan,eq_true r0,kd,viewStep,View.reg,View.store,View.reply]
-    by_cases r1 : rank i=1
-    · simp [bodyPlan,eq_false r0,eq_true r1,viewStep,View.reg,View.store,View.reply]
-    by_cases r8 : rank i≤8
-    · by_cases e8 : rank i=8 <;>
-        simp [bodyPlan,saltPlan,eq_false r0,eq_false r1,eq_true r8,e8,viewStep,View.reg,View.store,View.reply]
-    · by_cases e9 : rank i=9 <;>
-        simp [bodyPlan,saltPlan,eq_false r0,eq_false r1,eq_false r8,e9,viewStep,View.reg,View.store,View.reply]
 
-/-- Registers x14, x16, x17 after a slot (the group tail writes only x10, x12), and x15 kept. -/
+/-- Registers x14..x17 after a slot (the group tail writes only x10, x12). -/
 theorem plan_prefetch (o : Oracle) (v : View) (i : Nat) :
     (rank i=8 → ((plan i).foldl (viewStep o) v).regs .x14=preSecond o v.regs v.mem i (genWord i+16) ∧
+      ((plan i).foldl (viewStep o) v).regs .x15=preSecond o v.regs v.mem i (genWord i+17) ∧
       ((plan i).foldl (viewStep o) v).regs .x16=preSecond o v.regs v.mem i (genWord i+18) ∧
       ((plan i).foldl (viewStep o) v).regs .x17=preSecond o v.regs v.mem i (genWord i+19)) ∧
     (rank i≠8 → ((plan i).foldl (viewStep o) v).regs .x14=v.regs .x14 ∧
+      ((plan i).foldl (viewStep o) v).regs .x15=v.regs .x15 ∧
       ((plan i).foldl (viewStep o) v).regs .x16=v.regs .x16 ∧
-      ((plan i).foldl (viewStep o) v).regs .x17=v.regs .x17) ∧
-    ((plan i).foldl (viewStep o) v).regs .x15=v.regs .x15 := by
+      ((plan i).foldl (viewStep o) v).regs .x17=v.regs .x17) := by
   unfold plan
   simp only [List.foldl_append]
   have t := (tail_meaning o ((bodyPlan i).foldl (viewStep o) v) i).2

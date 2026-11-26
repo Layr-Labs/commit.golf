@@ -105,7 +105,7 @@ theorem group_accepts_honest (oracle : Oracle) (input : CheckInput) (ordinal : N
     (block : RecordBlock) (facts : RecordBlockFacts oracle input ordinal present state block)
     (rows : List PublicRow) (table : CollectedTable oracle input ordinal state rows)
     (message : Message) (salts : CompleteSaltTape)
-    (canonical : NearHonest input (honestCheckInput oracle message input.positions salts)) :
+    (canonical : input = honestCheckInput oracle message input.positions salts) :
     let index := (honestIndex input.positions ordinal present).val
     GroupAccepted block.state (capGroup index) := by
   let index := (honestIndex input.positions ordinal present).val

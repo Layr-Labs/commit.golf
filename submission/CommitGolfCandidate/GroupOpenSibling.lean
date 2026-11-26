@@ -117,17 +117,16 @@ def siblingSite (level : Fin 14) : CopySite :=
   unfold siblingSite
   split <;> rfl
 
-def siblingStart (level : Fin 14) : Nat := if level.val=0 then 148 else (siblingSite level).start-3
-def siblingEnd (level : Fin 14) : Nat :=
-  if level.val = 13 then 638 else if level.val = 1 then 220 else (siblingSite level).start+2*(siblingSite level).halfwords
+def siblingStart (level : Fin 14) : Nat := (siblingSite level).start-3
+def siblingEnd (level : Fin 14) : Nat := (siblingSite level).start+2*(siblingSite level).halfwords
 
-/-- The generic straight-line copy moves the whole width except at the dedicated level-1 site. -/
+/-- The straight-line copy of a level moves its whole width, except level 1 (whose 16th halfword is
+copied by A1). -/
 theorem sibling_width_exact :
-    ∀ level : Fin 14, level.val < 13 →
-      2*(siblingSite level).halfwords = if level.val = 1 then 0 else siblingWidth level.val := by
+    ∀ level : Fin 14, 2*(siblingSite level).halfwords = if level.val = 1 then 30 else siblingWidth level.val := by
   decide
 
-theorem sibling_copy_start : ∀ level : Fin 14, level.val≠0 → siblingStart level+3 = (siblingSite level).start := by
+theorem sibling_copy_start : ∀ level : Fin 14, siblingStart level+3 = (siblingSite level).start := by
   decide
 
 theorem sibling_next_all : ∀ level : Fin 13,
@@ -138,7 +137,7 @@ theorem sibling_next (level : Fin 14) (later : level.val+1 < 14) :
     siblingEnd level+2 = siblingStart ⟨level.val+1, later⟩ :=
   sibling_next_all ⟨level.val, by omega⟩
 
-theorem first_sibling_start : siblingStart 0 = 148 := rfl
+theorem first_sibling_start : siblingStart 0 = 150 := rfl
 theorem last_sibling_start : siblingStart 13 = 607 := rfl
 theorem last_sibling_end : siblingEnd 13 = 638 := rfl
 theorem a1_sibling_end : siblingEnd 1 = 220 := rfl
@@ -157,7 +156,7 @@ def tailPrefix (state : MachineState) (level : Fin 14) (count : Nat) : MachineSt
 
 set_option maxRecDepth 4096 in
 private theorem head_decode :
-    ∀ (level : Fin 14) (i : Fin 3), level.val ≠ 0 → level.val ≠ 2 →
+    ∀ (level : Fin 14) (i : Fin 3),
       (openingImage.code[siblingStart level+i.val]?).bind Opening.decodeBase =
         some (headCode[i.val]?.getD .EBREAK) := by decide
 
@@ -176,7 +175,7 @@ private theorem tail_decode :
 private theorem head_range : ∀ level : Fin 14, siblingStart level+3 ≤ 896 := by decide
 private theorem tail_range : ∀ level : Fin 14, siblingEnd level+2 ≤ 896 := by decide
 
-theorem execute_sibling_head (state : MachineState) (level : Fin 14) (nz : level.val ≠ 0) (old : level.val ≠ 2)
+theorem execute_sibling_head (state : MachineState) (level : Fin 14)
     (pc : state.pc = BitVec.ofNat 64 (4096+4*siblingStart level)) (fuel : Nat) (coins : Bool) :
     execute openingImage (3+fuel) state coins =
       (do let result ← execute openingImage fuel (headPrefix state 3) coins
@@ -189,7 +188,7 @@ theorem execute_sibling_head (state : MachineState) (level : Fin 14) (nz : level
           BitVec.ofNat 64 (4096+4*(siblingStart level+i)) := by rw [← BitVec.ofNat_add]; congr 1; omega
       rw [← offset]
       interval_cases i <;> simp [headPrefix, headCode, execInstrBr, pc, BitVec.add_assoc]
-    · exact head_decode level ⟨i,inside⟩ nz old
+    · exact head_decode level ⟨i,inside⟩
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
@@ -234,24 +233,17 @@ theorem sibling_tail_post (state : MachineState) (level : Fin 14) :
   intro reg a b
   simp [Ne.symm a, Ne.symm b]
 
-/-! ### Level 0 through the prefix's pointer word -/
-
-/-- Level 0's head loads the sibling pointer from the biased quartet base and jumps to the wide copy. -/
-def zeroRows : List (Nat × Instr) :=
-  [(148, .LD .x7 .x7 128), (149, .JAL .x0 16)]
-
-theorem zero_code : RowsCode zeroRows := by decide +kernel
-
-theorem zero_final_pc : rowNext zeroRows[1] = BitVec.ofNat 64 (4096+4*153) := by decide +kernel
-
 /-! ### Level 1 through A1 -/
 
-/-- Level 1 advances the cursor and node after copying the whole sibling. -/
+/-- Level 1's tail: `jal <A1>`; A1 = `lhu x31,30(x7); sh x31,30(x21); addi x21,x21,32; jal <221>`; then
+`srli x6,x6,1`. -/
 def a1Rows : List (Nat × Instr) :=
-  [(220, .ADDI .x21 .x21 32), (221, .SRLI .x6 .x6 1)]
+  [(220, .JAL .x0 (BitVec.ofNat 21 (4*(a1Start-220)))), (a1Start, .LHU .x31 .x7 30), (a1Start+1, .SH .x21 .x31 30),
+   (a1Start+2, .ADDI .x21 .x21 32), (a1Start+3, .JAL .x0 (BitVec.ofNat 21 (2^21-4*(a1Start+3-221)))),
+   (221, .SRLI .x6 .x6 1)]
 
 theorem a1_code : RowsCode a1Rows := by decide +kernel
 
-theorem a1_final_pc : rowNext a1Rows[1] = BitVec.ofNat 64 (4096+4*222) := by decide +kernel
+theorem a1_final_pc : rowNext a1Rows[5] = BitVec.ofNat 64 (4096+4*222) := by decide +kernel
 
 end TwoPermutationPrototype.GroupedOpening

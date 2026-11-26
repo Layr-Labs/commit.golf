@@ -1,7 +1,5 @@
 import CommitGolfCandidate.TwoPermutationPackedCapFetch
 
-/-! One-byte search image: the four root-compare branches (words 347, 350, 353, 356) go to the search block at word
-1163 (`0x222c`) instead of the reject at 364. -/
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64
@@ -14,7 +12,7 @@ attribute [local simp] Opening.getReg_setMem Opening.getReg_setReg MachineState.
 def rootCompareCode (i : Fin 4) : List Instr :=
   [.LD .x29 .x25 (BitVec.ofNat 12 (32+8*i.val)),
    .LD .x30 .x9 (BitVec.ofNat 12 (8*i.val)),
-   .BNE .x29 .x30 (BitVec.ofNat 13 (3264-12*i.val))]
+   .BNE .x29 .x30 (BitVec.ofNat 13 (68-12*i.val))]
 
 def rootComparePrefix (state : MachineState) (i : Fin 4) (count : Nat) : MachineState :=
   ((rootCompareCode i).take count).foldl execInstrBr state
@@ -65,7 +63,7 @@ attribute [local simp] getMem_pc getMem_reg
 theorem root_compare_post (s : MachineState) (i : Fin 4)
     (pc : s.pc=BitVec.ofNat 64 (4096+4*(345+3*i.val))) :
     let t := rootCompare s i
-    t.pc=(if rootWordMatches s i then BitVec.ofNat 64 (4096+4*(348+3*i.val)) else 0x222c) ∧
+    t.pc=(if rootWordMatches s i then BitVec.ofNat 64 (4096+4*(348+3*i.val)) else 0x15b0) ∧
       t.mem=s.mem ∧ ∀ r : Reg, r≠.x29 → r≠.x30 → t.getReg r=s.getReg r := by
   dsimp only
   simp only [rootCompare,rootComparePrefix,rootCompareCode,List.take,List.foldl_cons,List.foldl_nil,

@@ -32,14 +32,16 @@ theorem staged_honest_nonce_words (oracle : Oracle) (input : CheckInput) (ordina
     (present : ordinal < input.positions.card) (before : MachineState) (fits : ProofWithin input)
     (cursor : RecordCursor input ordinal before) (framed : RecordInputFrame input ordinal before)
     (message : Message) (salts : CompleteSaltTape)
-    (canonical : NearHonest input (honestCheckInput oracle message input.positions salts)) :
+    (canonical : input = honestCheckInput oracle message input.positions salts) :
     checkerNonce (staged before) = saltWords (salts (honestIndex input.positions ordinal present)) := by
   have stagedPtr : (staged before).getReg .x4 = wordAddress 1534 := by
     unfold staged
     rw [copy_field_register _ _ _ (by decide),record_setup_register _ _ (by decide) (by decide)
       (by decide) (by decide) (by decide)]
     exact cursor.nonceScratch
-  have raw := packed_record_nonce oracle message input.positions salts ordinal present before canonical framed
+  have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
+    Eq.mp (congrArg (fun data => RecordInputFrame data ordinal before) canonical) framed
+  have raw := packed_record_nonce oracle message input.positions salts ordinal present before loaded
   have copied := (staged_nonce_read input ordinal present before fits cursor).trans raw
   rw [checker_nonce_words _ 1534 stagedPtr,buffer_window (staged before) 1534 2]
   change (fun i : Fin 2 => (readBuffer (staged before) 12272 16).extractLsb' (64*i.val) 64) = _
@@ -48,14 +50,12 @@ theorem staged_honest_nonce_words (oracle : Oracle) (input : CheckInput) (ordina
 
 theorem canonical_entry_value (oracle : Oracle) (input : CheckInput) (message : Message)
     (salts : CompleteSaltTape) (item : {index // index ∈ input.positions})
-    (canonical : NearHonest input (honestCheckInput oracle message input.positions salts)) :
+    (canonical : input = honestCheckInput oracle message input.positions salts) :
     input.values item = message item.val := by
   let lookup (record : CheckInput) : Entry :=
     if present : item.val ∈ record.positions then record.values ⟨item.val,present⟩ else 0
-  obtain ⟨P, same, _, _⟩ := canonical
-  have transported := congrArg lookup same
-  have present : item.val ∈ ({ honestCheckInput oracle message input.positions salts with proof := P } :
-    CheckInput).positions := item.property
+  have transported := congrArg lookup canonical
+  have present : item.val ∈ (honestCheckInput oracle message input.positions salts).positions := item.property
   dsimp only [lookup] at transported
   rw [dif_pos item.property,dif_pos present] at transported
   exact transported
@@ -91,7 +91,7 @@ theorem raw_nonce_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (before : MachineState) (fits : ProofWithin input)
     (cursor : RecordCursor input ordinal before) (framed : RecordInputFrame input ordinal before)
     (message : Message) (salts : CompleteSaltTape)
-    (canonical : NearHonest input (honestCheckInput oracle message input.positions salts)) :
+    (canonical : input = honestCheckInput oracle message input.positions salts) :
     rawNonce (honestIndex input.positions ordinal present).val before =
       saltWords (salts (honestIndex input.positions ordinal present)) := by
   by_cases ahead : isAHead (honestIndex input.positions ordinal present).val = true
@@ -102,7 +102,9 @@ theorem raw_nonce_honest (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
       checkerNonce (aStaged (aEntry before)) from if_pos ahead]
     have x4 : (aStaged (aEntry before)).getReg .x4 = wordAddress 1534 := by
       rw [a_staged_register .x4 (by decide) (by decide) (by decide) (by decide) (by decide), ready.scratch]; rfl
-    have raw := packed_record_nonce oracle message input.positions salts ordinal present before canonical framed
+    have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
+      Eq.mp (congrArg (fun data => RecordInputFrame data ordinal before) canonical) framed
+    have raw := packed_record_nonce oracle message input.positions salts ordinal present before loaded
     have copied := (a_staged_read ready).trans ((read_buffer_memory_congr _ _ emem _ _).trans raw)
     rw [checker_nonce_words _ 1534 x4, buffer_window (aStaged (aEntry before)) 1534 2]
     change (fun i : Fin 2 => (readBuffer (aStaged (aEntry before)) 12272 16).extractLsb' (64*i.val) 64) = _

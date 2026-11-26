@@ -16,8 +16,7 @@ at `qLeaf i`), the key block at `qSalt 0`.
   the tag `m-7` at `m-5` and the second call `[m-7, m+18) → qLeaf i`.
 * C leaf (rank 1), entry `m+7`: tag `m+7` at `m+9`, second call `[m+7, m+32) → qLeaf i`.
 * Follower (rank ≥ 2): first call `[m, m+25) → [m-4, m+21)`, tag `m+7` at `m+9`, salt into
-  `m+7, m+8` (from the generator reply; rank 10 from x16, x17, rank 9 from x14 and, through x12 = `m-4`, the
-  reply word `sourceWord+1`), second call.
+  `m+7, m+8` (from the generator reply, or from x14..x17 for ranks 9 and 10), second call.
 * Tail: `x10 += trail` to the next entry, or after the fourth leaf of quartet `q = i/4` the quartet
   call on `[qSource q, +25)` (even `q`: output `qLeaf i = qSource q + 21`, x12 reused; odd `q`:
   output `qSource q - 82`) and the restore `x10 += x1 | x2` to the next entry.
@@ -58,9 +57,9 @@ def saltPlan (i : Nat) : List Action :=
   if rank i≤8 then
     [.load .x12 .x10 (saltImm (rank i)) (sourceWord i),.store .x10 .x12 0 (m+7),
      .load .x12 .x10 (saltImm (rank i)+8) (sourceWord i+1),.store .x10 .x12 8 (m+8)] ++
-    (if rank i=8 then [.load .x14 .x10 (-1848) (genWord i+16),
+    (if rank i=8 then [.load .x14 .x10 (-1848) (genWord i+16),.load .x15 .x10 (-1840) (genWord i+17),
       .load .x16 .x10 (-1832) (genWord i+18),.load .x17 .x10 (-1824) (genWord i+19)] else [])
-  else if rank i=9 then [.store .x10 .x14 0 (m+7),.load .x12 .x12 (-2008) (sourceWord i+1),.store .x10 .x12 8 (m+8)]
+  else if rank i=9 then [.store .x10 .x14 0 (m+7),.store .x10 .x15 8 (m+8)]
   else [.store .x10 .x16 0 (m+7),.store .x10 .x17 8 (m+8)]
 
 def bodyPlan (i : Nat) : List Action :=
@@ -105,14 +104,12 @@ theorem plan_words (i : Nat) : (plan i).map Action.op=packet (i%4096) := by
     · by_cases e : i%4096/4%2=0 <;> simp [t,m,e,Action.op]
     · simp [t,m,Action.op]
 
-theorem plan_fetch (i : Nat) : fetchOps (firstWord4 (i%16384)) (plan i) := by
+theorem plan_fetch (i : Nat) : fetchOps (firstWord (i%4096)) (plan i) := by
   intro j s pc
   have len := congrArg List.length (plan_words i)
   simp only [List.length_map] at len
-  have mod4 : (i%16384)%4096 = i%4096 := by omega
-  have inside : j.val<(packet ((i%16384)%4096)).length := by rw [mod4]; exact len ▸ j.isLt
-  have got := fetch_packet4 ⟨i%16384,by omega⟩ j.val inside s pc
-  simp only [mod4] at got
+  have inside : j.val<(packet (i%4096)).length := len ▸ j.isLt
+  have got := fetch_packet ⟨i%4096,by omega⟩ j.val inside s pc
   rw [←plan_words,List.getElem?_eq_getElem (by simpa using j.isLt)] at got
   change fetch image s=some (.base (plan i)[j.val].op)
   simpa only [List.getElem_map,Option.getD_some] using got
@@ -144,8 +141,6 @@ structure PacketRegs (s : MachineState) (i : Nat) : Prop where
   selector : s.getReg .x5=0
   size : s.getReg .x11=200
   primitive : s.getReg .x13=1
-  /-- `2^32` (setup row 4), the latch's bound on x10. -/
-  limit : s.getReg .x15=4294967296
 
 theorem slot_address (i : Nat) : wordAddress (msgWord i+7)+wordAddress (sgap i)=wordAddress (qLeaf i) := by
   rw [←wordAddress_add];congr 1

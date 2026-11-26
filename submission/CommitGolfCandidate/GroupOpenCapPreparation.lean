@@ -8,11 +8,11 @@ open Opening (markBase trapdoorBase machineMarks markWord)
 
 def capPreparation := CapStudy.capPreparation
 
-theorem execute_cap_preparation (state : MachineState) (pc : state.pc = CapStudy.Postorder.pcOf 1097)
+theorem execute_cap_preparation (state : MachineState) (pc : state.pc = 0x1a24)
     (base : state.getReg .x26 = BitVec.ofNat 64 markBase) (fuel : Nat) (allowCoins : Bool) :
-    execute openingImage (770 + fuel) state allowCoins =
+    execute openingImage (771 + fuel) state allowCoins =
       (do let result ← execute openingImage fuel (capPreparation state) allowCoins
-          return result.charge 770 0) :=
+          return result.charge 771 0) :=
   CapStudy.execute_cap_preparation state pc base fuel allowCoins
 
 theorem cap_preparation_context (state : MachineState) (groups : List Nat) (dest : Nat)
@@ -20,7 +20,6 @@ theorem cap_preparation_context (state : MachineState) (groups : List Nat) (dest
     (heap : state.getReg .x25 = BitVec.ofNat 64 Opening.trapdoorBase)
     (leaves : state.getReg .x27 = 256#64)
     (proofStart : state.getReg .x20 = BitVec.ofNat 64 quartetProofBase)
-    (one : state.getReg .x23 = 1#64)
     (pointer : state.getReg .x21 = BitVec.ofNat 64 dest)
     (marks : ∀ node, 255 < node → node < 512 → machineMarks state node = markWord groups node) :
     let after := capPreparation state
@@ -29,8 +28,7 @@ theorem cap_preparation_context (state : MachineState) (groups : List Nat) (dest
     (markWord groups) marks
     (fun k pos upper => Opening.mark_word_parent groups ⟨k,upper⟩ pos)
   exact ⟨pc, ⟨⟨(live .x25 (by decide)).trans heap, (live .x26 (by decide)).trans markBaseReg,
-      (live .x27 (by decide)).trans leaves, (live .x20 (by decide)).trans proofStart,
-      (live .x23 (by decide)).trans one, values⟩,
+      (live .x27 (by decide)).trans leaves, (live .x20 (by decide)).trans proofStart, values⟩,
       root, (live .x21 (by decide)).trans pointer⟩, countdown⟩
 
 

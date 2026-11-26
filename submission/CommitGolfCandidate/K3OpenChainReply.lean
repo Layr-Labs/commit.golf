@@ -33,14 +33,14 @@ private theorem input_word_any (g : Fin Permutation.CounterSalt.groups) (key : B
       apply BitVec.eq_of_getLsbD_eq;intro k hk
       simp [hk,show 192≤64*(j.val-1)+k by omega]
 
-private theorem keyed_input (h : MachineState) (i : Index) (ph : Nat) (e : ChainEntry h i ph) (k : BitVec 192)
+private theorem keyed_input (h : MachineState) (i : Index) (e : ChainEntry h i) (k : BitVec 192)
     (key : KeyWords h k) :
     keyedQuery h=Permutation.CounterSalt.input (K6Chain.restart (coord i).1) k := by
   rw [keyedQuery,← reply_pack (Permutation.CounterSalt.input (K6Chain.restart (coord i).1) k)]
   apply congrArg packBuffer;funext j
   have jl := j.isLt
   change memoryView (chainBefore h) (128+j.val)=_
-  rw [before_view h i ph e _ (by omega),input_word_any]
+  rw [before_view h i e _ (by omega),input_word_any]
   by_cases zero : j.val=0
   · simp [writeWord,zero]
   · simp only [writeWord,show 128+j.val≠128 by omega,zero,if_false]
@@ -71,14 +71,14 @@ private theorem link_window (o : Oracle) (c : Nat) : ∀ (s : MachineState) (R :
       show (⇑o.permutation)^[c+1] R = (⇑o.permutation)^[c] (o.permutation R) from Function.iterate_succ_apply _ _ _]
     exact ih _ _ hY m
 
-theorem chain_reply (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index) (ph : Nat) (e : ChainEntry h i ph)
+theorem chain_reply (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index) (e : ChainEntry h i)
     (key : KeyWords h k) (j : Fin 25) :
-    memoryView (chainState o h i ph) (192+j.val)=replyWords (chainReply o k i) j := by
+    memoryView (chainState o h i) (192+j.val)=replyWords (chainReply o k i) j := by
   let R:=o.permutation (Permutation.CounterSalt.input (K6Chain.restart (coord i).1) k)
   let a:=writeBits (chainBefore h) (wordAddress 192) (o.permutation (keyedQuery h))
   have aw (m : Fin 25) : memoryView a (192+m.val)=replyWords R m := by
     show memoryView (writeBits _ _ _) _=_
-    rw [reply_inside,keyed_input h i ph e k key]
+    rw [reply_inside,keyed_input h i e k key]
   have final : chainReply o k i=(⇑o.permutation)^[chainLinks i] R := by
     have oc := K6Chain.opener_chain o.permutation k (coord i).1
     rw [K6Chain.restart_links i] at oc
@@ -88,7 +88,7 @@ theorem chain_reply (o : Oracle) (k : BitVec 192) (h : MachineState) (i : Index)
   rw [chain_view_of_mem (exit_rows_mem _)]
   apply link_window o (chainLinks i) _ R _ j
   intro m
-  rw [chain_view_of_mem (enter_rows_mem _ ph)]
+  rw [chain_view_of_mem (enter_rows_mem _)]
   exact aw m
 
 end TwoPermutationPrototype.GroupedOpening

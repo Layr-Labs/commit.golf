@@ -33,7 +33,7 @@ attribute [local irreducible] startedCap execute readBuffer capRootAt
 
 theorem execute_cap_suffix_with (codec : FrontierKernel) (oracle : Oracle) (groups : List Nat) (before : MachineState)
     (pointer claim fuel : Nat) (ready : CapSuffixReady groups before pointer claim)
-    (fuelBound : 80000 ≤ fuel) : CapFinished oracle groups before pointer claim fuel := by
+    (fuelBound : 40000 ≤ fuel) : CapFinished oracle groups before pointer claim fuel := by
   let prepared := startedCap before
   obtain ⟨pc, node, len, kind, count⟩ := started_cap_fixed before
   have preserved (reg : Reg) (a : reg ≠ .x6) (b : reg ≠ .x7) (c : reg ≠ .x28) (d : reg ≠ .x29)
@@ -80,23 +80,7 @@ theorem execute_cap_suffix_with (codec : FrontierKernel) (oracle : Oracle) (grou
       capRootAt prepared leaf = capRootAt before leaf := by
     unfold capRootAt
     exact prep_digest before ready.markBase _ (by omega) (by omega)
-  have transport (heap : Nat → BitVec 256) (contents : CapContents groups before 1 8 pointer 0 heap) :
-      CapContents groups prepared 1 8 pointer 0 heap := by
-    constructor
-    · intro leaf member low high under
-      rw [leafDigest leaf high]
-      exact contents.leaves leaf member low high under
-    · intro i inside
-      have room := ready.proofRoom
-      have mono := cap_packed_bytes_mono (Nat.le_of_lt inside)
-      have range : MEMORY_BYTES < 2^60 := by decide
-      have unchanged : capFrontierValue prepared pointer (0+i) = capFrontierValue before pointer (0+i) := by
-        apply cap_frontier_value_frame before prepared _ _ ready.proofAbove (by rw [Nat.zero_add]; omega)
-        intro word above bounded
-        exact started_cap_word before ready.markBase word bounded (Or.inr (by omega))
-      rw [unchanged]
-      exact contents.frontier i inside
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · rw [projection]
     exact ran.calls
   · rw [projection]
@@ -110,12 +94,22 @@ theorem execute_cap_suffix_with (codec : FrontierKernel) (oracle : Oracle) (grou
   · rw [projection]
     exact ran.terminates
   · intro heap model contents expected finish
-    have good := ran.honest heap model (transport heap contents) (claimDigest.trans expected) (endReg.trans finish)
-    rw [projection]
-    exact good
-  · intro heap u w model contents expected finish atEnd picked above low top
-    have good := ran.nearHonest heap u w model (transport _ contents) (claimDigest.trans expected)
-      (endReg.trans finish) atEnd picked above low top
+    have input : CapContents groups prepared 1 8 pointer 0 heap := by
+      constructor
+      · intro leaf member low high under
+        rw [leafDigest leaf high]
+        exact contents.leaves leaf member low high under
+      · intro i inside
+        have room := ready.proofRoom
+        have mono := cap_packed_bytes_mono (Nat.le_of_lt inside)
+        have range : MEMORY_BYTES < 2^60 := by decide
+        have unchanged : capFrontierValue prepared pointer (0+i) = capFrontierValue before pointer (0+i) := by
+          apply cap_frontier_value_frame before prepared _ _ ready.proofAbove (by rw [Nat.zero_add]; omega)
+          intro word above bounded
+          exact started_cap_word before ready.markBase word bounded (Or.inr (by omega))
+        rw [unchanged]
+        exact contents.frontier i inside
+    have good := ran.honest heap model input (claimDigest.trans expected) (endReg.trans finish)
     rw [projection]
     exact good
 

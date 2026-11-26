@@ -44,7 +44,7 @@ structure CollectionFacts (oracle : Oracle) (input : CheckInput) (left : Nat)
     RecordCursor input input.positions.card result.state ∧
     RecordInputFrame input input.positions.card result.state ∧
     CollectedTable oracle input input.positions.card result.state (rows++result.rows)
-  honest : ∀ message salts, NearHonest input (honestCheckInput oracle message input.positions salts) → result.rejected = false
+  honest : ∀ message salts, input = honestCheckInput oracle message input.positions salts → result.rejected = false
 
 attribute [local irreducible] execute checkEvaluation
 
