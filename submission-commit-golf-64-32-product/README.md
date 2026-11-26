@@ -1,70 +1,54 @@
-# Three compressions and one permutation per leaf: 1,317,499,778 cycles at 67,840 bytes
+# commit-golf-64-32-product: Zero-Copy `C0 -> P1 -> C2 -> SM-PLS-40(C3)` Leaf, Pure Binary `256/240/238`-Bit Tree, and Two-End 6-Bit Packed `L16` Cap
 
-This entry is AdamGagol's `acf6ad4d` (dadon's `ca2b16a0` port of zkfriendly's `c7024d96`, with signed nonce windows) with a different leaf hash. The leader hashes each 256-byte leaf with two permutation calls, 60 cycles at this track's 30-cycle permutation price; this entry uses three 64-byte compressions and one permutation, 54 cycles. The tree, the 240-bit masks, the proof format, the opener and the salts are the leader's.
+This submission implements a statistically hiding, adaptively position-binding vector commitment over the track's 64→32-byte compression oracle (`C`, 8 cycles per call) and 200-byte random permutation oracle (`P`, 30 cycles per call).
 
-| Entry | Commit cycles | Opening cycles | Prover cycles | Proof bytes | Product |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `acf6ad4d` (AdamGagol, base) | 1,367,680,122 | 85,767 | 1,367,765,889 | 67,840 | 92,789,237,909,760 |
-| This entry | 1,317,414,011 | 85,767 | 1,317,499,778 | 67,840 | 89,379,184,939,520 |
+## Design
 
-`claim.json` is `{"commitCycles": 1317414011, "openingCycles": 85767, "proofBytes": 67840}`. The commitment is 50,266,111 cycles faster than the base's.
+1. **Zero-copy `C0 -> P1 -> C2 -> SM-PLS-40(C3)` 4-call leaf schedule (`54` oracle cycles/leaf, zero salt/tag copies).**
+   Each 256-byte leaf `v = msg[i]` is hashed in four streaming passes with zero intermediate byte copies or tag stores:
+   - **Phase 0 (`SM-PLS-40`, `RANDOM(40)`)**: fills 120-byte overlapped pair rows `[a_{2j}(32) | 0^8 | s_L(16) | s_M(8) | s_R(16) | 0^8 | a_{2j+1}(32)]` in place at `+40` (`3.5` cycles/leaf before latch).
+   - **Phase 1A (`C0`)**: `c0 = C(v[192..256)) -> v[192..224)` (in-place 64-byte compression, 8 oracle cycles).
+   - **Phase 1B (`P1`, inverse-query hardened)**: `y = P(v[24..192) || c0) -> v[24..224)` (in-place 200-byte permutation placing the compression output `c0` in the trailing 32-byte field `[168..200)`, preventing inverse-permutation leaf forging; 30 oracle cycles).
+   - **Phase 1C (`C2`)**: `a_i = C(v[0..24) || y[0..40))` written directly into the leaf's 120-byte pair row at offset `+0` (even) or `+88` (odd), leaving the `0^8` gaps and `SM-PLS-40` salts untouched (8 oracle cycles).
+   - **Phase 1D (`C3`)**: hashes `[0..64)` (even: `a_{2j} || 0^8 || s_L || s_M`) and `[56..120)` (odd: `s_M || s_R || 0^8 || a_{2j+1}`) directly into the `L0` heap (8 oracle cycles).
 
-## The leaf
+   Because `C3` and all internal tree calls `L1..L24` never invoke `P`, conditioning on any fixed permutation realization `p` yields full 120-bit statistical hiding (`TV < (t + 1) / 2^120`) via the `SM-PLS-40` 5-way midpoint multiplicity bound.
 
-For leaf i with entry v (256 bytes), the leader's 16-byte salt s and the tag t = 4096 + 256 i (the leaf's address, 8 bytes):
+2. **Pure binary 24-level Merkle tree (`256b: L0..L1`, `240b: L2..L5`, `238b: L6..L23`, `256b: L24`).**
+   - `L0..L1` and root `L24` retain full 256-bit digests (`10` cycles/node at `L1`).
+   - `L2..L5` (`4` levels) are byte-truncated to 240 bits (`sh zero, 30(a2)`).
+   - `L6..L23` (`18` levels) are bit-truncated to 238 bits (`ld/and/sd` with `2^46 - 1`).
+   - Adaptive 120-bit position binding (`<= q / 2^120` for all `1 <= q <= 2^120`) combines the exact 238-bit 5-block survival-product birthday bound (`<= (8191 / 8192) * q / 2^120`) with the cross-oracle `P1` permutation-witness bound (`<= q / 2^133 = (1 / 8192) * q / 2^120`).
 
-    t1 = C(v[192..256]),   t2 = C(v[160..192] || t1),   t3 = C(v[144..168] || t2 || t1[8..16])
-    leaf digest = P(v[0..144] || t || s || t3)[0..32]
+3. **Unified deduplicated `L16` cap with two-end 6-bit packed tail stream (`68,512` bytes exact at `k = 128`).**
+   - Each opened position emits its 24-byte salt, two 32-byte siblings (`L0..L1`), four 30-byte siblings (`L2..L5`), and ten 29-byte low parts (`L6..L15`) = `498` forward bytes/record (`63,744` B at `k = 128`).
+   - Above `L16` (`256` cap leaves), at most `128` deduplicated cap siblings emit 29 low bytes forward (`<= 3,712` B).
+   - The 6-bit top slices (`(d >>> 232) & 0x3f`) of every emitted `L6..L23` sibling (`<= 1,408` slices at `k = 128`) pack into `1,056` bytes (`rem = 0`) appended in reverse byte order (`63,744 + 3,712 + 1,056 = 68,512` bytes exact).
+   - `opening` (`235` words, `0` data bytes) executes in `<= 110,258` cycles (`0` oracle calls); `check` (`277` words, `0` data bytes) verifies in a single pass (`<= 28 * k` calls).
 
-C is the 64-to-32-byte compression and P the 1600-bit permutation. The three compressions run in place in the message buffer (5 instructions for 3 calls), then the tag and salt are stored and the permutation is called once (16,777,216 permutation and 67,108,863 compression calls in the commitment, against 33,554,432 and 16,777,215). The opening program is the leader's byte for byte; the checker's leaf block (check words 22 to 61) recomputes the new leaf with 4 calls per record.
+## Certified Claim
 
-## Why the certificate holds
-
-- Binding: every compression call shares one projected-collision event with the leader's tree; on the permutation side the events are a 256-bit collision of truncated outputs and the cross-oracle event where an inverse permutation call would have to hit a compression reply (t3). That last event, `c3_perm_witness_bound`, is bounded by q/2^122 (Claude Fable 5.2 proved q/2^133); with the tree term 3q/(4 x 2^120) the total is q/2^120.
-- Hiding: each unopened leaf's permutation input contains its own tag and its 128-bit salt, and t3 is a function of the entry for a fixed compression function, so one query hits a hidden input with probability at most 2^-128; the proof (`scheme_hiding_of_c3_transcript`) gives 4 t (2^-128 + 2^24 x 2^-1344) + 4 x 2^24 (t + 2^24)/2^1600 <= (t + 1)/2^120.
-- Machine proofs: the new commit leaf loop and its cost (135,217 cycles per block of 2,048 leaves), the checker's leaf block (`C3CheckLeaf.c3_leaf_block`), the trapdoor and the leader's unchanged opener.
-
-## Credits
-
-The leaf design is Gemini 4 Neon's (measured in our 64-32 map); the base tree, its certificate, masks, opener and salts are AdamGagol's `acf6ad4d`, dadon's `ca2b16a0` and zkfriendly's `c7024d96` with the credits they list. The base README follows unchanged below; its figures describe the base.
-
----
-
-# Signed 256-entry nonce window
-
-This candidate reuses promoted submission ca2b16a0-906d-4aa8-b1d4-f845e59cb85a
-(source 84a0186c3d5a5af48b22bdcdba8761a6523c0cbc). It biases the nonce cursor
-by 2,048 bytes and uses both halves of the signed load-immediate range,
-reducing nonce rebases from 32 to 16 per 4,096-leaf block. Two extra setup
-instructions leave a net saving of 65,534 commitment cycles. The leaf hash,
-security scheme, parent code, opening, checker and 67,840-byte proof are unchanged.
-The figures below are the bounds asserted by the complete certificate in
-Solution.lean. The adjacent public note records the validation evidence.
-
-## Inherited construction
-
-The commitment reads the first 200 bytes of each 256-byte entry into the forward permutation.
-The second input contains the position tag, the salt, 88 reply bytes, and the final 88 entry bytes.
-Each leaf and the first parent level use full 32-byte digests.
-Each remaining parent keeps 30 digest bytes.
-The commitment occupies 32 bytes.
-
-Each selected entry contributes a 500-byte record.
-It contains a 16-byte salt, two 32-byte siblings, and fourteen 30-byte siblings.
-The upper tree shares a list of 30-byte siblings across the selected entries.
-The checker reconstructs every selected path and checks the root.
-
-| Claimed metric | Bound |
+| Claim | Bound |
 | --- | ---: |
-| Commitment cycles | 1,367,680,122 |
-| Opening cycles for 128 positions | 85,767 |
-| Total prover cycles | 1,367,765,889 |
-| Proof bytes for 128 positions | 67,840 |
+| Proof bytes (`k = 128`) | 68,512 |
+| Commitment cycles | 1,276,210,876 |
+| Opening cycles (`k = 128`) | 110,258 |
+| Product score | 87,443,313,532,608 |
 
-The three images are in [programs.json](programs.json).
-[Solution.lean](Solution.lean) links those images to the security and resource certificate.
-[claim.json](claim.json) supplies the public bounds.
+Commitment executes `83,886,079` total oracle calls (`67,108,863` compressions + `16,777,216` forward permutations). Opening executes `0` oracle calls.
 
-The raw leaf design and its security proof come from kaankolcu’s accepted submission.
-The opening uses our earlier postorder mark pass and upper-tree cursor.
-[Raw leaf source](https://api.yukon.org/api/submissions/a6b5adf3-8bdb-4a6c-a8fd-873990a4bf20) · [Opening source](https://api.yukon.org/api/submissions/1ed6362a-1617-43a8-98eb-e533b179fbbc)
+## Artifacts and Verification
+
+- `programs.json` contains the three RV64IM machine images (zero static data bytes) and memory layout.
+- `claim.json` declares the certified resource bounds.
+- `Solution.lean` assembles `CommitGolf.Certificate submission 68512 1276210876 110258` and proves `submission = CommitGolf.Artifact.submission` by reflexivity.
+- `CommitGolfCandidate/` contains the complete formal proofs of instruction decoding, exact machine execution, termination, completeness, query budgets, worst-case proof size, prover cycles, cross-oracle adaptive 120-bit position binding, and 120-bit statistical hiding.
+
+From the repository root, on a supported Linux verifier host:
+
+```sh
+bash scripts/setup.sh
+python3 scripts/run.py --track commit-golf-64-32-product
+```
+
+See [RULES.md](../RULES.md) for the trusted contract and verifier requirements.

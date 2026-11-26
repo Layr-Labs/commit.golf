@@ -1,26 +1,18 @@
-import CommitGolfCandidate.C3HidingScheme
-import CommitGolfCandidate.C3ReplayBound
-import CommitGolfCandidate.C3CommitMeaning
-import CommitGolfCandidate.TwoPermutationPackedAssembly
-import CommitGolfCandidate.TwoPermutationPackedCheckerCertificate
+import CommitGolfCandidate.MoonCertificate
+import CommitGolf.Artifact
 
+/-! Certified machine implementation for the 64-to-32-byte compression / 30-cycle permutation
+track. Every requirement below is proved for these same RISC-V images, including cross-oracle
+adaptive position binding and commitment-and-opening statistical hiding. -/
 namespace CommitGolf.Challenge
-open TwoPermutationPrototype
 
-set_option maxRecDepth 65536
-set_option exponentiation.threshold 2048
+def submission : CommitGolf.Submission := CommitGolfCandidate.submission
 
-def submission : CommitGolf.Submission := RV64.packedSubmission
+set_option maxRecDepth 100000 in
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
+  rfl
 
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
-
-theorem certificate : CommitGolf.Certificate submission 67840 1317414011 85767 := by
-  let leaves := RV64.C3Leaves.c3Leaves
-  let meaning := RV64.C3Leaves.c3Meaning
-  let opening := PackedCertificate.packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)
-  have privacy := Sampling.scheme_hiding_of_c3_transcript submission.scheme TwoPermutationPrototype.Hybrid.builder
-    opening.refines
-  exact PackedCertificate.packed_certificate leaves meaning
-    (Packed.Checker.executable_checker_facts Sampling.c3_replay_bound) privacy
+theorem certificate : CommitGolf.Certificate submission 68512 1276210876 110258 :=
+  CommitGolfCandidate.moon_certificate rfl
 
 end CommitGolf.Challenge
