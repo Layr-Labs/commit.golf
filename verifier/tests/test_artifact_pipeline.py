@@ -80,6 +80,8 @@ class ArtifactPipelineTests(unittest.TestCase):
     def test_track_price_is_trusted_and_incompatible_builds_are_removed(self):
         from tracks import TRACKS
         for name, track in TRACKS.items():
+            if track.depth_model is not None:
+                continue  # Different certificate and manifest schema; see test_depth_tracks.
             with self.subTest(track=name), tempfile.TemporaryDirectory() as directory:
                 args, _ = self.fixture(Path(directory))
                 args.track = name
@@ -169,6 +171,7 @@ class ArtifactPipelineTests(unittest.TestCase):
             shutil.copy2(ROOT / 'scripts/generate_artifact.py',
                          args.trusted / 'scripts/generate_artifact.py')
             shutil.copy2(ROOT / 'verifier/artifact.py', args.trusted / 'verifier/artifact.py')
+            shutil.copy2(ROOT / 'verifier/depth_profiles.py', args.trusted / 'verifier/depth_profiles.py')
             local_manifest = manifest()
             local_manifest['steps']['check'] += 1
             (args.trusted / 'submission/programs.json').write_text(json.dumps(local_manifest))

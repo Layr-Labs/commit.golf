@@ -212,6 +212,104 @@
           "version": "certificate-hash96-perm30-v1"
         }
       }
+    },
+    {
+      "name": "commit-golf-oracle-rounds-pareto",
+      "description": "Minimize certified prover cycles, opening-proof bytes and commitment-plus-opening oracle rounds. Batched RV64 queries snapshot all inputs before answers; 64-to-32-byte compression and permutation calls each cost 8 cycles.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission-commit-golf-oracle-rounds-pareto"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py",
+        "--track",
+        "commit-golf-oracle-rounds-pareto"
+      ],
+      "scorePath": "scripts/commit-golf-oracle-rounds-pareto/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-commit-golf-oracle-rounds-pareto.yml",
+        "maxConcurrentWorkflows": 2
+      },
+      "mode": "pareto",
+      "objectives": [
+        {
+          "name": "proverCycles",
+          "direction": "-"
+        },
+        {
+          "name": "proofBytes",
+          "direction": "-"
+        },
+        {
+          "name": "oracleRounds",
+          "direction": "-"
+        }
+      ],
+      "paretoPolicies": {
+        "scoring": {
+          "version": "oracle-rounds-v1"
+        },
+        "validity": {
+          "version": "certificate-oracle-rounds-v1"
+        }
+      }
+    },
+    {
+      "name": "commit-golf-work-span-pareto",
+      "description": "Minimize certified prover work, opening-proof bytes and weighted fork/join span. RV64 tasks share read-only memory and own disjoint writable regions; 64-to-32-byte compression and permutation calls each cost 8 cycles.",
+      "category": "cryptography",
+      "direction": "-",
+      "editablePaths": [
+        "submission-commit-golf-work-span-pareto"
+      ],
+      "setupCommand": [
+        "bash",
+        "scripts/setup.sh"
+      ],
+      "benchmarkCommand": [
+        "python3",
+        "scripts/run.py",
+        "--track",
+        "commit-golf-work-span-pareto"
+      ],
+      "scorePath": "scripts/commit-golf-work-span-pareto/score.json",
+      "maxSubmissionBytes": 33554432,
+      "runner": {
+        "provider": "github-actions",
+        "workflow": "benchmark-commit-golf-work-span-pareto.yml",
+        "maxConcurrentWorkflows": 2
+      },
+      "mode": "pareto",
+      "objectives": [
+        {
+          "name": "proverWork",
+          "direction": "-"
+        },
+        {
+          "name": "proofBytes",
+          "direction": "-"
+        },
+        {
+          "name": "proverSpan",
+          "direction": "-"
+        }
+      ],
+      "paretoPolicies": {
+        "scoring": {
+          "version": "fork-join-span-v1"
+        },
+        "validity": {
+          "version": "certificate-fork-join-span-v1"
+        }
+      }
     }
   ]
 }

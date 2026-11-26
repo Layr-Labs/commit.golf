@@ -17,6 +17,8 @@ jobs:
       changed_64_32_pareto: ${{ steps.paths.outputs.changed_64_32_pareto }}
       changed_96_32_product: ${{ steps.paths.outputs.changed_96_32_product }}
       changed_96_32_pareto: ${{ steps.paths.outputs.changed_96_32_pareto }}
+      changed_oracle_rounds_pareto: ${{ steps.paths.outputs.changed_oracle_rounds_pareto }}
+      changed_work_span_pareto: ${{ steps.paths.outputs.changed_work_span_pareto }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -51,6 +53,8 @@ jobs:
               '64_32_pareto': b'submission-commit-golf-64-32-pareto',
               '96_32_product': b'submission-commit-golf-96-32-product',
               '96_32_pareto': b'submission-commit-golf-96-32-pareto',
+              'work_span_pareto': b'submission-commit-golf-work-span-pareto',
+              'oracle_rounds_pareto': b'submission-commit-golf-oracle-rounds-pareto',
           }
           submission_paths = (b'submission/', b'submission-pareto/',
                               *(directory + b'/' for directory in new_tracks.values()))
@@ -117,6 +121,18 @@ jobs:
     uses: ./.github/workflows/benchmark-commit-golf-96-32-pareto.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
+  benchmark-oracle-rounds-pareto:
+    needs: changes
+    if: needs.changes.outputs.changed_oracle_rounds_pareto == 'true' && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true')
+    uses: ./.github/workflows/benchmark-commit-golf-oracle-rounds-pareto.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+  benchmark-work-span-pareto:
+    needs: changes
+    if: needs.changes.outputs.changed_work_span_pareto == 'true' && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.solver_branch != 'true')
+    uses: ./.github/workflows/benchmark-commit-golf-work-span-pareto.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
   linkage:
     needs: changes
     if: needs.changes.outputs.contract == 'true'
@@ -135,7 +151,7 @@ jobs:
     if: always()
     needs: [changes, benchmark, benchmark-pareto, linkage, scale,
             benchmark-64-32-product, benchmark-64-32-pareto,
-            benchmark-96-32-product, benchmark-96-32-pareto]
+            benchmark-96-32-product, benchmark-96-32-pareto, benchmark-oracle-rounds-pareto, benchmark-work-span-pareto]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -156,6 +172,10 @@ jobs:
           TRACK_64_32_PARETO_RESULT: ${{ needs.benchmark-64-32-pareto.result }}
           TRACK_96_32_PRODUCT_RESULT: ${{ needs.benchmark-96-32-product.result }}
           TRACK_96_32_PARETO_RESULT: ${{ needs.benchmark-96-32-pareto.result }}
+          CHANGED_WORK_SPAN_PARETO: ${{ needs.changes.outputs.changed_work_span_pareto }}
+          TRACK_WORK_SPAN_PARETO_RESULT: ${{ needs.benchmark-work-span-pareto.result }}
+          CHANGED_ORACLE_ROUNDS_PARETO: ${{ needs.changes.outputs.changed_oracle_rounds_pareto }}
+          TRACK_ORACLE_ROUNDS_PARETO_RESULT: ${{ needs.benchmark-oracle-rounds-pareto.result }}
         run: |
           if [[ "$CHANGES_RESULT" != success ]]; then
             echo 'Contract change detection did not succeed.' >&2
@@ -195,4 +215,6 @@ jobs:
           check_track commit-golf-64-32-pareto "$CHANGED_64_32_PARETO" "$TRACK_64_32_PARETO_RESULT"
           check_track commit-golf-96-32-product "$CHANGED_96_32_PRODUCT" "$TRACK_96_32_PRODUCT_RESULT"
           check_track commit-golf-96-32-pareto "$CHANGED_96_32_PARETO" "$TRACK_96_32_PARETO_RESULT"
+          check_track commit-golf-oracle-rounds-pareto "$CHANGED_ORACLE_ROUNDS_PARETO" "$TRACK_ORACLE_ROUNDS_PARETO_RESULT"
+          check_track commit-golf-work-span-pareto "$CHANGED_WORK_SPAN_PARETO" "$TRACK_WORK_SPAN_PARETO_RESULT"
           echo 'All required benchmark and regression checks passed.'

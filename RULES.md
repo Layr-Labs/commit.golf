@@ -11,7 +11,10 @@ independently. A candidate dominates another when it is no worse on both and str
 better on at least one. `commit-golf-64-32-product` and `commit-golf-64-32-pareto` use the corresponding
 scoring rules with permutation calls priced at 30 cycles. `commit-golf-96-32-product` and
 `commit-golf-96-32-pareto` additionally widen compression to 96→32 bytes, still at 8 cycles.
-All six tracks share every other contract parameter and numeric limit below.
+These six tracks share every other contract parameter and numeric limit below.
+The separate `commit-golf-oracle-rounds-pareto` and `commit-golf-work-span-pareto`
+tracks use the execution and resource contracts in [depth rules](docs/depth-rules.md).
+They retain the workload and security games below; their certificates also prove depth bounds.
 
 The cycle bounds and opening-proof byte bound are worst-case honest-run bounds, not
 sample averages. Commitment bytes, private trapdoor storage, opened values, indices,
@@ -80,7 +83,7 @@ Oversized proofs reject.
 | Ordinary instruction | 1 |
 | Multiplication/division, including remainder and word forms | 4 |
 | Compression syscall | 8 |
-| Forward or inverse permutation syscall | 8 (`product`, `pareto`); 30 (all `commit-golf-*` tracks) |
+| Forward or inverse permutation syscall | 8 (`product`, `pareto`); 30 (the `64-32-*` and `96-32-*` tracks) |
 | Private randomness, `n` bytes | 1 + ceil(n / 8) |
 | HALT | 1 |
 

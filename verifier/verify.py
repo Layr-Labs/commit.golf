@@ -25,6 +25,7 @@ from check_submission import check
 from artifact import load_artifact, purge_artifact_cache, write_artifact_module
 from fetch import FetchError, fetch_pr
 from tracks import TRACKS, prepare_contract
+from depth_profiles import depth_profile
 
 HERE = Path(__file__).resolve().parent
 TRUSTED = HERE.parent
@@ -196,6 +197,9 @@ def verify(args: argparse.Namespace) -> dict:
         track = TRACKS[track_name]
         result.update(track=track_name, permutation_cycles=track.permutation_cycles,
                       compression_input_bytes=track.compression_input_bytes)
+        profile = depth_profile(track.depth_model) if track.depth_model is not None else None
+        if profile is not None:
+            result.update(resource_model=profile.version, objective_names=list(profile.objectives))
         if args.local and work.is_relative_to(args.local.resolve()):
             raise VerifyError('work directory must be outside the local submission directory')
         if work.exists():
@@ -215,13 +219,14 @@ def verify(args: argparse.Namespace) -> dict:
             shutil.copytree(args.local, source, symlinks=True)
         else:
             fetch_pr(args.repository, args.pr, args.commit, source, track=track_name)
-        policy = check(source)
+        policy = (check(source) if profile is None else
+                  check(source, resource_model=track.depth_model))
         result['claim'] = policy['claim']
         if not policy['ok']:
             result.update(status='policy_rejected', errors=policy['errors'])
             log.write_text('\n'.join(policy['errors']) + '\n')
             return result
-        artifact = load_artifact(source / 'programs.json')
+        artifact = load_artifact(source / 'programs.json', resource_model=track.depth_model)
         if artifact.digest != policy['artifactDigest']:
             raise VerifyError('programs.json changed after policy validation')
         result['artifact_digest'] = artifact.digest
@@ -231,13 +236,17 @@ def verify(args: argparse.Namespace) -> dict:
             shutil.copy2(args.trusted / name, project / name)
         for name in ('CommitGolf',):
             shutil.copytree(args.trusted / name, project / name)
+        if profile is not None:
+            shutil.copy2(args.trusted / 'CommitGolfDepth.lean', project / 'CommitGolfDepth.lean')
+            shutil.copytree(args.trusted / 'CommitGolfDepth', project / 'CommitGolfDepth')
         write_artifact_module(artifact, project)
         with (project / 'lakefile.lean').open('a') as out:
             out.write('\nlean_lib Solution\n')
         if (source / 'CommitGolfCandidate').is_dir():  # optional: Solution.lean may stand alone
             shutil.copytree(source / 'CommitGolfCandidate', project / 'CommitGolfCandidate')
         shutil.copy2(source / 'Solution.lean', project / 'Solution.lean')
-        challenge = (args.trusted / 'verifier' / 'Challenge.lean.in').read_text()
+        template = 'Challenge.lean.in' if profile is None else profile.template
+        challenge = (args.trusted / 'verifier' / template).read_text()
         for key, value in policy['claim'].items():
             challenge = challenge.replace('{{' + key + '}}', str(value))
         (project / 'CommitGolf' / 'Challenge.lean').write_text(challenge)
@@ -266,6 +275,8 @@ def verify(args: argparse.Namespace) -> dict:
             result['status'] = 'timeout'
         elif exit_code == 0 and 'Your solution is okay!' in log.read_text(errors='replace'):
             result.update(status='verified', score=policy['score'])
+            if profile is not None:
+                result['scores'] = policy['scores']
         else:
             result.update(status='rejected', reason=log.read_text(errors='replace')[-1200:])
         return result

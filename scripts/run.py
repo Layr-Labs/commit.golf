@@ -8,7 +8,8 @@ import sys
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
-from scoring import score_claim
+from scoring import score_claim, depth_objectives
+from depth_profiles import depth_profile
 from tracks import TRACKS
 
 parser = argparse.ArgumentParser()
@@ -37,25 +38,42 @@ if (report.get("track") != args.track or type(report.get("permutation_cycles")) 
         or report["compression_input_bytes"] != track.compression_input_bytes):
     raise SystemExit("Verifier used a different track, permutation cost, or compression width")
 claim = report["claim"]
+profile = depth_profile(track.depth_model) if track.depth_model is not None else None
 try:
-    score = score_claim(claim)
+    if profile is None:
+        score = score_claim(claim)
+        if type(report.get("score")) is not int or report["score"] != score:
+            raise SystemExit("Verifier reported a different score")
+    else:
+        point = depth_objectives(claim, track.depth_model)
+        actual = report.get("scores")
+        if (type(actual) is not list or len(actual) != 3
+                or any(type(value) is not int for value in actual) or actual != point
+                or report.get("score") is not None
+                or report.get("resource_model") != profile.version
+                or report.get("objective_names") != list(profile.objectives)):
+            raise SystemExit("Verifier reported a different depth contract or objective point")
 except ValueError as exc:
     raise SystemExit(f"Invalid verifier metrics: {exc}")
-if type(report.get("score")) is not int or report["score"] != score:
-    raise SystemExit("Verifier reported a different score")
 contract = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 if report["contract_commit"] != contract:
     raise SystemExit("Verifier used a different contract from the repository commit")
 artifact_digest = hashlib.sha256((submission / 'programs.json').read_bytes()).hexdigest()
 if report.get('artifact_digest') != artifact_digest:
     raise SystemExit('Verifier used a different delivered program manifest')
-metrics = {**claim,
-           "proverCycles": claim["commitCycles"] + claim["openingCycles"],
-           "track": args.track, "permutationCycles": track.permutation_cycles,
+metrics = {**claim, "track": args.track, "permutationCycles": track.permutation_cycles,
            "compressionInputBytes": track.compression_input_bytes,
            "contractCommit": contract, "artifactDigest": artifact_digest, "verified": True}
+if profile is None:
+    metrics["proverCycles"] = claim["commitCycles"] + claim["openingCycles"]
+else:
+    metrics.update({profile.work_metric: point[0], profile.depth_metric: point[2],
+                    "resourceModel": profile.version})
 temporary = score_path.with_suffix(".tmp")
-payload = ({"valid": True, "scores": [metrics["proverCycles"], claim["proofBytes"]],
-            "metrics": metrics} if track.pareto else {"score": score, "metrics": metrics})
+if profile is not None:
+    payload = {"valid": True, "scores": point, "metrics": metrics}
+else:
+    payload = ({"valid": True, "scores": [metrics["proverCycles"], claim["proofBytes"]],
+                "metrics": metrics} if track.pareto else {"score": score, "metrics": metrics})
 temporary.write_text(json.dumps(payload) + "\n")
 temporary.replace(score_path)

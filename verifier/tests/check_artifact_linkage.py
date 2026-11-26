@@ -96,6 +96,8 @@ end CommitGolf.Challenge
     cases.append(Case('missing_equality', raw, missing, 'rejected'))
     cost_probe = (Path(__file__).parent / 'TrackCosts.lean.in').read_text()
     for name, track in TRACKS.items():
+        if track.depth_model is not None:
+            continue  # Depth manifests/certificates have a separate linkage harness.
         source = direct + cost_probe.replace('{{permutationCycles}}', str(track.permutation_cycles))
         source = source.replace('{{compressionInputBytes}}', str(track.compression_input_bytes))
         source = source.replace('{{compressionInputBits}}', str(8 * track.compression_input_bytes))

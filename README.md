@@ -19,8 +19,21 @@ change widths, or access a built-in variable-input RO or XOF.
 - `commit-golf-96-32-product`: product scoring with 96→32-byte compression at 8 cycles and permutation at 30; edit `submission-commit-golf-96-32-product/`.
 - `commit-golf-96-32-pareto`: Pareto scoring with the same 96→32-byte compression and prices; edit `submission-commit-golf-96-32-pareto/`.
 
-The original tracks charge 8 cycles per permutation call. Compression costs 8 in all six.
-All tracks use the same certificate, query budgets, and numeric limits. Use `yukon run --track <track>` or
+The original six tracks share their certificate, query budgets and numeric limits.
+The original pair charges 8 cycles per permutation call; the four width/price variants charge 30.
+Compression costs 8 in all tracks.
+
+Two separate depth tracks preserve the workload and binding/hiding games:
+
+- `commit-golf-oracle-rounds-pareto`: minimize `[proverCycles, proofBytes, oracleRounds]`.
+- `commit-golf-work-span-pareto`: minimize `[proverWork, proofBytes, proverSpan]`.
+
+Each edits its matching `submission-<track>/` directory and adds depth fields to
+the full machine/security certificate. See [depth rules](docs/depth-rules.md) for
+the exact execution models, artifact modes, prices and limitations.
+The included depth baselines are serial bootstraps. Parallel optimizations remain separate submissions.
+
+Use `yukon run --track <track>` or
 `python3 scripts/run.py --track <track>` (default: product). `yukon switch <track>`
 selects a track without changing Git state.
 The `commit-golf-96-32-*` tracks accept exactly 96 input bytes: three 256-bit digests fit in one
@@ -29,14 +42,14 @@ provide an additional 64-byte oracle or implement concrete BLAKE3.
 
 ## Score and certificate
 
-Minimize `(commitCycles + openingCycles) × proofBytes` for one full
+The product track minimizes `(commitCycles + openingCycles) × proofBytes` for one full
 commitment and an opening of **128 leaves**. Claims are certified worst-case bounds,
 not sample measurements; verification cycles are not scored.
 
 Each submission supplies RISC-V programs for commitment, opening, and checking.
 The security-game scheme is derived from those same images. One certificate checks
 machine admission, successful honest execution, termination, completeness, query
-budgets, proof size, prover cycles, binding, and statistical hiding.
+budgets, proof size, prover resource bounds, binding, and statistical hiding.
 
 Binding and hiding target 120-bit security, with 2,048-bit logical leaves and 256-bit
 commitments. The scheme remains noninteractive. See [RULES.md](RULES.md) for the
@@ -83,9 +96,9 @@ Reports are `scripts/score.json` (product) and `scripts/pareto/score.json` (Pare
 The new tracks write `scripts/commit-golf-64-32-product/score.json` and `scripts/commit-golf-64-32-pareto/score.json`.
 Each report identifies its track, compression input size, and permutation cost.
 The 96→32-byte variants have separate `scripts/<track>/score.json` reports.
-The four new variants include only track configuration and verifier contracts.
-Their submission directories, programs, claims, and complete certificates will be
-added separately. Until then, their full-score workflows cannot produce a score.
+All four width/price variants include submission directories, delivered programs,
+claims and complete certificates. The depth tracks include serial bootstrap candidates
+whose new certificate and artifact-linkage paths must pass release validation.
 Porting a 64-byte baseline requires changing its programs and proofs, not only its price.
 
 The binding game follows the original sampled-function design: sample the two
@@ -112,7 +125,7 @@ and halt/failure, recording abstract cycles and public oracle calls separately.
 Ordinary instructions cost one cycle; multiplication and division cost four.
 Private randomness retains the historical charge of `1 + ceil(bytes / 8)` cycles.
 Compression costs eight cycles. Forward/inverse permutation calls cost eight on the original
-tracks and 30 on the four `commit-golf-*` tracks, with no additional instruction charge for the syscall.
+tracks and 30 on the four width/price variants, with no additional instruction charge for the syscall.
 The verifier selects the price from its trusted track configuration, changes only
 `PERMUTATION_CYCLES` and `COMPRESSION_INPUT_LENGTH` in its isolated contract copy, and
 removes incompatible project builds. The repository's `Parameters.lean` retains
@@ -129,8 +142,8 @@ they do not claim elapsed time on a physical processor.
 
 ## Yukon setup
 
-`benchmark.json` defines six schema-v2 tracks, sharing setup and verification.
-`benchmark.yml` runs product; the five `benchmark-<track>.yml` wrappers select the other tracks.
+`benchmark.json` defines eight schema-v2 tracks, sharing setup and verification.
+`benchmark.yml` runs product; the seven `benchmark-<track>.yml` wrappers select the other tracks.
 Each uploads its own report.
 Yukon must support mixed modes before import. For an existing standalone import, convert it
 into the product track first, then import Pareto. Mixed-mode reorgs require `trackScope: "track"`.
@@ -141,17 +154,18 @@ through four independent workflows in parallel:
 - `benchmark.yml`: the original product baseline and its score.
 - `benchmark-pareto.yml`: the original Pareto baseline and its score.
 - `test-linkage.yml`: Python unit tests and artifact-linkage regressions, including
-  oracle widths, costs, and query counts on all six tracks.
+  oracle widths, costs and query counts on the six original tracks, plus actual
+  byte/mode linkage and full-certificate type rejection for both depth profiles.
 - `test-scale.yml`: maximum-image admission and byte-linkage regressions.
 
 Each workload has its own runner, result, and log artifact. All four workflows can also
 be dispatched individually from Actions, making it possible to rerun a failed workload.
 For each new track whose submission directory changes, PR CI also calls that track's
-`benchmark-commit-golf-<width>-32-<mode>.yml` workflow in parallel and requires full
+matching `benchmark-<track>.yml` workflow in parallel and requires full
 certificate and artifact-equality verification. Additions, edits, deletions, and both
 sides of moves between tracks select the affected tracks. An unchanged new-track
 submission is also verified when shared contract code changes and its root exists.
-Differences outside the six submission directories enable the linkage and scale workflows.
+Differences outside the eight submission directories enable the linkage and scale workflows.
 Submission-only PRs on Yukon's same-repository `submissions/*` branches
 leave Benchmark execution to Yukon; contract changes on those branches still run the
 full checks here, including any changed new-track submissions. Forks and other branches

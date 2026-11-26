@@ -47,6 +47,8 @@ jobs:
             commit-golf-64-32-pareto) bash scripts/blacksmith.sh run-commit-golf-64-32-pareto ;;
             commit-golf-96-32-product) bash scripts/blacksmith.sh run-commit-golf-96-32-product ;;
             commit-golf-96-32-pareto) bash scripts/blacksmith.sh run-commit-golf-96-32-pareto ;;
+            commit-golf-oracle-rounds-pareto) bash scripts/blacksmith.sh run-commit-golf-oracle-rounds-pareto ;;
+            commit-golf-work-span-pareto) bash scripts/blacksmith.sh run-commit-golf-work-span-pareto ;;
             *) echo 'Unknown track' >&2; exit 1 ;;
           esac
       - name: Collect results
@@ -63,6 +65,8 @@ jobs:
             commit-golf-64-32-pareto) score_path=scripts/commit-golf-64-32-pareto/score.json ;;
             commit-golf-96-32-product) score_path=scripts/commit-golf-96-32-product/score.json ;;
             commit-golf-96-32-pareto) score_path=scripts/commit-golf-96-32-pareto/score.json ;;
+            commit-golf-oracle-rounds-pareto) score_path=scripts/commit-golf-oracle-rounds-pareto/score.json ;;
+            commit-golf-work-span-pareto) score_path=scripts/commit-golf-work-span-pareto/score.json ;;
             *) exit 1 ;;
           esac
           mkdir -p ".work/score-artifact/$(dirname "$score_path")"

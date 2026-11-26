@@ -7,7 +7,7 @@ runs:
       id: cache
       with:
         path: .cache/trusted.tar.zst
-        key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
+        key: verifier-ubuntu26-vm-${{ runner.arch }}-${{ hashFiles('CommitGolf/**', 'CommitGolf.lean', 'CommitGolfDepth/**', 'CommitGolfDepth.lean', 'CommitGolfBaseline/**', 'CommitGolfBaseline.lean', 'lakefile.lean', 'lake-manifest.json', 'lean-toolchain', 'verifier/**', 'scripts/setup.sh', 'scripts/blacksmith.sh', 'scripts/vm-setup.sh') }}-v2
     - name: Start verifier VM
       shell: bash
       run: bash scripts/blacksmith.sh start

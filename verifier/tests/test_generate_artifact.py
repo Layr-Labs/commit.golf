@@ -21,6 +21,7 @@ class GenerateArtifactTests(unittest.TestCase):
             (root / folder).mkdir()
         shutil.copy2(ROOT / 'scripts/generate_artifact.py', root / 'scripts/generate_artifact.py')
         shutil.copy2(ROOT / 'verifier/artifact.py', root / 'verifier/artifact.py')
+        shutil.copy2(ROOT / 'verifier/depth_profiles.py', root / 'verifier/depth_profiles.py')
         raw = json.dumps(manifest()).encode()
         (root / 'submission/programs.json').write_bytes(raw)
         return raw
@@ -58,6 +59,29 @@ class GenerateArtifactTests(unittest.TestCase):
             self.assertIn('Already current', again.stdout)
             self.assertEqual(destination.stat().st_mtime_ns, before)
             self.assertTrue(all(path.exists() for path in caches))
+
+    def test_depth_generator_selects_exact_resource_model_and_binds_modes(self):
+        for model, namespace, mode in [('oracle-rounds', 'Rounds', 'batched'),
+                                       ('work-span', 'Span', 'forkJoin')]:
+            with self.subTest(model=model), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.fixture(root)
+                value = manifest()
+                value['schemaVersion'] = 2
+                value['executionModes'] = dict.fromkeys(('commit', 'opening', 'check'), mode)
+                raw = json.dumps(value).encode()
+                (root / 'submission/programs.json').write_bytes(raw)
+                self.assertNotEqual(self.cli(root).returncode, 0)
+                result = self.cli(root, '--resource-model', model)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                source = (root / 'CommitGolf/Artifact.lean').read_text()
+                self.assertTrue(source.endswith(parse_artifact(raw, resource_model=model).lean_source()))
+                self.assertIn(f'def depthSubmission : CommitGolfDepth.{namespace}.Submission', source)
+                self.assertEqual(source.count('=> .' + mode), 3)
+                other = 'work-span' if model == 'oracle-rounds' else 'oracle-rounds'
+                before = (root / 'CommitGolf/Artifact.lean').read_bytes()
+                self.assertNotEqual(self.cli(root, '--resource-model', other, '--refresh').returncode, 0)
+                self.assertEqual((root / 'CommitGolf/Artifact.lean').read_bytes(), before)
 
     def test_changed_manifest_requires_refresh_and_purges_every_artifact_cache(self):
         with tempfile.TemporaryDirectory() as directory:

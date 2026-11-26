@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'verifier'))
-from scoring import score_claim
+from scoring import score_claim, depth_objectives
+from depth_profiles import depth_profile
 from tracks import TRACKS
 
 
@@ -45,6 +46,16 @@ class RunnerTests(unittest.TestCase):
 
     def report(self, track='product'):
         claim = {'proofBytes': 8, 'commitCycles': 7, 'openingCycles': 6}
+        if TRACKS[track].depth_model is not None:
+            profile = depth_profile(TRACKS[track].depth_model)
+            claim = dict(zip(profile.claim_keys, (8, 7, 6, 2, 1)))
+            return {'status': 'verified', 'claim': claim, 'score': None,
+                    'scores': depth_objectives(claim, TRACKS[track].depth_model),
+                    'resource_model': profile.version, 'objective_names': list(profile.objectives),
+                    'contract_commit': 'contract', 'track': track,
+                    'permutation_cycles': TRACKS[track].permutation_cycles,
+                    'compression_input_bytes': TRACKS[track].compression_input_bytes,
+                    'artifact_digest': hashlib.sha256(b'delivered program fixture').hexdigest()}
         return {'status': 'verified', 'claim': claim, 'score': score_claim(claim),
                 'contract_commit': 'contract', 'track': track,
                 'permutation_cycles': TRACKS[track].permutation_cycles,
