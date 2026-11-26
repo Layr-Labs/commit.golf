@@ -16,8 +16,8 @@ private theorem register_set_mem (state : MachineState) (address value : Word) (
 
 private theorem path_copy_eq (state : MachineState) (start : Nat) :
     checkPathCopyState state start =
-      copyBlock state (if start = 31 then .x21 else .x25)
-        (if start = 39 ∨ start = 15 then 0 else 32) := rfl
+      copyBlock state (if start = 29 then .x21 else .x25)
+        (if start = 37 then 0 else 32) := rfl
 
 set_option maxHeartbeats 2000000 in
 private theorem copy_block_word (state : MachineState) (source : Reg) (offset word : Nat)
@@ -269,36 +269,6 @@ theorem check_path_loop_digest (oracle : Oracle) (state : MachineState)
     all_goals
       rw [induction, check_path_step_digest]
       simp only [answer, climb, List.foldl_cons, Bool.false_eq_true, ite_false, ite_true]
-
-/-- Copying the proof salt initializes the hash accumulator to that exact digest. -/
-theorem check_salt_copy_digest (state : MachineState) (address : Nat)
-    (scratch : state.getReg .x21 = 256) (pointer : state.getReg .x25 = BitVec.ofNat 64 address)
-    (aligned : address%8 = 0) (above : 320 ≤ address) (bounded : address+32 < 2^64) :
-    readBuffer (checkPathCopyState state 15) 256 32 = readBuffer state address 32 := by
-  have pointerNat : (state.getReg .x25).toNat = address := by
-    rw [pointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
-  have separated : ∀ i < 4, ∀ j < 4,
-      state.getReg .x25 + BitVec.ofNat 64 (8*i) ≠ BitVec.ofNat 64 (256+0+8*j) := by
-    intro i hi j hj equal
-    have natural := congrArg BitVec.toNat equal
-    rw [pointer, ← BitVec.ofNat_add] at natural
-    simp only [BitVec.toNat_ofNat] at natural
-    rw [Nat.mod_eq_of_lt (by omega : address+8*i < 2^64),
-      Nat.mod_eq_of_lt (by omega : 256+0+8*j < 2^64)] at natural
-    omega
-  rw [path_copy_eq]
-  change readBuffer (copyBlock state .x25 0) 256 32 = _
-  exact (copy_block_digest state .x25 0 (by decide) (Or.inl rfl) scratch
-    (by simpa only [pointerNat] using aligned) separated).trans
-      (congrArg (fun start => readBuffer state start 32) pointerNat)
-
-/-- Salt copying changes only the four words of the low scratch half. -/
-theorem check_salt_copy_outside (state : MachineState) (address : Word)
-    (scratch : state.getReg .x21 = 256)
-    (outside : ∀ i < 4, address ≠ BitVec.ofNat 64 (256+8*i)) :
-    (checkPathCopyState state 15).getMem address = state.getMem address := by
-  rw [path_copy_eq]
-  exact copy_block_outside state .x25 0 address (by decide) (Or.inl rfl) scratch outside
 
 /-- The entire authentication path preserves input and output buffers outside scratch. -/
 theorem check_path_loop_outside (oracle : Oracle) (state : MachineState) (count : Nat)

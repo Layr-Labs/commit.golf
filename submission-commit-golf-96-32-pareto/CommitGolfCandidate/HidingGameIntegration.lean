@@ -10,19 +10,19 @@ namespace CommitGolfCandidate
 local instance hidingGameIntegrationDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
-def queryActualTranscript (message : Message) (salt : Index → Digest) (positions : Positions) :
+def queryActualTranscript (message : Message) (salt : Index → Salt) (positions : Positions) :
     OracleComp World (Commitment × Proof) :=
-  queryTranscript (queryHeap LENGTH (queryLeaf message salt) LOG_LENGTH) salt positions
+  queryTranscript (queryHeap LENGTH (queryActualLeaf message salt) LOG_LENGTH) salt positions
 
 attribute [local irreducible] heapQueryBudget queryHeap queryTranscript
 
 theorem query_actual_transcript_reference (oracle : Oracle) (message : Message)
-    (salt : Index → Digest) (positions : Positions) :
+    (salt : Index → Salt) (positions : Positions) :
     fixedOracleRun oracle (queryActualTranscript message salt positions) =
       pure (referenceTranscript oracle.compression message salt positions) := by
   have correct (node : Nat) (positive : 0 < node) (inside : node < 2*LENGTH) :=
-    query_heap_reference oracle LENGTH (queryLeaf message salt)
-      (leafValues oracle.compression message salt) (query_leaf_reference oracle message salt)
+    query_heap_reference oracle LENGTH (queryActualLeaf message salt)
+      (actualLeafValues oracle.compression message salt) (query_actual_leaf_reference oracle message salt)
       LOG_LENGTH node positive inside (by
         change LENGTH ≤ LENGTH*node
         simpa only [Nat.mul_one] using Nat.mul_le_mul_left LENGTH positive)
@@ -35,14 +35,14 @@ theorem fixed_oracle_run_coins (oracle : Oracle) {α : Type} (coins : ProbComp �
 
 def referenceContinuation {α : Type} (message : Message) (positions : Positions)
     (observe : Commitment → Proof → OracleComp World α) : OracleComp World α := do
-  let salt ← (liftM ($ᵗ (Index → Digest)) : OracleComp World (Index → Digest))
+  let salt ← (liftM ($ᵗ (Index → Salt)) : OracleComp World (Index → Salt))
   let transcript ← queryActualTranscript message salt positions
   observe transcript.1 transcript.2
 
 theorem reference_continuation_run {α : Type} (oracle : Oracle) (message : Message)
     (positions : Positions) (observe : Commitment → Proof → OracleComp World α) :
     fixedOracleRun oracle (referenceContinuation message positions observe) =
-      (($ᵗ (Index → Digest)) >>= fun salt => observeTranscript oracle message salt positions observe) := by
+      (($ᵗ (Index → Salt)) >>= fun salt => observeTranscript oracle message salt positions observe) := by
   rw [referenceContinuation, fixed_oracle_run_bind, fixed_oracle_run_coins]
   apply bind_congr
   intro salt
