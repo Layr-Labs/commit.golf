@@ -224,5 +224,95 @@ theorem read_digest_eq_iff (left right : MachineState) (leftAddress rightAddress
     simp only [Nat.reduceMul, Nat.add_zero] at w0 w1 w2 w3
     rw [w0, w1, w2, w3]
 
+/-- An aligned 8-byte read equals the single memory word. -/
+theorem read_word_eq (state : MachineState) (address : Nat) (aligned : address % 8 = 0) :
+    readBuffer state address 8 = state.getMem (BitVec.ofNat 64 address) := by
+  apply BitVec.eq_of_toNat_eq
+  change (BitVec.ofNat 64 (readNatural state address 8)).toNat = _
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (read_natural_bound state address 8),
+    read_natural_word state address aligned]
+
+/-- A 16-byte salt read concatenates two consecutive words, low word first in memory. -/
+theorem read_salt_words (state : MachineState) (address : Nat) (aligned : address % 8 = 0) :
+    readBuffer state address 16 =
+      state.getMem (BitVec.ofNat 64 (address + 8)) ++ state.getMem (BitVec.ofNat 64 address) := by
+  apply BitVec.eq_of_toNat_eq
+  change (BitVec.ofNat 128 (readNatural state address 16)).toNat = _
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (read_natural_bound state address 16),
+    read_natural_add state address 8 8,
+    read_natural_word state address aligned,
+    read_natural_word state (address + 8) (by omega)]
+  simp only [append_nat]
+  norm_num
+  ring
+
+/-- 16-byte reads depend only on their two words. -/
+theorem read_salt_congr (left right : MachineState) (address : Nat)
+    (aligned : address % 8 = 0)
+    (words : ∀ i < 2, left.getMem (BitVec.ofNat 64 (address + 8*i)) =
+      right.getMem (BitVec.ofNat 64 (address + 8*i))) :
+    readBuffer left address 16 = readBuffer right address 16 := by
+  rw [read_salt_words _ _ aligned, read_salt_words _ _ aligned]
+  have w0 := words 0 (by decide)
+  have w1 := words 1 (by decide)
+  simp only [Nat.reduceMul, Nat.add_zero] at w0 w1
+  rw [w0, w1]
+
+theorem read_salt_eq_iff (left right : MachineState) (leftAddress rightAddress : Nat)
+    (leftAligned : leftAddress % 8 = 0) (rightAligned : rightAddress % 8 = 0) :
+    readBuffer left leftAddress 16 = readBuffer right rightAddress 16 ↔
+      ∀ word < 2, left.getMem (BitVec.ofNat 64 (leftAddress+8*word)) =
+        right.getMem (BitVec.ofNat 64 (rightAddress+8*word)) := by
+  constructor
+  · intro equal word bounded
+    rw [read_salt_words _ _ leftAligned, read_salt_words _ _ rightAligned] at equal
+    interval_cases word
+    · simpa only [Nat.mul_zero, Nat.add_zero, BitVec.extractLsb'_append_eq_right] using
+        congrArg (fun x : BitVec 128 => x.extractLsb' 0 64) equal
+    · simpa only [Nat.mul_one, BitVec.extractLsb'_append_eq_left] using
+        congrArg (fun x : BitVec 128 => x.extractLsb' 64 64) equal
+  · intro words
+    rw [read_salt_words _ _ leftAligned, read_salt_words _ _ rightAligned]
+    have w0 := words 0 (by decide)
+    have w1 := words 1 (by decide)
+    simp only [Nat.reduceMul, Nat.add_zero] at w0 w1
+    rw [w0, w1]
+
+set_option exponentiation.threshold 1024 in
+/-- Call 0 reads 16-byte salt, 8-byte leaf tag, and 72-byte message head. -/
+theorem read_init_query (state : MachineState) (address : Nat) :
+    readBuffer state address 96 =
+      (readBuffer state (address + 24) 72 ++ readBuffer state (address + 16) 8) ++
+        readBuffer state address 16 := by
+  apply BitVec.eq_of_toNat_eq
+  change (BitVec.ofNat 768 (readNatural state address 96)).toNat =
+    (((BitVec.ofNat 576 (readNatural state (address+24) 72)) ++
+      (BitVec.ofNat 64 (readNatural state (address+16) 8))) ++
+      (BitVec.ofNat 128 (readNatural state address 16))).toNat
+  rw [append_nat, append_nat, BitVec.toNat_ofNat, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
+    BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (read_natural_bound state address 96),
+    Nat.mod_eq_of_lt (read_natural_bound state (address+24) 72),
+    Nat.mod_eq_of_lt (read_natural_bound state (address+16) 8),
+    Nat.mod_eq_of_lt (read_natural_bound state address 16),
+    read_natural_add state address 16 80, read_natural_add state (address+16) 8 72]
+  rw [show address + 16 + 8 = address + 24 by omega]
+  ring
+
+set_option exponentiation.threshold 1024 in
+/-- A 72-byte read splits into the low 64 bytes and the high 8 bytes. -/
+theorem read_head72_split (state : MachineState) (address : Nat) :
+    readBuffer state address 72 =
+      readBuffer state (address + 64) 8 ++ readBuffer state address 64 := by
+  apply BitVec.eq_of_toNat_eq
+  change (BitVec.ofNat 576 (readNatural state address 72)).toNat =
+    ((BitVec.ofNat 64 (readNatural state (address+64) 8)) ++
+      (BitVec.ofNat 512 (readNatural state address 64))).toNat
+  rw [append_nat, BitVec.toNat_ofNat, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (read_natural_bound state address 72),
+    Nat.mod_eq_of_lt (read_natural_bound state (address+64) 8),
+    Nat.mod_eq_of_lt (read_natural_bound state address 64),
+    read_natural_add state address 64 8]
+  ring
 
 end CommitGolfCandidate

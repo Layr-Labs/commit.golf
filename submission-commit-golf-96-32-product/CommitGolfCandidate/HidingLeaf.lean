@@ -1,11 +1,9 @@
 import CommitGolfCandidate.HidingCache
 
-/-! Hiding of an entire salted leaf against a bounded oracle continuation.
-The chain is the same four-block fold used by the machine reference model.
-The cache variants preserve earlier compression answers and charge their count. -/
+/-! Hiding of a leaf tail chain starting from a uniform 256-bit initial digest
+(`leafDigestFromInit`) against a bounded oracle continuation. -/
 namespace CommitGolfCandidate
 
--- Observations retain the discrete measurable structure used by the contract.
 local instance hidingLeafDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
@@ -39,8 +37,7 @@ theorem fixed_hash_blocks (oracle : Oracle) (blocks : List LeafBlock) (state : D
     erw [fixed_oracle_run_public]
     exact ih (oracle.compression ((leafInput state block)))
 
-/-- Replacing each intermediate chaining value in turn gives a linear hybrid
-bound. The continuation includes all subsequent uses of the oracle. -/
+/-- Replacing each intermediate chaining value in turn gives a linear hybrid bound. -/
 theorem salted_chain_distance (permutation : Perm) (blocks : List LeafBlock)
     {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
@@ -84,30 +81,29 @@ theorem salted_chain_distance (permutation : Perm) (blocks : List LeafBlock)
     have nonnegative : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
     nlinarith
 
-/-- For the actual four-block leaf format, a private salt allows replacement of
-the entire leaf digest by a fresh uniform digest at cost 8*(budget+8)/2^256. -/
+/-- For the 3-block tail leaf chain `leafDigestFromInit`, a fresh 256-bit initial digest
+allows replacement of the leaf digest by a fresh uniform digest at cost `8*(budget+8)/2^256`. -/
 theorem salted_leaf_distance (permutation : Perm) (value : Entry)
     {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
     measureTVDist
       (do let table ← $ᵗ Compression
-          let salt ← $ᵗ Digest
-          fixedOracleRun ⟨table, permutation⟩ (next (leafDigest table salt value)))
+          let init ← $ᵗ Digest
+          fixedOracleRun ⟨table, permutation⟩ (next (leafDigestFromInit table init value)))
       (do let table ← $ᵗ Compression
           let answer ← $ᵗ Digest
           fixedOracleRun ⟨table, permutation⟩ (next answer)) ≤
       8 * ((budget + 8 : Nat) : ℝ) / 2^256 := by
-  have result := salted_chain_distance permutation
-    ((List.range 4).map fun block => value.extractLsb' (512*block) 512) next budget bounded
-  simp only [List.foldl_map, List.length_map, List.length_range, leafDigest, Nat.cast_ofNat] at result
+  have result := salted_chain_distance permutation (leafTailBlocks value) next budget bounded
+  simp only [leafTailBlocks, List.length_map, List.length_range, leafDigestFromInit, Nat.cast_ofNat] at result
   refine result.trans ?_
   apply div_le_div_of_nonneg_right _ (by positivity)
   have nonnegative : (0 : ℝ) ≤ budget := Nat.cast_nonneg _
   push_cast
   nlinarith
 
-/-- The chain bound also includes all compression inputs known before its salt
-was drawn. This is the form needed after an adaptive first stage. -/
+/-- The chain bound also includes all compression inputs known before the initial digest
+was drawn. -/
 theorem cached_salted_chain_distance (permutation : Perm) (cache : CompressionCache)
     (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
     (blocks : List LeafBlock)
@@ -152,8 +148,7 @@ theorem cached_salted_chain_distance (permutation : Perm) (cache : CompressionCa
     have nonnegative : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
     nlinarith
 
-/-- An entire private leaf remains hidden with a fixed prior query transcript.
-Its bound charges both prior cached cells and subsequent adaptive queries. -/
+/-- A private 3-block tail leaf remains hidden with a fixed prior query transcript. -/
 theorem cached_salted_leaf_distance (permutation : Perm) (cache : CompressionCache)
     (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
     (value : Entry)
@@ -161,15 +156,16 @@ theorem cached_salted_leaf_distance (permutation : Perm) (cache : CompressionCac
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
     measureTVDist
       (do let table ← $ᵗ Compression
-          let salt ← $ᵗ Digest
-          fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next (leafDigest (tableExtending cache table) salt value)))
+          let init ← $ᵗ Digest
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩
+            (next (leafDigestFromInit (tableExtending cache table) init value)))
       (do let table ← $ᵗ Compression
           let answer ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer)) ≤
       8 * ((keys.card + budget + 8 : Nat) : ℝ) / 2^256 := by
   have result := cached_salted_chain_distance permutation cache keys covered
-    ((List.range 4).map fun block => value.extractLsb' (512*block) 512) next budget bounded
-  simp only [List.foldl_map, List.length_map, List.length_range, leafDigest, Nat.cast_ofNat] at result
+    (leafTailBlocks value) next budget bounded
+  simp only [leafTailBlocks, List.length_map, List.length_range, leafDigestFromInit, Nat.cast_ofNat] at result
   refine result.trans ?_
   apply div_le_div_of_nonneg_right _ (by positivity)
   have nonnegative : (0 : ℝ) ≤ budget := Nat.cast_nonneg _
@@ -177,38 +173,37 @@ theorem cached_salted_leaf_distance (permutation : Perm) (cache : CompressionCac
   push_cast
   nlinarith
 
-/-- Any two leaf values are indistinguishable through the same bounded
-continuation, provided their salts remain private. The continuation may know
-both values and the fixed earlier transcript. -/
+/-- Any two leaf values are indistinguishable in `leafDigestFromInit` when given a fresh
+uniform 256-bit initial digest. -/
 theorem cached_leaf_indistinguishable (permutation : Perm) (cache : CompressionCache)
     (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
     (left right : Entry) {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
     measureTVDist
       (do let table ← $ᵗ Compression
-          let salt ← $ᵗ Digest
+          let init ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩
-            (next (leafDigest (tableExtending cache table) salt left)))
+            (next (leafDigestFromInit (tableExtending cache table) init left)))
       (do let table ← $ᵗ Compression
-          let salt ← $ᵗ Digest
+          let init ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩
-            (next (leafDigest (tableExtending cache table) salt right))) ≤
+            (next (leafDigestFromInit (tableExtending cache table) init right))) ≤
       16 * ((keys.card + budget + 8 : Nat) : ℝ) / 2^256 := by
   have leftBound := cached_salted_leaf_distance permutation cache keys covered left next budget bounded
   have rightBound := cached_salted_leaf_distance permutation cache keys covered right next budget bounded
   rw [measureTVDist_comm] at rightBound
   have triangle := measureTVDist_triangle (m := ProbComp)
     (do let table ← $ᵗ Compression
-        let salt ← $ᵗ Digest
+        let init ← $ᵗ Digest
         fixedOracleRun ⟨tableExtending cache table, permutation⟩
-          (next (leafDigest (tableExtending cache table) salt left)))
+          (next (leafDigestFromInit (tableExtending cache table) init left)))
     (do let table ← $ᵗ Compression
         let answer ← $ᵗ Digest
         fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer))
     (do let table ← $ᵗ Compression
-        let salt ← $ᵗ Digest
+        let init ← $ᵗ Digest
         fixedOracleRun ⟨tableExtending cache table, permutation⟩
-          (next (leafDigest (tableExtending cache table) salt right)))
+          (next (leafDigestFromInit (tableExtending cache table) init right)))
   refine (triangle.trans (add_le_add leftBound rightBound)).trans ?_
   exact le_of_eq (by ring)
 

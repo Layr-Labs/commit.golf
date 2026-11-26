@@ -18,47 +18,30 @@ private theorem deterministic_pure (oracle : Oracle) {α : Type} (value : α) :
     oracle.run (pure value : OracleComp World α) = pure (checkEvaluation oracle (pure value)) := by
   rw [oracle_run_pure, check_evaluation_pure]
 
-/-- Salt copying, the four in-place leaf calls, and the heap writes use only
-public queries: they add no private randomness. -/
-theorem leaf_run_deterministic (oracle : Oracle) (state : MachineState) (c k : Nat) :
-    oracle.run (leafRun state c k) = pure (checkEvaluation oracle (leafRun state c k)) := by
-  unfold leafRun laneRun
+/-- One 4-call in-place leaf lane uses only public queries. -/
+theorem leaf_lane_deterministic (oracle : Oracle) (state : MachineState) (j : Nat) :
+    oracle.run (leafLaneRun state j) = pure (checkEvaluation oracle (leafLaneRun state j)) := by
+  unfold leafLaneRun
   simp only [bind_assoc, oracle_run_public_bind, check_evaluation_public_bind, oracle_run_pure,
     check_evaluation_pure, pure_bind]
 
-theorem chunk_leaves_from_deterministic (oracle : Oracle) (state : MachineState)
-    (c start remaining : Nat) :
-    oracle.run (chunkLeavesFrom state c start remaining) =
-      pure (checkEvaluation oracle (chunkLeavesFrom state c start remaining)) := by
-  induction remaining generalizing state start with
+/-- Consecutive leaf lanes in a 32-leaf block are deterministic for a fixed oracle. -/
+theorem leaf_block_lanes_deterministic (oracle : Oracle) (state : MachineState) (start count : Nat) :
+    oracle.run (leafBlockLanes state start count) =
+      pure (checkEvaluation oracle (leafBlockLanes state start count)) := by
+  induction count generalizing state start with
   | zero => exact deterministic_pure oracle state
-  | succ remaining ih =>
-    rw [chunkLeavesFrom]
-    exact deterministic_bind oracle _ _ (leaf_run_deterministic oracle state c start)
+  | succ count ih =>
+    rw [leafBlockLanes]
+    exact deterministic_bind oracle _ _ (leaf_lane_deterministic oracle state start)
       (fun next => ih next (start + 1))
 
-theorem chunk_run_deterministic (oracle : Oracle) (state : MachineState) (c : Nat) :
-    oracle.run (chunkRun state c) = pure (checkEvaluation oracle (chunkRun state c)) := by
-  unfold chunkRun
-  exact deterministic_bind oracle _ _ (chunk_leaves_from_deterministic oracle state c 0 8)
-    (fun hashed => deterministic_pure oracle _)
-
-theorem iter_chunks_from_deterministic (oracle : Oracle) (state : MachineState)
-    (start remaining : Nat) :
-    oracle.run (iterChunksFrom state start remaining) =
-      pure (checkEvaluation oracle (iterChunksFrom state start remaining)) := by
-  induction remaining generalizing state start with
-  | zero => exact deterministic_pure oracle state
-  | succ remaining ih =>
-    rw [iterChunksFrom]
-    exact deterministic_bind oracle _ _ (chunk_run_deterministic oracle state start)
-      (fun next => ih next (start + 1))
-
-theorem commit_position_deterministic (oracle : Oracle) (state : MachineState) :
-    oracle.run (commitPositionRun state) = pure (checkEvaluation oracle (commitPositionRun state)) := by
-  unfold commitPositionRun
-  exact deterministic_bind oracle _ _ (iter_chunks_from_deterministic oracle state 0 4)
-    (fun chunks => deterministic_pure oracle _)
+/-- One 32-leaf block is deterministic for a fixed oracle. -/
+theorem commit_block_deterministic (oracle : Oracle) (state : MachineState) :
+    oracle.run (commitBlockRun state) = pure (checkEvaluation oracle (commitBlockRun state)) := by
+  unfold commitBlockRun
+  exact deterministic_bind oracle _ _ (leaf_block_lanes_deterministic oracle state 0 32)
+    (fun done => deterministic_pure oracle _)
 
 /-- After salt sampling, the full leaf loop is deterministic for a fixed oracle. -/
 theorem commit_leaves_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
@@ -67,16 +50,18 @@ theorem commit_leaves_deterministic (oracle : Oracle) (state : MachineState) (co
   | zero => exact deterministic_pure oracle state
   | succ count ih =>
     rw [commitLeaves]
-    exact deterministic_bind oracle _ _ (commit_position_deterministic oracle state) ih
+    exact deterministic_bind oracle _ _ (commit_block_deterministic oracle state) ih
 
-theorem parent_calls_from_deterministic (oracle : Oracle) (state : MachineState)
-    (isTail : Bool) (start remaining : Nat) :
-    oracle.run (parentCallsFrom state isTail start remaining) =
-      pure (checkEvaluation oracle (parentCallsFrom state isTail start remaining)) := by
-  induction remaining generalizing state start with
+/-- Consecutive parent calls are deterministic for a fixed oracle. -/
+theorem parent_calls_deterministic (oracle : Oracle) (state : MachineState) (start count : Nat) :
+    oracle.run (parentCallsRun state start count) =
+      pure (checkEvaluation oracle (parentCallsRun state start count)) := by
+  induction count generalizing state start with
   | zero => exact deterministic_pure oracle state
-  | succ remaining ih =>
-    rw [parentCallsFrom, oracle_run_public_bind, check_evaluation_public_bind, ih _ (start + 1)]
+  | succ count ih =>
+    rw [parentCallsRun]
+    simp only [oracle_run_public_bind, check_evaluation_public_bind, pure_bind]
+    rw [ih]
     simp only [pure_bind]
 
 /-- Parent construction is deterministic for the same fixed oracle. -/
@@ -84,19 +69,20 @@ theorem commit_parents_deterministic (oracle : Oracle) (state : MachineState) (c
     oracle.run (commitParents state count) = pure (checkEvaluation oracle (commitParents state count)) := by
   induction count generalizing state with
   | zero =>
-    exact parent_calls_from_deterministic oracle state true 0 15
+    rw [commitParents]
+    exact parent_calls_deterministic oracle state 0 31
   | succ count ih =>
     rw [commitParents]
     apply deterministic_bind oracle _ _ _ ih
     unfold parentIterationRun
-    exact deterministic_bind oracle _ _ (parent_calls_from_deterministic oracle state false 0 16)
-      (fun hashed => deterministic_pure oracle _)
+    exact deterministic_bind oracle _ _ (parent_calls_deterministic oracle state 0 32)
+      (fun done => deterministic_pure oracle _)
 
 /-- The entire commitment body makes no additional coin requests. -/
 theorem commit_body_deterministic (oracle : Oracle) (state : MachineState) (count : Nat) :
     oracle.run (commitBody state count) = pure (checkEvaluation oracle (commitBody state count)) := by
   unfold commitBody
-  apply deterministic_bind oracle _ _ (commit_leaves_deterministic oracle state (count / 32))
+  apply deterministic_bind oracle _ _ (commit_leaves_deterministic oracle state (count/32))
   intro leaves
   exact deterministic_bind oracle _ _ (commit_parents_deterministic oracle _ _)
     (fun parents => deterministic_pure oracle _)
@@ -109,7 +95,7 @@ def commitSaltCoins (message : Message) :
   $ᵗ BitVec (8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat)
 
 private def packCommitResult (body : MachineState × Nat) : Execution × Nat :=
-  (⟨.success, body.1, 1047527478, 5*LENGTH-1⟩, body.2)
+  (⟨.success, body.1, 959447084, 5*LENGTH-1⟩, body.2)
 
 private theorem pack_commit_state (body : MachineState × Nat) :
     (packCommitResult body).1.state = body.1 := rfl
@@ -137,25 +123,25 @@ private theorem commit_final_state (oracle : Oracle) (message : Message)
   pack_commit_state _
 
 private theorem commit_body_matches_sized (oracle : Oracle) (message : Message)
-    {bits : Nat} (answer : BitVec bits) (width : bits = 256*LENGTH) :
+    {bits : Nat} (answer : BitVec bits) (width : bits = 128*LENGTH) :
     CommittedState oracle message
       (checkEvaluation oracle (commitBody (commitInputReady message answer) LENGTH)).1 := by
   subst bits
   exact commit_body_matches oracle message answer
 
 private theorem commit_final_matches (oracle : Oracle) (message : Message)
-    {bits : Nat} (answer : BitVec bits) (width : bits = 256*LENGTH) :
+    {bits : Nat} (answer : BitVec bits) (width : bits = 128*LENGTH) :
     CommittedState oracle message (commitFinalResult oracle message answer).1.state := by
   rw [commit_final_state]
   exact commit_body_matches_sized oracle message answer width
 
-private theorem salt_width (setup : MachineState) (bytes : setup.getReg .x11 = 536870912) :
-    8*(setup.getReg .x11).toNat = 256*LENGTH := by
+private theorem salt_width (setup : MachineState) (bytes : setup.getReg .x11 = 268435456) :
+    8*(setup.getReg .x11).toNat = 128*LENGTH := by
   rw [bytes]
   rfl
 
 private theorem setup_salt_width (state : MachineState) :
-    8*((commitSetupState state).getReg .x11).toNat = 256*LENGTH :=
+    8*((commitSetupState state).getReg .x11).toNat = 128*LENGTH :=
   salt_width _ (commit_setup_registers state).2.2.2.2.1
 
 private theorem sampled_witness {α β : Type} (coins : ProbComp α) (output : α → β)
@@ -186,28 +172,27 @@ theorem commit_run_matches (oracle : Oracle) (message : Message) (result : Execu
   exact commit_final_matches oracle message answer
     (setup_salt_width (submission.initialState .commit message))
 
-/-- The RANDOM syscall requests one 256-bit salt for each vector position. -/
+/-- The RANDOM syscall requests one 128-bit salt for each vector position. -/
 theorem commit_salt_width (message : Message) :
     8*((commitSetupState (submission.initialState .commit message)).getReg .x11).toNat =
-      256*LENGTH := setup_salt_width _
+      128*LENGTH := setup_salt_width _
 
-/-- Explicit salt contents of the actual final state, for every possible random
+/-- Explicit 128-bit salt contents of the actual final state, for every possible random
 reply. Keeping the reply width as a parameter avoids unfolding the large sampler. -/
 theorem commit_final_salt (oracle : Oracle) (message : Message) {bits : Nat}
-    (answer : BitVec bits) (width : bits = 256*LENGTH) (index : Index) :
+    (answer : BitVec bits) (width : bits = 128*LENGTH) (index : Index) :
     readBuffer (commitFinalResult oracle message answer).1.state
-      (5905584160+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 := by
+      (5905584160+16*index.val) 16 = answer.extractLsb' (128*index.val) 128 := by
   rw [commit_final_state]
   subst bits
   exact commit_body_salt oracle message answer index
 
-/-- Functional correctness together with the identity of the retained salts.
-These are deterministic facts about the machine, separate from the hiding bound. -/
+/-- Functional correctness together with the identity of the retained 128-bit salts. -/
 theorem commit_final_contents (oracle : Oracle) (message : Message) {bits : Nat}
-    (answer : BitVec bits) (width : bits = 256*LENGTH) :
+    (answer : BitVec bits) (width : bits = 128*LENGTH) :
     CommittedState oracle message (commitFinalResult oracle message answer).1.state ∧
     ∀ index : Index, readBuffer (commitFinalResult oracle message answer).1.state
-      (5905584160+32*index.val) 32 = answer.extractLsb' (256*index.val) 256 :=
+      (5905584160+16*index.val) 16 = answer.extractLsb' (128*index.val) 128 :=
   ⟨commit_final_matches oracle message answer width, commit_final_salt oracle message answer width⟩
 
 end CommitGolfCandidate

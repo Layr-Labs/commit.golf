@@ -3,11 +3,11 @@ import CommitGolfCandidate.BindingMachine
 /-! Replay the two conflicting records through the actual public oracle interface.
 For normal proofs (`k ≠ 128`) replay uses 28 compression calls per record; for cap-table
 proofs (`k = 128`) replay first reconstructs the 7 upper cap-tree siblings (120 calls)
-and then replays the 28-call leaf-and-path sequence (148 calls total). -/
+and then replays the 28-call tagged-salt leaf-and-path sequence (148 calls total). -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv OracleComp OracleSpec
 
-/-- Replay a salted leaf chain and retain the inputs actually queried. -/
+/-- Replay a tail leaf chain and retain the inputs actually queried. -/
 def replayChain : Digest → List LeafBlock → OracleComp World (Digest × List (BitVec COMPRESSION_INPUT_LENGTH))
   | state, [] => pure (state, [])
   | state, block :: rest => do
@@ -15,6 +15,14 @@ def replayChain : Digest → List LeafBlock → OracleComp World (Digest × List
       let next ← (liftM (World.query (.inr (.inl input))) : OracleComp World Digest)
       let (root, inputs) ← replayChain next rest
       return (root, input :: inputs)
+
+/-- Replay Call 0 and the three tail blocks of one tagged salted leaf. -/
+def replayLeaf (index : Index) (salt : Salt) (value : Entry) :
+    OracleComp World (Digest × List (BitVec COMPRESSION_INPUT_LENGTH)) := do
+  let init := leafInitInput index salt value
+  let d0 ← (liftM (World.query (.inr (.inl init))) : OracleComp World Digest)
+  let (leaf, tailInputs) ← replayChain d0 (leafTailBlocks value)
+  return (leaf, init :: tailInputs)
 
 /-- Replay a bottom-up authentication path, retaining its compression inputs. -/
 def replayPath : Digest → List (Bool × Digest) → OracleComp World (Digest × List (BitVec COMPRESSION_INPUT_LENGTH))
@@ -67,6 +75,16 @@ theorem replay_chain_run (oracle : Oracle) (state : Digest) (blocks : List LeafB
     simp only [pure_bind, oracle_run_pure]
     simp [Oracle.answer, chainInputs, absorb, Nat.add_comm]
     exact ⟨rfl, rfl⟩
+
+theorem replay_leaf_run (oracle : Oracle) (index : Index) (salt : Salt) (value : Entry) :
+    oracle.run (replayLeaf index salt value) =
+      pure ((leafDigest oracle.compression index salt value,
+        leafChainInputs oracle.compression index salt value), 4) := by
+  simp only [replayLeaf]
+  erw [oracle_run_public_bind oracle (.inl (leafInitInput index salt value))]
+  erw [oracle_run_bind, replay_chain_run]
+  simp only [pure_bind, oracle_run_pure, leafTailBlocks, List.length_cons, List.length_nil]
+  rfl
 
 theorem replay_path_run (oracle : Oracle) (node : Digest) (path : List (Bool × Digest)) :
     oracle.run (replayPath node path) =
@@ -190,19 +208,19 @@ theorem replay_record_cost_le (input : CheckInput) : replayRecordCost input ≤ 
 /-- Replay one parsed record through the public oracle interface. -/
 def replayRecord (input : CheckInput) (ordinal : Nat) :
     OracleComp World (List (BitVec COMPRESSION_INPUT_LENGTH)) := do
-  let (leaf, leafInputs) ← replayChain (recordSalt input ordinal) (leafBlocks (recordValue input ordinal))
+  let (leaf, leafInputs) ← replayLeaf (recordIndex input ordinal) (recordSalt input ordinal) (recordValue input ordinal)
   if input.positions.card = BATCH then
     let upper ← replayCapUpper (recordCap input) (recordIndex input ordinal)
     let lower := (List.range 17).map fun level =>
       ((recordIndex input ordinal).val.testBit level,
         readBuffer (submission.initialState .check input)
-          (submission.layout.proof + 576 * ordinal + 32 + 32 * level) 32)
+          (submission.layout.proof + 560 * ordinal + 16 + 32 * level) 32)
     let (_, treeInputs) ← replayPath leaf (lower ++ List.ofFn upper)
     return leafInputs ++ treeInputs
   else
     let siblings := fun level =>
       readBuffer (submission.initialState .check input)
-        (submission.layout.proof + 800 * ordinal + 32 + 32 * level) 32
+        (submission.layout.proof + 784 * ordinal + 16 + 32 * level) 32
     let (_, treeInputs) ← replayPath leaf (recordPath (recordIndex input ordinal) siblings)
     return leafInputs ++ treeInputs
 
@@ -214,7 +232,7 @@ theorem replay_record_run (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     oracle.run (replayRecord input ordinal) =
       pure (recordInputs oracle.compression input ordinal, replayRecordCost input) := by
   unfold replayRecord replayRecordCost
-  rw [oracle_run_bind, replay_chain_run, pure_bind]
+  rw [oracle_run_bind, replay_leaf_run, pure_bind]
   dsimp only
   by_cases batch : input.positions.card = BATCH
   · simp only [if_pos batch]
@@ -226,7 +244,7 @@ theorem replay_record_run (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
         ((List.range 17).map fun level =>
           ((recordIndex input ordinal).val.testBit level,
             (readBuffer (submission.initialState .check input)
-              (submission.layout.proof + 576 * ordinal + 32 + 32 * level) 32 : Digest))) ++
+              (submission.layout.proof + 560 * ordinal + 16 + 32 * level) 32 : Digest))) ++
         List.ofFn (fun k : Fin 7 =>
           ((recordIndex input ordinal).val.testBit (17 + k.val),
             referenceHeap oracle.compression 128 (recordCap input)
@@ -247,23 +265,21 @@ theorem replay_record_run (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
             recordSibling, if_pos batch, if_neg (show ¬ (k + 17 < 17) by omega),
             Nat.add_sub_cancel, Nat.add_comm 17 k]
     erw [pathEq]
-    simp only [recordInputs, openingInputs, leafDigest_eq_fold, leafBlocks,
-      List.length_map, List.length_range, record_path_length]
+    simp only [recordInputs, openingInputs, record_path_length]
   · simp only [if_neg batch]
     erw [oracle_run_bind, replay_path_run]
     simp only [pure_bind, oracle_run_pure]
     have pathEq :
         recordPath (recordIndex input ordinal) (fun level =>
           (readBuffer (submission.initialState .check input)
-            (submission.layout.proof + 800 * ordinal + 32 + 32 * level) 32 : Digest)) =
+            (submission.layout.proof + 784 * ordinal + 16 + 32 * level) 32 : Digest)) =
         recordPath (recordIndex input ordinal) (recordSibling oracle.compression input ordinal) := by
       unfold recordPath recordPathPrefix
       apply List.map_congr_left
       intro level _
       simp only [recordSibling, if_neg batch]
     erw [pathEq]
-    simp only [recordInputs, openingInputs, leafDigest_eq_fold, leafBlocks,
-      List.length_map, List.length_range, record_path_length]
+    simp only [recordInputs, openingInputs, record_path_length]
 
 /-- This choice depends only on the adversary's claim, not on oracle answers.
 Classical choice is allowed here because the binding adversary is unrestricted
@@ -348,6 +364,18 @@ theorem replay_chain_query_bound (state : Digest) (blocks : List LeafBlock) :
     refine ⟨by omega, fun next => ?_⟩
     simpa only [Nat.add_sub_cancel, IsTotalQueryBound, isQueryBound_map_iff] using ih next
 
+theorem replay_leaf_query_bound (index : Index) (salt : Salt) (value : Entry) :
+    IsTotalQueryBound (replayLeaf index salt value) 4 := by
+  simp only [replayLeaf, bind_pure_comp]
+  change IsTotalQueryBound ((liftM (World.query (.inr (.inl (leafInitInput index salt value)))) :
+    OracleComp World Digest) >>= _) (3 + 1)
+  erw [isTotalQueryBound_query_bind_iff]
+  refine ⟨by omega, fun d0 => ?_⟩
+  have hq := replay_chain_query_bound d0 (leafTailBlocks value)
+  have hlen : (leafTailBlocks value).length = 3 := by simp [leafTailBlocks]
+  rw [hlen] at hq
+  simpa only [Nat.add_sub_cancel, IsTotalQueryBound, isQueryBound_map_iff] using hq
+
 theorem replay_path_query_bound (node : Digest) (path : List (Bool × Digest)) :
     IsTotalQueryBound (replayPath node path) path.length := by
   induction path generalizing node with
@@ -406,32 +434,28 @@ theorem replay_record_query_bound (input : CheckInput) (ordinal : Nat) :
   by_cases batch : input.positions.card = BATCH
   · simp only [if_pos batch]
     change IsTotalQueryBound (_ >>= _) (4 + (120 + 24))
-    apply isTotalQueryBound_bind
-    · simpa only [leafBlocks, List.length_map, List.length_range] using
-        replay_chain_query_bound (recordSalt input ordinal) (leafBlocks (recordValue input ordinal))
-    · intro result
-      apply isTotalQueryBound_bind (replay_cap_upper_query_bound (recordCap input) (recordIndex input ordinal))
-      intro upper
-      simp only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff]
-      let p : List (Bool × Digest) :=
-        ((List.range 17).map fun level =>
-          ((recordIndex input ordinal).val.testBit level,
-            (readBuffer (submission.initialState .check input)
-              (submission.layout.proof + 576 * ordinal + 32 + 32 * level) 32 : Digest))) ++
-        List.ofFn upper
-      have lenEq : p.length = 24 := by simp [p]
-      have hq := replay_path_query_bound result.1 p
-      rw [lenEq] at hq
-      exact hq
+    apply isTotalQueryBound_bind (replay_leaf_query_bound _ _ _)
+    intro result
+    apply isTotalQueryBound_bind (replay_cap_upper_query_bound (recordCap input) (recordIndex input ordinal))
+    intro upper
+    simp only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff]
+    let p : List (Bool × Digest) :=
+      ((List.range 17).map fun level =>
+        ((recordIndex input ordinal).val.testBit level,
+          (readBuffer (submission.initialState .check input)
+            (submission.layout.proof + 560 * ordinal + 16 + 32 * level) 32 : Digest))) ++
+      List.ofFn upper
+    have lenEq : p.length = 24 := by simp [p]
+    have hq := replay_path_query_bound result.1 p
+    rw [lenEq] at hq
+    exact hq
   · simp only [if_neg batch]
     change IsTotalQueryBound (_ >>= _) (4 + 24)
-    apply isTotalQueryBound_bind
-    · simpa only [leafBlocks, List.length_map, List.length_range] using
-        replay_chain_query_bound (recordSalt input ordinal) (leafBlocks (recordValue input ordinal))
-    · intro result
-      simp only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff]
-      simpa only [record_path_length, IsTotalQueryBound] using replay_path_query_bound result.1
-        (recordPath (recordIndex input ordinal) _)
+    apply isTotalQueryBound_bind (replay_leaf_query_bound _ _ _)
+    intro result
+    simp only [bind_pure_comp, IsTotalQueryBound, isQueryBound_map_iff]
+    simpa only [record_path_length, IsTotalQueryBound] using replay_path_query_bound result.1
+      (recordPath (recordIndex input ordinal) _)
 
 theorem replay_claim_query_bound (claim : Scheme.Claim) :
     IsTotalQueryBound (replayClaim claim) (replayClaimCost claim) := by

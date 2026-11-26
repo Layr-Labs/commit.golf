@@ -88,7 +88,7 @@ theorem check_input_invariant (input : CheckInput) :
       norm_num [LENGTH, LOG_LENGTH, MEMORY_BYTES] at cardinal ⊢; omega) (by decide) inside
   · rw [regs.2.2.2.1]
     intro word inside
-    exact check_buffer_access 10871640096 (4 * (24 + 1) * input.positions.card) word (by
+    exact check_buffer_access 10871640096 ((2 + 4 * 24) * input.positions.card) word (by
       norm_num [LENGTH, LOG_LENGTH, MEMORY_BYTES] at cardinal ⊢; omega) (by decide) inside
   · rw [regs.2.2.2.2.1]
     intro word inside
@@ -98,14 +98,14 @@ attribute [local irreducible] checkRootWordsState checkCapHash
 
 /-- Cap-mode (`k = 128`) checker invariant after the top-7 root matches (`pathDepth = 17`). -/
 theorem check_cap_loop_invariant (input : CheckInput) (hashed : MachineState)
-    (batch : input.positions.card = BATCH) (lenOk : input.proof.length = 77824)
+    (batch : input.positions.card = BATCH) (lenOk : input.proof.length = 75776)
     (reached : hashed ∈ support (checkCapHash (submission.initialState .check input))) :
     CheckLoopInvariant (checkCapEnterLoopState (checkRootWordsState hashed 138 4)) BATCH 17 := by
   let initial := submission.initialState .check input
   have is128 : initial.getReg .x16 = 128 := by
     change BitVec.ofNat 64 input.positions.card = 128; rw [batch]; rfl
-  have isLen : initial.getReg .x17 = 77824 := by
-    change BitVec.ofNat 64 input.proof.length = 77824; rw [lenOk]; rfl
+  have isLen : initial.getReg .x17 = 75776 := by
+    change BitVec.ofNat 64 input.proof.length = 75776; rw [lenOk]; rfl
   have hRegs := check_cap_hash_registers initial hashed is128 isLen reached
   let compared := checkRootWordsState hashed 138 4
   have cKeep (reg : Reg) (n6 : reg ≠ .x6) (n7 : reg ≠ .x7) : compared.getReg reg = hashed.getReg reg :=
@@ -127,7 +127,7 @@ theorem check_cap_loop_invariant (input : CheckInput) (hashed : MachineState)
   have e25 : (checkCapEnterLoopState compared).getReg .x25 = BitVec.ofNat 64 10871640096 := by
     rw [enterKeep .x25 (by decide) (by decide) (by decide), cKeep .x25 (by decide) (by decide),
       hRegs.2.2.2.2.2.2.1]; rfl
-  have e26 : (checkCapEnterLoopState compared).getReg .x26 = BitVec.ofNat 64 (10871640096 + 73728) := by
+  have e26 : (checkCapEnterLoopState compared).getReg .x26 = BitVec.ofNat 64 (10871640096 + 71680) := by
     simp only [checkCapEnterLoopState, MachineState.getReg_setPC,
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x21 ≠ .x26),
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x30 ≠ .x26),
@@ -152,7 +152,7 @@ theorem check_cap_loop_invariant (input : CheckInput) (hashed : MachineState)
     exact initial_index_bound input word (by rw [batch]; exact hw)
   · rw [e8]; intro word hw; exact check_buffer_access _ (32 * BATCH) word (by decide) (by decide) hw
   · rw [e25]; intro word hw
-    exact check_buffer_access _ (4 * (17 + 1) * BATCH) word (by decide) (by decide) hw
+    exact check_buffer_access _ ((2 + 4 * 17) * BATCH) word (by decide) (by decide) hw
   · rw [e26]; intro word hw
     exact check_buffer_access _ (4 * 2 ^ (24 - 17)) word (by decide) (by decide) hw
 
@@ -178,12 +178,12 @@ theorem check_input_resources (input : CheckInput) (result : Execution)
     exact card
   by_cases valid : input.proof.length ≤ submission.sizes.proof
   · by_cases batch : input.positions.card = BATCH
-    · by_cases rightLen : input.proof.length = 77824
+    · by_cases rightLen : input.proof.length = 75776
       · let initial := submission.initialState .check input
         have is128 : initial.getReg .x16 = 128 := by
           change BitVec.ofNat 64 input.positions.card = 128; rw [batch]; rfl
-        have isLen : initial.getReg .x17 = 77824 := by
-          change BitVec.ofNat 64 input.proof.length = 77824; rw [rightLen]; rfl
+        have isLen : initial.getReg .x17 = 75776 := by
+          change BitVec.ofNat 64 input.proof.length = 75776; rw [rightLen]; rfl
         let extra := submission.steps .check - (4118 + 15 + 4 + (1412 * BATCH + 3))
         have hsteps : submission.steps .check = 214748365824 := rfl
         have budget : submission.steps .check =
@@ -228,7 +228,7 @@ theorem check_input_resources (input : CheckInput) (result : Execution)
         simp only [support_pure, Set.mem_singleton_iff] at reachable
         subst result
         exact ⟨by change Exit.failure ≠ Exit.unfinished; decide, by dsimp; omega, by dsimp; omega⟩
-    · by_cases rightLength : input.proof.length = 800 * input.positions.card
+    · by_cases rightLength : input.proof.length = 784 * input.positions.card
       · let initial := submission.initialState .check input
         have not128 : initial.getReg .x16 ≠ 128 := by
           intro h; have n := congrArg BitVec.toNat h

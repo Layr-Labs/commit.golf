@@ -7,7 +7,7 @@ namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 private def pathCopySource (start : Nat) : Reg := if start = 29 then .x21 else .x25
-private def pathCopyOffset (start : Nat) : Nat := if start = 37 ∨ start = 16 then 0 else 32
+private def pathCopyOffset (start : Nat) : Nat := if start = 37 then 0 else 32
 
 private def pathCopyInstructions (start : Nat) : List Instr :=
   [.LD .x6 (pathCopySource start) 0, .SD .x21 .x6 (BitVec.ofNat 12 (pathCopyOffset start)),
@@ -42,10 +42,9 @@ theorem check_path_copy_pc (state : MachineState) (start : Nat) :
     MachineState.setPC, BitVec.add_assoc]
 
 set_option maxHeartbeats 1000000 in
-/-- Each copy in the two ordering branches (and the salt copy at index 16) uses
-eight ordinary instructions. -/
+/-- Each copy in the two ordering branches uses eight ordinary instructions. -/
 theorem check_path_copy (state : MachineState) (start : Nat)
-    (location : start = 29 ∨ start = 37 ∨ start = 46 ∨ start = 16)
+    (location : start = 29 ∨ start = 37 ∨ start = 46)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (scratch : state.getReg .x21 = 256)
     (sourceValid : ∀ word : Fin 4,
@@ -57,12 +56,12 @@ theorem check_path_copy (state : MachineState) (start : Nat)
   apply execute_unit_steps (states := pathCopyPrefix state start)
   intro i hi
   refine ⟨.base (((pathCopyInstructions start)[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply check_fetch _ (start + i) _ (by rcases location with rfl | rfl | rfl | rfl <;> omega)
-    · rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;>
+  · apply check_fetch _ (start + i) _ (by rcases location with rfl | rfl | rfl <;> omega)
+    · rcases location with rfl | rfl | rfl <;> interval_cases i <;>
         simp [pathCopyPrefix, pathCopyInstructions, execInstrBr, pc, MachineState.setPC]
-    · rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;> rfl
+    · rcases location with rfl | rfl | rfl <;> interval_cases i <;> rfl
   · have sourceReg := path_copy_register state start i (by omega) (pathCopySource start)
-      (by rcases location with rfl | rfl | rfl | rfl <;> decide)
+      (by rcases location with rfl | rfl | rfl <;> decide)
     have scratchReg := (path_copy_register state start i (by omega) .x21 (by decide)).trans scratch
     have s0 := sourceValid ⟨0, by decide⟩
     have s1 := sourceValid ⟨1, by decide⟩
@@ -74,7 +73,7 @@ theorem check_path_copy (state : MachineState) (start : Nat)
         simp only [pathCopyInstructions, List.getElem?_cons_zero, List.getElem?_cons_succ,
           Option.getD_some, memoryArgumentsValid, memAccess, sourceReg, scratchReg, signExtend12] <;>
         first | exact s0 | exact s1 | exact s2 | exact s3 |
-          (rcases location with rfl | rfl | rfl | rfl <;> rfl)
+          (rcases location with rfl | rfl | rfl <;> rfl)
     interval_cases i <;>
       simp only [pathCopyInstructions, List.getElem?_cons_zero, List.getElem?_cons_succ,
         Option.getD_some] at valid ⊢ <;>
@@ -157,7 +156,7 @@ theorem check_path_preparation (state : MachineState) (pc : state.pc = 4204)
       sourceB
     simp only [pathPreparationSteps, even, if_true, checkPathPreparedState]
     rw [show 10 + fuel = 2 + (8 + fuel) by omega, check_path_branch state pc,
-      check_path_copy branched 46 (Or.inr (Or.inr (Or.inl rfl))) branchPC scratchB source]
+      check_path_copy branched 46 (Or.inr (Or.inr rfl)) branchPC scratchB source]
     simp [Execution.charge, branched, ← Nat.add_assoc]
   · have branchPC : branched.pc = 4212 := if_neg even
     have source : ∀ word : Fin 4,
@@ -515,7 +514,7 @@ theorem check_path_subroutine (pathDepth : Nat) (depthBound : pathDepth ≤ 24)
   simp [Execution.charge, Nat.add_assoc]
 
 theorem path_copy_mem_outside (state : MachineState) (start : Nat)
-    (location : start = 29 ∨ start = 37 ∨ start = 46 ∨ start = 16)
+    (location : start = 29 ∨ start = 37 ∨ start = 46)
     (address : Word) (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256 + 8 * i)) :
     (checkPathCopyState state start).getMem address = state.getMem address := by
@@ -529,7 +528,7 @@ theorem path_copy_mem_outside (state : MachineState) (start : Nat)
   have o5 : address ≠ 296#64 := outside 5 (by decide)
   have o6 : address ≠ 304#64 := outside 6 (by decide)
   have o7 : address ≠ 312#64 := outside 7 (by decide)
-  rcases location with rfl | rfl | rfl | rfl <;>
+  rcases location with rfl | rfl | rfl <;>
     simp [checkPathCopyState, pathCopyPrefix, pathCopyInstructions, pathCopySource, pathCopyOffset,
       execInstrBr, signExtend12, regSetMem, scratch, o0, o1, o2, o3, o4, o5, o6, o7,
       MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq]
@@ -556,7 +555,7 @@ theorem check_path_loop_support_outside (state : MachineState) (count : Nat)
       (path_branch_register state .x21 (by decide)).trans scratch
     unfold checkPathPreparedState
     split
-    · exact path_copy_mem_outside _ 46 (Or.inr (Or.inr (Or.inl rfl))) address bScratch outside
+    · exact path_copy_mem_outside _ 46 (Or.inr (Or.inr rfl)) address bScratch outside
     · rw [MachineState.getMem_setPC,
         path_copy_mem_outside _ 37 (Or.inr (Or.inl rfl)) address
           ((check_path_copy_register _ 29 .x21 (by decide)).trans bScratch) outside,

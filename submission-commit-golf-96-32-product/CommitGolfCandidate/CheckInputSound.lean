@@ -16,11 +16,11 @@ def recordValue (input : CheckInput) (ordinal : Nat) : Entry :=
     input.values ((input.positions.attach.sort (fun i j => i.val ≤ j.val))[ordinal]'(by simpa using present))
   else 0
 
-/-- Salt parsed from the same proof bytes loaded by the checker (`576`-byte stride in cap mode,
-`800`-byte stride in normal mode). -/
-def recordSalt (input : CheckInput) (ordinal : Nat) : Digest :=
-  let stride := if input.positions.card = BATCH then 576 else 800
-  readBuffer (submission.initialState .check input) (submission.layout.proof + stride * ordinal) 32
+/-- 16-byte salt parsed from the same proof bytes loaded by the checker (`560`-byte stride in cap mode,
+`784`-byte stride in normal mode). -/
+def recordSalt (input : CheckInput) (ordinal : Nat) : Salt :=
+  let stride := if input.positions.card = BATCH then 560 else 784
+  readBuffer (submission.initialState .check input) (submission.layout.proof + stride * ordinal) 16
 
 /-- Level-7 cap digest `slot ∈ 0..127` parsed from a cap-mode proof buffer. -/
 def recordCap (input : CheckInput) (slot : Nat) : Digest :=
@@ -33,19 +33,19 @@ def recordSibling (compress : Compression) (input : CheckInput) (ordinal level :
   if input.positions.card = BATCH then
     if level < 17 then
       readBuffer (submission.initialState .check input)
-        (submission.layout.proof + 576 * ordinal + 32 + 32 * level) 32
+        (submission.layout.proof + 560 * ordinal + 16 + 32 * level) 32
     else
       referenceHeap compress 128 (recordCap input)
         (((128 + (recordIndex input ordinal).val / 2 ^ 17) / 2 ^ (level - 17)) ^^^ 1)
   else
     readBuffer (submission.initialState .check input)
-      (submission.layout.proof + 800 * ordinal + 32 + 32 * level) 32
+      (submission.layout.proof + 784 * ordinal + 16 + 32 * level) 32
 
 private theorem range_24_split :
     List.range 24 = List.range 17 ++ (List.range 7).map (· + 17) := by
   decide
 
-private theorem record_root_of_cap (compress : Compression) (value : Entry) (salt : Digest)
+private theorem record_root_of_cap (compress : Compression) (value : Entry) (salt : Salt)
     (index : Index) (cap : Nat → Digest) (siblings : Nat → Digest) (commitment : Digest)
     (upper : ∀ k < 7, siblings (k + 17) =
       referenceHeap compress 128 cap (((128 + index.val / 2 ^ 17) / 2 ^ k) ^^^ 1))
@@ -115,8 +115,8 @@ theorem check_input_sound (oracle : Oracle) (input : CheckInput)
     let entered := checkCapEnterLoopState compared
     have is128 : initial.getReg .x16 = 128 := by
       change BitVec.ofNat 64 input.positions.card = 128; rw [batch]; rfl
-    have isLen : initial.getReg .x17 = 77824 := by
-      change BitVec.ofNat 64 input.proof.length = 77824; rw [lenOk]; rfl
+    have isLen : initial.getReg .x17 = 75776 := by
+      change BitVec.ofNat 64 input.proof.length = 75776; rw [lenOk]; rfl
     have reached : hashed ∈ support (checkCapHash initial) := check_evaluation_support oracle _
     have hRegs := check_cap_hash_registers initial hashed is128 isLen reached
     have cKeep (reg : Reg) (n6 : reg ≠ .x6) (n7 : reg ≠ .x7) : compared.getReg reg = hashed.getReg reg :=
@@ -134,13 +134,18 @@ theorem check_input_sound (oracle : Oracle) (input : CheckInput)
       apply read_digest_congr _ _ _ aligned
       intro w hw
       exact eAbove (addr + 8 * w) (by omega) (by omega)
+    have eSalt (addr : Nat) (aligned : addr % 8 = 0) (hi : 8704 ≤ addr) (lt64 : addr + 16 < 2 ^ 64) :
+        readBuffer entered addr 16 = readBuffer initial addr 16 := by
+      apply read_salt_congr _ _ _ aligned
+      intro w hw
+      exact eAbove (addr + 8 * w) (by omega) (by omega)
     have enterKeep (reg : Reg) (n21 : reg ≠ .x21) (n26 : reg ≠ .x26) (n30 : reg ≠ .x30) :
         entered.getReg reg = compared.getReg reg := by
       simp only [entered, checkCapEnterLoopState, MachineState.getReg_setPC,
         MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n21),
         MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n30),
         MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n26)]
-    have targetPtr : entered.getReg .x26 = BitVec.ofNat 64 (10871640096 + 73728) := by
+    have targetPtr : entered.getReg .x26 = BitVec.ofNat 64 (10871640096 + 71680) := by
       simp only [entered, checkCapEnterLoopState, MachineState.getReg_setPC,
         MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x21 ≠ .x26),
         MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x30 ≠ .x26),
@@ -156,7 +161,7 @@ theorem check_input_sound (oracle : Oracle) (input : CheckInput)
       rw [enterKeep .x24 (by decide) (by decide) (by decide), cKeep .x24 (by decide) (by decide),
         hRegs.2.2.2.2.2.1]; rfl
     have targetData (slot : Nat) (hs : slot < 2 ^ (24 - 17)) :
-        readBuffer entered (10871640096 + 73728 + 32 * slot) 32 = recordCap input slot := by
+        readBuffer entered (10871640096 + 71680 + 32 * slot) 32 = recordCap input slot := by
       rw [eDigest _ (by omega) (by omega) (by change _ + 32 * slot + 32 < 2 ^ 64; change slot < 128 at hs; omega)]
       rfl
     have indexData (ordinal : Nat) (present : ordinal < BATCH) :
@@ -176,17 +181,17 @@ theorem check_input_sound (oracle : Oracle) (input : CheckInput)
         show submission.layout.values = 6576672800 from rfl] using
         check_input_value_block input ordinal block ordLt inside
     have saltData (ordinal : Nat) (present : ordinal < BATCH) :
-        readBuffer entered (10871640096 + (32 + 32 * 17) * ordinal) 32 = recordSalt input ordinal := by
-      rw [eDigest _ (by omega) (by omega) (by change ordinal < 128 at present; omega)]
+        readBuffer entered (10871640096 + (16 + 32 * 17) * ordinal) 16 = recordSalt input ordinal := by
+      rw [eSalt _ (by omega) (by omega) (by change ordinal < 128 at present; omega)]
       simp only [recordSalt, if_pos batch, initial]; rfl
     have pathData (ordinal : Nat) (present : ordinal < BATCH) (level : Nat) (inside : level < 17) :
-        readBuffer entered (10871640096 + (32 + 32 * 17) * ordinal + 32 + 32 * level) 32 =
+        readBuffer entered (10871640096 + (16 + 32 * 17) * ordinal + 16 + 32 * level) 32 =
           recordSibling oracle.compression input ordinal level := by
       rw [eDigest _ (by omega) (by omega) (by change ordinal < 128 at present; omega)]
       simp only [recordSibling, if_pos batch, if_pos inside, initial]; rfl
     have hLowAll := check_loop_sound oracle entered (recordCap input) (recordValue input)
       (recordSalt input) (recordIndex input) (recordSibling oracle.compression input)
-      17 (10871640096 + 73728) 6576672800 10871640096 6442455072 BATCH
+      17 (10871640096 + 71680) 6576672800 10871640096 6442455072 BATCH
       (by decide) (by decide) rfl rfl targetPtr valuePtr proofPtr indexPtr
       (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide)
@@ -229,11 +234,11 @@ theorem check_input_sound (oracle : Oracle) (input : CheckInput)
         show submission.layout.values = 6576672800 from rfl] using
         check_input_value_block input ordinal block present inside
     have saltData (ordinal : Nat) (_present : ordinal < input.positions.card) :
-        readBuffer ready (10871640096 + (32 + 32 * 24) * ordinal) 32 = recordSalt input ordinal := by
+        readBuffer ready (10871640096 + (16 + 32 * 24) * ordinal) 16 = recordSalt input ordinal := by
       rw [read_buffer_memory_congr _ _ memory]
       simp only [recordSalt, if_neg batch, initial]; rfl
     have pathData (ordinal : Nat) (_present : ordinal < input.positions.card) (level : Nat) (_inside : level < 24) :
-        readBuffer ready (10871640096 + (32 + 32 * 24) * ordinal + 32 + 32 * level) 32 =
+        readBuffer ready (10871640096 + (16 + 32 * 24) * ordinal + 16 + 32 * level) 32 =
           recordSibling oracle.compression input ordinal level := by
       rw [read_buffer_memory_congr _ _ memory]
       simp only [recordSibling, if_neg batch, initial]; rfl

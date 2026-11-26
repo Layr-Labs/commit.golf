@@ -10,7 +10,7 @@ set_option maxRecDepth 4096
 /-! ### Cap length gate (indices 87..92, PCs 4444..4464) -/
 
 private def capLenInstructions : List Instr :=
-  [.ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 38, .SLLI .x6 .x6 11, .ADDI .x6 .x6 0]
+  [.ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 37, .SLLI .x6 .x6 11, .ADDI .x6 .x6 0]
 
 private def capLenPrefix (state : MachineState) (count : Nat) : MachineState :=
   (capLenInstructions.take count).foldl execInstrBr state
@@ -31,10 +31,10 @@ private theorem cap_len_prefix (state : MachineState) (pc : state.pc = 4444)
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-/-- State after checking `x17 = 77824` in cap mode (`4468` on match, `4432` on mismatch). -/
+/-- State after checking `x17 = 75776` in cap mode (`4468` on match, `4432` on mismatch). -/
 def checkCapLengthState (state : MachineState) : MachineState :=
   (capLenPrefix (checkDispatchState state) 5).setPC
-    (if state.getReg .x17 = 77824 then 4468 else 4432)
+    (if state.getReg .x17 = 75776 then 4468 else 4432)
 
 /-- For `x16 = 128`, 13 cycles reach the cap proof-length decision. -/
 theorem check_cap_length_gate (state : MachineState) (pc : state.pc = 4096)
@@ -48,7 +48,7 @@ theorem check_cap_length_gate (state : MachineState) (pc : state.pc = 4096)
   let ready := capLenPrefix disp 5
   have readyPC : ready.pc = 4464 := by
     simp [ready, capLenPrefix, capLenInstructions, execInstrBr, dispPC, MachineState.setPC]
-  have ready6 : ready.getReg .x6 = 77824 := by
+  have ready6 : ready.getReg .x6 = 75776 := by
     simp [ready, capLenPrefix, capLenInstructions, execInstrBr, signExtend12,
       MachineState.getReg, MachineState.setReg, MachineState.setPC]
   have ready17 : ready.getReg .x17 = state.getReg .x17 := by
@@ -61,9 +61,9 @@ theorem check_cap_length_gate (state : MachineState) (pc : state.pc = 4096)
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr]
     rw [ready6, ready17, readyPC]
     simp only [checkCapLengthState, ready, disp, signExtend13, MachineState.setPC]
-    by_cases eq : state.getReg .x17 = 77824
+    by_cases eq : state.getReg .x17 = 75776
     · simp only [eq, ↓reduceIte]; rfl
-    · have ne : ((77824 : Word) == state.getReg .x17) = false :=
+    · have ne : ((75776 : Word) == state.getReg .x17) = false :=
         beq_false_of_ne (fun h => eq h.symm)
       simp only [eq, ↓reduceIte, bne, ne, Bool.not_false]; rfl
   rw [show 13 + fuel = 7 + (5 + (fuel + 1)) by omega,
@@ -107,26 +107,26 @@ private theorem run_check_valid_cap (input : CheckInput)
 
 theorem check_input_cap_length (input : CheckInput)
     (valid : input.proof.length ≤ submission.sizes.proof) :
-    ((submission.initialState .check input).getReg .x17 = 77824) ↔
-      input.proof.length = 77824 := by
+    ((submission.initialState .check input).getReg .x17 = 75776) ↔
+      input.proof.length = 75776 := by
   have lengthBound : input.proof.length < 2^64 := by
-    change input.proof.length ≤ 13421772800 at valid; norm_num; omega
-  change BitVec.ofNat 64 input.proof.length = BitVec.ofNat 64 77824 ↔ _
+    change input.proof.length ≤ 13153337344 at valid; norm_num; omega
+  change BitVec.ofNat 64 input.proof.length = BitVec.ofNat 64 75776 ↔ _
   rw [← BitVec.toNat_inj]
   simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt lengthBound,
-    Nat.mod_eq_of_lt (by decide : 77824 < 2^64)]
+    Nat.mod_eq_of_lt (by decide : 75776 < 2^64)]
 
-/-- In cap mode (`k = 128`), any in-capacity proof length other than 77,824 rejects in 16 cycles. -/
+/-- In cap mode (`k = 128`), any in-capacity proof length other than 75,776 rejects in 16 cycles. -/
 theorem check_input_cap_wrong_length (input : CheckInput)
     (valid : input.proof.length ≤ submission.sizes.proof)
     (batch : input.positions.card = BATCH)
-    (wrong : input.proof.length ≠ 77824) :
+    (wrong : input.proof.length ≠ 75776) :
     submission.run .check input =
       pure ⟨.failure, checkExitState (checkCapLengthState (submission.initialState .check input)) false,
         16, 0⟩ := by
   have is128 : (submission.initialState .check input).getReg .x16 = 128 := by
     change BitVec.ofNat 64 input.positions.card = 128; rw [batch]; rfl
-  have notLen : (submission.initialState .check input).getReg .x17 ≠ 77824 :=
+  have notLen : (submission.initialState .check input).getReg .x17 ≠ 75776 :=
     fun h => wrong ((check_input_cap_length input valid).mp h)
   have rejectPC : (checkCapLengthState (submission.initialState .check input)).pc = 4432 :=
     if_neg notLen
@@ -139,7 +139,7 @@ theorem check_input_cap_wrong_length (input : CheckInput)
 /-! ### Cap copy setup & loop (indices 93..118, PCs 4468..4568) -/
 
 private def capCopySetupInstructions : List Instr :=
-  [.ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 36, .SLLI .x6 .x6 11, .ADDI .x6 .x6 0,
+  [.ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 35, .SLLI .x6 .x6 11, .ADDI .x6 .x6 0,
    .ADD .x19 .x25 .x6, .ADDI .x23 .x19 0, .ADDI .x22 .x0 512,
    .ADDI .x12 .x0 0, .SLLI .x12 .x12 11, .ADDI .x12 .x12 2, .SLLI .x12 .x12 11, .ADDI .x12 .x12 512,
    .ADDI .x28 .x0 128]
@@ -168,8 +168,8 @@ theorem check_cap_copy_setup (state : MachineState) (pc : state.pc = 4468)
 
 theorem check_cap_copy_setup_registers (state : MachineState) (pc : state.pc = 4468) :
     (checkCapCopySetupState state).pc = 4524 ∧
-    (checkCapCopySetupState state).getReg .x19 = state.getReg .x25 + 73728 ∧
-    (checkCapCopySetupState state).getReg .x23 = state.getReg .x25 + 73728 ∧
+    (checkCapCopySetupState state).getReg .x19 = state.getReg .x25 + 71680 ∧
+    (checkCapCopySetupState state).getReg .x23 = state.getReg .x25 + 71680 ∧
     (checkCapCopySetupState state).getReg .x22 = 512 ∧
     (checkCapCopySetupState state).getReg .x12 = 4608 ∧
     (checkCapCopySetupState state).getReg .x28 = 128 ∧
@@ -831,7 +831,7 @@ theorem check_cap_enter_loop (state : MachineState) (pc : state.pc = 4696)
 attribute [local irreducible] checkCapCopyStepState checkCapParentStepState
 
 /-- State distribution right at the cap-root comparison (PC 4648) for an admitted
-`k = 128` input of length `77824`. -/
+`k = 128` input of length `75776`. -/
 def checkCapHash (initial : MachineState) : OracleComp World MachineState := do
   let afterCopy := checkCapCopyStepState^[128] (checkCapCopySetupState (checkCapLengthState initial))
   let afterParents ← checkCapParentLoop (checkCapParentSetupState afterCopy) 127
@@ -840,7 +840,7 @@ def checkCapHash (initial : MachineState) : OracleComp World MachineState := do
 /-- Execute the entire cap-copy and 127-compression top-tree phase from `initial` (PC 4096)
 to the cap-root comparison (PC 4648): 4118 instructions, 5007 cycles, 127 queries. -/
 theorem check_cap_hash (initial : MachineState) (pc : initial.pc = 4096)
-    (is128 : initial.getReg .x16 = 128) (isLen : initial.getReg .x17 = 77824)
+    (is128 : initial.getReg .x16 = 128) (isLen : initial.getReg .x17 = 75776)
     (proofBase : initial.getReg .x15 = BitVec.ofNat 64 submission.layout.proof)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (4118 + fuel) initial allowCoins =
@@ -851,7 +851,7 @@ theorem check_cap_hash (initial : MachineState) (pc : initial.pc = 4096)
   have lenPC : lenState.pc = 4468 := if_pos isLen
   let copySetup := checkCapCopySetupState lenState
   have csRegs := check_cap_copy_setup_registers lenState lenPC
-  have csSrc : copySetup.getReg .x23 = BitVec.ofNat 64 (submission.layout.proof + 73728) := by
+  have csSrc : copySetup.getReg .x23 = BitVec.ofNat 64 (submission.layout.proof + 71680) := by
     rw [csRegs.2.2.1, (check_cap_length_registers initial).2.2.2.1, proofBase]; rfl
   let afterCopy := checkCapCopyStepState^[128] copySetup
   have copyEndPC : afterCopy.pc = 4572 :=
@@ -885,12 +885,12 @@ theorem check_cap_hash (initial : MachineState) (pc : initial.pc = 4096)
   constructor <;> omega
 
 theorem check_cap_hash_registers (initial hashed : MachineState)
-    (is128 : initial.getReg .x16 = 128) (isLen : initial.getReg .x17 = 77824)
+    (is128 : initial.getReg .x16 = 128) (isLen : initial.getReg .x17 = 75776)
     (reached : hashed ∈ support (checkCapHash initial)) :
     hashed.pc = 4648 ∧
     hashed.getReg .x21 = 544 ∧
     hashed.getReg .x23 = initial.getReg .x11 ∧
-    hashed.getReg .x19 = initial.getReg .x15 + 73728 ∧
+    hashed.getReg .x19 = initial.getReg .x15 + 71680 ∧
     hashed.getReg .x8 = initial.getReg .x14 ∧
     hashed.getReg .x24 = initial.getReg .x13 ∧
     hashed.getReg .x25 = initial.getReg .x15 ∧
@@ -927,7 +927,7 @@ theorem check_cap_hash_registers (initial hashed : MachineState)
       cap_copy_loop_preserves 128 copySetup reg hr3,
       check_cap_copy_setup_preserves lenState reg hr]
   have keep22 : afterParents.getReg .x22 = 512 := (parEnd.2 .x22 (by decide)).trans ps22
-  have keep19 : afterParents.getReg .x19 = initial.getReg .x15 + 73728 := by
+  have keep19 : afterParents.getReg .x19 = initial.getReg .x15 + 71680 := by
     rw [parEnd.2 .x19 (by decide), check_cap_parent_setup_preserves afterCopy .x19 (by simp),
       cap_copy_loop_preserves 128 copySetup .x19 (by decide), csRegs.2.1, lenRegs.2.2.2.1]
   refine ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -955,7 +955,7 @@ theorem check_cap_hash_registers (initial hashed : MachineState)
 /-- `checkCapHash` preserves every memory address outside `[544, 8704)`,
 including all input buffers (`commitment`, `indices`, `values`, `proof`). -/
 theorem check_cap_hash_support_outside (initial hashed : MachineState)
-    (isLen : initial.getReg .x17 = 77824)
+    (isLen : initial.getReg .x17 = 75776)
     (reached : hashed ∈ support (checkCapHash initial))
     (address : Word) (outside : address.toNat < 544 ∨ 8704 ≤ address.toNat) :
     hashed.getMem address = initial.getMem address := by

@@ -26,15 +26,15 @@ theorem record_path_directions (index : Index) (siblings siblings' : Nat → Dig
     (recordPath index siblings).map Prod.fst = (recordPath index siblings').map Prod.fst := by
   simp only [recordPath, recordPathPrefix, List.map_map, Function.comp_def]
 
-/-- The reference ancestor at height `pathDepth` computed from one salt/value/path record. -/
-def recordAncestor (compress : Compression) (pathDepth : Nat) (value : Entry) (salt : Digest)
+/-- The reference ancestor at height `pathDepth` computed from one 16-byte salt/value/path record. -/
+def recordAncestor (compress : Compression) (pathDepth : Nat) (value : Entry) (salt : Salt)
     (index : Index) (siblings : Nat → Digest) : Digest :=
-  climb compress (leafDigest compress salt value) (recordPathPrefix pathDepth index siblings)
+  climb compress (leafDigest compress index salt value) (recordPathPrefix pathDepth index siblings)
 
-/-- The reference root computed by one supplied 24-level salt/value/path record. -/
-def recordRoot (compress : Compression) (value : Entry) (salt : Digest)
+/-- The reference root computed by one supplied 24-level 16-byte salt/value/path record. -/
+def recordRoot (compress : Compression) (value : Entry) (salt : Salt)
     (index : Index) (siblings : Nat → Digest) : Digest :=
-  climb compress (leafDigest compress salt value) (recordPath index siblings)
+  climb compress (leafDigest compress index salt value) (recordPath index siblings)
 
 attribute [local irreducible] checkPositionHash checkEvaluation nextCheckState
 set_option maxRecDepth 4096
@@ -42,7 +42,7 @@ set_option maxHeartbeats 1000000
 
 /-- One actual checker iteration computes the height-`pathDepth` ancestor of its supplied record. -/
 theorem check_record_ancestor (oracle : Oracle) (state : MachineState)
-    (pathDepth valueAddress proofAddress : Nat) (value : Entry) (salt : Digest)
+    (pathDepth valueAddress proofAddress : Nat) (value : Entry) (salt : Salt)
     (index : Index) (siblings : Nat → Digest)
     (depthBound : pathDepth ≤ 24)
     (scratch : state.getReg .x21 = 256)
@@ -51,18 +51,18 @@ theorem check_record_ancestor (oracle : Oracle) (state : MachineState)
     (valueAligned : valueAddress % 8 = 0) (proofAligned : proofAddress % 8 = 0)
     (valueAbove : 352 ≤ valueAddress) (proofAbove : 352 ≤ proofAddress)
     (valueBound : valueAddress + 256 < 2 ^ 64)
-    (proofBound : proofAddress + (32 + 32 * pathDepth) < 2 ^ 64)
+    (proofBound : proofAddress + (16 + 32 * pathDepth) < 2 ^ 64)
     (valueData : ∀ block < 4, readBuffer state (valueAddress + 64 * block) 64 =
       value.extractLsb' (512 * block) 512)
-    (saltData : readBuffer state proofAddress 32 = salt)
+    (saltData : readBuffer state proofAddress 16 = salt)
     (indexData : state.getMem (state.getReg .x24) = BitVec.ofNat 64 index.val)
     (pathData : ∀ level < pathDepth,
-      readBuffer state (proofAddress + 32 + 32 * level) 32 = siblings level) :
+      readBuffer state (proofAddress + 16 + 32 * level) 32 = siblings level) :
     readBuffer (checkEvaluation oracle (checkPositionHash state pathDepth)).1 256 32 =
       recordAncestor oracle.compression pathDepth value salt index siblings := by
-  apply check_position_hash_digest oracle state pathDepth valueAddress proofAddress value salt
+  apply check_position_hash_digest oracle state pathDepth valueAddress proofAddress index value salt
     (recordPathPrefix pathDepth index siblings) scratch valuePointer proofPointer
-    valueAligned proofAligned valueAbove proofAbove valueBound proofBound saltData valueData
+    valueAligned proofAligned valueAbove proofAbove valueBound proofBound indexData saltData valueData
     (record_path_prefix_length _ _ _)
   · intro level inside
     have below : level < pathDepth := by rw [record_path_prefix_length] at inside; exact inside
@@ -76,7 +76,7 @@ theorem check_record_ancestor (oracle : Oracle) (state : MachineState)
 /-- If the unified checker loop accepts at `pathDepth`, every supplied record authenticates
 to its target slot `targets (index / 2 ^ pathDepth)`. -/
 theorem check_loop_sound (oracle : Oracle) (state : MachineState)
-    (targets : Nat → Digest) (values : Nat → Entry) (salts : Nat → Digest)
+    (targets : Nat → Digest) (values : Nat → Entry) (salts : Nat → Salt)
     (indices : Nat → Index) (siblings : Nat → Nat → Digest)
     (pathDepth targetAddress valueAddress proofAddress indexAddress count : Nat)
     (depthPos : 0 < pathDepth) (depthBound : pathDepth ≤ 24)
@@ -92,7 +92,7 @@ theorem check_loop_sound (oracle : Oracle) (state : MachineState)
     (proofAbove : 352 ≤ proofAddress) (indexAbove : 352 ≤ indexAddress)
     (targetBound : targetAddress + 32 * 2 ^ (24 - pathDepth) < 2 ^ 64)
     (valueBound : valueAddress + 256 * count < 2 ^ 64)
-    (proofBound : proofAddress + (32 + 32 * pathDepth) * count < 2 ^ 64)
+    (proofBound : proofAddress + (16 + 32 * pathDepth) * count < 2 ^ 64)
     (indexBound : indexAddress + 8 * count < 2 ^ 64)
     (targetData : ∀ slot < 2 ^ (24 - pathDepth),
       readBuffer state (targetAddress + 32 * slot) 32 = targets slot)
@@ -102,9 +102,9 @@ theorem check_loop_sound (oracle : Oracle) (state : MachineState)
       readBuffer state (valueAddress + 256 * ordinal + 64 * block) 64 =
         (values ordinal).extractLsb' (512 * block) 512)
     (saltData : ∀ ordinal < count,
-      readBuffer state (proofAddress + (32 + 32 * pathDepth) * ordinal) 32 = salts ordinal)
+      readBuffer state (proofAddress + (16 + 32 * pathDepth) * ordinal) 16 = salts ordinal)
     (pathData : ∀ ordinal < count, ∀ level < pathDepth,
-      readBuffer state (proofAddress + (32 + 32 * pathDepth) * ordinal + 32 + 32 * level) 32 =
+      readBuffer state (proofAddress + (16 + 32 * pathDepth) * ordinal + 16 + 32 * level) 32 =
         siblings ordinal level)
     (accepted : checkLoopAccepts oracle count pathDepth state = true) :
     ∀ ordinal < count,
@@ -113,8 +113,8 @@ theorem check_loop_sound (oracle : Oracle) (state : MachineState)
   induction count generalizing state values salts indices siblings valueAddress proofAddress indexAddress with
   | zero => intro ordinal inside; omega
   | succ count ih =>
-    have hrec : (32 + 32 * pathDepth) * (count + 1) =
-        (32 + 32 * pathDepth) * count + (32 + 32 * pathDepth) := Nat.mul_succ _ _
+    have hrec : (16 + 32 * pathDepth) * (count + 1) =
+        (16 + 32 * pathDepth) * count + (16 + 32 * pathDepth) := Nat.mul_succ _ _
     have acceptedParts : rootWordsMatch (checkEvaluation oracle (checkPositionHash state pathDepth)).1 = true ∧
         checkLoopAccepts oracle count pathDepth (nextCheckState oracle pathDepth state) = true := by
       simpa only [checkLoopAccepts, nextCheckState, Bool.and_eq_true] using accepted
@@ -142,7 +142,7 @@ theorem check_loop_sound (oracle : Oracle) (state : MachineState)
     have regs := next_check_registers oracle pathDepth state depthPos depthBound depthReg
     have nextValues : next.getReg .x8 = BitVec.ofNat 64 (valueAddress + 256) := by
       rw [regs.1, valuePointer, BitVec.ofNat_add]; rfl
-    have nextProof : next.getReg .x25 = BitVec.ofNat 64 (proofAddress + (32 + 32 * pathDepth)) := by
+    have nextProof : next.getReg .x25 = BitVec.ofNat 64 (proofAddress + (16 + 32 * pathDepth)) := by
       rw [regs.2.1, proofPointer, ← BitVec.ofNat_add]
     have nextIndices : next.getReg .x24 = BitVec.ofNat 64 (indexAddress + 8) := by
       rw [regs.2.2.1, indexPointer, BitVec.ofNat_add]; rfl
@@ -173,29 +173,29 @@ theorem check_loop_sound (oracle : Oracle) (state : MachineState)
       congr 1
       omega
     have nextSaltData (ordinal : Nat) (inside : ordinal < count) :
-        readBuffer next (proofAddress + (32 + 32 * pathDepth) + (32 + 32 * pathDepth) * ordinal) 32 =
+        readBuffer next (proofAddress + (16 + 32 * pathDepth) + (16 + 32 * pathDepth) * ordinal) 16 =
           salts (ordinal + 1) := by
-      have hord : (32 + 32 * pathDepth) * (ordinal + 1) ≤ (32 + 32 * pathDepth) * count :=
+      have hord : (16 + 32 * pathDepth) * (ordinal + 1) ≤ (16 + 32 * pathDepth) * count :=
         Nat.mul_le_mul_left _ (by omega)
-      have hmul : (32 + 32 * pathDepth) * (ordinal + 1) =
-          (32 + 32 * pathDepth) * ordinal + (32 + 32 * pathDepth) := Nat.mul_succ _ _
-      have hmod8 : ((32 + 32 * pathDepth) * ordinal) % 8 = 0 := by
-        rw [show 32 + 32 * pathDepth = 8 * (4 + 4 * pathDepth) by omega, Nat.mul_assoc]
+      have hmul : (16 + 32 * pathDepth) * (ordinal + 1) =
+          (16 + 32 * pathDepth) * ordinal + (16 + 32 * pathDepth) := Nat.mul_succ _ _
+      have hmod8 : ((16 + 32 * pathDepth) * ordinal) % 8 = 0 := by
+        rw [show 16 + 32 * pathDepth = 8 * (2 + 4 * pathDepth) by omega, Nat.mul_assoc]
         exact Nat.mul_mod_right 8 _
-      rw [next_check_digest oracle pathDepth state _ scratch (by omega) (by omega) (by omega)]
+      rw [next_check_salt oracle pathDepth state _ scratch (by omega) (by omega) (by omega)]
       convert saltData (ordinal + 1) (by omega) using 1
       congr 1
       omega
     have nextPathData (ordinal : Nat) (inside : ordinal < count) (level : Nat) (levelBound : level < pathDepth) :
         readBuffer next
-          (proofAddress + (32 + 32 * pathDepth) + (32 + 32 * pathDepth) * ordinal + 32 + 32 * level) 32 =
+          (proofAddress + (16 + 32 * pathDepth) + (16 + 32 * pathDepth) * ordinal + 16 + 32 * level) 32 =
           siblings (ordinal + 1) level := by
-      have hord : (32 + 32 * pathDepth) * (ordinal + 1) ≤ (32 + 32 * pathDepth) * count :=
+      have hord : (16 + 32 * pathDepth) * (ordinal + 1) ≤ (16 + 32 * pathDepth) * count :=
         Nat.mul_le_mul_left _ (by omega)
-      have hmul : (32 + 32 * pathDepth) * (ordinal + 1) =
-          (32 + 32 * pathDepth) * ordinal + (32 + 32 * pathDepth) := Nat.mul_succ _ _
-      have hmod8 : ((32 + 32 * pathDepth) * ordinal) % 8 = 0 := by
-        rw [show 32 + 32 * pathDepth = 8 * (4 + 4 * pathDepth) by omega, Nat.mul_assoc]
+      have hmul : (16 + 32 * pathDepth) * (ordinal + 1) =
+          (16 + 32 * pathDepth) * ordinal + (16 + 32 * pathDepth) := Nat.mul_succ _ _
+      have hmod8 : ((16 + 32 * pathDepth) * ordinal) % 8 = 0 := by
+        rw [show 16 + 32 * pathDepth = 8 * (2 + 4 * pathDepth) by omega, Nat.mul_assoc]
         exact Nat.mul_mod_right 8 _
       rw [next_check_digest oracle pathDepth state _ scratch (by omega) (by omega) (by omega)]
       convert pathData (ordinal + 1) (by omega) level levelBound using 1
@@ -206,7 +206,7 @@ theorem check_loop_sound (oracle : Oracle) (state : MachineState)
     | zero => exact first
     | succ ordinal =>
       exact ih next (fun k => values (k + 1)) (fun k => salts (k + 1)) (fun k => indices (k + 1))
-        (fun k => siblings (k + 1)) (valueAddress + 256) (proofAddress + (32 + 32 * pathDepth))
+        (fun k => siblings (k + 1)) (valueAddress + 256) (proofAddress + (16 + 32 * pathDepth))
         (indexAddress + 8) (regs.2.2.2.2.2.trans depthReg) (regs.2.2.2.1.trans scratch)
         (regs.2.2.2.2.1.trans targetPointer) nextValues nextProof nextIndices
         (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)

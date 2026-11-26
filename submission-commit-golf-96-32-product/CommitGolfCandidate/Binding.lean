@@ -1,8 +1,6 @@
 import CommitGolfCandidate.Model
 
-/-! Deterministic collision extraction for the submitted construction. These lemmas
-identify actual compression inputs; the random-oracle probability bound and machine
-refinement are separate obligations. -/
+/-! Deterministic collision extraction for the submitted 16-byte tagged-salt construction. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
@@ -14,13 +12,13 @@ private theorem append_injective {left right left' right' : Digest}
   · simpa only [BitVec.extractLsb'_append_eq_left] using
       congrArg (fun x : BitVec 512 => x.extractLsb' 256 256) h
 
-/-- Inputs made by the salted leaf chain, in execution order. -/
+/-- Inputs made by the tail leaf chain, in execution order. -/
 def chainInputs (compress : Compression) : Digest → List LeafBlock → List (BitVec COMPRESSION_INPUT_LENGTH)
   | _, [] => []
   | state, block :: rest =>
       leafInput state block :: chainInputs compress (absorb compress state block) rest
 
-/-- Different salts or equal-length block sequences with the same final digest
+/-- Different starting digests or equal-length block sequences with the same final digest
 produce a collision among the inputs of the two executions. -/
 theorem collision_of_chain_eq (compress : Compression)
     (state state' : Digest) (blocks blocks' : List LeafBlock)
@@ -103,32 +101,49 @@ theorem collision_of_climb_eq (compress : Compression)
           ih _ _ rest' tailsEqual nextEqual tailRoots
         exact ⟨x, List.mem_cons_of_mem _ hx, y, List.mem_cons_of_mem _ hy, hCollision⟩
 
-
-/-- The four 512-bit blocks absorbed by the leaf routine, in little-endian order. -/
-def leafBlocks (value : Entry) : List LeafBlock :=
-  (List.range 4).map fun block => value.extractLsb' (512 * block) 512
-
-theorem leafBlocks_injective : Function.Injective leafBlocks := by
-  intro value value' h
+/-- The 72-byte head together with the three 64-byte tail blocks uniquely determine the 256-byte leaf entry. -/
+theorem leaf_head_and_tail_injective (value value' : Entry)
+    (headEq : value.extractLsb' 0 576 = value'.extractLsb' 0 576)
+    (tailEq : leafTailBlocks value = leafTailBlocks value') :
+    value = value' := by
+  have hblocks :
+      [value.extractLsb' 512 512, value.extractLsb' 1024 512, value.extractLsb' 1536 512] =
+      [value'.extractLsb' 512 512, value'.extractLsb' 1024 512, value'.extractLsb' 1536 512] := by
+    simpa [leafTailBlocks, List.range_succ] using tailEq
+  have b1 : value.extractLsb' 512 512 = value'.extractLsb' 512 512 := (List.cons.inj hblocks).1
+  have b2 : value.extractLsb' 1024 512 = value'.extractLsb' 1024 512 := (List.cons.inj (List.cons.inj hblocks).2).1
+  have b3 : value.extractLsb' 1536 512 = value'.extractLsb' 1536 512 :=
+    (List.cons.inj (List.cons.inj (List.cons.inj hblocks).2).2).1
   apply BitVec.eq_of_getLsbD_eq
   intro bit hbit
-  have blockBound : bit / 512 < 4 := by
-    change bit < 2048 at hbit
-    omega
-  have blockEqual := List.map_inj_left.mp h (bit / 512) (List.mem_range.mpr blockBound)
-  have bitEqual := congrArg (fun block : LeafBlock => block.getLsbD (bit % 512)) blockEqual
-  have offset : 512 * (bit / 512) + bit % 512 = bit := by omega
-  simpa [BitVec.getLsbD_extractLsb', Nat.mod_lt _ (by decide : 0 < 512), offset] using bitEqual
+  change bit < 2048 at hbit
+  by_cases h0 : bit < 512
+  · have := congrArg (fun x : BitVec 576 => x.getLsbD bit) headEq
+    simpa [BitVec.getLsbD_extractLsb', show bit < 576 by omega] using this
+  · by_cases h1 : bit < 1024
+    · have := congrArg (fun x : LeafBlock => x.getLsbD (bit - 512)) b1
+      simpa [BitVec.getLsbD_extractLsb', show bit - 512 < 512 by omega, show 512 + (bit - 512) = bit by omega] using this
+    · by_cases h2 : bit < 1536
+      · have := congrArg (fun x : LeafBlock => x.getLsbD (bit - 1024)) b2
+        simpa [BitVec.getLsbD_extractLsb', show bit - 1024 < 512 by omega, show 1024 + (bit - 1024) = bit by omega] using this
+      · have := congrArg (fun x : LeafBlock => x.getLsbD (bit - 1536)) b3
+        simpa [BitVec.getLsbD_extractLsb', show bit - 1536 < 512 by omega, show 1536 + (bit - 1536) = bit by omega] using this
 
-theorem leafDigest_eq_fold (compress : Compression) (salt : Digest) (value : Entry) :
-    leafDigest compress salt value = (leafBlocks value).foldl (absorb compress) salt := by
-  simp [leafDigest, leafBlocks, List.foldl_map]
+/-- The four compression inputs of one position-tagged salted leaf evaluation. -/
+def leafChainInputs (compress : Compression) (index : Index) (salt : Salt) (value : Entry) :
+    List (BitVec COMPRESSION_INPUT_LENGTH) :=
+  let init := leafInitInput index salt value
+  init :: chainInputs compress (compress init) (leafTailBlocks value)
 
-/-- All compression inputs needed to verify one position. -/
-def openingInputs (compress : Compression) (salt : Digest) (value : Entry)
+theorem leafDigest_eq_tail_fold (compress : Compression) (index : Index) (salt : Salt) (value : Entry) :
+    leafDigest compress index salt value =
+      (leafTailBlocks value).foldl (absorb compress) (compress (leafInitInput index salt value)) := rfl
+
+/-- All compression inputs needed to verify one position (4 leaf + 24 path = 28). -/
+def openingInputs (compress : Compression) (index : Index) (salt : Salt) (value : Entry)
     (path : List (Bool × Digest)) : List (BitVec COMPRESSION_INPUT_LENGTH) :=
-  chainInputs compress salt (leafBlocks value) ++
-    pathInputs compress (leafDigest compress salt value) path
+  leafChainInputs compress index salt value ++
+    pathInputs compress (leafDigest compress index salt value) path
 
 theorem chainInputs_length (compress : Compression) (state : Digest) (blocks : List LeafBlock) :
     (chainInputs compress state blocks).length = blocks.length := by
@@ -145,31 +160,45 @@ theorem pathInputs_length (compress : Compression) (node : Digest)
     simp only [pathInputs, List.length_cons]
     exact congrArg (fun n : Nat => n + 1) (ih _)
 
-/-- A collision extractor need only replay four leaf calls and one per tree level
-for each of the two conflicting positions, independently of the opening batch size. -/
-theorem openingInputs_length (compress : Compression) (salt : Digest) (value : Entry)
+theorem openingInputs_length (compress : Compression) (index : Index) (salt : Salt) (value : Entry)
     (path : List (Bool × Digest)) :
-    (openingInputs compress salt value path).length = 4 + path.length := by
-  simp [openingInputs, chainInputs_length, pathInputs_length, leafBlocks]
+    (openingInputs compress index salt value path).length = 4 + path.length := by
+  unfold openingInputs leafChainInputs
+  rw [List.length_append, List.length_cons, pathInputs_length]
+  have hlen : (chainInputs compress (compress (leafInitInput index salt value)) (leafTailBlocks value)).length =
+      (leafTailBlocks value).length :=
+    chainInputs_length compress (compress (leafInitInput index salt value)) (leafTailBlocks value)
+  rw [hlen]
+  simp [leafTailBlocks]
 
-/-- Two different opened values at the same position and root force a collision.
-This covers collisions inside the salted leaf chain as well as in the tree path. -/
-theorem collision_of_openings_eq (compress : Compression)
-    (salt salt' : Digest) (value value' : Entry) (path path' : List (Bool × Digest))
+/-- Two different opened values at the same position and root force a compression collision. -/
+theorem collision_of_openings_eq (compress : Compression) (index : Index)
+    (salt salt' : Salt) (value value' : Entry) (path path' : List (Bool × Digest))
     (samePosition : path.map Prod.fst = path'.map Prod.fst)
     (different : value ≠ value')
-    (sameRoot : climb compress (leafDigest compress salt value) path =
-      climb compress (leafDigest compress salt' value') path') :
-    ∃ input ∈ openingInputs compress salt value path,
-      ∃ input' ∈ openingInputs compress salt' value' path',
+    (sameRoot : climb compress (leafDigest compress index salt value) path =
+      climb compress (leafDigest compress index salt' value') path') :
+    ∃ input ∈ openingInputs compress index salt value path,
+      ∃ input' ∈ openingInputs compress index salt' value' path',
         input ≠ input' ∧ compress input = compress input' := by
-  by_cases leavesEqual : leafDigest compress salt value = leafDigest compress salt' value'
-  · have blocksDifferent : leafBlocks value ≠ leafBlocks value' :=
-      fun h => different (leafBlocks_injective h)
-    obtain ⟨x, hx, y, hy, collision⟩ := collision_of_chain_eq compress salt salt'
-      (leafBlocks value) (leafBlocks value') (by simp [leafBlocks])
-      (Or.inr blocksDifferent) (by simpa only [leafDigest_eq_fold] using leavesEqual)
-    exact ⟨x, List.mem_append_left _ hx, y, List.mem_append_left _ hy, collision⟩
+  by_cases leavesEqual : leafDigest compress index salt value = leafDigest compress index salt' value'
+  · let init := leafInitInput index salt value
+    let init' := leafInitInput index salt' value'
+    by_cases stepDiff : compress init ≠ compress init' ∨ leafTailBlocks value ≠ leafTailBlocks value'
+    · obtain ⟨x, hx, y, hy, collision⟩ := collision_of_chain_eq compress (compress init) (compress init')
+        (leafTailBlocks value) (leafTailBlocks value') (by simp [leafTailBlocks])
+        stepDiff (by simpa only [leafDigest_eq_tail_fold] using leavesEqual)
+      exact ⟨x, List.mem_append_left _ (List.mem_cons_of_mem _ hx),
+        y, List.mem_append_left _ (List.mem_cons_of_mem _ hy), collision⟩
+    · push Not at stepDiff
+      have initNeq : init ≠ init' := by
+        intro eq
+        have headEq : value.extractLsb' 0 576 = value'.extractLsb' 0 576 := by
+          have h := congrArg (fun x : BitVec COMPRESSION_INPUT_LENGTH => x.extractLsb' 192 576) eq
+          simpa only [init, init', leafInitInput_head] using h
+        exact different (leaf_head_and_tail_injective value value' headEq stepDiff.2)
+      exact ⟨init, List.mem_append_left _ (List.mem_cons_self ..),
+        init', List.mem_append_left _ (List.mem_cons_self ..), initNeq, stepDiff.1⟩
   · obtain ⟨x, hx, y, hy, collision⟩ := collision_of_climb_eq compress _ _ path path'
       samePosition leavesEqual sameRoot
     exact ⟨x, List.mem_append_right _ hx, y, List.mem_append_right _ hy, collision⟩

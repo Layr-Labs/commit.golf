@@ -31,7 +31,7 @@ theorem next_check_registers (oracle : Oracle) (pathDepth : Nat) (state : Machin
     (depthReg : state.getReg .x30 = BitVec.ofNat 64 pathDepth) :
     (nextCheckState oracle pathDepth state).getReg .x8 = state.getReg .x8 + 256 ∧
     (nextCheckState oracle pathDepth state).getReg .x25 =
-      state.getReg .x25 + BitVec.ofNat 64 (32 + 32 * pathDepth) ∧
+      state.getReg .x25 + BitVec.ofNat 64 (16 + 32 * pathDepth) ∧
     (nextCheckState oracle pathDepth state).getReg .x24 = state.getReg .x24 + 8 ∧
     (nextCheckState oracle pathDepth state).getReg .x21 = state.getReg .x21 ∧
     (nextCheckState oracle pathDepth state).getReg .x26 = state.getReg .x26 ∧
@@ -85,13 +85,21 @@ theorem next_check_digest (oracle : Oracle) (pathDepth : Nat) (state : MachineSt
   intro word inside
   exact next_check_memory oracle pathDepth state (address + 8 * word) scratch (by omega) (by omega)
 
+theorem next_check_salt (oracle : Oracle) (pathDepth : Nat) (state : MachineState) (address : Nat)
+    (scratch : state.getReg .x21 = 256) (aligned : address % 8 = 0)
+    (above : 352 ≤ address) (bounded : address + 16 < 2 ^ 64) :
+    readBuffer (nextCheckState oracle pathDepth state) address 16 = readBuffer state address 16 := by
+  apply read_salt_congr _ _ _ aligned
+  intro word inside
+  exact next_check_memory oracle pathDepth state (address + 8 * word) scratch (by omega) (by omega)
+
 attribute [local irreducible] nextCheckState
 
 /-- All requested positions pass when the input records authenticate their values
 against one consistent heap at depth `pathDepth` (`24` against `heap 1`, or `17`
 against `heap (128 + slot)`). -/
 theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Message)
-    (heap : Nat → Digest) (salts : Index → Digest) (indices : Nat → Index)
+    (heap : Nat → Digest) (salts : Index → Salt) (indices : Nat → Index)
     (pathDepth targetAddress valueAddress proofAddress indexAddress count : Nat)
     (depthPos : 0 < pathDepth) (depthBound : pathDepth ≤ 24)
     (depthReg : state.getReg .x30 = BitVec.ofNat 64 pathDepth)
@@ -106,7 +114,7 @@ theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Me
     (proofAbove : 352 ≤ proofAddress) (indexAbove : 352 ≤ indexAddress)
     (targetBound : targetAddress + 32 * 2 ^ (24 - pathDepth) < 2 ^ 64)
     (valueBound : valueAddress + 256 * count < 2 ^ 64)
-    (proofBound : proofAddress + (32 + 32 * pathDepth) * count < 2 ^ 64)
+    (proofBound : proofAddress + (16 + 32 * pathDepth) * count < 2 ^ 64)
     (indexBound : indexAddress + 8 * count < 2 ^ 64)
     (targetData : ∀ slot < 2 ^ (24 - pathDepth),
       readBuffer state (targetAddress + 32 * slot) 32 = heap (2 ^ (24 - pathDepth) + slot))
@@ -116,20 +124,20 @@ theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Me
       readBuffer state (valueAddress + 256 * ordinal + 64 * block) 64 =
         (message (indices ordinal)).extractLsb' (512 * block) 512)
     (saltData : ∀ ordinal < count,
-      readBuffer state (proofAddress + (32 + 32 * pathDepth) * ordinal) 32 = salts (indices ordinal))
+      readBuffer state (proofAddress + (16 + 32 * pathDepth) * ordinal) 16 = salts (indices ordinal))
     (pathData : ∀ ordinal < count, ∀ level < pathDepth,
-      readBuffer state (proofAddress + (32 + 32 * pathDepth) * ordinal + 32 + 32 * level) 32 =
+      readBuffer state (proofAddress + (16 + 32 * pathDepth) * ordinal + 16 + 32 * level) 32 =
         heap (((LENGTH + (indices ordinal).val) / 2 ^ level) ^^^ 1))
     (leaves : ∀ index : Index,
-      heap (LENGTH + index.val) = leafDigest oracle.compression (salts index) (message index))
+      heap (LENGTH + index.val) = leafDigest oracle.compression index (salts index) (message index))
     (parents : ∀ parent, 0 < parent → parent < LENGTH →
       heap parent = combine oracle.compression (heap (2 * parent)) (heap (2 * parent + 1))) :
     checkLoopAccepts oracle count pathDepth state = true := by
   induction count generalizing state indices valueAddress proofAddress indexAddress with
   | zero => rfl
   | succ count ih =>
-    have hrec : (32 + 32 * pathDepth) * (count + 1) =
-        (32 + 32 * pathDepth) * count + (32 + 32 * pathDepth) := Nat.mul_succ _ _
+    have hrec : (16 + 32 * pathDepth) * (count + 1) =
+        (16 + 32 * pathDepth) * count + (16 + 32 * pathDepth) := Nat.mul_succ _ _
     have idx0 : state.getMem (state.getReg .x24) = BitVec.ofNat 64 (indices 0).val := by
       rw [indexPointer]; simpa only [Nat.mul_zero, Nat.add_zero] using indexData 0 (by omega)
     have reconstructed := check_position_heap_ancestor oracle state pathDepth valueAddress proofAddress
@@ -159,7 +167,7 @@ theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Me
     have regs := next_check_registers oracle pathDepth state depthPos depthBound depthReg
     have nextValues : next.getReg .x8 = BitVec.ofNat 64 (valueAddress + 256) := by
       rw [regs.1, valuePointer, BitVec.ofNat_add]; rfl
-    have nextProof : next.getReg .x25 = BitVec.ofNat 64 (proofAddress + (32 + 32 * pathDepth)) := by
+    have nextProof : next.getReg .x25 = BitVec.ofNat 64 (proofAddress + (16 + 32 * pathDepth)) := by
       rw [regs.2.1, proofPointer, ← BitVec.ofNat_add]
     have nextIndices : next.getReg .x24 = BitVec.ofNat 64 (indexAddress + 8) := by
       rw [regs.2.2.1, indexPointer, BitVec.ofNat_add]; rfl
@@ -190,29 +198,29 @@ theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Me
       congr 1
       omega
     have nextSaltData (ordinal : Nat) (inside : ordinal < count) :
-        readBuffer next (proofAddress + (32 + 32 * pathDepth) + (32 + 32 * pathDepth) * ordinal) 32 =
+        readBuffer next (proofAddress + (16 + 32 * pathDepth) + (16 + 32 * pathDepth) * ordinal) 16 =
           salts (indices (ordinal + 1)) := by
-      have hord : (32 + 32 * pathDepth) * (ordinal + 1) ≤ (32 + 32 * pathDepth) * count :=
+      have hord : (16 + 32 * pathDepth) * (ordinal + 1) ≤ (16 + 32 * pathDepth) * count :=
         Nat.mul_le_mul_left _ (by omega)
-      have hmul : (32 + 32 * pathDepth) * (ordinal + 1) =
-          (32 + 32 * pathDepth) * ordinal + (32 + 32 * pathDepth) := Nat.mul_succ _ _
-      have hmod8 : ((32 + 32 * pathDepth) * ordinal) % 8 = 0 := by
-        rw [show 32 + 32 * pathDepth = 8 * (4 + 4 * pathDepth) by omega, Nat.mul_assoc]
+      have hmul : (16 + 32 * pathDepth) * (ordinal + 1) =
+          (16 + 32 * pathDepth) * ordinal + (16 + 32 * pathDepth) := Nat.mul_succ _ _
+      have hmod8 : ((16 + 32 * pathDepth) * ordinal) % 8 = 0 := by
+        rw [show 16 + 32 * pathDepth = 8 * (2 + 4 * pathDepth) by omega, Nat.mul_assoc]
         exact Nat.mul_mod_right 8 _
-      rw [next_check_digest oracle pathDepth state _ scratch (by omega) (by omega) (by omega)]
+      rw [next_check_salt oracle pathDepth state _ scratch (by omega) (by omega) (by omega)]
       convert saltData (ordinal + 1) (by omega) using 1
       congr 1
       omega
     have nextPathData (ordinal : Nat) (inside : ordinal < count) (level : Nat) (levelBound : level < pathDepth) :
         readBuffer next
-          (proofAddress + (32 + 32 * pathDepth) + (32 + 32 * pathDepth) * ordinal + 32 + 32 * level) 32 =
+          (proofAddress + (16 + 32 * pathDepth) + (16 + 32 * pathDepth) * ordinal + 16 + 32 * level) 32 =
           heap (((LENGTH + (indices (ordinal + 1)).val) / 2 ^ level) ^^^ 1) := by
-      have hord : (32 + 32 * pathDepth) * (ordinal + 1) ≤ (32 + 32 * pathDepth) * count :=
+      have hord : (16 + 32 * pathDepth) * (ordinal + 1) ≤ (16 + 32 * pathDepth) * count :=
         Nat.mul_le_mul_left _ (by omega)
-      have hmul : (32 + 32 * pathDepth) * (ordinal + 1) =
-          (32 + 32 * pathDepth) * ordinal + (32 + 32 * pathDepth) := Nat.mul_succ _ _
-      have hmod8 : ((32 + 32 * pathDepth) * ordinal) % 8 = 0 := by
-        rw [show 32 + 32 * pathDepth = 8 * (4 + 4 * pathDepth) by omega, Nat.mul_assoc]
+      have hmul : (16 + 32 * pathDepth) * (ordinal + 1) =
+          (16 + 32 * pathDepth) * ordinal + (16 + 32 * pathDepth) := Nat.mul_succ _ _
+      have hmod8 : ((16 + 32 * pathDepth) * ordinal) % 8 = 0 := by
+        rw [show 16 + 32 * pathDepth = 8 * (2 + 4 * pathDepth) by omega, Nat.mul_assoc]
         exact Nat.mul_mod_right 8 _
       rw [next_check_digest oracle pathDepth state _ scratch (by omega) (by omega) (by omega)]
       convert pathData (ordinal + 1) (by omega) level levelBound using 1
@@ -222,7 +230,7 @@ theorem check_loop_honest (oracle : Oracle) (state : MachineState) (message : Me
     suffices rest : checkLoopAccepts oracle count pathDepth next = true by
       simpa only [next, nextCheckState] using rest
     exact ih next (fun k => indices (k + 1))
-      (valueAddress + 256) (proofAddress + (32 + 32 * pathDepth)) (indexAddress + 8)
+      (valueAddress + 256) (proofAddress + (16 + 32 * pathDepth)) (indexAddress + 8)
       (regs.2.2.2.2.2.trans depthReg) (regs.2.2.2.1.trans scratch) (regs.2.2.2.2.1.trans targetPointer)
       nextValues nextProof nextIndices (by omega) (by omega) (by omega) (by omega) (by omega)
       (by omega) (by omega) (by omega)

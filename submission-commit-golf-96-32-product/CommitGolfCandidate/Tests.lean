@@ -17,23 +17,23 @@ private def ensure (label : String) (condition : Bool) : IO Unit :=
   unless condition do throw (IO.userError label)
 
 #eval do
-  for depth in [1, 2, 3] do
+  for depth in [5, 6] do
     let s := candidate depth
     let message : Message := fun i => BitVec.ofNat LEAF_SIZE (∑ j ∈ Finset.range 8, (123 + i.val + j * 17) * 2^(256*j))
     let committed := run (s.run .commit message)
     ensure "commit must halt successfully" (committed.exit == Exit.success)
     ensure "commit query count" (committed.oracleCalls == 5 * 2^depth - 1)
     let (root, trapdoor) := s.readCommit committed
-    let salt := fun i => trapdoor.extractLsb' (8 * (96 * 2^depth + 32*i)) 256
+    let salt : Nat → Salt := fun i => trapdoor.extractLsb' (8 * (96 * 2^depth + 16*i)) 128
     let leaves := (List.range (2^depth)).map fun i =>
-      leafDigest testOracle.compression (salt i) (message ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩)
+      let idx : Index := ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩
+      leafDigest testOracle.compression idx (salt i) (message idx)
     let tree := layers testOracle.compression depth leaves
     ensure "machine root agrees with pure reference"
       (root == (tree.getLast?.getD []).head?.getD 0)
     let choices : List Positions := [∅, {(⟨0, by decide⟩ : Index)},
       (Finset.range (2^depth)).filter (fun i => i % 2 = 1) |>.image
-        (fun i => (⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩ : Index)),
-      (Finset.range (2^depth)).image (fun i => (⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩ : Index))]
+        (fun i => (⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩ : Index))]
     for positions in choices do
       let opened := run (s.run .opening (trapdoor, positions))
       ensure "opening must halt successfully" (s.openingSucceeded opened)

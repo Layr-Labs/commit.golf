@@ -1,839 +1,647 @@
 import CommitGolfCandidate.CommitLoop
 import CommitGolfCandidate.CopyRefinement
-import CommitGolfCandidate.LeafRefinement
+import CommitGolfCandidate.CheckEvaluation
+import CommitGolfCandidate.Model
 
-/-! Salt loading, the 32 in-place leaf chains (four 8-leaf chunks) and the heap writes
-of one commitment iteration, refined to the reference salted leaf digests. -/
+/-! Memory refinement of the 17-instruction in-place leaf lane and 32-leaf unrolled block
+to the reference position-tagged 128-bit salted leaf digest. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 set_option maxRecDepth 20000
 
-/-- Source pointer of a commitment digest copy. -/
-def commitCopyFrom (state : MachineState) (src : Reg) (srcOff : Nat) : Word :=
-  state.getReg src + BitVec.ofNat 64 srcOff
+/-- Commitment's final root copy matches opening's four-word digest copy. -/
+theorem commit_root_copy_as_opening (state : MachineState) :
+    (commitRootCopyState state).mem =
+      (openingCopyState ((state.setReg .x23 (state.getReg .x9 + 32)).setReg .x25
+        (state.getReg .x26))).mem := by
+  rw [commit_root_copy_expansion, opening_copy_expansion]
+  simp (config := { decide := true }) [List.foldl, execInstrBr, signExtend12,
+    MachineState.getReg, MachineState.setReg, MachineState.setPC,
+    MachineState.setMem, MachineState.getMem, BitVec.add_assoc]
 
-/-- Destination pointer of a commitment digest copy. -/
-def commitCopyTo (state : MachineState) (dst : Reg) (dstOff : Nat) : Word :=
-  state.getReg dst + BitVec.ofNat 64 dstOff
-
-private theorem setReg_mem (s : MachineState) (r : Reg) (v : Word) :
-    (s.setReg r v).mem = s.mem := by cases r <;> rfl
-
-private theorem copy_step_mem (s1 s2 : MachineState) (r1 d1 r2 d2 : Reg)
-    (o1 o2 o3 o4 : BitVec 12)
-    (hmem : s1.mem = s2.mem) (hd1 : d1 ≠ .x6) (hd2 : d2 ≠ .x6)
-    (hsrc : s1.getReg r1 + signExtend12 o1 = s2.getReg r2 + signExtend12 o3)
-    (hdst : s1.getReg d1 + signExtend12 o2 = s2.getReg d2 + signExtend12 o4) :
-    let s1' := execInstrBr (execInstrBr s1 (.LD .x6 r1 o1)) (.SD d1 .x6 o2)
-    let s2' := execInstrBr (execInstrBr s2 (.LD .x6 r2 o3)) (.SD d2 .x6 o4)
-    s1'.mem = s2'.mem ∧
-    (∀ reg, reg ≠ .x6 → s1'.getReg reg = s1.getReg reg) ∧
-    (∀ reg, reg ≠ .x6 → s2'.getReg reg = s2.getReg reg) := by
-  have hrm (s : MachineState) (a v : Word) (reg : Reg) :
-      (s.setMem a v).getReg reg = s.getReg reg := by cases reg <;> rfl
-  refine ⟨?_, ?_, ?_⟩
-  · simp only [execInstrBr, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_eq (by decide : Reg.x6 ≠ .x0),
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm hd1),
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm hd2)]
-    simp only [MachineState.setPC, MachineState.setMem, MachineState.getMem, setReg_mem,
-      hmem, hsrc, hdst]
-  · intro reg hreg
-    simp only [execInstrBr, MachineState.getReg_setPC, hrm,
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm hreg)]
-  · intro reg hreg
-    simp only [execInstrBr, MachineState.getReg_setPC, hrm,
-      MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm hreg)]
-
-/-- Any commitment digest copy uses the same load/store sequence as opening. -/
-theorem commit_copy_memory_as_opening (state : MachineState) (src dst : Reg)
-    (srcOff dstOff : Nat) (hsrc6 : src ≠ .x6) (hdst6 : dst ≠ .x6)
-    (hsrcBound : srcOff + 24 < 2048) (hsrcAligned : srcOff % 8 = 0)
-    (hdstBound : dstOff + 24 < 2048) (hdstAligned : dstOff % 8 = 0) :
-    (commitCopyState state src dst srcOff dstOff).mem =
-      (openingCopyState ((state.setReg .x23 (commitCopyFrom state src srcOff)).setReg .x25
-        (commitCopyTo state dst dstOff))).mem := by
-  let t0 := (state.setReg .x23 (commitCopyFrom state src srcOff)).setReg .x25
-    (commitCopyTo state dst dstOff)
-  have ht0mem : state.mem = t0.mem := by simp only [t0, setReg_mem]
-  have ht0x23 : t0.getReg .x23 = state.getReg src + BitVec.ofNat 64 srcOff := by
-    simp only [t0, commitCopyFrom, MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x25 ≠ .x23),
-      MachineState.getReg_setReg_eq (by decide : Reg.x23 ≠ .x0)]
-  have ht0x25 : t0.getReg .x25 = state.getReg dst + BitVec.ofNat 64 dstOff := by
-    simp only [t0, commitCopyTo, MachineState.getReg_setReg_eq (by decide : Reg.x25 ≠ .x0)]
-  have hs (w : Nat) (hw : w < 4) :
-      signExtend12 (BitVec.ofNat 12 (srcOff + 8 * w)) =
-        BitVec.ofNat 64 srcOff + BitVec.ofNat 64 (8 * w) := by
-    rw [signExtend12_ofNat_mul8 (srcOff + 8 * w) (by omega) (by omega), BitVec.ofNat_add]
-  have hd (w : Nat) (hw : w < 4) :
-      signExtend12 (BitVec.ofNat 12 (dstOff + 8 * w)) =
-        BitVec.ofNat 64 dstOff + BitVec.ofNat 64 (8 * w) := by
-    rw [signExtend12_ofNat_mul8 (dstOff + 8 * w) (by omega) (by omega), BitVec.ofNat_add]
-  have step0 := copy_step_mem state t0 src dst .x23 .x25
-    (BitVec.ofNat 12 srcOff) (BitVec.ofNat 12 dstOff) 0 0 ht0mem hdst6 (by decide)
-    (by rw [ht0x23, signExtend12_0, signExtend12_ofNat_mul8 srcOff (by omega) hsrcAligned]; simp)
-    (by rw [ht0x25, signExtend12_0, signExtend12_ofNat_mul8 dstOff (by omega) hdstAligned]; simp)
-  let s1 := execInstrBr (execInstrBr state (.LD .x6 src (BitVec.ofNat 12 srcOff))) (.SD dst .x6 (BitVec.ofNat 12 dstOff))
-  let t1 := execInstrBr (execInstrBr t0 (.LD .x6 .x23 0)) (.SD .x25 .x6 0)
-  have step1 := copy_step_mem s1 t1 src dst .x23 .x25
-    (BitVec.ofNat 12 (srcOff + 8)) (BitVec.ofNat 12 (dstOff + 8)) 8 8 step0.1 hdst6 (by decide)
-    (by rw [step0.2.1 src hsrc6, step0.2.2 .x23 (by decide), ht0x23, signExtend12_8,
-          show srcOff + 8 = srcOff + 8 * 1 by omega, hs 1 (by decide), BitVec.add_assoc]; rfl)
-    (by rw [step0.2.1 dst hdst6, step0.2.2 .x25 (by decide), ht0x25, signExtend12_8,
-          show dstOff + 8 = dstOff + 8 * 1 by omega, hd 1 (by decide), BitVec.add_assoc]; rfl)
-  let s2 := execInstrBr (execInstrBr s1 (.LD .x6 src (BitVec.ofNat 12 (srcOff + 8)))) (.SD dst .x6 (BitVec.ofNat 12 (dstOff + 8)))
-  let t2 := execInstrBr (execInstrBr t1 (.LD .x6 .x23 8)) (.SD .x25 .x6 8)
-  have step2 := copy_step_mem s2 t2 src dst .x23 .x25
-    (BitVec.ofNat 12 (srcOff + 16)) (BitVec.ofNat 12 (dstOff + 16)) 16 16 step1.1 hdst6 (by decide)
-    (by rw [step1.2.1 src hsrc6, step0.2.1 src hsrc6, step1.2.2 .x23 (by decide),
-          step0.2.2 .x23 (by decide), ht0x23, signExtend12_16,
-          show srcOff + 16 = srcOff + 8 * 2 by omega, hs 2 (by decide), BitVec.add_assoc]; rfl)
-    (by rw [step1.2.1 dst hdst6, step0.2.1 dst hdst6, step1.2.2 .x25 (by decide),
-          step0.2.2 .x25 (by decide), ht0x25, signExtend12_16,
-          show dstOff + 16 = dstOff + 8 * 2 by omega, hd 2 (by decide), BitVec.add_assoc]; rfl)
-  let s3 := execInstrBr (execInstrBr s2 (.LD .x6 src (BitVec.ofNat 12 (srcOff + 16)))) (.SD dst .x6 (BitVec.ofNat 12 (dstOff + 16)))
-  let t3 := execInstrBr (execInstrBr t2 (.LD .x6 .x23 16)) (.SD .x25 .x6 16)
-  have step3 := copy_step_mem s3 t3 src dst .x23 .x25
-    (BitVec.ofNat 12 (srcOff + 24)) (BitVec.ofNat 12 (dstOff + 24)) 24 24 step2.1 hdst6 (by decide)
-    (by rw [step2.2.1 src hsrc6, step1.2.1 src hsrc6, step0.2.1 src hsrc6,
-          step2.2.2 .x23 (by decide), step1.2.2 .x23 (by decide), step0.2.2 .x23 (by decide),
-          ht0x23, signExtend12_24,
-          show srcOff + 24 = srcOff + 8 * 3 by omega, hs 3 (by decide), BitVec.add_assoc]; rfl)
-    (by rw [step2.2.1 dst hdst6, step1.2.1 dst hdst6, step0.2.1 dst hdst6,
-          step2.2.2 .x25 (by decide), step1.2.2 .x25 (by decide), step0.2.2 .x25 (by decide),
-          ht0x25, signExtend12_24,
-          show dstOff + 24 = dstOff + 8 * 3 by omega, hd 3 (by decide), BitVec.add_assoc]; rfl)
-  rw [commit_copy_expansion, opening_copy_expansion]
-  exact step3.1
-
-private theorem copy_from_register (state : MachineState) (src dst : Reg) (srcOff dstOff : Nat) :
-    ((state.setReg .x23 (commitCopyFrom state src srcOff)).setReg .x25
-      (commitCopyTo state dst dstOff)).getReg .x23 = commitCopyFrom state src srcOff := by
-  rw [MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_eq (by decide)]
-
-private theorem copy_to_register (state : MachineState) (src dst : Reg) (srcOff dstOff : Nat) :
-    ((state.setReg .x23 (commitCopyFrom state src srcOff)).setReg .x25
-      (commitCopyTo state dst dstOff)).getReg .x25 = commitCopyTo state dst dstOff :=
-  MachineState.getReg_setReg_eq (by decide)
-
-/-- Copy a complete digest at any commitment copy site. -/
-theorem commit_copy_digest (state : MachineState) (src dst : Reg)
-    (srcOff dstOff source destination : Nat)
-    (hsrc6 : src ≠ .x6) (hdst6 : dst ≠ .x6)
-    (hsrcBound : srcOff + 24 < 2048) (hsrcAligned : srcOff % 8 = 0)
-    (hdstBound : dstOff + 24 < 2048) (hdstAligned : dstOff % 8 = 0)
-    (sourcePointer : commitCopyFrom state src srcOff = BitVec.ofNat 64 source)
-    (destinationPointer : commitCopyTo state dst dstOff = BitVec.ofNat 64 destination)
+theorem commit_root_copy_digest (state : MachineState) (source destination : Nat)
+    (sourcePointer : state.getReg .x9 + 32 = BitVec.ofNat 64 source)
+    (destinationPointer : state.getReg .x26 = BitVec.ofNat 64 destination)
     (sourceAligned : source % 8 = 0) (destinationAligned : destination % 8 = 0)
-    (sourceBound : source + 32 ≤ 2 ^ 64) (destinationBound : destination + 32 ≤ 2 ^ 64)
+    (sourceBound : source + 32 ≤ 2^64) (destinationBound : destination + 32 ≤ 2^64)
     (separate : source + 32 ≤ destination ∨ destination + 32 ≤ source) :
-    readBuffer (commitCopyState state src dst srcOff dstOff) destination 32 =
-      readBuffer state source 32 := by
-  rw [read_buffer_memory_congr _ _ (commit_copy_memory_as_opening state src dst srcOff dstOff
-    hsrc6 hdst6 hsrcBound hsrcAligned hdstBound hdstAligned)]
+    readBuffer (commitRootCopyState state) destination 32 = readBuffer state source 32 := by
+  rw [read_buffer_memory_congr _ _ (commit_root_copy_as_opening state)]
   rw [opening_copy_digest _ source destination
-    ((copy_from_register state src dst srcOff dstOff).trans sourcePointer)
-    ((copy_to_register state src dst srcOff dstOff).trans destinationPointer)
+    (by rw [MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_eq (by decide)]; exact sourcePointer)
+    (by rw [MachineState.getReg_setReg_eq (by decide)]; exact destinationPointer)
     sourceAligned destinationAligned sourceBound destinationBound separate]
   rfl
 
-/-- Any commitment copy preserves every disjoint complete digest. -/
-theorem commit_copy_preserves_digest (state : MachineState) (src dst : Reg)
-    (srcOff dstOff destination address : Nat)
-    (hsrc6 : src ≠ .x6) (hdst6 : dst ≠ .x6)
-    (hsrcBound : srcOff + 24 < 2048) (hsrcAligned : srcOff % 8 = 0)
-    (hdstBound : dstOff + 24 < 2048) (hdstAligned : dstOff % 8 = 0)
-    (destinationPointer : commitCopyTo state dst dstOff = BitVec.ofNat 64 destination)
+theorem commit_root_copy_preserves_digest (state : MachineState) (destination address : Nat)
+    (destinationPointer : state.getReg .x26 = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0)
-    (destinationBound : destination + 32 ≤ 2 ^ 64) (readBound : address + 32 ≤ 2 ^ 64)
+    (destinationBound : destination + 32 ≤ 2^64) (readBound : address + 32 ≤ 2^64)
     (separate : address + 32 ≤ destination ∨ destination + 32 ≤ address) :
-    readBuffer (commitCopyState state src dst srcOff dstOff) address 32 =
-      readBuffer state address 32 := by
-  rw [read_buffer_memory_congr _ _ (commit_copy_memory_as_opening state src dst srcOff dstOff
-    hsrc6 hdst6 hsrcBound hsrcAligned hdstBound hdstAligned)]
+    readBuffer (commitRootCopyState state) address 32 = readBuffer state address 32 := by
+  rw [read_buffer_memory_congr _ _ (commit_root_copy_as_opening state)]
   rw [opening_copy_preserves_digest _ destination address
-    ((copy_to_register state src dst srcOff dstOff).trans destinationPointer)
+    (by rw [MachineState.getReg_setReg_eq (by decide)]; exact destinationPointer)
     aligned destinationBound readBound separate]
   rfl
 
-/-- Any commitment copy preserves every disjoint 64-byte block. -/
-theorem commit_copy_preserves_block (state : MachineState) (src dst : Reg)
-    (srcOff dstOff destination address : Nat)
-    (hsrc6 : src ≠ .x6) (hdst6 : dst ≠ .x6)
-    (hsrcBound : srcOff + 24 < 2048) (hsrcAligned : srcOff % 8 = 0)
-    (hdstBound : dstOff + 24 < 2048) (hdstAligned : dstOff % 8 = 0)
-    (destinationPointer : commitCopyTo state dst dstOff = BitVec.ofNat 64 destination)
+theorem commit_root_copy_preserves_salt (state : MachineState) (destination address : Nat)
+    (destinationPointer : state.getReg .x26 = BitVec.ofNat 64 destination)
     (aligned : address % 8 = 0)
-    (destinationBound : destination + 32 ≤ 2 ^ 64) (readBound : address + 64 ≤ 2 ^ 64)
-    (separate : address + 64 ≤ destination ∨ destination + 32 ≤ address) :
-    readBuffer (commitCopyState state src dst srcOff dstOff) address 64 =
-      readBuffer state address 64 := by
-  rw [read_compression_halves _ _ aligned, read_compression_halves _ _ aligned,
-    commit_copy_preserves_digest state src dst srcOff dstOff destination address
-      hsrc6 hdst6 hsrcBound hsrcAligned hdstBound hdstAligned destinationPointer
-      aligned destinationBound (by omega) (by omega),
-    commit_copy_preserves_digest state src dst srcOff dstOff destination (address + 32)
-      hsrc6 hdst6 hsrcBound hsrcAligned hdstBound hdstAligned destinationPointer
-      (by omega) destinationBound (by omega) (by omega)]
+    (destinationBound : destination + 32 ≤ 2^64) (readBound : address + 16 ≤ 2^64)
+    (separate : address + 16 ≤ destination ∨ destination + 32 ≤ address) :
+    readBuffer (commitRootCopyState state) address 16 = readBuffer state address 16 := by
+  rw [read_buffer_memory_congr _ _ (commit_root_copy_as_opening state)]
+  apply read_salt_congr _ _ _ aligned
+  intro i hi
+  apply opening_copy_memory_outside
+  intro j
+  rw [MachineState.getReg_setReg_eq (by decide), destinationPointer, ← BitVec.ofNat_add]
+  intro eq
+  have h := congrArg BitVec.toNat eq
+  simp only [BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (by omega : address + 8 * i < 2^64),
+    Nat.mod_eq_of_lt (by have := j.isLt; omega : destination + 8 * j.val < 2^64)] at h
+  have := j.isLt
+  rcases separate with before | after <;> omega
 
-/-- The 96-byte oracle input of in-place call `j` of lane `k`. -/
-def chainInput (state : MachineState) (k j : Nat) : BitVec COMPRESSION_INPUT_LENGTH :=
-  readBuffer state (chainSource state k j).toNat 96
+/-! ### Memory effect of `leafPrepState` (16B salt + 8B tag) -/
 
-/-- The reply of one in-place call under a fixed oracle. -/
-def chainAnswer (oracle : Oracle) (state : MachineState) (k j : Nat) : BitVec 256 :=
-  oracle.compression (chainInput state k j)
+private theorem mem_getReg' (s : MachineState) (a v : Word) (r : Reg) :
+    (s.setMem a v).getReg r = s.getReg r := by cases r <;> rfl
 
-/-- One in-place call evaluated with a fixed oracle. -/
-def chainStep (oracle : Oracle) (state : MachineState) (c k j : Nat) : MachineState :=
-  chainCallState state c k j (chainAnswer oracle state k j)
+private theorem commit_getMem_setMem (s : MachineState) (a v q : Word) :
+    (s.setMem a v).getMem q = if q = a then v else s.getMem q := by
+  by_cases h : q = a
+  · subst h; simp [MachineState.getMem_setMem_eq]
+  · simp only [if_neg h]
+    first | exact MachineState.getMem_setMem_ne h | exact MachineState.getMem_setMem_ne h.symm
 
-/-- The four in-place calls of lane `k` in chunk `c`. -/
-def chainRun (oracle : Oracle) (state : MachineState) (c k : Nat) : MachineState :=
-  chainStep oracle (chainStep oracle (chainStep oracle (chainStep oracle state c k 0) c k 1) c k 2) c k 3
+/-- Exact memory after the 6-instruction prep: three aligned word writes at `x10`, `x10+8`, `x10+16`. -/
+theorem leaf_prep_getMem (state : MachineState) (j : Nat) (hj : j < 32)
+    (slot saltBase : Nat)
+    (slotPtr : state.getReg .x10 = BitVec.ofNat 64 slot)
+    (saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase)
+    (slotBound : slot + 24 ≤ 2^64) (saltBound : saltBase + 16 * j + 16 ≤ 2^64)
+    (disjoint : saltBase + 16 * j + 16 ≤ slot ∨ slot + 24 ≤ saltBase + 16 * j)
+    (addr : Word) :
+    (leafPrepState state j).getMem addr =
+      if addr = BitVec.ofNat 64 (slot + 16) then BitVec.ofNat 64 slot
+      else if addr = BitVec.ofNat 64 (slot + 8) then state.getMem (BitVec.ofNat 64 (saltBase + 16 * j + 8))
+      else if addr = BitVec.ofNat 64 slot then state.getMem (BitVec.ofNat 64 (saltBase + 16 * j))
+      else state.getMem addr := by
+  have s0 := signExtend12_salt0 ⟨j, hj⟩
+  have s1 := signExtend12_salt1 ⟨j, hj⟩
+  have neqSalt1Slot0 : BitVec.ofNat 64 (saltBase + 16 * j + 8) ≠ BitVec.ofNat 64 slot := by
+    intro h
+    have hn := congrArg BitVec.toNat h
+    simp only [BitVec.toNat_ofNat,
+      Nat.mod_eq_of_lt (by omega : saltBase + 16 * j + 8 < 2^64),
+      Nat.mod_eq_of_lt (by omega : slot < 2^64)] at hn
+    rcases disjoint with h1 | h2 <;> omega
+  have hse0 : signExtend12 (0 : BitVec 12) = 0#64 := rfl
+  have hse8 : signExtend12 (8 : BitVec 12) = 8#64 := rfl
+  have hse16 : signExtend12 (16 : BitVec 12) = 16#64 := rfl
+  have hadd0 (x : Word) : x + 0#64 = x := BitVec.add_zero x
+  have h1 : BitVec.ofNat 64 saltBase + BitVec.ofNat 64 (16 * j) = BitVec.ofNat 64 (saltBase + 16 * j) := by
+    rw [← BitVec.ofNat_add]
+  have h2 : BitVec.ofNat 64 saltBase + BitVec.ofNat 64 (16 * j + 8) = BitVec.ofNat 64 (saltBase + 16 * j + 8) := by
+    rw [← BitVec.ofNat_add]; exact congrArg (BitVec.ofNat 64) (by omega)
+  have h3 : BitVec.ofNat 64 slot + 8#64 = BitVec.ofNat 64 (slot + 8) := by
+    change BitVec.ofNat 64 slot + BitVec.ofNat 64 8 = _; rw [← BitVec.ofNat_add]
+  have h4 : BitVec.ofNat 64 slot + 16#64 = BitVec.ofNat 64 (slot + 16) := by
+    change BitVec.ofNat 64 slot + BitVec.ofNat 64 16 = _; rw [← BitVec.ofNat_add]
+  dsimp only [leafPrepState, leafPrepPrefix, leafPrepInstrs, List.take, List.foldl, execInstrBr]
+  simp only [MachineState.getMem_setPC, MachineState.getMem_setReg, MachineState.getReg_setPC,
+    mem_getReg', hse0, hse8, hse16,
+    MachineState.getReg_setReg_eq (by decide : Reg.x6 ≠ .x0),
+    MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x6 ≠ .x10),
+    MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x6 ≠ .x18),
+    MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x12 ≠ .x10),
+    slotPtr, saltPtr, s0, s1, h1, h2, h3, h4, hadd0]
+  simp only [commit_getMem_setMem, MachineState.getMem_setPC, MachineState.getMem_setReg,
+    neqSalt1Slot0, ↓reduceIte]
 
-/-- One leaf evaluated under a fixed oracle: salt copy then four in-place calls. -/
-def leafEval (oracle : Oracle) (state : MachineState) (c k : Nat) : MachineState :=
-  chainRun oracle (commitCopyState state .x18 .x8 (256 * c + 32 * k) (256 * k)) c k
+theorem leaf_prep_salt_tag (state : MachineState) (j : Nat) (hj : j < 32)
+    (slot saltBase : Nat)
+    (slotPtr : state.getReg .x10 = BitVec.ofNat 64 slot)
+    (saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase)
+    (slotAligned : slot % 8 = 0) (saltAligned : saltBase % 8 = 0)
+    (slotBound : slot + 24 ≤ 2^64) (saltBound : saltBase + 16 * j + 16 ≤ 2^64)
+    (disjoint : saltBase + 16 * j + 16 ≤ slot ∨ slot + 24 ≤ saltBase + 16 * j) :
+    readBuffer (leafPrepState state j) slot 16 = readBuffer state (saltBase + 16 * j) 16 ∧
+    readBuffer (leafPrepState state j) (slot + 16) 8 = BitVec.ofNat 64 slot := by
+  have gm := leaf_prep_getMem state j hj slot saltBase slotPtr saltPtr slotBound saltBound disjoint
+  have ne01 : BitVec.ofNat 64 slot ≠ BitVec.ofNat 64 (slot + 8) := by
+    intro h; have := congrArg BitVec.toNat h
+    simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : slot < 2^64),
+      Nat.mod_eq_of_lt (by omega : slot + 8 < 2^64)] at this; omega
+  have ne02 : BitVec.ofNat 64 slot ≠ BitVec.ofNat 64 (slot + 16) := by
+    intro h; have := congrArg BitVec.toNat h
+    simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : slot < 2^64),
+      Nat.mod_eq_of_lt (by omega : slot + 16 < 2^64)] at this; omega
+  have ne12 : BitVec.ofNat 64 (slot + 8) ≠ BitVec.ofNat 64 (slot + 16) := by
+    intro h; have := congrArg BitVec.toNat h
+    simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega : slot + 8 < 2^64),
+      Nat.mod_eq_of_lt (by omega : slot + 16 < 2^64)] at this; omega
+  constructor
+  · rw [read_salt_words _ _ slotAligned, read_salt_words _ _ (by omega), gm, gm]
+    simp only [ne01, ne02, ne12, ↓reduceIte, Nat.add_assoc]
+  · rw [read_word_eq _ _ (by omega), gm, if_pos rfl]
 
-theorem leaf_run_evaluation (oracle : Oracle) (state : MachineState) (c k : Nat) :
-    checkEvaluation oracle (leafRun state c k) = (leafEval oracle state c k, 4) := by
-  simp only [leafRun, laneRun, bind_assoc, pure_bind, check_evaluation_public_bind,
+/-- `leafPrepState` preserves any aligned byte range disjoint from `[slot, slot + 24)`. -/
+theorem leaf_prep_outside (state : MachineState) (j : Nat) (hj : j < 32)
+    (slot saltBase : Nat)
+    (slotPtr : state.getReg .x10 = BitVec.ofNat 64 slot)
+    (saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase)
+    (slotAligned : slot % 8 = 0)
+    (slotBound : slot + 24 ≤ 2^64) (saltBound : saltBase + 16 * j + 16 ≤ 2^64)
+    (disjoint : saltBase + 16 * j + 16 ≤ slot ∨ slot + 24 ≤ saltBase + 16 * j)
+    (address count : Nat) (readBound : address + count ≤ 2^64)
+    (separate : address + count ≤ slot ∨ slot + 24 ≤ address) :
+    readBuffer (leafPrepState state j) address count = readBuffer state address count := by
+  have gm := leaf_prep_getMem state j hj slot saltBase slotPtr saltPtr slotBound saltBound disjoint
+  unfold readBuffer
+  congr 1
+  apply Finset.sum_congr rfl
+  intro i hi
+  have hi' := Finset.mem_range.mp hi
+  have hbyte : (leafPrepState state j).getByte (BitVec.ofNat 64 (address + i)) =
+      state.getByte (BitVec.ofNat 64 (address + i)) := by
+    have hsplit : address + i = 8 * ((address + i) / 8) + (address + i) % 8 := by omega
+    rw [hsplit, aligned_byte (leafPrepState state j) ((address + i) / 8) ((address + i) % 8) (by omega),
+      aligned_byte state ((address + i) / 8) ((address + i) % 8) (by omega)]
+    congr 1
+    have hdiv : ((address + i) % 8) / 8 = 0 := Nat.div_eq_of_lt (Nat.mod_lt _ (by decide))
+    rw [hdiv, Nat.mul_zero, Nat.add_zero, gm]
+    have neq (off : Nat) (ho : off = 0 ∨ off = 8 ∨ off = 16) :
+        BitVec.ofNat 64 (8 * ((address + i) / 8)) ≠ BitVec.ofNat 64 (slot + off) := by
+      intro eq
+      have hn := congrArg BitVec.toNat eq
+      simp only [BitVec.toNat_ofNat,
+        Nat.mod_eq_of_lt (by omega : 8 * ((address + i) / 8) < 2^64),
+        Nat.mod_eq_of_lt (by rcases ho with rfl | rfl | rfl <;> omega : slot + off < 2^64)] at hn
+      rcases separate with before | after <;> rcases ho with rfl | rfl | rfl <;> omega
+    rw [if_neg (neq 16 (Or.inr (Or.inr rfl))), if_neg (neq 8 (Or.inr (Or.inl rfl))),
+      if_neg (by simpa using neq 0 (Or.inl rfl))]
+  rw [hbyte]
+
+/-! ### Fixed-oracle evaluation of one lane and one 32-leaf block -/
+
+def leafLaneEval (oracle : Oracle) (state : MachineState) (j : Nat) : MachineState :=
+  let p0 := leafPrepState state j
+  let a0 := oracle.compression (readBuffer p0 (state.getReg .x10).toNat 96)
+  let s1 := leafCall0State state j a0
+  let a1 := oracle.compression (readBuffer s1 (state.getReg .x10 + 56).toNat 96)
+  let s2 := leafCall1State s1 a1
+  let a2 := oracle.compression (readBuffer s2 (s1.getReg .x10 + 120).toNat 96)
+  let s3 := leafCall2State s2 a2
+  let a3 := oracle.compression (readBuffer s3 (s2.getReg .x10 + 128).toNat 96)
+  leafAdvanceState (leafCall3State s3 j a3)
+
+theorem leaf_lane_evaluation (oracle : Oracle) (state : MachineState) (j : Nat) :
+    checkEvaluation oracle (leafLaneRun state j) = (leafLaneEval oracle state j, 4) := by
+  simp only [leafLaneRun, leafLaneEval, bind_assoc, pure_bind, check_evaluation_public_bind,
     check_evaluation_pure]
   rfl
 
-theorem chain_step_register (oracle : Oracle) (state : MachineState) (c k j : Nat)
-    (hc : c < 4) (hk : k < 8) (hj : j < 4) (reg : Reg) (n10 : reg ≠ .x10) (n12 : reg ≠ .x12) :
-    (chainStep oracle state c k j).getReg reg = state.getReg reg :=
-  chain_call_register state c k j hc hk hj _ reg n10 n12
+theorem leaf_lane_eval_support (oracle : Oracle) (state : MachineState) (j : Nat) :
+    leafLaneEval oracle state j ∈ support (leafLaneRun state j) := by
+  have h := check_evaluation_support oracle (leafLaneRun state j)
+  rwa [leaf_lane_evaluation] at h
 
-theorem chain_run_register (oracle : Oracle) (state : MachineState) (c k : Nat)
-    (hc : c < 4) (hk : k < 8) (reg : Reg) (n10 : reg ≠ .x10) (n12 : reg ≠ .x12) :
-    (chainRun oracle state c k).getReg reg = state.getReg reg := by
-  unfold chainRun
-  rw [chain_step_register _ _ c k 3 hc hk (by decide) reg n10 n12,
-    chain_step_register _ _ c k 2 hc hk (by decide) reg n10 n12,
-    chain_step_register _ _ c k 1 hc hk (by decide) reg n10 n12,
-    chain_step_register _ _ c k 0 hc hk (by decide) reg n10 n12]
+theorem leaf_lane_eval_registers (oracle : Oracle) (state : MachineState) (j : Nat) :
+    (leafLaneEval oracle state j).getReg .x10 = state.getReg .x10 + 256 ∧
+    (leafLaneEval oracle state j).pc = state.pc + 68 ∧
+    ∀ reg, reg ≠ .x6 → reg ≠ .x10 → reg ≠ .x12 →
+      (leafLaneEval oracle state j).getReg reg = state.getReg reg :=
+  leaf_lane_registers state _ j (leaf_lane_eval_support oracle state j)
 
-theorem leaf_eval_register (oracle : Oracle) (state : MachineState) (c k : Nat)
-    (hc : c < 4) (hk : k < 8) (reg : Reg)
-    (n6 : reg ≠ .x6) (n10 : reg ≠ .x10) (n12 : reg ≠ .x12) :
-    (leafEval oracle state c k).getReg reg = state.getReg reg :=
-  (chain_run_register oracle _ c k hc hk reg n10 n12).trans
-    (commit_copy_register state .x18 .x8 _ _ reg n6)
+private theorem leaf_advance_mem (s : MachineState) : (leafAdvanceState s).mem = s.mem := rfl
+private theorem leaf_call3_mem (s : MachineState) (j : Nat) (a3 : BitVec 256) :
+    (leafCall3State s j a3).mem = (writeBits s (s.getReg .x23 + BitVec.ofNat 64 (heapOffset j)) a3).mem :=
+  write_bits_memory_congr _ _ _ a3 rfl
+private theorem leaf_call2_mem (s : MachineState) (a2 : BitVec 256) :
+    (leafCall2State s a2).mem = (writeBits s (s.getReg .x10 + 128) a2).mem :=
+  write_bits_memory_congr _ _ _ a2 rfl
+private theorem leaf_call1_mem (s : MachineState) (a1 : BitVec 256) :
+    (leafCall1State s a1).mem = (writeBits s (s.getReg .x10 + 120) a1).mem :=
+  write_bits_memory_congr _ _ _ a1 rfl
+private theorem leaf_call0_mem (s : MachineState) (j : Nat) (a0 : BitVec 256) :
+    (leafCall0State s j a0).mem = (writeBits (leafPrepState s j) (s.getReg .x10 + 56) a0).mem := rfl
+private theorem commit_block_next_mem (s : MachineState) : (commitBlockNextState s).mem = s.mem := rfl
 
-/-- Call `j` writes its reply at its output slot. -/
-theorem chain_call_written (state : MachineState) (c k j : Nat) (answer : BitVec 256)
-    (out : Nat) (hout : chainOutput state c k j = BitVec.ofNat 64 out) :
-    readBuffer (chainCallState state c k j answer) out 32 = answer := by
-  rw [read_buffer_memory_congr _ _ (chain_call_memory state c k j answer), hout]
-  have written := write_bits_digest state out 0 answer (by decide) (by decide)
-  simpa using written
-
-/-- Call `j` changes no byte outside its 32-byte output slot. -/
-theorem chain_call_outside (state : MachineState) (c k j : Nat) (answer : BitVec 256)
-    (out : Nat) (hout : chainOutput state c k j = BitVec.ofNat 64 out) (outBound : out + 32 ≤ 2 ^ 64)
-    (address count : Nat) (readBound : address + count ≤ 2 ^ 64)
-    (separate : address + count ≤ out ∨ out + 32 ≤ address) :
-    readBuffer (chainCallState state c k j answer) address count = readBuffer state address count := by
-  rw [read_buffer_memory_congr _ _ (chain_call_memory state c k j answer), hout]
-  exact write_bits_read_outside state answer out address count (by simpa using outBound) readBound
-    (by simpa using separate)
-
-theorem chain_step_written (oracle : Oracle) (state : MachineState) (c k j : Nat)
-    (source out : Nat) (hsource : (chainSource state k j).toNat = source)
-    (hout : chainOutput state c k j = BitVec.ofNat 64 out) :
-    readBuffer (chainStep oracle state c k j) out 32 =
-      absorb oracle.compression (readBuffer state source 32) (readBuffer state (source + 32) 64) := by
-  unfold chainStep
-  rw [chain_call_written state c k j _ out hout]
-  unfold chainAnswer chainInput
-  rw [hsource, read_leaf_query]
-  rfl
-
-theorem chain_step_outside (oracle : Oracle) (state : MachineState) (c k j : Nat)
-    (out : Nat) (hout : chainOutput state c k j = BitVec.ofNat 64 out) (outBound : out + 32 ≤ 2 ^ 64)
-    (address count : Nat) (readBound : address + count ≤ 2 ^ 64)
-    (separate : address + count ≤ out ∨ out + 32 ≤ address) :
-    readBuffer (chainStep oracle state c k j) address count = readBuffer state address count :=
-  chain_call_outside state c k j _ out hout outBound address count readBound separate
-
-private theorem lane_addresses (s : MachineState) (c k : Nat) (hk : k < 8) (slot heap : Nat)
-    (slotPointer : s.getReg .x8 = BitVec.ofNat 64 slot) (slotBound : slot + 2080 ≤ MEMORY_BYTES)
-    (heapPointer : s.getReg .x23 = BitVec.ofNat 64 heap) :
-    (chainSource s k 0).toNat = slot + 256 * k ∧
-    (chainSource s k 1).toNat = slot + 256 * k + 64 ∧
-    (chainSource s k 2).toNat = slot + 256 * k + 128 ∧
-    (chainSource s k 3).toNat = slot + 256 * k + 192 ∧
-    chainOutput s c k 0 = BitVec.ofNat 64 (slot + 256 * k + 64) ∧
-    chainOutput s c k 1 = BitVec.ofNat 64 (slot + 256 * k + 128) ∧
-    chainOutput s c k 2 = BitVec.ofNat 64 (slot + 256 * k + 192) ∧
-    chainOutput s c k 3 = BitVec.ofNat 64 (heap + 384 * c + heapOffset k) := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, chain_output_heap_nat s c k heap heapPointer⟩
-  · have h := chain_source_nat s k 0 hk (by decide) slot slotPointer slotBound; omega
-  · have h := chain_source_nat s k 1 hk (by decide) slot slotPointer slotBound; omega
-  · have h := chain_source_nat s k 2 hk (by decide) slot slotPointer slotBound; omega
-  · have h := chain_source_nat s k 3 hk (by decide) slot slotPointer slotBound; omega
-  · rw [chain_output_slot_nat s c k 0 hk (by decide) slot slotPointer slotBound,
-      show slot + 256 * k + 64 * 0 + 64 = slot + 256 * k + 64 by omega]
-  · rw [chain_output_slot_nat s c k 1 hk (by decide) slot slotPointer slotBound,
-      show slot + 256 * k + 64 * 1 + 64 = slot + 256 * k + 128 by omega]
-  · rw [chain_output_slot_nat s c k 2 hk (by decide) slot slotPointer slotBound,
-      show slot + 256 * k + 64 * 2 + 64 = slot + 256 * k + 192 by omega]
-
-theorem leaf_digest_unfold (compress : Compression) (salt : Digest) (value : Entry) :
-    leafDigest compress salt value =
-      absorb compress (absorb compress (absorb compress (absorb compress salt
-        (value.extractLsb' (512 * 0) 512)) (value.extractLsb' (512 * 1) 512))
-        (value.extractLsb' (512 * 2) 512)) (value.extractLsb' (512 * 3) 512) := rfl
-
-set_option maxHeartbeats 1600000 in
-/-- Four in-place calls of lane `k` in chunk `c` write the reference salted leaf digest
-into `heap + 384*c + heapOffset k`. -/
-theorem chain_run_digest (oracle : Oracle) (s0 : MachineState) (c k : Nat)
-    (hc : c < 4) (hk : k < 8) (slot heap : Nat) (salt : Digest) (value : Entry)
-    (slotPointer : s0.getReg .x8 = BitVec.ofNat 64 slot)
-    (heapPointer : s0.getReg .x23 = BitVec.ofNat 64 heap)
-    (slotBound : slot + 2080 ≤ MEMORY_BYTES)
-    (saltData : readBuffer s0 (slot + 256 * k) 32 = salt)
-    (data : ∀ block < 4,
-      readBuffer s0 (slot + 256 * k + 32 + 64 * block) 64 = value.extractLsb' (512 * block) 512) :
-    readBuffer (chainRun oracle s0 c k) (heap + 384 * c + heapOffset k) 32 =
-      leafDigest oracle.compression salt value := by
-  have mem : MEMORY_BYTES = 2 ^ 36 := rfl
-  generalize hL : slot + 256 * k = L at saltData data
-  have data0 : readBuffer s0 (L + 32) 64 = value.extractLsb' (512 * 0) 512 := by
-    have h := data 0 (by decide); rwa [show L + 32 + 64 * 0 = L + 32 by omega] at h
-  have data1 : readBuffer s0 (L + 64 + 32) 64 = value.extractLsb' (512 * 1) 512 := by
-    have h := data 1 (by decide); rwa [show L + 32 + 64 * 1 = L + 64 + 32 by omega] at h
-  have data2 : readBuffer s0 (L + 128 + 32) 64 = value.extractLsb' (512 * 2) 512 := by
-    have h := data 2 (by decide); rwa [show L + 32 + 64 * 2 = L + 128 + 32 by omega] at h
-  have data3 : readBuffer s0 (L + 192 + 32) 64 = value.extractLsb' (512 * 3) 512 := by
-    have h := data 3 (by decide); rwa [show L + 32 + 64 * 3 = L + 192 + 32 by omega] at h
-  have a0 := lane_addresses s0 c k hk slot heap slotPointer slotBound heapPointer
-  rw [hL] at a0
-  have w0 := chain_step_written oracle s0 c k 0 _ _ a0.1 a0.2.2.2.2.1
-  have o0 := chain_step_outside oracle s0 c k 0 _ a0.2.2.2.2.1 (by omega)
-  have x8a := (chain_step_register oracle s0 c k 0 hc hk (by decide) .x8 (by decide) (by decide)).trans slotPointer
-  have x23a := (chain_step_register oracle s0 c k 0 hc hk (by decide) .x23 (by decide) (by decide)).trans heapPointer
-  have d0 : readBuffer (chainStep oracle s0 c k 0) (L + 64) 32 =
-      absorb oracle.compression salt (value.extractLsb' (512 * 0) 512) := by
-    rw [w0, saltData, data0]
-  unfold chainRun
-  generalize chainStep oracle s0 c k 0 = t1 at d0 o0 x8a x23a ⊢
-  have a1 := lane_addresses t1 c k hk slot heap x8a slotBound x23a
-  rw [hL] at a1
-  have w1 := chain_step_written oracle t1 c k 1 _ _ a1.2.1 a1.2.2.2.2.2.1
-  have o1 := chain_step_outside oracle t1 c k 1 _ a1.2.2.2.2.2.1 (by omega)
-  have x8b := (chain_step_register oracle t1 c k 1 hc hk (by decide) .x8 (by decide) (by decide)).trans x8a
-  have x23b := (chain_step_register oracle t1 c k 1 hc hk (by decide) .x23 (by decide) (by decide)).trans x23a
-  have d1 : readBuffer (chainStep oracle t1 c k 1) (L + 128) 32 =
-      absorb oracle.compression (absorb oracle.compression salt (value.extractLsb' (512 * 0) 512))
-        (value.extractLsb' (512 * 1) 512) := by
-    rw [w1, d0, o0 _ 64 (by omega) (Or.inr (by omega)), data1]
-  generalize chainStep oracle t1 c k 1 = t2 at d1 o1 x8b x23b ⊢
-  have a2 := lane_addresses t2 c k hk slot heap x8b slotBound x23b
-  rw [hL] at a2
-  have w2 := chain_step_written oracle t2 c k 2 _ _ a2.2.2.1 a2.2.2.2.2.2.2.1
-  have o2 := chain_step_outside oracle t2 c k 2 _ a2.2.2.2.2.2.2.1 (by omega)
-  have x8c := (chain_step_register oracle t2 c k 2 hc hk (by decide) .x8 (by decide) (by decide)).trans x8b
-  have x23c := (chain_step_register oracle t2 c k 2 hc hk (by decide) .x23 (by decide) (by decide)).trans x23b
-  have d2 : readBuffer (chainStep oracle t2 c k 2) (L + 192) 32 =
-      absorb oracle.compression (absorb oracle.compression (absorb oracle.compression salt
-        (value.extractLsb' (512 * 0) 512)) (value.extractLsb' (512 * 1) 512))
-        (value.extractLsb' (512 * 2) 512) := by
-    rw [w2, d1, o1 _ 64 (by omega) (Or.inr (by omega)),
-      o0 _ 64 (by omega) (Or.inr (by omega)), data2]
-  generalize chainStep oracle t2 c k 2 = t3 at d2 o2 x8c x23c ⊢
-  have a3 := lane_addresses t3 c k hk slot heap x8c slotBound x23c
-  rw [hL] at a3
-  have w3 := chain_step_written oracle t3 c k 3 _ _ a3.2.2.2.1 a3.2.2.2.2.2.2.2
-  have b3 : L + 192 + 32 + 64 ≤ 2 ^ 64 := by omega
-  have s2 : L + 192 + 32 + 64 ≤ L + 192 ∨ L + 192 + 32 ≤ L + 192 + 32 := Or.inr (Nat.le_refl _)
-  have s1 : L + 192 + 32 + 64 ≤ L + 128 ∨ L + 128 + 32 ≤ L + 192 + 32 := Or.inr (by omega)
-  have s0 : L + 192 + 32 + 64 ≤ L + 64 ∨ L + 64 + 32 ≤ L + 192 + 32 := Or.inr (by omega)
-  have e3 : readBuffer t3 (L + 192 + 32) 64 = value.extractLsb' (512 * 3) 512 :=
-    ((o2 _ 64 b3 s2).trans ((o1 _ 64 b3 s1).trans (o0 _ 64 b3 s0))).trans data3
-  rewrite [w3, d2, e3]
-  exact (leaf_digest_unfold _ _ _).symm
-
-set_option maxHeartbeats 1600000 in
-/-- The four in-place calls of lane `k` in chunk `c` preserve every byte range outside
-the lane's chain region `[slot + 256*k + 64, slot + 256*k + 224)` and its heap slot. -/
-theorem chain_run_outside (oracle : Oracle) (s0 : MachineState) (c k : Nat)
-    (hc : c < 4) (hk : k < 8) (slot heap : Nat)
-    (slotPointer : s0.getReg .x8 = BitVec.ofNat 64 slot)
-    (heapPointer : s0.getReg .x23 = BitVec.ofNat 64 heap)
-    (slotBound : slot + 2080 ≤ MEMORY_BYTES)
-    (heapBound : heap + 384 * c + heapOffset k + 32 ≤ 2 ^ 64)
-    (address count : Nat) (readBound : address + count ≤ 2 ^ 64)
-    (outsideSlot : address + count ≤ slot + 256 * k + 64 ∨ slot + 256 * k + 224 ≤ address)
-    (outsideHeap : address + count ≤ heap + 384 * c + heapOffset k ∨
-      heap + 384 * c + heapOffset k + 32 ≤ address) :
-    readBuffer (chainRun oracle s0 c k) address count = readBuffer s0 address count := by
-  have mem : MEMORY_BYTES = 2 ^ 36 := rfl
-  have a0 := lane_addresses s0 c k hk slot heap slotPointer slotBound heapPointer
-  have o0 := chain_step_outside oracle s0 c k 0 _ a0.2.2.2.2.1 (by omega) address count readBound
-    (by rcases outsideSlot with h | h <;> omega)
-  have x8a := (chain_step_register oracle s0 c k 0 hc hk (by decide) .x8 (by decide) (by decide)).trans slotPointer
-  have x23a := (chain_step_register oracle s0 c k 0 hc hk (by decide) .x23 (by decide) (by decide)).trans heapPointer
-  unfold chainRun
-  generalize chainStep oracle s0 c k 0 = t1 at o0 x8a x23a ⊢
-  have a1 := lane_addresses t1 c k hk slot heap x8a slotBound x23a
-  have o1 := chain_step_outside oracle t1 c k 1 _ a1.2.2.2.2.2.1 (by omega) address count readBound
-    (by rcases outsideSlot with h | h <;> omega)
-  have x8b := (chain_step_register oracle t1 c k 1 hc hk (by decide) .x8 (by decide) (by decide)).trans x8a
-  have x23b := (chain_step_register oracle t1 c k 1 hc hk (by decide) .x23 (by decide) (by decide)).trans x23a
-  generalize chainStep oracle t1 c k 1 = t2 at o1 x8b x23b ⊢
-  have a2 := lane_addresses t2 c k hk slot heap x8b slotBound x23b
-  have o2 := chain_step_outside oracle t2 c k 2 _ a2.2.2.2.2.2.2.1 (by omega) address count readBound
-    (by rcases outsideSlot with h | h <;> omega)
-  have x8c := (chain_step_register oracle t2 c k 2 hc hk (by decide) .x8 (by decide) (by decide)).trans x8b
-  have x23c := (chain_step_register oracle t2 c k 2 hc hk (by decide) .x23 (by decide) (by decide)).trans x23b
-  generalize chainStep oracle t2 c k 2 = t3 at o2 x8c x23c ⊢
-  have a3 := lane_addresses t3 c k hk slot heap x8c slotBound x23c
-  have o3 := chain_step_outside oracle t3 c k 3 _ a3.2.2.2.2.2.2.2 heapBound
-    address count readBound outsideHeap
-  rw [o3, o2, o1, o0]
-
-theorem word_add_literal (w : Word) (a b : Nat) (h : w = BitVec.ofNat 64 a) :
-    w + BitVec.ofNat 64 b = BitVec.ofNat 64 (a + b) := by
-  rw [h, BitVec.ofNat_add]
-
-theorem heap_offset_chunk (c k : Nat) : heapOffset (8 * c + k) = 384 * c + heapOffset k := by
-  unfold heapOffset; omega
-
-/-- Hypotheses describing one 8-leaf chunk's memory before it runs. -/
-structure ChunkLayout (state : MachineState) (c slot saltAddress heap : Nat) : Prop where
-  hc : c < 4
-  slotPointer : state.getReg .x8 = BitVec.ofNat 64 slot
-  saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress
-  heapPointer : state.getReg .x23 = BitVec.ofNat 64 heap
-  r29 : state.getReg .x29 = 2048
-  slotAligned : slot % 8 = 0
-  saltAligned : saltAddress % 8 = 0
-  heapAligned : heap % 8 = 0
-  slotBound : slot + 2080 ≤ MEMORY_BYTES
-  saltBound : saltAddress + 1024 ≤ MEMORY_BYTES
-  heapBound : heap + 1536 ≤ MEMORY_BYTES
-  saltSlot : saltAddress + 1024 ≤ slot ∨ slot + 2016 ≤ saltAddress
-  heapSlot : heap + 1536 ≤ slot ∨ slot + 2080 ≤ heap
-  saltHeap : saltAddress + 1024 ≤ heap ∨ heap + 1536 ≤ saltAddress
-
-/-- One leaf preserves every digest outside `[slot + 256*k, slot + 256*k + 224)` and its heap slot. -/
-theorem leaf_eval_preserves_digest (oracle : Oracle) (state : MachineState)
-    (c k slot saltAddress heap address : Nat) (hk : k < 8)
-    (layout : ChunkLayout state c slot saltAddress heap)
-    (aligned : address % 8 = 0) (readBound : address + 32 ≤ 2 ^ 64)
-    (outsideSlot : address + 32 ≤ slot + 256 * k ∨ slot + 256 * k + 224 ≤ address)
-    (outsideHeap : address + 32 ≤ heap + 384 * c + heapOffset k ∨
-      heap + 384 * c + heapOffset k + 32 ≤ address) :
-    readBuffer (leafEval oracle state c k) address 32 = readBuffer state address 32 := by
-  have mem : MEMORY_BYTES = 2 ^ 36 := rfl
-  have hc := layout.hc
-  have slotBound := layout.slotBound
-  have heapBound := layout.heapBound
-  have hkOff : heapOffset k + 32 ≤ 384 := by unfold heapOffset; omega
-  have c8 := commit_copy_register state .x18 .x8 (256 * c + 32 * k) (256 * k) .x8 (by decide)
-  have c23 := commit_copy_register state .x18 .x8 (256 * c + 32 * k) (256 * k) .x23 (by decide)
-  unfold leafEval
-  rw [chain_run_outside oracle _ c k hc hk slot heap (c8.trans layout.slotPointer)
-      (c23.trans layout.heapPointer) slotBound (by omega) address 32 readBound
-      (by rcases outsideSlot with h | h <;> omega) outsideHeap,
-    commit_copy_preserves_digest state .x18 .x8 (256 * c + 32 * k) (256 * k) (slot + 256 * k)
-      address (by decide) (by decide) (by omega) (by omega) (by omega) (by omega)
-      (word_add_literal _ slot (256 * k) layout.slotPointer) aligned (by omega) readBound
+/-- One 17-instruction lane preserves every byte range disjoint from `[slot, slot + 216)`
+and `[heap + heapOffset j, heap + heapOffset j + 32)`. -/
+theorem leaf_lane_eval_outside (oracle : Oracle) (state : MachineState) (j : Nat) (hj : j < 32)
+    (slot saltBase heap : Nat)
+    (slotPtr : state.getReg .x10 = BitVec.ofNat 64 slot)
+    (saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase)
+    (heapPtr : state.getReg .x23 = BitVec.ofNat 64 heap)
+    (slotAligned : slot % 8 = 0)
+    (slotBound : slot + 280 ≤ MEMORY_BYTES)
+    (saltBound : saltBase + 16 * j + 16 ≤ MEMORY_BYTES)
+    (heapBound : heap + 1536 ≤ MEMORY_BYTES)
+    (saltDisjoint : saltBase + 16 * j + 16 ≤ slot ∨ slot + 24 ≤ saltBase + 16 * j)
+    (address count : Nat) (readBound : address + count ≤ 2^64)
+    (outsideSlot : address + count ≤ slot ∨ slot + 216 ≤ address)
+    (outsideHeap : address + count ≤ heap + heapOffset j ∨ heap + heapOffset j + 32 ≤ address) :
+    readBuffer (leafLaneEval oracle state j) address count = readBuffer state address count := by
+  have mem : MEMORY_BYTES = 2^36 := rfl
+  have hOff : heapOffset j + 32 ≤ 1536 := by
+    have := heap_offset_bound j 16 (by omega); omega
+  let p0 := leafPrepState state j
+  let a0 : BitVec 256 := oracle.compression (readBuffer p0 (state.getReg .x10).toNat 96)
+  let s1 := leafCall0State state j a0
+  let a1 : BitVec 256 := oracle.compression (readBuffer s1 (state.getReg .x10 + 56).toNat 96)
+  let s2 := leafCall1State s1 a1
+  let a2 : BitVec 256 := oracle.compression (readBuffer s2 (s1.getReg .x10 + 120).toNat 96)
+  let s3 := leafCall2State s2 a2
+  let a3 : BitVec 256 := oracle.compression (readBuffer s3 (s2.getReg .x10 + 128).toNat 96)
+  have heval : leafLaneEval oracle state j = leafAdvanceState (leafCall3State s3 j a3) := rfl
+  have s1r10 : s1.getReg .x10 = BitVec.ofNat 64 slot := by
+    dsimp only [s1]
+    rw [leafCall0State, writeBits_register, leafPrepState,
+      leaf_prep_prefix_reg state j 6 (by decide) .x10 (by decide) (by decide), slotPtr]
+  have s2r10 : s2.getReg .x10 = BitVec.ofNat 64 (slot + 56) := by
+    dsimp only [s2]
+    rw [leafCall1State, writeBits_register, leafCall1Setup, MachineState.getReg_setPC,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_eq (by decide),
+      s1r10, bitvec64_ofNat_add_lit]
+  have s3r23 : s3.getReg .x23 = BitVec.ofNat 64 heap := by
+    dsimp only [s3, s2, s1]
+    rw [leafCall2State, writeBits_register, leafCall2Setup, MachineState.getReg_setPC,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_ne _ _ _ _ (by decide),
+      leafCall1State, writeBits_register, leafCall1Setup, MachineState.getReg_setPC,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_ne _ _ _ _ (by decide),
+      leafCall0State, writeBits_register, leafPrepState,
+      leaf_prep_prefix_reg state j 6 (by decide) .x23 (by decide) (by decide), heapPtr]
+  rw [heval, read_buffer_memory_congr _ _ (leaf_advance_mem _),
+    read_buffer_memory_congr _ _ (leaf_call3_mem s3 j a3),
+    s3r23, ← BitVec.ofNat_add,
+    write_bits_read_outside _ _ (heap + heapOffset j) address count (by omega) readBound outsideHeap]
+  dsimp only [s3]
+  rw [read_buffer_memory_congr _ _ (leaf_call2_mem s2 a2),
+    s2r10, bitvec64_ofNat_add_lit, show slot + 56 + 128 = slot + 184 by omega,
+    write_bits_read_outside _ _ (slot + 184) address count (by omega) readBound
       (by rcases outsideSlot with h | h <;> omega)]
+  dsimp only [s2]
+  rw [read_buffer_memory_congr _ _ (leaf_call1_mem s1 a1),
+    s1r10, bitvec64_ofNat_add_lit,
+    write_bits_read_outside _ _ (slot + 120) address count (by omega) readBound
+      (by rcases outsideSlot with h | h <;> omega)]
+  dsimp only [s1]
+  rw [read_buffer_memory_congr _ _ (leaf_call0_mem state j a0),
+    slotPtr, bitvec64_ofNat_add_lit,
+    write_bits_read_outside _ _ (slot + 56) address count (by omega) readBound
+      (by rcases outsideSlot with h | h <;> omega)]
+  exact leaf_prep_outside state j hj slot saltBase slotPtr saltPtr slotAligned
+    (by omega) (by omega) saltDisjoint address count readBound
+    (by rcases outsideSlot with h | h <;> omega)
 
-/-- One leaf stores its reference salted digest into `heap + 384*c + heapOffset k`. -/
-theorem leaf_eval_digest (oracle : Oracle) (state : MachineState)
-    (c k slot saltAddress heap : Nat) (hk : k < 8)
-    (layout : ChunkLayout state c slot saltAddress heap) (value : Entry)
-    (data : ∀ block < 4,
-      readBuffer state (slot + 256 * k + 32 + 64 * block) 64 = value.extractLsb' (512 * block) 512) :
-    readBuffer (leafEval oracle state c k) (heap + 384 * c + heapOffset k) 32 =
-      leafDigest oracle.compression (readBuffer state (saltAddress + 256 * c + 32 * k) 32) value := by
-  have mem : MEMORY_BYTES = 2 ^ 36 := rfl
-  have hc := layout.hc
-  have slotBound := layout.slotBound
-  have saltBound := layout.saltBound
-  have sl := layout.saltSlot
-  have sla := layout.slotAligned
-  have saa := layout.saltAligned
-  have c8 := commit_copy_register state .x18 .x8 (256 * c + 32 * k) (256 * k) .x8 (by decide)
-  have c23 := commit_copy_register state .x18 .x8 (256 * c + 32 * k) (256 * k) .x23 (by decide)
-  have toPtr : commitCopyTo state .x8 (256 * k) = BitVec.ofNat 64 (slot + 256 * k) :=
-    word_add_literal _ slot (256 * k) layout.slotPointer
-  have fromPtr : commitCopyFrom state .x18 (256 * c + 32 * k) =
-      BitVec.ofNat 64 (saltAddress + 256 * c + 32 * k) := by
-    rw [commitCopyFrom, word_add_literal _ saltAddress (256 * c + 32 * k) layout.saltPointer]
-    congr 1; omega
-  have s0salt : readBuffer (commitCopyState state .x18 .x8 (256 * c + 32 * k) (256 * k))
-      (slot + 256 * k) 32 = readBuffer state (saltAddress + 256 * c + 32 * k) 32 :=
-    commit_copy_digest state .x18 .x8 (256 * c + 32 * k) (256 * k)
-      (saltAddress + 256 * c + 32 * k) (slot + 256 * k)
-      (by decide) (by decide) (by omega) (by omega) (by omega) (by omega)
-      fromPtr toPtr (by omega) (by omega) (by omega) (by omega)
-      (by rcases sl with h | h <;> omega)
-  have s0data (block : Nat) (hb : block < 4) :
-      readBuffer (commitCopyState state .x18 .x8 (256 * c + 32 * k) (256 * k))
-        (slot + 256 * k + 32 + 64 * block) 64 = value.extractLsb' (512 * block) 512 := by
-    rw [commit_copy_preserves_block state .x18 .x8 (256 * c + 32 * k) (256 * k) (slot + 256 * k)
-      _ (by decide) (by decide) (by omega) (by omega) (by omega) (by omega) toPtr
-      (by omega) (by omega) (by omega) (Or.inr (by omega))]
-    exact data block hb
-  exact chain_run_digest oracle _ c k hc hk slot heap
-    (readBuffer state (saltAddress + 256 * c + 32 * k) 32) value
-    (c8.trans layout.slotPointer) (c23.trans layout.heapPointer) slotBound s0salt s0data
+theorem leaf_digest_unfold (compress : Compression) (index : Index) (salt : Salt) (value : Entry) :
+    leafDigest compress index salt value =
+      absorb compress (absorb compress (absorb compress
+        (compress (leafInitInput index salt value))
+        (value.extractLsb' 512 512))
+        (value.extractLsb' 1024 512))
+        (value.extractLsb' 1536 512) := rfl
 
-/-- Consecutive leaves in chunk `c` preserve every digest outside their slot ranges and heap slots. -/
-theorem chunk_leaves_from_preserves_digest (oracle : Oracle) (state : MachineState)
-    (c start remaining slot saltAddress heap address : Nat) (hbound : start + remaining ≤ 8)
-    (layout : ChunkLayout state c slot saltAddress heap)
-    (aligned : address % 8 = 0) (readBound : address + 32 ≤ 2 ^ 64)
-    (outsideSlot : address + 32 ≤ slot + 256 * start ∨ slot + 256 * (start + remaining) ≤ address)
-    (outsideHeap : ∀ k, start ≤ k → k < start + remaining →
-      address + 32 ≤ heap + 384 * c + heapOffset k ∨
-      heap + 384 * c + heapOffset k + 32 ≤ address) :
-    readBuffer (checkEvaluation oracle (chunkLeavesFrom state c start remaining)).1 address 32 =
-      readBuffer state address 32 := by
-  induction remaining generalizing state start with
-  | zero => rw [chunkLeavesFrom, check_evaluation_pure]
-  | succ remaining ih =>
-    rw [chunkLeavesFrom, check_evaluation_bind, leaf_run_evaluation]
+/-- One 17-instruction lane writes `leafDigest oracle.compression index salt value` at
+`heap + heapOffset j` when `slot = 4072 + 256 * index.val`. -/
+theorem leaf_lane_eval_digest (oracle : Oracle) (state : MachineState) (j : Nat) (hj : j < 32)
+    (index : Index) (saltBase heap : Nat) (value : Entry)
+    (slotPtr : state.getReg .x10 = BitVec.ofNat 64 (4072 + 256 * index.val))
+    (saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase)
+    (heapPtr : state.getReg .x23 = BitVec.ofNat 64 heap)
+    (saltAligned : saltBase % 8 = 0)
+    (saltBound : saltBase + 16 * j + 16 ≤ MEMORY_BYTES)
+    (heapBound : heap + 1536 ≤ MEMORY_BYTES)
+    (saltDisjoint : 4072 + 256 * index.val + 24 ≤ saltBase + 16 * j)
+    (headData : readBuffer state (4096 + 256 * index.val) 72 = value.extractLsb' 0 576)
+    (block1Data : readBuffer state (4096 + 256 * index.val + 64) 64 = value.extractLsb' 512 512)
+    (block2Data : readBuffer state (4096 + 256 * index.val + 128) 64 = value.extractLsb' 1024 512)
+    (block3Data : readBuffer state (4096 + 256 * index.val + 192) 64 = value.extractLsb' 1536 512) :
+    readBuffer (leafLaneEval oracle state j) (heap + heapOffset j) 32 =
+      leafDigest oracle.compression index (readBuffer state (saltBase + 16 * j) 16) value := by
+  have mem : MEMORY_BYTES = 2^36 := rfl
+  have hi : index.val < 2^24 := index.isLt
+  let slot := 4072 + 256 * index.val
+  have hslotAl : slot % 8 = 0 := by omega
+  have hslotB : slot + 280 ≤ MEMORY_BYTES := by omega
+  have hOff : heapOffset j + 32 ≤ 1536 := by have := heap_offset_bound j 16 (by omega); omega
+  unfold leafLaneEval
+  dsimp only
+  rw [read_buffer_memory_congr _ _ (leaf_advance_mem _)]
+  -- Call 0 input
+  have prep := leaf_prep_salt_tag state j hj slot saltBase slotPtr saltPtr hslotAl saltAligned
+    (by omega) (by omega) (Or.inr saltDisjoint)
+  have prepHead : readBuffer (leafPrepState state j) (slot + 24) 72 = value.extractLsb' 0 576 := by
+    rw [leaf_prep_outside state j hj slot saltBase slotPtr saltPtr hslotAl
+      (by omega) (by omega) (Or.inr saltDisjoint) (slot + 24) 72 (by omega) (Or.inr (by omega))]
+    simpa [slot, show 4072 + 256 * index.val + 24 = 4096 + 256 * index.val by omega] using headData
+  have slotNat : (state.getReg .x10).toNat = slot := by
+    rw [slotPtr]; exact word_small_toNat slot (by omega)
+  have q0eq : readBuffer (leafPrepState state j) (state.getReg .x10).toNat 96 =
+      leafInitInput index (readBuffer state (saltBase + 16 * j) 16) value := by
+    rw [slotNat, read_init_query, prep.1, prep.2, prepHead]
+    rfl
+  let d0 : BitVec 256 := oracle.compression (leafInitInput index (readBuffer state (saltBase + 16 * j) 16) value)
+  have ha0 : oracle.compression (readBuffer (leafPrepState state j) (state.getReg .x10).toNat 96) = d0 :=
+    congrArg oracle.compression q0eq
+  rw [ha0]
+  -- After Call 0 (s1): d0 at slot + 56, block1 at slot + 88 unchanged
+  let s1 := leafCall0State state j d0
+  have hs1 : leafCall0State state j d0 = s1 := rfl
+  rw [hs1]
+  have s1r10 : s1.getReg .x10 = BitVec.ofNat 64 slot := by
+    dsimp only [s1]
+    rw [leafCall0State, writeBits_register, leafPrepState,
+      leaf_prep_prefix_reg state j 6 (by decide) .x10 (by decide) (by decide), slotPtr]
+  have s1_d0 : readBuffer s1 (slot + 56) 32 = d0 := by
+    dsimp only [s1]
+    rw [read_buffer_memory_congr _ _ (leaf_call0_mem state j d0), slotPtr, bitvec64_ofNat_add_lit]
+    simpa using write_bits_digest (leafPrepState state j) (slot + 56) 0 d0 (by decide) (by decide)
+  have s1_outside (addr cnt : Nat) (rb : addr + cnt ≤ 2^64) (sep : slot + 88 ≤ addr) :
+      readBuffer s1 addr cnt = readBuffer state addr cnt := by
+    dsimp only [s1]
+    rw [read_buffer_memory_congr _ _ (leaf_call0_mem state j d0), slotPtr, bitvec64_ofNat_add_lit,
+      write_bits_read_outside _ _ (slot + 56) addr cnt (by omega) rb (Or.inr (by omega))]
+    exact leaf_prep_outside state j hj slot saltBase slotPtr saltPtr hslotAl
+      (by omega) (by omega) (Or.inr saltDisjoint) addr cnt rb (Or.inr (by omega))
+  have off56 : (state.getReg .x10 + 56).toNat = slot + 56 := by
+    rw [slotPtr]; exact pointer_offset_nat slot 56 (by omega)
+  have q1eq : readBuffer s1 (state.getReg .x10 + 56).toNat 96 =
+      leafInput d0 (value.extractLsb' 512 512) := by
+    rw [off56, read_leaf_query, s1_d0, show slot + 56 + 32 = slot + 88 by omega,
+      s1_outside (slot + 88) 64 (by omega) (by omega),
+      show slot + 88 = 4096 + 256 * index.val + 64 by dsimp only [slot]; omega, block1Data]
+    rfl
+  let d1 : BitVec 256 := absorb oracle.compression d0 (value.extractLsb' 512 512)
+  have ha1 : oracle.compression (readBuffer s1 (state.getReg .x10 + 56).toNat 96) = d1 :=
+    congrArg oracle.compression q1eq
+  rw [ha1]
+  -- After Call 1 (s2): d1 at slot + 120, block2 at slot + 152 unchanged
+  let s2 := leafCall1State s1 d1
+  have hs2 : leafCall1State s1 d1 = s2 := rfl
+  rw [hs2]
+  have s2r10 : s2.getReg .x10 = BitVec.ofNat 64 (slot + 56) := by
+    dsimp only [s2]
+    rw [leafCall1State, writeBits_register, leafCall1Setup, MachineState.getReg_setPC,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_eq (by decide),
+      s1r10, bitvec64_ofNat_add_lit]
+  have s2_d1 : readBuffer s2 (slot + 120) 32 = d1 := by
+    dsimp only [s2]
+    rw [read_buffer_memory_congr _ _ (leaf_call1_mem s1 d1), s1r10, bitvec64_ofNat_add_lit]
+    simpa using write_bits_digest s1 (slot + 120) 0 d1 (by decide) (by decide)
+  have s2_outside (addr cnt : Nat) (rb : addr + cnt ≤ 2^64) (sep : slot + 152 ≤ addr) :
+      readBuffer s2 addr cnt = readBuffer state addr cnt := by
+    dsimp only [s2]
+    rw [read_buffer_memory_congr _ _ (leaf_call1_mem s1 d1), s1r10, bitvec64_ofNat_add_lit,
+      write_bits_read_outside _ _ (slot + 120) addr cnt (by omega) rb (Or.inr (by omega))]
+    exact s1_outside addr cnt rb (by omega)
+  have off120 : (s1.getReg .x10 + 120).toNat = slot + 120 := by
+    rw [s1r10]; exact pointer_offset_nat slot 120 (by omega)
+  have q2eq : readBuffer s2 (s1.getReg .x10 + 120).toNat 96 =
+      leafInput d1 (value.extractLsb' 1024 512) := by
+    rw [off120, read_leaf_query, s2_d1, show slot + 120 + 32 = slot + 152 by omega,
+      s2_outside (slot + 152) 64 (by omega) (by omega),
+      show slot + 152 = 4096 + 256 * index.val + 128 by dsimp only [slot]; omega, block2Data]
+    rfl
+  let d2 : BitVec 256 := absorb oracle.compression d1 (value.extractLsb' 1024 512)
+  have ha2 : oracle.compression (readBuffer s2 (s1.getReg .x10 + 120).toNat 96) = d2 :=
+    congrArg oracle.compression q2eq
+  rw [ha2]
+  -- After Call 2 (s3): d2 at slot + 184, block3 at slot + 216 unchanged
+  let s3 := leafCall2State s2 d2
+  have hs3 : leafCall2State s2 d2 = s3 := rfl
+  rw [hs3]
+  have s3r23 : s3.getReg .x23 = BitVec.ofNat 64 heap := by
+    dsimp only [s3, s2, s1]
+    rw [leafCall2State, writeBits_register, leafCall2Setup, MachineState.getReg_setPC,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_ne _ _ _ _ (by decide),
+      leafCall1State, writeBits_register, leafCall1Setup, MachineState.getReg_setPC,
+      MachineState.getReg_setReg_ne _ _ _ _ (by decide), MachineState.getReg_setReg_ne _ _ _ _ (by decide),
+      leafCall0State, writeBits_register, leafPrepState,
+      leaf_prep_prefix_reg state j 6 (by decide) .x23 (by decide) (by decide), heapPtr]
+  have s3_d2 : readBuffer s3 (slot + 184) 32 = d2 := by
+    dsimp only [s3]
+    rw [read_buffer_memory_congr _ _ (leaf_call2_mem s2 d2),
+      s2r10, bitvec64_ofNat_add_lit, show slot + 56 + 128 = slot + 184 by omega]
+    simpa using write_bits_digest s2 (slot + 184) 0 d2 (by decide) (by decide)
+  have s3_outside (addr cnt : Nat) (rb : addr + cnt ≤ 2^64) (sep : slot + 216 ≤ addr) :
+      readBuffer s3 addr cnt = readBuffer state addr cnt := by
+    dsimp only [s3]
+    rw [read_buffer_memory_congr _ _ (leaf_call2_mem s2 d2),
+      s2r10, bitvec64_ofNat_add_lit, show slot + 56 + 128 = slot + 184 by omega,
+      write_bits_read_outside _ _ (slot + 184) addr cnt (by omega) rb (Or.inr (by omega))]
+    exact s2_outside addr cnt rb (by omega)
+  have off184 : (s2.getReg .x10 + 128).toNat = slot + 184 := by
+    rw [s2r10]
+    have h := pointer_offset_nat (slot + 56) 128 (by omega)
+    change (BitVec.ofNat 64 (slot + 56) + BitVec.ofNat 64 128).toNat = _
+    rw [h]
+  have q3eq : readBuffer s3 (s2.getReg .x10 + 128).toNat 96 =
+      leafInput d2 (value.extractLsb' 1536 512) := by
+    rw [off184, read_leaf_query, s3_d2, show slot + 184 + 32 = slot + 216 by omega,
+      s3_outside (slot + 216) 64 (by omega) (by omega),
+      show slot + 216 = 4096 + 256 * index.val + 192 by dsimp only [slot]; omega, block3Data]
+    rfl
+  let d3 : BitVec 256 := absorb oracle.compression d2 (value.extractLsb' 1536 512)
+  have ha3 : oracle.compression (readBuffer s3 (s2.getReg .x10 + 128).toNat 96) = d3 :=
+    congrArg oracle.compression q3eq
+  rw [ha3, read_buffer_memory_congr _ _ (leaf_call3_mem s3 j d3), s3r23, ← BitVec.ofNat_add]
+  simpa [d3, d2, d1, d0, leaf_digest_unfold] using
+    write_bits_digest s3 (heap + heapOffset j) 0 d3 (by decide) (by decide)
+
+/-! ### Full 32-leaf block refinement -/
+
+theorem leaf_block_lanes_eval_succ (oracle : Oracle) (state : MachineState) (start count : Nat) :
+    checkEvaluation oracle (leafBlockLanes state start (count + 1)) =
+      let rest := checkEvaluation oracle (leafBlockLanes (leafLaneEval oracle state start) (start + 1) count)
+      (rest.1, 4 + rest.2) := by
+  rw [leafBlockLanes, check_evaluation_bind, leaf_lane_evaluation]
+
+theorem commit_block_evaluation (oracle : Oracle) (state : MachineState) :
+    (checkEvaluation oracle (commitBlockRun state)).1 =
+      commitBlockNextState (checkEvaluation oracle (leafBlockLanes state 0 32)).1 := by
+  rw [commitBlockRun, check_evaluation_bind]
+  simp only [check_evaluation_pure]
+
+/-- Layout hypotheses for one 32-leaf block. -/
+structure BlockLayout (state : MachineState) (slot saltBase heap : Nat) : Prop where
+  slotPtr : state.getReg .x10 = BitVec.ofNat 64 slot
+  saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase
+  heapPtr : state.getReg .x23 = BitVec.ofNat 64 heap
+  slotAligned : slot % 8 = 0
+  saltAligned : saltBase % 8 = 0
+  heapAligned : heap % 8 = 0
+  heapAfter : slot + 24 + 8192 ≤ heap
+  saltsAfter : heap + 1536 ≤ saltBase
+  saltBound : saltBase + 512 ≤ MEMORY_BYTES
+
+/-- `count` consecutive lanes starting at `start` preserve any byte range outside
+`[slot, slot + 256 * count)` and outside all written heap slots `[heap + heapOffset j, +32)`. -/
+theorem leaf_block_lanes_outside (oracle : Oracle) (state : MachineState)
+    (start count slot saltBase heap : Nat) (bounded : start + count ≤ 32)
+    (slotPtr : state.getReg .x10 = BitVec.ofNat 64 slot)
+    (saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase)
+    (heapPtr : state.getReg .x23 = BitVec.ofNat 64 heap)
+    (slotAligned : slot % 8 = 0)
+    (heapAfter : slot + 24 + 256 * count ≤ heap)
+    (saltsAfter : heap + 1536 ≤ saltBase)
+    (saltBound : saltBase + 512 ≤ MEMORY_BYTES)
+    (address bytes : Nat) (readBound : address + bytes ≤ 2^64)
+    (outsideSlot : address + bytes ≤ slot ∨ slot + 256 * count ≤ address)
+    (outsideHeap : ∀ j, start ≤ j → j < start + count →
+      address + bytes ≤ heap + heapOffset j ∨ heap + heapOffset j + 32 ≤ address) :
+    readBuffer (checkEvaluation oracle (leafBlockLanes state start count)).1 address bytes =
+      readBuffer state address bytes := by
+  induction count generalizing state start slot with
+  | zero => rw [leafBlockLanes, check_evaluation_pure]
+  | succ count ih =>
+    have regs := leaf_lane_eval_registers oracle state start
+    have nextSlot : (leafLaneEval oracle state start).getReg .x10 = BitVec.ofNat 64 (slot + 256) := by
+      rw [regs.1, slotPtr, bitvec64_ofNat_add_lit]
+    have nextSalt : (leafLaneEval oracle state start).getReg .x18 = BitVec.ofNat 64 saltBase :=
+      (regs.2.2 .x18 (by decide) (by decide) (by decide)).trans saltPtr
+    have nextHeap : (leafLaneEval oracle state start).getReg .x23 = BitVec.ofNat 64 heap :=
+      (regs.2.2 .x23 (by decide) (by decide) (by decide)).trans heapPtr
+    rw [leaf_block_lanes_eval_succ]
     dsimp only
-    let next := leafEval oracle state c start
-    have nextLayout : ChunkLayout next c slot saltAddress heap :=
-      ⟨layout.hc,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x8
-         (by decide) (by decide) (by decide)).trans layout.slotPointer,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x18
-         (by decide) (by decide) (by decide)).trans layout.saltPointer,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x23
-         (by decide) (by decide) (by decide)).trans layout.heapPointer,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x29
-         (by decide) (by decide) (by decide)).trans layout.r29,
-       layout.slotAligned, layout.saltAligned, layout.heapAligned,
-       layout.slotBound, layout.saltBound, layout.heapBound,
-       layout.saltSlot, layout.heapSlot, layout.saltHeap⟩
-    rw [ih next (start + 1) (by omega) nextLayout
-        (by rcases outsideSlot with h | h <;> omega)
-        (fun k hk1 hk2 => outsideHeap k (by omega) (by omega))]
-    exact leaf_eval_preserves_digest oracle state c start slot saltAddress heap address
-      (by omega) layout aligned readBound (by rcases outsideSlot with h | h <;> omega)
+    rw [ih _ (start + 1) (slot + 256) (by omega) nextSlot nextSalt nextHeap (by omega)
+      (by omega) (by rcases outsideSlot with h | h <;> omega)
+      (fun j hlo hhi => outsideHeap j (by omega) (by omega))]
+    exact leaf_lane_eval_outside oracle state start (by omega) slot saltBase heap
+      slotPtr saltPtr heapPtr slotAligned (by omega) (by omega) (by omega)
+      (Or.inr (by omega)) address bytes readBound
+      (by rcases outsideSlot with h | h <;> omega)
       (outsideHeap start (by omega) (by omega))
 
-/-- Consecutive leaves in chunk `c` compute and retain every salted leaf digest. -/
-theorem chunk_leaves_from_digests (oracle : Oracle) (state : MachineState)
-    (c start remaining slot saltAddress heap : Nat) (hbound : start + remaining ≤ 8)
-    (layout : ChunkLayout state c slot saltAddress heap) (value : Nat → Entry)
-    (data : ∀ k, start ≤ k → k < start + remaining → ∀ block < 4,
-      readBuffer state (slot + 256 * k + 32 + 64 * block) 64 =
-        (value k).extractLsb' (512 * block) 512) :
-    ∀ k, start ≤ k → k < start + remaining →
-      readBuffer (checkEvaluation oracle (chunkLeavesFrom state c start remaining)).1
-        (heap + 384 * c + heapOffset k) 32 =
-        leafDigest oracle.compression (readBuffer state (saltAddress + 256 * c + 32 * k) 32)
-          (value k) := by
-  have mem : MEMORY_BYTES = 2 ^ 36 := rfl
-  induction remaining generalizing state start with
-  | zero => intro k hk1 hk2; omega
-  | succ remaining ih =>
-    have hc := layout.hc
-    have slotBound := layout.slotBound
-    have saltBound := layout.saltBound
-    have heapBound := layout.heapBound
-    have sl := layout.saltSlot
-    have hs := layout.heapSlot
-    have sh := layout.saltHeap
-    have sla := layout.slotAligned
-    have saa := layout.saltAligned
-    have hea := layout.heapAligned
-    rw [chunkLeavesFrom, check_evaluation_bind, leaf_run_evaluation]
+/-- One 32-leaf block preserves every byte range outside `[slot, slot + 8192)` and
+outside all 32 written heap slots (hence preserves all pair gaps `[heap+96p+64, +32)`,
+all salts, and all subsequent message blocks). -/
+theorem commit_block_preserves (oracle : Oracle) (state : MachineState)
+    (slot saltBase heap address bytes : Nat) (layout : BlockLayout state slot saltBase heap)
+    (readBound : address + bytes ≤ 2^64)
+    (outsideSlot : address + bytes ≤ slot ∨ slot + 8192 ≤ address)
+    (outsideHeap : ∀ j < 32,
+      address + bytes ≤ heap + heapOffset j ∨ heap + heapOffset j + 32 ≤ address) :
+    readBuffer (checkEvaluation oracle (commitBlockRun state)).1 address bytes =
+      readBuffer state address bytes := by
+  rw [commit_block_evaluation, read_buffer_memory_congr _ _ (commit_block_next_mem _)]
+  exact leaf_block_lanes_outside oracle state 0 32 slot saltBase heap (by decide)
+    layout.slotPtr layout.saltPtr layout.heapPtr layout.slotAligned
+    layout.heapAfter layout.saltsAfter layout.saltBound
+    address bytes readBound outsideSlot (fun j _ hj => outsideHeap j hj)
+
+/-- `count` consecutive lanes starting at `start` write each leaf's reference digest into
+`heap + heapOffset j`. -/
+theorem leaf_block_lanes_digests (oracle : Oracle) (state : MachineState)
+    (start count baseIdx saltBase heap : Nat) (bounded : start + count ≤ 32)
+    (idxBound : baseIdx + count ≤ LENGTH)
+    (message : Nat → Entry)
+    (slotPtr : state.getReg .x10 = BitVec.ofNat 64 (4072 + 256 * baseIdx))
+    (saltPtr : state.getReg .x18 = BitVec.ofNat 64 saltBase)
+    (heapPtr : state.getReg .x23 = BitVec.ofNat 64 heap)
+    (saltAligned : saltBase % 8 = 0)
+    (heapAfter : 4072 + 256 * baseIdx + 24 + 256 * count ≤ heap)
+    (saltsAfter : heap + 1536 ≤ saltBase)
+    (saltBound : saltBase + 512 ≤ MEMORY_BYTES)
+    (headData : ∀ k < count,
+      readBuffer state (4096 + 256 * (baseIdx + k)) 72 = (message k).extractLsb' 0 576)
+    (blockData : ∀ k < count, ∀ b, 1 ≤ b → b < 4 →
+      readBuffer state (4096 + 256 * (baseIdx + k) + 64 * b) 64 = (message k).extractLsb' (512 * b) 512) :
+    ∀ k (hk : k < count),
+      readBuffer (checkEvaluation oracle (leafBlockLanes state start count)).1
+        (heap + heapOffset (start + k)) 32 =
+        leafDigest oracle.compression ⟨baseIdx + k, by omega⟩
+          (readBuffer state (saltBase + 16 * (start + k)) 16) (message k) := by
+  have mem : MEMORY_BYTES = 2^36 := rfl
+  induction count generalizing state start baseIdx message with
+  | zero => intro k hk; omega
+  | succ count ih =>
+    let idx0 : Index := ⟨baseIdx, by omega⟩
+    have regs := leaf_lane_eval_registers oracle state start
+    have nextSlot : (leafLaneEval oracle state start).getReg .x10 =
+        BitVec.ofNat 64 (4072 + 256 * (baseIdx + 1)) := by
+      rw [regs.1, slotPtr]
+      exact ofNat64_add_eq _ 256 _ (by clear * -; omega)
+    have nextSalt : (leafLaneEval oracle state start).getReg .x18 = BitVec.ofNat 64 saltBase :=
+      (regs.2.2 .x18 (by decide) (by decide) (by decide)).trans saltPtr
+    have nextHeap : (leafLaneEval oracle state start).getReg .x23 = BitVec.ofNat 64 heap :=
+      (regs.2.2 .x23 (by decide) (by decide) (by decide)).trans heapPtr
+    have lane0 := leaf_lane_eval_digest oracle state start (by omega) idx0 saltBase heap (message 0)
+      slotPtr saltPtr heapPtr saltAligned (by omega) (by omega) (by dsimp only [idx0]; omega)
+      (by simpa [idx0] using headData 0 (by omega))
+      (by simpa [idx0] using blockData 0 (by omega) 1 (by decide) (by decide))
+      (by simpa [idx0] using blockData 0 (by omega) 2 (by decide) (by decide))
+      (by simpa [idx0] using blockData 0 (by omega) 3 (by decide) (by decide))
+    have nextHead (k : Nat) (hk : k < count) :
+        readBuffer (leafLaneEval oracle state start) (4096 + 256 * (baseIdx + 1 + k)) 72 =
+          (message (k + 1)).extractLsb' 0 576 := by
+      rw [leaf_lane_eval_outside oracle state start (by omega) (4072 + 256 * baseIdx) saltBase heap
+        slotPtr saltPtr heapPtr (by omega) (by omega) (by omega) (by omega)
+        (Or.inr (by omega)) _ 72 (by omega) (Or.inr (by omega))
+        (Or.inl (by have := heap_offset_bound start 16 (by omega); omega))]
+      convert headData (k + 1) (by omega) using 2; omega
+    have nextBlock (k : Nat) (hk : k < count) (b : Nat) (hb1 : 1 ≤ b) (hb4 : b < 4) :
+        readBuffer (leafLaneEval oracle state start) (4096 + 256 * (baseIdx + 1 + k) + 64 * b) 64 =
+          (message (k + 1)).extractLsb' (512 * b) 512 := by
+      rw [leaf_lane_eval_outside oracle state start (by omega) (4072 + 256 * baseIdx) saltBase heap
+        slotPtr saltPtr heapPtr (by omega) (by omega) (by omega) (by omega)
+        (Or.inr (by omega)) _ 64 (by omega) (Or.inr (by omega))
+        (Or.inl (by have := heap_offset_bound start 16 (by omega); omega))]
+      convert blockData (k + 1) (by omega) b hb1 hb4 using 2; omega
+    intro k hk
+    rw [leaf_block_lanes_eval_succ]
     dsimp only
-    let next := leafEval oracle state c start
-    have nextLayout : ChunkLayout next c slot saltAddress heap :=
-      ⟨layout.hc,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x8
-         (by decide) (by decide) (by decide)).trans layout.slotPointer,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x18
-         (by decide) (by decide) (by decide)).trans layout.saltPointer,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x23
-         (by decide) (by decide) (by decide)).trans layout.heapPointer,
-       (leaf_eval_register oracle state c start layout.hc (by omega) .x29
-         (by decide) (by decide) (by decide)).trans layout.r29,
-       layout.slotAligned, layout.saltAligned, layout.heapAligned,
-       layout.slotBound, layout.saltBound, layout.heapBound,
-       layout.saltSlot, layout.heapSlot, layout.saltHeap⟩
-    have nextData : ∀ k, start + 1 ≤ k → k < start + 1 + remaining → ∀ block < 4,
-        readBuffer next (slot + 256 * k + 32 + 64 * block) 64 =
-          (value k).extractLsb' (512 * block) 512 := by
-      intro k hk1 hk2 block hb
-      have hkOff : heapOffset start + 32 ≤ 384 := by unfold heapOffset; omega
-      rw [read_compression_halves _ _ (by omega),
-        leaf_eval_preserves_digest oracle state c start slot saltAddress heap
-          (slot + 256 * k + 32 + 64 * block + 32) (by omega) layout (by omega) (by omega)
-          (Or.inr (by omega)) (by rcases hs with h | h <;> omega),
-        leaf_eval_preserves_digest oracle state c start slot saltAddress heap
-          (slot + 256 * k + 32 + 64 * block) (by omega) layout (by omega) (by omega)
-          (Or.inr (by omega)) (by rcases hs with h | h <;> omega),
-        ← read_compression_halves _ _ (by omega)]
-      exact data k (by omega) (by omega) block hb
-    intro k hk1 hk2
-    by_cases hcur : k = start
-    · subst k
-      have hkOff : heapOffset start + 32 ≤ 384 := by unfold heapOffset; omega
-      have hkAlign : heapOffset start % 8 = 0 := heap_offset_aligned start
-      rw [chunk_leaves_from_preserves_digest oracle next c (start + 1) remaining slot saltAddress
-          heap (heap + 384 * c + heapOffset start) (by omega) nextLayout (by omega) (by omega)
-          (by rcases hs with h | h <;> omega)
-          (fun j hj1 _ => by
-            have := heap_offset_disjoint start j (by omega)
-            omega)]
-      exact leaf_eval_digest oracle state c start slot saltAddress heap (by omega) layout
-        (value start) (data start (by omega) (by omega))
-    · have hkOff : heapOffset start + 32 ≤ 384 := by unfold heapOffset; omega
-      have rest := ih next (start + 1) (by omega) nextLayout nextData k (by omega) (by omega)
-      rw [rest, leaf_eval_preserves_digest oracle state c start slot saltAddress heap
-        (saltAddress + 256 * c + 32 * k) (by omega) layout (by omega) (by omega)
-        (by rcases sl with h | h <;> omega) (by rcases sh with h | h <;> omega)]
+    cases k with
+    | zero =>
+      simp only [Nat.add_zero]
+      have hOffS := heap_offset_bound start 16 (by omega)
+      rw [leaf_block_lanes_outside oracle _ (start + 1) count (4072 + 256 * (baseIdx + 1)) saltBase heap
+        (by omega) nextSlot nextSalt nextHeap (by omega) (by omega) saltsAfter saltBound
+        (heap + heapOffset start) 32 (by omega) (Or.inr (by omega))
+        (fun j hlo _ => by
+          have := heap_offset_disjoint start j (by omega)
+          rcases this with h | h <;> [exact Or.inl (by omega); exact Or.inr (by omega)])]
+      exact lane0
+    | succ k =>
+      have hrec := ih (leafLaneEval oracle state start) (start + 1) (baseIdx + 1)
+        (by omega) (by omega) (fun i => message (i + 1))
+        nextSlot nextSalt nextHeap (by omega) nextHead nextBlock k (by omega)
+      have saltPres : readBuffer (leafLaneEval oracle state start) (saltBase + 16 * (start + 1 + k)) 16 =
+          readBuffer state (saltBase + 16 * (start + (k + 1))) 16 := by
+        rw [show start + 1 + k = start + (k + 1) by omega]
+        exact leaf_lane_eval_outside oracle state start (by omega) (4072 + 256 * baseIdx) saltBase heap
+          slotPtr saltPtr heapPtr (by omega) (by omega) (by omega) (by omega)
+          (Or.inr (by omega)) _ 16 (by omega) (Or.inr (by omega))
+          (Or.inr (by have := heap_offset_bound start 16 (by omega); omega))
+      rw [saltPres] at hrec
+      have hidx : (⟨baseIdx + 1 + k, by omega⟩ : Index) = ⟨baseIdx + (k + 1), by omega⟩ := by
+        apply Fin.ext; dsimp; omega
+      rw [hidx] at hrec
+      simpa only [show start + 1 + k = start + (k + 1) by omega] using hrec
 
-/-- Hypotheses describing one 32-leaf iteration's memory before it runs. -/
-structure PairLayout (state : MachineState) (slot saltAddress heap : Nat) : Prop where
-  slotPointer : state.getReg .x8 = BitVec.ofNat 64 slot
-  saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress
-  heapPointer : state.getReg .x23 = BitVec.ofNat 64 heap
-  r29 : state.getReg .x29 = 2048
-  slotAligned : slot % 8 = 0
-  saltAligned : saltAddress % 8 = 0
-  heapAligned : heap % 8 = 0
-  slotBound : slot + 8224 ≤ MEMORY_BYTES
-  saltBound : saltAddress + 1024 ≤ MEMORY_BYTES
-  heapBound : heap + 1536 ≤ MEMORY_BYTES
-  saltSlot : saltAddress + 1024 ≤ slot ∨ slot + 8192 ≤ saltAddress
-  heapSlot : heap + 1536 ≤ slot ∨ slot + 8224 ≤ heap
-  saltHeap : saltAddress + 1024 ≤ heap ∨ heap + 1536 ≤ saltAddress
-
-attribute [local irreducible] checkEvaluation leafRun laneRun chunkLeavesFrom
-
-private theorem chunk_advance_mem (s : MachineState) : (chunkAdvanceState s).mem = s.mem := by
-  cases s; rfl
-
-private theorem commit_position_next_mem (s : MachineState) :
-    (commitPositionNextState s).mem = s.mem := by
-  cases s; rfl
-
-private theorem chunk_run_eval_mem (oracle : Oracle) (state : MachineState) (c : Nat) :
-    (checkEvaluation oracle (chunkRun state c)).1.mem =
-      (checkEvaluation oracle (chunkLeavesFrom state c 0 8)).1.mem := by
-  rw [chunkRun, check_evaluation_bind]
-  generalize checkEvaluation oracle (chunkLeavesFrom state c 0 8) = res
-  rcases res with ⟨hashed, calls⟩
-  simp only [check_evaluation_pure]
-  exact chunk_advance_mem hashed
-
-private theorem chunk_run_eval_regs (oracle : Oracle) (state : MachineState) (c : Nat) (hc : c < 4)
-    (r29 : state.getReg .x29 = 2048) :
-    (checkEvaluation oracle (chunkRun state c)).1.getReg .x8 = state.getReg .x8 + 2048 ∧
-    ∀ reg, reg ≠ .x6 → reg ≠ .x8 → reg ≠ .x10 → reg ≠ .x12 →
-      (checkEvaluation oracle (chunkRun state c)).1.getReg reg = state.getReg reg := by
-  have regs := chunk_run_registers state _ c hc (check_evaluation_support oracle (chunkRun state c))
-  exact ⟨by rw [regs.1, r29], regs.2⟩
-
-theorem iter_chunks_from_preserves_digest (oracle : Oracle) (state : MachineState)
-    (start remaining slot saltAddress heap address : Nat) (hbound : start + remaining ≤ 4)
-    (slotPointer : state.getReg .x8 = BitVec.ofNat 64 slot)
-    (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
-    (heapPointer : state.getReg .x23 = BitVec.ofNat 64 heap)
-    (r29 : state.getReg .x29 = 2048)
-    (slotAligned : slot % 8 = 0) (saltAligned : saltAddress % 8 = 0) (heapAligned : heap % 8 = 0)
-    (slotBound : slot + 32 + 2048 * remaining ≤ MEMORY_BYTES)
-    (saltBound : saltAddress + 1024 ≤ MEMORY_BYTES)
-    (heapBound : heap + 1536 ≤ MEMORY_BYTES)
-    (saltSlot : saltAddress + 1024 ≤ slot ∨ slot + 2048 * remaining ≤ saltAddress)
-    (heapSlot : heap + 1536 ≤ slot ∨ slot + 32 + 2048 * remaining ≤ heap)
-    (saltHeap : saltAddress + 1024 ≤ heap ∨ heap + 1536 ≤ saltAddress)
-    (aligned : address % 8 = 0) (readBound : address + 32 ≤ 2 ^ 64)
-    (outsideSlot : address + 32 ≤ slot ∨ slot + 2048 * remaining ≤ address)
-    (outsideHeap : ∀ i, 8 * start ≤ i → i < 8 * (start + remaining) →
-      address + 32 ≤ heap + heapOffset i ∨ heap + heapOffset i + 32 ≤ address) :
-    readBuffer (checkEvaluation oracle (iterChunksFrom state start remaining)).1 address 32 =
-      readBuffer state address 32 := by
-  induction remaining generalizing state start slot with
-  | zero => rw [iterChunksFrom, check_evaluation_pure]
-  | succ remaining ih =>
-    rw [iterChunksFrom, check_evaluation_bind]
-    dsimp only
-    let next := (checkEvaluation oracle (chunkRun state start)).1
-    have regs := chunk_run_eval_regs oracle state start (by omega) r29
-    have nextSlot : next.getReg .x8 = BitVec.ofNat 64 (slot + 2048) := by
-      rw [regs.1]; exact word_add_literal _ slot 2048 slotPointer
-    have chunkLayout : ChunkLayout state start slot saltAddress heap :=
-      ⟨by omega, slotPointer, saltPointer, heapPointer, r29, slotAligned, saltAligned, heapAligned,
-       by omega, saltBound, heapBound, by rcases saltSlot with h | h <;> omega,
-       by rcases heapSlot with h | h <;> omega, saltHeap⟩
-    rw [ih next (start + 1) (slot + 2048) (by omega) nextSlot
-        ((regs.2 .x18 (by decide) (by decide) (by decide) (by decide)).trans saltPointer)
-        ((regs.2 .x23 (by decide) (by decide) (by decide) (by decide)).trans heapPointer)
-        ((regs.2 .x29 (by decide) (by decide) (by decide) (by decide)).trans r29)
-        (by omega) (by omega) (by rcases saltSlot with h | h <;> omega)
-        (by rcases heapSlot with h | h <;> omega)
-        (by rcases outsideSlot with h | h <;> omega)
-        (fun i hi1 hi2 => outsideHeap i (by omega) (by omega))]
-    rw [read_buffer_memory_congr _ _ (chunk_run_eval_mem oracle state start)]
-    exact chunk_leaves_from_preserves_digest oracle state start 0 8 slot saltAddress heap address
-      (by decide) chunkLayout aligned readBound (by rcases outsideSlot with h | h <;> omega)
-      (fun k _ hk => by
-        have h := outsideHeap (8 * start + k) (by omega) (by omega)
-        rw [heap_offset_chunk] at h
-        simpa [Nat.add_assoc] using h)
-
-theorem iter_chunks_from_digests (oracle : Oracle) (state : MachineState)
-    (start remaining slot saltAddress heap : Nat) (hbound : start + remaining ≤ 4)
-    (slotPointer : state.getReg .x8 = BitVec.ofNat 64 slot)
-    (saltPointer : state.getReg .x18 = BitVec.ofNat 64 saltAddress)
-    (heapPointer : state.getReg .x23 = BitVec.ofNat 64 heap)
-    (r29 : state.getReg .x29 = 2048)
-    (slotAligned : slot % 8 = 0) (saltAligned : saltAddress % 8 = 0) (heapAligned : heap % 8 = 0)
-    (slotBound : slot + 32 + 2048 * remaining ≤ MEMORY_BYTES)
-    (saltBound : saltAddress + 1024 ≤ MEMORY_BYTES)
-    (heapBound : heap + 1536 ≤ MEMORY_BYTES)
-    (saltSlot : saltAddress + 1024 ≤ slot ∨ slot + 2048 * remaining ≤ saltAddress)
-    (heapSlot : heap + 1536 ≤ slot ∨ slot + 32 + 2048 * remaining ≤ heap)
-    (saltHeap : saltAddress + 1024 ≤ heap ∨ heap + 1536 ≤ saltAddress)
-    (value : Nat → Entry)
-    (data : ∀ i < 8 * remaining, ∀ block < 4,
-      readBuffer state (slot + 256 * i + 32 + 64 * block) 64 =
-        (value (8 * start + i)).extractLsb' (512 * block) 512) :
-    ∀ i, 8 * start ≤ i → i < 8 * (start + remaining) →
-      readBuffer (checkEvaluation oracle (iterChunksFrom state start remaining)).1
-        (heap + heapOffset i) 32 =
-        leafDigest oracle.compression (readBuffer state (saltAddress + 32 * i) 32) (value i) := by
-  have mem : MEMORY_BYTES = 2 ^ 36 := rfl
-  induction remaining generalizing state start slot with
-  | zero => intro i hi1 hi2; omega
-  | succ remaining ih =>
-    rw [iterChunksFrom, check_evaluation_bind]
-    dsimp only
-    let next := (checkEvaluation oracle (chunkRun state start)).1
-    have regs := chunk_run_eval_regs oracle state start (by omega) r29
-    have nextSlot : next.getReg .x8 = BitVec.ofNat 64 (slot + 2048) := by
-      rw [regs.1]; exact word_add_literal _ slot 2048 slotPointer
-    have chunkLayout : ChunkLayout state start slot saltAddress heap :=
-      ⟨by omega, slotPointer, saltPointer, heapPointer, r29, slotAligned, saltAligned, heapAligned,
-       by omega, saltBound, heapBound, by rcases saltSlot with h | h <;> omega,
-       by rcases heapSlot with h | h <;> omega, saltHeap⟩
-    have nextData : ∀ i < 8 * remaining, ∀ block < 4,
-        readBuffer next (slot + 2048 + 256 * i + 32 + 64 * block) 64 =
-          (value (8 * (start + 1) + i)).extractLsb' (512 * block) 512 := by
-      intro i hi block hb
-      rw [read_buffer_memory_congr _ _ (chunk_run_eval_mem oracle state start),
-        read_compression_halves _ _ (by omega),
-        chunk_leaves_from_preserves_digest oracle state start 0 8 slot saltAddress heap
-          (slot + 2048 + 256 * i + 32 + 64 * block + 32) (by decide) chunkLayout
-          (by omega) (by omega) (Or.inr (by omega))
-          (fun k _ hk => by
-            have hkOff : heapOffset k + 32 ≤ 384 := by unfold heapOffset; omega
-            rcases heapSlot with h | h <;> omega),
-        chunk_leaves_from_preserves_digest oracle state start 0 8 slot saltAddress heap
-          (slot + 2048 + 256 * i + 32 + 64 * block) (by decide) chunkLayout
-          (by omega) (by omega) (Or.inr (by omega))
-          (fun k _ hk => by
-            have hkOff : heapOffset k + 32 ≤ 384 := by unfold heapOffset; omega
-            rcases heapSlot with h | h <;> omega),
-        ← read_compression_halves _ _ (by omega)]
-      rw [show slot + 2048 + 256 * i + 32 + 64 * block = slot + 256 * (i + 8) + 32 + 64 * block by omega,
-        show 8 * (start + 1) + i = 8 * start + (i + 8) by omega]
-      exact data (i + 8) (by omega) block hb
-    intro i hi1 hi2
-    by_cases hlow : i < 8 * (start + 1)
-    · obtain ⟨k, rfl⟩ : ∃ k, i = 8 * start + k := ⟨i - 8 * start, by omega⟩
-      have hk : k < 8 := by omega
-      have hkOff : heapOffset (8 * start + k) + 32 ≤ 1536 := by unfold heapOffset; omega
-      have hkAlign : heapOffset (8 * start + k) % 8 = 0 := heap_offset_aligned _
-      rw [iter_chunks_from_preserves_digest oracle next (start + 1) remaining (slot + 2048)
-          saltAddress heap (heap + heapOffset (8 * start + k)) (by omega) nextSlot
-          ((regs.2 .x18 (by decide) (by decide) (by decide) (by decide)).trans saltPointer)
-          ((regs.2 .x23 (by decide) (by decide) (by decide) (by decide)).trans heapPointer)
-          ((regs.2 .x29 (by decide) (by decide) (by decide) (by decide)).trans r29)
-          (by omega) saltAligned heapAligned (by omega) saltBound heapBound
-          (by rcases saltSlot with h | h <;> omega) (by rcases heapSlot with h | h <;> omega)
-          saltHeap (by omega) (by omega) (by rcases heapSlot with h | h <;> omega)
-          (fun j hj1 _ => by
-            have := heap_offset_disjoint (8 * start + k) j (by omega)
-            omega)]
-      rw [read_buffer_memory_congr _ _ (chunk_run_eval_mem oracle state start),
-        heap_offset_chunk, ← Nat.add_assoc]
-      have hchunk := chunk_leaves_from_digests oracle state start 0 8 slot saltAddress heap
-        (by decide) chunkLayout (fun m => value (8 * start + m))
-        (fun m _ hm block hb => data m (by omega) block hb) k (by omega) hk
-      rw [hchunk, show saltAddress + 256 * start + 32 * k = saltAddress + 32 * (8 * start + k) by omega]
-    · have rest := ih next (start + 1) (slot + 2048) (by omega) nextSlot
-        ((regs.2 .x18 (by decide) (by decide) (by decide) (by decide)).trans saltPointer)
-        ((regs.2 .x23 (by decide) (by decide) (by decide) (by decide)).trans heapPointer)
-        ((regs.2 .x29 (by decide) (by decide) (by decide) (by decide)).trans r29)
-        (by omega) (by omega) (by rcases saltSlot with h | h <;> omega)
-        (by rcases heapSlot with h | h <;> omega) nextData i (by omega) (by omega)
-      rw [rest, read_buffer_memory_congr _ _ (chunk_run_eval_mem oracle state start),
-        chunk_leaves_from_preserves_digest oracle state start 0 8 slot saltAddress heap
-          (saltAddress + 32 * i) (by decide) chunkLayout (by omega) (by omega)
-          (by rcases saltSlot with h | h <;> omega)
-          (fun k _ hk => by
-            have hkOff : heapOffset k + 32 ≤ 384 := by unfold heapOffset; omega
-            rcases saltHeap with h | h <;> omega)]
-
-private theorem commit_position_eval_mem (oracle : Oracle) (state : MachineState) :
-    (checkEvaluation oracle (commitPositionRun state)).1.mem =
-      (checkEvaluation oracle (iterChunksFrom state 0 4)).1.mem := by
-  rw [commitPositionRun, check_evaluation_bind]
-  generalize checkEvaluation oracle (iterChunksFrom state 0 4) = res
-  rcases res with ⟨chunks, calls⟩
-  simp only [check_evaluation_pure]
-  exact commit_position_next_mem chunks
-
-/-- One 32-leaf iteration preserves every digest outside `[slot, slot + 8192)` and outside
-its 32 written heap slots (in particular, all 16 zero gaps inside `[heap, heap + 1536)`). -/
-theorem commit_position_preserves_digest (oracle : Oracle) (state : MachineState)
-    (slot saltAddress heap address : Nat) (layout : PairLayout state slot saltAddress heap)
-    (aligned : address % 8 = 0) (readBound : address + 32 ≤ 2 ^ 64)
-    (outsideSlot : address + 32 ≤ slot ∨ slot + 8192 ≤ address)
-    (outsideHeap : ∀ i < 32,
-      address + 32 ≤ heap + heapOffset i ∨ heap + heapOffset i + 32 ≤ address) :
-    readBuffer (checkEvaluation oracle (commitPositionRun state)).1 address 32 =
-      readBuffer state address 32 := by
-  rw [read_buffer_memory_congr _ _ (commit_position_eval_mem oracle state)]
-  exact iter_chunks_from_preserves_digest oracle state 0 4 slot saltAddress heap address (by decide)
-    layout.slotPointer layout.saltPointer layout.heapPointer layout.r29
-    layout.slotAligned layout.saltAligned layout.heapAligned
-    (by have := layout.slotBound; omega) layout.saltBound layout.heapBound
-    (by rcases layout.saltSlot with h | h; exact Or.inl h; exact Or.inr (by omega))
-    (by rcases layout.heapSlot with h | h; exact Or.inl h; exact Or.inr (by omega))
-    layout.saltHeap aligned readBound
-    (by rcases outsideSlot with h | h; exact Or.inl h; exact Or.inr (by omega))
-    (fun i _ hi => outsideHeap i (by omega))
-
-/-- One 32-leaf iteration stores, for each `i < 32`, the salted leaf digest of leaf `i`
-in `heap + heapOffset i`. -/
-theorem commit_position_digest (oracle : Oracle) (state : MachineState)
-    (slot saltAddress heap : Nat) (layout : PairLayout state slot saltAddress heap)
-    (value : Nat → Entry)
-    (data : ∀ i < 32, ∀ block < 4,
-      readBuffer state (slot + 256 * i + 32 + 64 * block) 64 =
-        (value i).extractLsb' (512 * block) 512) :
-    ∀ i < 32, readBuffer (checkEvaluation oracle (commitPositionRun state)).1
-        (heap + heapOffset i) 32 =
-      leafDigest oracle.compression (readBuffer state (saltAddress + 32 * i) 32) (value i) := by
-  intro i hi
-  rw [read_buffer_memory_congr _ _ (commit_position_eval_mem oracle state)]
-  exact iter_chunks_from_digests oracle state 0 4 slot saltAddress heap (by decide)
-    layout.slotPointer layout.saltPointer layout.heapPointer layout.r29
-    layout.slotAligned layout.saltAligned layout.heapAligned
-    (by have := layout.slotBound; omega) layout.saltBound layout.heapBound
-    (by rcases layout.saltSlot with h | h; exact Or.inl h; exact Or.inr (by omega))
-    (by rcases layout.heapSlot with h | h; exact Or.inl h; exact Or.inr (by omega))
-    layout.saltHeap value (fun m hm block hb => by simpa using data m (by omega) block hb)
-    i (by omega) (by omega)
+/-- One 32-leaf block writes all 32 reference leaf digests into `heap + heapOffset j`. -/
+theorem commit_block_digests (oracle : Oracle) (state : MachineState)
+    (baseIdx saltBase heap : Nat) (idxBound : baseIdx + 32 ≤ LENGTH)
+    (layout : BlockLayout state (4072 + 256 * baseIdx) saltBase heap)
+    (message : Nat → Entry)
+    (headData : ∀ k < 32,
+      readBuffer state (4096 + 256 * (baseIdx + k)) 72 = (message k).extractLsb' 0 576)
+    (blockData : ∀ k < 32, ∀ b, 1 ≤ b → b < 4 →
+      readBuffer state (4096 + 256 * (baseIdx + k) + 64 * b) 64 = (message k).extractLsb' (512 * b) 512) :
+    ∀ k (hk : k < 32),
+      readBuffer (checkEvaluation oracle (commitBlockRun state)).1 (heap + heapOffset k) 32 =
+        leafDigest oracle.compression ⟨baseIdx + k, by omega⟩
+          (readBuffer state (saltBase + 16 * k) 16) (message k) := by
+  intro k hk
+  rw [commit_block_evaluation, read_buffer_memory_congr _ _ (commit_block_next_mem _)]
+  simpa using leaf_block_lanes_digests oracle state 0 32 baseIdx saltBase heap (by decide)
+    idxBound message layout.slotPtr layout.saltPtr layout.heapPtr layout.saltAligned
+    layout.heapAfter layout.saltsAfter layout.saltBound headData blockData k hk
 
 end CommitGolfCandidate

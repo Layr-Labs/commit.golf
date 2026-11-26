@@ -68,10 +68,10 @@ theorem check_loop_acceptance (oracle : Oracle) (state : MachineState) (count pa
       simpa using invariant.indices 0 (by omega)
     have indexSmall : (state.getMem (state.getReg .x24)).toNat < 2 ^ 24 := by
       simpa using invariant.indexValues 0 (by omega)
-    have proofValid : ∀ word < 4 * (pathDepth + 1),
+    have proofValid : ∀ word < 2 + 4 * pathDepth,
         accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word)) 8 = true :=
       fun word smaller => invariant.proofs word (by
-        have : 4 * (pathDepth + 1) * 1 ≤ 4 * (pathDepth + 1) * (count + 1) :=
+        have : (2 + 4 * pathDepth) * 1 ≤ (2 + 4 * pathDepth) * (count + 1) :=
           Nat.mul_le_mul_left _ (by omega)
         omega)
     have valueValid : ∀ word < 32,
@@ -142,12 +142,12 @@ set_option maxHeartbeats 600000 in
 theorem check_input_acceptance (oracle : Oracle) (input : CheckInput) :
     (checkEvaluation oracle (submission.run .check input)).1.exit = .success ↔
       if input.positions.card = BATCH then
-        input.proof.length = 77824 ∧
+        input.proof.length = 75776 ∧
         let hashed := (checkEvaluation oracle (checkCapHash (submission.initialState .check input))).1
         rootWordsMatch hashed = true ∧
         checkLoopAccepts oracle BATCH 17 (checkCapEnterLoopState (checkRootWordsState hashed 138 4)) = true
       else
-        input.proof.length = 800 * input.positions.card ∧
+        input.proof.length = 784 * input.positions.card ∧
         checkLoopAccepts oracle input.positions.card 24
           (checkReadyState (checkLengthState (submission.initialState .check input))) = true := by
   have cardinal : input.positions.card ≤ 2 ^ 24 := by
@@ -156,12 +156,12 @@ theorem check_input_acceptance (oracle : Oracle) (input : CheckInput) :
   by_cases valid : input.proof.length ≤ submission.sizes.proof
   · by_cases batch : input.positions.card = BATCH
     · rw [if_pos batch]
-      by_cases rightLen : input.proof.length = 77824
+      by_cases rightLen : input.proof.length = 75776
       · let initial := submission.initialState .check input
         have is128 : initial.getReg .x16 = 128 := by
           change BitVec.ofNat 64 input.positions.card = 128; rw [batch]; rfl
-        have isLen : initial.getReg .x17 = 77824 := by
-          change BitVec.ofNat 64 input.proof.length = 77824; rw [rightLen]; rfl
+        have isLen : initial.getReg .x17 = 75776 := by
+          change BitVec.ofNat 64 input.proof.length = 75776; rw [rightLen]; rfl
         let hashed := (checkEvaluation oracle (checkCapHash initial)).1
         have reached : hashed ∈ support (checkCapHash initial) := check_evaluation_support oracle _
         have hRegs := check_cap_hash_registers initial hashed is128 isLen reached
@@ -206,7 +206,7 @@ theorem check_input_acceptance (oracle : Oracle) (input : CheckInput) :
         simp only [rightLen, false_and]
         decide
     · rw [if_neg batch]
-      by_cases rightLength : input.proof.length = 800 * input.positions.card
+      by_cases rightLength : input.proof.length = 784 * input.positions.card
       · let initial := submission.initialState .check input
         have not128 : initial.getReg .x16 ≠ 128 := by
           intro h; have n := congrArg BitVec.toNat h
@@ -227,14 +227,14 @@ theorem check_input_acceptance (oracle : Oracle) (input : CheckInput) :
         simp only [rightLength, false_and]
         decide
   · rw [check_oversized input (by omega), check_evaluation_pure]
-    change ¬ input.proof.length ≤ 13421772800 at valid
+    change ¬ input.proof.length ≤ 13153337344 at valid
     by_cases batch : input.positions.card = BATCH
     · rw [if_pos batch]
-      have notLen : input.proof.length ≠ 77824 := by omega
+      have notLen : input.proof.length ≠ 75776 := by omega
       simp only [notLen, false_and]
       decide
     · rw [if_neg batch]
-      have notLen : input.proof.length ≠ 800 * input.positions.card := by omega
+      have notLen : input.proof.length ≠ 784 * input.positions.card := by omega
       simp only [notLen, false_and]
       decide
 
@@ -243,12 +243,12 @@ checker substituted for the submitted program. -/
 theorem scheme_check_acceptance (oracle : Oracle) (input : CheckInput) :
     (oracle.eval (submission.scheme.check input.commitment input.positions input.values input.proof)).1 = true ↔
       if input.positions.card = BATCH then
-        input.proof.length = 77824 ∧
+        input.proof.length = 75776 ∧
         let hashed := (checkEvaluation oracle (checkCapHash (submission.initialState .check input))).1
         rootWordsMatch hashed = true ∧
         checkLoopAccepts oracle BATCH 17 (checkCapEnterLoopState (checkRootWordsState hashed 138 4)) = true
       else
-        input.proof.length = 800 * input.positions.card ∧
+        input.proof.length = 784 * input.positions.card ∧
         checkLoopAccepts oracle input.positions.card 24
           (checkReadyState (checkLengthState (submission.initialState .check input))) = true := by
   rw [scheme_check_evaluation]

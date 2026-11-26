@@ -6,7 +6,7 @@ import CommitGolfCandidate.BufferRefinement
 import CommitGolfCandidate.CopyRefinement
 
 /-! Functional refinement of the level-7 cap-table verification phase (`k = 128`).
-Copies the 128 cap digests from `[proof + 73728, proof + 77824)` into flat heap slots
+Copies the 128 cap digests from `[proof + 71680, proof + 75776)` into flat heap slots
 128..255 at `[4608, 8704)`, computes parents 127 down to 1 into `[544, 4608)`, and
 compares slot 1 (`[544, 576)`) against `input.commitment`. -/
 namespace CommitGolfCandidate
@@ -14,7 +14,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 /-- The 128 level-7 cap digests read directly from the loaded proof buffer. -/
 def capTableOf (initial : MachineState) (slot : Nat) : Digest :=
-  readBuffer initial (submission.layout.proof + 73728 + 32 * slot) 32
+  readBuffer initial (submission.layout.proof + 71680 + 32 * slot) 32
 
 set_option maxHeartbeats 2000000 in
 private theorem cap_copy_digest_memory (state : MachineState)
@@ -165,7 +165,7 @@ private theorem cap_parent_step_mem (state : MachineState) (answer : BitVec 256)
     (checkCapParentStepState state answer).mem = (paddedCompressionState state answer).mem := rfl
 
 private theorem check_cap_length_pc (state : MachineState) :
-    (checkCapLengthState state).pc = if state.getReg .x17 = 77824 then 4468 else 4432 := rfl
+    (checkCapLengthState state).pc = if state.getReg .x17 = 75776 then 4468 else 4432 := rfl
 
 private theorem check_cap_root_setup_mem (state : MachineState) :
     (checkCapRootSetupState state).mem = state.mem := rfl
@@ -243,26 +243,26 @@ attribute [local irreducible] checkCapCopyStepState checkCapCopySetupState check
 
 /-- `checkCapHash` computes the exact root of the 128-leaf cap table at scratch `[544, 576)`. -/
 theorem check_cap_hash_root (oracle : Oracle) (input : CheckInput)
-    (lenOk : input.proof.length = 77824) :
+    (lenOk : input.proof.length = 75776) :
     let initial := submission.initialState .check input
     readBuffer (checkEvaluation oracle (checkCapHash initial)).1 544 32 =
       referenceHeap oracle.compression 128 (capTableOf initial) 1 := by
   dsimp only
   let initial := submission.initialState .check input
   let lenState := checkCapLengthState initial
-  have isLen : initial.getReg .x17 = 77824 := by
-    change BitVec.ofNat 64 input.proof.length = 77824; rw [lenOk]; rfl
+  have isLen : initial.getReg .x17 = 75776 := by
+    change BitVec.ofNat 64 input.proof.length = 75776; rw [lenOk]; rfl
   have lenPC : lenState.pc = 4468 := by rw [check_cap_length_pc, if_pos isLen]
   let copySetup := checkCapCopySetupState lenState
   have csRegs := check_cap_copy_setup_registers lenState lenPC
-  have csSrc : copySetup.getReg .x23 = BitVec.ofNat 64 (submission.layout.proof + 73728) := by
+  have csSrc : copySetup.getReg .x23 = BitVec.ofNat 64 (submission.layout.proof + 71680) := by
     rw [csRegs.2.2.1, (check_cap_length_registers initial).2.2.2.1]; rfl
   have csMem : copySetup.mem = initial.mem :=
     csRegs.2.2.2.2.2.2.trans (check_cap_length_registers initial).2.2.2.2.2
   let afterCopy := checkCapCopyStepState^[128] copySetup
   have copyData : ∀ slot < 128, readBuffer afterCopy (4608 + 32 * slot) 32 = capTableOf initial slot := by
     apply cap_copy_loop_records copySetup (capTableOf initial)
-      (submission.layout.proof + 73728) 4608 128 (by decide) csSrc csRegs.2.2.2.2.1
+      (submission.layout.proof + 71680) 4608 128 (by decide) csSrc csRegs.2.2.2.2.1
       (by decide) (by decide) (by decide) (by decide) (by decide)
     intro slot hs
     rw [read_buffer_memory_congr _ _ csMem]
@@ -290,7 +290,7 @@ theorem check_cap_hash_root (oracle : Oracle) (input : CheckInput)
 
 /-- The cap-root four-word comparison passes iff the 128 cap digests hash to `input.commitment`. -/
 theorem check_cap_comparison (oracle : Oracle) (input : CheckInput)
-    (batch : input.positions.card = BATCH) (lenOk : input.proof.length = 77824) :
+    (batch : input.positions.card = BATCH) (lenOk : input.proof.length = 75776) :
     let initial := submission.initialState .check input
     let hashed := (checkEvaluation oracle (checkCapHash initial)).1
     (∀ word < 4, hashed.getMem (hashed.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
@@ -301,8 +301,8 @@ theorem check_cap_comparison (oracle : Oracle) (input : CheckInput)
   let hashed := (checkEvaluation oracle (checkCapHash initial)).1
   have is128 : initial.getReg .x16 = 128 := by
     change BitVec.ofNat 64 input.positions.card = 128; rw [batch]; rfl
-  have isLen : initial.getReg .x17 = 77824 := by
-    change BitVec.ofNat 64 input.proof.length = 77824; rw [lenOk]; rfl
+  have isLen : initial.getReg .x17 = 75776 := by
+    change BitVec.ofNat 64 input.proof.length = 75776; rw [lenOk]; rfl
   have hRegs := check_cap_hash_registers initial hashed is128 isLen (check_evaluation_support oracle _)
   have commEq : readBuffer hashed submission.layout.commitment 32 = input.commitment := by
     have same : readBuffer hashed submission.layout.commitment 32 =

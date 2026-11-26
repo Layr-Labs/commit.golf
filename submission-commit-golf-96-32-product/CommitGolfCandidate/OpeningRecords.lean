@@ -1,6 +1,6 @@
 import CommitGolfCandidate.OpeningRefinement
 
-/-! Salt, sibling, and cap-table contents of complete opening iterations. -/
+/-! 16-byte salt, sibling-path, and level-7 cap-table contents of complete opening iterations. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
@@ -9,49 +9,49 @@ private theorem prepared_memory (state : MachineState) :
 
 private theorem path_memory (state : MachineState) :
     (openingPositionPathState state).mem =
-      (openingCopyState (openingPositionPreparedState state)).mem := rfl
+      (openingSaltCopyState (openingPositionPreparedState state)).mem := rfl
 
 private theorem next_memory (state : MachineState) :
     (openingNextState state).mem = state.mem := rfl
 
 private theorem salt_pointer (base index : Nat) :
-    BitVec.ofNat 64 base + (BitVec.ofNat 64 index <<< 5) =
-      BitVec.ofNat 64 (base+32*index) := by
+    BitVec.ofNat 64 base + (BitVec.ofNat 64 index <<< 4) =
+      BitVec.ofNat 64 (base+16*index) := by
   rw [BitVec.shiftLeft_eq_mul_twoPow]
-  change BitVec.ofNat 64 base + BitVec.ofNat 64 index * BitVec.ofNat 64 32 = _
+  change BitVec.ofNat 64 base + BitVec.ofNat 64 index * BitVec.ofNat 64 16 = _
   rw [← BitVec.ofNat_mul, ← BitVec.ofNat_add, Nat.mul_comm index]
 
-/-- The first record is the original private salt, copied by the actual image. -/
+/-- The first record is the original 16-byte private salt, copied by the actual image. -/
 theorem opening_position_salt_copy (state : MachineState) (source destination : Nat)
-    (sourcePointer : state.getReg .x18 + (state.getMem (state.getReg .x24) <<< 5) =
+    (sourcePointer : state.getReg .x18 + (state.getMem (state.getReg .x24) <<< 4) =
       BitVec.ofNat 64 source)
     (destinationPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
     (sourceAligned : source % 8 = 0) (destinationAligned : destination % 8 = 0)
-    (sourceBound : source+32 ≤ 2^64) (destinationBound : destination+32 ≤ 2^64)
-    (separated : source+32 ≤ destination) :
-    readBuffer (openingPositionPathState state) destination 32 = readBuffer state source 32 := by
+    (sourceBound : source+16 ≤ 2^64) (destinationBound : destination+16 ≤ 2^64)
+    (separated : source+16 ≤ destination) :
+    readBuffer (openingPositionPathState state) destination 16 = readBuffer state source 16 := by
   rw [read_buffer_memory_congr _ _ (path_memory state)]
-  rw [opening_copy_digest _ source destination
+  rw [opening_salt_copy_salt _ source destination
     ((opening_position_prepared state).2.trans sourcePointer)
     ((opening_position_prepare_register state .x25 (by decide) (by decide) (by decide)).trans
       destinationPointer)
     sourceAligned destinationAligned sourceBound destinationBound (Or.inl separated)]
   exact read_buffer_memory_congr _ _ (prepared_memory state) _ _
 
-/-- Copying the salt preserves the heap and every earlier digest. -/
+/-- Copying the 16-byte salt preserves the heap and every earlier digest. -/
 theorem opening_position_setup_preserves (state : MachineState) (destination address : Nat)
     (destinationPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
-    (aligned : address % 8 = 0) (bounded : destination+32 ≤ 2^64)
+    (aligned : address % 8 = 0) (bounded : destination+16 ≤ 2^64)
     (separated : address+32 ≤ destination) :
     readBuffer (openingPositionPathState state) address 32 = readBuffer state address 32 := by
   rw [read_buffer_memory_congr _ _ (path_memory state)]
-  rw [opening_copy_preserves_digest _ destination address
+  rw [opening_salt_copy_preserves_digest _ destination address
     ((opening_position_prepare_register state .x25 (by decide) (by decide) (by decide)).trans
       destinationPointer) aligned bounded (by omega) (Or.inl separated)]
   exact read_buffer_memory_congr _ _ (prepared_memory state) _ _
 
-/-- Every complete opening iteration emits the selected salt followed by `pathDepth`
-siblings of the selected leaf. -/
+/-- Every complete opening iteration at depth `pathDepth` emits the selected 16-byte salt
+followed by `pathDepth` siblings of the selected leaf. -/
 theorem opening_position_records (pathDepth : Nat) (state : MachineState) (heap : Nat → Digest)
     (base salts index destination : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
@@ -62,22 +62,21 @@ theorem opening_position_records (pathDepth : Nat) (state : MachineState) (heap 
     (heapAligned : base % 8 = 0) (saltAligned : salts % 8 = 0)
     (destinationAligned : destination % 8 = 0)
     (indexBound : index < LENGTH) (heapSeparated : base+3*2^29 ≤ destination)
-    (saltSeparated : salts+2^29 ≤ destination)
-    (bounded : destination+(32+32*pathDepth) ≤ MEMORY_BYTES)
+    (saltSeparated : salts+2^28 ≤ destination)
+    (bounded : destination+(16+32*pathDepth) ≤ MEMORY_BYTES)
     (data : ∀ slot < 2^25, readBuffer state (base+heapOffset slot) 32 = heap slot) :
-    readBuffer (openingPositionState pathDepth state) destination 32 =
-      readBuffer state (salts+32*index) 32 ∧
+    readBuffer (openingPositionState pathDepth state) destination 16 =
+      readBuffer state (salts+16*index) 16 ∧
     ∀ level < pathDepth,
-      readBuffer (openingPositionState pathDepth state) (destination+32+32*level) 32 =
+      readBuffer (openingPositionState pathDepth state) (destination+16+32*level) 32 =
         heap (((LENGTH+index)/2^level) ^^^ 1) := by
   let path := openingPositionPathState state
-  have bound64 : destination+(32+32*pathDepth) < 2^64 := by
-    simp only [MEMORY_BYTES] at bounded; omega
+  have bound64 : destination+(16+32*pathDepth) < 2^64 := by simp only [MEMORY_BYTES] at bounded; omega
   have indexSmall : index < 16777216 := indexBound
-  have pathDestination : path.getReg .x25 = BitVec.ofNat 64 (destination+32) := by
+  have pathDestination : path.getReg .x25 = BitVec.ofNat 64 (destination+16) := by
     rw [(opening_position_path_registers state).1, destinationPointer]
-    exact (BitVec.ofNat_add (n := 64) destination 32).symm
-  have pathDestinationNat : (path.getReg .x25).toNat = destination+32 := by
+    exact (BitVec.ofNat_add (n := 64) destination 16).symm
+  have pathDestinationNat : (path.getReg .x25).toNat = destination+16 := by
     rw [pathDestination, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   have pathHeap : path.getReg .x9 = BitVec.ofNat 64 base :=
     (opening_position_path_register state .x9 (by decide) (by decide) (by decide)
@@ -99,21 +98,21 @@ theorem opening_position_records (pathDepth : Nat) (state : MachineState) (heap 
     exact read_buffer_memory_congr _ _ (next_memory _) _ _
   constructor
   · rw [unchanged]
-    have retained : readBuffer (openingPathState^[pathDepth] path) destination 32 =
-        readBuffer path destination 32 := by
-      apply read_digest_congr _ _ _ destinationAligned
+    have retained : readBuffer (openingPathState^[pathDepth] path) destination 16 =
+        readBuffer path destination 16 := by
+      apply read_salt_congr _ _ _ destinationAligned
       intro i hi
       apply opening_path_loop_memory_below
       · rw [pathDestinationNat]; omega
       · rw [pathDestinationNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
         omega
     rw [retained]
-    exact opening_position_salt_copy state (salts+32*index) destination
+    exact opening_position_salt_copy state (salts+16*index) destination
       (by rw [saltPointer, selected]; exact salt_pointer salts index)
       destinationPointer (by omega) destinationAligned (by omega) (by omega) (by omega)
   · intro level inside
     rw [unchanged]
-    exact opening_path_records path heap base (LENGTH+index) (destination+32) pathDepth
+    exact opening_path_records path heap base (LENGTH+index) (destination+16) pathDepth
       pathHeap pathNode pathDestination heapAligned (by omega)
       (by change 16777216+index < 2^25; omega) (by omega) (by omega) pathData level inside
 
@@ -124,22 +123,21 @@ set_option maxHeartbeats 1000000
 
 /-- The outer opening loop preserves every memory word before its output buffer. -/
 theorem opening_positions_memory_below (pathDepth count : Nat) (state : MachineState) (address : Word)
-    (bounded : (state.getReg .x25).toNat+(32+32*pathDepth)*count ≤ MEMORY_BYTES)
+    (bounded : (state.getReg .x25).toNat+(16+32*pathDepth)*count ≤ MEMORY_BYTES)
     (below : address.toNat < (state.getReg .x25).toNat) :
     ((openingPositionState pathDepth)^[count] state).getMem address = state.getMem address := by
   induction count generalizing state with
   | zero => rfl
   | succ count ih =>
-    have recordLe : (state.getReg .x25).toNat + (32 + 32 * pathDepth) ≤ MEMORY_BYTES := by
-      have : (32 + 32 * pathDepth) * 1 ≤ (32 + 32 * pathDepth) * (count + 1) :=
-        Nat.mul_le_mul_left _ (by omega)
+    have recordLe : (state.getReg .x25).toNat + (16+32*pathDepth) ≤ MEMORY_BYTES := by
+      have : (16+32*pathDepth)*1 ≤ (16+32*pathDepth)*(count+1) := Nat.mul_le_mul_left _ (by omega)
       omega
     have nextOutput : ((openingPositionState pathDepth state).getReg .x25).toNat =
-        (state.getReg .x25).toNat+(32+32*pathDepth) := by
+        (state.getReg .x25).toNat+(16+32*pathDepth) := by
       rw [(opening_position_progress pathDepth state).2.1, BitVec.toNat_add, BitVec.toNat_ofNat]
-      simp only [MEMORY_BYTES] at recordLe
-      rw [Nat.mod_eq_of_lt (by omega : 32 + 32 * pathDepth < 2 ^ 64),
-        Nat.mod_eq_of_lt (by omega)]
+      have small : (state.getReg .x25).toNat + (16+32*pathDepth) < 2^64 := by
+        simp only [MEMORY_BYTES] at recordLe; omega
+      rw [Nat.mod_eq_of_lt (by omega : 16 + 32 * pathDepth < 2^64), Nat.mod_eq_of_lt small]
     rw [Function.iterate_succ_apply, ih]
     · exact opening_position_memory_below pathDepth state address recordLe below
     · rw [nextOutput]; rw [Nat.mul_succ] at bounded; omega
@@ -149,10 +147,10 @@ theorem opening_positions_memory_below (pathDepth count : Nat) (state : MachineS
 theorem opening_position_preserves_digest (pathDepth : Nat) (state : MachineState)
     (destination address : Nat)
     (output : state.getReg .x25 = BitVec.ofNat 64 destination)
-    (aligned : address % 8 = 0) (bounded : destination+(32+32*pathDepth) ≤ MEMORY_BYTES)
+    (aligned : address % 8 = 0) (bounded : destination+(16+32*pathDepth) ≤ MEMORY_BYTES)
     (separate : address+32 ≤ destination) :
     readBuffer (openingPositionState pathDepth state) address 32 = readBuffer state address 32 := by
-  have bound64 : destination+(32+32*pathDepth) < 2^64 := by simp only [MEMORY_BYTES] at bounded; omega
+  have bound64 : destination+(16+32*pathDepth) < 2^64 := by simp only [MEMORY_BYTES] at bounded; omega
   apply read_digest_congr _ _ _ aligned
   intro i hi
   apply opening_position_memory_below pathDepth
@@ -163,10 +161,28 @@ theorem opening_position_preserves_digest (pathDepth : Nat) (state : MachineStat
       Nat.mod_eq_of_lt (by omega : destination < 2^64)]
     omega
 
-/-- The complete outer loop emits every selected salt/path record, in index-list
-order, and preserves each record while producing the later ones. -/
-theorem opening_all_records (pathDepth : Nat) (state : MachineState)
-    (heap saltValue : Nat → Digest)
+/-- Each complete position preserves earlier 16-byte salt buffers. -/
+theorem opening_position_preserves_salt (pathDepth : Nat) (state : MachineState)
+    (destination address : Nat)
+    (output : state.getReg .x25 = BitVec.ofNat 64 destination)
+    (aligned : address % 8 = 0) (bounded : destination+(16+32*pathDepth) ≤ MEMORY_BYTES)
+    (separate : address+16 ≤ destination) :
+    readBuffer (openingPositionState pathDepth state) address 16 = readBuffer state address 16 := by
+  have bound64 : destination+(16+32*pathDepth) < 2^64 := by simp only [MEMORY_BYTES] at bounded; omega
+  apply read_salt_congr _ _ _ aligned
+  intro i hi
+  apply opening_position_memory_below pathDepth
+  · rw [output, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    exact bounded
+  · rw [output, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
+      Nat.mod_eq_of_lt (by omega : address+8*i < 2^64),
+      Nat.mod_eq_of_lt (by omega : destination < 2^64)]
+    omega
+
+/-- The complete outer loop at depth `pathDepth` emits every selected 16-byte salt/path record,
+in index-list order, and preserves each record while producing the later ones. -/
+theorem opening_all_records (pathDepth : Nat) (state : MachineState) (heap : Nat → Digest)
+    (saltValue : Nat → BitVec 128)
     (indices : Nat → Nat) (base salts indexAddress destination count : Nat)
     (heapPointer : state.getReg .x9 = BitVec.ofNat 64 base)
     (saltPointer : state.getReg .x18 = BitVec.ofNat 64 salts)
@@ -175,37 +191,34 @@ theorem opening_all_records (pathDepth : Nat) (state : MachineState)
     (outputPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
     (heapAligned : base % 8 = 0) (saltAligned : salts % 8 = 0)
     (outputAligned : destination % 8 = 0)
-    (heapSeparated : base+3*2^29 ≤ destination) (saltSeparated : salts+2^29 ≤ destination)
+    (heapSeparated : base+3*2^29 ≤ destination) (saltSeparated : salts+2^28 ≤ destination)
     (indexSeparated : indexAddress+8*count ≤ destination)
-    (bounded : destination+(32+32*pathDepth)*count ≤ MEMORY_BYTES)
+    (bounded : destination+(16+32*pathDepth)*count ≤ MEMORY_BYTES)
     (indexData : ∀ ordinal < count,
       state.getMem (BitVec.ofNat 64 (indexAddress+8*ordinal)) = BitVec.ofNat 64 (indices ordinal))
     (indexBound : ∀ ordinal < count, indices ordinal < LENGTH)
     (heapData : ∀ slot < 2^25, readBuffer state (base+heapOffset slot) 32 = heap slot)
-    (saltData : ∀ index < LENGTH, readBuffer state (salts+32*index) 32 = saltValue index) :
+    (saltData : ∀ index < LENGTH, readBuffer state (salts+16*index) 16 = saltValue index) :
     ∀ ordinal < count,
       readBuffer ((openingPositionState pathDepth)^[count] state)
-        (destination+(32+32*pathDepth)*ordinal) 32 = saltValue (indices ordinal) ∧
+        (destination+(16+32*pathDepth)*ordinal) 16 =
+          saltValue (indices ordinal) ∧
       ∀ level < pathDepth,
         readBuffer ((openingPositionState pathDepth)^[count] state)
-          (destination+(32+32*pathDepth)*ordinal+32+32*level) 32 =
+          (destination+(16+32*pathDepth)*ordinal+16+32*level) 32 =
             heap (((LENGTH+indices ordinal)/2^level) ^^^ 1) := by
   induction count generalizing state indices indexAddress destination with
   | zero => intro ordinal inside; omega
   | succ count ih =>
-    have recordLe : destination+(32+32*pathDepth) ≤ MEMORY_BYTES := by
-      have : (32+32*pathDepth)*1 ≤ (32+32*pathDepth)*(count+1) := Nat.mul_le_mul_left _ (by omega)
+    have recordLe : destination+(16+32*pathDepth) ≤ MEMORY_BYTES := by
+      have : (16+32*pathDepth)*1 ≤ (16+32*pathDepth)*(count+1) := Nat.mul_le_mul_left _ (by omega)
       omega
-    have bound64 : destination+(32+32*pathDepth)*(count+1) < 2^64 := by
-      simp only [MEMORY_BYTES] at bounded; omega
+    have rec64 : destination+(16+32*pathDepth) < 2^64 := by simp only [MEMORY_BYTES] at recordLe; omega
     let next := openingPositionState pathDepth state
-    have nextOutput : next.getReg .x25 = BitVec.ofNat 64 (destination+(32+32*pathDepth)) := by
-      rw [(opening_position_progress pathDepth state).2.1, outputPointer]
-      exact (BitVec.ofNat_add (n := 64) destination (32+32*pathDepth)).symm
-    have rec64 : destination + (32 + 32 * pathDepth) < 2 ^ 64 := by
-      simp only [MEMORY_BYTES] at recordLe; omega
-    have nextOutputNat : (next.getReg .x25).toNat = destination+(32+32*pathDepth) := by
-      rw [nextOutput, BitVec.toNat_ofNat, Nat.mod_eq_of_lt rec64]
+    have nextOutput : next.getReg .x25 = BitVec.ofNat 64 (destination+(16+32*pathDepth)) := by
+      rw [(opening_position_progress pathDepth state).2.1, outputPointer, ← BitVec.ofNat_add]
+    have nextOutputNat : (next.getReg .x25).toNat = destination+(16+32*pathDepth) := by
+      rw [nextOutput, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
     have nextIndex : next.getReg .x24 = BitVec.ofNat 64 (indexAddress+8) := by
       rw [(opening_position_progress pathDepth state).1, indexPointer]
       exact (BitVec.ofNat_add (n := 64) indexAddress 8).symm
@@ -214,7 +227,8 @@ theorem opening_all_records (pathDepth : Nat) (state : MachineState)
           BitVec.ofNat 64 (indices (ordinal+1)) := by
       rw [opening_position_memory_below pathDepth]
       · convert indexData (ordinal+1) (by omega) using 1
-        congr 2; omega
+        congr 2
+        omega
       · rw [outputPointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]; exact recordLe
       · rw [outputPointer, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
           Nat.mod_eq_of_lt (by omega : indexAddress+8+8*ordinal < 2^64),
@@ -228,9 +242,9 @@ theorem opening_all_records (pathDepth : Nat) (state : MachineState)
         outputPointer (by omega) recordLe (by omega)]
       exact heapData slot inside
     have nextSaltData (index : Nat) (inside : index < LENGTH) :
-        readBuffer next (salts+32*index) 32 = saltValue index := by
+        readBuffer next (salts+16*index) 16 = saltValue index := by
       have small : index < 16777216 := inside
-      rw [opening_position_preserves_digest pathDepth state destination (salts+32*index)
+      rw [opening_position_preserves_salt pathDepth state destination (salts+16*index)
         outputPointer (by omega) recordLe (by omega)]
       exact saltData index inside
     intro ordinal inside
@@ -242,7 +256,15 @@ theorem opening_all_records (pathDepth : Nat) (state : MachineState)
         (by rw [indexPointer]; simpa only [Nat.mul_zero, Nat.add_zero] using indexData 0 (by omega))
         outputPointer heapAligned saltAligned outputAligned (indexBound 0 (by omega))
         heapSeparated saltSeparated recordLe heapData
-      have retained (offset : Nat) (aligned : offset % 8 = 0) (within : offset+32 ≤ 32+32*pathDepth) :
+      have retainedSalt : readBuffer ((openingPositionState pathDepth)^[count] next) destination 16 =
+          readBuffer next destination 16 := by
+        apply read_salt_congr _ _ _ outputAligned
+        intro i hi
+        apply opening_positions_memory_below pathDepth
+        · rw [nextOutputNat]; rw [Nat.mul_succ] at bounded; omega
+        · rw [nextOutputNat, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+          omega
+      have retainedDigest (offset : Nat) (aligned : offset % 8 = 0) (within : offset+32 ≤ 16+32*pathDepth) :
           readBuffer ((openingPositionState pathDepth)^[count] next) (destination+offset) 32 =
             readBuffer next (destination+offset) 32 := by
         apply read_digest_congr _ _ _ (by omega)
@@ -253,14 +275,14 @@ theorem opening_all_records (pathDepth : Nat) (state : MachineState)
           omega
       simp only [Nat.mul_zero, Nat.add_zero]
       constructor
-      · rw [show destination = destination+0 by omega, retained 0 (by decide) (by omega)]
+      · rw [retainedSalt]
         exact Eq.trans first.1 (saltData (indices 0) (indexBound 0 (by omega)))
       · intro level levelBound
-        rw [show destination+32+32*level = destination+(32+32*level) by omega,
-          retained (32+32*level) (by omega) (by omega)]
+        rw [show destination+16+32*level = destination+(16+32*level) by omega,
+          retainedDigest (16+32*level) (by omega) (by omega)]
         simpa only [Nat.add_assoc] using first.2 level levelBound
     | succ ordinal =>
-      have record := ih next (fun k => indices (k+1)) (indexAddress+8) (destination+(32+32*pathDepth))
+      have record := ih next (fun k => indices (k+1)) (indexAddress+8) (destination+(16+32*pathDepth))
         ((opening_position_bases pathDepth state).1.trans heapPointer)
         ((opening_position_bases pathDepth state).2.1.trans saltPointer)
         ((opening_position_bases pathDepth state).2.2.trans leafCount)
@@ -268,8 +290,8 @@ theorem opening_all_records (pathDepth : Nat) (state : MachineState)
         (by rw [Nat.mul_succ] at bounded; omega)
         nextIndexData (fun k hk => indexBound (k+1) (by omega)) nextHeapData nextSaltData
         ordinal (by omega)
-      simpa only [show destination+(32+32*pathDepth)*(ordinal+1) =
-          destination+(32+32*pathDepth)+(32+32*pathDepth)*ordinal by rw [Nat.mul_succ]; omega]
+      simpa only [show destination+(16+32*pathDepth)*(ordinal+1) =
+          destination+(16+32*pathDepth)+(16+32*pathDepth)*ordinal by rw [Nat.mul_succ]; omega]
         using record
 
 /-! ### Level-7 cap-table copy contents -/
@@ -294,12 +316,12 @@ private theorem cap_pair_first_copy (state : MachineState) (src dst : Nat)
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x25 ≠ .x23),
       MachineState.getReg_setReg_eq (by decide : Reg.x23 ≠ .x0),
       opening_copy_register _ .x23 (by decide), srcPtr]
-    exact (BitVec.ofNat_add src 32).symm
+    exact (BitVec.ofNat_add (n := 64) src 32).symm
   have mDst : m.getReg .x25 = BitVec.ofNat 64 (dst + 32) := by
     simp only [m, openingCapMidState, c1, MachineState.getReg_setPC,
       MachineState.getReg_setReg_eq (by decide : Reg.x25 ≠ .x0),
       opening_copy_register _ .x25 (by decide), dstPtr]
-    exact (BitVec.ofNat_add dst 32).symm
+    exact (BitVec.ofNat_add (n := 64) dst 32).symm
   constructor
   · rw [read_buffer_memory_congr _ _ pairMem,
       opening_copy_preserves_digest m (dst + 32) dst mDst dstAligned (by omega) (by omega) (Or.inl (by omega)),
@@ -347,10 +369,10 @@ theorem opening_cap_records (state : MachineState) (capVal : Nat → Digest)
     let next := openingCapPairState state
     have nextSrc : next.getReg .x23 = BitVec.ofNat 64 (src + 96) := by
       rw [(opening_cap_pair_registers state).1, srcPtr]
-      exact (BitVec.ofNat_add src 96).symm
+      exact (BitVec.ofNat_add (n := 64) src 96).symm
     have nextDst : next.getReg .x25 = BitVec.ofNat 64 (dst + 64) := by
       rw [(opening_cap_pair_registers state).2.1, dstPtr]
-      exact (BitVec.ofNat_add dst 64).symm
+      exact (BitVec.ofNat_add (n := 64) dst 64).symm
     have nextDstNat : (next.getReg .x25).toNat = dst + 64 := by
       rw [nextDst, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
     have nextData (p : Nat) (hp : p < count) :

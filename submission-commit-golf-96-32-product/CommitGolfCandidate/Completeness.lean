@@ -38,22 +38,22 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
   let indices : Nat → Index := fun ordinal =>
     ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
   let heap : Nat → Digest := fun slot => readBuffer committed (4294971424 + heapOffset slot) 32
-  let salts : Index → Digest := fun index => readBuffer committed (5905584160 + 32 * index.val) 32
+  let salts : Index → Salt := fun index => readBuffer committed (5905584160 + 16 * index.val) 16
   have proofLen : input.proof.length = openingProofBytes positions.card :=
     opening_proof_length trapdoor positions
   apply (scheme_check_acceptance oracle input).mpr
   by_cases batch : positions.card = BATCH
   · rw [if_pos batch]
-    have lenOk : input.proof.length = 77824 := by
+    have lenOk : input.proof.length = 75776 := by
       rw [proofLen]; simp only [openingProofBytes, if_pos batch]
-    have bytesEq : openingProofBytes positions.card = 77824 := by
+    have bytesEq : openingProofBytes positions.card = 75776 := by
       simp only [openingProofBytes, if_pos batch]
     have capRecs := opening_output_records_cap committed positions batch
     have capEq (slot : Nat) (hs : slot < 128) : capTableOf initial slot = heap (128 + slot) := by
       have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
-        (73728 + 32 * slot) (by rw [bytesEq]; omega)
+        (71680 + 32 * slot) (by rw [bytesEq]; omega)
       have hRec := capRecs.2 slot hs
-      change readBuffer initial (submission.layout.proof + (73728 + 32 * slot)) 32 = _ at copied
+      change readBuffer initial (submission.layout.proof + (71680 + 32 * slot)) 32 = _ at copied
       rw [capTableOf, Nat.add_assoc]
       exact copied.trans (by simpa only [Nat.add_assoc] using hRec)
     have topRoot : referenceHeap oracle.compression 128 (capTableOf initial) 1 = input.commitment := by
@@ -68,8 +68,8 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
     let entered := checkCapEnterLoopState compared
     have is128 : initial.getReg .x16 = 128 := by
       change BitVec.ofNat 64 positions.card = 128; rw [batch]; rfl
-    have isLen : initial.getReg .x17 = 77824 := by
-      change BitVec.ofNat 64 input.proof.length = 77824; rw [lenOk]; rfl
+    have isLen : initial.getReg .x17 = 75776 := by
+      change BitVec.ofNat 64 input.proof.length = 75776; rw [lenOk]; rfl
     have reached : hashed ∈ support (checkCapHash initial) := check_evaluation_support oracle _
     have hRegs := check_cap_hash_registers initial hashed is128 isLen reached
     have cKeep (reg : Reg) (n6 : reg ≠ .x6) (n7 : reg ≠ .x7) : compared.getReg reg = hashed.getReg reg :=
@@ -87,13 +87,18 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
       apply read_digest_congr _ _ _ aligned
       intro w hw
       exact eAbove (addr + 8 * w) (by omega) (by omega)
+    have eSalt (addr : Nat) (aligned : addr % 8 = 0) (hi : 8704 ≤ addr) (lt64 : addr + 16 < 2 ^ 64) :
+        readBuffer entered addr 16 = readBuffer initial addr 16 := by
+      apply read_salt_congr _ _ _ aligned
+      intro w hw
+      exact eAbove (addr + 8 * w) (by omega) (by omega)
     have enterKeep (reg : Reg) (n21 : reg ≠ .x21) (n26 : reg ≠ .x26) (n30 : reg ≠ .x30) :
         entered.getReg reg = compared.getReg reg := by
       simp only [entered, checkCapEnterLoopState, MachineState.getReg_setPC,
         MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n21),
         MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n30),
         MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm n26)]
-    have targetPtr : entered.getReg .x26 = BitVec.ofNat 64 (10871640096 + 73728) := by
+    have targetPtr : entered.getReg .x26 = BitVec.ofNat 64 (10871640096 + 71680) := by
       simp only [entered, checkCapEnterLoopState, MachineState.getReg_setPC,
         MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x21 ≠ .x26),
         MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x30 ≠ .x26),
@@ -109,7 +114,7 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
       rw [enterKeep .x24 (by decide) (by decide) (by decide), cKeep .x24 (by decide) (by decide),
         hRegs.2.2.2.2.2.1]; rfl
     have targetData (slot : Nat) (hs : slot < 2 ^ (24 - 17)) :
-        readBuffer entered (10871640096 + 73728 + 32 * slot) 32 = heap (2 ^ (24 - 17) + slot) := by
+        readBuffer entered (10871640096 + 71680 + 32 * slot) 32 = heap (2 ^ (24 - 17) + slot) := by
       have hs128 : slot < 128 := hs
       rw [eDigest _ (by omega) (by omega) (by omega)]
       exact capEq slot hs128
@@ -136,33 +141,33 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
       rw [indexSame] at value
       exact value
     have saltData (ordinal : Nat) (present : ordinal < BATCH) :
-        readBuffer entered (10871640096 + (32 + 32 * 17) * ordinal) 32 = salts (indices ordinal) := by
-      rw [eDigest _ (by omega) (by omega) (by change ordinal < 128 at present; omega)]
-      have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
-        (576 * ordinal) (by rw [bytesEq]; change ordinal < 128 at present; omega)
+        readBuffer entered (10871640096 + (16 + 32 * 17) * ordinal) 16 = salts (indices ordinal) := by
+      rw [eSalt _ (by omega) (by omega) (by change ordinal < 128 at present; omega)]
+      have copied := check_opening_proof_salt trapdoor positions root (message.restrict positions)
+        (560 * ordinal) (by rw [bytesEq]; change ordinal < 128 at present; omega)
       exact copied.trans (capRecs.1 ordinal present).1
     have pathData (ordinal : Nat) (present : ordinal < BATCH) (level : Nat) (inside : level < 17) :
-        readBuffer entered (10871640096 + (32 + 32 * 17) * ordinal + 32 + 32 * level) 32 =
+        readBuffer entered (10871640096 + (16 + 32 * 17) * ordinal + 16 + 32 * level) 32 =
           heap (((LENGTH + (indices ordinal).val) / 2 ^ level) ^^^ 1) := by
       rw [eDigest _ (by omega) (by omega) (by change ordinal < 128 at present; omega)]
       have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
-        (576 * ordinal + 32 + 32 * level) (by rw [bytesEq]; change ordinal < 128 at present; omega)
+        (560 * ordinal + 16 + 32 * level) (by rw [bytesEq]; change ordinal < 128 at present; omega)
       have hRec := (capRecs.1 ordinal present).2 level inside
       have joined := copied.trans (by simpa only [Nat.add_assoc] using hRec)
-      change readBuffer initial (10871640096 + (576 * ordinal + 32 + 32 * level)) 32 =
+      change readBuffer initial (10871640096 + (560 * ordinal + 16 + 32 * level)) 32 =
         heap (((LENGTH + (indices ordinal).val) / 2 ^ level) ^^^ 1) at joined
       simpa only [Nat.add_assoc] using joined
     have loopAcc := check_loop_honest oracle entered message heap salts indices
-      17 (10871640096 + 73728) 6576672800 10871640096 6442455072 BATCH
+      17 (10871640096 + 71680) 6576672800 10871640096 6442455072 BATCH
       (by decide) (by decide) rfl rfl targetPtr valuePtr proofPtr indexPtr
       (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide)
       targetData indexData valueData saltData pathData correct.2.2 correct.2.1
     exact ⟨lenOk, capMatch, loopAcc⟩
   · rw [if_neg batch]
-    have lenOk : input.proof.length = 800 * positions.card := by
+    have lenOk : input.proof.length = 784 * positions.card := by
       rw [proofLen]; simp only [openingProofBytes, if_neg batch]
-    have bytesEq : openingProofBytes positions.card = 800 * positions.card := by
+    have bytesEq : openingProofBytes positions.card = 784 * positions.card := by
       simp only [openingProofBytes, if_neg batch]
     let ready := checkReadyState (checkLengthState initial)
     have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
@@ -199,20 +204,20 @@ theorem honest_check_accepts (oracle : Oracle) (message : Message)
       rw [indexSame] at value
       exact value
     have saltData (ordinal : Nat) (present : ordinal < positions.card) :
-        readBuffer ready (10871640096 + (32 + 32 * 24) * ordinal) 32 = salts (indices ordinal) := by
+        readBuffer ready (10871640096 + (16 + 32 * 24) * ordinal) 16 = salts (indices ordinal) := by
       rw [read_buffer_memory_congr _ _ memory]
-      have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
-        (800 * ordinal) (by rw [bytesEq]; omega)
+      have copied := check_opening_proof_salt trapdoor positions root (message.restrict positions)
+        (784 * ordinal) (by rw [bytesEq]; omega)
       exact copied.trans (opening_output_records committed positions batch ordinal present).1
     have pathData (ordinal : Nat) (present : ordinal < positions.card) (level : Nat) (inside : level < 24) :
-        readBuffer ready (10871640096 + (32 + 32 * 24) * ordinal + 32 + 32 * level) 32 =
+        readBuffer ready (10871640096 + (16 + 32 * 24) * ordinal + 16 + 32 * level) 32 =
           heap (((LENGTH + (indices ordinal).val) / 2 ^ level) ^^^ 1) := by
       rw [read_buffer_memory_congr _ _ memory]
       have copied := check_opening_proof_digest trapdoor positions root (message.restrict positions)
-        (800 * ordinal + 32 + 32 * level) (by rw [bytesEq]; omega)
+        (784 * ordinal + 16 + 32 * level) (by rw [bytesEq]; omega)
       have record := (opening_output_records committed positions batch ordinal present).2 level inside
       have joined := copied.trans (by simpa only [Nat.add_assoc] using record)
-      change readBuffer initial (10871640096 + (800 * ordinal + 32 + 32 * level)) 32 =
+      change readBuffer initial (10871640096 + (784 * ordinal + 16 + 32 * level)) 32 =
         heap (((LENGTH + (indices ordinal).val) / 2 ^ level) ^^^ 1) at joined
       simpa only [Nat.add_assoc] using joined
     have accepted := check_loop_honest oracle ready message heap salts indices
