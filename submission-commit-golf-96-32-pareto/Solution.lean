@@ -1,37 +1,83 @@
-import CommitGolfCandidate.Properties
-import CommitGolfCandidate.Binding
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.OpeningInput
-import CommitGolfCandidate.CheckInput
-import CommitGolfCandidate.Budgets
-import CommitGolfCandidate.CheckAcceptance
-import CommitGolfCandidate.Completeness
-import CommitGolfCandidate.BindingSecurity
-import CommitGolfCandidate.HidingSecurity
-import CommitGolf.Artifact
-import CommitGolfCandidate.LeafResourceBridge
-import CommitGolfCandidate.ResourceTests
+import CommitGolfCandidate.PairFinal
+import CommitGolfCandidate.LateOrdinary
+import CommitGolfCandidate.LateResources2
+import CommitGolfCandidate.LateOpenOutput
+import CommitGolfCandidate.LateOpenFinish
+import CommitGolfCandidate.LateOpenPrefix
+import CommitGolfCandidate.LateOpenCapEnd
+import CommitGolfCandidate.LateOpenStart
+import CommitGolfCandidate.LateOpenOverride
+import CommitGolfCandidate.LateOpenCapFill
+import CommitGolfCandidate.LateOpenCapMemory
+import CommitGolfCandidate.LateOpenRecords
+import CommitGolfCandidate.LateOpenRecord
+import CommitGolfCandidate.LateOpenRecordHead
+import CommitGolfCandidate.LateOpenPathStep
+import CommitGolfCandidate.LateOpenPathModel
+import CommitGolfCandidate.LateOpenControl
+import CommitGolfCandidate.LateOpenBlocks
+import CommitGolfCandidate.LateOpenExpressions
+import CommitGolfCandidate.LateOpenSources
+import CommitGolfCandidate.LateOpenWrites
+import CommitGolfCandidate.LateOpenCopy
+import CommitGolfCandidate.LateOpenMemory
+import CommitGolfCandidate.LateOpenCode
+import CommitGolfCandidate.LateCommitFacts
+import CommitGolfCandidate.LateTrapdoor
+import CommitGolfCandidate.LatePasses
+import CommitGolfCandidate.LateHeaderInterpreter
+import CommitGolfCandidate.LateParentLoop
+import CommitGolfCandidate.LateRoot
+import CommitGolfCandidate.LateParentPrice
+import CommitGolfCandidate.LateParentBody
+import CommitGolfCandidate.LateGuards
+import CommitGolfCandidate.LateParentRun
+import CommitGolfCandidate.LateCachedTree
+import CommitGolfCandidate.LateTreeMemory
+import CommitGolfCandidate.LatePrefix
+import CommitGolfCandidate.LateParentSites
+import CommitGolfCandidate.LateReady
+import CommitGolfCandidate.LateLayers
+import CommitGolfCandidate.LateLeafLoop
+import CommitGolfCandidate.LateLeafNext
+import CommitGolfCandidate.LateSecurity
+import CommitGolfCandidate.LateExtractor
+import CommitGolfCandidate.LatePairReplay
+import CommitGolfCandidate.LateCheckSound
+import CommitGolfCandidate.LateLatchRegs
+import CommitGolfCandidate.LateInitial
+import CommitGolfCandidate.LateLeafContents
+import CommitGolfCandidate.LateCheckModel
+import CommitGolfCandidate.LateLeafFrame
+import CommitGolfCandidate.LateBinding
+import CommitGolfCandidate.LateSetup
+import CommitGolfCandidate.LateCoins
+import CommitGolfCandidate.LateMemory
+import CommitGolfCandidate.LateBudget
+import CommitGolfCandidate.LateLeafMemory
+import CommitGolfCandidate.LateReplay
+import CommitGolfCandidate.LateFormat
+import CommitGolfCandidate.LateLayout
+import CommitGolfCandidate.LateLeafSites
+import CommitGolfCandidate.LateCallState
+import CommitGolfCandidate.LateFixed
+import CommitGolfCandidate.LateLeafWrites
+import CommitGolfCandidate.LateArtifact
+import CommitGolfCandidate.LateCertificate
+import CommitGolfCandidate.LateLeafRun
+import CommitGolfCandidate.LateParents
 
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
 namespace CommitGolf.Challenge
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+def submission := CommitGolfCandidate.Late.submission
 
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
-theorem certificate : CommitGolf.Certificate submission 102400 6375342100 48670 where
-  admission := CommitGolfCandidate.submission_admission
-  machineSuccess := CommitGolfCandidate.submission_machine_success
-  termination := CommitGolfCandidate.submission_termination
-  completeness := CommitGolfCandidate.submission_completeness
-  honestBudgets := CommitGolfCandidate.submission_honest_budgets
-  proofSize := CommitGolfCandidate.submission_proof_size
-  proverCycles := CommitGolfCandidate.submission_prover_cycles
-  binding := CommitGolfCandidate.submission_binding
-  hidingProperty := CommitGolfCandidate.submission_hiding
+theorem certificate_of_batch (batch : CommitGolfCandidate.Late.Check.BatchEvaluation) :
+    Certificate submission 72704 914948443 45875 :=
+  CommitGolfCandidate.Late.certificate_of_batch batch
+
+theorem certificate : Certificate submission 72704 914948443 45875 :=
+  certificate_of_batch CommitGolfCandidate.PairCap.batchEvaluation
 
 end CommitGolf.Challenge

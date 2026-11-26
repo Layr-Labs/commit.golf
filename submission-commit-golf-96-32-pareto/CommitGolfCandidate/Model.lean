@@ -12,9 +12,36 @@ abbrev Digest := BitVec 256
 def combine (compress : Compression) (left right : Digest) : Digest :=
   compress ((padInput (right ++ left)))
 
+/-- A leaf absorbs 512 message bits per call. -/
+abbrev LeafBlock := BitVec 512
+
+/-- One leaf call: the chaining value occupies the low 256 bits (first 32 bytes in memory),
+followed by the 64-byte message block. No padding is involved. -/
+def leafInput (state : Digest) (block : LeafBlock) : BitVec COMPRESSION_INPUT_LENGTH :=
+  block ++ state
+
+def absorb (compress : Compression) (state : Digest) (block : LeafBlock) : Digest :=
+  compress (leafInput state block)
+
+@[simp] theorem leafInput_digest (state : Digest) (block : LeafBlock) :
+    (leafInput state block).extractLsb' 0 256 = state :=
+  BitVec.extractLsb'_append_eq_right
+
+@[simp] theorem leafInput_block (state : Digest) (block : LeafBlock) :
+    (leafInput state block).extractLsb' 256 512 = block :=
+  BitVec.extractLsb'_append_eq_left
+
+theorem leafInput_injective {state state' : Digest} {block block' : LeafBlock}
+    (same : leafInput state block = leafInput state' block') : state = state' ∧ block = block' := by
+  constructor
+  · simpa only [leafInput_digest] using
+      congrArg (fun x : BitVec COMPRESSION_INPUT_LENGTH => x.extractLsb' 0 256) same
+  · simpa only [leafInput_block] using
+      congrArg (fun x : BitVec COMPRESSION_INPUT_LENGTH => x.extractLsb' 256 512) same
+
 def leafDigest (compress : Compression) (salt : Digest) (value : Entry) : Digest :=
-  (List.range 8).foldl
-    (fun state block => combine compress state (value.extractLsb' (256 * block) 256)) salt
+  (List.range 4).foldl
+    (fun state block => absorb compress state (value.extractLsb' (512 * block) 512)) salt
 
 def parentLayer (compress : Compression) : List Digest → List Digest
   | left :: right :: rest => combine compress left right :: parentLayer compress rest
