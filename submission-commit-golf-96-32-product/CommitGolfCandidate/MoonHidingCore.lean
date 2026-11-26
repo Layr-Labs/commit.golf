@@ -870,13 +870,13 @@ def queryLevel1Aux (h768 : COMPRESSION_INPUT_LENGTH = 768) (l0 : Nat → Digest)
       pure (Function.update prev n d)
 
 def queryBinLevelAux (h768 : COMPRESSION_INPUT_LENGTH = 768) (prevLevel : Nat → Digest)
-    (prevSize : Nat) (lvl : Nat) : Nat → OracleComp World (Nat → Digest)
+    (prevSize : Nat) (isRoot : Bool) : Nat → OracleComp World (Nat → Digest)
   | 0 => pure (fun idx =>
       if prevSize % 2 = 1 ∧ idx = prevSize / 2 then prevLevel (2 * idx) else 0)
   | n + 1 => do
-      let prev ← queryBinLevelAux h768 prevLevel prevSize lvl n
+      let prev ← queryBinLevelAux h768 prevLevel prevSize isRoot n
       let raw ← queryCompress h768 (binaryInput (prevLevel (2 * n)) (prevLevel (2 * n + 1)))
-      let d := maskLevel lvl raw
+      let d := if isRoot then raw else mask240 raw
       pure (Function.update prev n d)
 
 def queryUpperLevels (h768 : COMPRESSION_INPUT_LENGTH = 768)
@@ -885,7 +885,7 @@ def queryUpperLevels (h768 : COMPRESSION_INPUT_LENGTH = 768)
   | k + 1 => do
       let prev ← queryUpperLevels h768 l0 l1 k
       let prevLvl := k + 1
-      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (k + 2) (levelSize prevLvl / 2)
+      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (decide (k + 2 = 24)) (levelSize prevLvl / 2)
       pure (Function.update prev (k + 2) cur)
 
 def queryTreeFromLeafFn (h768 : COMPRESSION_INPUT_LENGTH = 768)
@@ -915,16 +915,16 @@ private theorem queryLevel1Aux_succ (h768 : COMPRESSION_INPUT_LENGTH = 768) (l0 
       pure (Function.update prev n d)) := rfl
 
 private theorem queryBinLevelAux_zero (h768 : COMPRESSION_INPUT_LENGTH = 768) (prevLevel : Nat → Digest)
-    (prevSize : Nat) (lvl : Nat) :
-    queryBinLevelAux h768 prevLevel prevSize lvl 0 =
+    (prevSize : Nat) (isRoot : Bool) :
+    queryBinLevelAux h768 prevLevel prevSize isRoot 0 =
       pure (fun idx => if prevSize % 2 = 1 ∧ idx = prevSize / 2 then prevLevel (2 * idx) else 0) := rfl
 
 private theorem queryBinLevelAux_succ (h768 : COMPRESSION_INPUT_LENGTH = 768) (prevLevel : Nat → Digest)
-    (prevSize : Nat) (lvl : Nat) (n : Nat) :
-    queryBinLevelAux h768 prevLevel prevSize lvl (n + 1) = (do
-      let prev ← queryBinLevelAux h768 prevLevel prevSize lvl n
+    (prevSize : Nat) (isRoot : Bool) (n : Nat) :
+    queryBinLevelAux h768 prevLevel prevSize isRoot (n + 1) = (do
+      let prev ← queryBinLevelAux h768 prevLevel prevSize isRoot n
       let raw ← queryCompress h768 (binaryInput (prevLevel (2 * n)) (prevLevel (2 * n + 1)))
-      let d := maskLevel lvl raw
+      let d := if isRoot then raw else mask240 raw
       pure (Function.update prev n d)) := rfl
 
 private theorem queryUpperLevels_zero (h768 : COMPRESSION_INPUT_LENGTH = 768) (l0 l1 : Nat → Digest) :
@@ -934,7 +934,7 @@ private theorem queryUpperLevels_succ (h768 : COMPRESSION_INPUT_LENGTH = 768) (l
     queryUpperLevels h768 l0 l1 (k + 1) = (do
       let prev ← queryUpperLevels h768 l0 l1 k
       let prevLvl := k + 1
-      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (k + 2) (levelSize prevLvl / 2)
+      let cur ← queryBinLevelAux h768 (prev prevLvl) (levelSize prevLvl) (decide (k + 2 = 24)) (levelSize prevLvl / 2)
       pure (Function.update prev (k + 2) cur)) := rfl
 
 private theorem queryTreeFromLeafFn_def (h768 : COMPRESSION_INPUT_LENGTH = 768)
@@ -1067,7 +1067,7 @@ theorem queryTreeFromLeafFn_fixed (h768 : COMPRESSION_INPUT_LENGTH = 768)
   have hbin : ∀ (prevLvl : Nat) (hge1 : 1 ≤ prevLvl) (hlt24 : prevLvl < 24)
       (prevArr : Nat → Digest) (hprev : ∀ idx < levelSize prevLvl, prevArr idx = nodeValFromLeaves c leaves prevLvl idx)
       (n : Nat) (hn : n ≤ levelSize prevLvl / 2),
-      ∃ f, fixedOracleRun oracle (queryBinLevelAux h768 prevArr (levelSize prevLvl) (prevLvl + 1) n) = pure f ∧
+      ∃ f, fixedOracleRun oracle (queryBinLevelAux h768 prevArr (levelSize prevLvl) (decide (prevLvl + 1 = 24)) n) = pure f ∧
         (∀ idx < n, f idx = nodeValFromLeaves c leaves (prevLvl + 1) idx) ∧
         (levelSize prevLvl % 2 = 1 → f (levelSize prevLvl / 2) = nodeValFromLeaves c leaves (prevLvl + 1) (levelSize prevLvl / 2)) := by
     intro prevLvl hge1 hlt24 prevArr hprev n hn
@@ -1089,7 +1089,7 @@ theorem queryTreeFromLeafFn_fixed (h768 : COMPRESSION_INPUT_LENGTH = 768)
         by_cases heq : idx = n
         · subst heq
           simp only [Function.update_self, nodeValFromLeaves, show 2 * idx + 1 < levelSize (m + 1) by omega,
-            ite_true]
+            ite_true, decide_eq_true_eq]
           rw [hprev (2 * idx) (by omega), hprev (2 * idx + 1) (by omega)]
         · rw [Function.update_of_ne heq]; exact hval idx (by omega)
       · intro hodd
@@ -1376,18 +1376,18 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
           · exact List.mem_append_right _ (List.mem_append_left _ h2)
   obtain ⟨l1, tr1, htr1_run, htr1_good, htr1_lt, htr1_prom⟩ := hl1 FULL_TRIPLETS (le_refl _)
   have hbin : ∀ (prevTr : CompressionReplies) (hpg : GoodIdealTrace h768 aVec bVec sOpen leafRand positions prevTr)
-      (prevArr : Nat → Digest) (ps : Nat) (lvl : Nat)
+      (prevArr : Nat → Digest) (ps : Nat) (ir : Bool)
       (hprev : ∀ idx < ps, (∃ k ∉ positions, (prevArr idx).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
         (∃ p ∈ prevTr, (prevArr idx).extractLsb' 0 192 = p.2.extractLsb' 0 192))
       (n : Nat) (hn : n ≤ ps / 2),
       ∃ f tr,
-        fixedOracleRun oracle (traceCompressionReplies (queryBinLevelAux h768 prevArr ps lvl n)) = pure (f, tr) ∧
+        fixedOracleRun oracle (traceCompressionReplies (queryBinLevelAux h768 prevArr ps ir n)) = pure (f, tr) ∧
         GoodIdealTrace h768 aVec bVec sOpen leafRand positions (prevTr ++ tr) ∧
         (∀ idx < n, (∃ k ∉ positions, (f idx).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
           (∃ p ∈ prevTr ++ tr, (f idx).extractLsb' 0 192 = p.2.extractLsb' 0 192)) ∧
         (ps % 2 = 1 → (∃ k ∉ positions, (f (ps / 2)).extractLsb' 0 192 = (leafRand k).extractLsb' 0 192) ∨
           (∃ p ∈ prevTr ++ tr, (f (ps / 2)).extractLsb' 0 192 = p.2.extractLsb' 0 192)) := by
-    intro prevTr hpg prevArr ps lvl hprev n hn
+    intro prevTr hpg prevArr ps ir hprev n hn
     induction n with
     | zero =>
       refine ⟨fun idx => if ps % 2 = 1 ∧ idx = ps / 2 then prevArr (2 * idx) else 0, [],
@@ -1401,12 +1401,12 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
       rw [queryBinLevelAux_succ]
       let x := (binaryInput (prevArr (2 * n)) (prevArr (2 * n + 1))).cast h768.symm
       let raw : Digest := oracle.compression x
-      let d : Digest := maskLevel lvl raw
+      let d : Digest := if ir then raw else mask240 raw
       have hrunb :
           fixedOracleRun oracle (traceCompressionReplies (do
-            let prev ← queryBinLevelAux h768 prevArr ps lvl n
+            let prev ← queryBinLevelAux h768 prevArr ps ir n
             let raw' ← queryCompress h768 (binaryInput (prevArr (2 * n)) (prevArr (2 * n + 1)))
-            let d' := maskLevel lvl raw'
+            let d' := if ir then raw' else mask240 raw'
             pure (Function.update prev n d'))) =
           pure (Function.update f n d, tr ++ [(x, raw)]) := by
         simp only [traceReplies_bind, traceReplies_pure, fixed_oracle_run_bind, fixed_oracle_run_pure,
@@ -1434,7 +1434,9 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
         by_cases heq : idx = n
         · subst heq; rw [Function.update_self]
           right; refine ⟨(x, raw), by simp, ?_⟩
-          exact extractLsb'_192_maskLevel lvl raw
+          dsimp only [d]; cases ir
+          · exact extractLsb'_192_mask240 raw
+          · rfl
         · rw [Function.update_of_ne heq]
           rcases hval idx (by omega) with hlr | ⟨p, hp, hpeq⟩
           · exact Or.inl hlr
@@ -1480,7 +1482,7 @@ theorem queryIdealTree_good_trace (h768 : COMPRESSION_INPUT_LENGTH = 768)
       rw [queryUpperLevels_succ, traceReplies_bind, fixed_oracle_run_bind, hrun, pure_bind]
       dsimp only
       obtain ⟨cur, trc, hcrun, hcgood, hclt, hcprom⟩ := hbin ((tr0 ++ tr1) ++ tr) hgood
-        (arr (k + 1)) (levelSize (k + 1)) (k + 2) (hval (k + 1) (by omega))
+        (arr (k + 1)) (levelSize (k + 1)) (decide (k + 2 = 24)) (hval (k + 1) (by omega))
         (levelSize (k + 1) / 2) (le_refl _)
       simp only [traceReplies_bind, traceReplies_pure, fixed_oracle_run_bind, fixed_oracle_run_pure,
         hcrun, pure_bind, List.append_nil]

@@ -47,11 +47,11 @@ private theorem honestMachine_run_exact (h768 : COMPRESSION_INPUT_LENGTH = 768)
           pure (resOf rand, 78293674)) ∧
       ∀ rand,
         (resOf rand).success = true ∧
-        (resOf rand).commitCycles = 848294279 ∧
-        (positions.card = BATCH → (resOf rand).openingCycles ≤ 128500) := by
+        (resOf rand).commitCycles = 847595227 ∧
+        (positions.card = BATCH → (resOf rand).openingCycles ≤ 107915) := by
   obtain ⟨finalState, hcommit_run, _⟩ := commit_run_exact h768 oracle message
   let cExec (rand : Fin (LENGTH / 2) → PairRand) : Execution :=
-    ⟨Riscv.Exit.success, finalState rand, 848294279, 78293674⟩
+    ⟨Riscv.Exit.success, finalState rand, 847595227, 78293674⟩
   let td (rand : Fin (LENGTH / 2) → PairRand) : BitVec (8 * submission.sizes.trapdoor) :=
     (submission.readCommit (cExec rand)).2
   have hopen_all : ∀ rand,
@@ -60,7 +60,7 @@ private theorem honestMachine_run_exact (h768 : COMPRESSION_INPUT_LENGTH = 768)
         oExec.exit = Riscv.Exit.success ∧
         oExec.oracleCalls = 0 ∧
         (oExec.state.getReg .x11).toNat ≤ submission.sizes.proof ∧
-        (positions.card = BATCH → oExec.cycles ≤ 128500) :=
+        (positions.card = BATCH → oExec.cycles ≤ 107915) :=
     fun rand => opening_run_deterministic oracle (td rand) positions
   let oExec (rand : Fin (LENGTH / 2) → PairRand) : Execution := Classical.choose (hopen_all rand)
   let resOf (rand : Fin (LENGTH / 2) → PairRand) : MachineResult := {
@@ -129,7 +129,7 @@ private theorem scheme_honest_exact (h768 : COMPRESSION_INPUT_LENGTH = 768)
   have hcommit_scheme :
       EvalDistEq (oracle.run (submission.scheme.commit message))
         (($ᵗ (Fin (LENGTH / 2) → PairRand)) >>= fun rand =>
-          pure ((submission.readCommit ⟨Riscv.Exit.success, finalState rand, 848294279, 78293674⟩ :
+          pure ((submission.readCommit ⟨Riscv.Exit.success, finalState rand, 847595227, 78293674⟩ :
             Commitment × submission.scheme.Trapdoor), 78293674)) := by
     let rc : Execution × ℕ → (Commitment × submission.scheme.Trapdoor) × ℕ :=
       fun p => (submission.readCommit p.1, p.2)
@@ -146,7 +146,7 @@ private theorem scheme_honest_exact (h768 : COMPRESSION_INPUT_LENGTH = 768)
   apply bind_congr; intro rand
   refine (pure_bind _ _).trans ?_
   have hspec := hcommit_spec rand
-  let cExec : Execution := ⟨Riscv.Exit.success, finalState rand, 848294279, 78293674⟩
+  let cExec : Execution := ⟨Riscv.Exit.success, finalState rand, 847595227, 78293674⟩
   let salts := pairSalts rand
   let rt : Commitment := rootVal c96 message salts
   let td : submission.scheme.Trapdoor := (submission.readCommit cExec).2
@@ -183,7 +183,7 @@ theorem submission_termination (h768 : COMPRESSION_INPUT_LENGTH = 768) :
     rw [hrun.prEvent_eq (fun result => result.1.exit ≠ Riscv.Exit.unfinished)]
     let f : (Fin (LENGTH / 2) → PairRand) → Execution × ℕ :=
       fun rand => (({ exit := Riscv.Exit.success, state := finalState rand,
-                      cycles := 848294279, oracleCalls := 78293674 } : Execution), 78293674)
+                      cycles := 847595227, oracleCalls := 78293674 } : Execution), 78293674)
     exact prEvent_uniform_bind_pure_eq_one f
       (fun result => result.1.exit ≠ Riscv.Exit.unfinished)
       (fun _ => by dsimp only [f]; decide)
@@ -228,23 +228,23 @@ theorem submission_honest_budgets (h768 : COMPRESSION_INPUT_LENGTH = 768) :
       (check_honest_accepts h768 oracle message (pairSalts rand) positions).2⟩)
 
 theorem submission_proof_size (h768 : COMPRESSION_INPUT_LENGTH = 768) :
-    submission.scheme.ProofSize 70080 := by
+    submission.scheme.ProofSize 70410 := by
   intro oracle message positions hcard
   rw [(scheme_honest_exact h768 oracle message positions).prEvent_eq
-    (fun result => result.proofBytes ≤ 70080)]
+    (fun result => result.proofBytes ≤ 70410)]
   exact prEvent_uniform_bind_pure_eq_one (honestResultOf h768 oracle message positions)
-    (fun result => result.proofBytes ≤ 70080)
+    (fun result => result.proofBytes ≤ 70410)
     (fun rand => referenceProof_length_128_le _ (pairSalts rand) positions hcard)
 
 theorem submission_prover_cycles (h768 : COMPRESSION_INPUT_LENGTH = 768) :
-    submission.ProverCycles 848294279 128500 := by
+    submission.ProverCycles 847595227 107915 := by
   intro oracle message positions hcard
   obtain ⟨resOf, hrun, hspec⟩ := honestMachine_run_exact h768 oracle message positions
   rw [hrun.prEvent_eq
-    (fun result => result.1.commitCycles ≤ 848294279 ∧ result.1.openingCycles ≤ 128500)]
+    (fun result => result.1.commitCycles ≤ 847595227 ∧ result.1.openingCycles ≤ 107915)]
   exact prEvent_uniform_bind_pure_eq_one
     (fun rand => (resOf rand, 78293674))
-    (fun result => result.1.commitCycles ≤ 848294279 ∧ result.1.openingCycles ≤ 128500)
+    (fun result => result.1.commitCycles ≤ 847595227 ∧ result.1.openingCycles ≤ 107915)
     (fun rand => ⟨le_of_eq (hspec rand).2.1, (hspec rand).2.2 hcard⟩)
 
 /-! ### 4. Adaptive Position Binding & Statistical Hiding -/
@@ -283,7 +283,7 @@ theorem submission_hiding (h768 : COMPRESSION_INPUT_LENGTH = 768) :
 /-! ### 5. Complete Certificate -/
 
 theorem moon_certificate (h768 : COMPRESSION_INPUT_LENGTH = 768) :
-    CommitGolf.Certificate submission 70080 848294279 128500 where
+    CommitGolf.Certificate submission 70410 847595227 107915 where
   admission := submission_admission
   machineSuccess := submission_machine_success h768
   termination := submission_termination h768

@@ -73,15 +73,14 @@ theorem referenceProof_congr_opened (nodes : Nat → Nat → Digest)
     (s1 s2 : Index → Salt192) (positions : Positions)
     (hagree : ∀ i ∈ positions, s1 i = s2 i) :
     referenceProof nodes s1 positions = referenceProof nodes s2 positions := by
-  unfold referenceProof referenceProofFwd
+  unfold referenceProof
   split
   · rfl
-  · apply congrArg (· ++ pack6BitsRev (referenceProofTails nodes positions))
-    apply congrArg (· ++ capFrontierFwd nodes positions)
+  · apply congrArg (· ++ capFrontierProof nodes positions)
     apply List.flatMap_congr
     intro i hi
     have hmem : i ∈ positions := (Finset.mem_sort (· ≤ ·)).mp hi
-    simp only [recordFwd, hagree i hmem]
+    simp only [recordProof, hagree i hmem]
 
 theorem idealTranscript_congr_opened_msg (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (compress : Compression) (m0 m1 : Message) (sOpen : Index → Salt192)
