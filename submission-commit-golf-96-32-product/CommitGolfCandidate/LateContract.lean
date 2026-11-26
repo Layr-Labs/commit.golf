@@ -33,7 +33,7 @@ theorem honest_budgets_of_law (law : Check.MachineLaw) : submission.scheme.Hones
   · omega
 
 theorem certificate_of_checker_runs (batch : Check.BatchEvaluation) (normal : Check.NormalEvaluation)
-    (late_hiding : HidingGoal) : Certificate submission 72704 913899867 45875 := by
+    (late_hiding : HidingGoal) : Certificate submission 72704 911802772 45875 := by
   let law:=Check.law_of_evaluations batch normal
   exact certificate_of_refinements machine_success (Check.termination_of_evaluations batch normal)
     (completeness_of_law law) (honest_budgets_of_law law) proof_size prover_cycles (Check.sound_of_machine law)

@@ -9,9 +9,9 @@ actual artifact; the remaining machine refinements are explicit premises. -/
 theorem certificate_of_refinements
     (success : submission.MachineSuccess) (termination : submission.Termination)
     (complete : submission.scheme.Completeness) (budgets : submission.scheme.HonestBudgets)
-    (size : submission.scheme.ProofSize 72704) (cycles : submission.ProverCycles 913899867 45875)
+    (size : submission.scheme.ProofSize 72704) (cycles : submission.ProverCycles 911802772 45875)
     (checker : Check.AcceptsValid) (refines : ViewRefinement) (late_hiding : HidingGoal) :
-    Certificate submission 72704 913899867 45875 where
+    Certificate submission 72704 911802772 45875 where
   admission := admission
   machineSuccess := success
   termination := termination
