@@ -158,6 +158,21 @@ theorem read_compression_padding (state : MachineState) (address : Nat) :
     Nat.mod_eq_of_lt (read_natural_bound state address 64), read_natural_add state address 64 32]
   ring
 
+set_option exponentiation.threshold 1024 in
+/-- A leaf query reads the 32-byte chaining value followed by the 64-byte block. -/
+theorem read_leaf_query (state : MachineState) (address : Nat) :
+    readBuffer state address 96 =
+      readBuffer state (address + 32) 64 ++ readBuffer state address 32 := by
+  apply BitVec.eq_of_toNat_eq
+  change (BitVec.ofNat 768 (readNatural state address 96)).toNat =
+    ((BitVec.ofNat 512 (readNatural state (address+32) 64)) ++
+      (BitVec.ofNat 256 (readNatural state address 32))).toNat
+  rw [append_nat, BitVec.toNat_ofNat, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt (read_natural_bound state address 96),
+    Nat.mod_eq_of_lt (read_natural_bound state (address+32) 64),
+    Nat.mod_eq_of_lt (read_natural_bound state address 32), read_natural_add state address 32 64]
+  ring
+
 /-- Reads depend only on the words in the addressed digest. -/
 theorem read_digest_congr (left right : MachineState) (address : Nat)
     (aligned : address % 8 = 0)
