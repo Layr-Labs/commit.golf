@@ -12,20 +12,20 @@ theorem runs_finish {o : Oracle} {s t : MachineState} {a b q r : Nat} {ex : Exit
   intro fuel;rw [Nat.add_assoc,run,fin]
 
 theorem compRuns {o : Oracle} {s : MachineState} {k cyc calls : Nat} {op : OracleComp World MachineState}
-    (run : ∀ fuel, execute (submission.image .check) (k+fuel) s false =
-      (do let t ← op; let next ← execute (submission.image .check) fuel t false
+    (run : ∀ fuel, execute Late.Check.Normal.checkerImage (k+fuel) s false =
+      (do let t ← op; let next ← execute Late.Check.Normal.checkerImage fuel t false
           return next.charge cyc calls)) :
-    Runs o s (checkEvaluation o op).1 k (checkEvaluation o op).2 := by
-  intro fuel;unfold obs;rw [run,check_evaluation_bind]
-  simp only [bind_pure_comp,check_evaluation_map];rfl
+    Runs o s (Late.Check.Normal.checkEvaluation o op).1 k (Late.Check.Normal.checkEvaluation o op).2 := by
+  intro fuel;unfold obs;rw [run,Late.Check.Normal.check_evaluation_bind]
+  simp only [bind_pure_comp,Late.Check.Normal.check_evaluation_map];rfl
 
 structure CompleteCap (H : Compression) (input : CheckInput) (s : MachineState) : Prop where
-  pc : s.pc=5592
+  pc : s.pc=5492
   rootPtr : s.getReg .x26=4294971392
   root : readBuffer s 4294971392 32=input.commitment
   parents : ∀ p<128,readBuffer s (4608+32*p) 32=capTable H input p
 
-theorem compareFinal (o : Oracle) (s : MachineState) (pc : s.pc=5672)
+theorem compareFinal (o : Oracle) (s : MachineState) (pc : s.pc=5572)
     (left : s.getReg .x21=544) (right : s.getReg .x23=4294971392) :
     Finishes o s 15 0 (if readBuffer s 544 32=readBuffer s 4294971392 32 then .success else .failure) := by
   let same := ∀ j<4,s.getMem (s.getReg .x21+BitVec.ofNat 64 (8*j))=s.getMem (s.getReg .x23+BitVec.ofNat 64 (8*j))
@@ -38,18 +38,18 @@ theorem compareFinal (o : Oracle) (s : MachineState) (pc : s.pc=5672)
     intro j hj;rw [right];exact (show ∀ i : Fin 4, accessValid (4294971392+BitVec.ofNat 64 (8*i.val)) 8 by decide) ⟨j,hj⟩
   intro fuel
   by_cases ok : same
-  · have done := top_check_root_words_pc s 394 (Or.inr rfl) pc 4 (by decide) ok
+  · have done := top_check_root_words_pc s 369 (Or.inr rfl) pc 4 (by decide) ok
     unfold obs
-    rw [if_pos (eqn.mp ok),show 15+fuel=12+(3+fuel) by omega,top_check_root_matches s 394 (Or.inr rfl) pc sv dv ok,
-      top_check_exit _ true done,pure_bind,check_evaluation_pure]
+    rw [if_pos (eqn.mp ok),show 15+fuel=12+(3+fuel) by omega,top_check_root_matches s 369 (Or.inr rfl) pc sv dv ok,
+      top_check_exit _ true done,pure_bind,Late.Check.Normal.check_evaluation_pure]
     rfl
-  · obtain ⟨e,run,bad,_,_⟩ := top_check_root_rejects s 394 (Or.inr rfl) pc sv dv ok fuel false
-    unfold obs;rw [if_neg (fun v=>ok (eqn.mpr v)),run,check_evaluation_pure];exact Prod.ext bad rfl
+  · obtain ⟨e,run,bad,_,_⟩ := top_check_root_rejects s 369 (Or.inr rfl) pc sv dv ok fuel false
+    unfold obs;rw [if_neg (fun v=>ok (eqn.mpr v)),run,Late.Check.Normal.check_evaluation_pure];exact Prod.ext bad rfl
 
-attribute [local irreducible] checkEvaluation execute top_checkCapParentLoop
+attribute [local irreducible] Late.Check.Normal.checkEvaluation execute top_checkCapParentLoop
 
 structure UpperEntry (o : Oracle) (input : CheckInput) (s : MachineState) : Prop where
-  pc : s.pc=5648
+  pc : s.pc=5548
   r5 : s.getReg .x5=0
   r13 : s.getReg .x13=0
   r22 : s.getReg .x22=512
@@ -63,7 +63,7 @@ theorem upperEntry (o : Oracle) (input : CheckInput) (s : MachineState) (inv : C
     ∃ t, Runs o s t 14 0 ∧ UpperEntry o input t := by
   let first:=initRootState s
   let t:=checkCapParentSetupState first
-  have fp : first.pc=5596 := by simp [first,initRootState,initRootOps,execInstrBr,MachineState.setPC,inv.pc]
+  have fp : first.pc=5496 := by simp [first,initRootState,initRootOps,execInstrBr,MachineState.setPC,inv.pc]
   obtain ⟨sp,r5,_,r13,r10,r12,mem⟩ := top_check_cap_parent_setup_registers first fp
   have r22 : t.getReg .x22=512 := (check_cap_parent_setup_preserves first _ (by decide)).trans (by rfl)
   have r26 : t.getReg .x26=4294971392 := (check_cap_parent_setup_preserves first _ (by decide)).trans inv.rootPtr
@@ -75,7 +75,7 @@ theorem upperEntry (o : Oracle) (input : CheckInput) (s : MachineState) (inv : C
     fun p hp => (read_buffer_memory_congr t s sameMem _ _).trans (inv.parents p hp)⟩
 
 structure UpperDone (o : Oracle) (input : CheckInput) (s : MachineState) : Prop where
-  pc : s.pc=5664
+  pc : s.pc=5564
   r22 : s.getReg .x22=512
   r26 : s.getReg .x26=4294971392
   root : readBuffer s 4294971392 32=input.commitment
@@ -84,8 +84,8 @@ structure UpperDone (o : Oracle) (input : CheckInput) (s : MachineState) : Prop 
 theorem runUpper (o : Oracle) (input : CheckInput) (s : MachineState) (inv : UpperEntry o input s) :
     ∃ t,Runs o s t 2540 127 ∧ UpperDone o input t := by
   let op:=top_checkCapParentLoop s 127
-  let t:=(checkEvaluation o op).1
-  have reached : t ∈ support op := check_evaluation_support o op
+  let t:=(Late.Check.Normal.checkEvaluation o op).1
+  have reached : t ∈ support op := Late.Check.Normal.check_evaluation_support o op
   have done := top_cap_parent_loop_finished 127 (by decide) s inv.r22 inv.r12 t reached
   have run := compRuns (o:=o) (fun fuel => top_check_cap_parent_loop 127 (by decide) s (fun _=>inv.pc)
     inv.r5 inv.r13 inv.r22 inv.r10 inv.r12 fuel false)

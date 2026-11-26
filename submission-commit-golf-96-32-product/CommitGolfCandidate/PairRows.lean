@@ -3,16 +3,16 @@ namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 8000
 set_option maxHeartbeats 30000
-attribute [local irreducible] readBuffer rowHash storedAt prefixNode lowerHash
+attribute [local irreducible] readBuffer storedAt prefixNode lowerHash
 
 theorem advance (o : Oracle) (input : CheckInput) (n : Nat) (hn : n<128) (s : MachineState)
     (inv : RecordInvariant o.compression input n s) (fresh : Bool)
-    (h : HashedFrame o input n (rowHash o s)) (passed : TailOK o input n (rowHash o s) fresh) :
-    RecordInvariant o.compression input (n+1) (finishRow fresh (rowHash o s)) :=
-  finishInvariant o input n hn (rowHash o s) h fresh passed
-    (fun v=>(hashedTable o s inv.scratch v).trans (inv.table v)) inv.consistent
-    (fun w hw=>(hashedOutside o s inv.scratch w (by omega)).trans (inv.inputWords w hw))
-    (fun p=>(hashGap o s inv.scratch p).trans (inv.gap p))
+    (m : MachineState) (higher : Late.Check.Micro.High s m) (h : HashedFrame o input n m) (passed : TailOK o input n m fresh) :
+    RecordInvariant o.compression input (n+1) (finishRow fresh m) :=
+  finishInvariant o input n hn m h fresh passed
+    (fun v=>(hashedTable higher v).trans (inv.table v)) inv.consistent
+    (fun w hw al hb=>(highWord higher w (by omega) al hb).trans (inv.inputWords w hw al hb))
+    (fun p=>(hashGap higher p).trans (inv.gap p))
 
 private theorem tailBound (k : Nat) (cap : k≤834) (fresh : Bool) : k+(if fresh then 26 else 29)≤864 := by cases fresh <;> simp <;> omega
 
@@ -20,12 +20,11 @@ theorem rowStep (o : Oracle) (input : CheckInput) (b : input.positions.card=BATC
     (n : Nat) (hn : n<128) (s : MachineState) (inv : RecordInvariant o.compression input n s) :
     (¬BatchValid o.compression input ∧ ∃ k≤864, Rejects o s k 20) ∨
     ∃ t k, k≤864 ∧ Runs o s t k 20 ∧ RecordInvariant o.compression input (n+1) t := by
-  let m := rowHash o s
-  obtain ⟨k,cap,run,h⟩ := hashRecord o input b n hn s inv
-  have tab := (hashedTable o s inv.scratch (rowBucket input n)).trans (inv.table _)
+  obtain ⟨m,k,cap,run,h,higher⟩ := hashRecord o input b n hn s inv
+  have tab := (hashedTable higher (rowBucket input n)).trans (inv.table _)
   rcases classifyRow o input n hn m h tab with ⟨rej,invalid⟩|⟨fresh,passed⟩
   · exact Or.inl ⟨invalid,k+28,by omega,runs_rejects run rej⟩
-  · refine Or.inr ⟨_,_,?_,runs_trans run (tailRun o input n m fresh passed),advance o input n hn s inv fresh h passed⟩
+  · refine Or.inr ⟨_,_,?_,runs_trans run (tailRun o input n m fresh passed),advance o input n hn s inv fresh m higher h passed⟩
     exact tailBound k cap fresh
 
 theorem allRows (o : Oracle) (input : CheckInput) (b : input.positions.card=BATCH)

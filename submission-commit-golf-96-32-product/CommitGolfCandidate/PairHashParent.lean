@@ -3,10 +3,10 @@ namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 8000
 set_option maxHeartbeats 200000
-attribute [local irreducible] checkEvaluation execute readBuffer parentAt
+attribute [local irreducible] Late.Check.Normal.checkEvaluation execute readBuffer parentAt
 
 structure Prepared (o : Oracle) (input : CheckInput) (p : Fin 128) (s t : MachineState) : Prop where
-  pc : t.pc=5508
+  pc : t.pc=5408
   regs : Carries s t
   quiet : Quiet s t (sourceRow p.val) 64
   value : o.compression (readBuffer t (sourceRow p.val) 96) = parentAt o.compression input p.val
@@ -20,10 +20,10 @@ theorem parentValue (o : Oracle) (s : MachineState) (p : Fin 128) (l r : Digest)
 
 theorem hashEffect {o : Oracle} {input : CheckInput} {p : Fin 128} {s t m : MachineState} {d : Digest}
     (prep : Prepared o input p s t) (keep : Carries t m) (w : Written t m (outSlot p.val) d)
-    (eqn : d=parentAt o.compression input p.val) : PairEffect o.compression input p.val s (m.setPC 5568) :=
-  ⟨rfl,carriesTrans (carriesTrans prep.regs keep) (carriesPC m 5568),
-   (memDigest (s:=m) (t:=m.setPC 5568) rfl (outSlot p.val)).trans (w.atDst.trans eqn),
-   fun x bx ch out=>(byteMem (s:=m) (t:=m.setPC 5568) rfl x).trans ((w.outside x bx out).trans (prep.quiet x bx ch))⟩
+    (eqn : d=parentAt o.compression input p.val) : PairEffect o.compression input p.val s (m.setPC 5468) :=
+  ⟨rfl,carriesTrans (carriesTrans prep.regs keep) (carriesPC m 5468),
+   (memDigest (s:=m) (t:=m.setPC 5468) rfl (outSlot p.val)).trans (w.atDst.trans eqn),
+   fun x bx ch out=>(byteMem (s:=m) (t:=m.setPC 5468) rfl x).trans ((w.outside x bx out).trans (prep.quiet x bx ch))⟩
 
 theorem executeParent (o : Oracle) (input : CheckInput) (p : Fin 128) (s t : MachineState)
     (a : Args p s) (prep : Prepared o input p s t) :
@@ -39,8 +39,8 @@ theorem executeParent (o : Oracle) (input : CheckInput) (p : Fin 128) (s t : Mac
   let d:=o.compression (readBuffer t (t.getReg .x23).toNat 96)
   have eqn : d=parentAt o.compression input p.val := by dsimp [d];rw [addr];exact prep.value
   let m:=hashed t d
-  have pc : m.pc=5532 := by change (hashSetupState t).pc+4=5532;rw [(hashRegisters t prep.pc).1] <;> rfl
+  have pc : m.pc=5432 := by change (hashSetupState t).pc+4=5432;rw [(hashRegisters t prep.pc).1] <;> rfl
   have run : Runs o t m 6 1 := hashRuns o t prep.pc sb sa db da
   have wr := hashWritten t (outSlot p.val) atT.dest (by unfold outSlot;omega) d
-  exact ⟨m.setPC 5568,runs_trans run (jump334 o m pc),hashEffect (s:=s) (t:=t) (m:=m) prep (hashKeeps t d) wr eqn⟩
+  exact ⟨m.setPC 5468,runs_trans run (jump334 o m pc),hashEffect (s:=s) (t:=t) (m:=m) prep (hashKeeps t d) wr eqn⟩
 end CommitGolfCandidate.PairCap.Batch

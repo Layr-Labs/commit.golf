@@ -1,7 +1,4 @@
 import CommitGolfCandidate.PairPad
-
-import CommitGolfCandidate.CheckCapRefinement
-
 namespace CommitGolfCandidate.PairCap
 
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -12,28 +9,28 @@ set_option maxHeartbeats 1000000
 
 def top_checkExitState (state : MachineState) (success : Bool) : MachineState :=
   ((state.setReg .x5 1).setReg .x10 (if success then 0 else 1)).setPC
-    (if success then 5728 else 4440)
+    (if success then 5628 else 4440)
 
 theorem top_check_exit (state : MachineState) (success : Bool)
-    (pc : state.pc = if success then 5720 else 4432) (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 + fuel) state allowCoins =
+    (pc : state.pc = if success then 5620 else 4432) (fuel : Nat) (allowCoins : Bool) :
+    execute Late.Check.Normal.checkerImage (3 + fuel) state allowCoins =
       pure ⟨if success then .success else .failure, top_checkExitState state success, 3, 0⟩ := by
-  let next := (state.setReg .x5 1).setPC (if success then 5724 else 4436)
-  have fetch₁ : fetch (submission.image .check) state =
+  let next := (state.setReg .x5 1).setPC (if success then 5624 else 4436)
+  have fetch₁ : fetch Late.Check.Normal.checkerImage state =
       some (.base (.ADDI .x5 .x0 1)) := by
     cases success
     · apply patchedFetch state 84 _ (by decide) pc; rfl
-    · apply patchedFetch state 406 _ (by decide) pc; rfl
-  have fetch₂ : fetch (submission.image .check) next =
+    · apply patchedFetch state 381 _ (by decide) pc; rfl
+  have fetch₂ : fetch Late.Check.Normal.checkerImage next =
       some (.base (.ADDI .x10 .x0 (if success then 0 else 1))) := by
     cases success
     · apply patchedFetch next 85 _ (by decide) rfl; rfl
-    · apply patchedFetch next 407 _ (by decide) rfl; rfl
-  have fetch₃ : fetch (submission.image .check) (top_checkExitState state success) =
+    · apply patchedFetch next 382 _ (by decide) rfl; rfl
+  have fetch₃ : fetch Late.Check.Normal.checkerImage (top_checkExitState state success) =
       some (.base .ECALL) := by
     cases success
     · apply patchedFetch _ 86 _ (by decide) rfl; rfl
-    · apply patchedFetch _ 408 _ (by decide) rfl; rfl
+    · apply patchedFetch _ 383 _ (by decide) rfl; rfl
   have step₁ : ordinaryStep state (.base (.ADDI .x5 .x0 1)) = some next := by
     cases success <;> simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr,
       signExtend12, next, pc, MachineState.getReg, MachineState.setReg, MachineState.setPC]
@@ -54,23 +51,23 @@ def top_checkRootPrefix (state : MachineState) (word count : Nat) : MachineState
   ((top_checkRootInstructions word).take count).foldl execInstrBr state
 
 def top_checkRootBranchOffset (start word : Nat) : BitVec 13 :=
-  BitVec.ofNat 13 ((if start = 294 then 7344 else 6944) - 12 * word)
+  BitVec.ofNat 13 ((if start = 269 then 7444 else 7044) - 12 * word)
 
 def top_checkRootWordState (state : MachineState) (start word : Nat) : MachineState :=
   execInstrBr (top_checkRootPrefix state word 2) (.BNE .x6 .x7 (top_checkRootBranchOffset start word))
 
 theorem top_check_root_word (state : MachineState) (start word : Nat)
-    (location : start = 294 ∨ start = 394) (bounded : word < 4)
+    (location : start = 269 ∨ start = 369) (bounded : word < 4)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start + 12 * word))
     (scratchValid : accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (targetValid : accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
+    execute Late.Check.Normal.checkerImage (3 + fuel) state allowCoins =
+      (do let result ← execute Late.Check.Normal.checkerImage fuel
             (top_checkRootWordState state start word) allowCoins
           return result.charge 3 0) := by
-  have loads (remaining : Nat) : execute (submission.image .check) (2 + remaining) state allowCoins =
-      (do let result ← execute (submission.image .check) remaining
+  have loads (remaining : Nat) : execute Late.Check.Normal.checkerImage (2 + remaining) state allowCoins =
+      (do let result ← execute Late.Check.Normal.checkerImage remaining
             (top_checkRootPrefix state word 2) allowCoins
           return result.charge 2 0) := by
     apply execute_unit_steps (states := top_checkRootPrefix state word)
@@ -90,7 +87,7 @@ theorem top_check_root_word (state : MachineState) (start word : Nat)
           MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x6 ≠ .x23)] <;>
         first | rw [scratchValid]; rfl | rw [targetValid]; rfl
     · interval_cases i <;> rfl
-  have fetched : fetch (submission.image .check) (top_checkRootPrefix state word 2) =
+  have fetched : fetch Late.Check.Normal.checkerImage (top_checkRootPrefix state word 2) =
       some (.base (.BNE .x6 .x7 (top_checkRootBranchOffset start word))) := by
     apply patchedFetch _ (start + 3 * word + 2) _ (by rcases location with rfl | rfl <;> omega)
     · rcases location with rfl | rfl <;> interval_cases word <;>
@@ -118,7 +115,7 @@ theorem top_check_root_word_preserves (state : MachineState) (start word : Nat) 
     split <;> rfl
 
 theorem top_check_root_word_pc (state : MachineState) (start word : Nat)
-    (location : start = 294 ∨ start = 394) (bounded : word < 4)
+    (location : start = 269 ∨ start = 369) (bounded : word < 4)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start + 12 * word)) :
     (top_checkRootWordState state start word).pc =
       if state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
@@ -131,14 +128,14 @@ theorem top_check_root_word_pc (state : MachineState) (start word : Nat)
     split <;> simp_all
 
 theorem top_check_root_word_reject (state : MachineState) (start word : Nat)
-    (location : start = 294 ∨ start = 394) (bounded : word < 4)
+    (location : start = 269 ∨ start = 369) (bounded : word < 4)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start + 12 * word))
     (scratchValid : accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (targetValid : accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (different : state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) ≠
       state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (6 + fuel) state allowCoins =
+    execute Late.Check.Normal.checkerImage (6 + fuel) state allowCoins =
       pure ⟨.failure, top_checkExitState (top_checkRootWordState state start word) false, 6, 0⟩ := by
   have rejectPC : (top_checkRootWordState state start word).pc = 4432 := by
     rw [top_check_root_word_pc state start word location bounded pc, if_neg different]
@@ -172,7 +169,7 @@ theorem top_check_root_words_read (state : MachineState) (start count word : Nat
   exact congrFun preserved.2 _
 
 theorem top_check_root_words_pc (state : MachineState) (start : Nat)
-    (location : start = 294 ∨ start = 394)
+    (location : start = 269 ∨ start = 369)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (count : Nat) (bounded : count ≤ 4)
     (agrees : ∀ word < count,
@@ -189,7 +186,7 @@ theorem top_check_root_words_pc (state : MachineState) (start : Nat)
       if_pos (agrees count (by omega))]
 
 theorem top_check_root_prefix (state : MachineState) (start : Nat)
-    (location : start = 294 ∨ start = 394)
+    (location : start = 269 ∨ start = 369)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (scratchValid : ∀ word < 4,
       accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
@@ -200,8 +197,8 @@ theorem top_check_root_prefix (state : MachineState) (start : Nat)
       state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
         state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
     (remaining : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 * count + remaining) state allowCoins =
-      (do let result ← execute (submission.image .check) remaining
+    execute Late.Check.Normal.checkerImage (3 * count + remaining) state allowCoins =
+      (do let result ← execute Late.Check.Normal.checkerImage remaining
             (top_checkRootWordsState state start count) allowCoins
           return result.charge (3 * count) 0) := by
   induction count generalizing remaining with
@@ -223,7 +220,7 @@ theorem top_check_root_prefix (state : MachineState) (start : Nat)
     simp [top_checkRootWordsState, Execution.charge, Nat.mul_add, ← Nat.add_assoc]
 
 theorem top_check_root_matches (state : MachineState) (start : Nat)
-    (location : start = 294 ∨ start = 394)
+    (location : start = 269 ∨ start = 369)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (scratchValid : ∀ word < 4,
       accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
@@ -233,14 +230,14 @@ theorem top_check_root_matches (state : MachineState) (start : Nat)
       state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
         state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (12 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
+    execute Late.Check.Normal.checkerImage (12 + fuel) state allowCoins =
+      (do let result ← execute Late.Check.Normal.checkerImage fuel
             (top_checkRootWordsState state start 4) allowCoins
           return result.charge 12 0) :=
   top_check_root_prefix state start location pc scratchValid targetValid 4 (by decide) agrees fuel allowCoins
 
 theorem top_check_root_first_mismatch (state : MachineState) (start : Nat)
-    (location : start = 294 ∨ start = 394)
+    (location : start = 269 ∨ start = 369)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (scratchValid : ∀ word < 4,
       accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
@@ -253,7 +250,7 @@ theorem top_check_root_first_mismatch (state : MachineState) (start : Nat)
     (different : state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) ≠
       state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 * word + 6 + fuel) state allowCoins =
+    execute Late.Check.Normal.checkerImage (3 * word + 6 + fuel) state allowCoins =
       pure ⟨.failure, top_checkExitState (top_checkRootWordState (top_checkRootWordsState state start word) start word) false,
         3 * word + 6, 0⟩ := by
   have prefixPC := top_check_root_words_pc state start location pc word (by omega) earlier
@@ -274,7 +271,7 @@ theorem top_check_root_first_mismatch (state : MachineState) (start : Nat)
   simp [Execution.charge, Nat.add_comm]
 
 theorem top_check_root_rejects (state : MachineState) (start : Nat)
-    (location : start = 294 ∨ start = 394)
+    (location : start = 269 ∨ start = 369)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (scratchValid : ∀ word < 4,
       accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
@@ -284,7 +281,7 @@ theorem top_check_root_rejects (state : MachineState) (start : Nat)
       state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
         state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
     (fuel : Nat) (allowCoins : Bool) :
-    ∃ result, execute (submission.image .check) (15 + fuel) state allowCoins = pure result ∧
+    ∃ result, execute Late.Check.Normal.checkerImage (15 + fuel) state allowCoins = pure result ∧
       result.exit = .failure ∧ result.cycles ≤ 15 ∧ result.oracleCalls = 0 := by
   have existsMismatch : ∃ word, word < 4 ∧
       state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) ≠
@@ -315,24 +312,24 @@ def top_capParentSetupInstructions : List Instr :=
 def top_capParentSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
   (top_capParentSetupInstructions.take count).foldl execInstrBr state
 
-theorem top_check_cap_parent_setup (state : MachineState) (pc : state.pc = 5596)
+theorem top_check_cap_parent_setup (state : MachineState) (pc : state.pc = 5496)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (13 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
+    execute Late.Check.Normal.checkerImage (13 + fuel) state allowCoins =
+      (do let result ← execute Late.Check.Normal.checkerImage fuel
             (checkCapParentSetupState state) allowCoins
           return result.charge 13 0) := by
   apply execute_unit_steps (states := top_capParentSetupPrefix state)
   intro i hi
   refine ⟨.base ((top_capParentSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply patchedFetch _ (375 + i) _ (by omega)
+  · apply patchedFetch _ (350 + i) _ (by omega)
     · interval_cases i <;>
         simp [top_capParentSetupPrefix, top_capParentSetupInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-theorem top_check_cap_parent_setup_registers (state : MachineState) (pc : state.pc = 5596) :
-    (checkCapParentSetupState state).pc = 5648 ∧
+theorem top_check_cap_parent_setup_registers (state : MachineState) (pc : state.pc = 5496) :
+    (checkCapParentSetupState state).pc = 5548 ∧
     (checkCapParentSetupState state).getReg .x5 = 0 ∧
     (checkCapParentSetupState state).getReg .x11 = 64 ∧
     (checkCapParentSetupState state).getReg .x13 = 0 ∧
@@ -348,22 +345,22 @@ theorem top_check_cap_parent_setup_registers (state : MachineState) (pc : state.
 def top_checkCapParentLatchState (state : MachineState) : MachineState :=
   let nextDst := state.getReg .x12 - 32
   ((state.setReg .x10 (state.getReg .x10 - 64)).setReg .x12 nextDst).setPC
-    (if nextDst = state.getReg .x22 then 5664 else 5648)
+    (if nextDst = state.getReg .x22 then 5564 else 5548)
 
-theorem top_check_cap_parent_latch (state : MachineState) (pc : state.pc = 5652)
+theorem top_check_cap_parent_latch (state : MachineState) (pc : state.pc = 5552)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
+    execute Late.Check.Normal.checkerImage (3 + fuel) state allowCoins =
+      (do let result ← execute Late.Check.Normal.checkerImage fuel
             (top_checkCapParentLatchState state) allowCoins
           return result.charge 3 0) := by
-  let s1 := (state.setReg .x10 (state.getReg .x10 - 64)).setPC 5656
-  let s2 := (s1.setReg .x12 (state.getReg .x12 - 32)).setPC 5660
-  have f0 : fetch (submission.image .check) state = some (.base (.ADDI .x10 .x10 4032)) := by
-    apply patchedFetch _ 389 _ (by decide) pc; rfl
-  have f1 : fetch (submission.image .check) s1 = some (.base (.ADDI .x12 .x12 4064)) := by
-    apply patchedFetch _ 390 _ (by decide) rfl; rfl
-  have f2 : fetch (submission.image .check) s2 = some (.base (.BNE .x12 .x22 8180)) := by
-    apply patchedFetch _ 391 _ (by decide) rfl; rfl
+  let s1 := (state.setReg .x10 (state.getReg .x10 - 64)).setPC 5556
+  let s2 := (s1.setReg .x12 (state.getReg .x12 - 32)).setPC 5560
+  have f0 : fetch Late.Check.Normal.checkerImage state = some (.base (.ADDI .x10 .x10 4032)) := by
+    apply patchedFetch _ 364 _ (by decide) pc; rfl
+  have f1 : fetch Late.Check.Normal.checkerImage s1 = some (.base (.ADDI .x12 .x12 4064)) := by
+    apply patchedFetch _ 365 _ (by decide) rfl; rfl
+  have f2 : fetch Late.Check.Normal.checkerImage s2 = some (.base (.BNE .x12 .x22 8180)) := by
+    apply patchedFetch _ 366 _ (by decide) rfl; rfl
   have st0 : ordinaryStep state (.base (.ADDI .x10 .x10 4032)) = some s1 := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s1, pc,
       BitVec.sub_eq_add_neg]
@@ -408,9 +405,9 @@ theorem top_cap_parent_step_registers (state : MachineState) (answer : BitVec 25
 
 theorem top_cap_parent_step_pc (state : MachineState) (answer : BitVec 256) :
     (top_checkCapParentStepState state answer).pc =
-      if state.getReg .x12 - 32 = state.getReg .x22 then 5664 else 5648 := by
+      if state.getReg .x12 - 32 = state.getReg .x22 then 5564 else 5548 := by
   change (if (paddedCompressionState state answer).getReg .x12 - 32 =
-      (paddedCompressionState state answer).getReg .x22 then 5664 else 5648) = _
+      (paddedCompressionState state answer).getReg .x22 then 5564 else 5548) = _
   rw [padded_compression_register state answer .x12 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide),
     padded_compression_register state answer .x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]
 
@@ -421,15 +418,15 @@ def top_checkCapParentLoop (state : MachineState) : Nat → OracleComp World Mac
       top_checkCapParentLoop (top_checkCapParentStepState state answer) count
 
 theorem top_check_cap_parent_loop (count : Nat) (bounded : count ≤ 127) (state : MachineState)
-    (pc : 0 < count → state.pc = 5648)
+    (pc : 0 < count → state.pc = 5548)
     (r5 : state.getReg .x5 = 0) (r13 : state.getReg .x13 = 0)
     (r22 : state.getReg .x22 = 512)
     (r10 : state.getReg .x10 = BitVec.ofNat 64 (512 + 64 * count))
     (r12 : state.getReg .x12 = BitVec.ofNat 64 (512 + 32 * count))
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (20 * count + fuel) state allowCoins =
+    execute Late.Check.Normal.checkerImage (20 * count + fuel) state allowCoins =
       (do let finished ← top_checkCapParentLoop state count
-          let result ← execute (submission.image .check) fuel finished allowCoins
+          let result ← execute Late.Check.Normal.checkerImage fuel finished allowCoins
           return result.charge (27 * count) count) := by
   induction count generalizing state with
   | zero => simp [top_checkCapParentLoop, Execution.charge]
@@ -442,10 +439,9 @@ theorem top_check_cap_parent_loop (count : Nat) (bounded : count ≤ 127) (state
       simp only [rangeValid, r10Nat, MEMORY_BYTES, decide_eq_true_eq]; omega
     have dstValid : rangeValid (state.getReg .x12) 32 = true := by
       simp only [rangeValid, r12Nat, MEMORY_BYTES, decide_eq_true_eq]; omega
-    have call := rec_padding_call true state 388 (Or.inr rfl) (pc (by omega))
+    have call := rec_padding_call true state 363 (Or.inr rfl) (pc (by omega))
       r5 r13 srcValid dstValid (by rw [r10Nat]; omega) (by rw [r12Nat]; omega)
       (by rw [r10Nat, r12Nat]; omega) (3 + (20 * count + fuel)) allowCoins
-    simp only [paddingProgram] at call
     rw [show 20 * (count + 1) + fuel = 17 + (3 + (20 * count + fuel)) by omega]
     erw [call]
     simp only [top_checkCapParentLoop, bind_assoc, pure_bind]
@@ -454,7 +450,7 @@ theorem top_check_cap_parent_loop (count : Nat) (bounded : count ≤ 127) (state
         OracleComp World (BitVec 256)) >>= k)
     funext answer
     change BitVec 256 at answer
-    have afterPC : (paddedCompressionState state answer).pc = 5652 := by
+    have afterPC : (paddedCompressionState state answer).pc = 5552 := by
       rw [padded_compression_pc, pc (by omega)]; rfl
     have next10 : (top_checkCapParentStepState state answer).getReg .x10 =
         BitVec.ofNat 64 (512 + 64 * count) := by
@@ -468,7 +464,7 @@ theorem top_check_cap_parent_loop (count : Nat) (bounded : count ≤ 127) (state
       change BitVec.ofNat 64 (512 + 32 * (count + 1)) - BitVec.ofNat 64 32 = _
       rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) _ _ (by omega) (by omega)]
       congr 1
-    have nextPC : 0 < count → (top_checkCapParentStepState state answer).pc = 5648 := by
+    have nextPC : 0 < count → (top_checkCapParentStepState state answer).pc = 5548 := by
       intro pos
       rw [top_cap_parent_step_pc, ← (top_cap_parent_step_registers state answer).2.1, next12, r22, if_neg]
       intro eq
@@ -497,7 +493,7 @@ theorem top_cap_parent_loop_finished (count : Nat) (bounded : count ≤ 127) (st
     (r22 : state.getReg .x22 = 512)
     (r12 : state.getReg .x12 = BitVec.ofNat 64 (512 + 32 * count))
     (finished : MachineState) (reached : finished ∈ support (top_checkCapParentLoop state count)) :
-    (0 < count → finished.pc = 5664) ∧
+    (0 < count → finished.pc = 5564) ∧
     ∀ reg ∉ [Reg.x10, .x11, .x12, .x14, .x15, .x16, .x17, .x31],
       finished.getReg reg = state.getReg reg := by
   induction count generalizing state with
@@ -589,19 +585,19 @@ theorem top_cap_parent_loop_support_outside (count : Nat) (bounded : count ≤ 1
     omega
 
 def top_checkCapRootSetupState (state : MachineState) : MachineState :=
-  ((state.setReg .x21 (state.getReg .x22 + 32)).setReg .x23 (state.getReg .x26)).setPC 5672
+  ((state.setReg .x21 (state.getReg .x22 + 32)).setReg .x23 (state.getReg .x26)).setPC 5572
 
-theorem top_check_cap_root_setup (state : MachineState) (pc : state.pc = 5664)
+theorem top_check_cap_root_setup (state : MachineState) (pc : state.pc = 5564)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (2 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
+    execute Late.Check.Normal.checkerImage (2 + fuel) state allowCoins =
+      (do let result ← execute Late.Check.Normal.checkerImage fuel
             (top_checkCapRootSetupState state) allowCoins
           return result.charge 2 0) := by
-  let s1 := (state.setReg .x21 (state.getReg .x22 + 32)).setPC 5668
-  have f0 : fetch (submission.image .check) state = some (.base (.ADDI .x21 .x22 32)) := by
-    apply patchedFetch _ 392 _ (by decide) pc; rfl
-  have f1 : fetch (submission.image .check) s1 = some (.base (.ADDI .x23 .x26 0)) := by
-    apply patchedFetch _ 393 _ (by decide) rfl; rfl
+  let s1 := (state.setReg .x21 (state.getReg .x22 + 32)).setPC 5568
+  have f0 : fetch Late.Check.Normal.checkerImage state = some (.base (.ADDI .x21 .x22 32)) := by
+    apply patchedFetch _ 367 _ (by decide) pc; rfl
+  have f1 : fetch Late.Check.Normal.checkerImage s1 = some (.base (.ADDI .x23 .x26 0)) := by
+    apply patchedFetch _ 368 _ (by decide) rfl; rfl
   have st0 : ordinaryStep state (.base (.ADDI .x21 .x22 32)) = some s1 := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s1, pc]
   have st1 : ordinaryStep s1 (.base (.ADDI .x23 .x26 0)) = some (top_checkCapRootSetupState state) := by
@@ -621,12 +617,12 @@ theorem top_cap_parent_loop_heap (oracle : Oracle) (state : MachineState)
     (above : ∀ slot, count < slot → slot < 256 →
       readBuffer state (512 + 32 * slot) 32 = referenceHeap oracle.compression 128 cap slot) :
     ∀ slot, 0 < slot → slot < 256 →
-      readBuffer (checkEvaluation oracle (top_checkCapParentLoop state count)).1 (512 + 32 * slot) 32 =
+      readBuffer (Late.Check.Normal.checkEvaluation oracle (top_checkCapParentLoop state count)).1 (512 + 32 * slot) 32 =
         referenceHeap oracle.compression 128 cap slot := by
   induction count generalizing state with
   | zero =>
     intro slot pos hi
-    rw [top_checkCapParentLoop, check_evaluation_pure]
+    rw [top_checkCapParentLoop, Late.Check.Normal.check_evaluation_pure]
     exact above slot pos hi
   | succ count ih =>
     have r10Nat : (state.getReg .x10).toNat = 512 + 64 * (count + 1) := by
@@ -675,7 +671,7 @@ theorem top_cap_parent_loop_heap (oracle : Oracle) (state : MachineState)
           (512 + 32 * slot) 32 (by omega) (by omega) (Or.inr (by omega))
         exact preserved.trans (above slot (by omega) hi)
     intro slot pos hi
-    rw [top_checkCapParentLoop, check_evaluation_public_bind]
+    rw [top_checkCapParentLoop, Late.Check.Normal.check_evaluation_public_bind]
     exact ih next (by omega) next10 next12 nextAbove slot pos hi
 
 end CommitGolfCandidate.PairCap

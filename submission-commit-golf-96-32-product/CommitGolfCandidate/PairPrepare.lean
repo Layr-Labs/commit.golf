@@ -24,8 +24,8 @@ theorem SameData.atPC {s t : MachineState} (h : SameData s t) (pc : Word) : Same
 def flagL (s : MachineState) (p : Fin 128) := byteAt s (flag (2*p.val))
 def flagR (s : MachineState) (p : Fin 128) := byteAt s (flag (2*p.val+1))
 
-theorem loadFlags (o : Oracle) (s : MachineState) (p : Fin 128) (a : Args p s) (pc : s.pc=5416) :
-    Runs o s (marksState s) 2 0 ∧ SameData s (marksState s) ∧ (marksState s).pc=5424 ∧
+theorem loadFlags (o : Oracle) (s : MachineState) (p : Fin 128) (a : Args p s) (pc : s.pc=5316) :
+    Runs o s (marksState s) 2 0 ∧ SameData s (marksState s) ∧ (marksState s).pc=5324 ∧
     (marksState s).getReg .x6=(flagL s p).zeroExtend 64 ∧ (marksState s).getReg .x7=(flagR s p).zeroExtend 64 := by
   have inc : BitVec.ofNat 64 (flag (2*p.val))+1#64=BitVec.ofNat 64 (flag (2*p.val+1)) := by
     rw [show flag (2*p.val+1)=flag (2*p.val)+1 by unfold flag;omega];exact (BitVec.ofNat_add _ 1).symm

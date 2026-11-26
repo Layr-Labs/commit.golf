@@ -1,6 +1,4 @@
 import CommitGolfCandidate.PairBatchSteps
-import CommitGolfCandidate.CopyRefinement
-import CommitGolfCandidate.WriteMemoryCore
 namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 12000
@@ -33,9 +31,9 @@ theorem bucketAccess (s : MachineState) (u : Fin 256) (idx : s.getReg .x20=BitVe
     rw [ptr,BitVec.add_zero]; exact flagOK u
   all_goals rfl
 
-theorem bucketInfo (s : MachineState) (pc : s.pc=5220) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val) :
+theorem bucketInfo (s : MachineState) (pc : s.pc=5120) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val) :
     let b := bucketState s
-    b.pc=5268 ∧ b.getReg .x22=BitVec.ofNat 64 (flag u.val) ∧ b.getReg .x23=BitVec.ofNat 64 (cell u.val) ∧
+    b.pc=5168 ∧ b.getReg .x22=BitVec.ofNat 64 (flag u.val) ∧ b.getReg .x23=BitVec.ofNat 64 (cell u.val) ∧
     b.getReg .x7=(s.getByte (BitVec.ofNat 64 (flag u.val))).zeroExtend 64 ∧ b.mem=s.mem := by
   have mark : (12288#64 + s.getReg .x20) = BitVec.ofNat 64 (flag u.val) := by
     rw [idx];exact (BitVec.ofNat_add 12288 u.val).symm

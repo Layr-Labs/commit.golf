@@ -1,7 +1,7 @@
 import CommitGolfCandidate.PairFresh
 namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
-set_option maxRecDepth 5100
+set_option maxRecDepth 5000
 set_option maxHeartbeats 20000
 attribute [local irreducible] bucketState tested copied compared lowerHash readBuffer storedAt Runs
 theorem classifyRow (o : Oracle) (input : CheckInput) (n : Nat) (hn : n<128) (s : MachineState)

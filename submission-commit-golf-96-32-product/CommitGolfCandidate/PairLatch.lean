@@ -17,7 +17,7 @@ def AreaQuiet (s t : MachineState) (p : Nat) :=
   ∀ a, a<2^64 → Separate a 1 (sourceRow p) 64 → Separate a 1 (outSlot p) 32 → byteAt t a=byteAt s a
 
 structure PairEffect (H : Compression) (input : CheckInput) (p : Nat) (s t : MachineState) : Prop where
-  pc : t.pc=5568
+  pc : t.pc=5468
   keep : Carries s t
   result : digestAt t (outSlot p)=parentAt H input p
   quiet : AreaQuiet s t p
@@ -32,11 +32,11 @@ theorem areaDigest {s t : MachineState} {p a : Nat} (h : AreaQuiet s t p)
   unfold byteAt at e;rw [e]
 
 def pairLatch (s : MachineState) := execInstrBr (pairNextState s) (.BNE .x27 .x0 8020)
-theorem latchRuns (o : Oracle) (s : MachineState) (pc : s.pc=5568) : Runs o s (pairLatch s) 6 0 := by
+theorem latchRuns (o : Oracle) (s : MachineState) (pc : s.pc=5468) : Runs o s (pairLatch s) 6 0 := by
   apply pureBlockRuns (cyc:=6)
   intro fuel
-  have nextPC : (pairNextState s).pc=5588 := by simp [pairNextState,pairNextOps,execInstrBr,MachineState.setPC,pc]
-  rw [show 6+fuel=5+(fuel+1) by omega,pairNextRun _ pc,edge373 _ nextPC]
+  have nextPC : (pairNextState s).pc=5488 := by simp [pairNextState,pairNextOps,execInstrBr,MachineState.setPC,pc]
+  rw [show 6+fuel=5+(fuel+1) by omega,pairNextRun _ pc,edge348 _ nextPC]
   simp [pairLatch,Execution.charge,← Nat.add_assoc]
 
 theorem latchMemory (s : MachineState) : (pairLatch s).mem=s.mem := by
@@ -46,9 +46,9 @@ theorem ptrAdd (base stride n : Nat) :
     BitVec.ofNat 64 (base+stride*n)+BitVec.ofNat 64 stride=BitVec.ofNat 64 (base+stride*(n+1)) := by
   rw [← BitVec.ofNat_add]; congr 1;ring
 
-theorem latchControl (s : MachineState) (pc : s.pc=5568) (k : Nat) (small : k<128)
+theorem latchControl (s : MachineState) (pc : s.pc=5468) (k : Nat) (small : k<128)
     (rem : s.getReg .x27=BitVec.ofNat 64 (128-k)) :
-    (pairLatch s).pc=(if k+1=128 then 5592 else 5416) ∧
+    (pairLatch s).pc=(if k+1=128 then 5492 else 5316) ∧
     (pairLatch s).regs=(pairNextState s).regs ∧ (pairNextState s).getReg .x27=BitVec.ofNat 64 (128-(k+1)) := by
   have cc : (pairNextState s).getReg .x27=s.getReg .x27+signExtend12 4095 := rfl
   rw [rem,show 128-k=(128-(k+1))+1 by omega,BitVec.ofNat_add,BitVec.add_assoc,
@@ -59,7 +59,7 @@ theorem latchControl (s : MachineState) (pc : s.pc=5568) (k : Nat) (small : k<12
       rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)] at eqn
       change _=0 at eqn;omega
     · rintro eqn;rw [eqn] <;> decide
-  have np : (pairNextState s).pc=5588 := by simp [pairNextState,pairNextOps,execInstrBr,MachineState.setPC,pc]
+  have np : (pairNextState s).pc=5488 := by simp [pairNextState,pairNextOps,execInstrBr,MachineState.setPC,pc]
   refine ⟨?_,?_,cc⟩
   · simp only [pairLatch,execInstrBr,beq_iff_eq,cc,show (pairNextState s).getReg .x0=0#64 from rfl,zero,np]
     split <;> simp_all [MachineState.setPC,signExtend13]

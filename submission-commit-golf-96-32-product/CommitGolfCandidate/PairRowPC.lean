@@ -4,8 +4,8 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 8000
 set_option maxHeartbeats 40000
 
-theorem latchLocation (m : MachineState) (mpc : m.pc=5364) (n : Nat) (hn : n<128) (rem : m.getReg .x27=BitVec.ofNat 64 (128-n)) :
-    (nextEdge m).pc=if n+1=128 then 5376 else 5024 := by
+theorem latchLocation (m : MachineState) (mpc : m.pc=5264) (n : Nat) (hn : n<128) (rem : m.getReg .x27=BitVec.ofNat 64 (128-n)) :
+    (nextEdge m).pc=if n+1=128 then 5276 else 4924 := by
   have values := latchValues m
   have dec := remainingDec m n hn rem
   have test : ∀ i : Fin 128, (BitVec.ofNat 64 (128-(i.val+1)) != 0#64)=decide (i.val+1 ≠ 128) := by decide

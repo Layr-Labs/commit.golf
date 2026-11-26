@@ -1,5 +1,4 @@
 import CommitGolfCandidate.PairStore
-import CommitGolfCandidate.ParentRefinement
 namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 10000
@@ -28,9 +27,9 @@ theorem rowInput (s : MachineState) (a : Nat) (aligned : a%8=0) (gap : readBuffe
   rw [BitVec.toNat_append,BitVec.toNat_append,BitVec.toNat_append,BitVec.toNat_append]
   simp
 
-theorem hashRegisters (s : MachineState) (pc : s.pc = 5508) :
+theorem hashRegisters (s : MachineState) (pc : s.pc = 5408) :
     let ready := hashSetupState s
-    ready.pc=5528 ∧ ready.getReg .x5=0 ∧ ready.getReg .x11=96 ∧ ready.getReg .x13=0 ∧
+    ready.pc=5428 ∧ ready.getReg .x5=0 ∧ ready.getReg .x11=96 ∧ ready.getReg .x13=0 ∧
     ready.getReg .x10=s.getReg .x23 ∧ ready.getReg .x12=s.getReg .x24 ∧ ready.mem=s.mem := by
   simp [hashSetupState,hashSetupOps,execInstrBr,pc,signExtend12,
     MachineState.getReg,MachineState.setPC,MachineState.setReg]
@@ -38,19 +37,19 @@ theorem hashRegisters (s : MachineState) (pc : s.pc = 5508) :
 def hashed (s : MachineState) (answer : Digest) :=
   writeBits (hashSetupState s) (s.getReg .x24) answer
 
-theorem hashRun (s : MachineState) (pc : s.pc = 5508)
+theorem hashRun (s : MachineState) (pc : s.pc = 5408)
     (sv : rangeValid (s.getReg .x23) 96 = true) (sa : (s.getReg .x23).toNat % 8=0)
     (dv : rangeValid (s.getReg .x24) 32 = true) (da : (s.getReg .x24).toNat % 8=0)
     (fuel : Nat) (coins : Bool) :
-    execute (submission.image .check) (6+fuel) s coins =
+    execute Late.Check.Normal.checkerImage (6+fuel) s coins =
       (do let answer ← (liftM (World.query (.inr (.inl (readBuffer s (s.getReg .x23).toNat 96)))) :
                          OracleComp World Digest)
-          let next ← execute (submission.image .check) fuel (hashed s answer) coins
+          let next ← execute Late.Check.Normal.checkerImage fuel (hashed s answer) coins
           return next.charge 13 1) := by
   let ready := hashSetupState s
   obtain ⟨endPC,r5,r11,r13,r10,r12,mem⟩ := hashRegisters s pc
-  have ef : fetch (submission.image .check) ready = some (.base .ECALL) := by
-    apply patchedFetch _ 358 _ (by decide) endPC; rfl
+  have ef : fetch Late.Check.Normal.checkerImage ready = some (.base .ECALL) := by
+    apply patchedFetch _ 333 _ (by decide) endPC; rfl
   have arg : oracleInput ready = some (.inl (readBuffer s (s.getReg .x23).toNat 96)) := by
     simp [ready,oracleInput,r13,r10,r11,r12,sa,da,sv,dv,COMPRESSION_INPUT_LENGTH,COMPRESSION_OUTPUT_LENGTH,
       read_buffer_memory_congr _ _ mem]

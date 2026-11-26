@@ -11,10 +11,10 @@ theorem consistentIfValid (H : Compression) (input : CheckInput) (valid : BatchV
   have parentEq : openingIndex input.positions a/131072=openingIndex input.positions b/131072 := by omega
   have sideEq : (openingIndex input.positions a).testBit 16=(openingIndex input.positions b).testBit 16 := by
     simp only [Nat.testBit_eq_decide_div_mod_eq,show (2:Nat)^16=65536 by decide,same]
-  have e := valid.records a ha
+  have e := pairAgreement valid a ha
   dsimp only at e
   rw [parentEq,sideEq] at e
-  exact Option.some.inj (e.symm.trans (valid.records b hb))
+  exact Option.some.inj (e.symm.trans (pairAgreement valid b hb))
 
 theorem prefixWitness (H : Compression) (input : CheckInput) (n : Nat) (u : Fin 256) (d : Digest)
     (e : prefixNode H input n u=some d) :

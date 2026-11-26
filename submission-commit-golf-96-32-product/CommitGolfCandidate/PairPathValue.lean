@@ -1,9 +1,4 @@
-import CommitGolfCandidate.PairControl
-
-import CommitGolfCandidate.PathRefinement
-
-import CommitGolfCandidate.PairHash
-
+import CommitGolfCandidate.PairPath
 namespace CommitGolfCandidate.PairCap
 
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
@@ -22,9 +17,9 @@ theorem rec_register_set_mem (state : MachineState) (address value : Word) (reg 
     (state.setMem address value).getReg reg = state.getReg reg := by cases reg <;> rfl
 
 theorem rec_path_copy_eq (state : MachineState) (start : Nat) :
-    checkPathCopyState state start =
+    Late.Check.Normal.checkPathCopyState state start =
       rec_copyBlock state (if start = 29 then .x21 else .x25)
-        (if start = 37 then 0 else 32) := rfl
+        (if start = 37 ∨ start = 16 then 0 else 32) := rfl
 
 theorem rec_copy_block_word (state : MachineState) (source : Reg) (offset word : Nat)
     (notTemp : source ≠ .x6) (offsets : offset = 0 ∨ offset = 32) (bounded : word < 4)
@@ -89,6 +84,8 @@ theorem rec_copy_block_preserves (state : MachineState) (source : Reg) (offset a
   apply read_digest_congr _ _ _ aligned
   intro i hi
   exact rec_copy_block_outside state source offset _ notTemp offsets scratch (outside i hi)
+
+attribute [local irreducible] rec_copyBlock
 
 theorem rec_check_path_input (state : MachineState) (address : Nat)
     (scratch : state.getReg .x21 = 256) (pointer : state.getReg .x25 = BitVec.ofNat 64 address)
@@ -166,15 +163,15 @@ theorem rec_check_path_input (state : MachineState) (address : Nat)
 
 theorem rec_check_path_step_digest (state : MachineState) (answer : Digest) :
     readBuffer (rec_checkPathStepState state answer) 256 32 = answer := by
-  change readBuffer (checkCompressionState (rec_checkPathPreparedState state) answer) 256 32 = answer
-  exact check_compression_digest _ _
+  change readBuffer (Late.Check.Normal.checkCompressionState (rec_checkPathPreparedState state) answer) 256 32 = answer
+  exact Late.Check.Normal.check_compression_digest _ _
 
 theorem rec_check_path_step_outside (state : MachineState) (answer : Digest)
     (address : Word) (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i)) :
     (rec_checkPathStepState state answer).getMem address = state.getMem address := by
-  change (checkCompressionState (rec_checkPathPreparedState state) answer).getMem address = _
-  rw [check_compression_memory_outside _ _ _
+  change (Late.Check.Normal.checkCompressionState (rec_checkPathPreparedState state) answer).getMem address = _
+  rw [Late.Check.Normal.check_compression_memory_outside _ _ _
     ⟨outside 0 (by decide), outside 1 (by decide), outside 2 (by decide), outside 3 (by decide)⟩]
   have lower : ∀ i < 4, address ≠ BitVec.ofNat 64 (256+0+8*i) :=
     fun i hi => outside i (by omega)
@@ -204,6 +201,8 @@ theorem rec_low_bit_zero (index : Word) :
   rw [BitVec.and_one_eq_setWidth_ofBool_getLsbD]
   cases h : index.getLsbD 0 <;> simp [BitVec.ofBool]
 
+attribute [local irreducible] rec_checkPathStepState rec_checkPathPreparedState rec_checkPathLoop Late.Check.Normal.checkEvaluation
+
 theorem rec_check_path_loop_digest (oracle : Oracle) (state : MachineState)
     (address : Nat) (path : List (Bool × Digest))
     (scratch : state.getReg .x21 = 256)
@@ -212,10 +211,10 @@ theorem rec_check_path_loop_digest (oracle : Oracle) (state : MachineState)
     (bounded : address + 32 * path.length < 2^64)
     (data : ∀ i (hi : i < path.length), readBuffer state (address + 32*i) 32 = (path[i]'hi).2)
     (directions : ∀ i (hi : i < path.length), (state.getReg .x20).getLsbD i = (path[i]'hi).1) :
-    readBuffer (checkEvaluation oracle (rec_checkPathLoop state path.length)).1 256 32 =
+    readBuffer (Late.Check.Normal.checkEvaluation oracle (rec_checkPathLoop state path.length)).1 256 32 =
       climb oracle.compression (readBuffer state 256 32) path := by
   induction path generalizing state address with
-  | nil => simp [rec_checkPathLoop, check_evaluation_pure, climb]
+  | nil => simp [rec_checkPathLoop, Late.Check.Normal.check_evaluation_pure, climb]
   | cons pair rest ih =>
     rcases pair with ⟨right, sibling⟩
     have input := rec_check_path_input state address scratch pointer aligned above (by simp only [List.length_cons] at bounded; omega)
@@ -255,13 +254,13 @@ theorem rec_check_path_loop_digest (oracle : Oracle) (state : MachineState)
       exact directions (i+1) (by simp; omega)
     have induction := ih next (address+32) nextScratch nextPointer (by omega) (by omega)
       (by simp only [List.length_cons] at bounded; omega) nextData nextDirections
-    rw [List.length_cons, rec_checkPathLoop, check_evaluation_public_bind]
-    change readBuffer (checkEvaluation oracle (rec_checkPathLoop
+    rw [List.length_cons, rec_checkPathLoop, Late.Check.Normal.check_evaluation_public_bind]
+    change readBuffer (Late.Check.Normal.checkEvaluation oracle (rec_checkPathLoop
       (rec_checkPathStepState state (oracle.compression (padInput (readBuffer (rec_checkPathPreparedState state) 256 64))))
       rest.length)).1 256 32 = _
     rw [input]
     cases right <;>
-      change readBuffer (checkEvaluation oracle (rec_checkPathLoop next rest.length)).1 256 32 = _
+      change readBuffer (Late.Check.Normal.checkEvaluation oracle (rec_checkPathLoop next rest.length)).1 256 32 = _
     all_goals
       rw [induction, rec_check_path_step_digest]
       simp only [answer, climb, List.foldl_cons, Bool.false_eq_true, ite_false, ite_true]
@@ -269,16 +268,15 @@ theorem rec_check_path_loop_digest (oracle : Oracle) (state : MachineState)
 theorem rec_check_path_loop_outside (oracle : Oracle) (state : MachineState) (count : Nat)
     (address : Word) (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 8, address ≠ BitVec.ofNat 64 (256+8*i)) :
-    (checkEvaluation oracle (rec_checkPathLoop state count)).1.getMem address = state.getMem address := by
+    (Late.Check.Normal.checkEvaluation oracle (rec_checkPathLoop state count)).1.getMem address = state.getMem address := by
   induction count generalizing state with
-  | zero => simp [rec_checkPathLoop, check_evaluation_pure]
+  | zero => simp [rec_checkPathLoop, Late.Check.Normal.check_evaluation_pure]
   | succ count ih =>
-    rw [rec_checkPathLoop, check_evaluation_public_bind]
+    rw [rec_checkPathLoop, Late.Check.Normal.check_evaluation_public_bind]
     let answer := oracle.compression (padInput (readBuffer (rec_checkPathPreparedState state) 256 64))
-    change (checkEvaluation oracle (rec_checkPathLoop (rec_checkPathStepState state answer) count)).1.getMem address = _
+    change (Late.Check.Normal.checkEvaluation oracle (rec_checkPathLoop (rec_checkPathStepState state answer) count)).1.getMem address = _
     have nextScratch : (rec_checkPathStepState state answer).getReg .x21 = 256 :=
       (rec_check_path_step_registers state answer).2.2.2.trans scratch
     rw [ih _ nextScratch]
     exact rec_check_path_step_outside state answer address scratch outside
-
 end CommitGolfCandidate.PairCap

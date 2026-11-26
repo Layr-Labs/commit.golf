@@ -5,7 +5,7 @@ set_option maxRecDepth 6000
 set_option maxHeartbeats 90000
 attribute [local irreducible] readBuffer copyAt storedAt nextEdge storeState
 
-theorem copyHigh (s : MachineState) (pc : s.pc=5220) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val)
+theorem copyHigh (s : MachineState) (pc : s.pc=5120) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val)
     (w : Word) (high : 32768≤w.toNat) : (copied s).getMem w=s.getMem w := by
   apply copiedWord s pc u idx
   · have b : ∀ u : Fin 256, (alignToDword (BitVec.ofNat 64 (flag u.val))).toNat < 32768 := by decide
@@ -15,7 +15,7 @@ theorem copyHigh (s : MachineState) (pc : s.pc=5220) (u : Fin 256) (idx : s.getR
     have c:=b u;have hj:=j.isLt
     rw [e,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (by omega)] at high;omega
 
-theorem copyGap (s : MachineState) (pc : s.pc=5220) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val) (p : Fin 128) :
+theorem copyGap (s : MachineState) (pc : s.pc=5120) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val) (p : Fin 128) :
     readBuffer (copied s) (16384+96*p.val+64) 32=readBuffer s (16384+96*p.val+64) 32 := by
   apply read_digest_congr _ _ _ (by omega)
   intro j hj;apply copiedWord s pc u idx

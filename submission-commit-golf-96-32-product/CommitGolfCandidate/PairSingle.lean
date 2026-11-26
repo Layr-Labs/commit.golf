@@ -5,13 +5,13 @@ set_option maxRecDepth 8000
 set_option maxHeartbeats 180000
 attribute [local irreducible] readBuffer execute
 
-private theorem fillPC (s : MachineState) (r : Bool) (pc : s.pc=if r then 5436 else 5476) :
-    (filled r s).pc=if r then 5468 else 5508 := by
+private theorem fillPC (s : MachineState) (r : Bool) (pc : s.pc=if r then 5336 else 5376) :
+    (filled r s).pc=if r then 5368 else 5408 := by
   cases r <;> simp [filled,fillRightState,fillLeftState,fillRightOps,fillLeftOps,execInstrBr,MachineState.setPC,pc]
 
 theorem fillOne (o : Oracle) (p : Fin 128) (r : Bool) (m : MachineState) (a : Args p m)
-    (pc : m.pc=if r then 5436 else 5476) :
-    ∃ t,Runs o m t (if r then 9 else 8) 0 ∧ t.pc=5508 ∧ Carries m t ∧
+    (pc : m.pc=if r then 5336 else 5376) :
+    ∃ t,Runs o m t (if r then 9 else 8) 0 ∧ t.pc=5408 ∧ Carries m t ∧
       Written m t (sourceRow p.val+(if r then 32 else 0)) (digestAt m (inSlot p.val)) := by
   let z:=filled r m
   have lit := fillData m p a r
@@ -19,12 +19,12 @@ theorem fillOne (o : Oracle) (p : Fin 128) (r : Bool) (m : MachineState) (a : Ar
   have atEnd:=fillPC m r pc
   cases r
   · exact ⟨z,pureBlockRuns (fun fuel=>fillLeftRun m pc safe.1 fuel false),atEnd,lit⟩
-  · exact ⟨z.setPC 5508,runs_trans (pureBlockRuns (fun fuel=>fillRightRun m pc safe.2.1 fuel false)) (jump318 o z atEnd),
-      rfl,carriesTrans lit.1 (carriesPC _ _),⟨(read_buffer_memory_congr (z.setPC 5508) z rfl _ _).trans lit.2.atDst,
-      fun x bx away => (byteMem (s:=z) (t:=z.setPC 5508) rfl x).trans (lit.2.outside x bx away)⟩⟩
+  · exact ⟨z.setPC 5408,runs_trans (pureBlockRuns (fun fuel=>fillRightRun m pc safe.2.1 fuel false)) (jump318 o z atEnd),
+      rfl,carriesTrans lit.1 (carriesPC _ _),⟨(read_buffer_memory_congr (z.setPC 5408) z rfl _ _).trans lit.2.atDst,
+      fun x bx away => (byteMem (s:=z) (t:=z.setPC 5408) rfl x).trans (lit.2.outside x bx away)⟩⟩
 
 theorem singlePrepared (o : Oracle) (input : CheckInput) (p : Fin 128) (r : Bool) (s m : MachineState)
-    (same : SameData s m) (a : Args p s) (pc : m.pc=if r then 5436 else 5476)
+    (same : SameData s m) (a : Args p s) (pc : m.pc=if r then 5336 else 5376)
     (gap : digestAt s (sourceRow p.val+64)=0)
     (formula : parentAt o.compression input p.val =
       (if r then combine o.compression (digestAt s (sourceRow p.val)) (digestAt s (inSlot p.val))
@@ -52,7 +52,7 @@ theorem singlePrepared (o : Oracle) (input : CheckInput) (p : Fin 128) (r : Bool
       exact parentValue o t p _ _ low high g
 
 theorem copySupplied (o : Oracle) (input : CheckInput) (p : Fin 128) (s m : MachineState) (same : SameData s m)
-    (a : Args p s) (pc : m.pc=5536)
+    (a : Args p s) (pc : m.pc=5436)
     (value : digestAt s (inSlot p.val)=parentAt o.compression input p.val) :
     ∃ z, Runs o m z 8 0 ∧ PairEffect o.compression input p.val s z := by
   let z:=useParentState m

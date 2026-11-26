@@ -7,7 +7,7 @@ set_option maxRecDepth 8000
 set_option maxHeartbeats 40000
 
 structure PairCursor (n : Nat) (s : MachineState) : Prop where
-  pc : s.pc=if n=128 then 5592 else 5416
+  pc : s.pc=if n=128 then 5492 else 5316
   slots : s.getReg .x19=BitVec.ofNat 64 (inSlot n)
   marks : s.getReg .x22=BitVec.ofNat 64 (flag (2*n))
   source : s.getReg .x23=BitVec.ofNat 64 (sourceRow n)

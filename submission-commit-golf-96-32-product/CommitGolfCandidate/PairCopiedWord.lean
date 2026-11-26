@@ -16,7 +16,7 @@ private theorem byteGet (s : MachineState) (dst w : Word) (h : w≠alignToDword 
 private theorem copiedDef (s : MachineState) : copied s = nextEdge (storeState (tested s)) := rfl
 attribute [local irreducible] MachineState.getMem storedAt nextEdge storeState copyAt tested copied
 
-theorem copiedWord (s : MachineState) (pc : s.pc=5220) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val)
+theorem copiedWord (s : MachineState) (pc : s.pc=5120) (u : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val)
     (w : Word) (flagAway : w ≠ alignToDword (BitVec.ofNat 64 (flag u.val)))
     (cellAway : ∀ j : Fin 4, w ≠ BitVec.ofNat 64 (cell u.val+8*j.val)) :
     (copied s).getMem w=s.getMem w := by

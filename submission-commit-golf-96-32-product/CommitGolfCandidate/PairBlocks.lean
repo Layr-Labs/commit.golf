@@ -23,13 +23,13 @@ private theorem simplePC (s : MachineState) (op : Instr) (isSimple : simple op) 
     (execInstrBr s op).pc = s.pc + 4 := by
   cases op <;> simp [simple] at isSimple <;> rfl
 
-theorem plainBlock (ops : List Instr) (start : Nat) (within : start+ops.length≤409)
+theorem plainBlock (ops : List Instr) (start : Nat) (within : start+ops.length≤384)
     (plain : ∀ i : Fin ops.length, simple ops[i])
-    (enc : ∀ i : Fin ops.length, ((submission.image .check).code[start+i.val]?).bind decodeInstruction =
+    (enc : ∀ i : Fin ops.length, (Late.Check.Normal.checkerImage.code[start+i.val]?).bind decodeInstruction =
       some (.base ops[i])) (s : MachineState) (pc : s.pc=BitVec.ofNat 64 (4096+4*start))
     (safe : safeSteps ops s) (fuel : Nat) (coins : Bool) :
-    execute (submission.image .check) (ops.length+fuel) s coins =
-    (do let next ← execute (submission.image .check) fuel (ops.foldl execInstrBr s) coins
+    execute Late.Check.Normal.checkerImage (ops.length+fuel) s coins =
+    (do let next ← execute Late.Check.Normal.checkerImage fuel (ops.foldl execInstrBr s) coins
         return next.charge ops.length 0) := by
   have succ (i : Nat) (hi : i<ops.length) : stepPrefix ops s (i+1) = execInstrBr (stepPrefix ops s i) ops[i] := by
     unfold stepPrefix; rw [List.take_succ_eq_append_getElem hi, List.foldl_append]; rfl
@@ -42,7 +42,7 @@ theorem plainBlock (ops : List Instr) (start : Nat) (within : start+ops.length�
       rw [succ i (by omega),simplePC _ _ pl,ih (by omega),
         show 4096+4*(start+(i+1)) = (4096+4*(start+i))+4 by omega]
       exact (BitVec.ofNat_add (4096+4*(start+i)) 4).symm
-  have run := execute_unit_steps (submission.image .check) ops.length fuel (stepPrefix ops s) coins (by
+  have run := execute_unit_steps Late.Check.Normal.checkerImage ops.length fuel (stepPrefix ops s) coins (by
     intro i hi
     refine ⟨.base ops[i],patchedFetch _ _ _ (by omega) (pcs i (by omega)) (enc ⟨i,hi⟩),?_,?_⟩
     · rw [succ i hi]; exact (simpleStep _ _ (plain ⟨i,hi⟩) (safe ⟨i,hi⟩)).1

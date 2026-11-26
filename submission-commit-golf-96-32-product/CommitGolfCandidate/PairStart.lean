@@ -1,39 +1,38 @@
-import CommitGolfCandidate.PairHeader
 import CommitGolfCandidate.PairProgress
-import CommitGolfCandidate.BufferRefinement
+import CommitGolfCandidate.LateBatchEntry
 namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 10000
 set_option maxHeartbeats 200000
 
 private theorem initialZero (input : CheckInput) (a : Nat) (low : a<32768) :
-    (submission.initialState .check input).getByte (BitVec.ofNat 64 a) = 0 := by
-  rw [initial_input_byte submission .check input a (by omega)]
-  have b0 : ¬ submission.layout.commitment ≤ a := by change ¬ 4294971392 ≤ a; omega
-  have b1 : ¬ submission.layout.indices ≤ a := by change ¬ 6442455072 ≤ a; omega
-  have b2 : ¬ submission.layout.values ≤ a := by change ¬ 6576672800 ≤ a; omega
-  have b3 : ¬ submission.layout.proof ≤ a := by change ¬ 10871640096 ≤ a; omega
-  have b4 : ¬ dataBase (submission.image .check) ≤ a := by change ¬ 68719476736 ≤ a; omega
+    (Late.submission.initialState .check input).getByte (BitVec.ofNat 64 a) = 0 := by
+  rw [initial_input_byte Late.submission .check input a (by omega)]
+  have b0 : ¬ Late.submission.layout.commitment ≤ a := by change ¬ 4294971392 ≤ a; omega
+  have b1 : ¬ Late.submission.layout.indices ≤ a := by change ¬ 7650414624 ≤ a; omega
+  have b2 : ¬ Late.submission.layout.values ≤ a := by change ¬ 7784632352 ≤ a; omega
+  have b3 : ¬ Late.submission.layout.proof ≤ a := by change ¬ 12079599648 ≤ a; omega
+  have b4 : ¬ dataBase (Late.submission.image .check) ≤ a := by change ¬ 68719476736 ≤ a; omega
   simp [inputByte,Submission.inputBuffers,fixedBuffer,positionsBuffer,valuesBuffer,b0,b1,b2,b3,b4]
 
-attribute [local irreducible] initialRows readBuffer
+attribute [local irreducible] Late.Check.Micro.initialRows readBuffer
 theorem startInvariant (o : Oracle) (input : CheckInput) (b : input.positions.card=BATCH)
-    (length : input.proof.length=71680) :
-    RecordInvariant o.compression input 0 (initialRows (submission.initialState .check input)) := by
-  let s := submission.initialState .check input
+    (length : input.proof.length=72704) :
+    RecordInvariant o.compression input 0 (Late.Check.Micro.initialRows (Late.submission.initialState .check input)) := by
+  let s := Late.submission.initialState .check input
   have s16 : s.getReg .x16 = 128 := by change BitVec.ofNat 64 input.positions.card=128; rw [b];rfl
-  have s17 : s.getReg .x17 = 71680 := by change BitVec.ofNat 64 input.proof.length=71680; rw [length];rfl
-  obtain ⟨pc,rem,idx,v,pf,rt,slots,scratch,depth,mem⟩ := rowsRegisters s s16 s17
+  have s17 : s.getReg .x17 = 72704 := by change BitVec.ofNat 64 input.proof.length=72704; rw [length];rfl
+  obtain ⟨pc,rem,idx,v,pf,rt,slots,scratch,depth,mem⟩ := Late.Check.Micro.batchRegisters s (by rfl) s16 s17
   refine ⟨by decide,idx,v,pf,rem,scratch,depth,slots,rt,pc,?_,?_,?_,?_⟩
   · intro u
-    have mm (a : Word) : (initialRows s).getByte a = s.getByte a := by
+    have mm (a : Word) : (Late.Check.Micro.initialRows s).getByte a = s.getByte a := by
       simp only [MachineState.getByte,MachineState.getMem,mem]
     unfold storedAt
     rw [mm, initialZero input _ (by dsimp [flag]; have := u.isLt; omega)]
     rfl
   · intro r hr; omega
-  · intro a _
-    change (initialRows s).mem a = s.mem a
+  · intro a _ _ _
+    change (Late.Check.Micro.initialRows s).mem a = s.mem a
     exact congrArg (fun z : Word → Word => z a) mem
   · intro p
     rw [read_buffer_memory_congr _ _ mem]

@@ -5,7 +5,7 @@ namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 6000
 set_option maxHeartbeats 25000
-attribute [local irreducible] execute checkEvaluation readBuffer storedAt lowerHash
+attribute [local irreducible] execute Late.Check.Normal.checkEvaluation readBuffer storedAt lowerHash
 
 structure TailEvidence (fresh : Bool) (zero matchOK writeRun compareRun : Prop)
     (old : Option Digest) (current : Digest) : Prop where

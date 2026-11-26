@@ -1,7 +1,8 @@
 import CommitGolfCandidate.HeapModel
 
-/-! Memory-independent description of the honest Merkle tree and the hybrid Merkle tree
-used in the 128-bit tagged-salt hiding proof. -/
+/-! A memory-independent description of the honest Merkle tree. The hiding proof
+can reason about salted leaves and their ancestors; machine refinement must still
+identify the emitted root and proof with this tree. -/
 namespace CommitGolfCandidate
 open CommitGolf
 
@@ -31,7 +32,8 @@ theorem reference_heap_leaf (compress : Compression) (leafCount : Nat)
   congr 1
   omega
 
-/-- Parent consistency and leaf contents uniquely determine every used heap slot. -/
+/-- Parent consistency and leaf contents uniquely determine every used heap slot.
+No injectivity or random-oracle property of compression is required. -/
 theorem heap_eq_reference (compress : Compression) (leafCount : Nat)
     (leaf heap : Nat → Digest)
     (parents : ∀ node, 0 < node → node < leafCount →
@@ -52,36 +54,20 @@ theorem heap_eq_reference (compress : Compression) (leafCount : Nat)
 termination_by 2*leafCount-node
 decreasing_by all_goals omega
 
-/-- The mathematical heap for this submission, using position-tagged 128-bit salts. -/
-def saltedHeap (compress : Compression) (message : Message) (salt : Index → Salt) :
+/-- The mathematical heap for this submission, using exactly its four-block
+salted leaf hash and the same compression function for all internal nodes. -/
+def saltedHeap (compress : Compression) (message : Message) (salt : Index → Digest) :
     Nat → Digest :=
   referenceHeap compress LENGTH fun index =>
     if inside : index < LENGTH then
-      leafDigest compress ⟨index, inside⟩ (salt ⟨index, inside⟩) (message ⟨index, inside⟩)
+      leafDigest compress (salt ⟨index, inside⟩) (message ⟨index, inside⟩)
     else 0
 
 theorem salted_heap_leaf (compress : Compression) (message : Message)
-    (salt : Index → Salt) (index : Index) :
+    (salt : Index → Digest) (index : Index) :
     saltedHeap compress message salt (LENGTH+index.val) =
-      leafDigest compress index (salt index) (message index) := by
+      leafDigest compress (salt index) (message index) := by
   rw [saltedHeap, reference_heap_leaf _ _ _ _ index.isLt, dif_pos index.isLt]
-
-/-- Hybrid leaf digest: opened leaves hash honestly with their 16-byte salt and leaf tag;
-unopened leaves replace Call 0's output with an independent 256-bit `freshInit index`. -/
-def hybridLeafDigest (compress : Compression) (positions : Positions) (message : Message)
-    (salt : Index → Salt) (freshInit : Index → Digest) (index : Index) : Digest :=
-  if index ∈ positions then
-    leafDigest compress index (salt index) (message index)
-  else
-    leafDigestFromInit compress (freshInit index) (message index)
-
-/-- The hybrid Merkle heap used between `Real(m)` and `Hybrid(m)`. -/
-def hybridHeap (compress : Compression) (positions : Positions) (message : Message)
-    (salt : Index → Salt) (freshInit : Index → Digest) : Nat → Digest :=
-  referenceHeap compress LENGTH fun index =>
-    if inside : index < LENGTH then
-      hybridLeafDigest compress positions message salt freshInit ⟨index, inside⟩
-    else 0
 
 /-- Every sibling read by a valid authentication path is a used heap slot. -/
 theorem heap_sibling_bounds (leafCount node : Nat) (positive : 2 ≤ node)

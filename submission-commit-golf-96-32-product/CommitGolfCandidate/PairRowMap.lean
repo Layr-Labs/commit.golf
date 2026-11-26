@@ -5,7 +5,7 @@ set_option maxRecDepth 6000
 set_option maxHeartbeats 90000
 attribute [local irreducible] readBuffer copyAt storedAt nextEdge storeState
 
-theorem copiedMap (s : MachineState) (pc : s.pc=5220) (u v : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val)
+theorem copiedMap (s : MachineState) (pc : s.pc=5120) (u v : Fin 256) (idx : s.getReg .x20=BitVec.ofNat 64 u.val)
     (hs : s.getReg .x21=256) :
     storedAt (copied s) v = if v=u then some (readBuffer s 256 32) else storedAt s v := by
   have info := testInfo s pc u idx

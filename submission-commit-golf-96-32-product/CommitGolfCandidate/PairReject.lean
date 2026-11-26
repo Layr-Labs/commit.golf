@@ -5,7 +5,7 @@ namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 6000
 set_option maxHeartbeats 250000
-attribute [local irreducible] execute checkEvaluation readBuffer storedAt lowerHash
+attribute [local irreducible] execute Late.Check.Normal.checkEvaluation readBuffer storedAt lowerHash
 
 def Rejects (o : Oracle) (s : MachineState) (steps calls : Nat) := ∀ fuel, obs o (steps+fuel) s=(.failure,calls)
 
@@ -43,16 +43,16 @@ theorem duplicateReject (o : Oracle) (input : CheckInput) (n : Nat) (s : Machine
     (seen : (bucketState s).getReg .x7≠0) (neq : ¬equalWords (tested s)) : Rejects o s 28 0 := by
   let b := bucketState s
   have pc := (bucketInfo s h.pc _ h.index).1
-  have pass : (tested s).pc=5272 := by
+  have pass : (tested s).pc=5172 := by
     unfold tested afterTest;dsimp only [execInstrBr];simp only [beq_iff_eq,show (bucketState s).getReg .x0=0#64 from rfl]
-    rw [if_neg (show (bucketState s).getReg .x7≠0#64 from seen)]; change (bucketState s).pc+4=5272;rw [pc];rfl
+    rw [if_neg (show (bucketState s).getReg .x7≠0#64 from seen)]; change (bucketState s).pc+4=5172;rw [pc];rfl
   have access := compareAccess _ _ _ _ h
   intro fuel
-  obtain ⟨result,run,bad,_,q⟩ := top_check_root_rejects (tested s) 294 (Or.inl rfl) pass access.1 access.2 neq fuel false
+  obtain ⟨result,run,bad,_,q⟩ := top_check_root_rejects (tested s) 269 (Or.inl rfl) pass access.1 access.2 neq fuel false
   unfold obs
-  rw [show 28+fuel=12+((15+fuel)+1) by omega,bucketRun _ h.pc (bucketAccess s _ h.index),edge293 b pc]
-  have run' : execute (submission.image .check) (15+fuel) (execInstrBr b (.BEQ .x7 .x0 56)) false=pure result := run
+  rw [show 28+fuel=12+((15+fuel)+1) by omega,bucketRun _ h.pc (bucketAccess s _ h.index),edge268 b pc]
+  have run' : execute Late.Check.Normal.checkerImage (15+fuel) (execInstrBr b (.BEQ .x7 .x0 56)) false=pure result := run
   rw [run']
-  simp only [pure_bind,check_evaluation_pure,Execution.charge,bad]
+  simp only [pure_bind,Late.Check.Normal.check_evaluation_pure,Execution.charge,bad]
 
 end CommitGolfCandidate.PairCap.Batch

@@ -3,14 +3,14 @@ namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 8000
 set_option maxHeartbeats 30000
-attribute [local irreducible] readBuffer rowHash storedAt prefixNode lowerHash
+attribute [local irreducible] readBuffer storedAt prefixNode lowerHash
 
 theorem finishInvariant (o : Oracle) (input : CheckInput) (n : Nat) (hn : n<128)
     (m : MachineState) (h : HashedFrame o input n m) (fresh : Bool) (passed : TailOK o input n m fresh)
     (tab : ∀ v, storedAt m v=prefixNode o.compression input n v)
     (consistent : ∀ r<n, ∀ u : Fin 256, openingIndex input.positions r/65536=u.val →
       prefixNode o.compression input n u=some (lowerHash o.compression input r))
-    (high : ∀ w : Word,32768≤w.toNat → m.getMem w=(submission.initialState .check input).getMem w)
+    (high : ∀ w : Word,32768≤w.toNat → w.toNat%8=0 → w.toNat+8≤MEMORY_BYTES → m.getMem w=(Late.submission.initialState .check input).getMem w)
     (gap : ∀ p : Fin 128,readBuffer m (16384+96*p.val+64) 32=0) :
     RecordInvariant o.compression input (n+1) (finishRow fresh m) := by
   let u := rowBucket input n
@@ -33,10 +33,10 @@ theorem finishInvariant (o : Oracle) (input : CheckInput) (n : Nat) (hn : n<128)
       have prior : storedAt m u=some (lowerHash o.compression input n) := whenSeen passed.prior dup
       exact (mapCongr (compared m) m (comparedMem m h.pc u h.index) v).trans
         ((tab v).trans (prefixSeen _ input n u ix _ ((tab u).symm.trans prior) v).symm)
-  · intro w hw
-    exact rowProperty m fresh (fun t=>t.getMem w=(submission.initialState .check input).getMem w)
-      (fun _=>(copyHigh m h.pc u h.index w hw).trans (high w hw))
-      (fun _=>(wordAfter (s:=m) (t:=compared m) (comparedMem m h.pc u h.index) w).trans (high w hw))
+  · intro w hw al hb
+    exact rowProperty m fresh (fun t=>t.getMem w=(Late.submission.initialState .check input).getMem w)
+      (fun _=>(copyHigh m h.pc u h.index w hw).trans (high w hw al hb))
+      (fun _=>(wordAfter (s:=m) (t:=compared m) (comparedMem m h.pc u h.index) w).trans (high w hw al hb))
   · intro p
     let a:=16384+96*p.val+64
     exact rowProperty m fresh (fun t=>readBuffer t a 32=0)

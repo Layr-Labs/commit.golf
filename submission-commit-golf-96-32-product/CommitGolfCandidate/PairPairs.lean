@@ -11,7 +11,7 @@ def pairCalls (s : MachineState) (p : Fin 128) : Nat := if flagL s p=0 ∧ flagR
 theorem pairBody (o : Oracle) (input : CheckInput) (p : Fin 128) (s : MachineState)
     (inv : PairInvariant o.compression input p.val s) :
     ∃ t k,k≤20 ∧ Runs o s t k (pairCalls s p) ∧ PairEffect o.compression input p.val s t := by
-  have pc : s.pc=5416 := by rw [inv.pc,if_neg (Nat.ne_of_lt p.isLt)]
+  have pc : s.pc=5316 := by rw [inv.pc,if_neg (Nat.ne_of_lt p.isLt)]
   have a : Args p s := ⟨inv.slots,inv.marks,inv.source,inv.dest⟩
   have l := (inv.left p le_rfl).symm
   have r := (inv.right p le_rfl).symm

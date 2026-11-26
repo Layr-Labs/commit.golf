@@ -1,7 +1,7 @@
 import CommitGolfCandidate.PairLatch
 namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
-set_option maxRecDepth 5100
+set_option maxRecDepth 5000
 set_option maxHeartbeats 90000
 theorem flagSpan (p : Nat) (hp : p<128) (u : Fin 256) :
     flag u.val<2^64 ∧ Separate (flag u.val) 1 (sourceRow p) 64 ∧ Separate (flag u.val) 1 (outSlot p) 32 := by

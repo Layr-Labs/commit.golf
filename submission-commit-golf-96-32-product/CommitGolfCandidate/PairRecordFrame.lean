@@ -4,7 +4,7 @@ namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 8000
 set_option maxHeartbeats 35000
-attribute [local irreducible] readBuffer rowHash storedAt prefixNode lowerHash
+attribute [local irreducible] readBuffer storedAt prefixNode lowerHash
 
 theorem mapCongr (s t : MachineState) (eqn : s.mem=t.mem) (u : Fin 256) :
     storedAt s u=storedAt t u := by
@@ -39,7 +39,7 @@ theorem whenSeen {α : Type} {v : Option α} {current : α} {b : Bool}
 theorem recordFrom (H : Compression) (input : CheckInput) (n : Nat) (bound : n≤128) (s : MachineState)
     (reg : NextRegs n s) (tab : ∀ u,storedAt s u=prefixNode H input n u)
     (agree : ∀ r<n,∀ u : Fin 256, openingIndex input.positions r/65536=u.val → prefixNode H input n u=some (lowerHash H input r))
-    (high : ∀ w : Word,32768≤w.toNat → s.getMem w=(submission.initialState .check input).getMem w)
+    (high : ∀ w : Word,32768≤w.toNat → w.toNat%8=0 → w.toNat+8≤MEMORY_BYTES → s.getMem w=(Late.submission.initialState .check input).getMem w)
     (gap : ∀ p : Fin 128,readBuffer s (16384+96*p.val+64) 32=0) : RecordInvariant H input n s :=
   ⟨bound,reg.ip,reg.vp,reg.pp,reg.remaining,reg.scratch,reg.depth,reg.slots,reg.root,reg.pc,tab,agree,high,gap⟩
 end CommitGolfCandidate.PairCap.Batch

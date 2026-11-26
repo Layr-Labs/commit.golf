@@ -5,15 +5,15 @@ namespace CommitGolfCandidate.PairCap.Batch
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 set_option maxRecDepth 6000
 set_option maxHeartbeats 250000
-attribute [local irreducible] execute checkEvaluation readBuffer storedAt lowerHash
+attribute [local irreducible] execute Late.Check.Normal.checkEvaluation readBuffer storedAt lowerHash
 
-theorem freshRuntime (o : Oracle) (s : MachineState) (pc : s.pc=5220) (u : Fin 256)
+theorem freshRuntime (o : Oracle) (s : MachineState) (pc : s.pc=5120) (u : Fin 256)
     (idx : s.getReg .x20=BitVec.ofNat 64 u.val) (flagZ : (bucketState s).getReg .x7=0)
     (safe : safeSteps storeOps (tested s)) : Runs o s (copied s) 26 0 := by
   unfold tested at safe
   exact pureBlockRuns (s:=s) (t:=copied s) (n:=26) (cyc:=26)
     (fun fuel=>firstWrite s pc u idx flagZ safe fuel false)
-theorem seenRuntime (o : Oracle) (s : MachineState) (pc : s.pc=5220) (u : Fin 256)
+theorem seenRuntime (o : Oracle) (s : MachineState) (pc : s.pc=5120) (u : Fin 256)
     (idx : s.getReg .x20=BitVec.ofNat 64 u.val) (flagNZ : (bucketState s).getReg .x7≠0)
     (a : ∀ j<4,accessValid ((tested s).getReg .x21+BitVec.ofNat 64 (8*j)) 8)
     (b : ∀ j<4,accessValid ((tested s).getReg .x23+BitVec.ofNat 64 (8*j)) 8)

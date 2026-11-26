@@ -5,14 +5,14 @@ set_option maxRecDepth 8000
 set_option maxHeartbeats 40000
 
 structure NextRegs (n : Nat) (s : MachineState) : Prop where
-  pc : s.pc=if n=128 then 5376 else 5024
-  ip : s.getReg .x24=BitVec.ofNat 64 (6442455072+8*n)
-  vp : s.getReg .x8=BitVec.ofNat 64 (6576672800+256*n)
-  pp : s.getReg .x25=BitVec.ofNat 64 (10871640096+528*n)
+  pc : s.pc=if n=128 then 5276 else 4924
+  ip : s.getReg .x24=BitVec.ofNat 64 (7650414624+8*n)
+  vp : s.getReg .x8=BitVec.ofNat 64 (7784632352+256*n)
+  pp : s.getReg .x25=BitVec.ofNat 64 (12079599648+536*n)
   remaining : s.getReg .x27=BitVec.ofNat 64 (128-n)
   scratch : s.getReg .x21=256
   depth : s.getReg .x30=16
-  slots : s.getReg .x19=10871707680
+  slots : s.getReg .x19=12079668256
   root : s.getReg .x26=4294971392
 
 theorem remainingDec (m : MachineState) (n : Nat) (hn : n<128) (rem : m.getReg .x27=BitVec.ofNat 64 (128-n)) :
