@@ -35,32 +35,32 @@ theorem compression_answer_programming (permutation : Perm) (input : BitVec COMP
 
 /-- Exact intermediate game: a uniform hidden salt and an independent digest,
 with the digest programmed at the corresponding salted compression input. -/
-theorem salted_compression_programming (permutation : Perm) (block : LeafBlock)
+theorem salted_compression_programming (permutation : Perm) (block : Digest)
     {α : Type} (next : Digest → OracleComp World α) :
     𝒟[do let salt ← $ᵗ Digest
          let answer ← $ᵗ Digest
          let table ← $ᵗ Compression
-         fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput salt block)) answer)
+         fixedOracleRun (programCompression ⟨table, permutation⟩ ((padInput (block ++ salt))) answer)
            (next answer)] =
     𝒟[do let table ← $ᵗ Compression
          let salt ← $ᵗ Digest
-         fixedOracleRun ⟨table, permutation⟩ (next (absorb table salt block))] := by
+         fixedOracleRun ⟨table, permutation⟩ (next (combine table salt block))] := by
   trans 𝒟[do let salt ← $ᵗ Digest
               let table ← $ᵗ Compression
-              fixedOracleRun ⟨table, permutation⟩ (next (absorb table salt block))]
+              fixedOracleRun ⟨table, permutation⟩ (next (combine table salt block))]
   · exact _root_.evalDist_bind_congr _ _ _ (fun salt =>
-      compression_answer_programming permutation ((leafInput salt block)) next)
+      compression_answer_programming permutation ((padInput (block ++ salt))) next)
   · exact distribution_bind_comm _ _ _
 
 /-- A salted compression output hides its block against a bounded adaptive
 continuation, at cost q/2^256. The salt is private; the output is public. -/
-theorem salted_compression_distance (permutation : Perm) (block : LeafBlock)
+theorem salted_compression_distance (permutation : Perm) (block : Digest)
     {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
     measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
-          fixedOracleRun ⟨table, permutation⟩ (next (absorb table salt block)))
+          fixedOracleRun ⟨table, permutation⟩ (next (combine table salt block)))
       (do let table ← $ᵗ Compression
           let answer ← $ᵗ Digest
           fixedOracleRun ⟨table, permutation⟩ (next answer)) ≤
@@ -74,7 +74,7 @@ theorem salted_compression_distance (permutation : Perm) (block : LeafBlock)
     let answer ← $ᵗ Digest
     let table ← $ᵗ Compression
     let salt ← $ᵗ Digest
-    fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput salt block)) answer)
+    fixedOracleRun (programCompression ⟨table, permutation⟩ ((padInput (block ++ salt))) answer)
       (next answer)
   have distance : measureTVDist ideal programmed ≤ ((budget : ENNReal) / 2^256).toReal := by
     apply measureTVDist_bind_left_le_of_forall_le ($ᵗ Digest) _ _ (by positivity)
@@ -100,17 +100,17 @@ theorem salted_compression_distance (permutation : Perm) (block : LeafBlock)
   have programmed_eq : 𝒟[programmed] =
       𝒟[do let table ← $ᵗ Compression
            let salt ← $ᵗ Digest
-           fixedOracleRun ⟨table, permutation⟩ (next (absorb table salt block))] := by
+           fixedOracleRun ⟨table, permutation⟩ (next (combine table salt block))] := by
     unfold programmed
     trans 𝒟[do let salt ← $ᵗ Digest
                 let answer ← $ᵗ Digest
                 let table ← $ᵗ Compression
-                fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput salt block)) answer)
+                fixedOracleRun (programCompression ⟨table, permutation⟩ ((padInput (block ++ salt))) answer)
                   (next answer)]
     · trans 𝒟[do let answer ← $ᵗ Digest
                   let salt ← $ᵗ Digest
                   let table ← $ᵗ Compression
-                  fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput salt block)) answer)
+                  fixedOracleRun (programCompression ⟨table, permutation⟩ ((padInput (block ++ salt))) answer)
                     (next answer)]
       · exact _root_.evalDist_bind_congr _ _ _ (fun _ => distribution_bind_comm _ _ _)
       · exact distribution_bind_comm _ _ _

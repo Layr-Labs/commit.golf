@@ -1,5 +1,4 @@
 import CommitGolfCandidate.Execution
-import CommitGolfCandidate.HeapLayout
 
 /-! Control-flow proofs for the concrete opening image. Instruction addresses below
 are checked against the submitted bytes, rather than a separate assembly model. -/
@@ -7,7 +6,7 @@ namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 private theorem opening_fetch (state : MachineState) (index : Nat) (instruction : Instr)
-    (indexBound : index < 101) (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * index))
+    (indexBound : index < 62) (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * index))
     (decoded : ((submission.image .opening).code[index]?).bind decodeInstruction =
       some (.base instruction)) :
     fetch (submission.image .opening) state = some (.base instruction) := by
@@ -26,7 +25,7 @@ private def openingSetupInstructions : List Instr :=
   [.ADDI .x9 .x12 0, .ADDI .x24 .x13 0, .ADDI .x25 .x15 0, .ADDI .x27 .x16 0,
    .ADDI .x19 .x0 0, .SLLI .x19 .x19 11, .ADDI .x19 .x19 4,
    .SLLI .x19 .x19 11, .ADDI .x19 .x19 0, .SLLI .x19 .x19 11, .ADDI .x19 .x19 0,
-   .ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 384,
+   .ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 256,
    .SLLI .x6 .x6 11, .ADDI .x6 .x6 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 0,
    .ADD .x18 .x9 .x6]
 
@@ -50,11 +49,10 @@ private theorem opening_setup_prefix (state : MachineState) (pc : state.pc = 409
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-/-- State after initial pointer setup and empty-opening branch (`open-done` at 4328,
-or depth selection at 4176). -/
+/-- State at the first position, or at the return block for an empty opening. -/
 def openingInitializedState (state : MachineState) : MachineState :=
   (openingSetupPrefix state 19).setPC
-    (if state.getReg .x16 = 0 then 4328 else 4176)
+    (if state.getReg .x16 = 0 then 4316 else 4176)
 
 /-- Setup copies the ABI pointers and count, and computes the heap size and salt base.
 The original position count and all input memory are preserved. -/
@@ -64,7 +62,7 @@ theorem opening_setup_registers (state : MachineState) :
     (openingInitializedState state).getReg .x25 = state.getReg .x15 ∧
     (openingInitializedState state).getReg .x27 = state.getReg .x16 ∧
     (openingInitializedState state).getReg .x19 = 16777216 ∧
-    (openingInitializedState state).getReg .x18 = state.getReg .x12 + 1610612736 ∧
+    (openingInitializedState state).getReg .x18 = state.getReg .x12 + 1073741824 ∧
     (openingInitializedState state).getReg .x16 = state.getReg .x16 ∧
     (openingInitializedState state).mem = state.mem := by
   dsimp only [openingInitializedState, openingSetupPrefix, openingSetupInstructions,
@@ -86,10 +84,10 @@ theorem opening_setup (state : MachineState) (pc : state.pc = 4096)
     simpa only [openingInitializedState, MachineState.getReg_setPC] using
       (opening_setup_registers state).2.2.2.1
   have fetched : fetch (submission.image .opening) ready =
-      some (.base (.BEQ .x27 .x0 156)) := by
+      some (.base (.BEQ .x27 .x0 144)) := by
     apply opening_fetch ready 19 _ (by decide) readyPC
     rfl
-  have stepped : ordinaryStep ready (.base (.BEQ .x27 .x0 156)) =
+  have stepped : ordinaryStep ready (.base (.BEQ .x27 .x0 144)) =
       some (openingInitializedState state) := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr]
     rw [readyCount, show ready.getReg .x0 = 0 from rfl, readyPC]
@@ -99,125 +97,40 @@ theorem opening_setup (state : MachineState) (pc : state.pc = 4096)
   rw [execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
-/-- State after selecting path depth (`17` when `x27 = 128`, `24` otherwise) and
-reaching `open-position` at PC 4192. -/
-def openingDepthState (state : MachineState) : MachineState :=
-  if state.getReg .x27 = 128 then
-    (((state.setReg .x30 24).setReg .x6 128).setReg .x30 17).setPC 4192
-  else
-    ((state.setReg .x30 24).setReg .x6 128).setPC 4192
-
-theorem opening_depth_register (state : MachineState) (reg : Reg)
-    (not6 : reg ≠ .x6) (not30 : reg ≠ .x30) :
-    (openingDepthState state).getReg reg = state.getReg reg := by
-  unfold openingDepthState
-  split <;> simp only [MachineState.getReg_setPC,
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not30),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not6)]
-
-theorem opening_depth_value (state : MachineState) :
-    (openingDepthState state).getReg .x30 =
-      if state.getReg .x27 = 128 then 17 else 24 := by
-  unfold openingDepthState
-  split <;> simp [MachineState.getReg_setPC, MachineState.getReg_setReg_ne,
-    MachineState.getReg_setReg_eq]
-
-theorem opening_depth_pc (state : MachineState) :
-    (openingDepthState state).pc = 4192 := by
-  unfold openingDepthState; split <;> rfl
-
-theorem opening_depth_memory (state : MachineState) :
-    (openingDepthState state).mem = state.mem := by
-  unfold openingDepthState; split <;> rfl
-
-/-- Selecting path depth takes 4 cycles when `x27 = 128` and 3 cycles otherwise. -/
-theorem opening_depth_select (state : MachineState) (pc : state.pc = 4176)
-    (fuel : Nat) (allowCoins : Bool) :
-    let cost := if state.getReg .x27 = 128 then 4 else 3
-    execute (submission.image .opening) (cost + fuel) state allowCoins =
-      (do let result ← execute (submission.image .opening) fuel
-            (openingDepthState state) allowCoins
-          return result.charge cost 0) := by
-  let s1 := (state.setReg .x30 24).setPC 4180
-  let s2 := ((state.setReg .x30 24).setReg .x6 128).setPC 4184
-  have f0 : fetch (submission.image .opening) state = some (.base (.ADDI .x30 .x0 24)) := by
-    apply opening_fetch state 20 _ (by decide) pc; rfl
-  have f1 : fetch (submission.image .opening) s1 = some (.base (.ADDI .x6 .x0 128)) := by
-    apply opening_fetch s1 21 _ (by decide) rfl; rfl
-  have f2 : fetch (submission.image .opening) s2 = some (.base (.BNE .x27 .x6 8)) := by
-    apply opening_fetch s2 22 _ (by decide) rfl; rfl
-  have st0 : ordinaryStep state (.base (.ADDI .x30 .x0 24)) = some s1 := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s1, pc,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  have st1 : ordinaryStep s1 (.base (.ADDI .x6 .x0 128)) = some s2 := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s1, s2,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  by_cases cap : state.getReg .x27 = 128
-  · simp only [cap, ↓reduceIte, openingDepthState]
-    have capR : state.regs .x27 = 128 := by simpa [MachineState.getReg] using cap
-    let s3 := ((state.setReg .x30 24).setReg .x6 128).setPC 4188
-    have st2 : ordinaryStep s2 (.base (.BNE .x27 .x6 8)) = some s3 := by
-      simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, s2, s3,
-        capR, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    have f3 : fetch (submission.image .opening) s3 = some (.base (.ADDI .x30 .x0 17)) := by
-      apply opening_fetch s3 23 _ (by decide) rfl; rfl
-    have st3 : ordinaryStep s3 (.base (.ADDI .x30 .x0 17)) =
-        some ((((state.setReg .x30 24).setReg .x6 128).setReg .x30 17).setPC 4192) := by
-      simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s3,
-        MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    rw [show 4 + fuel = (((fuel + 1) + 1) + 1) + 1 by omega]
-    rw [execute_ordinary_step _ _ _ _ _ _ f0 st0,
-      execute_ordinary_step _ _ _ _ _ _ f1 st1,
-      execute_ordinary_step _ _ _ _ _ _ f2 st2,
-      execute_ordinary_step _ _ _ _ _ _ f3 st3]
-    simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
-  · simp only [cap, ↓reduceIte, openingDepthState]
-    have capR : state.regs .x27 ≠ 128 := by simpa [MachineState.getReg] using cap
-    have st2 : ordinaryStep s2 (.base (.BNE .x27 .x6 8)) =
-        some (((state.setReg .x30 24).setReg .x6 128).setPC 4192) := by
-      simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, s2,
-        MachineState.getReg, MachineState.setReg, MachineState.setPC]
-      exact capR
-    rw [show 3 + fuel = ((fuel + 1) + 1) + 1 by omega]
-    rw [execute_ordinary_step _ _ _ _ _ _ f0 st0,
-      execute_ordinary_step _ _ _ _ _ _ f1 st1,
-      execute_ordinary_step _ _ _ _ _ _ f2 st2]
-    simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
-
 /-- The path-loop latch really is a decrement followed by a backward BNE. -/
 private theorem opening_fetch_decrement (state : MachineState)
-    (pc : state.pc = 4308) :
+    (pc : state.pc = 4296) :
     fetch (submission.image .opening) state = some (.base (.ADDI .x28 .x28 4095)) := by
-  apply opening_fetch state 53 _ (by decide) pc
+  apply opening_fetch state 50 _ (by decide) pc
   rfl
 
 private theorem opening_fetch_branch (state : MachineState)
-    (pc : state.pc = 4312) :
-    fetch (submission.image .opening) state = some (.base (.BNE .x28 .x0 8128)) := by
-  apply opening_fetch state 54 _ (by decide) pc
+    (pc : state.pc = 4300) :
+    fetch (submission.image .opening) state = some (.base (.BNE .x28 .x0 8136)) := by
+  apply opening_fetch state 51 _ (by decide) pc
   rfl
 
 /-- State after the inner loop's two-instruction latch. Counter zero exits to
-`open-next` (4316); a nonzero counter branches back to `open-path` (4248). -/
+`open-next`; a nonzero counter branches back to `open-path`. -/
 def openingLatchState (state : MachineState) : MachineState :=
   let remaining := state.getReg .x28 - 1
-  (state.setReg .x28 remaining).setPC (if remaining = 0 then 4316 else 4248)
+  (state.setReg .x28 remaining).setPC (if remaining = 0 then 4304 else 4244)
 
 /-- Exact interpreter behavior of the loop latch, with arbitrary memory and coins.
 The latch costs two cycles and makes no queries. -/
-theorem opening_latch (state : MachineState) (pc : state.pc = 4308)
+theorem opening_latch (state : MachineState) (pc : state.pc = 4296)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .opening) (2 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
             (openingLatchState state) allowCoins
           return result.charge 2 0) := by
   have first := opening_fetch_decrement state pc
-  let next := (state.setReg .x28 (state.getReg .x28 - 1)).setPC 4312
+  let next := (state.setReg .x28 (state.getReg .x28 - 1)).setPC 4300
   have second := opening_fetch_branch next rfl
   have step : ordinaryStep state (.base (.ADDI .x28 .x28 4095)) = some next := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       next, pc, BitVec.sub_eq_add_neg]
-  have branch : ordinaryStep next (.base (.BNE .x28 .x0 8128)) =
+  have branch : ordinaryStep next (.base (.BNE .x28 .x0 8136)) =
       some (openingLatchState state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13,
       next, openingLatchState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
@@ -226,15 +139,32 @@ theorem opening_latch (state : MachineState) (pc : state.pc = 4308)
   simp only [execute, first, step, second, branch, instructionCycles, bind_assoc, pure_bind]
   simp [Execution.charge, ← Nat.add_assoc]
 
+/-- A positive bounded counter strictly decreases at the actual loop latch.
+No wraparound is possible for an honest path counter (initially 24). -/
+theorem opening_latch_counter (state : MachineState) (remaining : Nat)
+    (positive : 0 < remaining) (bounded : remaining ≤ LOG_LENGTH)
+    (counter : state.getReg .x28 = BitVec.ofNat 64 remaining) :
+    ((openingLatchState state).getReg .x28).toNat = remaining - 1 ∧
+    remaining - 1 < remaining := by
+  simp only [openingLatchState, MachineState.getReg_setPC,
+    MachineState.getReg_setReg_eq (by decide : Reg.x28 ≠ .x0), counter]
+  constructor
+  · change (BitVec.ofNat 64 remaining - BitVec.ofNat 64 1).toNat = remaining - 1
+    rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) remaining 1 (by decide) (by omega)]
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+    simp only [LOG_LENGTH] at bounded
+    omega
+  · omega
+
 /-- The outer loop advances the index pointer and decrements the position count. -/
 def openingNextState (state : MachineState) : MachineState :=
   let remaining := state.getReg .x27 - 1
   ((state.setReg .x24 (state.getReg .x24 + 8)).setReg .x27 remaining).setPC
-    (if remaining = 0 then 4328 else 4192)
+    (if remaining = 0 then 4316 else 4176)
 
-/-- Exact three-instruction transition from `open-next` (4316) to `open-position` (4192)
-or `open-done` (4328). -/
-theorem opening_next (state : MachineState) (pc : state.pc = 4316)
+/-- Exact three-instruction transition from `open-next` to the next position or
+`open-done`. This also preserves the memory containing the completed proof prefix. -/
+theorem opening_next (state : MachineState) (pc : state.pc = 4304)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .opening) (3 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
@@ -242,17 +172,17 @@ theorem opening_next (state : MachineState) (pc : state.pc = 4316)
           return result.charge 3 0) := by
   have first : fetch (submission.image .opening) state =
       some (.base (.ADDI .x24 .x24 8)) := by
-    apply opening_fetch state 55 _ (by decide) pc
+    apply opening_fetch state 52 _ (by decide) pc
     rfl
-  let advanced := (state.setReg .x24 (state.getReg .x24 + 8)).setPC 4320
-  let next := (advanced.setReg .x27 (state.getReg .x27 - 1)).setPC 4324
+  let advanced := (state.setReg .x24 (state.getReg .x24 + 8)).setPC 4308
+  let next := (advanced.setReg .x27 (state.getReg .x27 - 1)).setPC 4312
   have second : fetch (submission.image .opening) advanced =
       some (.base (.ADDI .x27 .x27 4095)) := by
-    apply opening_fetch advanced 56 _ (by decide) rfl
+    apply opening_fetch advanced 53 _ (by decide) rfl
     rfl
   have third : fetch (submission.image .opening) next =
-      some (.base (.BNE .x27 .x0 8060)) := by
-    apply opening_fetch next 57 _ (by decide) rfl
+      some (.base (.BNE .x27 .x0 8056)) := by
+    apply opening_fetch next 54 _ (by decide) rfl
     rfl
   have step₁ : ordinaryStep state (.base (.ADDI .x24 .x24 8)) = some advanced := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
@@ -261,7 +191,7 @@ theorem opening_next (state : MachineState) (pc : state.pc = 4316)
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       advanced, next, BitVec.sub_eq_add_neg, MachineState.getReg, MachineState.setReg,
       MachineState.setPC]
-  have step₃ : ordinaryStep next (.base (.BNE .x27 .x0 8060)) =
+  have step₃ : ordinaryStep next (.base (.BNE .x27 .x0 8056)) =
       some (openingNextState state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13,
       advanced, next, openingNextState, MachineState.getReg, MachineState.setReg,
@@ -272,72 +202,67 @@ theorem opening_next (state : MachineState) (pc : state.pc = 4316)
     bind_assoc, pure_bind]
   simp [Execution.charge, ← Nat.add_assoc]
 
-/-- Dispatch at `open-done` (4328): `x16 = 128` falls through to cap copy (4336);
-otherwise branch to normal exit (4472). -/
-def openingDoneGateState (state : MachineState) : MachineState :=
-  (state.setReg .x6 128).setPC (if state.getReg .x16 = 128 then 4336 else 4472)
+theorem opening_next_counter (state : MachineState) (remaining : Nat)
+    (positive : 0 < remaining) (bounded : remaining ≤ LENGTH)
+    (counter : state.getReg .x27 = BitVec.ofNat 64 remaining) :
+    ((openingNextState state).getReg .x27).toNat = remaining - 1 ∧
+    remaining - 1 < remaining := by
+  simp only [openingNextState, MachineState.getReg_setPC,
+    MachineState.getReg_setReg_eq (by decide : Reg.x27 ≠ .x0), counter]
+  constructor
+  · change (BitVec.ofNat 64 remaining - BitVec.ofNat 64 1).toNat = remaining - 1
+    rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) remaining 1 (by decide) (by omega)]
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+    norm_num [LENGTH, LOG_LENGTH] at bounded
+    omega
+  · omega
 
-theorem opening_done_gate (state : MachineState) (pc : state.pc = 4328)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (2 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .opening) fuel
-            (openingDoneGateState state) allowCoins
-          return result.charge 2 0) := by
-  let next := (state.setReg .x6 128).setPC 4332
-  have f0 : fetch (submission.image .opening) state = some (.base (.ADDI .x6 .x0 128)) := by
-    apply opening_fetch state 58 _ (by decide) pc; rfl
-  have f1 : fetch (submission.image .opening) next = some (.base (.BNE .x16 .x6 140)) := by
-    apply opening_fetch next 59 _ (by decide) rfl; rfl
-  have s0 : ordinaryStep state (.base (.ADDI .x6 .x0 128)) = some next := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, next, pc,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  have s1 : ordinaryStep next (.base (.BNE .x16 .x6 140)) = some (openingDoneGateState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, next,
-      openingDoneGateState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    split <;> simp_all
-  rw [Nat.add_comm 2 fuel]
-  simp only [execute, f0, s0, f1, s1, instructionCycles, bind_assoc, pure_bind]
-  simp [Execution.charge, ← Nat.add_assoc]
-
-/-- Final machine state for normal exit (`k ≠ 128`), reporting `800 * k` proof bytes. -/
+/-- Final machine state after reporting the opening length and requesting success. -/
 def openingExitState (state : MachineState) : MachineState :=
   ((((state.setReg .x6 800).setReg .x11 (state.getReg .x16 * 800)).setReg .x5 1).setReg
-    .x10 0).setPC 4496
+    .x10 0).setPC 4340
 
-/-- The normal return block (4472) halts successfully, reports 800 bytes per position,
+/-- The actual return block halts successfully, reports 800 bytes per position,
 and costs exactly ten cycles (including the four-cycle multiplication). -/
-theorem opening_exit (state : MachineState) (pc : state.pc = 4472)
+theorem opening_exit (state : MachineState) (pc : state.pc = 4316)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .opening) (7 + fuel) state allowCoins =
       pure ⟨.success, openingExitState state, 10, 0⟩ := by
-  let s₁ := (state.setReg .x6 0).setPC 4476
-  let s₂ := (state.setReg .x6 0).setPC 4480
-  let s₃ := (state.setReg .x6 800).setPC 4484
-  let s₄ := ((state.setReg .x6 800).setReg .x11 (state.getReg .x16 * 800)).setPC 4488
+  let s₁ := (state.setReg .x6 0).setPC 4320
+  let s₂ := (state.setReg .x6 0).setPC 4324
+  let s₃ := (state.setReg .x6 800).setPC 4328
+  let s₄ := ((state.setReg .x6 800).setReg .x11 (state.getReg .x16 * 800)).setPC 4332
   let s₅ := (((state.setReg .x6 800).setReg .x11 (state.getReg .x16 * 800)).setReg
-    .x5 1).setPC 4492
+    .x5 1).setPC 4336
   let s₆ := openingExitState state
   have fetch0 : fetch (submission.image .opening) state =
       some (.base (.ADDI .x6 .x0 0)) := by
-    apply opening_fetch state 94 _ (by decide) pc; rfl
+    apply opening_fetch state 55 _ (by decide) pc
+    rfl
   have fetch1 : fetch (submission.image .opening) s₁ =
       some (.base (.SLLI .x6 .x6 11)) := by
-    apply opening_fetch s₁ 95 _ (by decide) rfl; rfl
+    apply opening_fetch s₁ 56 _ (by decide) rfl
+    rfl
   have fetch2 : fetch (submission.image .opening) s₂ =
       some (.base (.ADDI .x6 .x6 800)) := by
-    apply opening_fetch s₂ 96 _ (by decide) rfl; rfl
+    apply opening_fetch s₂ 57 _ (by decide) rfl
+    rfl
   have fetch3 : fetch (submission.image .opening) s₃ =
       some (.base (.MUL .x11 .x16 .x6)) := by
-    apply opening_fetch s₃ 97 _ (by decide) rfl; rfl
+    apply opening_fetch s₃ 58 _ (by decide) rfl
+    rfl
   have fetch4 : fetch (submission.image .opening) s₄ =
       some (.base (.ADDI .x5 .x0 1)) := by
-    apply opening_fetch s₄ 98 _ (by decide) rfl; rfl
+    apply opening_fetch s₄ 59 _ (by decide) rfl
+    rfl
   have fetch5 : fetch (submission.image .opening) s₅ =
       some (.base (.ADDI .x10 .x0 0)) := by
-    apply opening_fetch s₅ 99 _ (by decide) rfl; rfl
+    apply opening_fetch s₅ 60 _ (by decide) rfl
+    rfl
   have fetch6 : fetch (submission.image .opening) s₆ =
       some (.base .ECALL) := by
-    apply opening_fetch s₆ 100 _ (by decide) rfl; rfl
+    apply opening_fetch s₆ 61 _ (by decide) rfl
+    rfl
   have step0 : ordinaryStep state (.base (.ADDI .x6 .x0 0)) = some s₁ := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       s₁, MachineState.getReg, MachineState.setReg, MachineState.setPC]
@@ -345,11 +270,15 @@ theorem opening_exit (state : MachineState) (pc : state.pc = 4472)
   have step1 : ordinaryStep s₁ (.base (.SLLI .x6 .x6 11)) = some s₂ := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       s₁, s₂, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    simp; funext reg; by_cases h : reg = .x6 <;> simp [h]
+    simp
+    funext reg
+    by_cases h : reg = .x6 <;> simp [h]
   have step2 : ordinaryStep s₂ (.base (.ADDI .x6 .x6 800)) = some s₃ := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       s₂, s₃, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    simp; funext reg; by_cases h : reg = .x6 <;> simp [h]
+    simp
+    funext reg
+    by_cases h : reg = .x6 <;> simp [h]
   have step3 : ordinaryStep s₃ (.base (.MUL .x11 .x16 .x6)) = some s₄ := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       s₃, s₄, MachineState.getReg, MachineState.setReg, MachineState.setPC]
@@ -365,10 +294,12 @@ theorem opening_exit (state : MachineState) (pc : state.pc = 4472)
   rw [Nat.add_comm 7 fuel]
   simp only [execute, fetch0, step0, fetch1, step1, fetch2, step2, fetch3, step3,
     fetch4, step4, fetch5, step5, fetch6, instructionCycles, bind_assoc, pure_bind]
-  dsimp only [s₆, openingExitState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
+  dsimp only [s₆, openingExitState, MachineState.getReg, MachineState.setReg,
+    MachineState.setPC]
   simp [Execution.charge]
 
-/-- Reporting the normal proof length cannot overflow a 64-bit register. -/
+/-- Reporting the proof length cannot overflow a 64-bit register, even when all
+positions are opened. In particular, the scored 128-position opening reports 102400. -/
 theorem opening_exit_length (state : MachineState) (positions : Nat)
     (bounded : positions ≤ LENGTH)
     (count : state.getReg .x16 = BitVec.ofNat 64 positions) :
@@ -383,64 +314,66 @@ theorem opening_exit_length (state : MachineState) (positions : Nat)
   rw [Nat.mod_eq_of_lt (by omega)]
   omega
 
-/-- Final machine state for cap-table exit (`k = 128`), reporting `77824` proof bytes. -/
-private def openingCapExitInstructions : List Instr :=
-  [.ADDI .x11 .x0 0, .SLLI .x11 .x11 11, .ADDI .x11 .x11 38,
-   .SLLI .x11 .x11 11, .ADDI .x11 .x11 0, .ADDI .x5 .x0 1, .ADDI .x10 .x0 0]
+/-- The scored batch's return length, provided the loop preserved the ABI count. -/
+theorem opening_exit_batch_length (state : MachineState)
+    (count : state.getReg .x16 = BitVec.ofNat 64 BATCH) :
+    ((openingExitState state).getReg .x11).toNat = 102400 := by
+  have h := opening_exit_length state BATCH (by norm_num [BATCH, LENGTH, LOG_LENGTH]) count
+  simpa [BATCH] using h
 
-private def openingCapExitPrefix (state : MachineState) (count : Nat) : MachineState :=
-  (openingCapExitInstructions.take count).foldl execInstrBr state
+/-- For every valid ABI input, the loop starts with exactly the supplied number
+of positions. Its natural-number value is bounded by the challenge vector length. -/
+theorem opening_entry_count (trapdoor : BitVec (8 * submission.sizes.trapdoor))
+    (positions : Positions) :
+    ((openingInitializedState (submission.initialState .opening (trapdoor, positions))).getReg
+      .x27).toNat = positions.card ∧ positions.card ≤ LENGTH := by
+  have bounded : positions.card ≤ LENGTH := by
+    simpa [Index] using Finset.card_le_univ positions
+  have counter : (submission.initialState .opening (trapdoor, positions)).getReg .x16 =
+      BitVec.ofNat 64 positions.card := rfl
+  constructor
+  · rw [(opening_setup_registers _).2.2.2.1, counter, BitVec.toNat_ofNat,
+      Nat.mod_eq_of_lt]
+    norm_num [LENGTH, LOG_LENGTH] at bounded
+    omega
+  · exact bounded
 
-def openingCapExitState (state : MachineState) : MachineState :=
-  openingCapExitPrefix state 7
+/-- Full result of the empty-opening path, including its actual final machine state. -/
+def emptyOpeningResult (trapdoor : BitVec (8 * submission.sizes.trapdoor)) : Execution :=
+  ⟨.success, openingExitState (openingInitializedState
+    (submission.initialState .opening (trapdoor, ∅))), 30, 0⟩
 
-theorem opening_cap_exit_memory (state : MachineState) :
-    (openingCapExitState state).mem = state.mem := rfl
+/-- The complete submitted opening program handles an empty position set in thirty
+cycles, succeeds, and makes no queries, for every serialized trapdoor. -/
+theorem opening_empty_execution (trapdoor : BitVec (8 * submission.sizes.trapdoor)) :
+    submission.run .opening (trapdoor, ∅) = pure (emptyOpeningResult trapdoor) := by
+  let initial := submission.initialState .opening (trapdoor, ∅)
+  have pc : initial.pc = 4096 := rfl
+  have count : initial.getReg .x16 = 0 := rfl
+  have readyPC : (openingInitializedState initial).pc = 4316 := by
+    simp [openingInitializedState, MachineState.setPC, count]
+  change execute (submission.image .opening) (submission.steps .opening) initial true = _
+  have steps : submission.steps .opening = 20 + (7 + (submission.steps .opening - 27)) := by
+    norm_num [submission, candidate, LOG_LENGTH, LENGTH]
+  rw [steps, opening_setup initial pc, opening_exit _ readyPC]
+  simp [emptyOpeningResult, initial, Execution.charge]
 
-theorem opening_cap_exit_length (state : MachineState) :
-    ((openingCapExitState state).getReg .x11).toNat = 77824 := by
-  simp [openingCapExitState, openingCapExitPrefix, openingCapExitInstructions,
-    execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
+/-- The scheme derived from the image produces the empty proof on this path. -/
+theorem opening_empty_proof (trapdoor : BitVec (8 * submission.sizes.trapdoor)) :
+    submission.scheme.opening trapdoor ∅ = pure [] := by
+  let initial := submission.initialState .opening (trapdoor, ∅)
+  have initialCount : initial.getReg .x16 = 0 := rfl
+  have readyCount : (openingInitializedState initial).getReg .x16 = 0 := by
+    rw [(opening_setup_registers initial).2.2.2.2.2.2.1, initialCount]
+  have length : ((emptyOpeningResult trapdoor).state.getReg .x11).toNat = 0 := by
+    exact opening_exit_length (openingInitializedState initial) 0 (by omega) readyCount
+  change (submission.readProof <$> submission.run .opening (trapdoor, ∅)) = _
+  rw [opening_empty_execution]
+  have exited : (emptyOpeningResult trapdoor).exit = .success := rfl
+  simp [Submission.readProof, Submission.openingSucceeded, length, exited]
 
-/-- Cap-table return block (4440): 7 ordinary instructions plus HALT = 8 cycles. -/
-theorem opening_cap_exit (state : MachineState) (pc : state.pc = 4440)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (8 + fuel) state allowCoins =
-      pure ⟨.success, openingCapExitState state, 8, 0⟩ := by
-  have prefixRun (remaining : Nat) :
-      execute (submission.image .opening) (7 + remaining) state allowCoins =
-        (do let result ← execute (submission.image .opening) remaining
-              (openingCapExitState state) allowCoins
-            return result.charge 7 0) := by
-    apply execute_unit_steps (states := openingCapExitPrefix state)
-    intro i hi
-    refine ⟨.base ((openingCapExitInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply opening_fetch _ (86 + i) _ (by omega)
-      · interval_cases i <;>
-          simp [openingCapExitPrefix, openingCapExitInstructions, execInstrBr, pc, MachineState.setPC]
-      · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  have exitPC : (openingCapExitState state).pc = 4468 := by
-    simp [openingCapExitState, openingCapExitPrefix, openingCapExitInstructions, execInstrBr, pc,
-      MachineState.setPC]
-  have f7 : fetch (submission.image .opening) (openingCapExitState state) = some (.base .ECALL) := by
-    apply opening_fetch _ 93 _ (by decide) exitPC; rfl
-  have r5 : (openingCapExitState state).getReg .x5 = 1 := by
-    dsimp only [openingCapExitState, openingCapExitPrefix, openingCapExitInstructions,
-      List.take, List.foldl, execInstrBr, signExtend12, MachineState.getReg,
-      MachineState.setReg, MachineState.setPC]
-    simp
-  have r10 : (openingCapExitState state).getReg .x10 = 0 := by
-    dsimp only [openingCapExitState, openingCapExitPrefix, openingCapExitInstructions,
-      List.take, List.foldl, execInstrBr, signExtend12, MachineState.getReg,
-      MachineState.setReg, MachineState.setPC]
-    simp
-  rw [show 8 + fuel = 7 + (fuel + 1) by omega, prefixRun]
-  simp only [execute, f7, r5, r10, bind_assoc, pure_bind]
-  simp [Execution.charge]
 
-/-- All four digest copies in the opening image use these four aligned loads and stores.
+/-- Both the salt and sibling copies use these four aligned loads and stores.
 Only x6 is scratch; the source (x23), destination (x25), and loop counters survive. -/
 private def openingCopyInstructions : List Instr :=
   [.LD .x6 .x23 0, .SD .x25 .x6 0,
@@ -486,11 +419,11 @@ theorem opening_copy_register (state : MachineState) (reg : Reg) (scratch : reg 
     (openingCopyState state).getReg reg = state.getReg reg :=
   opening_copy_prefix_register state 8 (by decide) reg scratch
 
-set_option maxHeartbeats 1200000 in
-/-- All four digest copies in the actual image (salt, sibling, cap left, cap right)
-each take eight cycles and make no queries. -/
+set_option maxHeartbeats 1000000 in
+/-- The two copies in the actual image each take eight cycles and make no queries.
+All four loads and stores must be in bounds and aligned. -/
 theorem opening_copy (state : MachineState) (start : Nat)
-    (location : start = 27 ∨ start = 43 ∨ start = 64 ∨ start = 74)
+    (location : start = 23 ∨ start = 40)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
@@ -504,11 +437,11 @@ theorem opening_copy (state : MachineState) (start : Nat)
   apply execute_unit_steps (states := openingCopyPrefix state)
   intro i hi
   refine ⟨.base ((openingCopyInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply opening_fetch _ (start + i) _ (by rcases location with rfl | rfl | rfl | rfl <;> omega)
-    · rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;>
+  · apply opening_fetch _ (start + i) _ (by rcases location with rfl | rfl <;> omega)
+    · rcases location with rfl | rfl <;> interval_cases i <;>
         simp [openingCopyPrefix, openingCopyInstructions, execInstrBr, pc,
           MachineState.setPC]
-    · rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;> rfl
+    · rcases location with rfl | rfl <;> interval_cases i <;> rfl
   · have s0 := sourceValid ⟨0, by decide⟩
     have s1 := sourceValid ⟨1, by decide⟩
     have s2 := sourceValid ⟨2, by decide⟩
@@ -532,6 +465,7 @@ theorem opening_copy (state : MachineState) (start : Nat)
         List.getElem?_cons_succ, Option.getD_some] at valid ⊢ <;>
       simp only [ordinaryStep, valid, ↓reduceIte] <;> rfl
   · interval_cases i <;> rfl
+
 
 /-- A 32-byte block inside memory, aligned to eight bytes, admits every load/store
 used by the digest copy. The bound also rules out address wraparound. -/
@@ -593,6 +527,7 @@ theorem opening_copy_memory (state : MachineState)
       copy_getReg_setMem, signExtend12,
       h10, h20, h21, h30, h31, h32]
 
+
 /-- Copying a digest advances past its eight instructions. -/
 theorem opening_copy_pc (state : MachineState) :
     (openingCopyState state).pc = state.pc + 32 := by
@@ -600,25 +535,25 @@ theorem opening_copy_pc (state : MachineState) :
     execInstrBr, MachineState.setPC, BitVec.add_assoc]
 
 private def openingPathInstructions : List Instr :=
-  [.XORI .x7 .x20 1, .SRLI .x6 .x20 1, .ADD .x7 .x7 .x6, .SLLI .x7 .x7 5, .ADD .x23 .x9 .x7]
+  [.XORI .x7 .x20 1, .SLLI .x7 .x7 5, .ADD .x23 .x9 .x7]
 
 private def openingPathPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingPathInstructions.take count).foldl execInstrBr state
 
-/-- Compute the sibling's gap-heap address: `t = s xor 1`, then `32*(t + s/2)`. -/
+/-- Compute the sibling's heap address: toggle the low index bit, then multiply by 32. -/
 def openingPathPreparedState (state : MachineState) : MachineState :=
-  openingPathPrefix state 5
+  openingPathPrefix state 3
 
-private theorem opening_path_prepare (state : MachineState) (pc : state.pc = 4248)
+private theorem opening_path_prepare (state : MachineState) (pc : state.pc = 4244)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (5 + fuel) state allowCoins =
+    execute (submission.image .opening) (3 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
             (openingPathPreparedState state) allowCoins
-          return result.charge 5 0) := by
+          return result.charge 3 0) := by
   apply execute_unit_steps (states := openingPathPrefix state)
   intro i hi
   refine ⟨.base ((openingPathInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply opening_fetch _ (38 + i) _ (by omega)
+  · apply opening_fetch _ (37 + i) _ (by omega)
     · interval_cases i <;>
         simp [openingPathPrefix, openingPathInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases i <;> rfl
@@ -626,27 +561,26 @@ private theorem opening_path_prepare (state : MachineState) (pc : state.pc = 424
   · interval_cases i <;> rfl
 
 private theorem opening_path_prepare_register (state : MachineState) (reg : Reg)
-    (scratch : reg ≠ .x7) (source : reg ≠ .x23) (half : reg ≠ .x6) :
+    (scratch : reg ≠ .x7) (source : reg ≠ .x23) :
     (openingPathPreparedState state).getReg reg = state.getReg reg := by
   dsimp only [openingPathPreparedState, openingPathPrefix, openingPathInstructions,
     List.take, List.foldl, execInstrBr]
   simp only [MachineState.getReg_setPC,
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm scratch),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm half),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm source)]
 
-theorem opening_path_source (state : MachineState) :
+private theorem opening_path_source (state : MachineState) :
     (openingPathPreparedState state).getReg .x23 =
-      state.getReg .x9 + (((state.getReg .x20 ^^^ 1) + (state.getReg .x20 >>> 1)) <<< 5) := by
+      state.getReg .x9 + ((state.getReg .x20 ^^^ 1) <<< 5) := by
   simp [openingPathPreparedState, openingPathPrefix, openingPathInstructions,
     execInstrBr, MachineState.getReg, MachineState.setReg, MachineState.setPC, signExtend12]
 
 /-- Advance the output pointer and move from the current tree node to its parent. -/
 def openingPathAdvancedState (state : MachineState) : MachineState :=
   ((state.setReg .x25 (state.getReg .x25 + 32)).setReg .x20
-    (state.getReg .x20 >>> 1)).setPC 4308
+    (state.getReg .x20 >>> 1)).setPC 4296
 
-private theorem opening_path_advance (state : MachineState) (pc : state.pc = 4300)
+private theorem opening_path_advance (state : MachineState) (pc : state.pc = 4288)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .opening) (2 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
@@ -654,11 +588,13 @@ private theorem opening_path_advance (state : MachineState) (pc : state.pc = 430
           return result.charge 2 0) := by
   have first : fetch (submission.image .opening) state =
       some (.base (.ADDI .x25 .x25 32)) := by
-    apply opening_fetch state 51 _ (by decide) pc; rfl
-  let next := (state.setReg .x25 (state.getReg .x25 + 32)).setPC 4304
+    apply opening_fetch state 48 _ (by decide) pc
+    rfl
+  let next := (state.setReg .x25 (state.getReg .x25 + 32)).setPC 4292
   have second : fetch (submission.image .opening) next =
       some (.base (.SRLI .x20 .x20 1)) := by
-    apply opening_fetch next 52 _ (by decide) rfl; rfl
+    apply opening_fetch next 49 _ (by decide) rfl
+    rfl
   have step : ordinaryStep state (.base (.ADDI .x25 .x25 32)) = some next := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, next, pc]
   have shift : ordinaryStep next (.base (.SRLI .x20 .x20 1)) =
@@ -676,24 +612,24 @@ def openingPathState (state : MachineState) : MachineState :=
   openingLatchState (openingPathAdvancedState
     (openingCopyState (openingPathPreparedState state)))
 
-/-- Exact seventeen-cycle iteration of the submitted opening program. -/
-theorem opening_path_iteration (state : MachineState) (pc : state.pc = 4248)
+/-- Exact fifteen-cycle iteration of the submitted opening program. -/
+theorem opening_path_iteration (state : MachineState) (pc : state.pc = 4244)
     (sourceValid : ∀ word : Fin 4,
-      accessValid (state.getReg .x9 + (((state.getReg .x20 ^^^ 1) + (state.getReg .x20 >>> 1)) <<< 5) +
+      accessValid (state.getReg .x9 + ((state.getReg .x20 ^^^ 1) <<< 5) +
         BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (destinationValid : ∀ word : Fin 4,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (17 + fuel) state allowCoins =
+    execute (submission.image .opening) (15 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
             (openingPathState state) allowCoins
-          return result.charge 17 0) := by
+          return result.charge 15 0) := by
   let ready := openingPathPreparedState state
   let copied := openingCopyState ready
-  have readyPC : ready.pc = 4268 := by
+  have readyPC : ready.pc = 4256 := by
     simp [ready, openingPathPreparedState, openingPathPrefix, openingPathInstructions,
       execInstrBr, pc, MachineState.setPC]
-  have copiedPC : copied.pc = 4300 := by rw [opening_copy_pc, readyPC]; rfl
+  have copiedPC : copied.pc = 4288 := by rw [opening_copy_pc, readyPC]; rfl
   have reads : ∀ word : Fin 4,
       accessValid (ready.getReg .x23 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
     intro word
@@ -702,11 +638,11 @@ theorem opening_path_iteration (state : MachineState) (pc : state.pc = 4248)
   have writes : ∀ word : Fin 4,
       accessValid (ready.getReg .x25 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
     intro word
-    rw [opening_path_prepare_register state .x25 (by decide) (by decide) (by decide)]
+    rw [opening_path_prepare_register state .x25 (by decide) (by decide)]
     exact destinationValid word
-  rw [show 17 + fuel = 5 + (8 + (2 + (2 + fuel))) by omega,
+  rw [show 15 + fuel = 3 + (8 + (2 + (2 + fuel))) by omega,
     opening_path_prepare state pc,
-    opening_copy ready 43 (Or.inr (Or.inl rfl)) readyPC reads writes,
+    opening_copy ready 40 (Or.inr rfl) readyPC reads writes,
     opening_path_advance copied copiedPC,
     opening_latch (openingPathAdvancedState copied) rfl]
   simp [openingPathState, ready, copied, Execution.charge, ← Nat.add_assoc]
@@ -723,44 +659,29 @@ theorem opening_path_registers (state : MachineState) :
     MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq,
     opening_copy_register, opening_path_prepare_register]
 
-/-- The sibling's byte offset in the gap heap, as computed by the path loop. -/
-theorem opening_sibling_offset (node : Word) (nodeBound : node.toNat < 2 ^ 25) :
-    (((node ^^^ 1) + (node >>> 1)) <<< 5).toNat = heapOffset (node.toNat ^^^ 1) := by
-  have siblingBound : node.toNat ^^^ 1 < 2 ^ 25 :=
-    Nat.xor_lt_two_pow nodeBound (by decide)
-  have half : (node >>> 1).toNat = node.toNat / 2 := by
-    rw [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow, pow_one]
-  have sum : ((node ^^^ 1) + (node >>> 1)).toNat = (node.toNat ^^^ 1) + node.toNat / 2 := by
-    simp only [BitVec.toNat_add, half, BitVec.toNat_xor]
-    change ((node.toNat ^^^ 1) + node.toNat / 2) % 2 ^ 64 = _
-    apply Nat.mod_eq_of_lt
-    omega
-  rw [heap_offset_sibling]
-  simp only [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq, sum]
-  rw [Nat.mod_eq_of_lt (by omega)]
-  omega
 
-/-- Sibling addresses remain inside the allocated gap heap. -/
+/-- Sibling addresses remain inside the allocated digest heap. The heap has
+2^25 slots of 32 bytes (including unused slot zero). -/
 theorem opening_sibling_access (heap node : Word)
-    (heapBound : heap.toNat + 3 * 2 ^ 29 ≤ MEMORY_BYTES)
+    (heapBound : heap.toNat + 2 ^ 30 ≤ MEMORY_BYTES)
     (heapAligned : heap.toNat % 8 = 0) (nodeBound : node.toNat < 2 ^ 25)
     (word : Fin 4) :
-    accessValid (heap + (((node ^^^ 1) + (node >>> 1)) <<< 5) +
-      BitVec.ofNat 64 (8 * word.val)) 8 = true := by
+    accessValid (heap + ((node ^^^ 1) <<< 5) + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
   have siblingBound : node.toNat ^^^ 1 < 2 ^ 25 :=
     Nat.xor_lt_two_pow nodeBound (by decide)
-  have offset := opening_sibling_offset node nodeBound
-  have inside := heap_offset_bound (node.toNat ^^^ 1) (2^24) (by omega)
-  have aligned := heap_offset_aligned (node.toNat ^^^ 1)
-  have total : heap.toNat + heapOffset (node.toNat ^^^ 1) < 2 ^ 64 := by
+  have offset : ((node ^^^ 1) <<< 5).toNat = (node.toNat ^^^ 1) * 32 := by
+    simp only [BitVec.toNat_shiftLeft, BitVec.toNat_xor, Nat.shiftLeft_eq]
+    change ((node.toNat ^^^ 1) * 32) % 2 ^ 64 = _
+    rw [Nat.mod_eq_of_lt]
+    omega
+  have total : heap.toNat + (node.toNat ^^^ 1) * 32 < 2 ^ 64 := by
     simp only [MEMORY_BYTES] at heapBound
     omega
-  have address : (heap + (((node ^^^ 1) + (node >>> 1)) <<< 5)).toNat =
-      heap.toNat + heapOffset (node.toNat ^^^ 1) := by
+  have address : (heap + ((node ^^^ 1) <<< 5)).toNat =
+      heap.toNat + (node.toNat ^^^ 1) * 32 := by
     simp only [BitVec.toNat_add, offset, Nat.mod_eq_of_lt total]
   apply opening_digest_access_valid
   · rw [address]
-    simp only [MEMORY_BYTES] at heapBound ⊢
     omega
   · rw [address]
     omega
@@ -770,37 +691,39 @@ private theorem copy_pc_setPC (state : MachineState) (pc : Word) :
 
 private theorem opening_path_pc (state : MachineState) :
     (openingPathState state).pc =
-      if state.getReg .x28 - 1 = 0 then 4316 else 4248 := by
+      if state.getReg .x28 - 1 = 0 then 4304 else 4244 := by
   simp [openingPathState, openingLatchState, openingPathAdvancedState,
     copy_pc_setPC, MachineState.getReg_setReg_ne,
     opening_copy_register, opening_path_prepare_register]
 
-/-- The complete sibling loop has a precise linear cost. -/
+/-- The complete sibling loop has a precise linear cost. Its assumptions are
+ordinary heap/output bounds and alignment; the memory contents are arbitrary. -/
 theorem opening_path_loop (remaining : Nat) (bounded : remaining ≤ LOG_LENGTH)
     (state : MachineState) (counter : state.getReg .x28 = BitVec.ofNat 64 remaining)
-    (pc : 0 < remaining → state.pc = 4248)
-    (heapBound : (state.getReg .x9).toNat + 3 * 2 ^ 29 ≤ MEMORY_BYTES)
+    (pc : 0 < remaining → state.pc = 4244)
+    (heapBound : (state.getReg .x9).toNat + 2 ^ 30 ≤ MEMORY_BYTES)
     (heapAligned : (state.getReg .x9).toNat % 8 = 0)
     (nodeBound : (state.getReg .x20).toNat < 2 ^ 25)
     (outputBound : (state.getReg .x25).toNat + 32 * remaining ≤ MEMORY_BYTES)
     (outputAligned : (state.getReg .x25).toNat % 8 = 0)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (17 * remaining + fuel) state allowCoins =
+    execute (submission.image .opening) (15 * remaining + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
             (openingPathState^[remaining] state) allowCoins
-          return result.charge (17 * remaining) 0) := by
+          return result.charge (15 * remaining) 0) := by
   induction remaining generalizing state with
   | zero => simp [Execution.charge]
   | succ remaining ih =>
     have small : remaining < 2 ^ 64 := by
-      simp only [LOG_LENGTH] at bounded; omega
+      simp only [LOG_LENGTH] at bounded
+      omega
     have subtract : BitVec.ofNat 64 (remaining + 1) - 1 = BitVec.ofNat 64 remaining := by
       change BitVec.ofNat 64 (remaining + 1) - BitVec.ofNat 64 1 = _
       rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
       simp
     have nextCounter : (openingPathState state).getReg .x28 = BitVec.ofNat 64 remaining := by
       rw [(opening_path_registers state).2.2.1, counter, subtract]
-    have nextPC : 0 < remaining → (openingPathState state).pc = 4248 := by
+    have nextPC : 0 < remaining → (openingPathState state).pc = 4244 := by
       intro positive
       rw [opening_path_pc, counter, subtract, if_neg]
       intro zero
@@ -827,7 +750,7 @@ theorem opening_path_loop (remaining : Nat) (bounded : remaining ≤ LOG_LENGTH)
     have reads := opening_sibling_access (state.getReg .x9) (state.getReg .x20)
       heapBound heapAligned nodeBound
     have writes := opening_digest_access_valid (state.getReg .x25) (by omega) outputAligned
-    rw [show 17 * (remaining + 1) + fuel = 17 + (17 * remaining + fuel) by omega,
+    rw [show 15 * (remaining + 1) + fuel = 15 + (15 * remaining + fuel) by omega,
       opening_path_iteration state (pc (by omega)) reads writes,
       ih (by omega) (openingPathState state) nextCounter nextPC
         (by simpa only [nextHeap] using heapBound)
@@ -836,11 +759,13 @@ theorem opening_path_loop (remaining : Nat) (bounded : remaining ≤ LOG_LENGTH)
     simp [Function.iterate_succ_apply, Execution.charge, Nat.mul_add, Nat.add_comm,
       Nat.add_left_comm]
 
-/-- A positive path counter reaches zero and transfers control to `open-next` (4316). -/
+
+/-- A positive path counter reaches zero and transfers control to `open-next`
+after exactly that many iterations. -/
 theorem opening_path_finished (remaining : Nat) (positive : 0 < remaining)
     (bounded : remaining ≤ LOG_LENGTH) (state : MachineState)
     (counter : state.getReg .x28 = BitVec.ofNat 64 remaining) :
-    (openingPathState^[remaining] state).pc = 4316 ∧
+    (openingPathState^[remaining] state).pc = 4304 ∧
     (openingPathState^[remaining] state).getReg .x28 = 0 := by
   induction remaining generalizing state with
   | zero => omega
@@ -855,43 +780,22 @@ theorem opening_path_finished (remaining : Nat) (positive : 0 < remaining)
     | zero =>
       simp only [Function.iterate_succ_apply, Function.iterate_zero, id_eq]
       constructor
-      · rw [opening_path_pc, counter, subtract]; rfl
+      · rw [opening_path_pc, counter, subtract]
+        rfl
       · exact nextCounter
     | succ remaining =>
       rw [Function.iterate_succ_apply]
       exact ih (by omega) (by omega) (openingPathState state) nextCounter
 
-private theorem opening_path_register (state : MachineState) (reg : Reg)
-    (scratch : reg ≠ .x6) (sibling : reg ≠ .x7) (index : reg ≠ .x20)
-    (source : reg ≠ .x23) (output : reg ≠ .x25) (counter : reg ≠ .x28) :
-    (openingPathState state).getReg reg = state.getReg reg := by
-  simp only [openingPathState, openingLatchState, openingPathAdvancedState,
-    MachineState.getReg_setPC,
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm counter),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm index),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm output)]
-  rw [opening_copy_register _ reg scratch,
-    opening_path_prepare_register _ reg sibling source scratch]
-
-private theorem opening_path_preserves_register (iterations : Nat) (state : MachineState)
-    (reg : Reg) (scratch : reg ≠ .x6) (sibling : reg ≠ .x7) (index : reg ≠ .x20)
-    (source : reg ≠ .x23) (output : reg ≠ .x25) (counter : reg ≠ .x28) :
-    (openingPathState^[iterations] state).getReg reg = state.getReg reg := by
+/-- The original position count, used to calculate the final proof length,
+is unchanged by any number of sibling iterations. -/
+theorem opening_path_preserves_count (iterations : Nat) (state : MachineState) :
+    (openingPathState^[iterations] state).getReg .x16 = state.getReg .x16 := by
   induction iterations with
   | zero => rfl
   | succ iterations ih =>
-    rw [Function.iterate_succ_apply',
-      opening_path_register _ reg scratch sibling index source output counter, ih]
+    rw [Function.iterate_succ_apply', (opening_path_registers _).2.2.2.1, ih]
 
-/-- The sibling loop emits one 32-byte digest per level. -/
-theorem opening_path_output (iterations : Nat) (state : MachineState) :
-    (openingPathState^[iterations] state).getReg .x25 =
-      state.getReg .x25 + BitVec.ofNat 64 (32 * iterations) := by
-  induction iterations with
-  | zero => simp
-  | succ iterations ih =>
-    rw [Function.iterate_succ_apply', (opening_path_registers _).1, ih]
-    simp [Nat.mul_add, BitVec.ofNat_add, BitVec.add_assoc]
 
 private def openingPositionInstructions : List Instr :=
   [.LD .x20 .x24 0, .SLLI .x6 .x20 5, .ADD .x23 .x18 .x6]
@@ -903,7 +807,7 @@ private def openingPositionPrefix (state : MachineState) (count : Nat) : Machine
 def openingPositionPreparedState (state : MachineState) : MachineState :=
   openingPositionPrefix state 3
 
-private theorem opening_position_prepare (state : MachineState) (pc : state.pc = 4192)
+private theorem opening_position_prepare (state : MachineState) (pc : state.pc = 4176)
     (indexValid : accessValid (state.getReg .x24) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .opening) (3 + fuel) state allowCoins =
@@ -913,7 +817,7 @@ private theorem opening_position_prepare (state : MachineState) (pc : state.pc =
   apply execute_unit_steps (states := openingPositionPrefix state)
   intro i hi
   refine ⟨.base ((openingPositionInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply opening_fetch _ (24 + i) _ (by omega)
+  · apply opening_fetch _ (20 + i) _ (by omega)
     · interval_cases i <;>
         simp [openingPositionPrefix, openingPositionInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases i <;> rfl
@@ -942,26 +846,27 @@ theorem opening_position_prepared (state : MachineState) :
     execInstrBr, MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq, signExtend12]
 
 private def openingSaltInstructions : List Instr :=
-  [.ADDI .x25 .x25 32, .ADD .x20 .x20 .x19, .ADDI .x28 .x30 0]
+  [.ADDI .x25 .x25 32, .ADD .x20 .x20 .x19, .ADDI .x28 .x0 0,
+   .SLLI .x28 .x28 11, .ADDI .x28 .x28 24, .BEQ .x28 .x0 64]
 
 private def openingSaltPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingSaltInstructions.take count).foldl execInstrBr state
 
 /-- After the salt copy, advance the proof pointer, enter the leaf's heap slot,
-and copy the active path depth from `x30` into `x28`. -/
+and set the sibling-loop counter to 24. -/
 def openingSaltAdvancedState (state : MachineState) : MachineState :=
-  openingSaltPrefix state 3
+  openingSaltPrefix state 6
 
-private theorem opening_salt_advance (state : MachineState) (pc : state.pc = 4236)
+private theorem opening_salt_advance (state : MachineState) (pc : state.pc = 4220)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (3 + fuel) state allowCoins =
+    execute (submission.image .opening) (6 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
             (openingSaltAdvancedState state) allowCoins
-          return result.charge 3 0) := by
+          return result.charge 6 0) := by
   apply execute_unit_steps (states := openingSaltPrefix state)
   intro i hi
   refine ⟨.base ((openingSaltInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply opening_fetch _ (35 + i) _ (by omega)
+  · apply opening_fetch _ (31 + i) _ (by omega)
     · interval_cases i <;>
         simp [openingSaltPrefix, openingSaltInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases i <;> rfl
@@ -978,18 +883,18 @@ private theorem opening_salt_register (state : MachineState) (reg : Reg)
 private theorem opening_salt_advanced (state : MachineState) :
     (openingSaltAdvancedState state).getReg .x25 = state.getReg .x25 + 32 ∧
     (openingSaltAdvancedState state).getReg .x20 = state.getReg .x20 + state.getReg .x19 ∧
-    (openingSaltAdvancedState state).getReg .x28 = state.getReg .x30 ∧
-    (openingSaltAdvancedState state).pc = state.pc + 12 := by
+    (openingSaltAdvancedState state).getReg .x28 = 24 ∧
+    (openingSaltAdvancedState state).pc = state.pc + 24 := by
   simp [openingSaltAdvancedState, openingSaltPrefix, openingSaltInstructions,
     execInstrBr, MachineState.getReg, MachineState.setReg, MachineState.setPC,
     signExtend12, BitVec.add_assoc]
 
-/-- State at the sibling-loop entry (4248) after copying this position's salt. -/
+/-- State at the sibling-loop entry after copying this position's salt. -/
 def openingPositionPathState (state : MachineState) : MachineState :=
   openingSaltAdvancedState (openingCopyState (openingPositionPreparedState state))
 
-/-- The actual position setup and salt copy take fourteen cycles. -/
-theorem opening_position_setup (state : MachineState) (pc : state.pc = 4192)
+/-- The actual position setup and salt copy take seventeen cycles. -/
+theorem opening_position_setup (state : MachineState) (pc : state.pc = 4176)
     (indexValid : accessValid (state.getReg .x24) 8 = true)
     (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg .x18 + (state.getMem (state.getReg .x24) <<< 5) +
@@ -997,16 +902,16 @@ theorem opening_position_setup (state : MachineState) (pc : state.pc = 4192)
     (destinationValid : ∀ word : Fin 4,
       accessValid (state.getReg .x25 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (14 + fuel) state allowCoins =
+    execute (submission.image .opening) (17 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
             (openingPositionPathState state) allowCoins
-          return result.charge 14 0) := by
+          return result.charge 17 0) := by
   let ready := openingPositionPreparedState state
   let copied := openingCopyState ready
-  have readyPC : ready.pc = 4204 := by
+  have readyPC : ready.pc = 4188 := by
     simp [ready, openingPositionPreparedState, openingPositionPrefix,
       openingPositionInstructions, execInstrBr, pc, MachineState.setPC]
-  have copiedPC : copied.pc = 4236 := by rw [opening_copy_pc, readyPC]; rfl
+  have copiedPC : copied.pc = 4220 := by rw [opening_copy_pc, readyPC]; rfl
   have reads : ∀ word : Fin 4,
       accessValid (ready.getReg .x23 + BitVec.ofNat 64 (8 * word.val)) 8 = true := by
     intro word
@@ -1017,11 +922,12 @@ theorem opening_position_setup (state : MachineState) (pc : state.pc = 4192)
     intro word
     rw [opening_position_prepare_register state .x25 (by decide) (by decide) (by decide)]
     exact destinationValid word
-  rw [show 14 + fuel = 3 + (8 + (3 + fuel)) by omega,
+  rw [show 17 + fuel = 3 + (8 + (6 + fuel)) by omega,
     opening_position_prepare state pc indexValid,
-    opening_copy ready 27 (Or.inl rfl) readyPC reads writes,
+    opening_copy ready 23 (Or.inl rfl) readyPC reads writes,
     opening_salt_advance copied copiedPC]
   simp [openingPositionPathState, ready, copied, Execution.charge, ← Nat.add_assoc]
+
 
 theorem opening_position_path_register (state : MachineState) (reg : Reg)
     (scratch : reg ≠ .x6) (index : reg ≠ .x20) (source : reg ≠ .x23)
@@ -1035,8 +941,8 @@ theorem opening_position_path_registers (state : MachineState) :
     (openingPositionPathState state).getReg .x25 = state.getReg .x25 + 32 ∧
     (openingPositionPathState state).getReg .x20 =
       state.getMem (state.getReg .x24) + state.getReg .x19 ∧
-    (openingPositionPathState state).getReg .x28 = state.getReg .x30 := by
-  refine ⟨?_, ?_, ?_⟩
+    (openingPositionPathState state).getReg .x28 = 24 := by
+  refine ⟨?_, ?_, (opening_salt_advanced _).2.2.1⟩
   · rw [openingPositionPathState, (opening_salt_advanced _).1,
       opening_copy_register _ .x25 (by decide),
       opening_position_prepare_register _ .x25 (by decide) (by decide) (by decide)]
@@ -1044,9 +950,6 @@ theorem opening_position_path_registers (state : MachineState) :
       opening_copy_register _ .x20 (by decide), opening_copy_register _ .x19 (by decide),
       (opening_position_prepared state).1,
       opening_position_prepare_register _ .x19 (by decide) (by decide) (by decide)]
-  · rw [openingPositionPathState, (opening_salt_advanced _).2.2.1,
-      opening_copy_register _ .x30 (by decide),
-      opening_position_prepare_register _ .x30 (by decide) (by decide) (by decide)]
 
 /-- Salt lookup is safe for every valid vector index, independently of salt contents. -/
 theorem opening_salt_access (salts index : Word)
@@ -1068,38 +971,35 @@ theorem opening_salt_access (salts index : Word)
   · rw [address]; omega
   · rw [address]; omega
 
-/-- State after one complete salt-plus-path opening of `pathDepth` siblings and the outer latch. -/
-def openingPositionState (pathDepth : Nat) (state : MachineState) : MachineState :=
-  openingNextState (openingPathState^[pathDepth] (openingPositionPathState state))
+/-- State after one complete salt-plus-path opening and the outer loop latch. -/
+def openingPositionState (state : MachineState) : MachineState :=
+  openingNextState (openingPathState^[24] (openingPositionPathState state))
 
-/-- One complete position with `pathDepth` siblings costs `17 + 17 * pathDepth` cycles
-(`425` for depth 24, `306` for depth 17) and makes no queries. -/
-theorem opening_position (pathDepth : Nat) (depthPos : 0 < pathDepth)
-    (depthBound : pathDepth ≤ LOG_LENGTH) (state : MachineState)
-    (pc : state.pc = 4192)
-    (depthReg : state.getReg .x30 = BitVec.ofNat 64 pathDepth)
+/-- One complete position costs 380 cycles and makes no queries, including its
+salt, all 24 siblings, and the transition to the next position or return block. -/
+theorem opening_position (state : MachineState) (pc : state.pc = 4176)
     (indexValid : accessValid (state.getReg .x24) 8 = true)
     (indexBound : (state.getMem (state.getReg .x24)).toNat < 2 ^ 24)
     (leaves : state.getReg .x19 = 16777216)
     (saltBound : (state.getReg .x18).toNat + 2 ^ 29 ≤ MEMORY_BYTES)
     (saltAligned : (state.getReg .x18).toNat % 8 = 0)
-    (heapBound : (state.getReg .x9).toNat + 3 * 2 ^ 29 ≤ MEMORY_BYTES)
+    (heapBound : (state.getReg .x9).toNat + 2 ^ 30 ≤ MEMORY_BYTES)
     (heapAligned : (state.getReg .x9).toNat % 8 = 0)
-    (outputBound : (state.getReg .x25).toNat + (32 + 32 * pathDepth) ≤ MEMORY_BYTES)
+    (outputBound : (state.getReg .x25).toNat + 800 ≤ MEMORY_BYTES)
     (outputAligned : (state.getReg .x25).toNat % 8 = 0)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (17 + 17 * pathDepth + fuel) state allowCoins =
+    execute (submission.image .opening) (380 + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
-            (openingPositionState pathDepth state) allowCoins
-          return result.charge (17 + 17 * pathDepth) 0) := by
+            (openingPositionState state) allowCoins
+          return result.charge 380 0) := by
   let path := openingPositionPathState state
-  have pathPC : path.pc = 4248 := by
-    change (openingPositionPathState state).pc = 4248
+  have pathPC : path.pc = 4244 := by
+    change (openingPositionPathState state).pc = 4244
     rw [openingPositionPathState, (opening_salt_advanced _).2.2.2, opening_copy_pc]
     simp [openingPositionPreparedState, openingPositionPrefix, openingPositionInstructions,
       execInstrBr, pc, MachineState.setPC]
-  have pathCounter : path.getReg .x28 = BitVec.ofNat 64 pathDepth :=
-    (opening_position_path_registers state).2.2.trans depthReg
+  have pathCounter : path.getReg .x28 = BitVec.ofNat 64 24 :=
+    (opening_position_path_registers state).2.2
   have pathHeap : path.getReg .x9 = state.getReg .x9 :=
     opening_position_path_register state .x9 (by decide) (by decide) (by decide) (by decide) (by decide)
   have pathNode : (path.getReg .x20).toNat < 2 ^ 25 := by
@@ -1113,65 +1013,83 @@ theorem opening_position (pathDepth : Nat) (depthPos : 0 < pathDepth)
     apply Nat.mod_eq_of_lt
     simp only [MEMORY_BYTES] at outputBound
     omega
-  have pathOutput : (path.getReg .x25).toNat + 32 * pathDepth ≤ MEMORY_BYTES := by
+  have pathOutput : (path.getReg .x25).toNat + 32 * 24 ≤ MEMORY_BYTES := by
     rw [outputNat]; omega
   have pathAligned : (path.getReg .x25).toNat % 8 = 0 := by rw [outputNat]; omega
-  have finishedPC : (openingPathState^[pathDepth] path).pc = 4316 :=
-    (opening_path_finished pathDepth depthPos depthBound path pathCounter).1
+  have finishedPC : (openingPathState^[24] path).pc = 4304 :=
+    (opening_path_finished 24 (by decide) (by decide) path pathCounter).1
   have reads := opening_salt_access (state.getReg .x18) (state.getMem (state.getReg .x24))
     saltBound saltAligned indexBound
   have writes := opening_digest_access_valid (state.getReg .x25) (by omega) outputAligned
-  rw [show 17 + 17 * pathDepth + fuel = 14 + (17 * pathDepth + (3 + fuel)) by omega,
+  rw [show 380 + fuel = 17 + (15 * 24 + (3 + fuel)) by omega,
     opening_position_setup state pc indexValid reads writes,
-    opening_path_loop pathDepth depthBound path pathCounter (fun _ => pathPC)
+    opening_path_loop 24 (by decide) path pathCounter (fun _ => pathPC)
       (by simpa only [pathHeap] using heapBound)
       (by simpa only [pathHeap] using heapAligned) pathNode pathOutput pathAligned,
     opening_next _ finishedPC]
-  simp only [openingPositionState, path, bind_assoc, pure_bind]
-  apply bind_congr
-  intro res
-  congr 1
-  simp only [Execution.charge, Execution.mk.injEq, true_and]
-  constructor <;> omega
+  simp [openingPositionState, path, Execution.charge, ← Nat.add_assoc]
 
-/-- One position advances the input by 8 bytes and proof output by `32 + 32 * pathDepth` bytes,
-while preserving `x16` and `x30`. -/
-theorem opening_position_progress (pathDepth : Nat) (state : MachineState) :
-    (openingPositionState pathDepth state).getReg .x24 = state.getReg .x24 + 8 ∧
-    (openingPositionState pathDepth state).getReg .x25 =
-      state.getReg .x25 + BitVec.ofNat 64 (32 + 32 * pathDepth) ∧
-    (openingPositionState pathDepth state).getReg .x27 = state.getReg .x27 - 1 ∧
-    (openingPositionState pathDepth state).getReg .x16 = state.getReg .x16 ∧
-    (openingPositionState pathDepth state).getReg .x30 = state.getReg .x30 := by
-  have outPtr : (openingPositionState pathDepth state).getReg .x25 =
-      state.getReg .x25 + BitVec.ofNat 64 (32 + 32 * pathDepth) := by
-    simp only [openingPositionState, openingNextState, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x27 ≠ .x25),
-      MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x24 ≠ .x25),
-      opening_path_output, (opening_position_path_registers state).1]
-    rw [BitVec.ofNat_add, BitVec.add_assoc]
-    rfl
-  refine ⟨?_, outPtr, ?_, ?_, ?_⟩ <;>
-    simp [-Function.iterate_succ, openingPositionState, openingNextState,
-      MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq,
-      opening_path_preserves_register, opening_position_path_register]
+
+private theorem opening_path_register (state : MachineState) (reg : Reg)
+    (scratch : reg ≠ .x6) (sibling : reg ≠ .x7) (index : reg ≠ .x20)
+    (source : reg ≠ .x23) (output : reg ≠ .x25) (counter : reg ≠ .x28) :
+    (openingPathState state).getReg reg = state.getReg reg := by
+  simp only [openingPathState, openingLatchState, openingPathAdvancedState,
+    MachineState.getReg_setPC,
+    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm counter),
+    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm index),
+    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm output)]
+  rw [opening_copy_register _ reg scratch,
+    opening_path_prepare_register _ reg sibling source]
+
+private theorem opening_path_preserves_register (iterations : Nat) (state : MachineState)
+    (reg : Reg) (scratch : reg ≠ .x6) (sibling : reg ≠ .x7) (index : reg ≠ .x20)
+    (source : reg ≠ .x23) (output : reg ≠ .x25) (counter : reg ≠ .x28) :
+    (openingPathState^[iterations] state).getReg reg = state.getReg reg := by
+  induction iterations with
+  | zero => rfl
+  | succ iterations ih =>
+    rw [Function.iterate_succ_apply',
+      opening_path_register _ reg scratch sibling index source output counter, ih]
+
+/-- The sibling loop emits one 32-byte digest per level. -/
+theorem opening_path_output (iterations : Nat) (state : MachineState) :
+    (openingPathState^[iterations] state).getReg .x25 =
+      state.getReg .x25 + BitVec.ofNat 64 (32 * iterations) := by
+  induction iterations with
+  | zero => simp
+  | succ iterations ih =>
+    rw [Function.iterate_succ_apply', (opening_path_registers _).1, ih]
+    simp [Nat.mul_add, BitVec.ofNat_add, BitVec.add_assoc]
+
+/-- One position advances the input by eight bytes and the proof by 800 bytes,
+while decrementing the number of positions still to open. -/
+theorem opening_position_progress (state : MachineState) :
+    (openingPositionState state).getReg .x24 = state.getReg .x24 + 8 ∧
+    (openingPositionState state).getReg .x25 = state.getReg .x25 + 800 ∧
+    (openingPositionState state).getReg .x27 = state.getReg .x27 - 1 ∧
+    (openingPositionState state).getReg .x16 = state.getReg .x16 := by
+  simp [-Function.iterate_succ, openingPositionState, openingNextState,
+    MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq,
+    opening_path_preserves_register, opening_position_path_register,
+    opening_path_output, (opening_position_path_registers state).1, BitVec.add_assoc]
 
 /-- The fixed heap, salt base, and tree size survive a complete position opening. -/
-theorem opening_position_bases (pathDepth : Nat) (state : MachineState) :
-    (openingPositionState pathDepth state).getReg .x9 = state.getReg .x9 ∧
-    (openingPositionState pathDepth state).getReg .x18 = state.getReg .x18 ∧
-    (openingPositionState pathDepth state).getReg .x19 = state.getReg .x19 := by
+theorem opening_position_bases (state : MachineState) :
+    (openingPositionState state).getReg .x9 = state.getReg .x9 ∧
+    (openingPositionState state).getReg .x18 = state.getReg .x18 ∧
+    (openingPositionState state).getReg .x19 = state.getReg .x19 := by
   simp [-Function.iterate_succ, openingPositionState, openingNextState,
     MachineState.getReg_setReg_ne, opening_path_preserves_register,
     opening_position_path_register]
 
-private theorem opening_position_pc (pathDepth : Nat) (state : MachineState) :
-    (openingPositionState pathDepth state).pc =
-      if state.getReg .x27 - 1 = 0 then 4328 else 4192 := by
+private theorem opening_position_pc (state : MachineState) :
+    (openingPositionState state).pc =
+      if state.getReg .x27 - 1 = 0 then 4316 else 4176 := by
   simp [-Function.iterate_succ, openingPositionState, openingNextState, copy_pc_setPC,
     opening_path_preserves_register, opening_position_path_register]
 
-theorem opening_copy_memory_below (state : MachineState) (address : Word)
+private theorem opening_copy_memory_below (state : MachineState) (address : Word)
     (bounded : (state.getReg .x25).toNat + 32 ≤ MEMORY_BYTES)
     (below : address.toNat < (state.getReg .x25).toNat) :
     (openingCopyState state).getMem address = state.getMem address := by
@@ -1193,8 +1111,8 @@ private theorem opening_path_memory_below (state : MachineState) (address : Word
     MachineState.getMem_setPC, MachineState.getMem_setReg]
   rw [opening_copy_memory_below]
   · simp [openingPathPreparedState, openingPathPrefix, openingPathInstructions, execInstrBr]
-  · simpa only [opening_path_prepare_register state .x25 (by decide) (by decide) (by decide)] using bounded
-  · simpa only [opening_path_prepare_register state .x25 (by decide) (by decide) (by decide)] using below
+  · simpa only [opening_path_prepare_register state .x25 (by decide) (by decide)] using bounded
+  · simpa only [opening_path_prepare_register state .x25 (by decide) (by decide)] using below
 
 /-- Path output never overwrites earlier memory, including the serialized indices. -/
 theorem opening_path_loop_memory_below (iterations : Nat) (state : MachineState) (address : Word)
@@ -1216,11 +1134,12 @@ theorem opening_path_loop_memory_below (iterations : Nat) (state : MachineState)
     · rw [outputNat]; omega
     · rw [outputNat]; omega
 
-/-- A complete salt-and-path opening preserves all memory before its proof output. -/
-theorem opening_position_memory_below (pathDepth : Nat) (state : MachineState) (address : Word)
-    (bounded : (state.getReg .x25).toNat + (32 + 32 * pathDepth) ≤ MEMORY_BYTES)
+/-- A complete salt-and-path opening preserves all memory before its proof output.
+This is the separation fact needed to keep subsequent input positions intact. -/
+theorem opening_position_memory_below (state : MachineState) (address : Word)
+    (bounded : (state.getReg .x25).toNat + 800 ≤ MEMORY_BYTES)
     (below : address.toNat < (state.getReg .x25).toNat) :
-    (openingPositionState pathDepth state).getMem address = state.getMem address := by
+    (openingPositionState state).getMem address = state.getMem address := by
   let path := openingPositionPathState state
   have outputNat : (path.getReg .x25).toNat = (state.getReg .x25).toNat + 32 := by
     rw [(opening_position_path_registers state).1, BitVec.toNat_add]
@@ -1242,9 +1161,10 @@ theorem opening_position_memory_below (pathDepth : Nat) (state : MachineState) (
         using (show (state.getReg .x25).toNat + 32 ≤ MEMORY_BYTES by omega)
     · simpa only [opening_position_prepare_register state .x25 (by decide) (by decide) (by decide)] using below
   simp only [openingPositionState, openingNextState, MachineState.getMem_setPC, MachineState.getMem_setReg]
-  rw [opening_path_loop_memory_below pathDepth path address, saltMemory]
+  rw [opening_path_loop_memory_below 24 path address, saltMemory]
   · rw [outputNat]; omega
   · rw [outputNat]; omega
+
 
 private theorem opening_address_add (address : Word) (offset : Nat)
     (bounded : address.toNat + offset ≤ MEMORY_BYTES) :
@@ -1256,13 +1176,11 @@ private theorem opening_address_add (address : Word) (offset : Nat)
     Nat.mod_eq_of_lt (by omega : offset < 2 ^ 64), Nat.mod_eq_of_lt small]
 
 set_option maxRecDepth 4096 in
-/-- Execute all remaining positions at depth `pathDepth` (`24` or `17`). -/
-theorem opening_positions_loop (pathDepth : Nat) (depthPos : 0 < pathDepth)
-    (depthBound : pathDepth ≤ LOG_LENGTH)
-    (remaining : Nat) (bounded : remaining ≤ LENGTH)
+/-- Execute all remaining positions. The index buffer precedes the proof buffer,
+so every iteration preserves the indices that later iterations will read. -/
+theorem opening_positions_loop (remaining : Nat) (bounded : remaining ≤ LENGTH)
     (state : MachineState) (counter : state.getReg .x27 = BitVec.ofNat 64 remaining)
-    (depthReg : state.getReg .x30 = BitVec.ofNat 64 pathDepth)
-    (pc : 0 < remaining → state.pc = 4192)
+    (pc : 0 < remaining → state.pc = 4176)
     (indices : ∀ offset < remaining,
       (state.getMem (state.getReg .x24 + BitVec.ofNat 64 (8 * offset))).toNat < 2 ^ 24)
     (indexSpace : (state.getReg .x24).toNat + 8 * remaining ≤ (state.getReg .x25).toNat)
@@ -1270,30 +1188,28 @@ theorem opening_positions_loop (pathDepth : Nat) (depthPos : 0 < pathDepth)
     (leaves : state.getReg .x19 = 16777216)
     (saltBound : (state.getReg .x18).toNat + 2 ^ 29 ≤ MEMORY_BYTES)
     (saltAligned : (state.getReg .x18).toNat % 8 = 0)
-    (heapBound : (state.getReg .x9).toNat + 3 * 2 ^ 29 ≤ MEMORY_BYTES)
+    (heapBound : (state.getReg .x9).toNat + 2 ^ 30 ≤ MEMORY_BYTES)
     (heapAligned : (state.getReg .x9).toNat % 8 = 0)
-    (outputBound : (state.getReg .x25).toNat + (32 + 32 * pathDepth) * remaining ≤ MEMORY_BYTES)
+    (outputBound : (state.getReg .x25).toNat + 800 * remaining ≤ MEMORY_BYTES)
     (outputAligned : (state.getReg .x25).toNat % 8 = 0)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) ((17 + 17 * pathDepth) * remaining + fuel) state allowCoins =
+    execute (submission.image .opening) (380 * remaining + fuel) state allowCoins =
       (do let result ← execute (submission.image .opening) fuel
-            ((openingPositionState pathDepth)^[remaining] state) allowCoins
-          return result.charge ((17 + 17 * pathDepth) * remaining) 0) := by
+            (openingPositionState^[remaining] state) allowCoins
+          return result.charge (380 * remaining) 0) := by
   induction remaining generalizing state with
   | zero => simp [Execution.charge]
   | succ remaining ih =>
     have small : remaining < 2 ^ 64 := by
-      norm_num [LENGTH, LOG_LENGTH] at bounded; omega
+      norm_num [LENGTH, LOG_LENGTH] at bounded
+      omega
     have subtract : BitVec.ofNat 64 (remaining + 1) - 1 = BitVec.ofNat 64 remaining := by
       change BitVec.ofNat 64 (remaining + 1) - BitVec.ofNat 64 1 = _
       rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
       simp
-    have prog := opening_position_progress pathDepth state
-    have nextCounter : (openingPositionState pathDepth state).getReg .x27 = BitVec.ofNat 64 remaining := by
-      rw [prog.2.2.1, counter, subtract]
-    have nextDepth : (openingPositionState pathDepth state).getReg .x30 = BitVec.ofNat 64 pathDepth :=
-      prog.2.2.2.2.trans depthReg
-    have nextPC : 0 < remaining → (openingPositionState pathDepth state).pc = 4192 := by
+    have nextCounter : (openingPositionState state).getReg .x27 = BitVec.ofNat 64 remaining := by
+      rw [(opening_position_progress state).2.2.1, counter, subtract]
+    have nextPC : 0 < remaining → (openingPositionState state).pc = 4176 := by
       intro positive
       rw [opening_position_pc, counter, subtract, if_neg]
       intro zero
@@ -1301,31 +1217,27 @@ theorem opening_positions_loop (pathDepth : Nat) (depthPos : 0 < pathDepth)
       change remaining % 2 ^ 64 = 0 at equal
       rw [Nat.mod_eq_of_lt small] at equal
       omega
-    have nextIndex : ((openingPositionState pathDepth state).getReg .x24).toNat =
+    have nextIndex : ((openingPositionState state).getReg .x24).toNat =
         (state.getReg .x24).toNat + 8 := by
-      rw [prog.1]
+      rw [(opening_position_progress state).1]
       exact opening_address_add (state.getReg .x24) 8 (by omega)
-    have recordLe : (state.getReg .x25).toNat + (32 + 32 * pathDepth) ≤ MEMORY_BYTES := by
-      have : (32 + 32 * pathDepth) * 1 ≤ (32 + 32 * pathDepth) * (remaining + 1) :=
-        Nat.mul_le_mul_left _ (by omega)
-      omega
-    have nextOutput : ((openingPositionState pathDepth state).getReg .x25).toNat =
-        (state.getReg .x25).toNat + (32 + 32 * pathDepth) := by
-      rw [prog.2.1]
-      exact opening_address_add (state.getReg .x25) (32 + 32 * pathDepth) recordLe
+    have nextOutput : ((openingPositionState state).getReg .x25).toNat =
+        (state.getReg .x25).toNat + 800 := by
+      rw [(opening_position_progress state).2.1]
+      exact opening_address_add (state.getReg .x25) 800 (by omega)
     have nextIndices : ∀ offset < remaining,
-        ((openingPositionState pathDepth state).getMem
-          ((openingPositionState pathDepth state).getReg .x24 + BitVec.ofNat 64 (8 * offset))).toNat < 2 ^ 24 := by
+        ((openingPositionState state).getMem
+          ((openingPositionState state).getReg .x24 + BitVec.ofNat 64 (8 * offset))).toNat < 2 ^ 24 := by
       intro offset offsetBound
-      have address : (openingPositionState pathDepth state).getReg .x24 + BitVec.ofNat 64 (8 * offset) =
+      have address : (openingPositionState state).getReg .x24 + BitVec.ofNat 64 (8 * offset) =
           state.getReg .x24 + BitVec.ofNat 64 (8 * (offset + 1)) := by
-        rw [prog.1]
+        rw [(opening_position_progress state).1]
         simp only [Nat.mul_add, Nat.mul_one, BitVec.ofNat_add, BitVec.add_assoc]
         rw [BitVec.add_comm (8 : Word)]
         rfl
-      rw [address, opening_position_memory_below pathDepth]
+      rw [address, opening_position_memory_below]
       · exact indices (offset + 1) (by omega)
-      · exact recordLe
+      · omega
       · rw [opening_address_add _ _ (by omega)]
         omega
     have indexValid : accessValid (state.getReg .x24) 8 = true := by
@@ -1333,30 +1245,25 @@ theorem opening_positions_loop (pathDepth : Nat) (depthPos : 0 < pathDepth)
       exact ⟨by omega, indexAligned⟩
     have indexBound : (state.getMem (state.getReg .x24)).toNat < 2 ^ 24 := by
       simpa using indices 0 (by omega)
-    have nextBases := opening_position_bases pathDepth state
-    have stepSplit : (17 + 17 * pathDepth) * (remaining + 1) + fuel =
-        (17 + 17 * pathDepth) + ((17 + 17 * pathDepth) * remaining + fuel) := by
-      rw [Nat.mul_succ]; omega
-    rw [stepSplit,
-      opening_position pathDepth depthPos depthBound state (pc (by omega)) depthReg
-        indexValid indexBound leaves saltBound saltAligned heapBound heapAligned
-        recordLe outputAligned,
-      ih (by omega) (openingPositionState pathDepth state) nextCounter nextDepth nextPC nextIndices
+    have nextBases := opening_position_bases state
+    rw [show 380 * (remaining + 1) + fuel = 380 + (380 * remaining + fuel) by omega,
+      opening_position state (pc (by omega)) indexValid indexBound leaves
+        saltBound saltAligned heapBound heapAligned (by omega) outputAligned,
+      ih (by omega) (openingPositionState state) nextCounter nextPC nextIndices
         (by rw [nextIndex, nextOutput]; omega) (by rw [nextIndex]; omega)
         (by simpa only [nextBases.2.2] using leaves)
         (by simpa only [nextBases.2.1] using saltBound)
         (by simpa only [nextBases.2.1] using saltAligned)
         (by simpa only [nextBases.1] using heapBound)
         (by simpa only [nextBases.1] using heapAligned)
-        (by rw [nextOutput]; rw [Nat.mul_succ] at outputBound; omega)
-        (by rw [nextOutput]; omega)]
+        (by rw [nextOutput]; omega) (by rw [nextOutput]; omega)]
     simp [Function.iterate_succ_apply, Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm]
 
-/-- The complete position loop reaches `open-done` (4328) with its counter at zero. -/
-theorem opening_positions_finished (pathDepth remaining : Nat) (positive : 0 < remaining)
+/-- The complete position loop reaches the return block with its counter at zero. -/
+theorem opening_positions_finished (remaining : Nat) (positive : 0 < remaining)
     (state : MachineState) (counter : state.getReg .x27 = BitVec.ofNat 64 remaining) :
-    ((openingPositionState pathDepth)^[remaining] state).pc = 4328 ∧
-    ((openingPositionState pathDepth)^[remaining] state).getReg .x27 = 0 := by
+    (openingPositionState^[remaining] state).pc = 4316 ∧
+    (openingPositionState^[remaining] state).getReg .x27 = 0 := by
   induction remaining generalizing state with
   | zero => omega
   | succ remaining ih =>
@@ -1364,8 +1271,8 @@ theorem opening_positions_finished (pathDepth remaining : Nat) (positive : 0 < r
       change BitVec.ofNat 64 (remaining + 1) - BitVec.ofNat 64 1 = _
       rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
       simp
-    have nextCounter : (openingPositionState pathDepth state).getReg .x27 = BitVec.ofNat 64 remaining := by
-      rw [(opening_position_progress pathDepth state).2.2.1, counter, subtract]
+    have nextCounter : (openingPositionState state).getReg .x27 = BitVec.ofNat 64 remaining := by
+      rw [(opening_position_progress state).2.2.1, counter, subtract]
     cases remaining with
     | zero =>
       simp only [Function.iterate_succ_apply, Function.iterate_zero, id_eq]
@@ -1374,287 +1281,14 @@ theorem opening_positions_finished (pathDepth remaining : Nat) (positive : 0 < r
       · exact nextCounter
     | succ remaining =>
       rw [Function.iterate_succ_apply]
-      exact ih (by omega) (openingPositionState pathDepth state) nextCounter
+      exact ih (by omega) (openingPositionState state) nextCounter
 
 /-- Preserve the original ABI opening count throughout the outer loop. -/
-theorem opening_positions_preserves_count (pathDepth iterations : Nat) (state : MachineState) :
-    ((openingPositionState pathDepth)^[iterations] state).getReg .x16 = state.getReg .x16 := by
+theorem opening_positions_preserves_count (iterations : Nat) (state : MachineState) :
+    (openingPositionState^[iterations] state).getReg .x16 = state.getReg .x16 := by
   induction iterations with
   | zero => rfl
   | succ iterations ih =>
-    rw [Function.iterate_succ_apply', (opening_position_progress pathDepth _).2.2.2.1, ih]
-
-/-- Preserve the heap base throughout the outer loop. -/
-theorem opening_positions_preserves_heap (pathDepth iterations : Nat) (state : MachineState) :
-    ((openingPositionState pathDepth)^[iterations] state).getReg .x9 = state.getReg .x9 := by
-  induction iterations with
-  | zero => rfl
-  | succ iterations ih =>
-    rw [Function.iterate_succ_apply', (opening_position_bases pathDepth _).1, ih]
-
-/-- Track proof output pointer across the outer loop. -/
-theorem opening_positions_output (pathDepth iterations : Nat) (state : MachineState) :
-    ((openingPositionState pathDepth)^[iterations] state).getReg .x25 =
-      state.getReg .x25 + BitVec.ofNat 64 ((32 + 32 * pathDepth) * iterations) := by
-  induction iterations with
-  | zero => simp
-  | succ iterations ih =>
-    rw [Function.iterate_succ_apply', (opening_position_progress pathDepth _).2.1, ih]
-    rw [BitVec.add_assoc, ← BitVec.ofNat_add, ← Nat.mul_succ]
-
-/-! ### Level-7 cap-table copy (`k = 128`) -/
-
-private def openingCapSetupInstructions : List Instr :=
-  [.ADDI .x6 .x0 3, .SLLI .x6 .x6 11, .ADD .x23 .x9 .x6, .ADDI .x28 .x0 64]
-
-private def openingCapSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
-  (openingCapSetupInstructions.take count).foldl execInstrBr state
-
-def openingCapSetupState (state : MachineState) : MachineState :=
-  openingCapSetupPrefix state 4
-
-theorem opening_cap_setup (state : MachineState) (pc : state.pc = 4336)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (4 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .opening) fuel
-            (openingCapSetupState state) allowCoins
-          return result.charge 4 0) := by
-  apply execute_unit_steps (states := openingCapSetupPrefix state)
-  intro i hi
-  refine ⟨.base ((openingCapSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply opening_fetch _ (60 + i) _ (by omega)
-    · interval_cases i <;>
-        simp [openingCapSetupPrefix, openingCapSetupInstructions, execInstrBr, pc, MachineState.setPC]
-    · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
-
-theorem opening_cap_setup_registers (state : MachineState) (pc : state.pc = 4336) :
-    (openingCapSetupState state).pc = 4352 ∧
-    (openingCapSetupState state).getReg .x23 = state.getReg .x9 + 6144 ∧
-    (openingCapSetupState state).getReg .x25 = state.getReg .x25 ∧
-    (openingCapSetupState state).getReg .x28 = 64 ∧
-    (openingCapSetupState state).mem = state.mem := by
-  dsimp only [openingCapSetupState, openingCapSetupPrefix, openingCapSetupInstructions,
-    List.take, List.foldl, execInstrBr, signExtend12, MachineState.getReg,
-    MachineState.setReg, MachineState.setPC]
-  simp [pc]
-
-/-- Advance source and destination by 32 bytes between the two halves of a cap pair. -/
-def openingCapMidState (state : MachineState) : MachineState :=
-  ((state.setReg .x23 (state.getReg .x23 + 32)).setReg .x25 (state.getReg .x25 + 32)).setPC 4392
-
-private theorem opening_cap_mid (state : MachineState) (pc : state.pc = 4384)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (2 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .opening) fuel
-            (openingCapMidState state) allowCoins
-          return result.charge 2 0) := by
-  let next := (state.setReg .x23 (state.getReg .x23 + 32)).setPC 4388
-  have f0 : fetch (submission.image .opening) state = some (.base (.ADDI .x23 .x23 32)) := by
-    apply opening_fetch state 72 _ (by decide) pc; rfl
-  have f1 : fetch (submission.image .opening) next = some (.base (.ADDI .x25 .x25 32)) := by
-    apply opening_fetch next 73 _ (by decide) rfl; rfl
-  have s0 : ordinaryStep state (.base (.ADDI .x23 .x23 32)) = some next := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, next, pc]
-  have s1 : ordinaryStep next (.base (.ADDI .x25 .x25 32)) = some (openingCapMidState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, next,
-      openingCapMidState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  rw [Nat.add_comm 2 fuel]
-  simp only [execute, f0, s0, f1, s1, instructionCycles, bind_assoc, pure_bind]
-  simp [Execution.charge, ← Nat.add_assoc]
-
-/-- After the second digest of a cap pair, skip the 32-byte gap (+64 total on x23),
-advance x25 by 32, and decrement x28. -/
-def openingCapNextState (state : MachineState) : MachineState :=
-  let remaining := state.getReg .x28 - 1
-  (((state.setReg .x23 (state.getReg .x23 + 64)).setReg .x25 (state.getReg .x25 + 32)).setReg
-    .x28 remaining).setPC (if remaining = 0 then 4440 else 4352)
-
-private theorem opening_cap_next (state : MachineState) (pc : state.pc = 4424)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (4 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .opening) fuel
-            (openingCapNextState state) allowCoins
-          return result.charge 4 0) := by
-  let s1 := (state.setReg .x23 (state.getReg .x23 + 64)).setPC 4428
-  let s2 := (s1.setReg .x25 (state.getReg .x25 + 32)).setPC 4432
-  let s3 := (s2.setReg .x28 (state.getReg .x28 - 1)).setPC 4436
-  have f0 : fetch (submission.image .opening) state = some (.base (.ADDI .x23 .x23 64)) := by
-    apply opening_fetch state 82 _ (by decide) pc; rfl
-  have f1 : fetch (submission.image .opening) s1 = some (.base (.ADDI .x25 .x25 32)) := by
-    apply opening_fetch s1 83 _ (by decide) rfl; rfl
-  have f2 : fetch (submission.image .opening) s2 = some (.base (.ADDI .x28 .x28 4095)) := by
-    apply opening_fetch s2 84 _ (by decide) rfl; rfl
-  have f3 : fetch (submission.image .opening) s3 = some (.base (.BNE .x28 .x0 8108)) := by
-    apply opening_fetch s3 85 _ (by decide) rfl; rfl
-  have st0 : ordinaryStep state (.base (.ADDI .x23 .x23 64)) = some s1 := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s1, pc]
-  have st1 : ordinaryStep s1 (.base (.ADDI .x25 .x25 32)) = some s2 := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s1, s2,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  have st2 : ordinaryStep s2 (.base (.ADDI .x28 .x28 4095)) = some s3 := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, s1, s2, s3,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC, BitVec.sub_eq_add_neg]
-  have st3 : ordinaryStep s3 (.base (.BNE .x28 .x0 8108)) = some (openingCapNextState state) := by
-    simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13, s1, s2, s3,
-      openingCapNextState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    split <;> simp_all
-  rw [Nat.add_comm 4 fuel]
-  simp only [execute, f0, st0, f1, st1, f2, st2, f3, st3, instructionCycles, bind_assoc, pure_bind]
-  simp [Execution.charge, ← Nat.add_assoc]
-
-/-- One iteration of the cap-table copy loop: copy pair `(2q, 2q+1)` across the gap. -/
-def openingCapPairState (state : MachineState) : MachineState :=
-  openingCapNextState (openingCopyState (openingCapMidState (openingCopyState state)))
-
-theorem opening_cap_pair_registers (state : MachineState) :
-    (openingCapPairState state).getReg .x23 = state.getReg .x23 + 96 ∧
-    (openingCapPairState state).getReg .x25 = state.getReg .x25 + 64 ∧
-    (openingCapPairState state).getReg .x28 = state.getReg .x28 - 1 := by
-  simp [openingCapPairState, openingCapNextState, openingCapMidState,
-    MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq,
-    opening_copy_register, BitVec.add_assoc]
-
-theorem opening_cap_pair_pc (state : MachineState) :
-    (openingCapPairState state).pc =
-      if state.getReg .x28 - 1 = 0 then 4440 else 4352 := by
-  simp [openingCapPairState, openingCapNextState, openingCapMidState,
-    copy_pc_setPC, MachineState.getReg_setReg_ne, opening_copy_register]
-
-theorem opening_cap_pair_iteration (state : MachineState) (pc : state.pc = 4352)
-    (srcBound : (state.getReg .x23).toNat + 64 ≤ MEMORY_BYTES)
-    (srcAligned : (state.getReg .x23).toNat % 8 = 0)
-    (dstBound : (state.getReg .x25).toNat + 64 ≤ MEMORY_BYTES)
-    (dstAligned : (state.getReg .x25).toNat % 8 = 0)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (22 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .opening) fuel
-            (openingCapPairState state) allowCoins
-          return result.charge 22 0) := by
-  let c1 := openingCopyState state
-  let m := openingCapMidState c1
-  let c2 := openingCopyState m
-  have c1PC : c1.pc = 4384 := by rw [opening_copy_pc, pc]; rfl
-  have c2PC : c2.pc = 4424 := by rw [opening_copy_pc]; rfl
-  have s1 := opening_digest_access_valid (state.getReg .x23) (by omega) srcAligned
-  have d1 := opening_digest_access_valid (state.getReg .x25) (by omega) dstAligned
-  have mSrc : m.getReg .x23 = state.getReg .x23 + 32 := by
-    simp [m, openingCapMidState, c1, opening_copy_register, MachineState.getReg_setReg_ne,
-      MachineState.getReg_setReg_eq]
-  have mDst : m.getReg .x25 = state.getReg .x25 + 32 := by
-    simp [m, openingCapMidState, c1, opening_copy_register, MachineState.getReg_setReg_ne,
-      MachineState.getReg_setReg_eq]
-  have mSrcNat : (m.getReg .x23).toNat = (state.getReg .x23).toNat + 32 := by
-    rw [mSrc]; exact opening_address_add _ 32 (by omega)
-  have mDstNat : (m.getReg .x25).toNat = (state.getReg .x25).toNat + 32 := by
-    rw [mDst]; exact opening_address_add _ 32 (by omega)
-  have s2 := opening_digest_access_valid (m.getReg .x23) (by rw [mSrcNat]; omega) (by rw [mSrcNat]; omega)
-  have d2 := opening_digest_access_valid (m.getReg .x25) (by rw [mDstNat]; omega) (by rw [mDstNat]; omega)
-  rw [show 22 + fuel = 8 + (2 + (8 + (4 + fuel))) by omega,
-    opening_copy state 64 (Or.inr (Or.inr (Or.inl rfl))) pc s1 d1,
-    opening_cap_mid c1 c1PC,
-    opening_copy m 74 (Or.inr (Or.inr (Or.inr rfl))) rfl s2 d2,
-    opening_cap_next c2 c2PC]
-  simp [openingCapPairState, c1, m, c2, Execution.charge, ← Nat.add_assoc]
-
-theorem opening_cap_pair_memory_below (state : MachineState) (address : Word)
-    (bounded : (state.getReg .x25).toNat + 64 ≤ MEMORY_BYTES)
-    (below : address.toNat < (state.getReg .x25).toNat) :
-    (openingCapPairState state).getMem address = state.getMem address := by
-  let c1 := openingCopyState state
-  let m := openingCapMidState c1
-  have mDstNat : (m.getReg .x25).toNat = (state.getReg .x25).toNat + 32 := by
-    have mDst : m.getReg .x25 = state.getReg .x25 + 32 := by
-      simp [m, openingCapMidState, c1, opening_copy_register, MachineState.getReg_setReg_ne,
-        MachineState.getReg_setReg_eq]
-    rw [mDst]; exact opening_address_add _ 32 (by omega)
-  simp only [openingCapPairState, openingCapNextState, MachineState.getMem_setPC, MachineState.getMem_setReg]
-  rw [opening_copy_memory_below m address (by rw [mDstNat]; omega) (by rw [mDstNat]; omega)]
-  exact opening_copy_memory_below state address (by omega) below
-
-theorem opening_cap_loop_memory_below (iterations : Nat) (state : MachineState) (address : Word)
-    (bounded : (state.getReg .x25).toNat + 64 * iterations ≤ MEMORY_BYTES)
-    (below : address.toNat < (state.getReg .x25).toNat) :
-    (openingCapPairState^[iterations] state).getMem address = state.getMem address := by
-  induction iterations generalizing state with
-  | zero => rfl
-  | succ iterations ih =>
-    have nextDst : ((openingCapPairState state).getReg .x25).toNat =
-        (state.getReg .x25).toNat + 64 := by
-      rw [(opening_cap_pair_registers state).2.1]
-      exact opening_address_add _ 64 (by omega)
-    rw [Function.iterate_succ_apply, ih]
-    · exact opening_cap_pair_memory_below state address (by omega) below
-    · rw [nextDst]; omega
-    · rw [nextDst]; omega
-
-theorem opening_cap_loop (remaining : Nat) (bounded : remaining ≤ 64) (state : MachineState)
-    (counter : state.getReg .x28 = BitVec.ofNat 64 remaining)
-    (pc : 0 < remaining → state.pc = 4352)
-    (srcBound : (state.getReg .x23).toNat + 96 * remaining ≤ MEMORY_BYTES)
-    (srcAligned : (state.getReg .x23).toNat % 8 = 0)
-    (dstBound : (state.getReg .x25).toNat + 64 * remaining ≤ MEMORY_BYTES)
-    (dstAligned : (state.getReg .x25).toNat % 8 = 0)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .opening) (22 * remaining + fuel) state allowCoins =
-      (do let result ← execute (submission.image .opening) fuel
-            (openingCapPairState^[remaining] state) allowCoins
-          return result.charge (22 * remaining) 0) := by
-  induction remaining generalizing state with
-  | zero => simp [Execution.charge]
-  | succ remaining ih =>
-    have subtract : BitVec.ofNat 64 (remaining + 1) - 1 = BitVec.ofNat 64 remaining := by
-      change BitVec.ofNat 64 (remaining + 1) - BitVec.ofNat 64 1 = _
-      rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
-      simp
-    have nextCounter : (openingCapPairState state).getReg .x28 = BitVec.ofNat 64 remaining := by
-      rw [(opening_cap_pair_registers state).2.2, counter, subtract]
-    have nextPC : 0 < remaining → (openingCapPairState state).pc = 4352 := by
-      intro positive
-      rw [opening_cap_pair_pc, counter, subtract, if_neg]
-      intro zero
-      have := congrArg BitVec.toNat zero
-      change remaining % 2 ^ 64 = 0 at this
-      rw [Nat.mod_eq_of_lt (by omega)] at this
-      omega
-    have nextSrc : ((openingCapPairState state).getReg .x23).toNat =
-        (state.getReg .x23).toNat + 96 := by
-      rw [(opening_cap_pair_registers state).1]
-      exact opening_address_add _ 96 (by omega)
-    have nextDst : ((openingCapPairState state).getReg .x25).toNat =
-        (state.getReg .x25).toNat + 64 := by
-      rw [(opening_cap_pair_registers state).2.1]
-      exact opening_address_add _ 64 (by omega)
-    rw [show 22 * (remaining + 1) + fuel = 22 + (22 * remaining + fuel) by omega,
-      opening_cap_pair_iteration state (pc (by omega)) (by omega) srcAligned (by omega) dstAligned,
-      ih (by omega) (openingCapPairState state) nextCounter nextPC
-        (by rw [nextSrc]; omega) (by rw [nextSrc]; omega)
-        (by rw [nextDst]; omega) (by rw [nextDst]; omega)]
-    simp [Function.iterate_succ_apply, Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm]
-
-theorem opening_cap_finished (remaining : Nat) (positive : 0 < remaining)
-    (bounded : remaining ≤ 64) (state : MachineState)
-    (counter : state.getReg .x28 = BitVec.ofNat 64 remaining) :
-    (openingCapPairState^[remaining] state).pc = 4440 ∧
-    (openingCapPairState^[remaining] state).getReg .x28 = 0 := by
-  induction remaining generalizing state with
-  | zero => omega
-  | succ remaining ih =>
-    have subtract : BitVec.ofNat 64 (remaining + 1) - 1 = BitVec.ofNat 64 remaining := by
-      change BitVec.ofNat 64 (remaining + 1) - BitVec.ofNat 64 1 = _
-      rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
-      simp
-    have nextCounter : (openingCapPairState state).getReg .x28 = BitVec.ofNat 64 remaining := by
-      rw [(opening_cap_pair_registers state).2.2, counter, subtract]
-    cases remaining with
-    | zero =>
-      simp only [Function.iterate_succ_apply, Function.iterate_zero, id_eq]
-      constructor
-      · rw [opening_cap_pair_pc, counter, subtract]; rfl
-      · exact nextCounter
-    | succ remaining =>
-      rw [Function.iterate_succ_apply]
-      exact ih (by omega) (by omega) (openingCapPairState state) nextCounter
+    rw [Function.iterate_succ_apply', (opening_position_progress _).2.2.2, ih]
 
 end CommitGolfCandidate

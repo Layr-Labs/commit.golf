@@ -9,6 +9,8 @@ import CommitGolfCandidate.Completeness
 import CommitGolfCandidate.BindingSecurity
 import CommitGolfCandidate.HidingSecurity
 import CommitGolf.Artifact
+import CommitGolfCandidate.LeafResourceBridge
+import CommitGolfCandidate.ResourceTests
 
 /-! Certified initial machine implementation. Every requirement below is proved
 for these same RISC-V images, including adaptive binding and commitment-and-opening
@@ -17,12 +19,11 @@ namespace CommitGolf.Challenge
 
 def submission : CommitGolf.Submission := CommitGolfCandidate.submission
 
-set_option maxRecDepth 200000 in
-set_option maxHeartbeats 16000000 in
+set_option maxRecDepth 100000 in
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
   rfl
 
-theorem certificate : CommitGolf.Certificate submission 77824 1047527478 40614 where
+theorem certificate : CommitGolf.Certificate submission 102400 6375342100 48670 where
   admission := CommitGolfCandidate.submission_admission
   machineSuccess := CommitGolfCandidate.submission_machine_success
   termination := CommitGolfCandidate.submission_termination

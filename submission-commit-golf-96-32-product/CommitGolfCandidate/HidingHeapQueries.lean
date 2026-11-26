@@ -6,23 +6,6 @@ Recomputing subtrees lets the leaf hiding lemma charge every honest compression.
 namespace CommitGolfCandidate
 open CommitGolf OracleComp
 
-/-- One parent compression as an oracle program, matching `combine`. -/
-def hashParent (left right : Digest) : OracleComp World Digest := do
-  let answer ← (liftM (World.query (.inr (.inl ((padInput (right ++ left)))))) : OracleComp World Digest)
-  pure answer
-
-theorem hash_parent_bound (left right : Digest) : PublicQueryBound (hashParent left right) 1 := by
-  change 1 ≤ 1 ∧ ∀ answer, PublicQueryBound (pure answer : OracleComp World Digest) (1-1)
-  exact ⟨le_refl _, fun _ => trivial⟩
-
-theorem fixed_hash_parent (oracle : Oracle) (left right : Digest)
-    {α : Type} (next : Digest → OracleComp World α) :
-    fixedOracleRun oracle (hashParent left right >>= next) =
-      fixedOracleRun oracle (next (combine oracle.compression left right)) := by
-  simp only [hashParent, bind_assoc, pure_bind]
-  erw [fixed_oracle_run_public]
-  rfl
-
 /-- Compute a heap node from oracle-computed leaves. Fuel bounds the tree depth;
 the refinement theorem below proves it is sufficient on all nodes of interest. -/
 def queryHeap (leafCount : Nat) (leaf : Nat → OracleComp World Digest) :
@@ -33,7 +16,7 @@ def queryHeap (leafCount : Nat) (leaf : Nat → OracleComp World Digest) :
       if 0 < node ∧ node < leafCount then do
         let left ← queryHeap leafCount leaf fuel (2*node)
         let right ← queryHeap leafCount leaf fuel (2*node+1)
-        hashParent left right
+        hashBlocks [right] left
       else if leafCount ≤ node ∧ node < 2*leafCount then leaf (node-leafCount)
       else pure 0
 
@@ -70,8 +53,8 @@ theorem query_heap_bound (leafCount : Nat) (leaf : Nat → OracleComp World Dige
     simp only [queryHeap]
     split
     · have parent := public_query_bound_bind (ih (2*node)) (fun left =>
-        public_query_bound_bind (ih (2*node+1)) (fun right => hash_parent_bound left right))
-      simpa only [heapQueryBudget, Nat.add_assoc] using parent
+        public_query_bound_bind (ih (2*node+1)) (fun right => hash_blocks_bound [right] left))
+      simpa only [List.length_singleton, heapQueryBudget, Nat.add_assoc] using parent
     · split
       · exact (bounded _).mono (heap_query_budget_ge_leaf leafBudget (fuel+1))
       · trivial
@@ -102,10 +85,10 @@ theorem query_heap_reference (oracle : Oracle) (leafCount : Nat)
         leftEnough.trans (Nat.mul_le_mul_left _ (by omega))
       rw [fixed_oracle_run_bind, ih (2*node) (by omega) (by omega) leftEnough, pure_bind]
       rw [fixed_oracle_run_bind, ih (2*node+1) (by omega) (by omega) rightEnough, pure_bind]
-      have final := fixed_hash_parent oracle
-        (referenceHeap oracle.compression leafCount values (2*node))
-        (referenceHeap oracle.compression leafCount values (2*node+1)) pure
-      simp only [bind_pure, fixed_oracle_run_pure] at final
+      have final := fixed_hash_blocks oracle
+        [referenceHeap oracle.compression leafCount values (2*node+1)]
+        (referenceHeap oracle.compression leafCount values (2*node)) pure
+      simp only [bind_pure, List.foldl_cons, List.foldl_nil, fixed_oracle_run_pure] at final
       rw [final, reference_heap_parent _ _ _ _ branch.1 branch.2]
     · rename_i notBranch
       have lower : leafCount ≤ node := by omega

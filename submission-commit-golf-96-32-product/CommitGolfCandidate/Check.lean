@@ -1,7 +1,7 @@
 import CommitGolfCandidate.Padding96Call
 
-/-! The checker's dispatch, length gates, root-word comparison, compression call,
-and leaf subroutine, proved against the submitted image. -/
+/-! The checker’s input gate and exit blocks, proved against the submitted image.
+Malformed proof lengths reject before any oracle call or proof-memory access. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
@@ -20,147 +20,76 @@ theorem check_fetch (state : MachineState) (index : Nat) (instruction : Instr)
   | none => simp [h] at decoded
   | some word => simpa [h] using decoded
 
-/-! ### Entry dispatch (`k = 128` vs `k ≠ 128`) -/
-
-private def checkDispatchInstructions : List Instr :=
+private def checkSetupInstructions : List Instr :=
   [.ADDI .x26 .x11 0, .ADDI .x24 .x13 0, .ADDI .x8 .x14 0,
-   .ADDI .x25 .x15 0, .ADDI .x27 .x16 0, .ADDI .x6 .x0 128]
+   .ADDI .x25 .x15 0, .ADDI .x27 .x16 0, .ADDI .x6 .x0 0,
+   .SLLI .x6 .x6 11, .ADDI .x6 .x6 800]
 
-private def checkDispatchPrefix (state : MachineState) (count : Nat) : MachineState :=
-  (checkDispatchInstructions.take count).foldl execInstrBr state
+private def checkSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
+  (checkSetupInstructions.take count).foldl execInstrBr state
 
-private theorem check_dispatch_prefix (state : MachineState) (pc : state.pc = 4096)
+private theorem check_setup_prefix (state : MachineState) (pc : state.pc = 4096)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (6 + fuel) state allowCoins =
+    execute (submission.image .check) (8 + fuel) state allowCoins =
       (do let result ← execute (submission.image .check) fuel
-            (checkDispatchPrefix state 6) allowCoins
-          return result.charge 6 0) := by
-  apply execute_unit_steps (states := checkDispatchPrefix state)
+            (checkSetupPrefix state 8) allowCoins
+          return result.charge 8 0) := by
+  apply execute_unit_steps (states := checkSetupPrefix state)
   intro i hi
-  refine ⟨.base ((checkDispatchInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
+  refine ⟨.base ((checkSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
   · apply check_fetch _ i _ (by omega)
     · interval_cases i <;>
-        simp [checkDispatchPrefix, checkDispatchInstructions, execInstrBr, pc, MachineState.setPC]
+        simp [checkSetupPrefix, checkSetupInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-/-- State after initial ABI register copy and dispatch on `x16 = 128` (`4444` for cap
-mode, `4124` for normal mode). -/
-def checkDispatchState (state : MachineState) : MachineState :=
-  (checkDispatchPrefix state 6).setPC (if state.getReg .x16 = 128 then 4444 else 4124)
-
-theorem check_dispatch (state : MachineState) (pc : state.pc = 4096)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (7 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
-            (checkDispatchState state) allowCoins
-          return result.charge 7 0) := by
-  let ready := checkDispatchPrefix state 6
-  have readyPC : ready.pc = 4120 := by
-    simp [ready, checkDispatchPrefix, checkDispatchInstructions, execInstrBr, pc, MachineState.setPC]
-  have ready27 : ready.getReg .x27 = state.getReg .x16 := by
-    simp [ready, checkDispatchPrefix, checkDispatchInstructions, execInstrBr, signExtend12,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  have ready6 : ready.getReg .x6 = 128 := by
-    dsimp only [ready, checkDispatchPrefix, checkDispatchInstructions, List.take, List.foldl,
-      execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
-    simp
-  have fetched : fetch (submission.image .check) ready = some (.base (.BEQ .x27 .x6 324)) := by
-    apply check_fetch ready 6 _ (by decide) readyPC; rfl
-  have stepped : ordinaryStep ready (.base (.BEQ .x27 .x6 324)) = some (checkDispatchState state) := by
-    dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr]
-    rw [ready27, ready6, readyPC]
-    simp [checkDispatchState, ready, signExtend13]
-    split <;> simp_all
-  rw [show 7 + fuel = 6 + (fuel + 1) by omega, check_dispatch_prefix state pc]
-  rw [execute_ordinary_step _ _ _ _ _ _ fetched stepped]
-  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
-
-theorem check_dispatch_registers (state : MachineState) :
-    (checkDispatchState state).getReg .x26 = state.getReg .x11 ∧
-    (checkDispatchState state).getReg .x24 = state.getReg .x13 ∧
-    (checkDispatchState state).getReg .x8 = state.getReg .x14 ∧
-    (checkDispatchState state).getReg .x25 = state.getReg .x15 ∧
-    (checkDispatchState state).getReg .x27 = state.getReg .x16 ∧
-    (checkDispatchState state).getReg .x16 = state.getReg .x16 ∧
-    (checkDispatchState state).getReg .x17 = state.getReg .x17 ∧
-    (checkDispatchState state).mem = state.mem := by
-  dsimp only [checkDispatchState, checkDispatchPrefix, checkDispatchInstructions,
-    List.take, List.foldl, execInstrBr, signExtend12, MachineState.getReg,
-    MachineState.setReg, MachineState.setPC]
-  simp
-
-/-! ### Normal length gate (`k ≠ 128`) and exit blocks -/
-
-private def checkNormalLenInstructions : List Instr :=
-  [.ADDI .x6 .x0 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 800]
-
-private def checkNormalLenPrefix (state : MachineState) (count : Nat) : MachineState :=
-  (checkNormalLenInstructions.take count).foldl execInstrBr state
-
-private theorem check_normal_len_prefix (state : MachineState) (pc : state.pc = 4124)
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
-            (checkNormalLenPrefix state 3) allowCoins
-          return result.charge 3 0) := by
-  apply execute_unit_steps (states := checkNormalLenPrefix state)
-  intro i hi
-  refine ⟨.base ((checkNormalLenInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply check_fetch _ (7 + i) _ (by omega)
-    · interval_cases i <;>
-        simp [checkNormalLenPrefix, checkNormalLenInstructions, execInstrBr, pc, MachineState.setPC]
-    · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
-  · interval_cases i <;> rfl
-
-/-- The normal length gate compares `x16 * 800` with `x17` (after dispatch with `x16 ≠ 128`). -/
+/-- The input gate compares the supplied length with 800 times the opening size. -/
 def checkLengthState (state : MachineState) : MachineState :=
-  ((checkNormalLenPrefix (checkDispatchState state) 3).setReg .x7 (state.getReg .x16 * 800)).setPC
-    (if state.getReg .x16 * 800 = state.getReg .x17 then 4144 else 4432)
+  ((checkSetupPrefix state 8).setReg .x7 (state.getReg .x16 * 800)).setPC
+    (if state.getReg .x16 * 800 = state.getReg .x17 then 4136 else 4432)
 
-/-- For `x16 ≠ 128`, 12 instructions and 15 cycles reach the normal length decision. -/
+/-- Ten instructions, thirteen cycles, and no queries to reach the length decision. -/
 theorem check_length_gate (state : MachineState) (pc : state.pc = 4096)
-    (not128 : state.getReg .x16 ≠ 128) (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (12 + fuel) state allowCoins =
+    (fuel : Nat) (allowCoins : Bool) :
+    execute (submission.image .check) (10 + fuel) state allowCoins =
       (do let result ← execute (submission.image .check) fuel
             (checkLengthState state) allowCoins
-          return result.charge 15 0) := by
-  let disp := checkDispatchState state
-  have dispPC : disp.pc = 4124 := if_neg not128
-  let ready := checkNormalLenPrefix disp 3
-  let multiplied := (ready.setReg .x7 (state.getReg .x16 * 800)).setPC 4140
-  have readyPC : ready.pc = 4136 := by
-    simp [ready, checkNormalLenPrefix, checkNormalLenInstructions, execInstrBr, dispPC, MachineState.setPC]
-  have fetched₁ : fetch (submission.image .check) ready = some (.base (.MUL .x7 .x16 .x6)) := by
-    apply check_fetch ready 10 _ (by decide) readyPC; rfl
-  have fetched₂ : fetch (submission.image .check) multiplied = some (.base (.BNE .x7 .x17 292)) := by
-    apply check_fetch multiplied 11 _ (by decide) rfl; rfl
+          return result.charge 13 0) := by
+  let ready := checkSetupPrefix state 8
+  let multiplied := (ready.setReg .x7 (state.getReg .x16 * 800)).setPC 4132
+  have readyPC : ready.pc = 4128 := by
+    simp [ready, checkSetupPrefix, checkSetupInstructions, execInstrBr, pc, MachineState.setPC]
+  have fetched₁ : fetch (submission.image .check) ready =
+      some (.base (.MUL .x7 .x16 .x6)) := by
+    apply check_fetch ready 8 _ (by decide) readyPC
+    rfl
+  have fetched₂ : fetch (submission.image .check) multiplied =
+      some (.base (.BNE .x7 .x17 300)) := by
+    apply check_fetch multiplied 9 _ (by decide) rfl
+    rfl
   have readyCount : ready.getReg .x16 = state.getReg .x16 := by
-    have h := (check_dispatch_registers state).2.2.2.2.2.1
-    simpa [ready, disp, checkNormalLenPrefix, checkNormalLenInstructions, execInstrBr, signExtend12,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC] using h
+    simp [ready, checkSetupPrefix, checkSetupInstructions, execInstrBr, signExtend12,
+      MachineState.getReg, MachineState.setReg, MachineState.setPC]
   have readyLength : ready.getReg .x17 = state.getReg .x17 := by
-    have h := (check_dispatch_registers state).2.2.2.2.2.2.1
-    simpa [ready, disp, checkNormalLenPrefix, checkNormalLenInstructions, execInstrBr, signExtend12,
-      MachineState.getReg, MachineState.setReg, MachineState.setPC] using h
+    simp [ready, checkSetupPrefix, checkSetupInstructions, execInstrBr, signExtend12,
+      MachineState.getReg, MachineState.setReg, MachineState.setPC]
   have readyFactor : ready.getReg .x6 = 800 := by
-    dsimp only [ready, checkNormalLenPrefix, checkNormalLenInstructions, List.take, List.foldl,
+    dsimp only [ready, checkSetupPrefix, checkSetupInstructions, List.take, List.foldl,
       execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
     simp
   have step₁ : ordinaryStep ready (.base (.MUL .x7 .x16 .x6)) = some multiplied := by
     simp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr,
       readyCount, readyFactor, readyPC, multiplied]
     rfl
-  have step₂ : ordinaryStep multiplied (.base (.BNE .x7 .x17 292)) = some (checkLengthState state) := by
+  have step₂ : ordinaryStep multiplied (.base (.BNE .x7 .x17 300)) =
+      some (checkLengthState state) := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, multiplied]
     simp only [MachineState.getReg_setPC, MachineState.getReg_setReg_eq (by decide : Reg.x7 ≠ .x0),
       MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x7 ≠ .x17), readyLength]
-    simp [checkLengthState, ready, disp, signExtend13, MachineState.setPC]
+    simp [checkLengthState, ready, signExtend13, MachineState.setPC]
     split <;> simp_all
-  rw [show 12 + fuel = 7 + (3 + (fuel + 2)) by omega,
-    check_dispatch state pc, check_normal_len_prefix disp dispPC]
+  rw [show 10 + fuel = 8 + (fuel + 2) by omega, check_setup_prefix state pc]
   rw [execute_ordinary_step _ _ _ _ _ _ fetched₁ step₁]
   rw [execute_ordinary_step _ _ _ _ _ _ fetched₂ step₂]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
@@ -170,7 +99,7 @@ def checkExitState (state : MachineState) (success : Bool) : MachineState :=
   ((state.setReg .x5 1).setReg .x10 (if success then 0 else 1)).setPC
     (if success then 4428 else 4440)
 
-/-- Both exit blocks (`accept` at 4420, `reject` at 4432) halt in three cycles. -/
+/-- Both exit blocks halt in three cycles without consulting the oracle. -/
 theorem check_exit (state : MachineState) (success : Bool)
     (pc : state.pc = if success then 4420 else 4432) (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (3 + fuel) state allowCoins =
@@ -204,99 +133,111 @@ theorem check_exit (state : MachineState) (success : Bool)
   cases success <;> simp [checkExitState, MachineState.getReg, MachineState.setReg,
     MachineState.setPC, Execution.charge]
 
-/-- A mismatching normal proof length is rejected in 15 instructions and 18 cycles. -/
+/-- A mismatching length is rejected after thirteen instructions and sixteen cycles. -/
 theorem check_wrong_length (state : MachineState) (pc : state.pc = 4096)
-    (not128 : state.getReg .x16 ≠ 128)
     (wrong : state.getReg .x16 * 800 ≠ state.getReg .x17)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (15 + fuel) state allowCoins =
-      pure ⟨.failure, checkExitState (checkLengthState state) false, 18, 0⟩ := by
-  have rejectPC : (checkLengthState state).pc = 4432 := if_neg wrong
-  rw [show 15 + fuel = 12 + (3 + fuel) by omega, check_length_gate state pc not128,
+    execute (submission.image .check) (13 + fuel) state allowCoins =
+      pure ⟨.failure, checkExitState (checkLengthState state) false, 16, 0⟩ := by
+  have rejectPC : (checkLengthState state).pc = 4432 := by
+    exact if_neg wrong
+  rw [show 13 + fuel = 10 + (3 + fuel) by omega, check_length_gate state pc,
     check_exit _ false rejectPC]
   simp [Execution.charge]
 
 private def checkScratchInstructions : List Instr :=
-  [.ADDI .x30 .x0 24, .ADDI .x21 .x0 256]
+  [.ADDI .x21 .x0 0, .SLLI .x21 .x21 11, .ADDI .x21 .x21 256]
 
 private def checkScratchPrefix (state : MachineState) (count : Nat) : MachineState :=
   (checkScratchInstructions.take count).foldl execInstrBr state
 
-/-- Valid normal lengths set `x30 = 24`, `x21 = 256`, and jump to `accept` (4420) if
-empty or enter `check-position` (4156). -/
+/-- Valid lengths proceed to the first position, or accept an empty opening. -/
 def checkReadyState (state : MachineState) : MachineState :=
-  (checkScratchPrefix state 2).setPC (if state.getReg .x27 = 0 then 4420 else 4156)
+  (checkScratchPrefix state 3).setPC (if state.getReg .x27 = 0 then 4420 else 4152)
 
-private theorem check_scratch_prefix (state : MachineState) (pc : state.pc = 4144)
+private theorem check_scratch_prefix (state : MachineState) (pc : state.pc = 4136)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (2 + fuel) state allowCoins =
+    execute (submission.image .check) (3 + fuel) state allowCoins =
       (do let result ← execute (submission.image .check) fuel
-            (checkScratchPrefix state 2) allowCoins
-          return result.charge 2 0) := by
+            (checkScratchPrefix state 3) allowCoins
+          return result.charge 3 0) := by
   apply execute_unit_steps (states := checkScratchPrefix state)
   intro i hi
   refine ⟨.base ((checkScratchInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply check_fetch _ (12 + i) _ (by omega)
+  · apply check_fetch _ (10 + i) _ (by omega)
     · interval_cases i <;>
         simp [checkScratchPrefix, checkScratchInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-/-- The three-instruction transition after a valid normal length. -/
-theorem check_ready (state : MachineState) (pc : state.pc = 4144)
+/-- The four-instruction transition after a valid length, with no memory accesses. -/
+theorem check_ready (state : MachineState) (pc : state.pc = 4136)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 + fuel) state allowCoins =
+    execute (submission.image .check) (4 + fuel) state allowCoins =
       (do let result ← execute (submission.image .check) fuel (checkReadyState state) allowCoins
-          return result.charge 3 0) := by
-  let ready := checkScratchPrefix state 2
-  have readyPC : ready.pc = 4152 := by
+          return result.charge 4 0) := by
+  let ready := checkScratchPrefix state 3
+  have readyPC : ready.pc = 4148 := by
     simp [ready, checkScratchPrefix, checkScratchInstructions, execInstrBr, pc, MachineState.setPC]
   have readyCount : ready.getReg .x27 = state.getReg .x27 := by
     simp [ready, checkScratchPrefix, checkScratchInstructions, execInstrBr, signExtend12,
       MachineState.getReg, MachineState.setReg, MachineState.setPC]
-  have fetched : fetch (submission.image .check) ready = some (.base (.BEQ .x27 .x0 268)) := by
-    apply check_fetch ready 14 _ (by decide) readyPC; rfl
-  have stepped : ordinaryStep ready (.base (.BEQ .x27 .x0 268)) = some (checkReadyState state) := by
+  have fetched : fetch (submission.image .check) ready =
+      some (.base (.BEQ .x27 .x0 272)) := by
+    apply check_fetch ready 13 _ (by decide) readyPC
+    rfl
+  have stepped : ordinaryStep ready (.base (.BEQ .x27 .x0 272)) =
+      some (checkReadyState state) := by
     dsimp only [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr]
     rw [readyCount, show ready.getReg .x0 = 0 from rfl, readyPC]
     simp [checkReadyState, ready, signExtend13]
     split <;> simp_all
-  rw [show 3 + fuel = 2 + (fuel + 1) by omega, check_scratch_prefix state pc]
+  rw [show 4 + fuel = 3 + (fuel + 1) by omega, check_scratch_prefix state pc]
   rw [execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
-/-- The normal length gate preserves the position count and all input memory. -/
+/-- The length gate preserves the position count and all input memory. -/
 theorem check_length_preserves (state : MachineState) :
     (checkLengthState state).getReg .x27 = state.getReg .x16 ∧
     (checkLengthState state).mem = state.mem := by
-  dsimp only [checkLengthState, checkNormalLenPrefix, checkNormalLenInstructions,
-    checkDispatchState, checkDispatchPrefix, checkDispatchInstructions,
-    List.take, List.foldl, execInstrBr, signExtend12, MachineState.getReg,
-    MachineState.setReg, MachineState.setPC]
+  dsimp only [checkLengthState, checkSetupPrefix, checkSetupInstructions, List.take, List.foldl,
+    execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
   simp
 
-/-- Register mapping after the normal input gate and scratch/depth initialization. -/
+/-- Register mapping after the input gate and scratch initialization. Input
+addresses are copied into the outer loop's dedicated registers. -/
 theorem check_ready_registers (state : MachineState) :
     (checkReadyState (checkLengthState state)).getReg .x21 = 256 ∧
     (checkReadyState (checkLengthState state)).getReg .x24 = state.getReg .x13 ∧
     (checkReadyState (checkLengthState state)).getReg .x8 = state.getReg .x14 ∧
     (checkReadyState (checkLengthState state)).getReg .x25 = state.getReg .x15 ∧
     (checkReadyState (checkLengthState state)).getReg .x26 = state.getReg .x11 ∧
-    (checkReadyState (checkLengthState state)).getReg .x27 = state.getReg .x16 ∧
-    (checkReadyState (checkLengthState state)).getReg .x30 = 24 := by
+    (checkReadyState (checkLengthState state)).getReg .x27 = state.getReg .x16 := by
   dsimp only [checkReadyState, checkScratchPrefix, checkScratchInstructions,
-    checkLengthState, checkNormalLenPrefix, checkNormalLenInstructions,
-    checkDispatchState, checkDispatchPrefix, checkDispatchInstructions,
-    List.take, List.foldl, execInstrBr, signExtend12, MachineState.getReg,
-    MachineState.setReg, MachineState.setPC]
+    checkLengthState, checkSetupPrefix, checkSetupInstructions, List.take, List.foldl,
+    execInstrBr, signExtend12, MachineState.getReg, MachineState.setReg, MachineState.setPC]
   simp
 
 theorem check_ready_pc (state : MachineState) :
     (checkReadyState (checkLengthState state)).pc =
-      if state.getReg .x16 = 0 then 4420 else 4156 := by
-  change (if (checkLengthState state).getReg .x27 = 0 then 4420 else 4156) = _
+      if state.getReg .x16 = 0 then 4420 else 4152 := by
+  change (if (checkLengthState state).getReg .x27 = 0 then 4420 else 4152) = _
   rw [(check_length_preserves state).1]
+
+/-- Empty openings accept in twenty cycles, without reading data or using the oracle. -/
+theorem check_empty_execution (state : MachineState) (pc : state.pc = 4096)
+    (count : state.getReg .x16 = 0) (length : state.getReg .x17 = 0)
+    (fuel : Nat) (allowCoins : Bool) :
+    execute (submission.image .check) (17 + fuel) state allowCoins =
+      pure ⟨.success, checkExitState (checkReadyState (checkLengthState state)) true, 20, 0⟩ := by
+  have matched : state.getReg .x16 * 800 = state.getReg .x17 := by rw [count, length]; rfl
+  have lengthPC : (checkLengthState state).pc = 4136 := if_pos matched
+  have readyPC : (checkReadyState (checkLengthState state)).pc = 4420 :=
+    if_pos ((check_length_preserves state).1.trans count)
+  rw [show 17 + fuel = 10 + (4 + (3 + fuel)) by omega, check_length_gate state pc,
+    check_ready _ lengthPC, check_exit _ true readyPC]
+  simp [Execution.charge]
 
 private theorem run_check_valid (candidate : Submission) (input : CheckInput)
     (valid : input.proof.length ≤ candidate.sizes.proof) :
@@ -311,7 +252,7 @@ theorem check_oversized (input : CheckInput) (oversized : submission.sizes.proof
   have invalid : ¬input.proof.length ≤ submission.sizes.proof := by omega
   simp only [Submission.run, invalid, decide_false, Bool.false_eq_true, if_false]
 
-/-- The 64-bit normal length comparison cannot wrap around for any admitted proof. -/
+/-- The 64-bit length comparison cannot wrap around for any admitted proof. -/
 theorem check_input_length (input : CheckInput) (valid : input.proof.length ≤ submission.sizes.proof) :
     ((submission.initialState .check input).getReg .x16 * 800 =
       (submission.initialState .check input).getReg .x17) ↔
@@ -333,58 +274,63 @@ theorem check_input_length (input : CheckInput) (valid : input.proof.length ≤ 
   rw [Nat.mod_eq_of_lt productBound]
   omega
 
-/-- Every in-capacity normal-mode malformed length rejects in 18 cycles and zero queries. -/
+/-- Every in-capacity but malformed proof length rejects with exactly sixteen cycles
+and zero queries, regardless of the root, values, proof contents, or position set. -/
 theorem check_input_wrong_length (input : CheckInput)
     (valid : input.proof.length ≤ submission.sizes.proof)
-    (notBatch : input.positions.card ≠ BATCH)
     (wrong : input.proof.length ≠ 800 * input.positions.card) :
     submission.run .check input =
       pure ⟨.failure, checkExitState (checkLengthState (submission.initialState .check input)) false,
-        18, 0⟩ := by
-  have cardinal : input.positions.card ≤ LENGTH := by
-    simpa [Index] using Finset.card_le_univ input.positions
-  have countBound : input.positions.card < 2^64 := by
-    norm_num [LENGTH, LOG_LENGTH] at cardinal ⊢; omega
-  have not128 : (submission.initialState .check input).getReg .x16 ≠ 128 := by
-    intro h
-    have n := congrArg BitVec.toNat h
-    change input.positions.card % 2^64 = 128 at n
-    rw [Nat.mod_eq_of_lt countBound] at n
-    exact notBatch n
+        16, 0⟩ := by
   have gateWrong : (submission.initialState .check input).getReg .x16 * 800 ≠
       (submission.initialState .check input).getReg .x17 :=
     fun matched => wrong ((check_input_length input valid).mp matched)
-  have steps : submission.steps .check = 15 + (submission.steps .check - 15) := by
-    change 214748365824 = 15 + (214748365824 - 15); rfl
+  have steps : submission.steps .check = 13 + (submission.steps .check - 13) := by
+    change 214748365824 = 13 + (214748365824 - 13); rfl
   exact (run_check_valid submission input valid).trans
     ((congrArg (fun fuel => execute (submission.image .check) fuel
       (submission.initialState .check input) false) steps).trans
-      (check_wrong_length _ rfl not128 gateWrong _ false))
+      (check_wrong_length _ rfl gateWrong _ false))
 
-/-! ### Four-word digest comparison (shared by `check-root` at 66 and `cap-root` at 138) -/
+/-- An empty opening with an empty proof succeeds for every commitment and value input. -/
+theorem check_input_empty (input : CheckInput) (positions : input.positions = ∅)
+    (proof : input.proof = []) :
+    submission.run .check input = pure ⟨.success,
+      checkExitState (checkReadyState (checkLengthState (submission.initialState .check input))) true,
+      20, 0⟩ := by
+  have valid : input.proof.length ≤ submission.sizes.proof := by simp [proof]
+  have count : (submission.initialState .check input).getReg .x16 = 0 := by
+    change BitVec.ofNat 64 input.positions.card = 0
+    simp [positions]
+  have length : (submission.initialState .check input).getReg .x17 = 0 := by
+    change BitVec.ofNat 64 input.proof.length = 0
+    simp [proof]
+  have steps : submission.steps .check = 17 + (submission.steps .check - 17) := by
+    change 214748365824 = 17 + (214748365824 - 17); rfl
+  exact (run_check_valid submission input valid).trans
+    ((congrArg (fun fuel => execute (submission.image .check) fuel
+      (submission.initialState .check input) false) steps).trans
+      (check_empty_execution _ rfl count length _ false))
 
 private def checkRootInstructions (word : Nat) : List Instr :=
-  [.LD .x6 .x21 (BitVec.ofNat 12 (8 * word)), .LD .x7 .x23 (BitVec.ofNat 12 (8 * word))]
+  [.LD .x6 .x21 (BitVec.ofNat 12 (8 * word)), .LD .x7 .x26 (BitVec.ofNat 12 (8 * word))]
 
 private def checkRootPrefix (state : MachineState) (word count : Nat) : MachineState :=
   ((checkRootInstructions word).take count).foldl execInstrBr state
 
-private def checkRootBranchOffset (start word : Nat) : BitVec 13 :=
-  BitVec.ofNat 13 ((if start = 66 then 64 else 7968) - 12 * word)
+/-- Compare one of the four 64-bit words of the reconstructed and supplied roots. -/
+def checkRootWordState (state : MachineState) (word : Nat) : MachineState :=
+  execInstrBr (checkRootPrefix state word 2) (.BNE .x6 .x7 (BitVec.ofNat 13 (64 - 12 * word)))
 
-/-- Compare one of the four 64-bit words of `[x21, x21+32)` and `[x23, x23+32)`. -/
-def checkRootWordState (state : MachineState) (start word : Nat) : MachineState :=
-  execInstrBr (checkRootPrefix state word 2) (.BNE .x6 .x7 (checkRootBranchOffset start word))
-
-theorem check_root_word (state : MachineState) (start word : Nat)
-    (location : start = 66 ∨ start = 138) (bounded : word < 4)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start + 12 * word))
+/-- Each word comparison loads both words and rejects a mismatch before proceeding.
+This is an exact three-cycle interpreter transition, not a reference checker. -/
+theorem check_root_word (state : MachineState) (word : Nat) (bounded : word < 4)
+    (pc : state.pc = BitVec.ofNat 64 (4360 + 12 * word))
     (scratchValid : accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (targetValid : accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
+    (rootValid : accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (3 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
-            (checkRootWordState state start word) allowCoins
+      (do let result ← execute (submission.image .check) fuel (checkRootWordState state word) allowCoins
           return result.charge 3 0) := by
   have loads (remaining : Nat) : execute (submission.image .check) (2 + remaining) state allowCoins =
       (do let result ← execute (submission.image .check) remaining
@@ -393,10 +339,10 @@ theorem check_root_word (state : MachineState) (start word : Nat)
     apply execute_unit_steps (states := checkRootPrefix state word)
     intro i hi
     refine ⟨.base (((checkRootInstructions word)[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply check_fetch _ (start + 3 * word + i) _ (by rcases location with rfl | rfl <;> omega)
-      · rcases location with rfl | rfl <;> interval_cases word <;> interval_cases i <;>
+    · apply check_fetch _ (66 + 3 * word + i) _ (by omega)
+      · interval_cases word <;> interval_cases i <;>
           simp [checkRootPrefix, checkRootInstructions, execInstrBr, pc, MachineState.setPC]
-      · rcases location with rfl | rfl <;> interval_cases word <;> interval_cases i <;> rfl
+      · interval_cases word <;> interval_cases i <;> rfl
     · have offset : signExtend12 (BitVec.ofNat 12 (8 * word)) = BitVec.ofNat 64 (8 * word) := by
         interval_cases word <;> rfl
       interval_cases i <;>
@@ -404,26 +350,27 @@ theorem check_root_word (state : MachineState) (start word : Nat)
           List.getElem?_cons_zero, List.getElem?_cons_succ, Option.getD_some,
           ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, offset,
           MachineState.getReg_setPC,
-          MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x6 ≠ .x23)] <;>
-        first | rw [scratchValid]; rfl | rw [targetValid]; rfl
+          MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x6 ≠ .x26)] <;>
+        first | rw [scratchValid]; rfl | rw [rootValid]; rfl
     · interval_cases i <;> rfl
   have fetched : fetch (submission.image .check) (checkRootPrefix state word 2) =
-      some (.base (.BNE .x6 .x7 (checkRootBranchOffset start word))) := by
-    apply check_fetch _ (start + 3 * word + 2) _ (by rcases location with rfl | rfl <;> omega)
-    · rcases location with rfl | rfl <;> interval_cases word <;>
+      some (.base (.BNE .x6 .x7 (BitVec.ofNat 13 (64 - 12 * word)))) := by
+    apply check_fetch _ (68 + 3 * word) _ (by omega)
+    · interval_cases word <;>
         simp [checkRootPrefix, checkRootInstructions, execInstrBr, pc, MachineState.setPC]
-    · rcases location with rfl | rfl <;> interval_cases word <;> rfl
+    · interval_cases word <;> rfl
   have stepped : ordinaryStep (checkRootPrefix state word 2)
-      (.base (.BNE .x6 .x7 (checkRootBranchOffset start word))) =
-        some (checkRootWordState state start word) := rfl
+      (.base (.BNE .x6 .x7 (BitVec.ofNat 13 (64 - 12 * word)))) =
+        some (checkRootWordState state word) := rfl
   rw [show 3 + fuel = 2 + (fuel + 1) by omega, loads]
   rw [execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
 
-theorem check_root_word_preserves (state : MachineState) (start word : Nat) (reg : Reg)
+/-- A comparison does not alter memory or any non-scratch register. -/
+theorem check_root_word_preserves (state : MachineState) (word : Nat) (reg : Reg)
     (notLeft : reg ≠ .x6) (notRight : reg ≠ .x7) :
-    (checkRootWordState state start word).getReg reg = state.getReg reg ∧
-    (checkRootWordState state start word).mem = state.mem := by
+    (checkRootWordState state word).getReg reg = state.getReg reg ∧
+    (checkRootWordState state word).mem = state.mem := by
   constructor
   · simp only [checkRootWordState, checkRootPrefix, checkRootInstructions, List.take, List.foldl,
       execInstrBr]
@@ -434,198 +381,158 @@ theorem check_root_word_preserves (state : MachineState) (start word : Nat) (reg
       execInstrBr]
     split <;> rfl
 
-theorem check_root_word_pc (state : MachineState) (start word : Nat)
-    (location : start = 66 ∨ start = 138) (bounded : word < 4)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start + 12 * word)) :
-    (checkRootWordState state start word).pc =
+/-- The branch advances precisely when the two words agree; otherwise it reaches HALT failure. -/
+theorem check_root_word_pc (state : MachineState) (word : Nat) (bounded : word < 4)
+    (pc : state.pc = BitVec.ofNat 64 (4360 + 12 * word)) :
+    (checkRootWordState state word).pc =
       if state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
-          state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) then
-        BitVec.ofNat 64 (4096 + 4 * start + 12 * (word + 1)) else 4432 := by
-  rcases location with rfl | rfl <;> interval_cases word <;>
-    simp [checkRootWordState, checkRootPrefix, checkRootInstructions, checkRootBranchOffset,
-      execInstrBr, signExtend12, signExtend13, MachineState.getReg, MachineState.setReg,
+          state.getMem (state.getReg .x26 + BitVec.ofNat 64 (8 * word)) then
+        BitVec.ofNat 64 (4372 + 12 * word) else 4432 := by
+  interval_cases word <;>
+    simp [checkRootWordState, checkRootPrefix, checkRootInstructions, execInstrBr,
+      signExtend12, signExtend13, MachineState.getReg, MachineState.setReg,
       MachineState.setPC, MachineState.getMem, pc] <;>
     split <;> simp_all
 
-theorem check_root_word_reject (state : MachineState) (start word : Nat)
-    (location : start = 66 ∨ start = 138) (bounded : word < 4)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start + 12 * word))
+/-- Any mismatching root word produces a failed execution in six cycles and zero queries. -/
+theorem check_root_word_reject (state : MachineState) (word : Nat) (bounded : word < 4)
+    (pc : state.pc = BitVec.ofNat 64 (4360 + 12 * word))
     (scratchValid : accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (targetValid : accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
+    (rootValid : accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (different : state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) ≠
-      state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
+      state.getMem (state.getReg .x26 + BitVec.ofNat 64 (8 * word)))
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (6 + fuel) state allowCoins =
-      pure ⟨.failure, checkExitState (checkRootWordState state start word) false, 6, 0⟩ := by
-  have rejectPC : (checkRootWordState state start word).pc = 4432 := by
-    rw [check_root_word_pc state start word location bounded pc, if_neg different]
+      pure ⟨.failure, checkExitState (checkRootWordState state word) false, 6, 0⟩ := by
+  have rejectPC : (checkRootWordState state word).pc = 4432 := by
+    rw [check_root_word_pc state word bounded pc, if_neg different]
   rw [show 6 + fuel = 3 + (3 + fuel) by omega,
-    check_root_word state start word location bounded pc scratchValid targetValid,
-    check_exit _ false rejectPC]
+    check_root_word state word bounded pc scratchValid rootValid, check_exit _ false rejectPC]
   simp [Execution.charge]
 
-def checkRootWordsState (state : MachineState) (start : Nat) : Nat → MachineState
+/-- State after comparing a prefix of the four root words. -/
+def checkRootWordsState (state : MachineState) : Nat → MachineState
   | 0 => state
-  | count + 1 => checkRootWordState (checkRootWordsState state start count) start count
+  | count + 1 => checkRootWordState (checkRootWordsState state count) count
 
-theorem check_root_words_preserves (state : MachineState) (start count : Nat) (reg : Reg)
+theorem check_root_words_preserves (state : MachineState) (count : Nat) (reg : Reg)
     (notLeft : reg ≠ .x6) (notRight : reg ≠ .x7) :
-    (checkRootWordsState state start count).getReg reg = state.getReg reg ∧
-    (checkRootWordsState state start count).mem = state.mem := by
+    (checkRootWordsState state count).getReg reg = state.getReg reg ∧
+    (checkRootWordsState state count).mem = state.mem := by
   induction count with
   | zero => exact ⟨rfl, rfl⟩
   | succ count ih =>
-    have preserved := check_root_word_preserves (checkRootWordsState state start count)
-      start count reg notLeft notRight
+    have preserved := check_root_word_preserves (checkRootWordsState state count) count reg notLeft notRight
     exact ⟨preserved.1.trans ih.1, preserved.2.trans ih.2⟩
 
-private theorem check_root_words_read (state : MachineState) (start count word : Nat) (reg : Reg)
+private theorem check_root_words_read (state : MachineState) (count word : Nat) (reg : Reg)
     (notLeft : reg ≠ .x6) (notRight : reg ≠ .x7) :
-    (checkRootWordsState state start count).getMem
-        ((checkRootWordsState state start count).getReg reg + BitVec.ofNat 64 (8 * word)) =
+    (checkRootWordsState state count).getMem
+        ((checkRootWordsState state count).getReg reg + BitVec.ofNat 64 (8 * word)) =
       state.getMem (state.getReg reg + BitVec.ofNat 64 (8 * word)) := by
-  have preserved := check_root_words_preserves state start count reg notLeft notRight
+  have preserved := check_root_words_preserves state count reg notLeft notRight
   rw [preserved.1]
   exact congrFun preserved.2 _
 
-theorem check_root_words_pc (state : MachineState) (start : Nat)
-    (location : start = 66 ∨ start = 138)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
+/-- Matching prefixes proceed through the comparison block in order. -/
+theorem check_root_words_pc (state : MachineState) (pc : state.pc = 4360)
     (count : Nat) (bounded : count ≤ 4)
     (agrees : ∀ word < count,
       state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
-        state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word))) :
-    (checkRootWordsState state start count).pc = BitVec.ofNat 64 (4096 + 4 * start + 12 * count) := by
+        state.getMem (state.getReg .x26 + BitVec.ofNat 64 (8 * word))) :
+    (checkRootWordsState state count).pc = BitVec.ofNat 64 (4360 + 12 * count) := by
   induction count with
   | zero => exact pc
   | succ count ih =>
     have previous := ih (by omega) (fun word bound => agrees word (by omega))
-    rw [checkRootWordsState, check_root_word_pc _ start count location (by omega) previous,
-      check_root_words_read state start count count .x21 (by decide) (by decide),
-      check_root_words_read state start count count .x23 (by decide) (by decide),
+    rw [checkRootWordsState, check_root_word_pc _ count (by omega) previous,
+      check_root_words_read state count count .x21 (by decide) (by decide),
+      check_root_words_read state count count .x26 (by decide) (by decide),
       if_pos (agrees count (by omega))]
+    congr 1
+    omega
 
-theorem check_root_prefix (state : MachineState) (start : Nat)
-    (location : start = 66 ∨ start = 138)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
+/-- Execute any matching prefix of the root comparison. This also lets a rejection
+proof stop at the first mismatching word. -/
+theorem check_root_prefix (state : MachineState) (pc : state.pc = 4360)
     (scratchValid : ∀ word < 4,
       accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (targetValid : ∀ word < 4,
-      accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
+    (rootValid : ∀ word < 4,
+      accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (count : Nat) (bounded : count ≤ 4)
     (agrees : ∀ word < count,
       state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
-        state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
+        state.getMem (state.getReg .x26 + BitVec.ofNat 64 (8 * word)))
     (remaining : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (3 * count + remaining) state allowCoins =
       (do let result ← execute (submission.image .check) remaining
-            (checkRootWordsState state start count) allowCoins
+            (checkRootWordsState state count) allowCoins
           return result.charge (3 * count) 0) := by
   induction count generalizing remaining with
   | zero => simp [checkRootWordsState, Execution.charge]
   | succ count ih =>
-    have position := check_root_words_pc state start location pc count (by omega)
+    have position := check_root_words_pc state pc count (by omega)
       (fun word bound => agrees word (by omega))
-    have scratch : accessValid ((checkRootWordsState state start count).getReg .x21 +
+    have scratch : accessValid ((checkRootWordsState state count).getReg .x21 +
         BitVec.ofNat 64 (8 * count)) 8 = true := by
-      rw [(check_root_words_preserves state start count .x21 (by decide) (by decide)).1]
+      rw [(check_root_words_preserves state count .x21 (by decide) (by decide)).1]
       exact scratchValid count (by omega)
-    have target : accessValid ((checkRootWordsState state start count).getReg .x23 +
+    have root : accessValid ((checkRootWordsState state count).getReg .x26 +
         BitVec.ofNat 64 (8 * count)) 8 = true := by
-      rw [(check_root_words_preserves state start count .x23 (by decide) (by decide)).1]
-      exact targetValid count (by omega)
+      rw [(check_root_words_preserves state count .x26 (by decide) (by decide)).1]
+      exact rootValid count (by omega)
     rw [show 3 * (count + 1) + remaining = 3 * count + (3 + remaining) by omega,
-      ih (by omega) (fun word bound => agrees word (by omega)),
-      check_root_word _ start count location (by omega) position scratch target]
+      ih (by omega) (fun word bound => agrees word (by omega)), check_root_word _ count (by omega) position scratch root]
     simp [checkRootWordsState, Execution.charge, Nat.mul_add, ← Nat.add_assoc]
 
-theorem check_root_matches (state : MachineState) (start : Nat)
-    (location : start = 66 ∨ start = 138)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
+/-- All four matching root words pass in twelve cycles, with no oracle queries.
+The memory-validity hypotheses are exactly those checked by the actual loads. -/
+theorem check_root_matches (state : MachineState) (pc : state.pc = 4360)
     (scratchValid : ∀ word < 4,
       accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (targetValid : ∀ word < 4,
-      accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
+    (rootValid : ∀ word < 4,
+      accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (agrees : ∀ word < 4,
       state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
-        state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
+        state.getMem (state.getReg .x26 + BitVec.ofNat 64 (8 * word)))
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (12 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel
-            (checkRootWordsState state start 4) allowCoins
+      (do let result ← execute (submission.image .check) fuel (checkRootWordsState state 4) allowCoins
           return result.charge 12 0) :=
-  check_root_prefix state start location pc scratchValid targetValid 4 (by decide) agrees fuel allowCoins
+  check_root_prefix state pc scratchValid rootValid 4 (by decide) agrees fuel allowCoins
 
-theorem check_root_first_mismatch (state : MachineState) (start : Nat)
-    (location : start = 66 ∨ start = 138)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
-    (scratchValid : ∀ word < 4,
-      accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (targetValid : ∀ word < 4,
-      accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (word : Nat) (bounded : word < 4)
-    (earlier : ∀ index < word,
-      state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * index)) =
-        state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * index)))
-    (different : state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) ≠
-      state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
-    (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (3 * word + 6 + fuel) state allowCoins =
-      pure ⟨.failure, checkExitState (checkRootWordState (checkRootWordsState state start word) start word) false,
-        3 * word + 6, 0⟩ := by
-  have prefixPC := check_root_words_pc state start location pc word (by omega) earlier
-  have scratchReg := (check_root_words_preserves state start word .x21 (by decide) (by decide)).1
-  have targetPreserves := check_root_words_preserves state start word .x23 (by decide) (by decide)
-  have targetReg := targetPreserves.1
-  have scratchAccess : accessValid ((checkRootWordsState state start word).getReg .x21 +
-      BitVec.ofNat 64 (8 * word)) 8 = true := by rw [scratchReg]; exact scratchValid word bounded
-  have targetAccess : accessValid ((checkRootWordsState state start word).getReg .x23 +
-      BitVec.ofNat 64 (8 * word)) 8 = true := by rw [targetReg]; exact targetValid word bounded
-  have mismatch : (checkRootWordsState state start word).getMem
-        ((checkRootWordsState state start word).getReg .x21 + BitVec.ofNat 64 (8 * word)) ≠
-      (checkRootWordsState state start word).getMem
-        ((checkRootWordsState state start word).getReg .x23 + BitVec.ofNat 64 (8 * word)) := by
-    simpa only [scratchReg, targetReg, MachineState.getMem, targetPreserves.2] using different
-  rw [Nat.add_assoc, check_root_prefix state start location pc scratchValid targetValid word (by omega) earlier,
-    check_root_word_reject _ start word location bounded prefixPC scratchAccess targetAccess mismatch]
-  simp [Execution.charge, Nat.add_comm]
+private theorem scheme_check_of_run (candidate : Submission) (input : CheckInput)
+    (result : Execution) (run : candidate.run .check input = pure result) :
+    candidate.scheme.check input.commitment input.positions input.values input.proof =
+      pure (result.exit == .success) := by
+  change ((fun execution => execution.exit == .success) <$>
+    simulateQ checkHandler (candidate.run .check input)) = _
+  rw [run]
+  simp
 
-/-- If any digest word differs, comparison halts with failure within 15 cycles. -/
-theorem check_root_rejects (state : MachineState) (start : Nat)
-    (location : start = 66 ∨ start = 138)
-    (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
-    (scratchValid : ∀ word < 4,
-      accessValid (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (targetValid : ∀ word < 4,
-      accessValid (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) 8 = true)
-    (different : ¬ ∀ word < 4,
-      state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) =
-        state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)))
-    (fuel : Nat) (allowCoins : Bool) :
-    ∃ result, execute (submission.image .check) (15 + fuel) state allowCoins = pure result ∧
-      result.exit = .failure ∧ result.cycles ≤ 15 ∧ result.oracleCalls = 0 := by
-  have existsMismatch : ∃ word, word < 4 ∧
-      state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * word)) ≠
-        state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * word)) := by
-    push Not at different
-    exact different
-  let word := Nat.find existsMismatch
-  have bounded : word < 4 := (Nat.find_spec existsMismatch).1
-  have mismatch := (Nat.find_spec existsMismatch).2
-  have earlier : ∀ index < word,
-      state.getMem (state.getReg .x21 + BitVec.ofNat 64 (8 * index)) =
-        state.getMem (state.getReg .x23 + BitVec.ofNat 64 (8 * index)) := by
-    intro index before
-    have minimal := Nat.find_min existsMismatch before
-    exact Classical.byContradiction (fun neq => minimal ⟨by omega, neq⟩)
-  refine ⟨⟨.failure, checkExitState (checkRootWordState (checkRootWordsState state start word) start word) false,
-    3 * word + 6, 0⟩, ?_, rfl, by dsimp; omega, rfl⟩
-  have remaining : 15 + fuel = 3 * word + 6 + (9 - 3 * word + fuel) := by omega
-  rw [remaining]
-  exact check_root_first_mismatch state start location pc scratchValid targetValid word bounded
-    earlier mismatch _ allowCoins
+/-- Malformed lengths are rejected by the scheme used in the security games, too. -/
+theorem check_scheme_wrong_length (input : CheckInput)
+    (wrong : input.proof.length ≠ 800 * input.positions.card) :
+    submission.scheme.check input.commitment input.positions input.values input.proof = pure false := by
+  by_cases valid : input.proof.length ≤ submission.sizes.proof
+  · exact scheme_check_of_run submission input _ (check_input_wrong_length input valid wrong)
+  · exact scheme_check_of_run submission input _ (check_oversized input (by omega))
 
-/-! ### Path compression call (`check-compress`, start = 54) -/
+/-- Empty-opening acceptance also holds for the scheme derived from the image. -/
+theorem check_scheme_empty (input : CheckInput) (positions : input.positions = ∅)
+    (proof : input.proof = []) :
+    submission.scheme.check input.commitment input.positions input.values input.proof = pure true :=
+  scheme_check_of_run submission input _ (check_input_empty input positions proof)
+
+/-- Any accepted proof has exactly the required length. This holds against every
+fixed oracle, including adversarially chosen roots, values, and proof contents. -/
+theorem check_length_of_accept (oracle : Oracle) (input : CheckInput)
+    (accepted : (oracle.eval (submission.scheme.check input.commitment input.positions
+      input.values input.proof)).1 = true) :
+    input.proof.length = 800 * input.positions.card := by
+  by_contra wrong
+  rw [check_scheme_wrong_length input wrong] at accepted
+  simp [Oracle.eval] at accepted
 
 private def checkCompressionInstructions : List Instr :=
   [.ADDI .x5 .x0 0, .ADDI .x10 .x21 0, .ADDI .x11 .x0 64,
@@ -634,12 +541,16 @@ private def checkCompressionInstructions : List Instr :=
 private def checkCompressionPrefix (state : MachineState) (count : Nat) : MachineState :=
   (checkCompressionInstructions.take count).foldl execInstrBr state
 
+/-- State after the compression reply overwrites the low half of scratch memory. -/
 def checkCompressionState (state : MachineState) (answer : BitVec 256) : MachineState :=
   let ready := checkCompressionPrefix state 5
   writeBits ((savePaddingRegisters (ready.setReg .x31 (ready.pc+4))).setReg .x11 64) 256 answer
 
+/-- Both compression call sites perform precisely one fixed-width oracle query.
+Setup costs five cycles and the padded call costs 24. The oracle receives the
+64-byte scratch contents followed by 32 zero bytes; every reply is handled by the actual writer. -/
 theorem check_compression (state : MachineState) (start : Nat)
-    (location : start = 54)
+    (location : start = 56 ∨ start = 96)
     (pc : state.pc = BitVec.ofNat 64 (4096 + 4 * start))
     (scratch : state.getReg .x21 = 256) (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (22 + fuel) state allowCoins =
@@ -654,16 +565,16 @@ theorem check_compression (state : MachineState) (start : Nat)
     apply execute_unit_steps (states := checkCompressionPrefix state)
     intro i hi
     refine ⟨.base ((checkCompressionInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply check_fetch _ (start + i) _ (by rcases location with rfl <;> omega)
-      · rcases location with rfl <;> interval_cases i <;>
+    · apply check_fetch _ (start + i) _ (by rcases location with rfl | rfl <;> omega)
+      · rcases location with rfl | rfl <;> interval_cases i <;>
           simp [checkCompressionPrefix, checkCompressionInstructions, execInstrBr, pc, MachineState.setPC]
-      · rcases location with rfl <;> interval_cases i <;> rfl
+      · rcases location with rfl | rfl <;> interval_cases i <;> rfl
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
   let ready := checkCompressionPrefix state 5
   have readyPC : ready.pc = BitVec.ofNat 64 (4096 + 4 * (start+5)) := by
     dsimp only [ready]
-    rcases location with rfl <;>
+    rcases location with rfl | rfl <;>
         simp [checkCompressionPrefix, checkCompressionInstructions, execInstrBr, pc, MachineState.setPC]
   have registers : ready.getReg .x5 = 0 ∧ ready.getReg .x10 = 256 ∧
       ready.getReg .x11 = 64 ∧ ready.getReg .x12 = 256 ∧ ready.getReg .x13 = 0 := by
@@ -671,7 +582,7 @@ theorem check_compression (state : MachineState) (start : Nat)
       signExtend12, MachineState.getReg_setPC, MachineState.getReg_setReg_eq,
       MachineState.getReg_setReg_ne, scratch]
     rfl
-  have call := padding_call true ready (start+5) (by rcases location with rfl; exact Or.inl rfl) readyPC
+  have call := padding_call true ready (start+5) (by rcases location with rfl | rfl <;> simp [paddingCallSite]) readyPC
     registers.1 registers.2.2.2.2
     (by rw [registers.2.1]; rfl) (by rw [registers.2.2.2.1]; rfl)
     (by rw [registers.2.1]; rfl) (by rw [registers.2.2.2.1]; rfl)
@@ -694,11 +605,14 @@ theorem check_compression (state : MachineState) (start : Nat)
   rw [resultState]
   simp [Execution.charge, ← Nat.add_assoc]
 
+/-- The padded call returns to the instruction after the five-instruction setup. -/
 theorem check_compression_pc (state : MachineState) (answer : BitVec 256) :
     (checkCompressionState state answer).pc = state.pc + 24 := by
   simp [checkCompressionState, writeBits, savePaddingRegisters, checkCompressionPrefix, checkCompressionInstructions,
     execInstrBr, MachineState.setPC, BitVec.add_assoc]
 
+/-- Compression preserves the loop counters, pointers, and return address. The setup overwrites
+syscall arguments; the adapter additionally uses x14..x17 and x31. -/
 theorem check_compression_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
     (not5 : reg ≠ .x5) (not10 : reg ≠ .x10) (not11 : reg ≠ .x11)
     (not12 : reg ≠ .x12) (not13 : reg ≠ .x13)
@@ -721,6 +635,8 @@ theorem check_compression_register (state : MachineState) (answer : BitVec 256) 
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not31)]
 
 set_option maxHeartbeats 2000000 in
+/-- Each of the four scratch words receives the corresponding 64 bits of the reply.
+This verifies the actual 32 successive byte writes, including little-endian order. -/
 theorem check_compression_word (state : MachineState) (answer : BitVec 256)
     (word : Nat) (bounded : word < 4) :
     (checkCompressionState state answer).getMem (BitVec.ofNat 64 (256 + 8 * word)) =
@@ -739,6 +655,7 @@ theorem check_compression_word (state : MachineState) (answer : BitVec 256)
     interval_cases bit <;>
     simp
 
+/-- Compression touches only the four scratch words containing the output digest. -/
 theorem check_compression_memory_outside (state : MachineState) (answer : BitVec 256)
     (address : Word) (outside : address ≠ 256 ∧ address ≠ 264 ∧ address ≠ 272 ∧ address ≠ 280) :
     (checkCompressionState state answer).getMem address = state.getMem address := by
@@ -749,28 +666,16 @@ theorem check_compression_memory_outside (state : MachineState) (answer : BitVec
     change i < 32 at hi
     interval_cases i <;> norm_num [alignToDword] <;> tauto
 
-/-! ### Leaf subroutine (indices 154..180, PCs 4712..4816) -/
-
 private def checkLeafCopyInstructions : List Instr :=
   [.LD .x6 .x8 0, .SD .x21 .x6 32, .LD .x6 .x8 8, .SD .x21 .x6 40,
-   .LD .x6 .x8 16, .SD .x21 .x6 48, .LD .x6 .x8 24, .SD .x21 .x6 56,
-   .LD .x6 .x8 32, .SD .x21 .x6 64, .LD .x6 .x8 40, .SD .x21 .x6 72,
-   .LD .x6 .x8 48, .SD .x21 .x6 80, .LD .x6 .x8 56, .SD .x21 .x6 88]
+   .LD .x6 .x8 16, .SD .x21 .x6 48, .LD .x6 .x8 24, .SD .x21 .x6 56]
 
 private def checkLeafCopyPrefix (state : MachineState) (count : Nat) : MachineState :=
   (checkLeafCopyInstructions.take count).foldl execInstrBr state
 
-def checkLeafCopyState (state : MachineState) : MachineState := checkLeafCopyPrefix state 16
+def checkLeafCopyState (state : MachineState) : MachineState := checkLeafCopyPrefix state 8
 
-theorem check_leaf_copy_expansion (state : MachineState) :
-    checkLeafCopyState state =
-      ([.LD .x6 .x8 0, .SD .x21 .x6 32, .LD .x6 .x8 8, .SD .x21 .x6 40,
-        .LD .x6 .x8 16, .SD .x21 .x6 48, .LD .x6 .x8 24, .SD .x21 .x6 56,
-        .LD .x6 .x8 32, .SD .x21 .x6 64, .LD .x6 .x8 40, .SD .x21 .x6 72,
-        .LD .x6 .x8 48, .SD .x21 .x6 80, .LD .x6 .x8 56, .SD .x21 .x6 88] : List Instr).foldl
-          execInstrBr state := rfl
-
-private theorem check_copy_register (state : MachineState) (count : Nat) (bounded : count ≤ 16)
+private theorem check_copy_register (state : MachineState) (count : Nat) (bounded : count ≤ 8)
     (reg : Reg) (scratch : reg ≠ .x6) :
     (checkLeafCopyPrefix state count).getReg reg = state.getReg reg := by
   have memRegister (state : MachineState) (address value : Word) (reg : Reg) :
@@ -780,23 +685,20 @@ private theorem check_copy_register (state : MachineState) (count : Nat) (bounde
       MachineState.getReg_setPC, memRegister,
       MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm scratch)]
 
-theorem check_leaf_copy_register (state : MachineState) (reg : Reg) (scratch : reg ≠ .x6) :
-    (checkLeafCopyState state).getReg reg = state.getReg reg :=
-  check_copy_register state 16 (by decide) reg scratch
-
-set_option maxHeartbeats 1600000 in
-theorem check_leaf_copy (state : MachineState) (pc : state.pc = 4716)
+set_option maxHeartbeats 800000 in
+/-- Copy the next 256-bit message block into the upper scratch half. -/
+theorem check_leaf_copy (state : MachineState) (pc : state.pc = 4448)
     (scratch : state.getReg .x21 = 256)
-    (sourceValid : ∀ word : Fin 8,
+    (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (16 + fuel) state allowCoins =
+    execute (submission.image .check) (8 + fuel) state allowCoins =
       (do let result ← execute (submission.image .check) fuel (checkLeafCopyState state) allowCoins
-          return result.charge 16 0) := by
+          return result.charge 8 0) := by
   apply execute_unit_steps (states := checkLeafCopyPrefix state)
   intro i hi
   refine ⟨.base ((checkLeafCopyInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply check_fetch _ (155 + i) _ (by omega)
+  · apply check_fetch _ (88 + i) _ (by omega)
     · interval_cases i <;>
         simp [checkLeafCopyPrefix, checkLeafCopyInstructions, execInstrBr, pc, MachineState.setPC]
     · interval_cases i <;> rfl
@@ -806,162 +708,42 @@ theorem check_leaf_copy (state : MachineState) (pc : state.pc = 4716)
     have s1 := sourceValid ⟨1, by decide⟩
     have s2 := sourceValid ⟨2, by decide⟩
     have s3 := sourceValid ⟨3, by decide⟩
-    have s4 := sourceValid ⟨4, by decide⟩
-    have s5 := sourceValid ⟨5, by decide⟩
-    have s6 := sourceValid ⟨6, by decide⟩
-    have s7 := sourceValid ⟨7, by decide⟩
     have valid : memoryArgumentsValid (checkLeafCopyPrefix state i)
         ((checkLeafCopyInstructions[i]?).getD .EBREAK) = true := by
       interval_cases i <;>
         simp only [checkLeafCopyInstructions, List.getElem?_cons_zero, List.getElem?_cons_succ,
-          Option.getD_some, memoryArgumentsValid, memAccess, sourceReg, scratchReg, signExtend12]
-      · exact s0
-      · rfl
-      · exact s1
-      · rfl
-      · exact s2
-      · rfl
-      · exact s3
-      · rfl
-      · exact s4
-      · rfl
-      · exact s5
-      · rfl
-      · exact s6
-      · rfl
-      · exact s7
-      · rfl
+          Option.getD_some, memoryArgumentsValid, memAccess, sourceReg, scratchReg, signExtend12] <;>
+        first | exact s0 | exact s1 | exact s2 | exact s3 | rfl
     interval_cases i <;>
       simp only [checkLeafCopyInstructions, List.getElem?_cons_zero,
         List.getElem?_cons_succ, Option.getD_some] at valid ⊢ <;>
       simp only [ordinaryStep, valid, ↓reduceIte] <;> rfl
   · interval_cases i <;> rfl
 
-def leafQuery (state : MachineState) : BitVec COMPRESSION_INPUT_LENGTH := readBuffer state 256 96
-
-private def checkLeafCallInstructions : List Instr :=
-  [.ADDI .x5 .x0 0, .ADDI .x10 .x21 0, .ADDI .x11 .x0 96,
-   .ADDI .x12 .x21 0, .ADDI .x13 .x0 0]
-
-private def checkLeafCallPrefix (state : MachineState) (count : Nat) : MachineState :=
-  (checkLeafCallInstructions.take count).foldl execInstrBr state
-
-def checkLeafCompressionState (state : MachineState) (answer : BitVec 256) : MachineState :=
-  writeBits (checkLeafCallPrefix state 5) 256 answer
-
-private theorem check_leaf_call_registers (state : MachineState) (scratch : state.getReg .x21 = 256) :
-    (checkLeafCallPrefix state 5).getReg .x5 = 0 ∧ (checkLeafCallPrefix state 5).getReg .x10 = 256 ∧
-      (checkLeafCallPrefix state 5).getReg .x11 = 96 ∧ (checkLeafCallPrefix state 5).getReg .x12 = 256 ∧
-      (checkLeafCallPrefix state 5).getReg .x13 = 0 := by
-  simp [checkLeafCallPrefix, checkLeafCallInstructions, execInstrBr,
-    signExtend12, MachineState.getReg_setPC, MachineState.getReg_setReg_eq,
-    MachineState.getReg_setReg_ne, scratch]
-  rfl
-
-set_option maxHeartbeats 1600000 in
-theorem check_leaf_compression (state : MachineState) (pc : state.pc = 4780)
-    (scratch : state.getReg .x21 = 256) (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (6 + fuel) state allowCoins =
-      (do let answer ← World.query (.inr (.inl (leafQuery state)))
-          let result ← execute (submission.image .check) fuel
-            (checkLeafCompressionState state answer) allowCoins
-          return result.charge 13 1) := by
-  have setup (remaining : Nat) :
-      execute (submission.image .check) (5 + remaining) state allowCoins =
-        (do let result ← execute (submission.image .check) remaining
-              (checkLeafCallPrefix state 5) allowCoins
-            return result.charge 5 0) := by
-    apply execute_unit_steps (states := checkLeafCallPrefix state)
-    intro i hi
-    refine ⟨.base ((checkLeafCallInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-    · apply check_fetch _ (171 + i) _ (by omega)
-      · interval_cases i <;>
-          simp [checkLeafCallPrefix, checkLeafCallInstructions, execInstrBr, pc, MachineState.setPC]
-      · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-    · interval_cases i <;> rfl
-  let ready := checkLeafCallPrefix state 5
-  have readyPC : ready.pc = BitVec.ofNat 64 (4096 + 4 * 176) := by
-    simp [ready, checkLeafCallPrefix, checkLeafCallInstructions, execInstrBr, pc, MachineState.setPC]
-  have registers : ready.getReg .x5 = 0 ∧ ready.getReg .x10 = 256 ∧
-      ready.getReg .x11 = 96 ∧ ready.getReg .x12 = 256 ∧ ready.getReg .x13 = 0 :=
-    check_leaf_call_registers state scratch
-  have fetched : fetch (submission.image .check) ready = some (.base .ECALL) := by
-    apply check_fetch _ 176 _ (by decide) readyPC; rfl
-  have input : oracleInput ready = some (.inl (leafQuery state)) := by
-    have sameMem (address : Word) : ready.getMem address = state.getMem address := rfl
-    have memory : readBuffer ready 256 96 = readBuffer state 256 96 := by
-      unfold readBuffer
-      simp only [MachineState.getByte, sameMem]
-    have kind := registers.2.2.2.2
-    simp [oracleInput, registers.2.1, registers.2.2.1, registers.2.2.2.1, kind,
-      COMPRESSION_INPUT_LENGTH, COMPRESSION_OUTPUT_LENGTH, rangeValid, MEMORY_BYTES]
-    rw [memory]
-    rfl
-  rw [show 6 + fuel = 5 + (fuel + 1) by omega, setup, execute, fetched, if_pos registers.1, input]
-  simp only [writeOracleAnswer, registers.2.2.2.1, bind_assoc, pure_bind]
-  apply congrArg (fun continuation =>
-    (liftM (World.query (.inr (.inl (leafQuery state)))) :
-      OracleComp World (BitVec 256)) >>= continuation)
-  funext answer
-  change BitVec 256 at answer
-  have r12 : (checkLeafCallPrefix state 5).getReg .x12 = 256 := registers.2.2.2.1
-  simp [oracleCycles, COMPRESSION_CYCLES, Execution.charge, checkLeafCompressionState, r12,
-    ← Nat.add_assoc]
-  congr
-
-theorem check_leaf_compression_pc (state : MachineState) (answer : BitVec 256) :
-    (checkLeafCompressionState state answer).pc = state.pc + 24 := by
-  simp [checkLeafCompressionState, writeBits, checkLeafCallPrefix, checkLeafCallInstructions,
-    execInstrBr, MachineState.setPC, BitVec.add_assoc]
-
-theorem check_leaf_compression_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
-    (not5 : reg ≠ .x5) (not10 : reg ≠ .x10) (not11 : reg ≠ .x11)
-    (not12 : reg ≠ .x12) (not13 : reg ≠ .x13) :
-    (checkLeafCompressionState state answer).getReg reg = state.getReg reg := by
-  rw [checkLeafCompressionState, writeBits_register]
-  simp only [checkLeafCallPrefix, checkLeafCallInstructions, List.take, List.foldl, execInstrBr,
-    MachineState.getReg_setPC,
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not5),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not10),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not11),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not12),
-    MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not13)]
-
-theorem check_leaf_compression_memory_outside (state : MachineState) (answer : BitVec 256)
-    (address : Word) (outside : address ≠ 256 ∧ address ≠ 264 ∧ address ≠ 272 ∧ address ≠ 280) :
-    (checkLeafCompressionState state answer).getMem address = state.getMem address := by
-  unfold checkLeafCompressionState
-  rw [writeBits_memory_outside]
-  · rfl
-  · intro i hi
-    change i < 32 at hi
-    interval_cases i <;> norm_num [alignToDword] <;> tauto
-
+/-- The leaf-loop latch advances to the next block, then decrements the eight-block counter. -/
 def checkLeafNextState (state : MachineState) : MachineState :=
-  ((state.setReg .x8 (state.getReg .x8 + 64)).setReg .x28 (state.getReg .x28 - 1)).setPC
-    (if state.getReg .x28 - 1 = 0 then 4816 else 4716)
+  ((state.setReg .x8 (state.getReg .x8 + 32)).setReg .x28 (state.getReg .x28 - 1)).setPC
+    (if state.getReg .x28 - 1 = 0 then 4516 else 4448)
 
-set_option maxRecDepth 4096 in
-theorem check_leaf_next (state : MachineState) (pc : state.pc = 4804)
+theorem check_leaf_next (state : MachineState) (pc : state.pc = 4504)
     (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (3 + fuel) state allowCoins =
       (do let result ← execute (submission.image .check) fuel (checkLeafNextState state) allowCoins
           return result.charge 3 0) := by
-  let advanced := (state.setReg .x8 (state.getReg .x8 + 64)).setPC 4808
-  let next := (advanced.setReg .x28 (state.getReg .x28 - 1)).setPC 4812
-  have f0 : fetch (submission.image .check) state = some (.base (.ADDI .x8 .x8 64)) := by
-    apply check_fetch _ 177 _ (by decide) pc; rfl
+  let advanced := (state.setReg .x8 (state.getReg .x8 + 32)).setPC 4508
+  let next := (advanced.setReg .x28 (state.getReg .x28 - 1)).setPC 4512
+  have f0 : fetch (submission.image .check) state = some (.base (.ADDI .x8 .x8 32)) := by
+    apply check_fetch _ 102 _ (by decide) pc; rfl
   have f1 : fetch (submission.image .check) advanced = some (.base (.ADDI .x28 .x28 4095)) := by
-    apply check_fetch _ 178 _ (by decide) rfl; rfl
-  have f2 : fetch (submission.image .check) next = some (.base (.BNE .x28 .x0 8096)) := by
-    apply check_fetch _ 179 _ (by decide) rfl; rfl
-  have s0 : ordinaryStep state (.base (.ADDI .x8 .x8 64)) = some advanced := by
+    apply check_fetch _ 103 _ (by decide) rfl; rfl
+  have f2 : fetch (submission.image .check) next = some (.base (.BNE .x28 .x0 8128)) := by
+    apply check_fetch _ 104 _ (by decide) rfl; rfl
+  have s0 : ordinaryStep state (.base (.ADDI .x8 .x8 32)) = some advanced := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, pc, advanced]
   have s1 : ordinaryStep advanced (.base (.ADDI .x28 .x28 4095)) = some next := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12, advanced, next,
       MachineState.getReg, MachineState.setReg, MachineState.setPC, BitVec.sub_eq_add_neg]
-  have s2 : ordinaryStep next (.base (.BNE .x28 .x0 8096)) = some (checkLeafNextState state) := by
+  have s2 : ordinaryStep next (.base (.BNE .x28 .x0 8128)) = some (checkLeafNextState state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13,
       advanced, next, checkLeafNextState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
     split <;> simp_all
@@ -969,48 +751,51 @@ theorem check_leaf_next (state : MachineState) (pc : state.pc = 4804)
   simp only [execute, f0, s0, f1, s1, f2, s2, instructionCycles, bind_assoc, pure_bind]
   simp [Execution.charge, ← Nat.add_assoc]
 
+/-- One leaf block: copy 32 bytes, compress, then advance the pointer and counter. -/
 def checkLeafStepState (state : MachineState) (answer : BitVec 256) : MachineState :=
-  checkLeafNextState (checkLeafCompressionState (checkLeafCopyState state) answer)
+  checkLeafNextState (checkCompressionState (checkLeafCopyState state) answer)
 
-theorem check_leaf_block (state : MachineState) (pc : state.pc = 4716)
+theorem check_leaf_block (state : MachineState) (pc : state.pc = 4448)
     (scratch : state.getReg .x21 = 256)
-    (sourceValid : ∀ word : Fin 8,
+    (sourceValid : ∀ word : Fin 4,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (25 + fuel) state allowCoins =
-      (do let answer ← World.query (.inr (.inl (leafQuery (checkLeafCopyState state))))
+    execute (submission.image .check) (33 + fuel) state allowCoins =
+      (do let answer ← World.query (.inr (.inl (padInput (readBuffer (checkLeafCopyState state) 256 64))))
           let result ← execute (submission.image .check) fuel (checkLeafStepState state answer) allowCoins
-          return result.charge 32 1) := by
-  have copyPC : (checkLeafCopyState state).pc = 4780 := by
+          return result.charge 40 1) := by
+  have copyPC : (checkLeafCopyState state).pc = 4480 := by
     simp [checkLeafCopyState, checkLeafCopyPrefix, checkLeafCopyInstructions, execInstrBr,
       MachineState.setPC, pc]
   have copyScratch : (checkLeafCopyState state).getReg .x21 = 256 :=
-    (check_copy_register state 16 (by decide) .x21 (by decide)).trans scratch
+    (check_copy_register state 8 (by decide) .x21 (by decide)).trans scratch
   have compressionPC (answer : BitVec 256) :
-      (checkLeafCompressionState (checkLeafCopyState state) answer).pc = 4804 := by
-    rw [check_leaf_compression_pc, copyPC]
+      (checkCompressionState (checkLeafCopyState state) answer).pc = 4504 := by
+    rw [check_compression_pc, copyPC]
     rfl
-  rw [show 25 + fuel = 16 + (6 + (3 + fuel)) by omega, check_leaf_copy state pc scratch sourceValid,
-    check_leaf_compression _ copyPC copyScratch]
+  rw [show 33 + fuel = 8 + (22 + (3 + fuel)) by omega, check_leaf_copy state pc scratch sourceValid,
+    check_compression _ 96 (Or.inr rfl) copyPC copyScratch]
   simp only [bind_assoc, pure_bind]
   apply congrArg (fun continuation =>
-    (liftM (World.query (.inr (.inl (leafQuery (checkLeafCopyState state))))) :
+    (liftM (World.query (.inr (.inl (padInput (readBuffer (checkLeafCopyState state) 256 64))))) :
       OracleComp World (BitVec 256)) >>= continuation)
   funext answer
   rw [check_leaf_next _ (compressionPC answer)]
   simp [checkLeafStepState, Execution.charge, ← Nat.add_assoc]
 
+/-- The next iteration has the advanced source pointer and decremented counter;
+its scratch pointer and subroutine return address are unchanged. -/
 theorem check_leaf_block_registers (state : MachineState) (answer : BitVec 256) :
-    (checkLeafStepState state answer).getReg .x8 = state.getReg .x8 + 64 ∧
+    (checkLeafStepState state answer).getReg .x8 = state.getReg .x8 + 32 ∧
     (checkLeafStepState state answer).getReg .x28 = state.getReg .x28 - 1 ∧
     (checkLeafStepState state answer).getReg .x21 = state.getReg .x21 ∧
     (checkLeafStepState state answer).getReg .x1 = state.getReg .x1 := by
   have preserved (reg : Reg) (safe : reg ∈ [Reg.x8, .x28, .x21, .x1]) :
-      (checkLeafCompressionState (checkLeafCopyState state) answer).getReg reg = state.getReg reg := by
+      (checkCompressionState (checkLeafCopyState state) answer).getReg reg = state.getReg reg := by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at safe
     rcases safe with rfl | rfl | rfl | rfl <;>
-      exact (check_leaf_compression_register _ answer _ (by decide) (by decide) (by decide)
-        (by decide) (by decide)).trans (check_copy_register state 16 (by decide) _ (by decide))
+      exact (check_compression_register _ answer _ (by decide) (by decide) (by decide)
+        (by decide) (by decide)).trans (check_copy_register state 8 (by decide) _ (by decide))
   simp only [checkLeafStepState, checkLeafNextState, MachineState.getReg_setPC,
     MachineState.getReg_setReg_eq (by decide : Reg.x8 ≠ .x0),
     MachineState.getReg_setReg_eq (by decide : Reg.x28 ≠ .x0),
@@ -1019,38 +804,44 @@ theorem check_leaf_block_registers (state : MachineState) (answer : BitVec 256) 
     MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x8 ≠ .x21),
     MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x28 ≠ .x1),
     MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x8 ≠ .x1)]
-  rw [preserved .x8 (by simp), preserved .x28 (by simp),
-    preserved .x21 (by simp), preserved .x1 (by simp)]
+  rw [preserved .x8 (by simp),
+    preserved .x28 (by simp),
+    preserved .x21 (by simp),
+    preserved .x1 (by simp)]
   exact ⟨rfl, rfl, rfl, rfl⟩
 
 theorem check_leaf_block_pc (state : MachineState) (answer : BitVec 256) :
     (checkLeafStepState state answer).pc =
-      if state.getReg .x28 - 1 = 0 then 4816 else 4716 := by
-  change (if (checkLeafCompressionState (checkLeafCopyState state) answer).getReg .x28 - 1 = 0
-    then 4816 else 4716) = _
-  rw [check_leaf_compression_register _ answer .x28 (by decide) (by decide) (by decide) (by decide) (by decide),
-    checkLeafCopyState, check_copy_register state 16 (by decide) .x28 (by decide)]
+      if state.getReg .x28 - 1 = 0 then 4516 else 4448 := by
+  change (if (checkCompressionState (checkLeafCopyState state) answer).getReg .x28 - 1 = 0
+    then 4516 else 4448) = _
+  rw [check_compression_register _ answer .x28 (by decide) (by decide) (by decide) (by decide) (by decide),
+    checkLeafCopyState, check_copy_register state 8 (by decide) .x28 (by decide)]
 
+/-- A semantic unfolding of the actual block loop. Each iteration issues the exact
+scratch query from the image and applies its byte-writing and pointer transitions. -/
 def checkLeafLoop (state : MachineState) : Nat → OracleComp World MachineState
   | 0 => pure state
   | count + 1 => do
-      let answer ← World.query (.inr (.inl (leafQuery (checkLeafCopyState state))))
+      let answer ← World.query (.inr (.inl (padInput (readBuffer (checkLeafCopyState state) 256 64))))
       checkLeafLoop (checkLeafStepState state answer) count
 
-theorem check_leaf_loop (state : MachineState) (count : Nat) (bounded : count ≤ 4)
-    (pc : 0 < count → state.pc = 4716) (counter : state.getReg .x28 = BitVec.ofNat 64 count)
+/-- Exact execution of the leaf hash loop for every possible sequence of oracle replies.
+The loop uses 33 instructions and 40 cycles per block, and makes one query per block. -/
+theorem check_leaf_loop (state : MachineState) (count : Nat) (bounded : count ≤ 8)
+    (pc : 0 < count → state.pc = 4448) (counter : state.getReg .x28 = BitVec.ofNat 64 count)
     (scratch : state.getReg .x21 = 256)
-    (sourceValid : ∀ word < 8 * count,
+    (sourceValid : ∀ word < 4 * count,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (25 * count + fuel) state allowCoins =
+    execute (submission.image .check) (33 * count + fuel) state allowCoins =
       (do let finished ← checkLeafLoop state count
           let result ← execute (submission.image .check) fuel finished allowCoins
-          return result.charge (32 * count) count) := by
+          return result.charge (40 * count) count) := by
   induction count generalizing state with
   | zero => simp [checkLeafLoop, Execution.charge]
   | succ count ih =>
-    have currentValid (word : Fin 8) :
+    have currentValid (word : Fin 4) :
         accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word.val)) 8 = true :=
       sourceValid word.val (by omega)
     have nextCounter (answer : BitVec 256) :
@@ -1060,7 +851,7 @@ theorem check_leaf_loop (state : MachineState) (count : Nat) (bounded : count �
       rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (count + 1) 1 (by decide) (by omega)]
       congr 1
     have nextPC (answer : BitVec 256) (positive : 0 < count) :
-        (checkLeafStepState state answer).pc = 4716 := by
+        (checkLeafStepState state answer).pc = 4448 := by
       rw [check_leaf_block_pc]
       have nonzero : state.getReg .x28 - 1 ≠ 0 := by
         rw [← (check_leaf_block_registers state answer).2.1, nextCounter]
@@ -1069,33 +860,35 @@ theorem check_leaf_loop (state : MachineState) (count : Nat) (bounded : count �
         change count % 18446744073709551616 = 0 at this
         omega
       exact if_neg nonzero
-    have nextValid (answer : BitVec 256) (word : Nat) (bound : word < 8 * count) :
+    have nextValid (answer : BitVec 256) (word : Nat) (bound : word < 4 * count) :
         accessValid ((checkLeafStepState state answer).getReg .x8 +
           BitVec.ofNat 64 (8 * word)) 8 = true := by
-      have valid := sourceValid (word + 8) (by omega)
+      have valid := sourceValid (word + 4) (by omega)
       rw [(check_leaf_block_registers state answer).1]
-      have address : state.getReg .x8 + 64 + BitVec.ofNat 64 (8 * word) =
-          state.getReg .x8 + BitVec.ofNat 64 (8 * (word + 8)) := by
-        rw [show 8 * (word + 8) = 64 + 8 * word by omega, BitVec.ofNat_add, BitVec.add_assoc]
+      have address : state.getReg .x8 + 32 + BitVec.ofNat 64 (8 * word) =
+          state.getReg .x8 + BitVec.ofNat 64 (8 * (word + 4)) := by
+        rw [show 8 * (word + 4) = 32 + 8 * word by omega, BitVec.ofNat_add, BitVec.add_assoc]
         rfl
       rw [address]
       exact valid
-    rw [show 25 * (count + 1) + fuel = 25 + (25 * count + fuel) by omega,
+    rw [show 33 * (count + 1) + fuel = 33 + (33 * count + fuel) by omega,
       check_leaf_block state (pc (by omega)) scratch currentValid]
     simp only [checkLeafLoop, bind_assoc]
     apply congrArg (fun continuation =>
-      (liftM (World.query (.inr (.inl (leafQuery (checkLeafCopyState state))))) :
+      (liftM (World.query (.inr (.inl (padInput (readBuffer (checkLeafCopyState state) 256 64))))) :
         OracleComp World (BitVec 256)) >>= continuation)
     funext answer
     rw [ih _ (by omega) (nextPC answer) (nextCounter answer)
       ((check_leaf_block_registers state answer).2.2.1.trans scratch) (nextValid answer)]
     simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
 
-theorem check_leaf_loop_finished (state : MachineState) (count : Nat) (bounded : count ≤ 4)
+/-- Every possible run of the bounded loop exhausts its counter and preserves the
+return address. A nonempty loop reaches the actual JALR instruction. -/
+theorem check_leaf_loop_finished (state : MachineState) (count : Nat) (bounded : count ≤ 8)
     (counter : state.getReg .x28 = BitVec.ofNat 64 count) (finished : MachineState)
     (reachable : finished ∈ support (checkLeafLoop state count)) :
     finished.getReg .x28 = 0 ∧ finished.getReg .x1 = state.getReg .x1 ∧
-      (0 < count → finished.pc = 4816) := by
+      (0 < count → finished.pc = 4516) := by
   induction count generalizing state with
   | zero =>
     simp only [checkLeafLoop, support_pure, Set.mem_singleton_iff] at reachable
@@ -1120,53 +913,57 @@ theorem check_leaf_loop_finished (state : MachineState) (count : Nat) (bounded :
       rfl
     · exact remaining.2.2 (by omega)
 
-theorem check_leaf_return (state : MachineState) (pc : state.pc = 4816)
-    (link : state.getReg .x1 = 4200) (fuel : Nat) (allowCoins : Bool) :
+/-- The leaf subroutine returns to its caller using the preserved link register. -/
+theorem check_leaf_return (state : MachineState) (pc : state.pc = 4516)
+    (link : state.getReg .x1 = 4196) (fuel : Nat) (allowCoins : Bool) :
     execute (submission.image .check) (1 + fuel) state allowCoins =
-      (do let result ← execute (submission.image .check) fuel (state.setPC 4200) allowCoins
+      (do let result ← execute (submission.image .check) fuel (state.setPC 4196) allowCoins
           return result.charge 1 0) := by
   have fetched : fetch (submission.image .check) state =
       some (.base (.JALR .x0 .x1 0)) := by
-    apply check_fetch _ 180 _ (by decide) pc
+    apply check_fetch _ 105 _ (by decide) pc
     rfl
-  have stepped : ordinaryStep state (.base (.JALR .x0 .x1 0)) = some (state.setPC 4200) := by
+  have stepped : ordinaryStep state (.base (.JALR .x0 .x1 0)) = some (state.setPC 4196) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       MachineState.setReg, link]
   rw [Nat.add_comm 1 fuel, execute_ordinary_step _ _ _ _ _ _ fetched stepped]
   rfl
 
-theorem check_leaf_subroutine (state : MachineState) (pc : state.pc = 4712)
-    (link : state.getReg .x1 = 4200) (scratch : state.getReg .x21 = 256)
+/-- The full 2048-bit leaf-hashing subroutine: initialize eight blocks, process them,
+and return to the authentication-path code. All oracle replies are covered.
+It takes 266 instructions, costs exactly 322 cycles, and makes eight queries. -/
+theorem check_leaf_subroutine (state : MachineState) (pc : state.pc = 4444)
+    (link : state.getReg .x1 = 4196) (scratch : state.getReg .x21 = 256)
     (sourceValid : ∀ word < 32,
       accessValid (state.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true)
     (fuel : Nat) (allowCoins : Bool) :
-    execute (submission.image .check) (102 + fuel) state allowCoins =
-      (do let finished ← checkLeafLoop ((state.setReg .x28 4).setPC 4716) 4
-          let result ← execute (submission.image .check) fuel (finished.setPC 4200) allowCoins
-          return result.charge 130 4) := by
-  let initialized := (state.setReg .x28 4).setPC 4716
+    execute (submission.image .check) (266 + fuel) state allowCoins =
+      (do let finished ← checkLeafLoop ((state.setReg .x28 8).setPC 4448) 8
+          let result ← execute (submission.image .check) fuel (finished.setPC 4196) allowCoins
+          return result.charge 322 8) := by
+  let initialized := (state.setReg .x28 8).setPC 4448
   have fetched : fetch (submission.image .check) state =
-      some (.base (.ADDI .x28 .x0 4)) := by
-    apply check_fetch _ 154 _ (by decide) pc
+      some (.base (.ADDI .x28 .x0 8)) := by
+    apply check_fetch _ 87 _ (by decide) pc
     rfl
-  have stepped : ordinaryStep state (.base (.ADDI .x28 .x0 4)) = some initialized := by
+  have stepped : ordinaryStep state (.base (.ADDI .x28 .x0 8)) = some initialized := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
       initialized, pc, MachineState.getReg]
-  have initCounter : initialized.getReg .x28 = BitVec.ofNat 64 4 := by
+  have initCounter : initialized.getReg .x28 = BitVec.ofNat 64 8 := by
     simp [initialized, MachineState.getReg, MachineState.setReg, MachineState.setPC]
   have initScratch : initialized.getReg .x21 = 256 := by
     simpa [initialized, MachineState.getReg_setPC, MachineState.getReg_setReg_ne] using scratch
-  have initSource : ∀ word < 8 * 4,
+  have initSource : ∀ word < 4 * 8,
       accessValid (initialized.getReg .x8 + BitVec.ofNat 64 (8 * word)) 8 = true := by
     simpa [initialized, MachineState.getReg_setPC, MachineState.getReg_setReg_ne] using sourceValid
-  rw [show 102 + fuel = (25 * 4 + (1 + fuel)) + 1 by omega,
+  rw [show 266 + fuel = (33 * 8 + (1 + fuel)) + 1 by omega,
     execute_ordinary_step _ _ _ _ _ _ fetched stepped,
-    check_leaf_loop initialized 4 (by decide) (fun _ => rfl) initCounter initScratch initSource]
+    check_leaf_loop initialized 8 (by decide) (fun _ => rfl) initCounter initScratch initSource]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro finished reachable
-  have done := check_leaf_loop_finished initialized 4 (by decide) initCounter finished reachable
-  have finalLink : finished.getReg .x1 = 4200 := by
+  have done := check_leaf_loop_finished initialized 8 (by decide) initCounter finished reachable
+  have finalLink : finished.getReg .x1 = 4196 := by
     rw [done.2.1]
     simpa [initialized, MachineState.getReg_setPC, MachineState.getReg_setReg_ne] using link
   rw [check_leaf_return finished (done.2.2 (by decide)) finalLink]
@@ -1180,12 +977,14 @@ private theorem check_leaf_block_preserves (state : MachineState) (answer : BitV
   simp only [checkLeafStepState, checkLeafNextState, MachineState.getReg_setPC,
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not28),
     MachineState.getReg_setReg_ne _ _ _ _ (Ne.symm not8)]
-  exact (check_leaf_compression_register _ answer reg not5 not10 not11 not12 not13).trans
-    (check_copy_register state 16 (by decide) reg not6)
+  exact (check_compression_register _ answer reg not5 not10 not11 not12 not13 not14 not15 not16 not17 not31).trans
+    (check_copy_register state 8 (by decide) reg not6)
 
+/-- The complete hash preserves the position/path metadata, proof pointer, root
+pointer, and scratch pointer. It consumes exactly 32 bytes per block from x8. -/
 theorem check_leaf_loop_registers (state : MachineState) (count : Nat) (finished : MachineState)
     (reachable : finished ∈ support (checkLeafLoop state count)) :
-    finished.getReg .x8 = state.getReg .x8 + BitVec.ofNat 64 (64 * count) ∧
+    finished.getReg .x8 = state.getReg .x8 + BitVec.ofNat 64 (32 * count) ∧
     ∀ reg ∉ [.x5, .x6, .x8, .x10, .x11, .x12, .x13, .x28, .x14, .x15, .x16, .x17, .x31],
       finished.getReg reg = state.getReg reg := by
   induction count generalizing state with
@@ -1199,50 +998,9 @@ theorem check_leaf_loop_registers (state : MachineState) (count : Nat) (finished
     have rest := ih _ reached
     constructor
     · rw [rest.1, (check_leaf_block_registers state answer).1]
-      rw [show 64 * (count + 1) = 64 + 64 * count by omega, BitVec.ofNat_add, BitVec.add_assoc]
+      rw [show 32 * (count + 1) = 32 + 32 * count by omega, BitVec.ofNat_add, BitVec.add_assoc]
       rfl
     · intro reg preserved
       exact (rest.2 reg preserved).trans (check_leaf_block_preserves state answer reg preserved)
-
-private theorem leaf_copy_mem_outside (state : MachineState) (address : Word)
-    (scratch : state.getReg .x21 = 256)
-    (outside : ∀ j < 8, address ≠ BitVec.ofNat 64 (288 + 8 * j)) :
-    (checkLeafCopyState state).getMem address = state.getMem address := by
-  have regSetMem (s : MachineState) (a v : Word) (r : Reg) : (s.setMem a v).getReg r = s.getReg r := by
-    cases r <;> rfl
-  rw [check_leaf_copy_expansion]
-  have o0 : address ≠ 288#64 := outside 0 (by decide)
-  have o1 : address ≠ 296#64 := outside 1 (by decide)
-  have o2 : address ≠ 304#64 := outside 2 (by decide)
-  have o3 : address ≠ 312#64 := outside 3 (by decide)
-  have o4 : address ≠ 320#64 := outside 4 (by decide)
-  have o5 : address ≠ 328#64 := outside 5 (by decide)
-  have o6 : address ≠ 336#64 := outside 6 (by decide)
-  have o7 : address ≠ 344#64 := outside 7 (by decide)
-  simp only [List.foldl, execInstrBr, signExtend12]
-  simp [regSetMem, scratch, o0, o1, o2, o3, o4, o5, o6, o7, MachineState.getReg_setReg_ne,
-    MachineState.getReg_setReg_eq]
-
-/-- Every supported run of the leaf loop preserves all memory outside `[256, 352)`. -/
-theorem check_leaf_loop_support_outside (state : MachineState) (count : Nat)
-    (finished : MachineState) (reachable : finished ∈ support (checkLeafLoop state count))
-    (address : Word) (scratch : state.getReg .x21 = 256)
-    (outside : ∀ i < 12, address ≠ BitVec.ofNat 64 (256 + 8 * i)) :
-    finished.getMem address = state.getMem address := by
-  induction count generalizing state with
-  | zero =>
-    simp only [checkLeafLoop, support_pure, Set.mem_singleton_iff] at reachable
-    subst finished; rfl
-  | succ count ih =>
-    simp only [checkLeafLoop, mem_support_bind_iff] at reachable
-    obtain ⟨answer, _, reached⟩ := reachable
-    change BitVec 256 at answer
-    rw [ih _ reached ((check_leaf_block_registers state answer).2.2.1.trans scratch)]
-    change (checkLeafCompressionState (checkLeafCopyState state) answer).getMem address = _
-    rw [check_leaf_compression_memory_outside _ _ _
-      ⟨outside 0 (by decide), outside 1 (by decide), outside 2 (by decide), outside 3 (by decide)⟩]
-    apply leaf_copy_mem_outside _ _ scratch
-    intro j hj
-    simpa only [show 256 + 8 * (j + 4) = 288 + 8 * j by omega] using outside (j + 4) (by omega)
 
 end CommitGolfCandidate

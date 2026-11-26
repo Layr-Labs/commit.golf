@@ -105,18 +105,18 @@ theorem fixed_cache_answers (cache : CompressionCache) (oracle : Oracle) {α : T
 /-- A fresh salt can hit a previously answered cell only by guessing one of the
 low halves of the cached inputs. The block may depend on the earlier transcript. -/
 theorem cached_salt_hit_bound (cache : CompressionCache) (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH))
-    (covered : ∀ input, cache input ≠ none → input ∈ keys) (block : LeafBlock) :
-    (prEvent ((fun salt : Digest => cache ((leafInput salt block)) ≠ none) <$> (($ᵗ Digest)))) ≤
+    (covered : ∀ input, cache input ≠ none → input ∈ keys) (block : Digest) :
+    (prEvent ((fun salt : Digest => cache ((padInput (block ++ salt))) ≠ none) <$> (($ᵗ Digest)))) ≤
       (keys.card : ENNReal) / 2^256 := by
   have included :
-      (prEvent ((fun salt : Digest => cache ((leafInput salt block)) ≠ none) <$> (($ᵗ Digest)))) ≤
+      (prEvent ((fun salt : Digest => cache ((padInput (block ++ salt))) ≠ none) <$> (($ᵗ Digest)))) ≤
       (prEvent ((fun salt : Digest => keys.toList.any
         (fun input => decide (input.extractLsb' 0 256 = salt)) = true) <$> (($ᵗ Digest)))) := by
     apply prEvent_mono_of_support
     intro salt _ hit
     apply List.any_eq_true.mpr
-    exact ⟨(leafInput salt block), Finset.mem_toList.mpr (covered _ hit),
-      decide_eq_true (leafInput_digest salt block)⟩
+    exact ⟨(padInput (block ++ salt)), Finset.mem_toList.mpr (covered _ hit),
+      decide_eq_true (padInput_digest block salt)⟩
   exact included.trans (by simpa only [Finset.length_toList] using
     fresh_trace_hit_probability keys.toList)
 
@@ -125,13 +125,13 @@ Its loss is the continuation's query budget plus the number of cached inputs,
 all divided by 2^256. Thus prior queries are charged rather than ignored. -/
 theorem cached_salted_compression_distance (permutation : Perm) (cache : CompressionCache)
     (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
-    (block : LeafBlock) {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
+    (block : Digest) {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
     (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
     measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           let oracle : Oracle := ⟨tableExtending cache table, permutation⟩
-          fixedOracleRun oracle (next (absorb oracle.compression salt block)))
+          fixedOracleRun oracle (next (combine oracle.compression salt block)))
       (do let table ← $ᵗ Compression
           let answer ← $ᵗ Digest
           fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer)) ≤
@@ -139,21 +139,21 @@ theorem cached_salted_compression_distance (permutation : Perm) (cache : Compres
   let intermediate : ProbComp α := do
     let table ← $ᵗ Compression
     let salt ← $ᵗ Digest
-    fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next (absorb table salt block))
+    fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next (combine table salt block))
   have prior : measureTVDist
       (do let table ← $ᵗ Compression
           let salt ← $ᵗ Digest
           let oracle : Oracle := ⟨tableExtending cache table, permutation⟩
-          fixedOracleRun oracle (next (absorb oracle.compression salt block)))
+          fixedOracleRun oracle (next (combine oracle.compression salt block)))
       intermediate ≤ ((keys.card : ENNReal) / 2^256).toReal := by
     apply measureTVDist_bind_left_le_of_forall_le ($ᵗ Compression) _ _ (by positivity)
     intro table
     refine (measureTVDist_bind_left_le_prEvent_of_evalDistEq ($ᵗ Digest) _ _
-      (fun salt => cache ((leafInput salt block)) ≠ none) ?_).trans ?_
+      (fun salt => cache ((padInput (block ++ salt))) ≠ none) ?_).trans ?_
     · intro salt unqueried
-      have empty : cache ((leafInput salt block)) = none := Classical.not_not.mp unqueried
-      have same : absorb (tableExtending cache table) salt block = absorb table salt block := by
-        change (cache ((leafInput salt block))).getD (table ((leafInput salt block))) = table ((leafInput salt block))
+      have empty : cache ((padInput (block ++ salt))) = none := Classical.not_not.mp unqueried
+      have same : combine (tableExtending cache table) salt block = combine table salt block := by
+        change (cache ((padInput (block ++ salt)))).getD (table ((padInput (block ++ salt)))) = table ((padInput (block ++ salt)))
         rw [empty]
         rfl
       dsimp only

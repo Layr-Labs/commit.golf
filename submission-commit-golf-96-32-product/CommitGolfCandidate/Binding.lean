@@ -15,19 +15,19 @@ private theorem append_injective {left right left' right' : Digest}
       congrArg (fun x : BitVec 512 => x.extractLsb' 256 256) h
 
 /-- Inputs made by the salted leaf chain, in execution order. -/
-def chainInputs (compress : Compression) : Digest → List LeafBlock → List (BitVec COMPRESSION_INPUT_LENGTH)
+def chainInputs (compress : Compression) : Digest → List Digest → List (BitVec COMPRESSION_INPUT_LENGTH)
   | _, [] => []
   | state, block :: rest =>
-      leafInput state block :: chainInputs compress (absorb compress state block) rest
+      ((padInput (block ++ state))) :: chainInputs compress (combine compress state block) rest
 
 /-- Different salts or equal-length block sequences with the same final digest
 produce a collision among the inputs of the two executions. -/
 theorem collision_of_chain_eq (compress : Compression)
-    (state state' : Digest) (blocks blocks' : List LeafBlock)
+    (state state' : Digest) (blocks blocks' : List Digest)
     (sameLength : blocks.length = blocks'.length)
     (different : state ≠ state' ∨ blocks ≠ blocks')
-    (sameDigest : blocks.foldl (absorb compress) state =
-      blocks'.foldl (absorb compress) state') :
+    (sameDigest : blocks.foldl (combine compress) state =
+      blocks'.foldl (combine compress) state') :
     ∃ input ∈ chainInputs compress state blocks,
       ∃ input' ∈ chainInputs compress state' blocks',
         input ≠ input' ∧ compress input = compress input' := by
@@ -40,8 +40,8 @@ theorem collision_of_chain_eq (compress : Compression)
     cases blocks' with
     | nil => simp at sameLength
     | cons block' rest' =>
-      by_cases inputsEqual : leafInput state block = leafInput state' block'
-      · obtain ⟨rfl, rfl⟩ := leafInput_injective inputsEqual
+      by_cases inputsEqual : (padInput (block ++ state)) = (padInput (block' ++ state'))
+      · obtain ⟨rfl, rfl⟩ := append_injective (padInput_injective inputsEqual)
         have tailsDifferent : rest ≠ rest' := by
           intro h
           subst rest'
@@ -50,7 +50,7 @@ theorem collision_of_chain_eq (compress : Compression)
           ih _ _ rest' (by simpa using sameLength) (Or.inr tailsDifferent) sameDigest
         exact ⟨input, List.mem_cons_of_mem _ hInput, input',
           List.mem_cons_of_mem _ hInput', hCollision⟩
-      · by_cases nextEqual : absorb compress state block = absorb compress state' block'
+      · by_cases nextEqual : combine compress state block = combine compress state' block'
         · exact ⟨_, List.mem_cons_self .., _, List.mem_cons_self .., inputsEqual, nextEqual⟩
         · obtain ⟨input, hInput, input', hInput', hCollision⟩ :=
             ih _ _ rest' (by simpa using sameLength) (Or.inl nextEqual) sameDigest
@@ -104,24 +104,24 @@ theorem collision_of_climb_eq (compress : Compression)
         exact ⟨x, List.mem_cons_of_mem _ hx, y, List.mem_cons_of_mem _ hy, hCollision⟩
 
 
-/-- The four 512-bit blocks absorbed by the leaf routine, in little-endian order. -/
-def leafBlocks (value : Entry) : List LeafBlock :=
-  (List.range 4).map fun block => value.extractLsb' (512 * block) 512
+/-- The eight blocks absorbed by the leaf routine, in little-endian order. -/
+def leafBlocks (value : Entry) : List Digest :=
+  (List.range 8).map fun block => value.extractLsb' (256 * block) 256
 
 theorem leafBlocks_injective : Function.Injective leafBlocks := by
   intro value value' h
   apply BitVec.eq_of_getLsbD_eq
   intro bit hbit
-  have blockBound : bit / 512 < 4 := by
+  have blockBound : bit / 256 < 8 := by
     change bit < 2048 at hbit
     omega
-  have blockEqual := List.map_inj_left.mp h (bit / 512) (List.mem_range.mpr blockBound)
-  have bitEqual := congrArg (fun block : LeafBlock => block.getLsbD (bit % 512)) blockEqual
-  have offset : 512 * (bit / 512) + bit % 512 = bit := by omega
-  simpa [BitVec.getLsbD_extractLsb', Nat.mod_lt _ (by decide : 0 < 512), offset] using bitEqual
+  have blockEqual := List.map_inj_left.mp h (bit / 256) (List.mem_range.mpr blockBound)
+  have bitEqual := congrArg (fun block : Digest => block.getLsbD (bit % 256)) blockEqual
+  have offset : 256 * (bit / 256) + bit % 256 = bit := by omega
+  simpa [BitVec.getLsbD_extractLsb', Nat.mod_lt _ (by decide : 0 < 256), offset] using bitEqual
 
 theorem leafDigest_eq_fold (compress : Compression) (salt : Digest) (value : Entry) :
-    leafDigest compress salt value = (leafBlocks value).foldl (absorb compress) salt := by
+    leafDigest compress salt value = (leafBlocks value).foldl (combine compress) salt := by
   simp [leafDigest, leafBlocks, List.foldl_map]
 
 /-- All compression inputs needed to verify one position. -/
@@ -130,7 +130,7 @@ def openingInputs (compress : Compression) (salt : Digest) (value : Entry)
   chainInputs compress salt (leafBlocks value) ++
     pathInputs compress (leafDigest compress salt value) path
 
-theorem chainInputs_length (compress : Compression) (state : Digest) (blocks : List LeafBlock) :
+theorem chainInputs_length (compress : Compression) (state : Digest) (blocks : List Digest) :
     (chainInputs compress state blocks).length = blocks.length := by
   induction blocks generalizing state with
   | nil => rfl
@@ -145,11 +145,11 @@ theorem pathInputs_length (compress : Compression) (node : Digest)
     simp only [pathInputs, List.length_cons]
     exact congrArg (fun n : Nat => n + 1) (ih _)
 
-/-- A collision extractor need only replay four leaf calls and one per tree level
+/-- A collision extractor need only replay eight leaf calls and one per tree level
 for each of the two conflicting positions, independently of the opening batch size. -/
 theorem openingInputs_length (compress : Compression) (salt : Digest) (value : Entry)
     (path : List (Bool × Digest)) :
-    (openingInputs compress salt value path).length = 4 + path.length := by
+    (openingInputs compress salt value path).length = 8 + path.length := by
   simp [openingInputs, chainInputs_length, pathInputs_length, leafBlocks]
 
 /-- Two different opened values at the same position and root force a collision.

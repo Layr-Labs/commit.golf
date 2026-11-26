@@ -28,17 +28,16 @@ theorem conflicting_records_exist (claim : Scheme.Claim) (conflicting : claim.Co
     by rw [leftValue, rightValue]; exact different⟩
 
 /-- Compression inputs for replaying one record parsed from the submitted proof. -/
-def recordInputs (compress : Compression) (input : CheckInput) (ordinal : Nat) :
-    List (BitVec COMPRESSION_INPUT_LENGTH) :=
+def recordInputs (compress : Compression) (input : CheckInput) (ordinal : Nat) : List (BitVec COMPRESSION_INPUT_LENGTH) :=
   openingInputs compress (recordSalt input ordinal) (recordValue input ordinal)
-    (recordPath (recordIndex input ordinal) (recordSibling compress input ordinal))
+    (recordPath (recordIndex input ordinal) (recordSibling input ordinal))
 
 theorem record_inputs_length (compress : Compression) (input : CheckInput) (ordinal : Nat) :
-    (recordInputs compress input ordinal).length = 28 := by
+    (recordInputs compress input ordinal).length = 32 := by
   rw [recordInputs, openingInputs_length, record_path_length]
 
 /-- Any conflicting ordinal pair in a successful machine binding claim yields a
-compression collision among the 28 replay inputs of each record. This theorem uses
+compression collision among the 32 replay inputs of each record. This theorem uses
 actual checker acceptance, not an assumed abstract verifier. -/
 theorem binding_claim_collision (oracle : Oracle) (claim : Scheme.Claim) (left right : Nat)
     (records : ConflictingRecords claim left right)
@@ -52,20 +51,20 @@ theorem binding_claim_collision (oracle : Oracle) (claim : Scheme.Claim) (left r
   apply collision_of_openings_eq oracle.compression
     (recordSalt (claimLeft claim) left) (recordSalt (claimRight claim) right)
     (recordValue (claimLeft claim) left) (recordValue (claimRight claim) right)
-    (recordPath (recordIndex (claimLeft claim) left) (recordSibling oracle.compression (claimLeft claim) left))
-    (recordPath (recordIndex (claimRight claim) right) (recordSibling oracle.compression (claimRight claim) right))
+    (recordPath (recordIndex (claimLeft claim) left) (recordSibling (claimLeft claim) left))
+    (recordPath (recordIndex (claimRight claim) right) (recordSibling (claimRight claim) right))
   · rw [records.2.2.1]
     exact record_path_directions _ _ _
   · exact records.2.2.2
   · exact leftRoot.trans rightRoot.symm
 
 /-- A winning binding-game claim forces a collision detectable by replaying at
-most 56 compression calls on the extracted paths (plus cap-tree sibling replay when needed). -/
+most 64 compression calls, independently of the sizes of its two opening batches. -/
 theorem breaks_implies_collision (oracle : Oracle) (claim : Scheme.Claim)
     (breaks : submission.scheme.Breaks oracle claim) :
     ∃ left right, ConflictingRecords claim left right ∧
       (recordInputs oracle.compression (claimLeft claim) left).length +
-        (recordInputs oracle.compression (claimRight claim) right).length = 56 ∧
+        (recordInputs oracle.compression (claimRight claim) right).length = 64 ∧
       ∃ input ∈ recordInputs oracle.compression (claimLeft claim) left,
         ∃ input' ∈ recordInputs oracle.compression (claimRight claim) right,
           input ≠ input' ∧ oracle.compression input = oracle.compression input' := by

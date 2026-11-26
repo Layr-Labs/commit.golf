@@ -54,7 +54,7 @@ theorem heap_eq_reference (compress : Compression) (leafCount : Nat)
 termination_by 2*leafCount-node
 decreasing_by all_goals omega
 
-/-- The mathematical heap for this submission, using exactly its four-block
+/-- The mathematical heap for this submission, using exactly its eight-block
 salted leaf hash and the same compression function for all internal nodes. -/
 def saltedHeap (compress : Compression) (message : Message) (salt : Index → Digest) :
     Nat → Digest :=

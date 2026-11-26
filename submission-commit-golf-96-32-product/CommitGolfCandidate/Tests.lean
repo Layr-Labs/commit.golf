@@ -17,14 +17,14 @@ private def ensure (label : String) (condition : Bool) : IO Unit :=
   unless condition do throw (IO.userError label)
 
 #eval do
-  for depth in [1, 2, 3] do
+  for depth in [0, 1, 2, 3] do
     let s := candidate depth
     let message : Message := fun i => BitVec.ofNat LEAF_SIZE (∑ j ∈ Finset.range 8, (123 + i.val + j * 17) * 2^(256*j))
     let committed := run (s.run .commit message)
     ensure "commit must halt successfully" (committed.exit == Exit.success)
-    ensure "commit query count" (committed.oracleCalls == 5 * 2^depth - 1)
+    ensure "commit query count" (committed.oracleCalls == 9 * 2^depth - 1)
     let (root, trapdoor) := s.readCommit committed
-    let salt := fun i => trapdoor.extractLsb' (8 * (96 * 2^depth + 32*i)) 256
+    let salt := fun i => trapdoor.extractLsb' (8 * (64 * 2^depth + 32*i)) 256
     let leaves := (List.range (2^depth)).map fun i =>
       leafDigest testOracle.compression (salt i) (message ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩)
     let tree := layers testOracle.compression depth leaves
@@ -44,7 +44,7 @@ private def ensure (label : String) (condition : Bool) : IO Unit :=
       ensure "opening length" (proof.length == positions.card * openingBytes depth)
       let checked := run (s.run .check ⟨root, positions, message.restrict positions, proof⟩)
       ensure "honest proof must verify" (checked.exit == Exit.success)
-      ensure "checker query count" (checked.oracleCalls == positions.card * (4 + depth))
+      ensure "checker query count" (checked.oracleCalls == positions.card * (8 + depth))
       if positions.card > 0 then
         let badValues : Values positions := fun i => message i + 1
         ensure "changed values must reject"

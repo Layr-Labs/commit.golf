@@ -82,21 +82,21 @@ theorem distance_bind_le_averaged_bad {Key Output : Type} [Fintype Key]
 /-- Programming one input with a fresh hidden low half changes any q-query
 continuation by at most q/2^256 in statistical distance. The continuation may
 know the programmed answer and message block, but not the hidden salt. -/
-theorem hidden_reprogram_distance (oracle : Oracle) (block : LeafBlock) (answer : Digest)
+theorem hidden_reprogram_distance (oracle : Oracle) (block answer : Digest)
     {α : Type} (computation : OracleComp World α) (budget : Nat)
     (bounded : PublicQueryBound computation budget) :
     measureTVDist
       (($ᵗ Digest) >>= fun _ => fixedOracleRun oracle computation)
       (($ᵗ Digest) >>= fun salt =>
-        fixedOracleRun (programCompression oracle ((leafInput salt block)) answer) computation) ≤
+        fixedOracleRun (programCompression oracle ((padInput (block ++ salt))) answer) computation) ≤
       ((budget : ENNReal) / 2^256).toReal := by
   have distance := distance_bind_le_averaged_bad ($ᵗ Digest)
     (fun _ => fixedOracleRun oracle computation)
-    (fun salt => fixedOracleRun (programCompression oracle ((leafInput salt block)) answer) computation)
+    (fun salt => fixedOracleRun (programCompression oracle ((padInput (block ++ salt))) answer) computation)
     (fun salt => flaggedRun oracle (marksSalt salt) computation) (fun salt => by
-      have result := reprogram_compression_distance oracle ((leafInput salt block)) answer computation
-      have low : ((leafInput salt block)).extractLsb' 0 256 = salt :=
-        leafInput_digest salt block
+      have result := reprogram_compression_distance oracle ((padInput (block ++ salt))) answer computation
+      have low : ((padInput (block ++ salt))).extractLsb' 0 256 = salt :=
+        padInput_digest block salt
       simpa only [low] using result)
   exact distance.trans (ENNReal.toReal_mono (by finiteness)
     (fresh_query_hit_bound oracle computation budget bounded))

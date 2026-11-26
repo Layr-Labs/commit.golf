@@ -3,8 +3,8 @@ import CommitGolfCandidate.CommitSemantics
 import CommitGolfCandidate.OpeningOutput
 
 /-! Identify the commitment and every transmitted proof byte with the salted
-reference tree, covering both normal openings (`k ≠ 128`) and level-7 cap-table
-openings (`k = 128`). -/
+reference tree. This removes machine memory from the remaining privacy argument,
+without replacing the machine-derived scheme being certified. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
@@ -13,8 +13,8 @@ message and retained salts, on every used slot. -/
 theorem committed_heap_reference (oracle : Oracle) (message : Message)
     (state : MachineState) (correct : CommittedState oracle message state)
     (salt : Index → Digest)
-    (salts : ∀ index, readBuffer state (5905584160 + 32 * index.val) 32 = salt index)
-    (node : Nat) (positive : 0 < node) (inside : node < 2 * LENGTH) :
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
+    (node : Nat) (positive : 0 < node) (inside : node < 2*LENGTH) :
     heapDigest state 4294971424 node = saltedHeap oracle.compression message salt node := by
   apply heap_eq_reference oracle.compression LENGTH _ _ correct.2.1 _ node positive inside
   intro index below
@@ -25,51 +25,62 @@ theorem committed_heap_reference (oracle : Oracle) (message : Message)
 theorem committed_root_reference (oracle : Oracle) (message : Message)
     (state : MachineState) (correct : CommittedState oracle message state)
     (salt : Index → Digest)
-    (salts : ∀ index, readBuffer state (5905584160 + 32 * index.val) 32 = salt index) :
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index) :
     readBuffer state submission.layout.commitment 32 =
       saltedHeap oracle.compression message salt 1 :=
   correct.1.trans (committed_heap_reference oracle message state correct salt salts
     1 (by decide) (by decide))
 
-/-- The 32-byte digest containing byte `offset` of the opening proof.
-For `k = BATCH`, bytes `0..73727` hold 128 records of `(salt, 17 siblings)` and bytes
-`73728..77823` hold the 128 level-7 cap digests `heap[128..255]`.
-For `k ≠ BATCH`, bytes `0..800*k - 1` hold `k` records of `(salt, 24 siblings)`. -/
-def referenceOpeningDigestAt (heap : Nat → Digest) (salt : Index → Digest)
-    (positions : Positions) (offset : Nat) : Digest :=
-  if positions.card = BATCH then
-    if offset < 73728 then
-      let ordinal := offset / 576
-      let part := (offset % 576) / 32
-      let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-      if part = 0 then salt index
-      else heap (((LENGTH + index.val) / 2 ^ (part - 1)) ^^^ 1)
-    else
-      heap (128 + (offset - 73728) / 32)
-  else
-    let ordinal := offset / 800
-    let part := (offset % 800) / 32
-    let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-    if part = 0 then salt index
-    else heap (((LENGTH + index.val) / 2 ^ (part - 1)) ^^^ 1)
+/-- An opening record contains its leaf's salt followed by its 24 siblings.
+`part = 0` selects the salt; parts 1 through 24 select siblings. -/
+def referenceOpeningDigest (heap : Nat → Digest) (salt : Index → Digest)
+    (positions : Positions) (ordinal part : Nat) : Digest :=
+  let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
+  if part = 0 then salt index
+  else heap (((LENGTH+index.val)/2^(part-1)) ^^^ 1)
 
 /-- Exact little-endian proof bytes, in the ABI's sorted position order. -/
 def referenceOpening (heap : Nat → Digest) (salt : Index → Digest)
     (positions : Positions) : Proof :=
-  (List.range (openingProofBytes positions.card)).map fun offset =>
-    (referenceOpeningDigestAt heap salt positions offset).extractLsb' (8 * (offset % 32)) 8
+  (List.range (800*positions.card)).map fun offset =>
+    (referenceOpeningDigest heap salt positions (offset/800) ((offset%800)/32)).extractLsb'
+      (8*(offset%32)) 8
 
 theorem reference_opening_length (heap : Nat → Digest) (salt : Index → Digest)
-    (positions : Positions) :
-    (referenceOpening heap salt positions).length = openingProofBytes positions.card := by
+    (positions : Positions) : (referenceOpening heap salt positions).length = 800*positions.card := by
   simp only [referenceOpening, List.length_map, List.length_range]
 
-/-- All bytes emitted by the actual opening image equal the reference proof,
-for every opening set (including `k = 0`, `k = BATCH`, and arbitrary `k ≠ BATCH`). -/
+theorem opening_reference_digest (oracle : Oracle) (message : Message)
+    (state : MachineState) (correct : CommittedState oracle message state)
+    (salt : Index → Digest)
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
+    (positions : Positions) (ordinal part : Nat)
+    (present : ordinal < positions.card) (inside : part < 25) :
+    let trapdoor := readBuffer state submission.layout.trapdoor submission.sizes.trapdoor
+    readBuffer (openingResult trapdoor positions).state
+      (submission.layout.proof+800*ordinal+32*part) 32 =
+    referenceOpeningDigest (saltedHeap oracle.compression message salt) salt positions ordinal part := by
+  dsimp only
+  let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
+  have records := opening_output_records state positions ordinal present
+  by_cases zero : part = 0
+  · subst part
+    simpa only [referenceOpeningDigest, if_pos rfl, ite_true, Nat.mul_zero, Nat.add_zero]
+      using records.1.trans (salts index)
+  · have level : part-1 < LOG_LENGTH := by change part-1 < 24; omega
+    have address : submission.layout.proof+800*ordinal+32*part =
+        submission.layout.proof+800*ordinal+32+32*(part-1) := by omega
+    rw [address, records.2 (part-1) level]
+    simp only [referenceOpeningDigest, if_neg zero]
+    have bounds := opening_sibling_bounds index (part-1) level
+    exact committed_heap_reference oracle message state correct salt salts _ bounds.1 bounds.2
+
+/-- All bytes emitted by the actual opening image equal the reference proof.
+The proof covers arbitrary opening sets, including the empty set. -/
 theorem opening_reference_bytes (oracle : Oracle) (message : Message)
     (state : MachineState) (correct : CommittedState oracle message state)
     (salt : Index → Digest)
-    (salts : ∀ index, readBuffer state (5905584160 + 32 * index.val) 32 = salt index)
+    (salts : ∀ index, readBuffer state (5368713248+32*index.val) 32 = salt index)
     (positions : Positions) :
     let trapdoor := readBuffer state submission.layout.trapdoor submission.sizes.trapdoor
     submission.readProof (openingResult trapdoor positions) =
@@ -79,86 +90,13 @@ theorem opening_reference_bytes (oracle : Oracle) (message : Message)
   unfold referenceOpening
   apply List.map_congr_left
   intro offset present
-  have below : offset < openingProofBytes positions.card := List.mem_range.mp present
-  by_cases batch : positions.card = BATCH
-  · have belowCap : offset < 77824 := by
-      simp only [openingProofBytes, if_pos batch] at below; exact below
-    have capRecs := opening_output_records_cap state positions batch
-    unfold referenceOpeningDigestAt
-    rw [if_pos batch]
-    by_cases inRecs : offset < 73728
-    · rw [if_pos inRecs]
-      let ordinal := offset / 576
-      let part := (offset % 576) / 32
-      let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-      have ordLt : ordinal < BATCH := by change offset / 576 < 128; omega
-      have partLt : part < 18 := by omega
-      have addrEq : submission.layout.proof + 576 * ordinal + 32 * part + offset % 32 =
-          submission.layout.proof + offset := by omega
-      have digestEq :
-          readBuffer (openingResult (readBuffer state submission.layout.trapdoor submission.sizes.trapdoor) positions).state
-            (submission.layout.proof + 576 * ordinal + 32 * part) 32 =
-            if part = 0 then salt index
-            else saltedHeap oracle.compression message salt (((LENGTH + index.val) / 2 ^ (part - 1)) ^^^ 1) := by
-        by_cases zero : part = 0
-        · rw [if_pos zero, zero, Nat.mul_zero, Nat.add_zero]
-          exact (capRecs.1 ordinal ordLt).1.trans (salts index)
-        · rw [if_neg zero]
-          have level : part - 1 < 17 := by omega
-          have level24 : part - 1 < LOG_LENGTH := by change part - 1 < 24; omega
-          have addrSplit : submission.layout.proof + 576 * ordinal + 32 * part =
-              submission.layout.proof + 576 * ordinal + 32 + 32 * (part - 1) := by omega
-          rw [addrSplit, (capRecs.1 ordinal ordLt).2 (part - 1) level]
-          have bounds := opening_sibling_bounds index (part - 1) level24
-          exact committed_heap_reference oracle message state correct salt salts _ bounds.1 bounds.2
-      change _ = (if part = 0 then salt index
-        else saltedHeap oracle.compression message salt (((LENGTH + index.val) / 2 ^ (part - 1)) ^^^ 1)).extractLsb'
-          (8 * (offset % 32)) 8
-      rw [← digestEq, read_buffer_byte _ _ 32 (offset % 32) (by omega), addrEq]
-    · rw [if_neg inRecs]
-      let slot := (offset - 73728) / 32
-      have slotLt : slot < 128 := by omega
-      have addrEq : submission.layout.proof + 73728 + 32 * slot + offset % 32 =
-          submission.layout.proof + offset := by omega
-      have digestEq :
-          readBuffer (openingResult (readBuffer state submission.layout.trapdoor submission.sizes.trapdoor) positions).state
-            (submission.layout.proof + 73728 + 32 * slot) 32 =
-            saltedHeap oracle.compression message salt (128 + slot) := by
-        rw [capRecs.2 slot slotLt]
-        exact committed_heap_reference oracle message state correct salt salts (128 + slot)
-          (by omega) (by change 128 + slot < 2 * 16777216; omega)
-      change _ = (saltedHeap oracle.compression message salt (128 + slot)).extractLsb' (8 * (offset % 32)) 8
-      rw [← digestEq, read_buffer_byte _ _ 32 (offset % 32) (by omega), addrEq]
-  · have belowNorm : offset < 800 * positions.card := by
-      simp only [openingProofBytes, if_neg batch] at below; exact below
-    unfold referenceOpeningDigestAt
-    rw [if_neg batch]
-    let ordinal := offset / 800
-    let part := (offset % 800) / 32
-    let index : Index := ⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩
-    have ordLt : ordinal < positions.card := (Nat.div_lt_iff_lt_mul (by decide)).mpr (by omega)
-    have partLt : part < 25 := by omega
-    have addrEq : submission.layout.proof + 800 * ordinal + 32 * part + offset % 32 =
-        submission.layout.proof + offset := by omega
-    have records := opening_output_records state positions batch ordinal ordLt
-    have digestEq :
-        readBuffer (openingResult (readBuffer state submission.layout.trapdoor submission.sizes.trapdoor) positions).state
-          (submission.layout.proof + 800 * ordinal + 32 * part) 32 =
-          if part = 0 then salt index
-          else saltedHeap oracle.compression message salt (((LENGTH + index.val) / 2 ^ (part - 1)) ^^^ 1) := by
-      by_cases zero : part = 0
-      · rw [if_pos zero, zero, Nat.mul_zero, Nat.add_zero]
-        exact records.1.trans (salts index)
-      · rw [if_neg zero]
-        have level : part - 1 < LOG_LENGTH := by change part - 1 < 24; omega
-        have addrSplit : submission.layout.proof + 800 * ordinal + 32 * part =
-            submission.layout.proof + 800 * ordinal + 32 + 32 * (part - 1) := by omega
-        rw [addrSplit, records.2 (part - 1) level]
-        have bounds := opening_sibling_bounds index (part - 1) level
-        exact committed_heap_reference oracle message state correct salt salts _ bounds.1 bounds.2
-    change _ = (if part = 0 then salt index
-      else saltedHeap oracle.compression message salt (((LENGTH + index.val) / 2 ^ (part - 1)) ^^^ 1)).extractLsb'
-        (8 * (offset % 32)) 8
-    rw [← digestEq, read_buffer_byte _ _ 32 (offset % 32) (by omega), addrEq]
+  have below := List.mem_range.mp present
+  have ordinal : offset/800 < positions.card := (Nat.div_lt_iff_lt_mul (by decide)).mpr (by omega)
+  have part : (offset%800)/32 < 25 := by omega
+  have address : submission.layout.proof+800*(offset/800)+32*((offset%800)/32)+offset%32 =
+      submission.layout.proof+offset := by omega
+  have digest := opening_reference_digest oracle message state correct salt salts positions
+    (offset/800) ((offset%800)/32) ordinal part
+  rw [← digest, read_buffer_byte _ _ 32 (offset%32) (by omega), address]
 
 end CommitGolfCandidate
