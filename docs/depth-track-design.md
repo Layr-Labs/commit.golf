@@ -15,7 +15,7 @@ Implemented checkpoints:
   serializations execute 22 cycles. This is not a parallel-backend theorem.
 - Seven synthetic scoring regressions distinguish the competing objectives.
 
-See [prototype sources and build instructions](../DepthPrototype/README.md).
+See [archived prototype sources and build instructions](https://github.com/Layr-Labs/commit.golf/blob/d45f94302f2c36881f34f4c4bb455321f64d4325/DepthPrototype/README.md).
 
 The track contracts and artifact/claim interfaces are specified in [depth rules](depth-rules.md).
 Initial baselines preserve the complete serial certificate through exact legacy bridges.
