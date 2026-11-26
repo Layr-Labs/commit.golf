@@ -49,10 +49,13 @@ theorem opening_cap_cycles_bound (groups : List Nat) :
 
 def scheduledCycles (positions : Positions) : Nat :=
   if positions.card = 0 then 7 else
-    13 + (592*positions.card-1) + 769 +
+    13 + (467*positions.card-1) + 769 +
       (capSubtreeCycles (Opening.groupsBefore positions positions.card) 1 8 + 5) + 4
 
 def siblingWidth (level : Nat) : Nat := if level < 2 then 32 else 30
+
+def siblingCopyCycles (level : Nat) : Nat :=
+  if level < 2 then 18 else if level%2=0 then 17 else 30
 
 def siblingOffset (level : Nat) : Nat :=
   if level < 2 then 16+32*level else 80+30*(level-2)
@@ -98,7 +101,7 @@ theorem scheduled_fuel_fits (positions : Positions) : scheduledCycles positions 
     omega
 
 theorem scheduled_scored_limits (positions : Positions) (count : positions.card = BATCH) :
-    scheduledCycles positions ≤ 85767 ∧ proofLength positions ≤ 67840 := by
+    scheduledCycles positions ≤ 69767 ∧ proofLength positions ≤ 67840 := by
   have size : positions.card = 128 := count
   have cap := opening_cap_cycles_bound (Opening.groupsBefore positions positions.card)
   have bytes := Opening.opening_nodes_bound positions
@@ -127,7 +130,7 @@ set_option maxHeartbeats 800000 in
 /-- One request per even cap group attains both sharp scored opening bounds. -/
 theorem scheduled_scored_attainment :
     ∃ positions : Positions, positions.card = BATCH ∧
-      scheduledCycles positions = 85767 ∧ proofLength positions = 67840 := by
+      scheduledCycles positions = 69767 ∧ proofLength positions = 67840 := by
   have count : scattered128.card = 128 := by decide
   let groups := ((List.finRange 128).map scatteredIndex).map capGroup
   have order : scattered128.sort (· ≤ ·) = (List.finRange 128).map scatteredIndex := by

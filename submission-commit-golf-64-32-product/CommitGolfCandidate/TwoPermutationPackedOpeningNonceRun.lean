@@ -19,7 +19,7 @@ def nonceBlock (state : MachineState) : MachineState :=
   nonceAdvance (copyState .nonce (nonceSetup state))
 
 structure NonceTrace (state : MachineState) (index : Index) (ordinal : Nat) : Prop where
-  run : RunsOpeningBlock state (nonceBlock state) 21
+  run : RunsOpeningBlock state (nonceBlock state) 15
   next : LowerCursor (nonceBlock state) index ordinal 0
   bytes : ByteCopy state (nonceBlock state) (nonceAddress index) (recordBase ordinal) 16
   register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x31 →
@@ -55,10 +55,12 @@ theorem execute_ordinal_nonce (s : Submission) (layout : OpeningLayout s)
   have setup := nonce_setup_post state
   have advance := nonce_advance_post copied
   have landscape := all_nonce_copies_fit index ordinal (by omega)
+  have wordGeometry := nonce_word_geometry index ordinal
   have field : FieldInputs .nonce prepared (nonceAddress index) (recordBase ordinal) :=
     ⟨by rw [setup.1, ready.pc]; rfl, physical_nonce_source state index ready.nonce readIndex,
       (setup.2.2.2.2 .x21 (by decide) (by decide)).trans ready.dest,
-      landscape.2.2.1, landscape.2.2.2, landscape.1, landscape.2.1⟩
+      landscape.2.2.1, landscape.2.2.2, landscape.1, landscape.2.1,
+      fun _ => wordGeometry.1, fun _ => wordGeometry.2.1, fun _ => wordGeometry.2.2⟩
   have advancePC : copied.pc = 0x1080 := field.final_pc
   have kept (reg : Reg) (a : reg ≠ .x6) (b : reg ≠ .x7) (c : reg ≠ .x21) (d : reg ≠ .x31) :
       done.getReg reg = state.getReg reg :=

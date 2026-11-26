@@ -11,9 +11,9 @@ def lowerRun (level : Nat) : Nat → MachineState → MachineState
 
 def lowerCost (level : Nat) : Nat → Nat
   | 0 => 0
-  | left+1 => 5+siblingWidth level+lowerCost (level+1) left
+  | left+1 => 5+siblingCopyCycles level+lowerCost (level+1) left
 
-theorem lower_total_cost : lowerCost 0 16 = 564 := rfl
+theorem lower_total_cost : lowerCost 0 16 = 445 := rfl
 
 theorem destination_mono (ordinal : Nat) : Monotone (siblingDestination ordinal) := by
   apply monotone_nat_of_le_succ

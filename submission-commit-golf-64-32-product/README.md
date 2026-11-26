@@ -1,4 +1,4 @@
-# Signed 128-entry output and 256-entry nonce windows
+# Signed output and nonce windows with aligned opening copies
 
 This complete tree refines the qualified nonce256 successor of promoted source
 ca2b16a0-906d-4aa8-b1d4-f845e59cb85a / 84a0186c3d5a5af48b22bdcdba8761a6523c0cbc.
@@ -7,6 +7,8 @@ The output cursor is biased by 2,048 bytes to use signed ADDI offsets across
 unchanged parent phase. Two added setup instructions buy 131,070 fewer commit
 cycles than nonce256, or 196,604 fewer than the public predecessor.
 Full qualification of this exact tree is pending; see the adjacent public draft.
+Aligned word copies at ten sites per lower record preserve registers and memory
+while saving 125 cycles per record, or 16,000 cycles for 128 positions.
 
 ## Inherited construction
 
@@ -24,8 +26,8 @@ The checker reconstructs every selected path and checks the root.
 | Claimed metric | Bound |
 | --- | ---: |
 | Commitment cycles | 1,367,549,052 |
-| Opening cycles for 128 positions | 85,767 |
-| Total prover cycles | 1,367,634,819 |
+| Opening cycles for 128 positions | 69,767 |
+| Total prover cycles | 1,367,618,819 |
 | Proof bytes for 128 positions | 67,840 |
 
 The three images are in [programs.json](programs.json).

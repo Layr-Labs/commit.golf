@@ -48,7 +48,7 @@ theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Messag
 theorem packed_certificate (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (checks : CheckerFacts packedSubmission)
     (privateView : packedSubmission.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
-    Certificate packedSubmission 67840 1367549052 85767 :=
+    Certificate packedSubmission 67840 1367549052 69767 :=
   certificate_of_facts (packed_commit_resources leaves) packed_admitted
     (packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)) checks privateView
 

@@ -31,7 +31,7 @@ theorem opening_scored_attainment (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) :
     ∃ (positions : Positions) (result : Execution), positions.card = BATCH ∧
       s.run .opening (trapdoor, positions) = pure result ∧
-      result.cycles = 85767 ∧ (s.readProof result).length = 67840 := by
+      result.cycles = 69767 ∧ (s.readProof result).length = 67840 := by
   obtain ⟨positions, count, cycleVal, byteVal⟩ := scheduled_scored_attainment
   obtain ⟨result, run, physical⟩ := opening_physical s abi trapdoor positions
   exact ⟨positions, result, count, run, physical.cycles.trans cycleVal,
