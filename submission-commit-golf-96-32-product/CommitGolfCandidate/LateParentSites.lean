@@ -3,9 +3,9 @@ import CommitGolfCandidate.LateParents
 namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-def parentHeaderPC (d : Nat) := ([935, 998, 1065, 1132, 1199, 1266, 1333, 1400, 1467, 1534, 1599, 1664, 1729, 1794, 1859, 1924, 1989, 2054, 2119, 2184, 2249, 2285, 2309, 2327] : List Nat)[d]?.getD 0
-def parentBodyPC (d : Nat) := ([946, 1013, 1080, 1147, 1214, 1281, 1348, 1415, 1482, 1547, 1612, 1677, 1742, 1807, 1872, 1937, 2002, 2067, 2132, 2197, 2261, 2297, 2321, 2339] : List Nat)[d]?.getD 0
-def parentEndPC (d : Nat) := ([998, 1065, 1132, 1199, 1266, 1333, 1400, 1467, 1534, 1599, 1664, 1729, 1794, 1859, 1924, 1989, 2054, 2119, 2184, 2249, 2285, 2309, 2327, 2342] : List Nat)[d]?.getD 0
+def parentHeaderPC (d : Nat) := ([933, 996, 1063, 1130, 1197, 1264, 1331, 1398, 1465, 1532, 1597, 1662, 1727, 1792, 1857, 1922, 1987, 2052, 2117, 2182, 2247, 2283, 2307, 2325] : List Nat)[d]?.getD 0
+def parentBodyPC (d : Nat) := ([944, 1011, 1078, 1145, 1212, 1279, 1346, 1413, 1480, 1545, 1610, 1675, 1740, 1805, 1870, 1935, 2000, 2065, 2130, 2195, 2259, 2295, 2319, 2337] : List Nat)[d]?.getD 0
+def parentEndPC (d : Nat) := ([996, 1063, 1130, 1197, 1264, 1331, 1398, 1465, 1532, 1597, 1662, 1727, 1792, 1857, 1922, 1987, 2052, 2117, 2182, 2247, 2283, 2307, 2325, 2340] : List Nat)[d]?.getD 0
 def tileWidth (d : Nat) := min 16 (levelCount (d+1))
 def parentPC (d j : Nat) := parentBodyPC d + 3*j
 
@@ -20,7 +20,7 @@ theorem parent_sites (d : Fin 24) (j : Fin 16) (bound : j.val < tileWidth d) :
     AtWord (parentPC d j) (.ADDI .x10 .x21 (BitVec.ofNat 12 (96*j.val))) ∧
     AtWord (parentPC d j+1) (.ADDI .x12 .x22 (BitVec.ofNat 12 (gapOffset j))) ∧
     AtWord (parentPC d j+2) .ECALL := by
-  have allSmall : ∀ d : Fin 24, ∀ j : Fin 16, j.val < tileWidth d → parentPC d j+2 < 2353 := by decide
+  have allSmall : ∀ d : Fin 24, ∀ j : Fin 16, j.val < tileWidth d → parentPC d j+2 < 2351 := by decide
   have small := allSmall d j bound
   obtain ⟨src,dst,call⟩ := parent_words d j bound
   refine ⟨decoded_word _ (by omega) _ ?_,decoded_word _ (by omega) _ ?_,

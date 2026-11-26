@@ -8,22 +8,21 @@ def leafFold (h : Compression) : Nat → Nat → MachineState → MachineState
   | 0, _, s => s
   | n+1, k, s => leafFold h n (k+1) (afterLeaf h s k)
 
-def controls (k n : Nat) := ((k+n)/8-k/8) + ((k+n)/16-k/16) + 3*((k+n)/32-k/32)
+def controls (k n : Nat) := ((k+n)/16-k/16) + ((k+n)/16-k/16) + 3*((k+n)/32-k/32)
 def leafSteps (k n : Nat) := 12*n + controls k n
 def leafCycles (k n : Nat) := 40*n + controls k n
 
 private theorem tail_formula (k : Nat) :
-    tailCount k = (if k%8=7 then 1 else 0) + (if k%16=15 then 1 else 0) +
+    tailCount k = (if k%16=15 then 1 else 0) + (if k%16=15 then 1 else 0) +
       (if k%32=31 then 3 else 0) := by
-  have a : k%32%8 = k%8 := by omega
-  have b : k%32%16 = k%16 := by omega
-  unfold tailCount updates slotIndex
-  simp only [a,b,List.length_append]
-  split <;> split <;> split <;> rfl
+  have rem : k%32%16 = k%16 := by omega
+  by_cases a : k%16=15 <;> by_cases b : k%32=31 <;>
+    simp [tailCount,updates,slotIndex,rem,a,b] <;> omega
 
 private theorem controls_succ (k n : Nat) : controls k (n+1) = tailCount k + controls (k+1) n := by
   rw [tail_formula]; unfold controls
-  split <;> split <;> split <;> omega
+  by_cases a : k%16=15 <;> by_cases b : k%32=31 <;>
+    simp only [a,b,↓reduceIte] <;> omega
 
 theorem leaf_fold_run (o : Oracle) (n k : Nat) (s : MachineState) (a : AtLeaf s k)
     (bound : k+n ≤ LENGTH) (fuel : Nat) :

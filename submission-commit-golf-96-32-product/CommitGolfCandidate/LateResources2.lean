@@ -13,7 +13,7 @@ attribute [local irreducible] Open.result endCommit words cachedLevels lastParen
 
 theorem machine_run (o : Oracle) (m : Message) (p : Positions) :
     o.run (submission.honestMachine m p) =
-      (do let _ ← words; pure (⟨true,914948443,Open.cycles p.card,Open.outputSize p.card⟩,83886079)) := by
+      (do let _ ← words; pure (⟨true,913899867,Open.cycles p.card,Open.outputSize p.card⟩,83886079)) := by
   rw [honestCode,oracle_run_bind,full_commit_run,bind_assoc]
   apply bind_congr
   intro ws
@@ -31,14 +31,14 @@ theorem machine_success : submission.MachineSuccess := by
   obtain ⟨ws,_,h⟩ := reached
   rw [support_pure,Set.mem_singleton_iff] at h;subst r;rfl
 
-theorem prover_cycles : submission.ProverCycles 914948443 45875 := by
+theorem prover_cycles : submission.ProverCycles 913899867 45875 := by
   intro o m p batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro r reached
   rw [machine_run,mem_support_bind_iff] at reached
   obtain ⟨ws,_,h⟩ := reached
   rw [support_pure,Set.mem_singleton_iff] at h;subst r
-  change 914948443≤914948443 ∧ Open.cycles p.card≤45875
+  change 913899867≤913899867 ∧ Open.cycles p.card≤45875
   rw [batch]; decide
 
 theorem open_scheme_run (o : Oracle) (t : Trapdoor) (p : Positions) :

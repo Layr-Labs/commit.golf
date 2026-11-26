@@ -65,8 +65,8 @@ end CommitGolfCandidate.Late.Check.Normal
 namespace CommitGolfCandidate.Late
 open CommitGolf
 theorem certificate_of_batch_and_hiding (batch : Check.BatchEvaluation) (late_hiding : HidingGoal) :
-    Certificate submission 72704 914948443 45875 :=
+    Certificate submission 72704 913899867 45875 :=
   certificate_of_checker_runs batch Check.Normal.normalEvaluation late_hiding
 theorem certificate_of_batch (batch : Check.BatchEvaluation) :
-    Certificate submission 72704 914948443 45875 := certificate_of_batch_and_hiding batch late_hiding
+    Certificate submission 72704 913899867 45875 := certificate_of_batch_and_hiding batch late_hiding
 end CommitGolfCandidate.Late

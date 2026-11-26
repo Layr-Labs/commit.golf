@@ -7,16 +7,16 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 def lastParent (o : Oracle) (m : Message) (ws : List PairCoins) := passes o.compression (leavesDone o m ws) 24
 def endState (o : Oracle) (m : Message) (ws : List PairCoins) := haltState (rootCopy (lastParent o m ws))
 def endCommit (o : Oracle) (m : Message) (ws : List PairCoins) : Execution :=
-  ⟨.success,endState o m ws,914948443,83886079⟩
+  ⟨.success,endState o m ws,913899867,83886079⟩
 
 private theorem begin_parents (o : Oracle) (m : Message) (ws : List PairCoins) (len : ws.length=pairCount) :
-    Entry (leavesDone o m ws) 932 := by
+    Entry (leavesDone o m ws) 930 := by
   have a := leaves_done_regs o m ws len
   exact ⟨by simpa only [lt_self_iff_false,if_false] using a.pc,a.selector,a.kind,a.len,a.base,a.root⟩
 
 theorem last_pointers (o : Oracle) (m : Message) (ws : List PairCoins) (len : ws.length=pairCount) :
     let s := lastParent o m ws
-    s.pc=pcAt 2342 ∧ s.getReg .x12=BitVec.ofNat 64 rootSource ∧ s.getReg .x26=BitVec.ofNat 64 rootDestination := by
+    s.pc=pcAt 2340 ∧ s.getReg .x12=BitVec.ofNat 64 rootSource ∧ s.getReg .x26=BitVec.ofNat 64 rootDestination := by
   let s := leavesDone o m ws
   have done := poses o.compression s (begin_parents o m ws len) 24 (by decide)
   have prev := poses o.compression s (begin_parents o m ws len) 23 (by decide)
@@ -49,7 +49,7 @@ private theorem suffix_run (o : Oracle) (m : Message) (ws : List PairCoins) (len
   rw [Nat.add_comm 11 fuel,commit_exit _ pc src dst,oracle_run_pure,cycles,count,pure_bind]
   rfl
 
-private def spareFuel := 1099511627776-277414242
+private def spareFuel := 1099511627776-276365666
 private theorem fuel_eq : 1099511627776 =
     16842768+(9+(leafSteps 0 LENGTH+(total passSteps 24+(11+spareFuel)))) := by decide
 
@@ -64,9 +64,9 @@ private theorem add_charge (x : ProbComp (Execution × Nat)) (s : MachineState)
 
 private theorem final_continuation (o : Oracle) (m : Message) (ws : List PairCoins) (member : ws ∈ support words) :
     (do let (out,n) ← o.run (execute commitImage (total passSteps 24+(11+spareFuel)) (leavesDone o m ws) true)
-        pure (out.charge 742981657 67108864,67108864+n)) = pure (endCommit o m ws,83886079) := by
+        pure (out.charge 741933081 67108864,67108864+n)) = pure (endCommit o m ws,83886079) := by
   unfold endCommit
-  exact add_charge _ _ 742981657 171966786 67108864 16777215 914948443 83886079 (by decide) (by decide) (suffix_run o m ws (words_length ws member) spareFuel)
+  exact add_charge _ _ 741933081 171966786 67108864 16777215 913899867 83886079 (by decide) (by decide) (suffix_run o m ws (words_length ws member) spareFuel)
 
 theorem full_commit_run (o : Oracle) (m : Message) :
     o.run (submission.run .commit m) =

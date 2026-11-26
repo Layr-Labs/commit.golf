@@ -33,7 +33,7 @@ private theorem latch_enc : ∀ d : Fin 24, 16 ≤ levelCount (d.val+1) →
 private theorem latches (d : Fin 24) (large : 16 ≤ levelCount (d.val+1)) :
     (∀ j : Fin 3, AtWord (parentBodyPC d+48+j) (parentUpdates[j.val]'(by exact j.isLt))) ∧
     AtWord (parentBodyPC d+51) (.BNE .x20 .x0 7988) := by
-  have small : ∀ x : Fin 24, 16 ≤ levelCount (x.val+1) → parentBodyPC x+51 < 2353 := by decide
+  have small : ∀ x : Fin 24, 16 ≤ levelCount (x.val+1) → parentBodyPC x+51 < 2351 := by decide
   have endSmall := small d large
   constructor
   · intro j

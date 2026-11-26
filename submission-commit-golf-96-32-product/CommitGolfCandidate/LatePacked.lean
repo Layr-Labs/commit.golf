@@ -10,15 +10,15 @@ private theorem packed_lookup {count : Nat} (a : ArtifactEncoding.Packed count) 
 
 attribute [local irreducible] ArtifactEncoding.decode Artifact.commitCode
 
-theorem commit_packed_word (n : Nat) (small : n < 2353) :
+theorem commit_packed_word (n : Nat) (small : n < 2351) :
     commitImage.code[n]? = some (Artifact.commitCode.get 32 ⟨n,small⟩) := by
   rw [←commit_image_matches]
   exact packed_lookup Artifact.commitCode n small
 
 def packedWord (n : Nat) : BitVec 32 :=
-  if h : n < 2353 then Artifact.commitCode.get 32 ⟨n,h⟩ else 0
+  if h : n < 2351 then Artifact.commitCode.get 32 ⟨n,h⟩ else 0
 
-theorem decoded_word (n : Nat) (small : n < 2353) (op : Instr)
+theorem decoded_word (n : Nat) (small : n < 2351) (op : Instr)
     (ok : decodeInstruction (packedWord n) = some (.base op)) : AtWord n op := by
   intro s pc
   have eq : commitImage.code[n]? = some (packedWord n) := by simp only [packedWord,dif_pos small,commit_packed_word n small]

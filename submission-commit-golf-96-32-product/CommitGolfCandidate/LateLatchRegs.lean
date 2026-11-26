@@ -4,7 +4,7 @@ namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 structure UpdateRegs (s t : MachineState) (i : Fin 32) : Prop where
-  message : t.getReg .x8 = if i.val%8=7 then s.getReg .x8 + s.getReg .x29 else s.getReg .x8
+  message : t.getReg .x8 = if i.val%16=15 then s.getReg .x8 + s.getReg .x29 else s.getReg .x8
   row : t.getReg .x18 = if i.val%16=15 then s.getReg .x18+1536 else s.getReg .x18
   nodes : t.getReg .x23 = if i.val=31 then s.getReg .x23+1536 else s.getReg .x23
   count : t.getReg .x20 = if i.val=31 then s.getReg .x20-1 else s.getReg .x20
@@ -15,7 +15,7 @@ set_option maxRecDepth 12000 in
 theorem update_regs (s : MachineState) (i : Fin 32) : UpdateRegs s (updatesState s i) i := by
   have neg : signExtend12 4095 = -(1 : Word) := by decide
   have pos : signExtend12 1536 = (1536 : Word) := by decide
-  by_cases a : i.val%8=7 <;> by_cases b : i.val%16=15 <;> by_cases c : i.val=31 <;>
+  by_cases a : i.val%16=15 <;> by_cases b : i.val%16=15 <;> by_cases c : i.val=31 <;>
     constructor <;>
     simp only [updatesState, updates, a,b,c, ↓reduceIte, List.cons_append, List.nil_append,
       List.foldl_cons, List.foldl_nil, List.length_cons, List.length_nil, execInstrBr,
@@ -26,7 +26,7 @@ theorem update_keeps (s : MachineState) (i : Fin 32) (r : Reg)
     (r8 : Reg.x8 ≠ r) (r18 : Reg.x18 ≠ r) (r23 : Reg.x23 ≠ r) (r20 : Reg.x20 ≠ r) :
     (updatesState s i).getReg r = s.getReg r := by
   unfold updatesState updates
-  split <;> split <;> split <;>
+  split <;> split <;>
     simp only [List.cons_append, List.nil_append, List.foldl_cons, List.foldl_nil, execInstrBr,
       MachineState.getReg_setPC, MachineState.getReg_setReg_ne _ _ _ _ r8,
       MachineState.getReg_setReg_ne _ _ _ _ r18, MachineState.getReg_setReg_ne _ _ _ _ r23,

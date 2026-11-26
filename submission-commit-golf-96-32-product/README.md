@@ -1,3 +1,19 @@
+# Centered message cursor (unqualified development draft)
+
+This draft changes only commitment address cursors on public aeca157a /7eb3056.
+It uses signed ADDI offsets and a4096-byte message stride, saving1,048,576
+cycles in the full-depth instruction model. Candidate claim:913,899,867 commit,
+45,875 opening,72,704 proof bytes; product66,447,511,226,368. Exact-image
+feasibility passes; full Linux qualification is pending. The public note beside
+this selected tree records evidence and limitations. Opening/checker instruction
+bytes, cap layout, salts and proof serialization match the dependency.
+
+The following original public README is preserved as historical scheme and
+attribution documentation. Its entry table and claimed-score narrative describe
+the dependency, not this draft's qualification status.
+
+---
+
 # Paired 24-byte late salts: 914,994,318 cycles at 72,704 bytes
 
 This entry changes the leaf hash of the 96-32 leaders so that the salt enters only the last of the four compression calls, and lays out the leaves in pairs so that one 48-byte `RANDOM` call writes the salts of an even and an odd leaf exactly where their last calls read them. No salt is copied and no position tag is stored. The tree, the pair-slot cap of our `97b601a0` and the proof format otherwise stay as they were.

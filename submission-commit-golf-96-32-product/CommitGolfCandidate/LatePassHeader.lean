@@ -4,7 +4,7 @@ import CommitGolfCandidate.LateHeaderInterpreter
 namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-def passStart (d : Fin 24) := if d.val=0 then 932 else parentHeaderPC d
+def passStart (d : Fin 24) := if d.val=0 then 930 else parentHeaderPC d
 
 def baseAt (n : Nat) : Instr :=
   match decodeInstruction (packedWord n) with
@@ -41,7 +41,7 @@ set_option maxHeartbeats 4000000 in
 private theorem computed : ∀ d : Fin 24,
     let ops := headerOps d
     let q := ops.foldl knownStep seed
-    (ops.all setupOp = true) ∧ passStart d+ops.length=parentBodyPC d ∧ parentBodyPC d < 2353 ∧
+    (ops.all setupOp = true) ∧ passStart d+ops.length=parentBodyPC d ∧ parentBodyPC d < 2351 ∧
     (q .x21 = some (BitVec.ofNat 64 (nodeAddress d 0))) ∧
     (q .x22 = some (BitVec.ofNat 64 (nodeAddress (d.val+1) 0))) ∧
     (q .x5 = some 0) ∧ (q .x11 = some 96) ∧ (q .x13 = some 0) ∧
