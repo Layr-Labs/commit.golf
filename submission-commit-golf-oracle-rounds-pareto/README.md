@@ -15,3 +15,23 @@ Large images should define submission from the generated artifact where practica
 this historical small baseline retains its existing definitional byte equality.
 The production verifier regenerates the artifact and clears its build cache.
 See [the depth rules](../docs/depth-rules.md) for the execution ABI and exclusions.
+
+## Symbolic proof helpers
+
+Import `CommitGolfDepth.Rounds.Proofs` to use the protected, opt-in proof API. It is not
+imported by the contract or the serial bootstrap certificate.
+
+`loadDescriptors_formula` proves decoding of a table of arbitrary admitted length
+from four RAM-word invariants per index. `executeBatched_regular` combines those
+invariants and pointwise pre-state captures into an actual interpreter step for a
+symbolic count; it covers zero requests without expanding a literal descriptor list.
+`executeBatched_batch_bounds` composes worst-case continuation bounds over every
+possible reply and outcome. `executeBatched_batch_counted` preserves the fixed
+oracle and its independent call counter.
+
+For a binary-tree level, describe the descriptor and captured request as functions
+of the index, prove alignment/range and RAM contents, then use `snapshot_compression`
+and `executeBatched_regular`. `compression_quote` gives `1 + 13*k` macro cycles
+for `k` compression requests; descriptor/input preparation is additional machine
+work. Empty batches pay one entry cycle and zero rounds. The helpers neither build
+the table for free nor prove a complete tree construction or its security.

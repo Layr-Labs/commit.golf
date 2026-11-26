@@ -18,6 +18,14 @@ instructions in two disjoint child regions and proves span strictly below work.
 Descriptor tables are embedded image data; their initial loading is unscored under
 the existing ABI. Machine setup and the specified macro prices are charged.
 
+The same clients import the protected, opt-in `Rounds.Proofs`/`Span.Proofs` libraries and
+export general-input step and continuation-bound theorems. Their trusted expected
+types spell out the live interpreter, RAM, fuel and resource fields directly;
+they do not import proof-library predicates as specifications. The shared libraries
+remain available even when a later submission replaces its candidate modules. This checks
+symbolic counts and child/continuation bounds in addition to concrete reductions.
+It does not prove table construction or an entire parallel commitment.
+
 Run on the supported Linux verifier after setup:
 
 ```sh
@@ -29,10 +37,12 @@ resource-only theorem template. It preserves the production axiom and kernel
 policies. For each client it checks a positive resource proof and rejects an
 understated work bound, an understated depth bound, a changed execution mode and
 a changed code byte. It also checks that the resource client is rejected by the
-original full-security certificate contract. Negative cases require the expected
+original full-security certificate contract. A further negative changes the
+symbolic round/span bound and must fail at its own theorem target. There are 14
+cases in total. Negative cases require the expected
 linkage or theorem-mismatch diagnostic; timeouts and unrelated failures do not pass.
 
 The harness never changes production templates, comparator policy or score files.
-It records source, manifest, template and configuration hashes in its case results.
+It records source, helper-library, manifest, template and configuration hashes in its case results.
 An ordinary Lean compile is useful feedback; only a successful supported-verifier
 run establishes acceptance by that verifier.

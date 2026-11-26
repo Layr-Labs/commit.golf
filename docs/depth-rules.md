@@ -145,7 +145,10 @@ opening; legacy span equals work. They do not demonstrate parallel optimization.
 [resource-only clients](../verifier/tests/fixtures/README.md) exercise actual batched
 and fork/join images on a fixed zero message, for every fixed oracle. They test
 resource proof feasibility and artifact linkage, without supplying security
-certificates or a parallel secure baseline.
+certificates or a parallel secure baseline. The two submission READMEs document
+opt-in symbolic batch/table and fork/continuation lemmas. These proof modules
+leave the certificate imports unchanged and do not discharge table preparation, actual query budgets
+or complete construction/security proofs.
 A level-wise version of that tree would need eight leaf-hash stages plus 24 tree
 levels (32 rounds), assuming a whole layer fits one batch and salts are already
 available without extra oracle dependencies; this is a design estimate,

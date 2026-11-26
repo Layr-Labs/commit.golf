@@ -1,5 +1,6 @@
 import CommitGolfDepth.Rounds
 import CommitGolf.Artifact
+import CommitGolfDepth.Rounds.Proofs
 
 /-! Resource-only client of the real batched interpreter and artifact ABI.
 
@@ -199,5 +200,42 @@ theorem resource_fixture (oracle : Oracle) :
   rw [run_fixed]
   simp only [prEvent_pure, first_byte, second_byte]
   simp [finished]
+
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
+open CommitGolfDepth.Rounds.Batch
+
+/-- Symbolic solver-side rules, checked against core-only trusted statements. -/
+theorem symbolic_step : ∀ (image : Image) (state : MachineState) (steps count : Nat)
+    (coins : Bool) (table : Nat → Descriptor) (requests : Nat → Request)
+    (call : isBatchCall image state = true)
+    (countReg : (state.getReg .x11).toNat = count)
+    (valid : ArrayValid (state.getReg .x10) count)
+    (words : ∀ i < count,
+      readBuffer state ((state.getReg .x10).toNat + 32*i) 8 = (table i).kind ∧
+      readBuffer state ((state.getReg .x10).toNat + 32*i + 8) 8 = (table i).source ∧
+      readBuffer state ((state.getReg .x10).toNat + 32*i + 16) 8 = (table i).inputBytes ∧
+      readBuffer state ((state.getReg .x10).toNat + 32*i + 24) 8 = (table i).destination)
+    (captured : ∀ i < count, CommitGolfDepth.Rounds.Batch.snapshot state (table i) = some (requests i)),
+    executeBatched image (steps+1) state coins = (do
+      let written ← runFrozenWorld state ((List.range count).map requests)
+      let rest ← executeBatched image steps (written.setPC (state.pc + 4)) coins
+      pure (charge rest (preparationCycles count +
+        requestCost oracleCycles ((List.range count).map requests)) count
+        (if count = 0 then 0 else 1))) := @CommitGolfDepth.Rounds.Proofs.executeBatched_regular
+
+theorem symbolic_bounds : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (descriptors : List Descriptor) (requests : List Request)
+    (call : isBatchCall image state = true)
+    (loaded : loadDescriptors state (state.getReg .x10) (state.getReg .x11).toNat =
+      some descriptors)
+    (captured : snapshotAll state descriptors = some requests)
+    (work queries depth : Nat)
+    (continuation : ∀ written ∈ support (runFrozenWorld state requests),
+      ∀ rest ∈ support (executeBatched image steps (written.setPC (state.pc+4)) coins),
+        (rest.result.cycles ≤ work ∧ rest.result.oracleCalls ≤ queries ∧ rest.oracleRounds ≤ depth))
+    (result : CommitGolfDepth.Rounds.RoundMachine.Execution) (reached : result ∈ support
+      (executeBatched image (steps+1) state coins)),
+    (result.result.cycles ≤ (quote requests).priced batchFees + work ∧
+      result.result.oracleCalls ≤ requests.length+queries ∧ result.oracleRounds ≤ rounds requests+depth) := @CommitGolfDepth.Rounds.Proofs.executeBatched_batch_bounds
 
 end CommitGolf.Challenge

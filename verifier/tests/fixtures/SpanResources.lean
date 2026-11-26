@@ -1,5 +1,6 @@
 import CommitGolfDepth.Span
 import CommitGolf.Artifact
+import CommitGolfDepth.Span.Proofs
 
 /-! Resource-only proof client for delivered fork-mode images.
 
@@ -132,5 +133,51 @@ theorem resource_fixture (oracle : Oracle) :
       result.1.trace.instructions = 16 ∧ result.1.span < result.1.work ∧
       result.1.state.mem 512 = 49 ∧ result.1.state.mem 520 = 81] = 1 :=
   resources oracle
+
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
+
+/-- Symbolic solver-side rules, checked against core-only trusted statements. -/
+theorem symbolic_step : ∀ (children : ChildRunner) (image : Riscv.Image) (p : Policy)
+    (coins : Bool) (fuel : Nat) (state : MachineState) (left right : Child)
+    (fetched : Riscv.fetch image state = some (.base .ECALL))
+    (selector : state.getReg .x5 = 3)
+    (loaded : forkChildren p state = some (left, right))
+    (reserved : left.fuel + right.fuel ≤ fuel),
+    Subtype.val <$> runBody children true image p coins (fuel + 1) state = (do
+      let l ← children (childPolicy p left.region right.region) left.fuel (childState state left)
+      let r ← children (childPolicy p right.region left.region) right.fuel (childState state right)
+      let c ← if childrenExit l.val.exit r.val.exit = .success then
+          runBody children true image p coins (fuel - left.fuel - right.fuel)
+            ((protectWrites p state
+              (merge state l.val.state r.val.state left.region right.region)).setPC (state.pc + 4))
+        else pure (boundedStop (fuel - left.fuel - right.fuel)
+          (childrenExit l.val.exit r.val.exit) state)
+      return {c.val with trace := .fork FORK_CYCLES JOIN_CYCLES l.val.trace r.val.trace c.val.trace}) := @CommitGolfDepth.Span.Proofs.runBody_fork_val
+
+theorem symbolic_bounds : ∀ (children : ChildRunner) (image : Riscv.Image) (p : Policy)
+    (coins : Bool) (fuel : Nat) (state : MachineState) (left right : Child)
+    (fetched : Riscv.fetch image state = some (.base .ECALL))
+    (selector : state.getReg .x5 = 3)
+    (loaded : forkChildren p state = some (left, right))
+    (reserved : left.fuel + right.fuel ≤ fuel)
+    (lw ls lq rw rs rq cw cs cq : Nat)
+    (hl : ∀ l ∈ support (children (childPolicy p left.region right.region) left.fuel
+      (childState state left)), (l.val.work ≤ lw ∧ l.val.span ≤ ls ∧ l.val.oracleCalls ≤ lq))
+    (hr : ∀ r ∈ support (children (childPolicy p right.region left.region) right.fuel
+      (childState state right)), (r.val.work ≤ rw ∧ r.val.span ≤ rs ∧ r.val.oracleCalls ≤ rq))
+    (hc : ∀ l ∈ support (children (childPolicy p left.region right.region) left.fuel
+      (childState state left)), ∀ r ∈ support (children (childPolicy p right.region left.region)
+      right.fuel (childState state right)), ∀ c ∈ support
+      (if childrenExit l.val.exit r.val.exit = .success then
+        runBody children true image p coins (fuel - left.fuel - right.fuel)
+          ((protectWrites p state (merge state l.val.state r.val.state left.region right.region)).setPC
+            (state.pc + 4))
+      else pure (boundedStop (fuel - left.fuel - right.fuel)
+        (childrenExit l.val.exit r.val.exit) state)), (c.val.work ≤ cw ∧ c.val.span ≤ cs ∧ c.val.oracleCalls ≤ cq))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children true image p coins (fuel + 1) state)),
+    (out.val.work ≤ FORK_CYCLES + lw + rw + JOIN_CYCLES + cw ∧
+      out.val.span ≤ FORK_CYCLES + max ls rs + JOIN_CYCLES + cs ∧
+      out.val.oracleCalls ≤ lq + rq + cq) := @CommitGolfDepth.Span.Proofs.runBody_fork_bounds
 
 end CommitGolf.Challenge

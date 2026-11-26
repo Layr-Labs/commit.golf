@@ -24,6 +24,11 @@ class ResourceFixture:
     code: tuple[int, ...]
     data: tuple[int, ...]
 
+    @property
+    def library(self):
+        model = 'Rounds' if self.model == 'oracle-rounds' else 'Span'
+        return Path('CommitGolfDepth') / model / 'Proofs.lean'
+
     def manifest(self):
         value = manifest()
         value['schemaVersion'] = 2
