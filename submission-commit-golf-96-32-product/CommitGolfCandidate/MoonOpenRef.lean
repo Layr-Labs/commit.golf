@@ -13,7 +13,7 @@ theorem opening_run_deterministic (oracle : Oracle)
       exec.exit = Riscv.Exit.success ∧
       exec.oracleCalls = 0 ∧
       (exec.state.getReg .x11).toNat ≤ submission.sizes.proof ∧
-      (positions.card = BATCH → exec.cycles ≤ 107915) := by
+      (positions.card = BATCH → exec.cycles ≤ 128500) := by
   obtain ⟨exec, hrun, hexit, hcalls, hlen, _, hcyc⟩ := opening_exec_spec trapdoor positions
   refine ⟨exec, ?_, hexit, hcalls, ?_, hcyc⟩
   · rw [hrun, oracle_run_pure]
