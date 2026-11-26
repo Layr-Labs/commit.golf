@@ -1,37 +1,12 @@
-import CommitGolfCandidate.Properties
-import CommitGolfCandidate.Binding
-import CommitGolfCandidate.Execution
-import CommitGolfCandidate.OpeningInput
-import CommitGolfCandidate.CheckInput
-import CommitGolfCandidate.Budgets
-import CommitGolfCandidate.CheckAcceptance
-import CommitGolfCandidate.Completeness
-import CommitGolfCandidate.BindingSecurity
-import CommitGolfCandidate.HidingSecurity
-import CommitGolf.Artifact
-import CommitGolfCandidate.LeafResourceBridge
-import CommitGolfCandidate.ResourceTests
-
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
+import CommitGolfCandidate.R4Commit
+import CommitGolfCandidate.R4Contract
 namespace CommitGolf.Challenge
-
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
-
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
-
-theorem certificate : CommitGolf.Certificate submission 102400 6375342100 48670 where
-  admission := CommitGolfCandidate.submission_admission
-  machineSuccess := CommitGolfCandidate.submission_machine_success
-  termination := CommitGolfCandidate.submission_termination
-  completeness := CommitGolfCandidate.submission_completeness
-  honestBudgets := CommitGolfCandidate.submission_honest_budgets
-  proofSize := CommitGolfCandidate.submission_proof_size
-  proverCycles := CommitGolfCandidate.submission_prover_cycles
-  binding := CommitGolfCandidate.submission_binding
-  hidingProperty := CommitGolfCandidate.submission_hiding
-
+open CommitGolfCandidate.R4
+def submission := Artifact.submission
+theorem submission_matches_artifact : submission=CommitGolf.Artifact.submission:=rfl
+theorem certificate : Certificate submission 70080 848293028 96415 := by
+  apply certified
+  intro o m
+  obtain ⟨s,run,contents⟩:=commitExact o m
+  exact ⟨s,run,fun r=>⟨(contents r).root,(contents r).trapdoor⟩⟩
 end CommitGolf.Challenge
