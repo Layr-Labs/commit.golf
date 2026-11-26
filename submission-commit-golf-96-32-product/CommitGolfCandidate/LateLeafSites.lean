@@ -4,9 +4,9 @@ import CommitGolfCandidate.LateLayout
 namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
-/-- Index of the first address instruction. Each sixteenth leaf advances both centered message
-pointer and row pointer. Message immediates use the full signed 12-bit range. -/
-def leafPC (slot call : Nat) := 539+12*slot+2*(slot/16)+3*call
+/-- Index of the first address instruction. Each eighth leaf advances the message
+pointer, and each sixteenth leaf also advances the row pointer. -/
+def leafPC (slot call : Nat) := 539+12*slot+slot/8+slot/16+3*call
 
 def sourceReg (call : Nat) : Reg := if call = 3 then .x18 else .x8
 def targetReg : Nat → Reg
@@ -14,15 +14,15 @@ def targetReg : Nat → Reg
 
 def sourceOffset (slot call : Nat) : Nat :=
   match call with
-  | 0 => 256*(slot%16)+2048
-  | 1 => 256*(slot%16)+2048+64
-  | 2 => 256*(slot%16)+2048+160
+  | 0 => 256*(slot%8)
+  | 1 => 256*(slot%8)+64
+  | 2 => 256*(slot%8)+160
   | _ => 96*(slot%16)
 
 def targetOffset (slot call : Nat) : Nat :=
   let content := 96*(slot%16) + 32*(slot%2)
   match call with
-  | 0 => 256*(slot%16)+2048+64
+  | 0 => 256*(slot%8)+64
   | 1 => content
   | 2 => content+32
   | _ => gapOffset slot
@@ -34,10 +34,10 @@ def targetInstr (slot call : Nat) : Instr :=
   .ADDI .x12 (targetReg call) (BitVec.ofNat 12 (targetOffset slot call))
 
 def sourceWord (slot call : Nat) : BitVec 32 :=
-  BitVec.ofNat 32 (((sourceOffset slot call)%4096)*2^20 + (if call = 3 then 18 else 8)*2^15 + 10*128 + 19)
+  BitVec.ofNat 32 ((sourceOffset slot call)*2^20 + (if call = 3 then 18 else 8)*2^15 + 10*128 + 19)
 
 def targetWord (slot call : Nat) : BitVec 32 :=
-  BitVec.ofNat 32 (((targetOffset slot call)%4096)*2^20 + (match call with | 0 => 8 | 3 => 23 | _ => 18)*2^15 + 12*128 + 19)
+  BitVec.ofNat 32 ((targetOffset slot call)*2^20 + (match call with | 0 => 8 | 3 => 23 | _ => 18)*2^15 + 12*128 + 19)
 
 def leafWords := tail528 ++ (tail656 ++ (tail784 ++ tail912))
 

@@ -111,7 +111,7 @@ def parents (compress : Compression) : List Late.Digest → List Late.Digest
 
 def levels (compress : Compression) : Nat → List Late.Digest → Late.Levels
   | 0, layer => [layer]
-  | depth + 1, layer => layer :: levels compress depth (parents compress layer)
+  | depth + 1, layer => layer :: levels compress depth ((parents compress layer).map (Late.retain depth))
 
 theorem run_parents (oracle : Oracle) {α : Type} (layer : List Late.Digest)
     (next : List Late.Digest → OracleComp World α) :
@@ -158,12 +158,12 @@ theorem levels_bound (depth : Nat) (layer : List Late.Digest) :
   | succ depth ih =>
     simp only [Late.levelsM]
     have above (upper : List Late.Digest) (size : upper.length = layer.length / 2) :
-        PublicQueryBound (do let rest ← Late.levelsM Late.hash depth upper; pure (layer :: rest))
+        PublicQueryBound (do let rest ← Late.levelsM Late.hash depth (upper.map (Late.retain depth)); pure (layer :: rest))
           (layer.length / 2) := by
-      have chained := public_query_bound_bind (ih upper)
+      have chained := public_query_bound_bind (ih (upper.map (Late.retain depth)))
         (fun rest => (show PublicQueryBound (pure (layer :: rest) : OracleComp World Late.Levels) 0
           from trivial))
-      rw [size, Nat.add_zero] at chained
+      rw [List.length_map, size, Nat.add_zero] at chained
       exact chained
     exact (parents_bound layer _ _ above).mono (by omega)
 
@@ -320,7 +320,7 @@ theorem opening_salt_congr (retained : Late.Levels) (left right : Late.SaltTape)
     have opened : index ∈ positions := by simpa only [Finset.mem_sort] using member
     unfold Late.record
     rw [agree index opened]
-  unfold Late.opening
+  unfold Late.opening Late.wideOpening
   simp only [records]
 
 theorem opening_hidden_salt (retained : Late.Levels) (salt : Late.SaltTape)

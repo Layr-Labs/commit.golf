@@ -4,10 +4,10 @@ namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 private theorem updated_pc_table : ∀ i : Fin 32, latchStart i + (updates i).length =
-    if i.val=31 then 929 else leafPC ((i.val+1)%32) 0 := by decide
+    if i.val=31 then 931 else leafPC ((i.val+1)%32) 0 := by decide
 
 private theorem finish_branch (s : MachineState) : leafBranch s =
-    if s.getReg .x20 != 0 then s.setPC (s.pc+signExtend13 6632) else s.setPC (s.pc+4) := rfl
+    if s.getReg .x20 != 0 then s.setPC (s.pc+signExtend13 6624) else s.setPC (s.pc+4) := rfl
 
 private theorem nonpc (h : Compression) (s : MachineState) (k : Nat) (r : Reg) :
     (afterLeaf h s k).getReg r =
@@ -27,7 +27,7 @@ theorem tail_mem (h : Compression) (s : MachineState) (k : Nat) :
   have br (t : MachineState) : (leafBranch t).mem = t.mem := by
     have choose (cond : Bool) (yes no : Word) :
         (if cond then t.setPC yes else t.setPC no).mem = t.mem := by cases cond <;> rfl
-    exact choose (t.getReg .x20 != 0) (t.pc+signExtend13 6632) (t.pc+4)
+    exact choose (t.getReg .x20 != 0) (t.pc+signExtend13 6624) (t.pc+4)
   by_cases e : (slotIndex k).val=31
   · simp only [afterLeaf,if_pos e]
     exact (br _).trans eq
@@ -83,14 +83,11 @@ theorem after_regs (h : Compression) (s : MachineState) (k : Nat) (inside : k < 
       have more : k+1<LENGTH := by change k%32≠31 at e; change k+1<16777216; omega
       simpa only [if_neg e,mod,if_pos more] using tp
   · rw [nonpc,ur.message,keep _ (by decide) (by decide),keep _ (by decide) (by decide),a.message,a.stride]
-    change (if k%32%16=15 then _ else _) = _
+    change (if k%32%8=7 then _ else _) = _
     split
-    · rw [BitVec.add_assoc, BitVec.add_comm (2048 : Word) 4096, ←BitVec.add_assoc]
-      apply congrArg (fun w : Word => w+2048)
-      change BitVec.ofNat 64 _ + BitVec.ofNat 64 4096 = _
+    · change BitVec.ofNat 64 _ + BitVec.ofNat 64 2048 = _
       rw [ofAdd]; apply congrArg (BitVec.ofNat 64); unfold msgAddr; omega
-    · apply congrArg (fun w : Word => w+2048)
-      apply congrArg (BitVec.ofNat 64); unfold msgAddr; omega
+    · apply congrArg (BitVec.ofNat 64); unfold msgAddr; omega
   · rw [nonpc,ur.row,keep _ (by decide) (by decide),a.rows]
     change (if k%32%16=15 then _ else _) = _
     split

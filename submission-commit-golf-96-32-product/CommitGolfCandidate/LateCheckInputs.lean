@@ -1,5 +1,7 @@
 import CommitGolfCandidate.LateCheckSound
-import CommitGolfCandidate.LateOpenPathModel
+import CommitGolfCandidate.LateOpenWrites
+import CommitGolfCandidate.LateOpenControl
+import CommitGolfCandidate.LateMemoryStep
 
 namespace CommitGolfCandidate.Late.Check
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64

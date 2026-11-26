@@ -1,3 +1,5 @@
+import CommitGolfCandidate.TruncCodec
+import CommitGolfCandidate.TruncBirthday
 import CommitGolf.Statements
 
 /-! One-pass honest view for the paired, late-salt binary commitment.
@@ -57,12 +59,15 @@ def parentsM {M : Type → Type} [Monad M] (h : Block → M Digest) :
 abbrev Levels := List (List Digest)
 
 /-- Each internal digest is computed once and retained for later openings. -/
+def retain (remaining : Nat) (v : Digest) : Digest :=
+  if 0<remaining ∧ remaining≤21 then (0 : BitVec 16) ++ low240 v else v
+
 def levelsM {M : Type → Type} [Monad M] (h : Block → M Digest) :
     Nat → List Digest → M Levels
   | 0, layer => pure [layer]
   | d+1, layer => do
     let parents ← parentsM h layer
-    return layer :: (← levelsM h d parents)
+    return layer :: (← levelsM h d (parents.map (retain d)))
 
 def treeM {M : Type → Type} [Monad M] (h : Block → M Digest)
     (m : Message) (s : SaltTape) : M Levels := do
@@ -85,12 +90,16 @@ def capSlot (tree : Levels) (indices : List Index) (pair : Nat) : Digest :=
   | none => node tree 17 pair
   | some i => node tree 16 ((i.val / 2^16) ^^^ 1)
 
-def opening (tree : Levels) (s : SaltTape) (positions : Positions) : Proof :=
+def wideOpening (tree : Levels) (s : SaltTape) (positions : Positions) : Proof :=
   let indices := positions.sort (· ≤ ·)
   if positions.card = BATCH then
     indices.flatMap (record tree s 16) ++
       (List.range 128).flatMap fun p => bytes (n := 32) (capSlot tree indices p)
   else indices.flatMap (record tree s LOG_LENGTH)
+
+/-- The in-place codec projects the 13 upper siblings of each batch record and each cap slot. -/
+def opening (t : Levels) (s : SaltTape) (p : Positions) : Proof :=
+  if p.card=BATCH then Trunc.pack (wideOpening t s p) else wideOpening t s p
 
 /-- The hiding experiment does not invoke its checker. The machine supplies it. -/
 abbrev Checker := Commitment → (p : Positions) → Values p → Proof → OracleComp PublicSpec Bool

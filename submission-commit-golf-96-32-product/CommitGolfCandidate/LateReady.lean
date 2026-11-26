@@ -7,7 +7,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 def hashSetup : List Instr :=
   [.ADDI .x5 .x0 0, .ADDI .x11 .x0 96, .ADDI .x13 .x0 0,
    .ADDI .x20 .x0 256, .SLLI .x20 .x20 11, .ADDI .x20 .x20 0,
-   .LUI .x29 1, .ADD .x8 .x8 .x29, .ADDI .x8 .x8 2048]
+   .ADDI .x29 .x0 1, .SLLI .x29 .x29 11, .ADDI .x29 .x29 0]
 
 def ready (s : MachineState) := hashSetup.foldl execInstrBr s
 
@@ -29,7 +29,7 @@ def sampled (m : Message) (ws : List PairCoins) :=
   applyPairs 0 (setupState (startState m) 16) ws
 
 private theorem ready_frame (q : MachineState) :
-    (ready q).pc=q.pc+36 ∧ (ready q).getReg .x20=524288 ∧ (ready q).getReg .x29=4096 ∧
+    (ready q).pc=q.pc+36 ∧ (ready q).getReg .x20=524288 ∧ (ready q).getReg .x29=2048 ∧
     (ready q).getReg .x5=0 ∧ (ready q).getReg .x11=96 ∧ (ready q).getReg .x13=0 := by
   refine ⟨?_,?_,?_,?_,?_,?_⟩
   · change q.pc+4+4+4+4+4+4+4+4+4=_
@@ -52,12 +52,7 @@ theorem hash_start (m : Message) (ws : List PairCoins) (len : ws.length = pairCo
   constructor
   · change (ready t).pc = pcAt 539
     rw [pc,ip]; rfl
-  · have biased : (ready t).getReg .x8 = t.getReg .x8+2048 := by
-      change t.getReg .x8 + 4096 + signExtend12 2048 = _
-      rw [BitVec.add_assoc]
-      rfl
-    rw [biased,(kept _ (by decide) (by decide)).trans x8]
-    rfl
+  · exact (kept _ (by decide) (by decide)).trans x8
   · exact (kept _ (by decide) (by decide)).trans x18
   · exact (kept _ (by decide) (by decide)).trans x23
   · exact ctr

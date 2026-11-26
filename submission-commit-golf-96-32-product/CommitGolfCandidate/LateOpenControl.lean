@@ -46,11 +46,10 @@ theorem test_run (b : Test) (s : MachineState) (pc : s.pc=pcAt b.start) : Runs s
       exact choose (s.getReg b.args.1 != s.getReg b.args.2)
   exact same ▸ rs
 
-theorem halt_run (n : Nat) (atHalt : n=134 ∨ n=139) (s : MachineState) (pc : s.pc=pcAt n)
+theorem halt_run (s : MachineState) (pc : s.pc=pcAt 139)
     (mode : s.getReg .x5=1) (code : s.getReg .x10=0) (fuel : Nat) :
     execute image (fuel+1) s true = pure ⟨.success,s,1,0⟩ := by
-  obtain rfl|rfl := atHalt <;>
-    rw [execute, fetched _ (by decide) .ECALL (by rfl) _ pc,mode,code] <;> rfl
+  rw [execute,fetched 139 (by decide) .ECALL (by rfl) s pc,mode,code];rfl
 
 theorem access_at (a : Nat) (range : a+8≤MEMORY_BYTES) (align : a%8=0) :
     accessValid (BitVec.ofNat 64 a) 8=true := by

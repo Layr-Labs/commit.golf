@@ -4,7 +4,7 @@ import CommitGolfCandidate.LateHeaderInterpreter
 namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
-def passStart (d : Fin 24) := if d.val=0 then 930 else parentHeaderPC d
+def passStart (d : Fin 24) := if d.val=0 then 932 else parentHeaderPC d
 
 def baseAt (n : Nat) : Instr :=
   match decodeInstruction (packedWord n) with
@@ -41,12 +41,11 @@ set_option maxHeartbeats 4000000 in
 private theorem computed : ∀ d : Fin 24,
     let ops := headerOps d
     let q := ops.foldl knownStep seed
-    (ops.all setupOp = true) ∧ passStart d+ops.length=parentBodyPC d ∧ parentBodyPC d < 3316 ∧
-    (q .x21 = some (BitVec.ofNat 64 (nodeAddress d 0) + BitVec.ofNat 64 (parentBias d))) ∧
+    (ops.all setupOp = true) ∧ passStart d+ops.length=parentBodyPC d ∧ parentBodyPC d < 2655 ∧
+    (q .x21 = some (BitVec.ofNat 64 (nodeAddress d 0))) ∧
     (q .x22 = some (BitVec.ofNat 64 (nodeAddress (d.val+1) 0))) ∧
-    (32 ≤ levelSize d → q .x29 = some 3072) ∧
     (q .x5 = some 0) ∧ (q .x11 = some 96) ∧ (q .x13 = some 0) ∧
-    (32 ≤ levelSize d → q .x20 = some (BitVec.ofNat 64 (levelSize d/32))) ∧
+    (16 ≤ levelSize d → q .x20 = some (BitVec.ofNat 64 (levelSize d/16))) ∧
     (q .x9 = some 4294971424) ∧ (q .x26 = some 4294971392) := by decide
 
 private theorem ops_ok (d : Fin 24) (op : Instr) (member : op ∈ headerOps d) : setupOp op :=
@@ -54,10 +53,10 @@ private theorem ops_ok (d : Fin 24) (op : Instr) (member : op ∈ headerOps d) :
 
 theorem enter_frame (s : MachineState) (d : Fin 24) (entry : Entry s (passStart d)) :
     ParentFrame (entered s d) d 0 := by
-  obtain ⟨_,hlen,_,src,dst,stride,m,l,k,count,td,root⟩ := computed d
+  obtain ⟨_,hlen,_,src,dst,m,l,k,count,td,root⟩ := computed d
   have known := known_header (headerOps d) seed s (ops_ok d) (seed_ok s _ entry)
   have pos : ∀ d : Fin 24, 0<levelSize d := by decide
-  refine ⟨⟨known _ _ src,known _ _ dst,(fun large => known _ _ (stride large)),known _ _ m,known _ _ l,known _ _ k⟩,
+  refine ⟨⟨known _ _ src,known _ _ dst,known _ _ m,known _ _ l,known _ _ k⟩,
     ?_,fun large => known _ _ (count large),known _ _ td,known _ _ root⟩
   have pc := (header_properties (headerOps d) s (ops_ok d)).2
   simp only [parentNextPC,if_pos (pos d),parentPC,Nat.zero_mod,Nat.mul_zero,Nat.add_zero]

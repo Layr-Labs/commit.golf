@@ -16,8 +16,8 @@ def payload (t : Levels) (salt : SaltTape) (xs : List Index) :=
   if xs.length=128 then prefixBytes t salt xs ++ capBytes t xs else prefixBytes t salt xs
 
 theorem payload_eq (t : Levels) (salt : SaltTape) (p : Positions) :
-    payload t salt (indices p) = opening t salt p := by
-  simp only [payload,prefixBytes,capBytes,opening,indices,Finset.length_sort,depth,BATCH,LOG_LENGTH]
+    payload t salt (indices p) = wideOpening t salt p := by
+  simp only [payload,prefixBytes,capBytes,wideOpening,indices,Finset.length_sort,depth,BATCH,LOG_LENGTH]
   split <;> simp_all
 
 theorem output_length (t : Levels) (salt : SaltTape) (xs : List Index) :

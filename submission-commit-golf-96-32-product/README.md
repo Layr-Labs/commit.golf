@@ -1,51 +1,28 @@
-# Centered message cursor (unqualified development draft)
+# Paired late salts and 240-bit upper nodes: 919,258,786 cycles at 69,120 bytes
 
-This draft changes only commitment address cursors on public aeca157a /7eb3056.
-It uses signed ADDI offsets and a4096-byte message stride, saving1,048,576
-cycles in the full-depth instruction model. Candidate claim:913,899,867 commit,
-45,875 opening,72,704 proof bytes; product66,447,511,226,368. Exact-image
-feasibility passes; full Linux qualification is pending. The public note beside
-this selected tree records evidence and limitations. Opening/checker instruction
-bytes, cap layout, salts and proof serialization match the dependency.
-
-The following original public README is preserved as historical scheme and
-attribution documentation. Its entry table and claimed-score narrative describe
-the dependency, not this draft's qualification status.
-
----
-
-# Paired 24-byte late salts: 914,994,318 cycles at 72,704 bytes
-
-This entry changes the leaf hash of the 96-32 leaders so that the salt enters only the last of the four compression calls, and lays out the leaves in pairs so that one 48-byte `RANDOM` call writes the salts of an even and an odd leaf exactly where their last calls read them. No salt is copied and no position tag is stored. The tree, the pair-slot cap of our `97b601a0` and the proof format otherwise stay as they were.
+This entry is our promoted `aeca157a` (paired late 24-byte salts with the pair-slot cap) with the upper tree truncated to 240 bits: after each parent call at heap indices 2 to 4,194,303 (depths 1 to 21) the commitment clears the digest's last two bytes with one `sh zero,30(slot)`. The leaf digests, the three lowest sibling levels (depths 24 to 22) and the root keep all 256 bits; the 24-byte salts are unchanged.
 
 | Entry | Commit cycles | Opening cycles | Prover cycles | Proof bytes | Product |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `3e63809d` (dadon) | 959,447,084 | 40,102 | 959,487,186 | 75,776 | 72,706,101,006,336 |
-| `97b601a0` (ours, current best) | 959,447,084 | 40,631 | 959,487,715 | 71,680 | 68,776,079,411,200 |
-| This entry | 914,948,443 | 45,875 | 914,994,318 | 72,704 | 66,523,746,895,872 |
+| `aeca157a` (ours, current best) | 914,948,443 | 45,875 | 914,994,318 | 72,704 | 66,523,746,895,872 |
+| This entry | 919,142,745 | 116,041 | 919,258,786 | 69,120 | 63,539,167,288,320 |
 
-`claim.json` is `{"proofBytes": 72704, "commitCycles": 914948443, "openingCycles": 45875}`. The product is 2,252,332,515,328 (3.27%) below `97b601a0`.
+`claim.json` is `{"proofBytes": 69120, "commitCycles": 919142745, "openingCycles": 116041}`. The product is 2,984,579,607,552 (4.49%) below `aeca157a`.
 
-## The leaf
+## What changed
 
-For a 256-byte leaf m and a private 24-byte salt s:
-
-    u = C(m[0..96]),   a = C(u || m[96..160]),   b = C(m[160..256])
-    even leaf digest = C(a || b || 0^8 || s),   odd leaf digest = C(s || 0^8 || a || b)
-
-where C is the track's 96-to-32-byte compression. That is four calls per leaf, as in `c9b8af82` and `3e63809d`, but the salt is not in the first call. The final-call rows of leaves 2j and 2j+1 are consecutive, so the 24 salt bytes of the even row and the 24 of the odd row are adjacent, and one 48-byte `RANDOM` per pair fills both (8,388,608 draws). Salt sampling and placement cost about 4 cycles per leaf, against 7 in `3e63809d` (16-byte copy, tag store, and its share of one bulk draw). The commitment makes 5 x 2^24 - 1 = 83,886,079 compression calls, as before.
-
-The parents are the gap-heap binary parents C(left || right || 0^32) with full 256-bit digests. At 128 positions the proof is `97b601a0`'s pair-slot format with 24-byte salts: 128 records of 24 + 16 x 32 = 536 bytes and 128 pair slots of 32 bytes, 72,704 bytes; openings of other sizes send full paths. Every 128-position opening takes exactly 45,875 cycles and makes no oracle calls; the batch checker makes at most 2,815 calls (2,560 for the records, at most 128 for touched pairs, 127 for the upper tree).
+- Commitment: 4,194,302 more stores, one per truncated parent; everything else is `aeca157a`'s program.
+- Proof at 128 positions: each record is the 24-byte salt, three 32-byte siblings (depths 24 to 22) and thirteen 30-byte siblings (depths 21 to 9), 510 bytes, and each of the 128 pair slots is 30 bytes: 128 x 510 + 128 x 30 = 69,120 bytes. The opener packs the truncated digests to 30 bytes in place; this costs 116,041 cycles at every 128-position set, against 45,875 before. The checker expands the fields, enforces duplicate consistency as before and reconstructs the root. Openings of other sizes send full paths (792-byte records).
 
 ## Why the certificate holds
 
-- Hiding: `CommitGolfCandidate.Late.late_hiding` proves the contract's statistical hiding statement for this scheme with distance at most 2N(2t + 5N + 3)/2^192 (N = 2^24), that is t x 2^-166 + 2^-140.7, below (t + 1)/2^120. A hidden leaf's digest is a fresh output unless a query hits its final input, which needs its 192-bit salt; the proof models the honest computation as a single pass of at most 5N calls and shows that the 2^23 48-byte draws of the sampling loop equal one uniform salt tape. With 24-byte salts no position tag is needed.
-- Binding: two accepted openings that disagree at a position are reduced to a compression collision. The leaf's orientation (salt first or last) is fixed by the position's parity, so equal final inputs force equal (a, b), and equal branch replies force equal message ranges [0, 96), [96, 160) and [160, 256). The reduction replays the two records with at most 10,872 calls and 56 further probes.
-- Machine proofs: the commit proof composes the paired salt-sampling loop, the leaf-hashing loop and the 24 parent passes and identifies the root and the retained trapdoor; the opener's proof covers every cardinality; `PairCap.batchEvaluation` proves the batch checker's termination, query bound and exact acceptance condition for every correctly sized input, including malicious bytes.
+- Binding: one projected-collision event covers the whole tree. Two different compression inputs whose outputs agree on the retained 240 bits are a collision of the truncated function; with the reduction's replay (at most 10,928 calls beyond the adversary's q) the birthday bound M(M - 1)/(2 x 2^240), M = q + 10,928, is at most (1/2 + 2^-89) q/2^120 for 1 <= q <= 2^120 (Lean, with the exact factor 1/2), and the probability is at most 1 beyond that.
+- Hiding: the late-salt hybrid of `aeca157a` (distance at most 2N(2t + 5N + 3)/2^192, N = 2^24) with the tree above the leaves now computed on 240-bit projections; only the tree calculation changed.
+- Machine proofs: the masked parent passes, the packed record and slot codec, the batch checker (records, pair loop, upper loop) and the opener, for every cardinality.
 
 ## Credits
 
-The base machine and proofs come from dadon's `c9b8af82`, which credits AdamGagol's `3839a36d` and `7e8904fd` and the organizers' baseline; the pair-slot cap and its checker proofs come from our `97b601a0` (built on dadon's `3e63809d`). The hiding proof adapts `c9b8af82`'s fixed-oracle simulation and coordinate hybrid. `c9b8af82`'s README follows unchanged below; its figures describe that entry.
+The leaf, the salt layout and the commit loops come from our `aeca157a`, the pair-slot cap from our `97b601a0`; the projected birthday bound, the exact-half budget lemma, the packed codec and the charged binding replays were proved first in our Stage 3′ work on dadon's tagged tree (submitted separately). The base machine model and proof structure come from dadon's `c9b8af82`, which credits AdamGagol's `3839a36d` and `7e8904fd` and the organizers' baseline; `c9b8af82`'s README follows unchanged below.
 
 ---
 

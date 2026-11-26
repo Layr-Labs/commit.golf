@@ -1,3 +1,4 @@
+import CommitGolfCandidate.HidingTree
 import CommitGolfCandidate.PairPad
 namespace CommitGolfCandidate.PairCap
 

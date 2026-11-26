@@ -1,5 +1,5 @@
 import CommitGolfCandidate.LateCheckInputs
-import CommitGolfCandidate.LateOpenOutput
+import CommitGolfCandidate.LateFormat
 
 namespace CommitGolfCandidate.Late.Check
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
@@ -48,7 +48,7 @@ private theorem parsed {x : CheckInput} {n off : Nat} {v : BitVec (8*n)} (f : Co
   exact (read_serialized_slice (initial x) v (Open.proofBase+off) 0 n bytesOk).trans BitVec.extractLsb'_eq_self
 
 def canonicalInput (m : Message) (ps : Positions) (tree : Levels) (s : SaltTape) : CheckInput :=
-  ⟨node tree LOG_LENGTH 0,ps,m.restrict ps, opening tree s ps⟩
+  ⟨node tree LOG_LENGTH 0,ps,m.restrict ps, wideOpening tree s ps⟩
 
 theorem honestValue (m : Message) (ps : Positions) (tree : Levels) (s : SaltTape) (r : Nat) (hr : r<ps.card) :
     recordValue (canonicalInput m ps tree s) r = m (recordIndex ps r) := by
@@ -65,8 +65,8 @@ theorem honestValue (m : Message) (ps : Positions) (tree : Levels) (s : SaltTape
 
 private theorem sane (m : Message) (p : Positions) (t : Levels) (s : SaltTape) :
     (canonicalInput m p t s).proof.length≤13421772800 := by
-  change (opening t s p).length≤_
-  rw [opening_size];have le : p.card≤LENGTH := by simpa using Finset.card_le_univ p
+  change (wideOpening t s p).length≤_
+  rw [wide_size];have le : p.card≤LENGTH := by simpa using Finset.card_le_univ p
   change p.card≤16777216 at le;split <;> omega
 
 private theorem record_field (m : Message) (ps : Positions) (t : Levels) (s : SaltTape) (r : Nat) (hr : r<ps.card) :
@@ -83,13 +83,13 @@ private theorem record_field (m : Message) (ps : Positions) (t : Levels) (s : Sa
   · have hd : d=16 := by change (if ps.card=BATCH then 16 else 24) = _;rw [if_pos batch]
     refine ⟨a,b++(List.range 128).flatMap (fun p => bytes (n:=32) (capSlot t xs p)),?_,?_⟩
     · exact ha.trans (Nat.mul_comm ..)
-    · change opening t s ps = a ++ record t s d (recordIndex ps r) ++ _
-      rw [opening,if_pos batch,←hd,index]
+    · change wideOpening t s ps = a ++ record t s d (recordIndex ps r) ++ _
+      rw [wideOpening,if_pos batch,←hd,index]
       exact (congrArg (· ++ _) eq).trans (by simp [List.append_assoc,xs])
   · have hd : d=24 := by change (if ps.card=BATCH then 16 else 24)=_;rw [if_neg batch]
     refine ⟨a,b,ha.trans (Nat.mul_comm ..),?_⟩
-    change opening t s ps = a++record t s d (recordIndex ps r)++b
-    rw [opening,if_neg batch,index]
+    change wideOpening t s ps = a++record t s d (recordIndex ps r)++b
+    rw [wideOpening,if_neg batch,index]
     exact (show LOG_LENGTH=d from hd.symm) ▸ eq
 
 theorem honest_salt (m : Message) (p : Positions) (t : Levels) (s : SaltTape) (r : Nat) (hr : r<p.card) :
@@ -131,7 +131,7 @@ theorem honest_slot (m : Message) (ps : Positions) (t : Levels) (s : SaltTape) (
   rw [List.getElem_range] at eq
   refine ⟨xs.flatMap (record t s 16) ++ a,b,?_,?_⟩
   · simp [List.length_flatMap,record_size,List.sum_replicate,xs,batch,BATCH,len]
-  · change opening t s ps=_;rw [opening,if_pos batch]
+  · change wideOpening t s ps=_;rw [wideOpening,if_pos batch]
     change _ ++ (List.range 128).flatMap f = _
     rw [eq];simp [List.append_assoc,xs,f]
 

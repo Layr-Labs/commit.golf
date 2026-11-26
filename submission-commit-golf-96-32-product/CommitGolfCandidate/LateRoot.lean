@@ -13,18 +13,18 @@ def copyWord (s : MachineState) (i : Fin 4) :=
   execInstrBr (execInstrBr s (.LD .x6 .x12 off)) (.SD .x26 .x6 off)
 
 private theorem site (i : Fin 4) :
-    AtWord (3305+2*i.val) (.LD .x6 .x12 (BitVec.ofNat 12 (8*i.val))) ∧
-    AtWord (3305+2*i.val+1) (.SD .x26 .x6 (BitVec.ofNat 12 (8*i.val))) := by
+    AtWord (2644+2*i.val) (.LD .x6 .x12 (BitVec.ofNat 12 (8*i.val))) ∧
+    AtWord (2644+2*i.val+1) (.SD .x26 .x6 (BitVec.ofNat 12 (8*i.val))) := by
   constructor <;> apply decoded_word _ (by have := i.isLt; omega) _ <;> fin_cases i <;> rfl
 
 private theorem copy_run (s : MachineState) (i : Fin 4) (fuel : Nat)
-    (pc : s.pc = pcAt (3305+2*i.val)) (src : s.getReg .x12 = BitVec.ofNat 64 rootSource)
+    (pc : s.pc = pcAt (2644+2*i.val)) (src : s.getReg .x12 = BitVec.ofNat 64 rootSource)
     (dst : s.getReg .x26 = BitVec.ofNat 64 rootDestination) :
     execute commitImage (fuel+2) s true =
       (do let out ← execute commitImage fuel (copyWord s i) true; pure (out.charge 2 0)) := by
   let off := BitVec.ofNat 12 (8*i.val)
   let t := execInstrBr s (.LD .x6 .x12 off)
-  have pc' : t.pc = pcAt (3305+2*i.val+1) := by change s.pc+4 = _; rw [pc,pc_succ]
+  have pc' : t.pc = pcAt (2644+2*i.val+1) := by change s.pc+4 = _; rw [pc,pc_succ]
   have d' : t.getReg .x26 = BitVec.ofNat 64 rootDestination := dst
   have good : ordinaryStep s (.base (.LD .x6 .x12 off)) = some t := by
     have e : memoryArgumentsValid s (.LD .x6 .x12 off) = true := by
@@ -46,26 +46,26 @@ private theorem copied_pc (s : MachineState) (i : Fin 4) : (copyWord s i).pc=s.p
 def rootCopy (s : MachineState) := copyWord (copyWord (copyWord (copyWord s 0) 1) 2) 3
 def haltState (s : MachineState) := execInstrBr (execInstrBr s (.ADDI .x5 .x0 1)) (.ADDI .x10 .x0 0)
 
-private theorem halt_run (s : MachineState) (pc : s.pc=pcAt 3313) (fuel : Nat) :
+private theorem halt_run (s : MachineState) (pc : s.pc=pcAt 2652) (fuel : Nat) :
     execute commitImage (fuel+3) s true = pure ⟨.success,haltState s,3,0⟩ := by
   let t := execInstrBr s (.ADDI .x5 .x0 1)
-  have pt : t.pc=pcAt 3314 := by change s.pc+4=_;rw [pc];rfl
-  have pu : (haltState s).pc=pcAt 3315 := by change t.pc+4=_;rw [pt];rfl
-  have f := decoded_word 3313 (by decide) (.ADDI .x5 .x0 1) (by rfl) s pc
-  have f' := decoded_word 3314 (by decide) (.ADDI .x10 .x0 0) (by rfl) t pt
-  have f'' := decoded_word 3315 (by decide) .ECALL (by rfl) (haltState s) pu
+  have pt : t.pc=pcAt 2653 := by change s.pc+4=_;rw [pc];rfl
+  have pu : (haltState s).pc=pcAt 2654 := by change t.pc+4=_;rw [pt];rfl
+  have f := decoded_word 2652 (by decide) (.ADDI .x5 .x0 1) (by rfl) s pc
+  have f' := decoded_word 2653 (by decide) (.ADDI .x10 .x0 0) (by rfl) t pt
+  have f'' := decoded_word 2654 (by decide) .ECALL (by rfl) (haltState s) pu
   rw [execute_ordinary_step _ _ _ t _ _ f rfl, execute_ordinary_step _ _ _ (haltState s) _ _ f' rfl,
     execute,f'',show (haltState s).getReg .x5=1 by rfl,show (haltState s).getReg .x10=0 by rfl]
   rfl
 
-theorem commit_exit (s : MachineState) (pc : s.pc=pcAt 3305)
+theorem commit_exit (s : MachineState) (pc : s.pc=pcAt 2644)
     (src : s.getReg .x12 = BitVec.ofNat 64 rootSource) (dst : s.getReg .x26 = BitVec.ofNat 64 rootDestination)
     (fuel : Nat) : execute commitImage (fuel+11) s true = pure ⟨.success,haltState (rootCopy s),11,0⟩ := by
   let t := copyWord s 0; let u := copyWord t 1; let v := copyWord u 2
-  have pt : t.pc=pcAt 3307 := by rw [copied_pc,pc];rfl
-  have pu : u.pc=pcAt 3309 := by rw [copied_pc,pt];rfl
-  have pv : v.pc=pcAt 3311 := by rw [copied_pc,pu];rfl
-  have endPc : (rootCopy s).pc=pcAt 3313 := by change (copyWord v 3).pc = _; rw [copied_pc,pv];rfl
+  have pt : t.pc=pcAt 2646 := by rw [copied_pc,pc];rfl
+  have pu : u.pc=pcAt 2648 := by rw [copied_pc,pt];rfl
+  have pv : v.pc=pcAt 2650 := by rw [copied_pc,pu];rfl
+  have endPc : (rootCopy s).pc=pcAt 2652 := by change (copyWord v 3).pc = _; rw [copied_pc,pv];rfl
   rw [copy_run s 0 (fuel+9) pc src dst, copy_run t 1 (fuel+7) pt src dst,
     copy_run u 2 (fuel+5) pu src dst,copy_run v 3 (fuel+3) pv src dst,halt_run (copyWord v 3) endPc]
   rfl

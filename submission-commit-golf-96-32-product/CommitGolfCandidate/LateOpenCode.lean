@@ -5,7 +5,7 @@ namespace CommitGolfCandidate.Late.Open
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 def image := Late.submission.image .opening
-def openWord (n : Nat) : BitVec 32 := if h : n<140 then Artifact.openingCode.get 32 ⟨n,h⟩ else 0
+def openWord (n : Nat) : BitVec 32 := if h : n<140 then Artifact.openingCode.get 32 ⟨n,by omega⟩ else 0
 
 private theorem packed_lookup {m : Nat} (a : ArtifactEncoding.Packed m) (j : Nat) (h : j<m) :
     (ArtifactEncoding.decode 32 a)[j]? = some (a.get 32 ⟨j,h⟩) := by
@@ -17,7 +17,7 @@ theorem fetched (n : Nat) (hi : n<140) (op : Instr) (encoded : decodeInstruction
     (s : MachineState) (pc : s.pc=pcAt n) : fetch image s=some (.base op) := by
   have atWord : image.code[n]?=some (openWord n) := by
     rw [openWord,dif_pos hi]
-    exact packed_lookup Artifact.openingCode n hi
+    exact packed_lookup Artifact.openingCode n (by omega)
   simp only [fetch,pc,pcAt,BitVec.toNat_ofNat,Nat.mod_eq_of_lt (show 4096+4*n<2^64 by omega)]
   rw [if_pos (by constructor <;> omega)]
   simp only [Nat.add_sub_cancel_left,Nat.mul_div_cancel_left _ (by decide : 0<4),atWord,encoded]
