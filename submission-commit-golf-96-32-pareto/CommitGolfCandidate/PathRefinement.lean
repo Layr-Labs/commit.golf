@@ -16,8 +16,8 @@ private theorem register_set_mem (state : MachineState) (address value : Word) (
 
 private theorem path_copy_eq (state : MachineState) (start : Nat) :
     checkPathCopyState state start =
-      copyBlock state (if start = 31 then .x21 else .x25)
-        (if start = 39 ∨ start = 15 then 0 else 32) := rfl
+      copyBlock state (if start = 29 then .x21 else .x25)
+        (if start = 37 ∨ start = 16 then 0 else 32) := rfl
 
 set_option maxHeartbeats 2000000 in
 private theorem copy_block_word (state : MachineState) (source : Reg) (offset word : Nat)
@@ -274,7 +274,7 @@ theorem check_path_loop_digest (oracle : Oracle) (state : MachineState)
 theorem check_salt_copy_digest (state : MachineState) (address : Nat)
     (scratch : state.getReg .x21 = 256) (pointer : state.getReg .x25 = BitVec.ofNat 64 address)
     (aligned : address%8 = 0) (above : 320 ≤ address) (bounded : address+32 < 2^64) :
-    readBuffer (checkPathCopyState state 15) 256 32 = readBuffer state address 32 := by
+    readBuffer (checkPathCopyState state 16) 256 32 = readBuffer state address 32 := by
   have pointerNat : (state.getReg .x25).toNat = address := by
     rw [pointer, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   have separated : ∀ i < 4, ∀ j < 4,
@@ -296,7 +296,7 @@ theorem check_salt_copy_digest (state : MachineState) (address : Nat)
 theorem check_salt_copy_outside (state : MachineState) (address : Word)
     (scratch : state.getReg .x21 = 256)
     (outside : ∀ i < 4, address ≠ BitVec.ofNat 64 (256+8*i)) :
-    (checkPathCopyState state 15).getMem address = state.getMem address := by
+    (checkPathCopyState state 16).getMem address = state.getMem address := by
   rw [path_copy_eq]
   exact copy_block_outside state .x25 0 address (by decide) (Or.inl rfl) scratch outside
 

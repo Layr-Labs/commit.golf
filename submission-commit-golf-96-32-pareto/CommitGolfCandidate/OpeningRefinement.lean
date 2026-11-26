@@ -7,7 +7,8 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
 private theorem path_prepared_source (state : MachineState) :
     (openingPathPreparedState state).getReg .x23 =
-      state.getReg .x9 + ((state.getReg .x20 ^^^ 1) <<< 5) := by rfl
+      state.getReg .x9 + (((state.getReg .x20 ^^^ 1) + (state.getReg .x20 >>> 1)) <<< 5) :=
+  opening_path_source state
 
 private theorem path_prepared_output (state : MachineState) :
     (openingPathPreparedState state).getReg .x25 = state.getReg .x25 := by rfl
@@ -20,7 +21,8 @@ private theorem path_copied_memory (state : MachineState) :
 
 /-- One actual path iteration writes the digest at its computed sibling address. -/
 theorem opening_path_digest (state : MachineState) (source destination : Nat)
-    (sourcePointer : state.getReg .x9 + ((state.getReg .x20 ^^^ 1) <<< 5) = BitVec.ofNat 64 source)
+    (sourcePointer : state.getReg .x9 + (((state.getReg .x20 ^^^ 1) + (state.getReg .x20 >>> 1)) <<< 5) =
+      BitVec.ofNat 64 source)
     (destinationPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
     (sourceAligned : source % 8 = 0) (destinationAligned : destination % 8 = 0)
     (sourceBound : source+32 ≤ 2^64) (destinationBound : destination+32 ≤ 2^64)
@@ -46,13 +48,15 @@ theorem opening_path_preserves_digest (state : MachineState) (destination addres
     aligned destinationBound readBound separate]
   exact read_buffer_memory_congr _ _ (path_prepared_memory state) _ _
 
-private theorem sibling_pointer (base node : Nat) :
-    BitVec.ofNat 64 base + ((BitVec.ofNat 64 node ^^^ 1) <<< 5) =
-      BitVec.ofNat 64 (base+32*(node ^^^ 1)) := by
-  change BitVec.ofNat 64 base + ((BitVec.ofNat 64 node ^^^ BitVec.ofNat 64 1) <<< 5) = _
-  rw [← BitVec.ofNat_xor, BitVec.shiftLeft_eq_mul_twoPow]
-  change BitVec.ofNat 64 base + (BitVec.ofNat 64 (node ^^^ 1) * BitVec.ofNat 64 32) = _
-  rw [← BitVec.ofNat_mul, ← BitVec.ofNat_add, Nat.mul_comm (node ^^^ 1)]
+private theorem sibling_pointer (base node : Nat) (nodeBound : node < 2^25) :
+    BitVec.ofNat 64 base + (((BitVec.ofNat 64 node ^^^ 1) + (BitVec.ofNat 64 node >>> 1)) <<< 5) =
+      BitVec.ofNat 64 (base+heapOffset (node ^^^ 1)) := by
+  have nodeNat : (BitVec.ofNat 64 node).toNat = node := by
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  have offset := opening_sibling_offset (BitVec.ofNat 64 node) (by rw [nodeNat]; exact nodeBound)
+  rw [nodeNat] at offset
+  apply BitVec.eq_of_toNat_eq
+  rw [BitVec.toNat_add, offset, BitVec.toNat_ofNat, BitVec.toNat_ofNat, Nat.mod_add_mod]
 
 /-- Every sibling record emitted by the whole path loop is read from the original
 heap. Later copies preserve earlier proof records and the source heap. -/
@@ -62,9 +66,9 @@ theorem opening_path_records (state : MachineState) (heap : Nat → Digest)
     (nodePointer : state.getReg .x20 = BitVec.ofNat 64 node)
     (destinationPointer : state.getReg .x25 = BitVec.ofNat 64 destination)
     (heapAligned : base % 8 = 0) (destinationAligned : destination % 8 = 0)
-    (nodeBound : node < 2^25) (separated : base+2^30 ≤ destination)
+    (nodeBound : node < 2^25) (separated : base+3*2^29 ≤ destination)
     (bounded : destination+32*count ≤ MEMORY_BYTES)
-    (data : ∀ slot < 2^25, readBuffer state (base+32*slot) 32 = heap slot) :
+    (data : ∀ slot < 2^25, readBuffer state (base+heapOffset slot) 32 = heap slot) :
     ∀ level < count,
       readBuffer (openingPathState^[count] state) (destination+32*level) 32 =
         heap ((node / 2^level) ^^^ 1) := by
@@ -90,8 +94,10 @@ theorem opening_path_records (state : MachineState) (heap : Nat → Digest)
       change (node % 2^64) / 2 = (node/2) % 2^64
       rw [Nat.mod_eq_of_lt (by omega : node < 2^64), Nat.mod_eq_of_lt (by omega : node/2 < 2^64)]
     have nextData (slot : Nat) (slotBound : slot < 2^25) :
-        readBuffer next (base+32*slot) 32 = heap slot := by
-      rw [opening_path_preserves_digest state destination (base+32*slot) destinationPointer
+        readBuffer next (base+heapOffset slot) 32 = heap slot := by
+      have inside := heap_offset_bound slot (2^24) (by omega)
+      have aligned := heap_offset_aligned slot
+      rw [opening_path_preserves_digest state destination (base+heapOffset slot) destinationPointer
         (by omega) (by omega) (by omega) (Or.inl (by omega))]
       exact data slot slotBound
     intro level inside
@@ -108,8 +114,10 @@ theorem opening_path_records (state : MachineState) (heap : Nat → Digest)
           omega
       simp only [Nat.mul_zero, Nat.add_zero, Nat.pow_zero, Nat.div_one]
       rw [retained]
-      rw [opening_path_digest state (base+32*(node ^^^ 1)) destination
-        (by rw [heapPointer, nodePointer]; exact sibling_pointer base node)
+      have inside := heap_offset_bound (node ^^^ 1) (2^24) (by omega)
+      have aligned := heap_offset_aligned (node ^^^ 1)
+      rw [opening_path_digest state (base+heapOffset (node ^^^ 1)) destination
+        (by rw [heapPointer, nodePointer]; exact sibling_pointer base node nodeBound)
         destinationPointer (by omega) destinationAligned (by omega) (by omega) (Or.inl (by omega))]
       exact data _ siblingBound
     | succ level =>
