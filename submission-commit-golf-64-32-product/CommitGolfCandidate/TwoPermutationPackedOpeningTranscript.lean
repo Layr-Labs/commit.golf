@@ -1,4 +1,5 @@
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
+import CommitGolfCandidate.C3LeafModel
 import CommitGolfCandidate.TwoPermutationPackedOpeningProofBytes
 import CommitGolfCandidate.TwoPermutationPackedOpeningRecords
 import CommitGolfCandidate.TwoPermutationPackedOpeningRecordRun
@@ -31,7 +32,7 @@ theorem opening_scored_attainment (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) :
     ∃ (positions : Positions) (result : Execution), positions.card = BATCH ∧
       s.run .opening (trapdoor, positions) = pure result ∧
-      result.cycles = 69767 ∧ (s.readProof result).length = 67840 := by
+      result.cycles = 85767 ∧ (s.readProof result).length = 67840 := by
   obtain ⟨positions, count, cycleVal, byteVal⟩ := scheduled_scored_attainment
   obtain ⟨result, run, physical⟩ := opening_physical s abi trapdoor positions
   exact ⟨positions, result, count, run, physical.cycles.trans cycleVal,
@@ -42,15 +43,15 @@ theorem transcript_refines (s : Submission) (abi : OpeningABI s)
     (trapdoorOf : Oracle → Message → CompleteSaltTape → BitVec (8*s.sizes.trapdoor))
     (distribution : ∀ oracle message, fixedOracleRun oracle (s.scheme.commit message) =ᵈ
       (do let salts ← sampleCompleteSaltTape
-          let leaves := pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts
+          let leaves := c3FullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts
           pure (Hybrid.heap oracle.compression leaves 1, trapdoorOf oracle message salts)))
     (nonce : ∀ oracle message salts index,
       trapdoorSalt (s := s) (trapdoorOf oracle message salts) index = salts index)
     (heap : ∀ oracle message salts node, 0<node → node<2*LENGTH →
       trapdoorHeap (s := s) (trapdoorOf oracle message salts) node =
         Hybrid.heap oracle.compression
-          (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts) node) :
-    PinnedTranscriptRefines s.scheme (Hybrid.builder) := by
+          (c3FullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts) node) :
+    C3TranscriptRefines s.scheme (Hybrid.builder) := by
   intro oracle message positions
   unfold executableTranscript
   rw [fixed_oracle_run_bind]
@@ -60,7 +61,7 @@ theorem transcript_refines (s : Submission) (abi : OpeningABI s)
   intro salts
   rw [scheme_open_bytes s abi, pure_bind, fixed_oracle_run_pure]
   have proof := proof_from_trapdoor_matches s (trapdoorOf oracle message salts) positions
-    oracle.compression (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)
+    oracle.compression (c3FullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts)
     salts (heap oracle message salts) (nonce oracle message salts)
   rw [proof]
   rfl

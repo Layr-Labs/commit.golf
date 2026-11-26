@@ -13,7 +13,7 @@ set_option maxHeartbeats 1000000
 structure CheckerObservationFacts (oracle : Oracle) (input : CheckInput)
     (observed : (Execution × List PublicRow) × Nat) : Prop where
   terminates : observed.1.1.exit ≠ .unfinished
-  queries : observed.2 ≤ 26*input.positions.card
+  queries : observed.2 ≤ 28*input.positions.card
   paths : observed.1.1.exit = .success → ∀ index : {i // i ∈ input.positions},
     Nonempty (Hybrid.ProjectedOpening oracle index.val (input.values index) input.commitment observed.1.2)
   honest : ∀ message salts, input = honestCheckInput oracle message input.positions salts →
@@ -77,15 +77,15 @@ theorem checker_body_facts (record : Oracle → Nat → Index → MachineState �
       exact execute_header_reject _ pc _
     change CheckerObservationFacts oracle input
       (((checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).1.1.charge
-        collected.cycles (18*collected.records),
+        collected.cycles (20*collected.records),
         collected.rows ++ (checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).1.2),
-        18*collected.records+(checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).2)
+        20*collected.records+(checkEvaluation oracle (recordRows (execute packedImage rest collected.state false))).2)
     rw [finish,record_rows_pure,check_evaluation_pure]
     refine ⟨?_,?_,?_,?_⟩
     · intro impossible
       cases impossible
     · have count : collected.records ≤ input.positions.card := facts.queryRecords
-      change 18*collected.records+0 ≤ 26*input.positions.card
+      change 20*collected.records+0 ≤ 28*input.positions.card
       omega
     · intro impossible
       cases impossible

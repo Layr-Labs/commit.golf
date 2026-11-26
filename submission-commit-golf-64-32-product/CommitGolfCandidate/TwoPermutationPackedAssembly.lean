@@ -37,7 +37,7 @@ theorem packed_opening_facts (committed : PackedCommitTranscript) : OpeningFacts
 
 theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Message)
     (result : Execution) (reachable : result ∈ support (packedSubmission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 1367549052 ∧ result.oracleCalls = 50331647 := by
+    result.exit = .success ∧ result.cycles = 1317414011 ∧ result.oracleCalls = 83886079 := by
   have entry : RV64.CommitEntry (packedSubmission.initialState .commit message) := ⟨rfl,rfl,rfl,rfl⟩
   erw [RV64.packed_submission_wide_commit_run leaves packedSubmission RV64.packed_manifest_image.symm
     (by decide) message entry] at reachable
@@ -48,7 +48,7 @@ theorem packed_commit_resources (leaves : PackedLeafExecution) (message : Messag
 theorem packed_certificate (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (checks : CheckerFacts packedSubmission)
     (privateView : packedSubmission.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
-    Certificate packedSubmission 67840 1367549052 69767 :=
+    Certificate packedSubmission 67840 1317414011 85767 :=
   certificate_of_facts (packed_commit_resources leaves) packed_admitted
     (packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)) checks privateView
 

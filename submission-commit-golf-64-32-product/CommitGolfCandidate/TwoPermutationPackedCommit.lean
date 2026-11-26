@@ -20,10 +20,10 @@ structure PackedLeafExecution where
   trace : MachineState → OracleComp World MachineState
   executes : ∀ (initial : MachineState), CommitEntry initial → ∀ {bits : Nat}
     (coins : BitVec bits) (fuel : Nat),
-      execute packedWideCommitImage (184754175+fuel) (packed_wideReadyState initial coins) true =
+      execute packedWideCommitImage (268836864+fuel) (packed_wideReadyState initial coins) true =
         (do let leaves ← trace (packed_wideReadyState initial coins)
             let out ← execute packedWideCommitImage fuel leaves true
-            return out.charge 1157832703 33554432)
+            return out.charge 1107697664 67108864)
   finished : ∀ (initial : MachineState), CommitEntry initial → ∀ {bits : Nat}
     (coins : BitVec bits) (out : MachineState),
       out ∈ support (trace (packed_wideReadyState initial coins)) → PackedLeavesFinished out
@@ -62,10 +62,10 @@ def packed_wideCommitBody (leaf : PackedLeafExecution) (initial : MachineState) 
 
 theorem packed_wide_commit_after_draw (leaf : PackedLeafExecution) (initial : MachineState)
     (entry : CommitEntry initial) {bits : Nat} (coins : BitVec bits) (fuel : Nat) :
-    execute packedWideCommitImage (243475565+fuel) (packed_wideReadyState initial coins) true =
+    execute packedWideCommitImage (327558254+fuel) (packed_wideReadyState initial coins) true =
       (do let result ← packed_wideCommitBody leaf initial coins
-          return ⟨.success,result,1333994598,50331647⟩) := by
-  rw [show 243475565+fuel=184754175+(5+(58721374+(11+fuel))) by omega,
+          return ⟨.success,result,1283859559,83886079⟩) := by
+  rw [show 327558254+fuel=268836864+(5+(58721374+(11+fuel))) by omega,
     leaf.executes initial entry coins]
   simp only [packed_wideCommitBody,bind_assoc]
   apply bind_congr_of_forall_mem_support
@@ -85,12 +85,12 @@ def packed_wideCommitTrace (leaf : PackedLeafExecution) (initial : MachineState)
   let coins ← liftM ($ᵗ BitVec (8*((initialPrefix initial 11).getReg .x11).toNat) :
     ProbComp (BitVec (8*((initialPrefix initial 11).getReg .x11).toNat)))
   let state ← packed_wideCommitBody leaf initial coins
-  return ⟨.success,state,1367549052,50331647⟩
+  return ⟨.success,state,1317414011,83886079⟩
 
 theorem packed_wide_commit_execution (leaf : PackedLeafExecution) (initial : MachineState)
     (entry : CommitEntry initial) (fuel : Nat) :
-    execute packedWideCommitImage (243475587+fuel) initial true=packed_wideCommitTrace leaf initial := by
-  rw [show 243475587+fuel=22+(243475565+fuel) by omega,packed_execute_wide_setup initial entry]
+    execute packedWideCommitImage (327558274+fuel) initial true=packed_wideCommitTrace leaf initial := by
+  rw [show 327558274+fuel=20+(327558254+fuel) by omega,packed_execute_wide_setup initial entry]
   simp only [packed_wideCommitTrace,bind_assoc]
   apply bind_congr_of_forall_mem_support
   intro coins _
@@ -98,12 +98,12 @@ theorem packed_wide_commit_execution (leaf : PackedLeafExecution) (initial : Mac
   simp only [bind_assoc,pure_bind,Execution.charge]
 
 theorem packed_submission_wide_commit_run (leaf : PackedLeafExecution) (program : Submission)
-    (image : program.image .commit=packedWideCommitImage) (enough : 243475587≤program.steps .commit)
+    (image : program.image .commit=packedWideCommitImage) (enough : 327558274≤program.steps .commit)
     (message : Message) (entry : CommitEntry (program.initialState .commit message)) :
     program.run .commit message=packed_wideCommitTrace leaf (program.initialState .commit message) := by
   change execute (program.image .commit) (program.steps .commit)
     (program.initialState .commit message) true=_
-  rw [image,show program.steps .commit=243475587+(program.steps .commit-243475587) by omega]
+  rw [image,show program.steps .commit=327558274+(program.steps .commit-327558274) by omega]
   exact packed_wide_commit_execution leaf _ entry _
 
 end TwoPermutationPrototype.RV64

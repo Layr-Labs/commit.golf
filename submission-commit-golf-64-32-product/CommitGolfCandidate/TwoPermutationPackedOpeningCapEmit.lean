@@ -31,8 +31,7 @@ theorem emit_cap : EmitCap := by
   have destination := (initial.2.2.2 .x21 (by decide)).trans position.destWord
   have place : FieldInputs .cap setup src dest := by
     have ⟨sourceAlign, beforeProof⟩ := cap_digest_bounds _ bounded
-    refine ⟨by rw [initial.1, pc]; rfl, source, destination, ?_, fits, ?_, aligned, by simp [CopySite.fast],
-      by simp [CopySite.fast], by simp [CopySite.fast]⟩
+    refine ⟨by rw [initial.1, pc]; rfl, source, destination, ?_, fits, ?_, aligned⟩
     · have bound := beforeProof.trans separate
       change src+30 ≤ dest
       change src+32 ≤ dest at bound

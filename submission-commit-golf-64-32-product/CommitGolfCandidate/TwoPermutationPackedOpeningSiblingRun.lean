@@ -28,7 +28,7 @@ theorem lower_pc_next (level : Fin 16) :
     rfl
 
 structure SiblingTrace (state : MachineState) (index : Index) (ordinal : Nat) (level : Fin 16) : Prop where
-  run : RunsOpeningBlock state (siblingBlock level state) (5+siblingCopyCycles level.val)
+  run : RunsOpeningBlock state (siblingBlock level state) (5+siblingWidth level.val)
   next : LowerCursor (siblingBlock level state) index ordinal (level.val+1)
   bytes : ByteCopy state (siblingBlock level state) (siblingAddress index level.val)
     (siblingDestination ordinal level.val) (siblingWidth level.val)
@@ -57,14 +57,9 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
   have field : FieldInputs site prepared (siblingAddress index level.val)
       (siblingDestination ordinal level.val) := by
     refine ⟨before, physical_sibling_source state index _ cursor.heap cursor.node,
-      (head.2.2.2 .x21 (by decide)).trans cursor.dest, ?_, ?_, ordinalFit.1, ordinalFit.2.1, ?_, ?_, ?_⟩
+      (head.2.2.2 .x21 (by decide)).trans cursor.dest, ?_, ?_, ordinalFit.1, ordinalFit.2.1⟩
     · simpa only [site, sibling_width_exact] using ordinalFit.2.2.1
     · simpa only [site, sibling_width_exact] using ordinalFit.2.2.2
-    · exact fun fast => (sibling_word_geometry index ordinal level fast).1
-    · exact fun fast => (sibling_word_geometry index ordinal level fast).2.1
-    · intro fast
-      simpa only [site, sibling_width_exact] using
-        (sibling_word_geometry index ordinal level fast).2.2
   have tailPC : copied.pc = BitVec.ofNat 64 (4096+4*siblingEnd level) := field.final_pc
   have ranHead : RunsOpeningBlock state prepared 3 :=
     fun fuel coins => execute_sibling_head state level start fuel coins
@@ -77,9 +72,9 @@ theorem execute_sibling (state : MachineState) (index : Index) (ordinal : Nat) (
       ((copy_register site prepared reg d).trans (head.2.2.2 reg b))
   refine ⟨?_, ⟨?_, (kept .x9 (by decide) (by decide) (by decide) (by decide)).trans cursor.heap, ?_, ?_⟩,
     ?_, kept, ?_⟩
-  · change RunsOpeningBlock state done (5+siblingCopyCycles level.val)
-    rw [show 5+siblingCopyCycles level.val = 3+site.cycles+2 by
-      rw [show site.cycles = siblingCopyCycles level.val from sibling_cycles_exact level]
+  · change RunsOpeningBlock state done (5+siblingWidth level.val)
+    rw [show 5+siblingWidth level.val = 3+2*site.halfwords+2 by
+      rw [show 2*site.halfwords = siblingWidth level.val from sibling_width_exact level]
       omega]
     exact trace
   · have final : done.pc = BitVec.ofNat 64 (4096+4*(siblingEnd level+2)) := by

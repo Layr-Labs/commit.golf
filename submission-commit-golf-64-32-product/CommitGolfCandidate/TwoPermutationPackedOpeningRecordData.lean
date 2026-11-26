@@ -7,7 +7,7 @@ open Opening (OpeningLayout proofBase sortedIndex SameOpeningInput trapdoorBase)
 def recordData (state : MachineState) := lowerRun 0 16 (nonceBlock state)
 
 structure RecordData (state after : MachineState) (index : Index) (ordinal : Nat) : Prop where
-  run : RunsOpeningBlock state after 460
+  run : RunsOpeningBlock state after 585
   cursor : LowerCursor after index ordinal 16
   register : ∀ reg, reg ≠ .x6 → reg ≠ .x7 → reg ≠ .x21 → reg ≠ .x31 →
     after.getReg reg = state.getReg reg

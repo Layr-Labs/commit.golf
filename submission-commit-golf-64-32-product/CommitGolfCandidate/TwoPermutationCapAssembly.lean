@@ -27,7 +27,7 @@ theorem checker_cap_bindings (oracle : Oracle) (input : CheckInput) (state : Mac
 theorem checker_global_budget (input : CheckInput) (records capQueries : Nat)
     (recordBound : records ≤ input.positions.card)
     (capBound : capQueries ≤ 8*input.positions.card) :
-    18*records+capQueries ≤ 26*input.positions.card ∧ 18*records+capQueries ≤ 2^30 := by
+    20*records+capQueries ≤ 28*input.positions.card ∧ 20*records+capQueries ≤ 2^30 := by
   have card := checker_positions_bound input
   omega
 

@@ -1,7 +1,7 @@
-import CommitGolfCandidate.TwoPermutationPinnedBindingCertificate
-import CommitGolfCandidate.TwoPermutationPinnedFinalHiding
+import CommitGolfCandidate.C3HidingScheme
+import CommitGolfCandidate.C3ReplayBound
+import CommitGolfCandidate.C3CommitMeaning
 import CommitGolfCandidate.TwoPermutationPackedAssembly
-import CommitGolfCandidate.TwoPermutationPackedLeafCertificate
 import CommitGolfCandidate.TwoPermutationPackedCheckerCertificate
 
 namespace CommitGolf.Challenge
@@ -14,14 +14,13 @@ def submission : CommitGolf.Submission := RV64.packedSubmission
 
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
-theorem certificate : CommitGolf.Certificate submission 67840 1367549052 69767 := by
-  let leaves := RV64.PackedLeaves.executableLeaves
-  let meaning := RV64.PackedLeaves.executableMeaning
+theorem certificate : CommitGolf.Certificate submission 67840 1317414011 85767 := by
+  let leaves := RV64.C3Leaves.c3Leaves
+  let meaning := RV64.C3Leaves.c3Meaning
   let opening := PackedCertificate.packed_opening_facts (RV64.packedVerifiedTranscript leaves meaning)
-  have privacy := Sampling.scheme_hiding_of_pinned_transcript submission.scheme TwoPermutationPrototype.Hybrid.builder
-    opening.refines (fun adversary compress budget bounded =>
-      Sampling.pinned_final_reference_hiding adversary TwoPermutationPrototype.Hybrid.builder compress budget bounded)
+  have privacy := Sampling.scheme_hiding_of_c3_transcript submission.scheme TwoPermutationPrototype.Hybrid.builder
+    opening.refines
   exact PackedCertificate.packed_certificate leaves meaning
-    (Packed.Checker.executable_checker_facts Sampling.pinned_replay_bound) privacy
+    (Packed.Checker.executable_checker_facts Sampling.c3_replay_bound) privacy
 
 end CommitGolf.Challenge

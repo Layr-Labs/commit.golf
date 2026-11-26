@@ -93,7 +93,7 @@ theorem opening_physical_with (recordsExecute : RecordsExecute) (s : Submission)
     obtain ⟨after, ranCap, afterPC, endPosition, footerBytes⟩ :=
       cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC above aligned room
     let final := exitPrefix (advanceUp after) 3
-    have charge : scheduledCycles positions = 13+(467*positions.card-1)+770+capSubtreeCycles grouped 1 8+8 := by
+    have charge : scheduledCycles positions = 13+(592*positions.card-1)+770+capSubtreeCycles grouped 1 8+8 := by
       rw [scheduledCycles, if_neg empty]
       dsimp only [grouped]
       omega
@@ -101,8 +101,8 @@ theorem opening_physical_with (recordsExecute : RecordsExecute) (s : Submission)
     let surplus := s.steps .opening-scheduledCycles positions
     have ranSetup : RunsOpeningBlock initial begin 13 :=
       fun fuel coins => execute_setup initial rfl fuel coins (countReg ▸ nonempty_count positions positive)
-    have ranRecords : RunsOpeningBlock begin lower (467*positions.card-1) := by
-      have charged : recordsCost positions.card 0 positions.card = 467*positions.card-1 := by
+    have ranRecords : RunsOpeningBlock begin lower (592*positions.card-1) := by
+      have charged : recordsCost positions.card 0 positions.card = 592*positions.card-1 := by
         simp [recordsCost, positive]
       exact charged ▸ assembled.run
     have ranPrep : RunsOpeningBlock lower prepared 770 :=
@@ -125,7 +125,7 @@ theorem opening_physical_with (recordsExecute : RecordsExecute) (s : Submission)
       rw [abi.image, ← enough]
       change execute openingImage (scheduledCycles positions+surplus) initial true = pure result
       have amount : scheduledCycles positions+surplus =
-          13+(467*positions.card-1)+770+capSubtreeCycles grouped 1 8+(8+surplus) := by
+          13+(592*positions.card-1)+770+capSubtreeCycles grouped 1 8+(8+surplus) := by
         exact congrArg (fun amount => amount+surplus) charge |>.trans (Nat.add_assoc _ 8 surplus)
       have prefixTrace := (((ranSetup.next ranRecords).next ranPrep).next ranCap) (8+surplus) true
       rw [amount, prefixTrace, ranExit]
@@ -196,7 +196,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 69767 ∧ (result.state.getReg .x11).toNat ≤ 67840 := by
+    result.cycles ≤ 85767 ∧ (result.state.getReg .x11).toNat ≤ 67840 := by
   rw [physical.cycles, physical.length]
   exact scheduled_scored_limits positions count
 

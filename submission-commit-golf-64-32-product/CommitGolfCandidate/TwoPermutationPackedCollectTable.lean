@@ -1,4 +1,5 @@
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
+import CommitGolfCandidate.TwoPermutationHybridPaths
 import CommitGolfCandidate.TwoPermutationCollectTable
 import CommitGolfCandidate.TwoPermutationPackedPaths
 import CommitGolfCandidate.TwoPermutationPackedHonestInput
@@ -15,22 +16,14 @@ open TwoPermutationPrototype.PackedHonest (honestHeap)
 structure RecordedLower (oracle : Oracle) (index : Index) (value : Entry) (groupRoot : Digest)
     (rows : List PublicRow) where
   nonce : Words 2
-  first : PublicRow.permutation
-    (pinnedFirstRow oracle.permutation (entryWords value)).1
-    (pinnedFirstRow oracle.permutation (entryWords value)).2 ∈ rows
-  second : PublicRow.permutation
-    (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).1
-    (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).2 ∈ rows
+  leaf : C3LeafRows rows oracle.compression oracle.permutation index nonce (entryWords value)
   path : Hybrid.ProjectedPath rows (LENGTH+index.val) 16
-    (outputDigest (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords value)).2 (entryWords value)).2) groupRoot
+    (c3LeafDigest oracle.compression oracle.permutation index nonce (entryWords value)) groupRoot
 
 def RecordedLower.mono {oracle : Oracle} {index : Index} {value : Entry} {groupRoot : Digest}
     {before after : List PublicRow} (lower : RecordedLower oracle index value groupRoot before)
     (contains : ∀ row ∈ before, row ∈ after) : RecordedLower oracle index value groupRoot after :=
-  ⟨lower.nonce, contains _ lower.first, contains _ lower.second, lower.path.mono contains⟩
+  ⟨lower.nonce, lower.leaf.mono contains, lower.path.mono contains⟩
 
 private theorem hybrid_cap_path {rows : List PublicRow} {node height : Nat} {start finish : Digest}
     (path : ProjectedPath rows node height start finish) (bounded : node < LENGTH/2) :
@@ -47,7 +40,7 @@ def RecordedLower.join {oracle : Oracle} {index : Index} {value : Entry} {groupR
     {rows : List PublicRow} {root : Commitment} (lower : RecordedLower oracle index value groupRoot rows)
     (cap : ProjectedPath rows (capGroup index) 8 groupRoot root) :
     Hybrid.ProjectedOpening oracle index value root rows :=
-  ⟨lower.nonce, lower.first, lower.second, lower.path.append (hybrid_cap_path cap (by have h := (checker_cap_group index).2;change capGroup index<8388608;omega))⟩
+  ⟨lower.nonce, lower.leaf, lower.path.append (hybrid_cap_path cap (by have h := (checker_cap_group index).2;change capGroup index<8388608;omega))⟩
 
 /-- The accepted prefix and the cap groups its records authenticate. -/
 structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (state : MachineState)

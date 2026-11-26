@@ -31,7 +31,7 @@ theorem RecordBoundary.start {s : Submission} {trapdoor : BitVec (8*s.sizes.trap
   ⟨by simpa only [ite_eq_right (show ordinal ≠ positions.card by omega)] using boundary.pc,
     boundary.heap, boundary.index, boundary.nonce, boundary.dest, boundary.leaves, boundary.input⟩
 
-def recordCost (final : Bool) : Nat := if final then 466 else 467
+def recordCost (final : Bool) : Nat := if final then 591 else 592
 
 def afterLatch (marked : MachineState) (final : Bool) : MachineState :=
   if final then marked else marked.setPC 0x1034
@@ -56,7 +56,7 @@ structure OneRecord (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
       before.getByte (BitVec.ofNat 64 (siblingAddress (sortedIndex positions ordinal present) level+byte))
 
 def recordsCost (size ordinal count : Nat) : Nat :=
-  if 0<count ∧ ordinal+count=size then 467*count-1 else 467*count
+  if 0<count ∧ ordinal+count=size then 592*count-1 else 592*count
 
 def runRecords (size ordinal : Nat) : Nat → MachineState → MachineState
   | 0, state => state

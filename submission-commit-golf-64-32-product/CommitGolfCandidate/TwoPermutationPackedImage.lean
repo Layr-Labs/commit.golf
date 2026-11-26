@@ -1,6 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedFetchBase
 
-/-! Exact 367-word checker from the 4096-leaf, untagged-second-permutation, 240-bit-parent manifest. -/
+/-! Exact 372-word checker of the 3c1p entry (words 22..61 hold the 3c1p leaf block). -/
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 set_option maxRecDepth 8192
@@ -9,10 +9,10 @@ def packedImage : Image := ⟨[
   0x1f400313, 0x02680333, 0x5a68e463, 0x58080a63, 0x00068413, 0x00058493, 0x00080913, 0xfd870993,
   0x01000a37, 0x00078a93, 0x01178b33, 0x00003bb7, 0x00003c37, 0x100c0c13, 0x00004cb7, 0x00001d37,
   0x10000d93, 0x00003237, 0xff020213, 0x000011b7, 0xfd818193, 0x00000293, 0x00043303, 0x00831e13,
-  0x01c18e33, 0x00098513, 0x0c800593, 0x00100693, 0x000adf83, 0x01f21023, 0x002adf83, 0x01f21123,
-  0x004adf83, 0x01f21223, 0x006adf83, 0x01f21323, 0x008adf83, 0x01f21423, 0x00aadf83, 0x01f21523,
-  0x00cadf83, 0x01f21623, 0x00eadf83, 0x01f21723, 0x00850613, 0x02850513, 0x00000073, 0x03850513,
-  0x060e0f93, 0x00000013, 0x00000013, 0x01f53023, 0x00023f83, 0x01f53423, 0x00823f83, 0x01f53823,
+  0x01c18e33, 0x04000593, 0x00000693, 0x0e898513, 0x00050613, 0x00000073, 0xfe050513, 0x00850613,
+  0x00000073, 0xff050513, 0x00000073, 0x028e0f93, 0x01f53023, 0x000adf83, 0x01f51423, 0x002adf83,
+  0x01f51523, 0x004adf83, 0x01f51623, 0x006adf83, 0x01f51723, 0x008adf83, 0x01f51823, 0x00aadf83,
+  0x01f51923, 0x00cadf83, 0x01f51a23, 0x00eadf83, 0x01f51b23, 0x0c800593, 0x00100693, 0xf7050513,
   0x000b8613, 0x00000073, 0x010a8a93, 0x01430333, 0x04000593, 0x00000693, 0x01000e93, 0x00f00f13,
   0x15eef863, 0x01e00f13, 0x00137393, 0x0a038263, 0x000adf83, 0x01fc1023, 0x002adf83, 0x01fc1123,
   0x004adf83, 0x01fc1223, 0x006adf83, 0x01fc1323, 0x008adf83, 0x01fc1423, 0x00aadf83, 0x01fc1523,
@@ -58,17 +58,17 @@ inductive FieldSite where
   | nonce | rightInternal | leftInternal | rightLeaf | leftLeaf | boundary
 
 def FieldSite.start : FieldSite → Nat
-  | .nonce => 28 | .rightInternal => 68 | .leftInternal => 116
+  | .nonce => 37 | .rightInternal => 68 | .leftInternal => 116
   | .rightLeaf => 151 | .leftLeaf => 200 | .boundary => 298
 
 def FieldSite.count : FieldSite → Nat
   | .nonce => 8 | .rightLeaf | .leftLeaf => 16 | _ => 15
 
 def FieldSite.dest : FieldSite → Reg
-  | .nonce => .x4 | .boundary => .x7 | _ => .x24
+  | .nonce => .x10 | .boundary => .x7 | _ => .x24
 
 def FieldSite.offset : FieldSite → Nat
-  | .leftInternal | .leftLeaf => 32 | _ => 0
+  | .leftInternal | .leftLeaf => 32 | .nonce => 8 | _ => 0
 
 def FieldSite.load (j : Nat) : Instr := .LHU .x31 .x21 (BitVec.ofNat 12 (2*j))
 def FieldSite.store (site : FieldSite) (j : Nat) : Instr :=

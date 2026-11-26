@@ -31,13 +31,13 @@ structure RecordBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat
   run : ∀ fuel,
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel block.state false))
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+fuel) before false)) =
-      ((tail.1.1.charge block.cycles 18,block.rows++tail.1.2),18+tail.2)
+      ((tail.1.1.charge block.cycles 20,block.rows++tail.1.2),20+tail.2)
   pc : block.state.pc=0x13c0
   node : block.state.getReg .x6=
     BitVec.ofNat 64 (capGroup (honestIndex input.positions ordinal present).val)
   proof : block.state.getReg .x21=BitVec.ofNat 64 (checkProofByte (ordinal+1))
   saved : ∀ r, RecordSaved r → block.state.getReg r=before.getReg r
-  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) →
+  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+37 ≤ word) →
     (word < 1534 ∨ 1576 ≤ word) → memoryView block.state word=memoryView before word
   trace :
     let index := honestIndex input.positions ordinal present

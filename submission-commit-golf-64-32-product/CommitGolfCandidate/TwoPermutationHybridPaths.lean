@@ -2,6 +2,7 @@ import CommitGolfCandidate.TwoPermutationPinnedReplay
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.ProjectedCompression
 import CommitGolfCandidate.TwoPermutationCheckerReplay
+import CommitGolfCandidate.C3ReplayBound
 
 /-! Paid binding for the packed two-permutation design. Each compression row
 retains the actual full reply while its child authentication step receives
@@ -83,35 +84,28 @@ theorem ProjectedPath.compare {rows : List PublicRow} {node height : Nat}
         · exact Or.inr (equal_path_pair sameInput)
         · exact Or.inl ⟨_, _, _, _, call₀, call₁, sameInput, (low_normalize (node/2) parent₀).symm.trans ((congrArg low240 sameParent).trans (low_normalize (node/2) parent₁))⟩
 
-/-- The two forward permutation rows and the subsequent authenticated path for
-an opened index, all in a single genuine checker replay. -/
+/-- The four leaf rows (three compressions, one permutation call) and the subsequent
+authenticated path for an opened index, all in a single genuine checker replay. -/
 structure ProjectedOpening (oracle : Oracle) (index : Index) (entry : Entry) (root : Commitment)
     (rows : List PublicRow) where
   nonce : Words 2
-  first : PublicRow.permutation
-    (pinnedFirstRow oracle.permutation (entryWords entry)).1
-    (pinnedFirstRow oracle.permutation (entryWords entry)).2 ∈ rows
-  second : PublicRow.permutation
-    (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).1
-    (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).2 ∈ rows
+  leaf : C3LeafRows rows oracle.compression oracle.permutation index nonce (entryWords entry)
   path : ProjectedPath rows (LENGTH + index.val) LOG_LENGTH
-    (outputDigest (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).2) root
+    (c3LeafDigest oracle.compression oracle.permutation index nonce (entryWords entry)) root
 
 theorem projected_openings_conflict (oracle : Oracle) (index : Index) (root : Commitment)
     (value₀ value₁ : Entry) (conflict : value₀ ≠ value₁)
     (rows₀ rows₁ : List PublicRow) (left : ProjectedOpening oracle index value₀ root rows₀)
     (right : ProjectedOpening oracle index value₁ root rows₁) :
-    PinnedReplayEvidence (rows₀ ++ rows₁) := by
+    C3ReplayEvidence (rows₀ ++ rows₁) := by
   rcases (left.path.mono (fun _ h => List.mem_append_left _ h)).compare
     (right.path.mono (fun _ h => List.mem_append_right _ h)) with hash | sameLeaf
   · exact Or.inl hash
-  · exact Or.inr ⟨oracle.permutation, index, left.nonce, right.nonce, entryWords value₀, entryWords value₁,
-      List.mem_append_left _ left.first, List.mem_append_right _ right.first,
-      List.mem_append_left _ left.second, List.mem_append_right _ right.second,
-      sameLeaf, fun same => conflict (entry_words_injective same)⟩
+  · exact c3_leaf_rows_conflict (rows₀ ++ rows₁) oracle.compression oracle.permutation index
+      left.nonce right.nonce (entryWords value₀) (entryWords value₁)
+      (left.leaf.mono (fun _ h => List.mem_append_left _ h))
+      (right.leaf.mono (fun _ h => List.mem_append_right _ h))
+      sameLeaf (fun same => conflict (entry_words_injective same))
 
 def HybridAcceptedTrace (s : Submission) : Prop :=
   ∀ (oracle : Oracle) (input : CheckInput),
@@ -131,7 +125,7 @@ private theorem packed_limited_check (s : Submission) (oracle : Oracle) (input :
 
 theorem packed_replay_extracts (s : Submission) (refines : HybridAcceptedTrace s)
     (oracle : Oracle) (claim : Scheme.Claim) (breaks : s.scheme.Breaks oracle claim) :
-    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), PinnedReplayEvidence result.2 := by
+    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), C3ReplayEvidence result.2 := by
   obtain ⟨⟨index, member₀, member₁, conflict⟩, accepted₀, accepted₁⟩ := breaks
   let x := leftCheck claim
   let y := rightCheck claim
@@ -164,11 +158,11 @@ theorem packed_replay_extracts (s : Submission) (refines : HybridAcceptedTrace s
     (path₀ ⟨index, member₀⟩).some (path₁ ⟨index, member₁⟩).some
 
 def hybrid_binding_replay (s : Submission) (specified : HybridAcceptedTrace s) :
-    BindingReplayEvidence s.scheme PinnedReplayEvidence :=
+    BindingReplayEvidence s.scheme C3ReplayEvidence :=
   ⟨checkerReplay s, checker_replay_bounded s, packed_replay_extracts s specified⟩
 
 theorem binding_of_packed_trace (candidate : Submission) (trace : HybridAcceptedTrace candidate)
-    (bound : PinnedReplayBound) : candidate.scheme.Binding :=
+    (bound : C3ReplayBound) : candidate.scheme.Binding :=
   scheme_binding_of_replay_with candidate.scheme (hybrid_binding_replay candidate trace)
     (fun contained witness => witness.mono contained) bound
 

@@ -1,6 +1,7 @@
 import CommitGolfCandidate.TwoPermutationHybridHeapFacts
 import CommitGolfCandidate.TwoPermutationHybridMeaning
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
+import CommitGolfCandidate.C3LeafModel
 import CommitGolfCandidate.TwoPermutationPackedCommit
 import CommitGolfCandidate.TwoPermutationPackedParentMeaning
 import CommitGolfCandidate.TwoPermutationOpeningTranscript
@@ -15,14 +16,15 @@ open CommitGolfCandidate (checkEvaluation check_evaluation_support check_evaluat
 abbrev packedSubmission : Submission := Artifact.submission
 
 def packedPublicTree (oracle : Oracle) (message : Message) (salts : CompleteSaltTape) : Nat → BitVec 256 :=
-  Hybrid.heap oracle.compression (pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts)
+  Hybrid.heap oracle.compression
+    (c3FullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts)
 
 set_option maxRecDepth 16384
 set_option maxHeartbeats 1500000
 attribute [local irreducible] checkEvaluation packed_wideCommitBody packed_wideCommitTrace relocatedPhase rootPrefix
 
 structure PackedLeafMeaning (leaves : PackedLeafExecution) where
-  counted : ∀ oracle state, RunPublic oracle (leaves.trace state) 33554432
+  counted : ∀ oracle state, RunPublic oracle (leaves.trace state) 67108864
   content : ∀ (oracle : Oracle) (message : Message) (packed : BitVec (128*LENGTH)),
     let salts := splitBlocks 128 LENGTH packed
     let state := packed_wideReadyState (packedSubmission.initialState .commit message) packed
@@ -34,21 +36,21 @@ private theorem packed_wide_entry (message : Message) :
 
 theorem packed_wide_counted_body (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (oracle : Oracle) (initial : MachineState) {bits : Nat} (packed : BitVec bits) :
-    RunPublic oracle (packed_wideCommitBody leaves initial packed) 50331647 := by
+    RunPublic oracle (packed_wideCommitBody leaves initial packed) 83886079 := by
   unfold packed_wideCommitBody
-  apply run_bind_public _ _ _ 33554432 16777215 (meaning.counted ..)
+  apply run_bind_public _ _ _ 67108864 16777215 (meaning.counted ..)
   intro out
   exact run_bind_public _ _ _ 16777215 0 (by unfold relocatedPhase;exact counted_hybrid_phase ..) (fun _ => run_pure_public ..)
 
 def packed_widePackedOutput (leaves : PackedLeafExecution) (oracle : Oracle) (initial : MachineState)
     {bits : Nat} (packed : BitVec bits) : Execution :=
-  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1367549052,50331647⟩
+  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1317414011,83886079⟩
 
 theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (oracle : Oracle) (initial : MachineState) :
     oracle.run (packed_wideCommitTrace leaves initial) =
       (do let packed ← $ᵗ BitVec (8*((initialPrefix initial 11).getReg .x11).toNat)
-          return (packed_widePackedOutput leaves oracle initial packed,50331647)) := by
+          return (packed_widePackedOutput leaves oracle initial packed,83886079)) := by
   unfold packed_wideCommitTrace
   rw [CommitGolfCandidate.oracle_run_coins_bind]
   apply bind_congr_of_forall_mem_support
@@ -61,10 +63,10 @@ theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : Pack
 private theorem packed_wide_output_eq (leaves : PackedLeafExecution) (oracle : Oracle)
     (initial : MachineState) {bits : Nat} (packed : BitVec bits) :
     packed_widePackedOutput leaves oracle initial packed =
-      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1367549052,50331647⟩ := rfl
+      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1317414011,83886079⟩ := rfl
 
 private theorem execution_state (state : MachineState) :
-    (⟨.success,state,1367549052,50331647⟩ : Execution).state = state := rfl
+    (⟨.success,state,1317414011,83886079⟩ : Execution).state = state := rfl
 
 attribute [local irreducible] packed_widePackedOutput
 

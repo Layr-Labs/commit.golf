@@ -1,4 +1,3 @@
-import CommitGolfCandidate.TwoPermutationPackedOpeningFastCopy
 import CommitGolfCandidate.TwoPermutationPackedOpeningCapMoves
 import CommitGolfCandidate.TwoPermutationPackedOpeningBytes
 import CommitGolfCandidate.TwoPermutationPackedCopy
@@ -10,7 +9,7 @@ open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 open TwoPermutationPrototype.Packed
 
 def fieldCode (site : CopySite) : CopyCode where
-  image := referenceOpeningImage
+  image := openingImage
   start := site.start
   count := site.halfwords
   source := .x7
@@ -23,29 +22,8 @@ def fieldCode (site : CopySite) : CopyCode where
   store := fun offset inside state pc => by
     simpa only [Nat.zero_add, copyStore] using fetch_copy_store site ⟨offset, inside⟩ state pc
 
-/-- Slow sites still use the unchanged halfword instructions in the actual image. -/
-def slowFieldCode (site : CopySite) (slow : site.fast=false) : CopyCode where
-  image := openingImage
-  start := site.start
-  count := site.halfwords
-  source := .x7
-  dest := .x21
-  destOffset := 0
-  sourceTemp := by decide
-  destTemp := by decide
-  offsetBound := by cases site <;> simp [CopySite.halfwords] <;> (try split_ifs) <;> decide
-  load := fun j inside state pc => by
-    exact packed_fetch_base state (site.start+2*j) _
-      (by have h : site.start+2*j+1 < 667 := copy_site_inside site ⟨j,inside⟩; omega) pc
-      (slow_pairs_decoded site slow ⟨j,inside⟩).1
-  store := fun j inside state pc => by
-    simpa only [Nat.zero_add, copyStore] using
-      packed_fetch_base state (site.start+2*j+1) _ (copy_site_inside site ⟨j,inside⟩) pc
-        (slow_pairs_decoded site slow ⟨j,inside⟩).2
-
 def copyState (site : CopySite) (state : MachineState) : MachineState :=
-  if fast : site.fast=true then fastCopyState site fast state
-  else copyField (slowFieldCode site (by cases h : site.fast <;> simp_all)) state
+  copyField (fieldCode site) state
 
 structure FieldInputs (site : CopySite) (state : MachineState) (source target : Nat) : Prop where
   pc : state.pc = BitVec.ofNat 64 (4096+4*site.start)
@@ -55,67 +33,28 @@ structure FieldInputs (site : CopySite) (state : MachineState) (source target : 
   targetFit : target+2*site.halfwords ≤ MEMORY_BYTES
   sourceEven : source % 2 = 0
   targetEven : target % 2 = 0
-  sourceFour : site.fast=true → source % 4 = 0
-  targetFour : site.fast=true → target % 4 = 0
-  sourceGap : site.fast=true → source+2*site.halfwords+8 ≤ target
 
 private theorem FieldInputs.ready {site : CopySite} {state : MachineState} {source target : Nat}
-    (input : FieldInputs site state source target) (slow : site.fast=false) :
-    CopyReady (slowFieldCode site slow) state source target 0 := by
+    (input : FieldInputs site state source target) :
+    CopyReady (fieldCode site) state source target 0 := by
   refine ⟨?_, input.sourceReg, ?_, ?_, input.targetFit, input.sourceEven, input.targetEven⟩
-  · simpa [slowFieldCode] using input.pc
-  · simpa [slowFieldCode] using input.targetReg
+  · simpa [fieldCode] using input.pc
+  · simpa [fieldCode] using input.targetReg
   · exact input.disjoint.trans (Nat.le_trans (Nat.le_add_right _ _) input.targetFit)
-
-private theorem FieldInputs.fastReady {site : CopySite} {state : MachineState} {source target : Nat}
-    (input : FieldInputs site state source target) (fast : site.fast=true) :
-    FastInputs site state source target :=
-  ⟨input.pc,input.sourceReg,input.targetReg,input.sourceFour fast,input.targetFour fast,
-    input.sourceGap fast,input.targetFit⟩
 
 theorem FieldInputs.run {site : CopySite} {state : MachineState} {source target : Nat}
     (input : FieldInputs site state source target) :
-    RunsOpeningBlock state (copyState site state) site.cycles := by
-  unfold copyState
-  split
-  · rename_i fast
-    exact fun fuel coins => (input.fastReady fast).execute fast fuel coins
-  · rename_i slow
-    have h : site.fast=false := by cases h : site.fast <;> simp_all
-    simpa only [CopySite.cycles,h,Bool.false_eq_true,ite_false,RunsOpeningBlock,slowFieldCode] using
-      copy_field_execute (slowFieldCode site h) state source target (input.ready h)
+    RunsOpeningBlock state (copyState site state) (2*site.halfwords) :=
+  copy_field_execute (fieldCode site) state source target input.ready
 
 theorem FieldInputs.final_pc {site : CopySite} {state : MachineState} {source target : Nat}
     (input : FieldInputs site state source target) :
-    (copyState site state).pc = BitVec.ofNat 64 (4096+4*(site.start+2*site.halfwords)) := by
-  unfold copyState
-  split
-  · rename_i fast
-    exact (input.fastReady fast).final_pc fast
-  · rename_i slow
-    have h : site.fast=false := by cases h : site.fast <;> simp_all
-    exact copy_field_pc (slowFieldCode site h) state source target (input.ready h)
+    (copyState site state).pc = BitVec.ofNat 64 (4096+4*(site.start+2*site.halfwords)) :=
+  copy_field_pc (fieldCode site) state source target input.ready
 
 theorem copy_register (site : CopySite) (state : MachineState) (reg : Reg) (kept : reg ≠ .x31) :
-    (copyState site state).getReg reg = state.getReg reg := by
-  unfold copyState
-  split
-  · rename_i fast
-    exact fast_copy_register site fast state reg kept
-  · exact copy_field_register _ state reg kept
-
-theorem FieldInputs.memory {site : CopySite} {state : MachineState} {source target : Nat}
-    (input : FieldInputs site state source target) :
-    (copyState site state).mem =
-      (ProjectedHalfword.copyLoopMemory false site.halfwords state (BitVec.ofNat 64 source)
-        (BitVec.ofNat 64 target)).mem := by
-  unfold copyState
-  split
-  · rename_i fast
-    exact (input.fastReady fast).memory fast
-  · rename_i slow
-    have h : site.fast=false := by cases h : site.fast <;> simp_all
-    exact copy_field_memory (slowFieldCode site h) state source target (input.ready h)
+    (copyState site state).getReg reg = state.getReg reg :=
+  copy_field_register (fieldCode site) state reg kept
 
 theorem FieldInputs.bytes {site : CopySite} {state : MachineState} {source target : Nat}
     (input : FieldInputs site state source target) :
@@ -123,7 +62,7 @@ theorem FieldInputs.bytes {site : CopySite} {state : MachineState} {source targe
   have mem : (copyState site state).mem =
       (ProjectedHalfword.copyLoopMemory false site.halfwords state (BitVec.ofNat 64 source)
         (BitVec.ofNat 64 target)).mem :=
-    input.memory
+    copy_field_memory (fieldCode site) state source target input.ready
   have targetBound : target+2*site.halfwords ≤ 2^64 :=
     input.targetFit.trans (by decide)
   obtain ⟨copied, frame⟩ := forward_disjoint_memory site.halfwords state source target
@@ -187,7 +126,7 @@ theorem FieldInputs.words_before {site : CopySite} {state : MachineState} {sourc
   have mem : (copyState site state).mem =
       (ProjectedHalfword.copyLoopMemory false site.halfwords state (BitVec.ofNat 64 source)
         (BitVec.ofNat 64 target)).mem :=
-    input.memory
+    copy_field_memory (fieldCode site) state source target input.ready
   simpa only [MachineState.getMem, mem] using
     copyLoop_words_before site.halfwords state source target base address below upper aligned
       input.targetFit

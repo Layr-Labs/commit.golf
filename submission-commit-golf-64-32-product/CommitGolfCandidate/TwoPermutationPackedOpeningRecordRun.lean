@@ -77,7 +77,7 @@ private theorem latch_target (marked : MachineState) (last : Prop) [Decidable la
   · rw [show decide last = false from decide_eq_false h, ite_eq_right h]
     rfl
 
-private theorem complete_record_cost (final : Bool) : 460+latchCost final = recordCost final := by
+private theorem complete_record_cost (final : Bool) : 585+latchCost final = recordCost final := by
   cases final <;> decide
 
 private theorem execute_record_with_data (s : Submission)

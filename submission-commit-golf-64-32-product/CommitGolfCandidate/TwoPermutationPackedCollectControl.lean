@@ -75,7 +75,7 @@ theorem execute_record_group (oracle : Oracle) (input : CheckInput) (ordinal : N
     let group := groupRun block.state (capGroup index)
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel group.1 false))
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+group.2+fuel) state false)) =
-      ((tail.1.1.charge (block.cycles+group.2) 18, block.rows ++ tail.1.2), 18+tail.2) := by
+      ((tail.1.1.charge (block.cycles+group.2) 20, block.rows ++ tail.1.2), 20+tail.2) := by
   let index := (honestIndex input.positions ordinal present).val
   let group := groupRun block.state (capGroup index)
   have phase := group_after_record_ready oracle input ordinal present state cursor block facts

@@ -18,7 +18,7 @@ def group (g : Nat) : Nat → Nat → MachineState → OracleComp World MachineS
     let mid ← unitTrace s g u
     group g k (u+1) mid
 
-def progress (cost u : Nat) := cost*u+u/128+u/256
+def progress (cost u : Nat) := cost*u+u/64+u/256
 def span (cost u k : Nat) := progress cost (u+k)-progress cost u
 
 theorem span_step (cost u k : Nat) : span cost u (k+1) = cost + extra u + span cost (u+1) k := by
@@ -92,12 +92,12 @@ theorem group_post (s : MachineState) (g cnt u : Nat) (bound : g<2^12) (inside :
     rw [show u+(k+1)=u+1+k by omega]
     exact ih mid (u+1) (by omega) (unit_post s g u bound (by omega) r step) reach
 
-def SavedReg (reg : Reg) := reg ∈ [Reg.x5,.x8,.x9,.x19,.x21,.x23]
+def SavedReg (reg : Reg) := reg ∈ [Reg.x5,.x8,.x9,.x19,.x21]
 
 theorem rebased_saved (s : MachineState) (u : Nat) (reg : Reg) (safe : SavedReg reg) :
     (rebased s u).getReg reg=s.getReg reg := by
   simp only [SavedReg,List.mem_cons,List.not_mem_nil,or_false] at safe
-  rcases safe with rfl|rfl|rfl|rfl|rfl|rfl <;> unfold rebased <;> split <;> split <;> rfl
+  rcases safe with rfl|rfl|rfl|rfl|rfl <;> unfold rebased <;> split <;> split <;> rfl
 
 theorem unit_saved (s : MachineState) (g u : Nat) (reg : Reg) (safe : SavedReg reg)
     {next : MachineState} (hit : next ∈ support (unitTrace s g u)) : next.getReg reg=s.getReg reg := by
@@ -106,7 +106,7 @@ theorem unit_saved (s : MachineState) (g u : Nat) (reg : Reg) (safe : SavedReg r
   rw [rebased_saved _ _ _ safe]
   apply finished_reg_frame
   all_goals simp only [SavedReg,List.mem_cons,List.not_mem_nil,or_false] at safe
-  all_goals rcases safe with rfl|rfl|rfl|rfl|rfl|rfl <;> decide
+  all_goals rcases safe with rfl|rfl|rfl|rfl|rfl <;> decide
 
 theorem group_saved (s : MachineState) (g cnt u : Nat) (reg : Reg) (safe : SavedReg reg)
     {next : MachineState} (hit : next ∈ support (group g cnt u s)) : next.getReg reg=s.getReg reg := by

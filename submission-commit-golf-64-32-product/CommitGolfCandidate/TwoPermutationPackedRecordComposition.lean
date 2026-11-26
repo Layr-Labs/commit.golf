@@ -1,5 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedLowerRecursion
 import CommitGolfCandidate.TaggedPinnedModel
+import CommitGolfCandidate.C3BindingWitness
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
@@ -12,15 +13,8 @@ set_option maxHeartbeats 1600000
 structure PackedLeafTrace (oracle : Oracle) (index : Index) (entry : Entry) (digest : Digest)
     (rows : List PublicRow) where
   nonce : Words 2
-  first : PublicRow.permutation
-    (pinnedFirstRow oracle.permutation (entryWords entry)).1
-    (pinnedFirstRow oracle.permutation (entryWords entry)).2 ∈ rows
-  second : PublicRow.permutation
-    (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).1
-    (pinnedSecondRow oracle.permutation index nonce
-      (pinnedFirstRow oracle.permutation (entryWords entry)).2 (entryWords entry)).2 ∈ rows
-  output : pinnedLeafDigest oracle.permutation index nonce (entryWords entry) = digest
+  leaf : C3LeafRows rows oracle.compression oracle.permutation index nonce (entryWords entry)
+  output : c3LeafDigest oracle.compression oracle.permutation index nonce (entryWords entry) = digest
 
 structure LeafBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (before : MachineState) (block : RecordBlock) : Prop where
@@ -28,17 +22,17 @@ structure LeafBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
   run : ∀ fuel,
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel block.state false))
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+fuel) before false)) =
-      ((tail.1.1.charge block.cycles 2,block.rows++tail.1.2),2+tail.2)
+      ((tail.1.1.charge block.cycles 4,block.rows++tail.1.2),4+tail.2)
   cursor : LowerCursor ordinal (honestIndex input.positions ordinal present).val 0 block.state
   saved : LowerSaved before block.state
-  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) →
+  frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+37 ≤ word) →
     (word < 1534 ∨ 1576 ≤ word) → memoryView block.state word=memoryView before word
   trace :
     let index := honestIndex input.positions ordinal present
     Nonempty (PackedLeafTrace oracle index.val (input.values index) (readBuffer block.state 12288 32) block.rows)
   honest : ∀ message salts, input=honestCheckInput oracle message input.positions salts →
     readBuffer block.state 12288 32 =
-      pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts
+      c3FullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts
         (honestIndex input.positions ordinal present).val
 
 def LeafBlockRefines (leaf : Oracle → Nat → Index → MachineState → RecordBlock) : Prop :=
@@ -56,7 +50,7 @@ def joinedRecord (leaf : Oracle → Nat → Index → MachineState → RecordBlo
 
 private theorem leaf_sibling_frame (before after : MachineState) (input : CheckInput) (ordinal level : Nat)
     (present : ordinal < input.positions.card) (within : level<16)
-    (frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+26 ≤ word) →
+    (frame : ∀ word < 2^33, (word < checkSourceWord ordinal ∨ checkSourceWord ordinal+37 ≤ word) →
       (word < 1534 ∨ 1576 ≤ word) → memoryView after word = memoryView before word) :
     lowerWireSibling after ordinal level = lowerWireSibling before ordinal level := by
   apply lower_wire_sibling_frame
@@ -94,7 +88,7 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
     change checkEvaluation oracle (recordRows (execute packedImage (early.steps+later.steps+fuel) before false)) = _
     rw [show early.steps+later.steps+fuel=early.steps+(later.steps+fuel) by omega,
       entry.run, tail.exact_run]
-    simp only [Execution.charge,List.append_assoc,← Nat.add_assoc,show (2:Nat)+16=18 by decide]
+    simp only [Execution.charge,List.append_assoc,← Nat.add_assoc,show (4:Nat)+16=20 by decide]
     rfl
   · exact tail.cursor.node.trans (congrArg (BitVec.ofNat 64) (Opening.lower_node_cap_group item.val))
   · exact tail.cursor.proof.trans (congrArg (BitVec.ofNat 64) (lower_proof_byte_end ordinal))
@@ -107,13 +101,12 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
   · obtain ⟨leafTrace⟩ := entry.trace
     have witness := tail.path.mono (fun _ found => List.mem_append_right early.rows found)
     rw [← leafTrace.output] at witness
-    refine ⟨⟨leafTrace.nonce, List.mem_append_left later.rows leafTrace.first,
-      List.mem_append_left later.rows leafTrace.second,?_⟩⟩
+    refine ⟨⟨leafTrace.nonce, leafTrace.leaf.mono (fun _ h => List.mem_append_left later.rows h),?_⟩⟩
     have node : Opening.lowerNode item.val 0 = LENGTH+item.val.val := by simp [Opening.lowerNode]
     rw [node] at witness
     exact witness
   · intro message salts canonical
-    let leaves := pinnedFullLeafDigests (BiPermutation.equiv Block oracle.permutation) message salts
+    let leaves := c3FullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts
     have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
       Eq.mp (congrArg (fun data => RecordInputFrame data ordinal before) canonical) framed
     change readBuffer later.state 12288 32 =

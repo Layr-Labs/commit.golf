@@ -54,34 +54,6 @@ theorem all_sibling_copies_fit (index : Index) (ordinal level : Nat)
   refine ⟨?_, even_sibling_destination ordinal level, ?_, ?_⟩
   all_goals simp only [siblingAddress, siblingDestination, recordBase, recordBytes, Nat.mul_add] at * <;> omega
 
-theorem nonce_word_geometry (index : Index) (ordinal : Nat) :
-    nonceAddress index%4=0 ∧ recordBase ordinal%4=0 ∧
-      nonceAddress index+16+8≤recordBase ordinal := by
-  have indexBound := index.isLt
-  have tapeEnd := Opening.nonces_end_at_indices
-  have indexEnd := Opening.indices_before_records
-  have nonceFour : nonceBase%4=0 := by decide
-  have proofFour : proofBase%4=0 := by decide
-  have leaves : 1≤LENGTH := by decide
-  unfold nonceAddress recordBase recordBytes
-  omega
-
-theorem sibling_word_geometry (index : Index) (ordinal : Nat) (level : Fin 16)
-    (fast : (siblingSite level).fast=true) :
-    siblingAddress index level.val%4=0 ∧ siblingDestination ordinal level.val%4=0 ∧
-      siblingAddress index level.val+siblingWidth level.val+8≤siblingDestination ordinal level.val := by
-  have offset := fast_sibling_offset level fast
-  have bound := Opening.lower_swap_bound index level.val
-  have heapEnd := Opening.heap_before_nonces
-  have tapeEnd := Opening.nonces_end_at_indices
-  have indexEnd := Opening.indices_before_records
-  have heapFour : trapdoorBase%4=0 := by decide
-  have proofFour : proofBase%4=0 := by decide
-  have widthBound : siblingWidth level.val≤32 := by unfold siblingWidth; split <;> decide
-  have leaves : 1≤LENGTH := by decide
-  unfold siblingAddress siblingDestination recordBase recordBytes
-  omega
-
 theorem physical_nonce_source (state : MachineState) (index : Index)
     (tape : state.getReg .x22 = BitVec.ofNat 64 nonceBase)
     (readIndex : state.getMem (state.getReg .x8) = BitVec.ofNat 64 index.val) :

@@ -23,7 +23,7 @@ theorem checker_cap_group (index : Index) : 256 ≤ capGroup index ∧ capGroup 
 def RecordInputAddress (input : CheckInput) (ordinal word : Nat) : Prop :=
   (536871424 ≤ word ∧ word < 536871428) ∨
     (checkIndexWord 0 ≤ word ∧ word < checkIndexWord input.positions.card) ∨
-    checkSourceWord ordinal ≤ word
+    checkSourceWord ordinal + 5 ≤ word
 
 def RecordInputFrame (input : CheckInput) (ordinal : Nat) (state : MachineState) : Prop :=
   ∀ word < 2^33, RecordInputAddress input ordinal word →

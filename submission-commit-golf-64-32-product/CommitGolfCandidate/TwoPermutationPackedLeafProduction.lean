@@ -5,12 +5,12 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototy
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1500000
 def idx (g : Nat) (u : Fin 4096) := 4096*g+u.val
-def heapBase (g pos : Nat) := leafDest (4096*g+128*(pos/128))
+def heapBase (g pos : Nat) := leafDest (4096*g+64*(pos/64))
 def nonceBase (g pos : Nat) := leafSalt (4096*g+256*(pos/256))
 
 structure Regs (s : MachineState) (g pos : Nat) : Prop where
   source : s.getReg .x10=wordAddress (leafStart (4096*g+pos)+5)
-  heap : s.getReg .x20=wordAddress (heapBase g pos+256)
+  heap : s.getReg .x20=wordAddress (heapBase g pos)
   salts : s.getReg .x22=wordAddress (nonceBase g pos+256)
   stride : s.getReg .x7=4096
   selector : s.getReg .x5=0
@@ -22,7 +22,7 @@ theorem ready_slot (s : MachineState) (g : Nat) (u : Fin 4096) (bound : g<2^12) 
     LeafReady s u (leafStart (idx g u)) (idx g u) (leafDest (idx g u)) (nonceBase g u.val) := by
   have h := u.isLt
   refine ⟨r.source,?_,r.salts,?_,?_,?_,?_,?_,r.selector,r.size,r.primitive⟩
-  · rw [r.heap,wordAddress_nonce_bias,wordAddress,wordAddress,←BitVec.ofNat_add]
+  · rw [r.heap,wordAddress,wordAddress,←BitVec.ofNat_add]
     congr 1;unfold heapBase leafDest idx;omega
   · rw [commit_tag_address,wordAddress];congr 1;unfold leafStart;omega
   all_goals simp only [leafStart,leafDest,nonceBase,leafSalt,idx] <;> omega
@@ -30,7 +30,7 @@ theorem ready_slot (s : MachineState) (g : Nat) (u : Fin 4096) (bound : g<2^12) 
 structure RawRegs (s : MachineState) (g : Nat) (u : Fin 4096) : Prop where
   source : s.getReg .x10=wordAddress (leafStart (idx g u+1)+5)
   dest : s.getReg .x12=wordAddress (leafDest (idx g u))
-  heap : s.getReg .x20=wordAddress (heapBase g u.val+256)
+  heap : s.getReg .x20=wordAddress (heapBase g u.val)
   salts : s.getReg .x22=wordAddress (nonceBase g u.val+256)
   stride : s.getReg .x7=4096
   selector : s.getReg .x5=0
@@ -79,7 +79,7 @@ private theorem finish_output_at (s : MachineState) (u : Fin 4096) (start index 
   have output := (second_execution p u separate).2.2.1
   have base : p.getReg .x20=s.getReg .x20 := after_a_reg s u start a .x20 (by decide) (by decide)
   exact (tail_output (preparedB s u start a) dst b).trans (output.trans
-    ((congrArg (fun w : Word => (w-2048) + BitVec.ofNat 64 (32*(u.val%128))) base).trans ready.destination))
+    ((congrArg (· + BitVec.ofNat 64 (32*(u.val%64))) base).trans ready.destination))
 
 private theorem finish_pc_at (s : MachineState) (u : Fin 4096) (start index dst salts : Nat)
     (ready : LeafReady s u start index dst salts) (pc : s.pc = leafPC u 0) (a b : BitVec 1600) :

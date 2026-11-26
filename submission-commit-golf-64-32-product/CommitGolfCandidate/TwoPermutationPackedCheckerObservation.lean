@@ -133,7 +133,7 @@ theorem checker_complete_observation (record : Oracle → Nat → Index → Mach
     · intro message salts canonical
       exact (admitted (canonical.symm ▸ honest_input_admitted oracle message input.positions salts)).elim
 
-theorem checker_facts_of_observations (bound : PinnedReplayBound)
+theorem checker_facts_of_observations (bound : C3ReplayBound)
     (checked : ∀ (oracle : Oracle) (input : CheckInput),
       CheckerObservationFacts oracle input (checkObservation PackedChecker.submission oracle input)) :
     PackedCertificate.CheckerFacts PackedChecker.submission := by
