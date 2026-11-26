@@ -151,8 +151,9 @@ theorem execute_cycles_le_steps (image : Image) (steps : Nat) (state : MachineSt
           omega
         · simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at h
           obtain ⟨answer, _, next, hnext, rfl⟩ := h
+          rename_i input hInput hmem
           have := ih _ _ hnext
-          have cost := oracleCycles_le_thirty (by assumption)
+          have price := oracleCycles_le_thirty input
           simp only [Execution.charge]
           omega
       · split at h
