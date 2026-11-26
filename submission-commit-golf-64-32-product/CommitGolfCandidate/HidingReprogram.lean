@@ -1,4 +1,4 @@
-import CommitGolfCandidate.CompressionSampling
+import CommitGolfCandidate.HidingDistribution
 import VCVio.ProgramLogic.Relational.SimulateQ.UntilBad
 
 /-! Changing an oracle at hidden inputs is detectable only after querying one of
@@ -108,15 +108,15 @@ theorem oracle_change_distance_le_hit (left right : Oracle) (marked : World.Doma
 
 /-- Mark all compression inputs with a given low half. This conservatively includes
 the single salted input being reprogrammed, whatever its message block is. -/
-def marksSalt (salt : BitVec 256) : World.Domain → Bool
+def marksSalt (salt : Digest) : World.Domain → Bool
   | .inr (.inl input) => decide (input.extractLsb' 0 256 = salt)
   | _ => false
 
 /-- Update one compression cell; permutation and inverse remain exactly the same. -/
-def programCompression (oracle : Oracle) (input : BitVec COMPRESSION_INPUT_LENGTH) (answer : BitVec 256) : Oracle :=
+def programCompression (oracle : Oracle) (input : BitVec 512) (answer : Digest) : Oracle :=
   ⟨Function.update oracle.compression input answer, oracle.permutation⟩
 
-theorem program_compression_agrees (oracle : Oracle) (input : BitVec COMPRESSION_INPUT_LENGTH) (answer : BitVec 256)
+theorem program_compression_agrees (oracle : Oracle) (input : BitVec 512) (answer : Digest)
     (query : World.Domain) (unmarked : marksSalt (input.extractLsb' 0 256) query = false) :
     oracle.world query = (programCompression oracle input answer).world query := by
   rcases query with coins | publicQuery
@@ -126,6 +126,7 @@ theorem program_compression_agrees (oracle : Oracle) (input : BitVec COMPRESSION
         intro same
         subst requested
         simp [marksSalt] at unmarked
+        exact unmarked rfl
       simp only [Oracle.world, Oracle.answer, programCompression, QueryImpl.add_apply_inr,
         pure_inj]
       exact (Function.update_of_ne different answer oracle.compression).symm
@@ -133,7 +134,7 @@ theorem program_compression_agrees (oracle : Oracle) (input : BitVec COMPRESSION
 
 /-- Concrete reprogramming loss, charged against the original unprogrammed run.
 In that run a separately sampled hidden salt cannot influence the adaptive queries. -/
-theorem reprogram_compression_distance (oracle : Oracle) (input : BitVec COMPRESSION_INPUT_LENGTH) (answer : BitVec 256)
+theorem reprogram_compression_distance (oracle : Oracle) (input : BitVec 512) (answer : Digest)
     {α : Type} (computation : OracleComp World α) :
     measureTVDist (fixedOracleRun oracle computation)
       (fixedOracleRun (programCompression oracle input answer) computation) ≤

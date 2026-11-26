@@ -125,41 +125,4 @@ theorem compression_sampling_empty (permutation : Perm) {α : Type}
   rw [compression_sampling_equivalence]
   simp only [tableExtending_empty]
 
-theorem fixed_oracle_run_bind (oracle : Oracle) {α β : Type}
-    (computation : OracleComp World α) (next : α → OracleComp World β) :
-    fixedOracleRun oracle (computation >>= next) =
-      (fixedOracleRun oracle computation >>= fun value => fixedOracleRun oracle (next value)) := by
-  simp only [fixedOracleRun, oracle_run_bind, map_bind, map_pure, bind_map_left]
-  simp only [map_eq_bind_pure_comp]
-  apply bind_congr
-  intro first
-  cases first
-  apply bind_congr
-  intro second
-  cases second
-  rfl
-
-theorem fixed_oracle_run_map (oracle : Oracle) {α β : Type}
-    (f : α → β) (computation : OracleComp World α) :
-    fixedOracleRun oracle (f <$> computation) = f <$> fixedOracleRun oracle computation := by
-  simp only [fixedOracleRun, oracle_run_map, Functor.map_map]
-
-theorem fixed_oracle_run_coins (oracle : Oracle) {α : Type} (coins : ProbComp α) :
-    fixedOracleRun oracle (liftM coins : OracleComp World α) = coins := by
-  rw [fixedOracleRun, oracle_run_coins, Functor.map_map]
-  exact id_map coins
-
-theorem compression_run_bind (permutation : Perm) {α β : Type} (first : OracleComp World α)
-    (next : α → OracleComp World β) (cache : CompressionCache) :
-    compressionRun permutation (first >>= next) cache = (do
-      let (value, after) ← compressionRun permutation first cache
-      compressionRun permutation (next value) after) := by
-  simp [compressionRun, simulateQ_bind, StateT.run_bind]
-
-theorem compression_run_map (permutation : Perm) {α β : Type} (f : α → β)
-    (computation : OracleComp World α) (cache : CompressionCache) :
-    compressionRun permutation (f <$> computation) cache =
-      (fun result => (f result.1, result.2)) <$> compressionRun permutation computation cache := by
-  simp [compressionRun]
-
 end CommitGolfCandidate

@@ -1,16 +1,30 @@
 import CommitGolfCandidate.C3XLog
 import CommitGolfCandidate.CompressionSampling
+import CommitGolfCandidate.TwoPermutationBindingBridge
 
-/-! # The compression side of the cross-oracle permutation event
+/-! # The compression side of the cross-oracle event
 
-With the permutation fixed and the compression function sampled lazily, the `scan` flag is raised
-only when a fresh compression draw hits an earlier inverse call's `c3T3Field` target, giving
-at most `Q (Q - 1) / (2 · 2^256)` for `Q` public calls. -/
-namespace CommitGolfCandidate
-open CommitGolf OracleComp OracleSpec OracleComp.DeferredSampling
+The permutation is fixed and the compression function is sampled lazily (`compressionRun`,
+CompressionROM). The flag of `scan` is raised by a compression call whose reply was not seen
+before and is already the `t3` field of an input returned by an inverse call.
+
+A reply that repeats a cached answer was seen, so only a fresh draw can raise the flag, and it
+does so for at most one value per earlier inverse call. Summing over the calls of the program
+gives `Q (Q - 1) / 2 / 2^256` for `Q` public calls (`flag_bound`). The induction is that of
+`compression_collision_bound_from_cache`, with the list of targets in place of the cached keys;
+the marker calls of the marked run are permutation calls and cost nothing here. -/
+namespace TwoPermutationPrototype.Sampling
+open CommitGolf CommitGolfCandidate OracleComp OracleSpec OracleComp.DeferredSampling
 
 set_option autoImplicit false
 set_option maxRecDepth 8192
+
+theorem compression_run_map (permutation : Perm) {α β : Type} (f : α → β)
+    (computation : OracleComp World α) (cache : CompressionCache) :
+    compressionRun permutation (f <$> computation) cache =
+      (fun result : α × CompressionCache => (f result.1, result.2)) <$>
+        compressionRun permutation computation cache := by
+  simp [compressionRun, simulateQ_map, StateT.run_map]
 
 theorem compression_run_compress_some (permutation : Perm) {α : Type}
     (input : CompressionSpec.Domain) (next : CompressionSpec.Range input → OracleComp World α)
@@ -30,6 +44,7 @@ theorem compression_run_compress_none (permutation : Perm) {α : Type}
         compressionRun permutation (next answer) (cache.cacheQuery input answer)) := by
   rw [compression_run_compress, missing]
 
+/-- A uniform 256-bit value is one of `n` listed values with probability at most `n / 2^256`. -/
 theorem fresh_target_bound (targets : List (BitVec 256)) :
     Pr{let answer ← $ᵗ (BitVec 256)}[answer ∈ targets] ≤ (targets.length : ENNReal) / 2 ^ 256 := by
   rw [SampleableType.prEvent_uniformSample]
@@ -43,6 +58,8 @@ theorem fresh_target_bound (targets : List (BitVec 256)) :
       List.mem_toFinset.2 (Finset.mem_filter.1 hit).2).trans (List.toFinset_card_le targets)
   exact_mod_cast count
 
+/-- The sum of the per-call charges: the current call pays for the targets known now, the later
+calls for at most one more each. -/
 theorem flag_budget_split (budget known : Nat) (positive : 1 ≤ budget) :
     (known : ENNReal) / 2 ^ 256 +
         ∑ step ∈ Finset.range (budget - 1), ((known + 1 + step : Nat) : ENNReal) / 2 ^ 256 =
@@ -56,6 +73,8 @@ theorem flag_budget_split (budget known : Nat) (positive : 1 ≤ budget) :
   intro step _
   rw [show known + 1 + step = known + (step + 1) from by omega]
 
+/-- **The flag is rarely raised**, for every fixed permutation. `known` bounds the targets of the
+starting state; every cached answer of the starting cache counts as seen. -/
 theorem flag_bound_from_cache (permutation : Perm) {α : Type} (program : OracleComp World α)
     (budget known : Nat) (bounded : PublicQueryBound program budget)
     (cache : CompressionCache) (state : ScanState) (clear : ¬ state.flag)
@@ -160,6 +179,7 @@ theorem flag_bound_from_cache (permutation : Perm) {α : Type} (program : Oracle
             (scanStep state (.inverse (permutation.symm output) output)) clear cached
             (Nat.succ_le_succ size)).trans later
 
+/-- From the empty cache: at most `Q (Q - 1) / (2 · 2^256)` for a program with `Q` public calls. -/
 theorem flag_bound (permutation : Perm) {α : Type} (program : OracleComp World α) (budget : Nat)
     (bounded : PublicQueryBound program budget) :
     Pr{let result ← compressionRun permutation (markedRows program) ∅}[
@@ -174,6 +194,8 @@ theorem flag_bound (permutation : Perm) {α : Type} (program : OracleComp World 
   simp only [Nat.zero_add, div_eq_mul_inv] at estimate
   exact estimate.trans_eq (ENNReal.gauss_sum_inv_eq budget ((2 : ENNReal) ^ 256))
 
+/-- The same bound in the contract's model: a uniformly sampled compression function, any fixed
+permutation. -/
 theorem fixed_permutation_flag_bound {α : Type} (p : Perm) (program : OracleComp World α)
     (calls : Nat) (bounded : PublicQueryBound program calls) :
     Pr{let result ← (do let compress ← $ᵗ Compression
@@ -186,4 +208,4 @@ theorem fixed_permutation_flag_bound {α : Type} (p : Perm) (program : OracleCom
   rw [← equivalent, prEvent_map]
   exact flag_bound p program calls bounded
 
-end CommitGolfCandidate
+end TwoPermutationPrototype.Sampling

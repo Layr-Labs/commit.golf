@@ -7,13 +7,13 @@ salt. This is the independence needed to bound reprogramming detection. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleSpec
 
-def compressionHead : World.Domain → List (BitVec COMPRESSION_INPUT_LENGTH)
+def compressionHead : World.Domain → List (BitVec 512)
   | .inr (.inl input) => [input]
   | _ => []
 
 /-- Forward every real query and retain only compression inputs, in query order. -/
 def traceCompression {α : Type} (computation : OracleComp World α) :
-    OracleComp World (α × List (BitVec COMPRESSION_INPUT_LENGTH)) :=
+    OracleComp World (α × List (BitVec 512)) :=
   OracleComp.recOn computation
     (fun value => pure (value, []))
     (fun query _ next => do
@@ -66,7 +66,7 @@ private theorem compression_head_cost (query : World.Domain) :
 arbitrarily many private coin requests and arbitrary fixed permutation replies. -/
 theorem trace_run_length (oracle : Oracle) {α : Type} (computation : OracleComp World α)
     (budget : Nat) (bounded : PublicQueryBound computation budget)
-    (result : α × List (BitVec COMPRESSION_INPUT_LENGTH))
+    (result : α × List (BitVec 512))
     (reached : result ∈ support (fixedOracleRun oracle (traceCompression computation))) :
     result.2.length ≤ budget := by
   induction computation using OracleComp.inductionOn generalizing budget result with
@@ -94,10 +94,10 @@ theorem flagged_run_query_bind (oracle : Oracle) (marked : World.Domain → Bool
     OracleQuery.cont_query, id_map, StateT.run_bind, flagged_handler_run, bind_assoc, pure_bind]
 
 /-- The marker is exactly membership of the salt among low halves of traced inputs. -/
-theorem flagged_run_trace (oracle : Oracle) (salt : BitVec 256) {α : Type}
+theorem flagged_run_trace (oracle : Oracle) (salt : Digest) {α : Type}
     (computation : OracleComp World α) (flag : Bool) :
     flaggedRun oracle (marksSalt salt) computation flag =
-      ((fun result : α × List (BitVec COMPRESSION_INPUT_LENGTH) =>
+      ((fun result : α × List (BitVec 512) =>
         (result.1, (), flag || result.2.any (fun input => decide (input.extractLsb' 0 256 = salt)))) <$>
         fixedOracleRun oracle (traceCompression computation)) := by
   induction computation using OracleComp.inductionOn generalizing flag with

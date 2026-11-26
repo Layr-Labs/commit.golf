@@ -1,14 +1,30 @@
-import CommitGolfCandidate.C3WitnessCore
+import CommitGolfCandidate.C3BindingWitness
 import CommitGolfCandidate.S3PermBridge
 
-/-! # The marked run of a program, for the cross-oracle permutation event
+/-! # The marked run of a program, for the cross-oracle event of the 3c1p leaf
 
-`C3PermWitness` ties a permutation row to a compression reply (the `c3T3Field` of the
-permutation input). `markedRows program` follows every compression call with reply `c` by one
-forward permutation call on `c3Marker c`, and `scan` scans the log oldest-first while tracking
-the inverse-target collision flag. -/
-namespace CommitGolfCandidate
-open CommitGolf OracleComp OracleSpec
+`C3PermWitness` ties a permutation row to a compression reply (the `t3` field of the permutation
+input). Neither oracle alone bounds it: with the compression function fixed an inverse call can be
+completed to a witness offline, and with the permutation fixed two inputs with one `t3` can be read
+off the table. The bound therefore needs the order of calls across the two oracles, which the
+recorded rows of `recordRows` do not carry in a form either lazy model can see.
+
+This file sets up the bookkeeping. `markedRows program` runs `program` and
+
+* follows every compression call with reply `c` by one forward permutation call on the marker
+  input `c3Marker c` (so that the lazily sampled permutation table records when `c` appeared);
+* returns the calls in order, with their direction (`MarkedRow`).
+
+For one fixed oracle the marker calls change nothing: the rows of `recordRows program` are the
+erased rows of `markedRows program` (`marked_rows_erase`).
+
+`scan` reads a marked log from the oldest call to the newest and keeps: all rows, the compression
+replies seen (`seen`), the `t3` fields of the inputs returned by inverse calls (`targets`), and a
+flag raised when a compression reply that was not seen before is already a target. The flag is the
+only event that needs the compression oracle to be random (C3XFlag.lean); everything else is
+charged to the permutation table (C3XTable.lean). -/
+namespace TwoPermutationPrototype.Sampling
+open CommitGolf CommitGolfCandidate OracleComp OracleSpec
 
 set_option autoImplicit false
 set_option exponentiation.threshold 2100
@@ -28,7 +44,7 @@ theorem c3_marker_injective : Function.Injective c3Marker := by
 /-- One call of the marked run. A compression row also carries the reply of the marker call that
 follows it. An inverse row lists the returned input first, like `PublicRow.permutation`. -/
 inductive MarkedRow where
-  | compression (input : BitVec COMPRESSION_INPUT_LENGTH) (reply : BitVec 256) (mark : Block)
+  | compression (input : BitVec 512) (reply : BitVec 256) (mark : Block)
   | forward (input reply : Block)
   | inverse (input output : Block)
 
@@ -91,7 +107,8 @@ theorem marked_rows_inverse {α : Type} (output : Block) (next : Block → Oracl
         (fun result : α × List MarkedRow =>
           (result.1, MarkedRow.inverse answer output :: result.2)) <$> markedRows (next answer)) := rfl
 
-/-- For one fixed oracle the marked run records the rows of the plain run. -/
+/-- **For one fixed oracle the marked run records the rows of the plain run.** The marker calls
+are answered by the fixed permutation and their replies are only logged. -/
 theorem marked_rows_erase (oracle : Oracle) {α : Type} (program : OracleComp World α) :
     (fun result : α × List MarkedRow => (result.1, result.2.map MarkedRow.erase)) <$>
         fixedOracleRun oracle (markedRows program) =
@@ -126,14 +143,21 @@ theorem public_bound_of_record_rows {α : Type} {program : OracleComp World α} 
 
 /-! ### Reading a marked log -/
 
+/-- What `scan` knows after a prefix of the log. -/
 structure ScanState where
+  /-- All rows so far, as `recordRows` would list them (newest first). -/
   rows : List PublicRow
+  /-- The replies of the compression calls so far. -/
   seen : List (BitVec 256)
+  /-- The `t3` fields of the inputs returned by the inverse calls so far. -/
   targets : List (BitVec 256)
+  /-- Some compression call returned a reply that had not been seen and was already a target. -/
   flag : Prop
 
+/-- Nothing recorded. -/
 def ScanState.init : ScanState := ⟨[], [], [], False⟩
 
+/-- Read one row. -/
 def scanStep (state : ScanState) : MarkedRow → ScanState
   | .compression input reply _ =>
       ⟨.compression input reply :: state.rows, reply :: state.seen, state.targets,
@@ -144,6 +168,7 @@ def scanStep (state : ScanState) : MarkedRow → ScanState
       ⟨.permutation input output :: state.rows, state.seen, c3T3Field input :: state.targets,
         state.flag⟩
 
+/-- Read a log, oldest call first. -/
 def scan (state : ScanState) (log : List MarkedRow) : ScanState := log.foldl scanStep state
 
 theorem scan_nil (state : ScanState) : scan state [] = state := rfl
@@ -155,6 +180,7 @@ theorem scan_step_rows (state : ScanState) (row : MarkedRow) :
     (scanStep state row).rows = row.erase :: state.rows := by
   cases row <;> rfl
 
+/-- The scanned state lists every erased row of the log. -/
 theorem scan_rows_mem (state : ScanState) (log : List MarkedRow) (row : PublicRow)
     (present : row ∈ log.map MarkedRow.erase) : row ∈ (scan state log).rows := by
   have general : ∀ (log : List MarkedRow) (state : ScanState),
@@ -179,8 +205,9 @@ theorem scan_rows_mem (state : ScanState) (log : List MarkedRow) (row : PublicRo
         · exact Or.inr h
   exact general log state (Or.inr present)
 
+/-- A witness among the recorded rows is a witness for the scanned state. -/
 theorem scan_witness (log : List MarkedRow) (witness : C3PermWitness (log.map MarkedRow.erase)) :
     C3PermWitness (scan ScanState.init log).rows :=
   witness.mono fun row present => scan_rows_mem ScanState.init log row present
 
-end CommitGolfCandidate
+end TwoPermutationPrototype.Sampling

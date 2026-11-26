@@ -1,19 +1,36 @@
 import CommitGolfCandidate.C3XLog
 import CommitGolfCandidate.S3PermBadEvent
+import CommitGolfCandidate.S3LeafLayout
 
 /-! # The permutation side of the cross-oracle event
 
-With the compression function fixed and the permutation sampled lazily (`Strat`, `S3PermModel`),
-a `C3PermWitness` without a raised `scan` flag implies a bad permutation table, giving at most
-`Q (Q - 1) / 2 · 2^1344 / (2^1600 - Q)` for `Q` public calls. -/
-namespace CommitGolfCandidate
-open CommitGolf CommitGolfCandidate.Permutation OracleComp OracleSpec
+The compression function is fixed and the permutation is sampled lazily (`Strat`, S3PermModel).
+The table of the marked run is bad (`c3Spec`) when
+
+* a fresh forward reply shares its first 256 bits with the output of an older entry, or
+* a fresh inverse reply has, as its `t3` field, a value whose marker input is an older entry: the
+  field equals a compression reply that was already made.
+
+`C3Inv` relates the table to the scanned log. Its last clause is the order argument: while the
+table is good and no flag was raised, no entry fixed by an inverse call has a `t3` field among the
+compression replies seen. It is kept by every call:
+
+* an inverse call whose fresh input has a seen field makes the table bad, because the marker of
+  that field is an older entry;
+* a compression call whose reply is the field of an entry fixed by an inverse call either repeats
+  a reply seen before (impossible by the clause) or raises the flag.
+
+`witness_bad_or_flag`: a `C3PermWitness` among the rows then means a bad table or a raised flag.
+`marked_table_probability` is the union bound for the first alternative. -/
+namespace TwoPermutationPrototype.Sampling
+open CommitGolf CommitGolfCandidate CommitGolfCandidate.Permutation OracleComp OracleSpec
 
 set_option autoImplicit false
 set_option exponentiation.threshold 2100
 set_option maxRecDepth 8192
 set_option linter.unusedSectionVars false
 
+/-- The bad events of the permutation table of a marked run. -/
 def c3Spec : BadSpec PermState where
   pair new old :=
     (new.dir = .fwd ∧ outputDigest new.out = outputDigest old.out) ∨
@@ -34,11 +51,17 @@ theorem step_inverse_cases (t : Trace PermState) (x y : PermState) :
   · exact Or.inl rfl
   · exact Or.inr rfl
 
+/-- The table of a marked run against the scan of its log. -/
 structure C3Inv (t : Trace PermState) (state : ScanState) : Prop where
+  /-- Every compression reply seen has its marker input in the table. -/
   marked : ∀ c ∈ state.seen, ∃ m ∈ t, m.inp = c3Marker c
+  /-- The field of every entry fixed by an inverse call is a target. -/
   targeted : ∀ e ∈ t, e.dir = .inv → c3T3Field e.inp ∈ state.targets
+  /-- Every recorded permutation row is in the table. -/
   stored : ∀ x y, PublicRow.permutation x y ∈ state.rows → ∃ e ∈ t, e.inp = x ∧ e.out = y
+  /-- Every recorded compression reply was seen. -/
   replies : ∀ source c, PublicRow.compression source c ∈ state.rows → c ∈ state.seen
+  /-- The order clause, see the file header. -/
   fresh : ¬ state.flag → c3Spec.Good t → ∀ e ∈ t, e.dir = .inv → c3T3Field e.inp ∉ state.seen
 
 theorem C3Inv.init : C3Inv ([] : Trace PermState) ScanState.init where
@@ -137,7 +160,7 @@ theorem C3Inv.inverse {t : Trace PermState} {state : ScanState} (inv : C3Inv t s
       · exact inv.fresh clear goodTail e old dir
 
 theorem C3Inv.compression {t : Trace PermState} {state : ScanState} (inv : C3Inv t state)
-    (source : BitVec COMPRESSION_INPUT_LENGTH) (c : BitVec 256) (y : PermState)
+    (source : BitVec 512) (c : BitVec 256) (y : PermState)
     (allowed : y ∈ t.fwdAns (c3Marker c)) :
     C3Inv (t.stepF (c3Marker c) y) (scanStep state (.compression source c y)) := by
   have grows : ∀ e ∈ t, e ∈ t.stepF (c3Marker c) y :=
@@ -195,6 +218,7 @@ theorem C3Inv.compression {t : Trace PermState} {state : ScanState} (inv : C3Inv
       exact clear (Or.inr ⟨notSeen, target⟩)
     · exact notSeen earlier
 
+/-- **The invariant holds along every run of the marked program.** -/
 theorem marked_table_invariant {α : Type} (compress : Compression) (program : OracleComp World α)
     (s : PState PermState) (state : ScanState) (inv : C3Inv s.trace state) :
     (toStrat compress (markedRows program)).post s fun result finish =>
@@ -235,6 +259,8 @@ theorem marked_table_invariant {α : Type} (compress : Compression) (program : O
       intro result finish kept
       exact kept
 
+/-- The marked strategy makes as many permutation queries as the program makes public calls: a
+compression call costs its marker query. -/
 theorem marked_strat_QB {α : Type} (compress : Compression) {program : OracleComp World α}
     {budget : Nat} (bounded : PublicQueryBound program budget) :
     (toStrat compress (markedRows program)).QB budget := by
@@ -269,6 +295,8 @@ theorem marked_strat_QB {α : Type} (compress : Compression) {program : OracleCo
       exact Strat.QB.bind (ih answer (by simpa [Oracle.callCost] using bounded.2 answer))
         fun _ => Strat.QB.done _ 0
 
+/-- **Extraction (deterministic).** With the invariant, a witness among the rows means that the
+table is bad or the flag was raised. -/
 theorem witness_bad_or_flag {t : Trace PermState} {state : ScanState} (inv : C3Inv t state)
     (witness : C3PermWitness state.rows) : ¬ c3Spec.Good t ∨ state.flag := by
   by_contra h
@@ -298,8 +326,9 @@ theorem witness_bad_or_flag {t : Trace PermState} {state : ScanState} (inv : C3I
 
 theorem c3_state_lt (s : PermState) : s.toNat < 2 ^ 1600 := s.isLt
 
-theorem c3_card_state : Fintype.card PermState = 2 ^ 1600 := Fintype.card_bitVec 1600
+theorem c3_card_state : Fintype.card PermState = 2 ^ 1600 := s3_card_bitvec _
 
+/-- At most `2^1344` states share their first 256 bits. -/
 theorem c3_digest_fiber (d : BitVec 256) :
     (Finset.univ.filter fun s : PermState => outputDigest s = d).card ≤ 2 ^ 1344 := by
   have h := Finset.card_le_card_of_injOn
@@ -316,8 +345,9 @@ theorem c3_digest_fiber (d : BitVec 256) :
       have hB := c3_state_lt b
       apply BitVec.eq_of_toNat_eq
       omega)
-  rwa [Finset.card_univ, Fintype.card_bitVec] at h
+  rwa [Finset.card_univ, s3_card_bitvec] at h
 
+/-- At most `2^1344` states share their `t3` field. -/
 theorem c3_field_fiber (c : BitVec 256) :
     (Finset.univ.filter fun s : PermState => c3T3Field s = c).card ≤ 2 ^ 1344 := by
   have h := Finset.card_le_card_of_injOn
@@ -334,8 +364,9 @@ theorem c3_field_fiber (c : BitVec 256) :
       have hB := c3_state_lt b
       apply BitVec.eq_of_toNat_eq
       omega)
-  rwa [Finset.card_univ, Fintype.card_bitVec] at h
+  rwa [Finset.card_univ, s3_card_bitvec] at h
 
+/-- A fresh forward reply is bad against one older entry for at most `2^1344` values. -/
 theorem c3_forward_pairs (x : PermState) (old : Permutation.Entry PermState) :
     ∃ F : Finset PermState, F.card ≤ 2 ^ 1344 ∧ ∀ y, c3Spec.pair ⟨.fwd, x, y⟩ old → y ∈ F := by
   refine ⟨Finset.univ.filter fun s : PermState => outputDigest s = outputDigest old.out,
@@ -344,6 +375,8 @@ theorem c3_forward_pairs (x : PermState) (old : Permutation.Entry PermState) :
   · exact Finset.mem_filter.2 ⟨Finset.mem_univ _, same⟩
   · exact absurd dir (by simp)
 
+/-- A fresh inverse reply is bad against one older entry for at most `2^1344` values: its `t3`
+field must be the value whose marker is the older input. -/
 theorem c3_inverse_pairs (y : PermState) (old : Permutation.Entry PermState) :
     ∃ F : Finset PermState, F.card ≤ 2 ^ 1344 ∧ ∀ x, c3Spec.pair ⟨.inv, x, y⟩ old → x ∈ F := by
   by_cases marker : ∃ c, old.inp = c3Marker c
@@ -358,6 +391,9 @@ theorem c3_inverse_pairs (y : PermState) (old : Permutation.Entry PermState) :
     · exact absurd dir (by simp)
     · exact absurd ⟨_, hit⟩ marker
 
+/-- **The union bound for the table of a marked run**, for every fixed compression function: a
+witness without a raised flag has probability at most `Q (Q - 1) / 2 · 2^1344 / (2^1600 - Q)` when
+the program makes at most `Q` public calls. -/
 theorem marked_table_probability {α : Type} (compress : Compression)
     (program : OracleComp World α) (calls : Nat) (fits : calls < 2 ^ 1600)
     (bounded : PublicQueryBound program calls) :
@@ -388,4 +424,4 @@ theorem marked_table_probability {α : Type} (compress : Compression)
   rw [card] at raw
   exact evidence.trans raw
 
-end CommitGolfCandidate
+end TwoPermutationPrototype.Sampling

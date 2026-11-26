@@ -1,4 +1,4 @@
-import CommitGolfCandidate.MemoryCore
+import CommitGolfCandidate.Memory
 
 /-! Exact byte contents of the trusted input loader. These lemmas connect serialized
 messages, commitments, private state, and proofs to the machine's memory reads. -/

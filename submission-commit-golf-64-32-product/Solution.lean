@@ -1,18 +1,16 @@
-import CommitGolfCandidate.MoonCertificate
-import CommitGolf.Artifact
+import CommitGolfCandidate.C3PAssembly
 
-/-! Certified machine implementation for the 64-to-32-byte compression / 30-cycle permutation
-track. Every requirement below is proved for these same RISC-V images, including cross-oracle
-adaptive position binding and commitment-and-opening statistical hiding. -/
 namespace CommitGolf.Challenge
+open TwoPermutationPrototype
 
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
+set_option maxRecDepth 65536
+set_option exponentiation.threshold 2048
 
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
+def submission : CommitGolf.Submission := PackedCertificate.pairedSubmission
 
-theorem certificate : CommitGolf.Certificate submission 68512 1276210876 110258 :=
-  CommitGolfCandidate.moon_certificate rfl
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
+
+theorem certificate : CommitGolf.Certificate submission 67840 1266820219 96407 :=
+  PackedCertificate.paired_certificate
 
 end CommitGolf.Challenge

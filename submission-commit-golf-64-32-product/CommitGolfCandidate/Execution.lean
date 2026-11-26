@@ -1,4 +1,4 @@
-import CommitGolf.Programs
+import CommitGolfCandidate.Programs
 
 /-! Execution composition for the actual challenge interpreter. Splitting a run at
 an instruction boundary preserves its output, randomness, oracle calls, and cycles.
@@ -152,7 +152,7 @@ theorem execute_cycles_le_steps (image : Image) (steps : Nat) (state : MachineSt
         · simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at h
           obtain ⟨answer, _, next, hnext, rfl⟩ := h
           have := ih _ _ hnext
-          have cost := oracleCycles_le_thirty (by assumption)
+          have := oracleCycles_le_thirty (by assumption)
           simp only [Execution.charge]
           omega
       · split at h
