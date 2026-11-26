@@ -23,7 +23,7 @@ private theorem opening_fetch (state : MachineState) (index : Nat) (instruction 
   | some word => simpa [h] using decoded
 
 /-- The nineteen straight-line instructions before the initial empty-opening test. -/
-private def openingSetupInstructions : List Instr :=
+def openingSetupInstructions : List Instr :=
   [.ADDI .x9 .x12 0, .ADDI .x24 .x13 0, .ADDI .x25 .x15 0, .ADDI .x27 .x16 0,
    .ADDI .x19 .x0 0, .SLLI .x19 .x19 11, .ADDI .x19 .x19 4,
    .SLLI .x19 .x19 11, .ADDI .x19 .x19 0, .SLLI .x19 .x19 11, .ADDI .x19 .x19 0,
@@ -31,7 +31,7 @@ private def openingSetupInstructions : List Instr :=
    .SLLI .x6 .x6 11, .ADDI .x6 .x6 0, .SLLI .x6 .x6 11, .ADDI .x6 .x6 0,
    .ADD .x18 .x9 .x6]
 
-private def openingSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
+def openingSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingSetupInstructions.take count).foldl execInstrBr state
 
 /-- Execution of setup is checked against every corresponding instruction encoding. -/
@@ -441,13 +441,13 @@ theorem opening_cap_exit (state : MachineState) (pc : state.pc = 4424)
   simp [Execution.charge]
 
 /-- All three digest copies in the opening image use these four aligned loads and stores. -/
-private def openingCopyInstructions : List Instr :=
+def openingCopyInstructions : List Instr :=
   [.LD .x6 .x23 0, .SD .x25 .x6 0,
    .LD .x6 .x23 8, .SD .x25 .x6 8,
    .LD .x6 .x23 16, .SD .x25 .x6 16,
    .LD .x6 .x23 24, .SD .x25 .x6 24]
 
-private def openingCopyPrefix (state : MachineState) (count : Nat) : MachineState :=
+def openingCopyPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingCopyInstructions.take count).foldl execInstrBr state
 
 def openingCopyState (state : MachineState) : MachineState :=
@@ -469,7 +469,7 @@ private theorem copy_getMem_setMem (state : MachineState) (address value query :
       if query = address then value else state.getMem query := by
   simp [MachineState.getMem, MachineState.setMem]
 
-private theorem opening_copy_prefix_register (state : MachineState) (count : Nat)
+theorem opening_copy_prefix_register (state : MachineState) (count : Nat)
     (bounded : count ≤ 8) (reg : Reg) (scratch : reg ≠ .x6) :
     (openingCopyPrefix state count).getReg reg = state.getReg reg := by
   interval_cases count <;>
@@ -588,17 +588,17 @@ theorem opening_copy_pc (state : MachineState) :
     execInstrBr, MachineState.setPC, BitVec.add_assoc]
 
 /-- Two-word copy for one 16-byte salt (indices 27..30, PC 4204..4216). -/
-private def openingSaltCopyInstructions : List Instr :=
+def openingSaltCopyInstructions : List Instr :=
   [.LD .x6 .x23 0, .SD .x25 .x6 0,
    .LD .x6 .x23 8, .SD .x25 .x6 8]
 
-private def openingSaltCopyPrefix (state : MachineState) (count : Nat) : MachineState :=
+def openingSaltCopyPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingSaltCopyInstructions.take count).foldl execInstrBr state
 
 def openingSaltCopyState (state : MachineState) : MachineState :=
   openingSaltCopyPrefix state 4
 
-private theorem opening_salt_copy_prefix_register (state : MachineState) (count : Nat)
+theorem opening_salt_copy_prefix_register (state : MachineState) (count : Nat)
     (bounded : count ≤ 4) (reg : Reg) (scratch : reg ≠ .x6) :
     (openingSaltCopyPrefix state count).getReg reg = state.getReg reg := by
   interval_cases count <;>
@@ -705,10 +705,10 @@ theorem opening_salt_copy_memory_below (state : MachineState) (address : Word)
     Nat.mod_eq_of_lt (by omega : 8 * word.val < 2 ^ 64), Nat.mod_eq_of_lt small] at same
   omega
 
-private def openingPathInstructions : List Instr :=
+def openingPathInstructions : List Instr :=
   [.XORI .x7 .x20 1, .SRLI .x6 .x20 1, .ADD .x7 .x7 .x6, .SLLI .x7 .x7 5, .ADD .x23 .x9 .x7]
 
-private def openingPathPrefix (state : MachineState) (count : Nat) : MachineState :=
+def openingPathPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingPathInstructions.take count).foldl execInstrBr state
 
 /-- Compute the sibling's gap-heap address: `t = s xor 1`, then `32*(t + s/2)`. -/
@@ -731,7 +731,7 @@ private theorem opening_path_prepare (state : MachineState) (pc : state.pc = 423
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-private theorem opening_path_prepare_register (state : MachineState) (reg : Reg)
+theorem opening_path_prepare_register (state : MachineState) (reg : Reg)
     (scratch : reg ≠ .x7) (source : reg ≠ .x23) (half : reg ≠ .x6) :
     (openingPathPreparedState state).getReg reg = state.getReg reg := by
   dsimp only [openingPathPreparedState, openingPathPrefix, openingPathInstructions,
@@ -870,7 +870,7 @@ theorem opening_sibling_access (heap node : Word)
 private theorem copy_pc_setPC (state : MachineState) (pc : Word) :
     (state.setPC pc).pc = pc := rfl
 
-private theorem opening_path_pc (state : MachineState) :
+theorem opening_path_pc (state : MachineState) :
     (openingPathState state).pc =
       if state.getReg .x28 - 1 = 0 then 4300 else 4232 := by
   simp [openingPathState, openingLatchState, openingPathAdvancedState,
@@ -992,10 +992,10 @@ theorem opening_path_output (iterations : Nat) (state : MachineState) :
     rw [Function.iterate_succ_apply', (opening_path_registers _).1, ih]
     simp [Nat.mul_add, BitVec.ofNat_add, BitVec.add_assoc]
 
-private def openingPositionInstructions : List Instr :=
+def openingPositionInstructions : List Instr :=
   [.LD .x20 .x24 0, .SLLI .x6 .x20 4, .ADD .x23 .x18 .x6]
 
-private def openingPositionPrefix (state : MachineState) (count : Nat) : MachineState :=
+def openingPositionPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingPositionInstructions.take count).foldl execInstrBr state
 
 /-- Read the next serialized position and compute its 16-byte salt address. -/
@@ -1040,10 +1040,10 @@ theorem opening_position_prepared (state : MachineState) :
   simp [openingPositionPreparedState, openingPositionPrefix, openingPositionInstructions,
     execInstrBr, MachineState.getReg_setReg_ne, MachineState.getReg_setReg_eq, signExtend12]
 
-private def openingSaltInstructions : List Instr :=
+def openingSaltInstructions : List Instr :=
   [.ADDI .x25 .x25 16, .ADD .x20 .x20 .x19, .ADDI .x28 .x30 0]
 
-private def openingSaltPrefix (state : MachineState) (count : Nat) : MachineState :=
+def openingSaltPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingSaltInstructions.take count).foldl execInstrBr state
 
 /-- After the 16-byte salt copy, advance the proof pointer by 16, enter the leaf's heap slot,
@@ -1074,7 +1074,7 @@ private theorem opening_salt_register (state : MachineState) (reg : Reg)
     openingSaltInstructions, execInstrBr, MachineState.getReg, MachineState.setReg,
     MachineState.setPC, signExtend12]
 
-private theorem opening_salt_advanced (state : MachineState) :
+theorem opening_salt_advanced (state : MachineState) :
     (openingSaltAdvancedState state).getReg .x25 = state.getReg .x25 + 16 ∧
     (openingSaltAdvancedState state).getReg .x20 = state.getReg .x20 + state.getReg .x19 ∧
     (openingSaltAdvancedState state).getReg .x28 = state.getReg .x30 ∧
@@ -1263,7 +1263,7 @@ theorem opening_position_bases (pathDepth : Nat) (state : MachineState) :
     MachineState.getReg_setReg_ne, opening_path_preserves_register,
     opening_position_path_register]
 
-private theorem opening_position_pc (pathDepth : Nat) (state : MachineState) :
+theorem opening_position_pc (pathDepth : Nat) (state : MachineState) :
     (openingPositionState pathDepth state).pc =
       if state.getReg .x27 - 1 = 0 then 4312 else 4192 := by
   simp [-Function.iterate_succ, openingPositionState, openingNextState, copy_pc_setPC,
@@ -1343,7 +1343,7 @@ theorem opening_position_memory_below (pathDepth : Nat) (state : MachineState) (
   · rw [outputNat]; omega
   · rw [outputNat]; omega
 
-private theorem opening_address_add (address : Word) (offset : Nat)
+theorem opening_address_add (address : Word) (offset : Nat)
     (bounded : address.toNat + offset ≤ MEMORY_BYTES) :
     (address + BitVec.ofNat 64 offset).toNat = address.toNat + offset := by
   have small : address.toNat + offset < 2 ^ 64 := by
@@ -1498,10 +1498,10 @@ theorem opening_positions_output (pathDepth iterations : Nat) (state : MachineSt
 
 /-! ### Level-7 cap-table copy (`k = 128`) -/
 
-private def openingCapSetupInstructions : List Instr :=
+def openingCapSetupInstructions : List Instr :=
   [.ADDI .x6 .x0 3, .SLLI .x6 .x6 11, .ADD .x23 .x9 .x6, .ADDI .x28 .x0 64]
 
-private def openingCapSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
+def openingCapSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
   (openingCapSetupInstructions.take count).foldl execInstrBr state
 
 def openingCapSetupState (state : MachineState) : MachineState :=

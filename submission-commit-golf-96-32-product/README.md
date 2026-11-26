@@ -1,3 +1,37 @@
+# A pair-slot cap on dadon's 3e63809d: 959,487,715 cycles at 71,680 bytes
+
+This entry is dadon's promoted `commit-golf-96-32-product` entry `3e63809d` (16-byte salts with an 8-byte address tag) with a different encoding of the top of the tree in 128-position openings. The commitment program, the leaves, the tree and the commitment value are `3e63809d`'s; only the opening and check programs change, and with them the batch proof format.
+
+| Entry | Commit cycles | Opening cycles | Prover cycles | Proof bytes |
+| --- | ---: | ---: | ---: | ---: |
+| `3e63809d` (dadon) | 959,447,084 | 40,102 | 959,487,186 | 75,776 |
+| This entry | 959,447,084 | 40,631 | 959,487,715 | 71,680 |
+
+`claim.json` is `{"proofBytes": 71680, "commitCycles": 959447084, "openingCycles": 40631}`. The product is 68,776,079,411,200, 5.41% below `3e63809d`'s 72,706,101,006,336.
+
+## What changed
+
+`3e63809d` sends, at 128 positions, 128 records of a 16-byte salt and 17 siblings (depths 24 down to 8, counting the root as depth 0) and then the 128 depth-7 digests. Here each record stops one level lower, after 16 siblings (depths 24 down to 9), at its level-8 node, and the proof ends with one 32-byte slot for each of the 128 pairs of level-8 nodes:
+
+- a pair with no opened position below it gets its level-7 parent;
+- a pair with an opened position below it gets the level-8 sibling of its first opened position. The checker uses the slot only when exactly one child of the pair is reached by a record; when both are, it hashes their computed digests and ignores the slot, which is safe because both are bound through the parent and the root.
+
+The checker hashes each record up to its level-8 node, rejects if two records reach the same node with different values, computes each level-7 node by hashing its pair when a record reaches the pair and takes it from the slot otherwise, then hashes the upper tree to the commitment. Records are 16 + 16 x 32 = 528 bytes: 128 x 528 + 128 x 32 = 71,680 bytes, 4,096 fewer than `3e63809d`. Openings of other sizes keep `3e63809d`'s full paths. Every 128-position opening takes exactly 40,631 cycles and makes no oracle calls; the checker makes at most 2,815 calls at 128 positions.
+
+## Why the certificate holds
+
+- Hiding: the new batch proof is a fixed byte-level function of `3e63809d`'s proof for the same positions (drop each record's last sibling and fill the pair slots from the old records and cap), with no oracle calls, so `3e63809d`'s hiding bound (its tagged-salt argument, `HidingTaggedSalt.lean`, unchanged here) transfers unchanged.
+- Binding: `PairBinding` reduces two accepted openings that disagree at a position to a compression collision, as `3e63809d`'s reduction does, with at most 10,928 calls beyond the adversary's; the duplicate comparison and the root comparison are proved for adversarial bytes.
+- Machine proofs: the theorem `PairCap.batchEvaluation` proves, for every correctly sized batch input including malicious bytes, that the new checker terminates, makes at most 2,815 calls and accepts exactly when the abstract batch predicate holds; the opener is proved to emit the new format in exactly 40,631 cycles.
+
+New modules: 83 `Pair*` modules (`PairImage`, `PairStatic`, `PairOpening`, `PairWords`, `PairSuffix`, `PairInput`, `PairResources`, `PairFormat`, `PairPrivacy`, `PairControl`, `PairChildren`, `PairBatchModel`, `PairHash`, `PairUpper`, `PairSound`, `PairReplay`, `PairExtractor`, `PairBinding`, `PairProgress`, `PairEvaluation`, `PairCertificate` and their helpers). Changed: `Opening.lean` (exposes helpers) and `Solution.lean`. Every other module of `3e63809d`, including the tagged leaf, `HidingTaggedSalt.lean` and the commitment proofs, is unchanged.
+
+## Credits
+
+The commitment scheme, its programs and its certificate are dadon's `3e63809d`, which builds on dadon's `c9b8af82`, AdamGagol's `3839a36d` and `7e8904fd` and the organizers' baseline; its README follows unchanged below. The pair-slot cap is the same encoding as in our Stage 1 on `c9b8af82`.
+
+---
+
 # commit-golf-96-32-product: 128-bit tagged salt, 32×32 unrolled gap-heap, and level-7 cap table
 
 This is a salted binary Merkle commitment over the track's 96→32-byte compression
