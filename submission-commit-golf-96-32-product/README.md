@@ -1,132 +1,52 @@
-# R4a packed commitment
+# commit-golf-96-32-product: Shared-Midpoint 40-Byte Paired Late Salts, 3-Ary Bottom Layer, Selective 240/238-Bit Binary Tree, and Two-End 6-Bit Packed L15 Cap
 
-R4a builds on the team's accepted R4 submission (`673cbe9f`) and its declared dependency on dadon's shared-midpoint construction (`b4f31491`). Larger unrolls reduce the number of commit-loop branches. Each random block handles 16,384 pairs. The three leaf passes handle 16,384 leaves, 4,096 pairs and 8,192 pairs per block. The parent block size varies by depth. The commit executes 257,965,809 instructions and 78,293,686 compression calls. At 128 positions the product is (847,964,651 + 96,415) × 70,080 = 59,432,119,505,280.
+This submission implements a statistically hiding, adaptively position-binding vector commitment over the track's 96→32-byte compression oracle (`C`, 8 cycles per call). The permutation oracles are unused.
 
-# R4 shared-midpoint packed commitment
+## Design
 
-This entry adapts dadon's accepted submission `b4f31491-e784-4379-b657-95b7c83b1002` (validation commit `1a8a66f3`) and the team's Stage 4 packed 238-bit entry. The 40-byte paired draw, three leaf subpasses, machine-prefix proof and simultaneous-reprogramming probability lemmas derive from b4f31491. The parent loop preserves the Stage 4 ternary padding, mixed-width masks and packed pair-slot proof. The independent-salt loop measurement was 856,681,636 commit cycles. The shared-midpoint image measures 848,293,028 commit cycles and 96,415 opening cycles at 70,080 proof bytes.
+1. **Shared-midpoint 40-byte paired late salts (`RANDOM(40)` over 184-byte overlapped pair rows).**
+   Each 256-byte leaf `m = msg[i]` is compressed in four 96-byte calls where private randomness enters only Call 3:
+   - Call 0: `u = C(m[0..96))` written in place to `m[64..96)`.
+   - Call 1: `a = C(u || m[96..160))` written directly into the leaf's final-call row in the trapdoor.
+   - Call 2: `b = C(m[160..256))` written directly into the leaf's final-call row in the trapdoor.
+   - Call 3: even leaf `2j` hashes `a_{2j} || b_{2j} || 0^8 || s_L(j) || s_M(j)` and odd leaf `2j+1` hashes `s_M(j) || s_R(j) || 0^8 || a_{2j+1} || b_{2j+1}`.
 
-## Stage 4 predecessor: packed ternary tree with paired late salts
+   Consecutive even and odd 96-byte rows overlap by 8 bytes on the shared 64-bit random midpoint `s_M(j)` (`184` bytes per pair, 8-byte aligned), filled in place by one `RANDOM(40)` call at `+72` (`7` cycles/pair = `3.5` cycles/leaf before loop latch). Statistical hiding holds across all `0 <= k <= 2^24` with total variation distance strictly below `(t + 1) / 2^120` via the 5-way midpoint multiplicity bound `(2^23)^5 / (2^64)^4 = 2^-141` and 128-bit independent private halves `s_L(j), s_R(j)`.
 
-The first parent hashes three leaf digests. The last row contains one real leaf and two zero digests. The remaining layers hash pairs. Internal nodes retain 238 bits at depths 1–18 and 240 bits at depths 19–22. The root and the bottom two levels retain all 256 bits.
+2. **Zero-rebase 3-subpass self-advancing leaf schedule and 3-ary bottom layer (`L0 -> L1`).**
+   - Phases 0, 1A, 1B, and 1C execute four constant-body streaming passes with single-instruction `bne` latches and zero base-pointer rebases (`512`-pair `RANDOM(40)`, `256`-leaf Call 0, `64`-pair Calls 1–2, `128`-pair Call 3).
+   - Level 1 compresses `5,592,405` contiguous triplets `C(L0[3g] || L0[3g+1] || L0[3g+2])` directly into the zero-gapped `L1` layout (`128`-pair unrolled bulk loop with alternating `+64/+32` strides and zero gap-skip instructions, plus tail and promoted rightmost leaf `L0[16,777,215]`), giving `|L1| = 5,592,406`.
 
-At 128 positions the opener first lays out the 510-byte records and 171 pair slots described below. It moves the last eleven 238-bit slots into the high two bits of byte 29 of 1,309 other narrow fields. The records supply 1,152 carriers and the first 157 cap slots supply the rest. This removes 330 bytes and leaves the retained fields at their original offsets. Other cardinalities use 824 bytes per disclosed position.
+3. **Selective 240/238-bit left-aligned zero-gapped binary upper tree (`L1 -> L24`).**
+   - Levels `L0`, `L1`, and the root `L24` retain full 256-bit digests.
+   - Levels `L2..L5` (`4` levels) are byte-truncated to 240 bits (`sh zero, 30(a2)`).
+   - Levels `L6..L23` (`18` levels, `349,533` nodes) are bit-truncated to 238 bits (`ld x6, 24(a2); and x6, x6, x27; sd x6, 24(a2)` with `x27 = 2^46 - 1`), saving 2 bits per sibling on `L6..L23`.
+   - Adaptive 120-bit position binding (`≤ q / 2^120` for all `1 ≤ q ≤ 2^120`) holds via the exact survival-product birthday bound on 238-bit projected digests (`1 - ∏_{i < M} (1 - i / 2^238) ≤ q / 2^120` with `M ≤ q + 2^37`).
 
-The emulator measured 863,917,851 commit cycles, 96,031 opening cycles and 70,080 proof bytes, for a product of 60,550,092,850,560. The commit makes 78,293,686 compression calls. Binding uses the product-form bound for a collision in the retained 238 bits. The hiding proof applies the deterministic encoding to the late-salt tree opening.
+4. **Unified deduplicated `L15` cap with two-end 6-bit packed tail stream (`70,080` bytes at `k = 128`).**
+   For any nonempty sorted position set `positions`:
+   - Each opened position `i` emits its 24-byte salt, level-0 sibling(s) (`64 B` for triplet leaves, `0 B` for the promoted leaf), 32-byte level-1 sibling, four 30-byte siblings on `L2..L5`, and nine 29-byte low parts for `L6..L14` (skipping absent right siblings of promoted nodes), totaling at most `501` forward bytes per record.
+   - Above `L15` (`342` cap leaves, `≤ 171` emitted cap siblings at `k = 128`), each emitted cap sibling writes its 29 low bytes forward.
+   - The 6-bit top slices (`(d >>> 232) & 0x3f`) of every emitted `L6..L23` sibling (`≤ 1,323` slices at `k = 128`) are packed sequentially 6 bits at a time into `ceil(6 * n / 8)` bytes (`≤ 993 B` at `k = 128`) and appended in reverse byte order at the end of the proof (`64,128 + 4,959 + 993 = 70,080` bytes).
+   - The checker reads low bytes forward from `p_lo` and pops 6-bit tails backward from `p_hi = proofEnd` in a single pass, accepting iff `p_lo == p_hi`, zero unused padding bits remain in the tail buffer, and the reconstructed `L24` root matches the claimed commitment.
 
-## 240-bit predecessor
-
-The first parent call hashes three 32-byte leaf digests. Its last input row contains the last real leaf and two zero digests. Each higher layer hashes pairs and supplies a zero right child at an odd boundary. Non-root nodes at depth 22 or less retain 240 bits.
-
-A 128-position opening uses 128 records of 510 bytes. Each record contains one 24-byte salt, three 32-byte siblings and thirteen 30-byte siblings. The cap has 342 nodes and 171 slots of 30 bytes, bringing the proof to 70,410 bytes. Other cardinalities use 824 bytes per position.
-
-The emulator measured 863,218,785 commit cycles and 85,548 opening cycles, for a product of 60,785,258,086,530. The material below describes the Stage 2 construction from which this tree was derived.
-
----
-
-# Paired 24-byte late salts: 914,994,318 cycles at 72,704 bytes
-
-This entry changes the leaf hash of the 96-32 leaders so that the salt enters only the last of the four compression calls, and lays out the leaves in pairs so that one 48-byte `RANDOM` call writes the salts of an even and an odd leaf exactly where their last calls read them. No salt is copied and no position tag is stored. The tree, the pair-slot cap of our `97b601a0` and the proof format otherwise stay as they were.
-
-| Entry | Commit cycles | Opening cycles | Prover cycles | Proof bytes | Product |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `3e63809d` (dadon) | 959,447,084 | 40,102 | 959,487,186 | 75,776 | 72,706,101,006,336 |
-| `97b601a0` (ours, current best) | 959,447,084 | 40,631 | 959,487,715 | 71,680 | 68,776,079,411,200 |
-| This entry | 914,948,443 | 45,875 | 914,994,318 | 72,704 | 66,523,746,895,872 |
-
-`claim.json` is `{"proofBytes": 72704, "commitCycles": 914948443, "openingCycles": 45875}`. The product is 2,252,332,515,328 (3.27%) below `97b601a0`.
-
-## The leaf
-
-For a 256-byte leaf m and a private 24-byte salt s:
-
-    u = C(m[0..96]),   a = C(u || m[96..160]),   b = C(m[160..256])
-    even leaf digest = C(a || b || 0^8 || s),   odd leaf digest = C(s || 0^8 || a || b)
-
-where C is the track's 96-to-32-byte compression. That is four calls per leaf, as in `c9b8af82` and `3e63809d`, but the salt is not in the first call. The final-call rows of leaves 2j and 2j+1 are consecutive, so the 24 salt bytes of the even row and the 24 of the odd row are adjacent, and one 48-byte `RANDOM` per pair fills both (8,388,608 draws). Salt sampling and placement cost about 4 cycles per leaf, against 7 in `3e63809d` (16-byte copy, tag store, and its share of one bulk draw). The commitment makes 5 x 2^24 - 1 = 83,886,079 compression calls, as before.
-
-The parents are the gap-heap binary parents C(left || right || 0^32) with full 256-bit digests. At 128 positions the proof is `97b601a0`'s pair-slot format with 24-byte salts: 128 records of 24 + 16 x 32 = 536 bytes and 128 pair slots of 32 bytes, 72,704 bytes; openings of other sizes send full paths. Every 128-position opening takes exactly 45,875 cycles and makes no oracle calls; the batch checker makes at most 2,815 calls (2,560 for the records, at most 128 for touched pairs, 127 for the upper tree).
-
-## Why the certificate holds
-
-- Hiding: `CommitGolfCandidate.Late.late_hiding` proves the contract's statistical hiding statement for this scheme with distance at most 2N(2t + 5N + 3)/2^192 (N = 2^24), that is t x 2^-166 + 2^-140.7, below (t + 1)/2^120. A hidden leaf's digest is a fresh output unless a query hits its final input, which needs its 192-bit salt; the proof models the honest computation as a single pass of at most 5N calls and shows that the 2^23 48-byte draws of the sampling loop equal one uniform salt tape. With 24-byte salts no position tag is needed.
-- Binding: two accepted openings that disagree at a position are reduced to a compression collision. The leaf's orientation (salt first or last) is fixed by the position's parity, so equal final inputs force equal (a, b), and equal branch replies force equal message ranges [0, 96), [96, 160) and [160, 256). The reduction replays the two records with at most 10,872 calls and 56 further probes.
-- Machine proofs: the commit proof composes the paired salt-sampling loop, the leaf-hashing loop and the 24 parent passes and identifies the root and the retained trapdoor; the opener's proof covers every cardinality; `PairCap.batchEvaluation` proves the batch checker's termination, query bound and exact acceptance condition for every correctly sized input, including malicious bytes.
-
-## Credits
-
-The base machine and proofs come from dadon's `c9b8af82`, which credits AdamGagol's `3839a36d` and `7e8904fd` and the organizers' baseline; the pair-slot cap and its checker proofs come from our `97b601a0` (built on dadon's `3e63809d`). The hiding proof adapts `c9b8af82`'s fixed-oracle simulation and coordinate hybrid. `c9b8af82`'s README follows unchanged below; its figures describe that entry.
-
----
-
-# commit-golf-96-32-product: 32×16 unrolled in-place gap-heap commit with level-7 cap table
-
-This is a salted binary Merkle commitment over the track's 96→32-byte compression
-oracle (`COMPRESSION_INPUT_LENGTH = 768`, 8 cycles per compression call). The programs
-use compression only.
-
-## Commitment
-
-Each 2048-bit leaf is absorbed in four 64-byte message blocks starting from a private
-32-byte salt (`chaining value (32 bytes) || message block (64 bytes)`), with no padding:
-four compression calls per leaf.
-
-Commitment hashes each leaf in place without copying message blocks and stores internal
-nodes in a gap-heap layout where every sibling pair `[left | right | 0]` occupies 96
-contiguous bytes with a permanent 32-byte zero gap. To amortize loop control overhead
-while keeping all memory and immediate offsets nonnegative:
-
-- **32× unrolled leaf loop (`commit-pair`)**: each of the `2^19` iterations processes
-  32 leaves as four 8-leaf chunks (`x29 = 2048` advances `x8` after each chunk),
-  followed by a 4-instruction loop latch (`1544` cycles per 32 leaves, `48.25`
-  cycles/leaf).
-- **16× unrolled parent loop (`commit-parent`)**: each of the `2^20 - 1` iterations
-  computes 16 internal nodes in descending order using direct 96-byte compression calls
-  on the gap heap, followed by a 3-instruction loop latch (`163` cycles per 16 parents,
-  `10.1875` cycles/parent) and a 15-node straight-line tail down to the root.
-
-Commitment cycles are exactly `1,047,527,478` (`28` setup + `67,108,865` salt sampling +
-`10` ready + `809,500,672` leaf loop + `17` parent setup + `170,917,725` parent loop +
-`150` root tail + `11` root copy and halt) with `5 * 2^24 - 1 = 83,886,079` public
-queries.
-
-## Level-7 Fixed Cap Table for Batch Openings (`k = 128`)
-
-For scored batch openings (`k = 128` positions), instead of repeating the top 7 Merkle
-levels across all 128 authentication paths (`128 * 7 * 32 = 28,672` bytes), the opening
-program emits:
-
-1. 128 truncated records of `576` bytes each (`32`-byte salt + `17` lower siblings from
-   leaf level `0` up to level `16`, stopping at heap indices `128..255`): `73,728` bytes.
-2. The fixed level-7 cap table of all `128` digests at heap indices `128..255` in order:
-   `4,096` bytes.
-
-Total batch proof size is `73,728 + 4,096 = 77,824` bytes, and opening cycles are
-`40,614`. For non-batch opening counts (`k ≠ 128`), the opening and checker retain the
-standard `800 * k`-byte format (`32`-byte salt + `24` siblings per position).
-
-The checker verifies a `k = 128` proof by checking the length (`77,824`), copying the
-128 cap digests into a temporary flat heap at scratch `[4608, 8704)`, hashing parents
-127 down to 1 into `[544, 4608)` to verify the root against the commitment, and then
-running the unified per-position loop for 17 levels against the cap table entry
-`cap[index >> 17]` (`127 + 128 * 21 = 2,815` public queries).
-
-## Claimed Bounds (`BATCH = 128`, `LOG_LENGTH = 24`)
+## Certified Claim
 
 | Claim | Bound |
 | --- | ---: |
-| Proof bytes | 77,824 |
-| Commitment cycles | 1,047,527,478 |
-| Opening cycles | 40,614 |
+| Proof bytes (`k = 128`) | 70,080 |
+| Commitment cycles | 847,977,552 |
+| Opening cycles (`k = 128`) | 65,740 |
+| Product score | 59,430,873,903,360 |
 
-The product score is `(commitCycles + openingCycles) * proofBytes = 81,525,939,191,808`.
+Commitment executes `257,978,794` instructions (`847,977,552` cycles) and `78,293,674` compression calls (`0` permutation calls). Opening uses an alignment-specialized 8-residue word-buffered stream serializer (`0` oracle calls, `≤ 65,740` cycles at `k = 128`).
 
-## Verification
+## Artifacts and Verification
 
-`programs.json` delivers the three machine images and their ABI, `claim.json` states the
-claimed metrics, and `Solution.lean` proves the complete `CommitGolf.Certificate`
-(admission, termination, completeness, budgets, proof size, prover cycles, adaptive
-binding, and hiding) against the generated artifact.
+- `programs.json` contains the three RV64IM machine images, embedded level tables, and memory layout.
+- `claim.json` declares the certified resource bounds.
+- `Solution.lean` assembles `CommitGolf.Certificate submission 70080 847977552 65740` and proves `submission = CommitGolf.Artifact.submission` by reflexivity.
+- `CommitGolfCandidate/` contains the complete formal proofs of instruction decoding, exact machine execution, termination, completeness, query budgets, worst-case proof size, prover cycles, adaptive 120-bit position binding (exact 238-bit survival-product birthday bound), and 120-bit statistical hiding.
 
 From the repository root, on a supported Linux verifier host:
 
