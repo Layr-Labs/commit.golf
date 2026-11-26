@@ -11,13 +11,15 @@ def rec_checkCompressionInstructions : List Instr :=
 def rec_checkCompressionPrefix (state : MachineState) (count : Nat) : MachineState :=
   (rec_checkCompressionInstructions.take count).foldl execInstrBr state
 
+/-- This legacy call site uses the padding adapter alone, before any truncation
+tail. Its result is the raw padded state, not the truncating checker state. -/
 theorem rec_check_compression (state : MachineState) (start : Nat)
     (location : start = 54)
     (pc : state.pc = BitVec.ofNat 64 (4864 + 4 * start))
     (scratch : state.getReg .x21 = 256) (fuel : Nat) (allowCoins : Bool) :
     execute Late.Check.Normal.checkerImage (22 + fuel) state allowCoins =
       (do let answer ← World.query (.inr (.inl (padInput (readBuffer state 256 64))))
-          let result ← execute Late.Check.Normal.checkerImage fuel (Late.Check.Normal.checkCompressionState state answer) allowCoins
+          let result ← execute Late.Check.Normal.checkerImage fuel (Late.Check.Normal.checkPaddedState state answer) allowCoins
           return result.charge 29 1) := by
   have setup (remaining : Nat) :
       execute Late.Check.Normal.checkerImage (5 + remaining) state allowCoins =
@@ -59,7 +61,7 @@ theorem rec_check_compression (state : MachineState) (start : Nat)
       OracleComp World (BitVec 256)) >>= continuation)
   funext answer
   change BitVec 256 at answer
-  have resultState : paddedCompressionState ready answer = Late.Check.Normal.checkCompressionState state answer := by
+  have resultState : paddedCompressionState ready answer = Late.Check.Normal.checkPaddedState state answer := by
     unfold paddedCompressionState
     rw [registers.2.2.2.1]
     rfl

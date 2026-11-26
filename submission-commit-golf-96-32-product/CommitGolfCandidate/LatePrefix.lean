@@ -40,7 +40,7 @@ theorem run_through_leaves (o : Oracle) (m : Message) (fuel : Nat) :
     o.run (execute commitImage (16842768 + (9 + (leafSteps 0 LENGTH + fuel))) (startState m) true) =
       (do let ws ← words
           let (out,n) ← o.run (execute commitImage fuel (leavesDone o m ws) true)
-          return (out.charge 742981657 67108864,67108864+n)) := by
+          return (out.charge 741933081 67108864,67108864+n)) := by
   rw [commit_through_sampling _ rfl rfl, lift_draws, oracle_run_coins_bind]
   apply bind_congr_of_forall_mem_support
   intro ws reach

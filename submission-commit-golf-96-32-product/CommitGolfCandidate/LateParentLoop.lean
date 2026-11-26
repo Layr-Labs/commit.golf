@@ -25,11 +25,11 @@ theorem parents_memory (h : Compression) (s : MachineState) (d : Fin 24)
     let u := fillLevel h d n s
     have old : t.mem = u.mem := ih (by omega)
     have read := read_congr_mem t u (nodeAddress d (2*n)) 96 old
-    apply (tick_mem h (parents_frame h s d start n (by omega)).toParentRegs).trans
+    apply (tick_mem h (parents_frame h s d start n (by omega)).toParentRegs (by exact Nat.lt_of_lt_of_le (Nat.lt_succ_self n) le)).trans
     exact write_parent_mem_congr h t u d n old
 
-def levelSteps (d n : Nat) := siteWidth d*n+4*(n/16)
-def levelCycles (d n : Nat) := (7+siteWidth d)*n+4*(n/16)
+def levelSteps (d n : Nat) := siteWidth d*n+4*(n/32)
+def levelCycles (d n : Nat) := (7+siteWidth d)*n+4*(n/32)
 
 theorem parents_run (o : Oracle) (s : MachineState) (d : Fin 24) (start : ParentFrame s d 0)
     (n : Nat) (le : n≤levelSize d) (fuel : Nat) :
@@ -44,13 +44,13 @@ theorem parents_run (o : Oracle) (s : MachineState) (d : Fin 24) (start : Parent
     have pc := frame.pc
     rw [parentNextPC,if_pos hi] at pc
     have steps : fuel+levelSteps d (n+1) =
-        (fuel+(siteWidth d+if n%16=15 then 4 else 0))+levelSteps d n := by
+        (fuel+(siteWidth d+if n%32=31 then 4 else 0))+levelSteps d n := by
       unfold levelSteps; rw [Nat.mul_succ]; split <;> omega
     rw [steps,ih (by omega), parent_tick_run o frame.toParentRegs hi pc]
     simp only [bind_assoc,pure_bind,parentFold,Execution.charge]
     apply bind_congr
     rintro ⟨out,c⟩
-    have price : levelCycles d (n+1) = levelCycles d n + (7+siteWidth d + if n%16=15 then 4 else 0) := by
+    have price : levelCycles d (n+1) = levelCycles d n + (7+siteWidth d + if n%32=31 then 4 else 0) := by
       unfold levelCycles; rw [Nat.mul_succ]; split <;> omega
     simp only [price,Nat.succ_eq_add_one, Nat.add_assoc]
 

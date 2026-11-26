@@ -1,132 +1,194 @@
-# 240-bit nodes at heights 3..17: 919,242,636 prover cycles at 69,120 bytes
+# Selective 240-bit storage with centered leaf cursors and 32-parent loops
 
-This entry keeps the tree of `aeca157a` (paired 24-byte late salts, gap-heap binary tree, pair-slot cap) and stores and sends every tree node of height 3 to 17 as its low 240 bits (30 bytes). Leaves, heights 1 and 2 and the upper tree (heights 18..24, with the root) keep 256 bits.
+This candidate composes three concrete machine-image changes for the
+commit-golf-96-32-product track. The starting scheme is the public paired
+24-byte late-salt, gap-heap binary commitment and pair-slot cap from
+submission aeca157a-34c8-40aa-99c2-624ba9138702, source
+7eb30562aab710178446bb1f8ba97fa3fca987b9. The storage and proof-format
+change is our A96 selective truncation tree. The two instruction-scheduling
+changes are our centered message cursor96 and centered parent32 loop.
+The tree was prepared with GPT-6.1 Sol using Codex in Superharness.
 
-| Entry | Commit cycles | Opening cycles | Proof bytes | Product |
-| --- | ---: | ---: | ---: | ---: |
-| `aeca157a` (0xplemonade) | 914,948,443 | 45,875 | 72,704 | 66,523,746,895,872 |
-| This entry | 919,142,619 | 100,017 | 69,120 | 63,538,051,000,320 |
+The complete editable submission contains the instruction images, exact
+numeric claim, a Solution.lean certificate and every supporting source
+module. The equality theorem connects that certificate to the artifact
+generated from programs.json. The commitment, opening and checker are all
+derived from the delivered images. The original public authors' scheme,
+execution proofs, late-salt scheduling and cap design are inherited work;
+the optimization here does not claim those contributions as new.
 
-`claim.json` is `{"proofBytes": 69120, "commitCycles": 919142619, "openingCycles": 100017}`.
+## Claim and the composition
 
-- Commitment: one `sh x0, off+30(x22)` after each parent compression of heights 3..17 (2^22 - 2^7 = 4,194,176 cycles).
-- Batch proof: records of 24 + 3 x 32 + 13 x 30 = 510 bytes, then 128 pair slots of 30 bytes at offset 65,280, copied by halfwords.
-- Checker: truncates every recomputed node of height 3..17 (non-batch and batch paths) and widens 30-byte fields with zeros; query counts are unchanged.
-- Proofs: `Cut.lean` (`cut`, `low240`, `widen`), `climbAt` in `Model.lean`; binding reduces to a low-240 collision at truncated heights, with the bound (q+10928)^2/2^241 <= q/2^120.
+The claim is 915,996,948 commitment cycles, 100,017 opening cycles for a
+batch of 128 leaves, and 69,120 proof bytes. Its product is exactly
+63,320,622,220,800. These are the challenge's abstract machine charges,
+not wall-clock timing measurements. The score multiplies commitment plus
+opening cycles by proof bytes. Compared with our A96 tree at
+63,538,051,000,320, this composition saves 3,145,671 commitment cycles
+and improves the product by 0.3422024694 percent. Opening cycles and proof
+bytes are unchanged from A96. Static code length grows to 3,796 words;
+root copying begins at instruction 3,785. Static image size is distinct
+from executed instruction cost.
 
-The description of the base entry follows.
+The public aeca157a tree claims 914,948,443 commitment cycles, 45,875
+opening cycles and 72,704 proof bytes. A96 adds 4,194,176 commitment
+stores while reducing the batch proof by 3,584 bytes. Its halfword copies
+make opening more expensive. Centering the message cursor saves
+1,048,576 cycles. The parent-loop change saves another 2,097,095 cycles,
+including all extra setup instructions and the removed small-level latch.
+Thus the composed commitment charge is
 
----
+    914948443 + 4194176 - 1048576 - 2097095 = 915996948.
 
-# Paired 24-byte late salts: 914,994,318 cycles at 72,704 bytes
+This arithmetic is an explanation of the mechanism. Acceptance still
+requires the full image-linked certificate and the trusted comparator.
+The claimed improvement is useful because the two scheduling changes
+preserve the proof-format savings while removing loop work paid once per
+leaf group or parent group. The primary way this composition could fail
+is a wrong instruction relocation, signed immediate, counter convention
+or proof-bound propagation. A source-level union alone does not establish
+that these interacting details are correct.
 
-This entry changes the leaf hash of the 96-32 leaders so that the salt enters only the last of the four compression calls, and lays out the leaves in pairs so that one 48-byte `RANDOM` call writes the salts of an even and an odd leaf exactly where their last calls read them. No salt is copied and no position tag is stored. The tree, the pair-slot cap of our `97b601a0` and the proof format otherwise stay as they were.
+## Selective truncation and proof encoding
 
-| Entry | Commit cycles | Opening cycles | Prover cycles | Proof bytes | Product |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `3e63809d` (dadon) | 959,447,084 | 40,102 | 959,487,186 | 75,776 | 72,706,101,006,336 |
-| `97b601a0` (ours, current best) | 959,447,084 | 40,631 | 959,487,715 | 71,680 | 68,776,079,411,200 |
-| This entry | 914,948,443 | 45,875 | 914,994,318 | 72,704 | 66,523,746,895,872 |
+Only stored nodes of heights 3 through 17 use 240 bits. Leaves, nodes of
+heights 1 and 2, and the upper tree of heights 18 through 24 retain full
+256-bit digests. A parent producing a cut height executes an SH of zero
+to output bytes 30 and 31 immediately after its compression call. The
+stored representation is the low 240 bits widened with zero high bits.
+The next parent therefore hashes the same bytes the opening and checker
+can reconstruct. This is a change to the tree definition and security
+proofs, not merely a serialization rule applied to an unchanged tree.
 
-`claim.json` is `{"proofBytes": 72704, "commitCycles": 914948443, "openingCycles": 45875}`. The product is 2,252,332,515,328 (3.27%) below `97b601a0`.
+The cut heights contain 2^22 - 2^7 = 4,194,176 nodes. Each requires one
+extra ordinary instruction and one extra cycle. This dynamic store count
+is unchanged by parent unrolling. There are 480 syntactic store sites in
+the composed image: 32 sites in each of 15 affected parent passes. The
+prior A96 image had 16 sites per affected pass and repeated each body
+twice as often. The count of source sites must not be mistaken for the
+executed overhead.
 
-## The leaf
+A batch record is a 24-byte salt followed by three full 32-byte siblings
+and thirteen 30-byte siblings, totaling 510 bytes. The 128 records use
+65,280 bytes. The pair-slot table contributes 128 times 30 = 3,840 bytes,
+giving a total of 69,120 bytes. Sibling and slot copies use halfword
+loads and stores where their packed destination is not eight-byte
+aligned. The checker restores zero high bits before hashing a cut node.
+The upper tree remains full width because those upper nodes are rebuilt
+from the pair table and are not directly transmitted in this batch
+format. Cutting them would add commitment work without saving these
+proof bytes. Extending the cut toward the much larger bottom levels also
+has an unfavorable cycle-to-byte tradeoff for the product objective.
 
-For a 256-byte leaf m and a private 24-byte salt s:
+The binding and hiding arguments retain the challenge's required 120-bit
+targets. The truncation-aware model, heap invariants, cached tree,
+ordinary path checker, batch path checker and pair reconstruction are
+inherited from A96. The new leaf and parent schedules must refine that
+same model and its exact stored bytes. They do not weaken the security
+statement, change the number of leaves, reduce message size, omit
+positions, alter oracle costs or substitute an unrelated abstract
+commitment for the delivered programs.
 
-    u = C(m[0..96]),   a = C(u || m[96..160]),   b = C(m[160..256])
-    even leaf digest = C(a || b || 0^8 || s),   odd leaf digest = C(s || 0^8 || a || b)
+## Centered message cursor
 
-where C is the track's 96-to-32-byte compression. That is four calls per leaf, as in `c9b8af82` and `3e63809d`, but the salt is not in the first call. The final-call rows of leaves 2j and 2j+1 are consecutive, so the 24 salt bytes of the even row and the 24 of the odd row are adjacent, and one 48-byte `RANDOM` per pair fills both (8,388,608 draws). Salt sampling and placement cost about 4 cycles per leaf, against 7 in `3e63809d` (16-byte copy, tag store, and its share of one bulk draw). The commitment makes 5 x 2^24 - 1 = 83,886,079 compression calls, as before.
+The commitment still processes a 32-leaf body. Originally the message
+cursor rebased after each group of eight leaves because a positive
+12-bit immediate could not reach an entire sixteen-leaf window. The
+centered convention points x8 2,048 bytes into the logical window.
+Addresses use signed immediates ranging around that center. The setup
+uses LUI x29,1, ADD x8,x8,x29 and ADDI x8,x8,-2048; it does not add a
+setup cycle. The two remaining cursor updates advance by 4,096 bytes.
+The two redundant eight-leaf updates disappear.
 
-The parents are the gap-heap binary parents C(left || right || 0^32) with full 256-bit digests. At 128 positions the proof is `97b601a0`'s pair-slot format with 24-byte salts: 128 records of 24 + 16 x 32 = 536 bytes and 128 pair slots of 32 bytes, 72,704 bytes; openings of other sizes send full paths. Every 128-position opening takes exactly 45,875 cycles and makes no oracle calls; the batch checker makes at most 2,815 calls (2,560 for the records, at most 128 for touched pairs, 127 for the upper tree).
+The salt, row, destination and target addresses retain their meaning.
+Only x8's convention and the corresponding x8-based immediates change.
+There are 2^24 / 32 bodies, each saving two ordinary instructions. This
+gives exactly 1,048,576 fewer executed instructions and cycles. The
+query sequence, private coins and stored leaf values are preserved.
+The final cursor96 proof repairs are retained in the leaf, prefix,
+pointer, latch and ready-state modules; an earlier generator output is
+not substituted for those repaired sources.
 
-## Why the certificate holds
+## Centered parent loop
 
-- Hiding: `CommitGolfCandidate.Late.late_hiding` proves the contract's statistical hiding statement for this scheme with distance at most 2N(2t + 5N + 3)/2^192 (N = 2^24), that is t x 2^-166 + 2^-140.7, below (t + 1)/2^120. A hidden leaf's digest is a fresh output unless a query hits its final input, which needs its 192-bit salt; the proof models the honest computation as a single pass of at most 5N calls and shows that the 2^23 48-byte draws of the sampling loop equal one uniform salt tape. With 24-byte salts no position tag is needed.
-- Binding: two accepted openings that disagree at a position are reduced to a compression collision. The leaf's orientation (salt first or last) is fixed by the position's parity, so equal final inputs force equal (a, b), and equal branch replies force equal message ranges [0, 96), [96, 160) and [160, 256). The reduction replays the two records with at most 10,872 calls and 56 further probes.
-- Machine proofs: the commit proof composes the paired salt-sampling loop, the leaf-hashing loop and the 24 parent passes and identifies the root and the retained trapdoor; the opener's proof covers every cardinality; `PairCap.batchEvaluation` proves the batch checker's termination, query bound and exact acceptance condition for every correctly sized input, including malicious bytes.
+Each large level now processes 32 parents per body instead of 16. A
+parent still reads the 96-byte gap-heap block containing two adjacent
+32-byte child slots and their zero padding. On the nineteen levels with
+at least 32 parents, x21 is biased by 1,536 bytes into the source block.
+Parent j uses source immediate 96*j - 1536, ranging from -1,536 to
+1,440. The destination immediate is 32*(j + floor(j/2)), at most 1,472.
+Both fit a signed 12-bit immediate without increasing instruction count.
+For cut levels the zero halfword store uses that current destination
+offset plus 30, rather than an offset copied from the old 16-site body.
 
-## Credits
+Three added header instructions apply the source bias and establish
+x29 = 3 << 10 = 3072. The old counter setup keeps its instruction count
+but computes the number of 32-parent groups. The four-instruction latch
+advances the source by x29, advances the destination by 1,536 bytes,
+decrements the counter and branches to the body. Its relative branch
+depends on whether the level contains truncating stores. The five small
+levels have 16, 8, 4, 2 and 1 parents; they are straight-line and use zero
+source bias. The old latch after the 16-parent level is removed.
 
-The base machine and proofs come from dadon's `c9b8af82`, which credits AdamGagol's `3839a36d` and `7e8904fd` and the organizers' baseline; the pair-slot cap and its checker proofs come from our `97b601a0` (built on dadon's `3e63809d`). The hiding proof adapts `c9b8af82`'s fixed-oracle simulation and coordinate hybrid. `c9b8af82`'s README follows unchanged below; its figures describe that entry.
+Summing the reduction in four-instruction latches over all levels and
+subtracting the three extra instructions on each of nineteen large
+levels gives 2,097,095 cycles. The same reduction applies to executed
+steps. The full operational fuel accounting is updated along with cycle
+accounting. Finite header/body/end site tables and root relocation come
+from the final combined image. Relative branches are assembled from
+mapped sources and targets, rather than adjusted with a global offset.
 
----
+## Validation evidence and its limits
 
-# commit-golf-96-32-product: 32×16 unrolled in-place gap-heap commit with level-7 cap table
+The bounded feasibility check compares the actual old and new machine
+images, not a handwritten proxy body. It runs two leaf cases covering
+continuation and terminal latches, and 72 parent cases covering every
+one of 24 levels. Large levels exercise bounded counts of 32, 64, 128
+and 256 parents. All ordered compression inputs and all sparse written
+memory agree. The check counts 6,848 executed truncation stores in the
+parent probes and records actual old and new latch counts. These counts
+establish that the composed intervention is active in the tested paths.
+The opening and checker image objects remain byte-identical to A96.
 
-This is a salted binary Merkle commitment over the track's 96→32-byte compression
-oracle (`COMPRESSION_INPUT_LENGTH = 768`, 8 cycles per compression call). The programs
-use compression only.
+The same decoder reproduces two previously qualified better/worse
+comparisons before its cycle differences are used. The nonce256 control
+saves 14 cycles; the signed128 control saves 44 cycles on a continuing
+body and 43 on a terminal body. Their ordered queries and full sparse
+memory also agree. This calibration checks the experimental setup; it
+does not establish security or replace the kernel proof.
 
-## Commitment
+The accompanying qualification receipt records the outcome for the exact combined source tree.
+The intended qualification builds all supporting modules and Solution,
+runs the original trusted smoke tests, checks a source inventory against
+the frozen candidate, scans for forbidden native proof mechanisms,
+audits theorem axioms, runs all twenty comparator regression tests and
+asks the default Lean kernel to accept the complete certificate and
+artifact-equality theorem. Development replay uses the comparator's
+fake-landrun launcher and is unsandboxed; it is not an official isolated
+Yukon evaluation or a statement of submission, promotion or acceptance.
 
-Each 2048-bit leaf is absorbed in four 64-byte message blocks starting from a private
-32-byte salt (`chaining value (32 bytes) || message block (64 bytes)`), with no padding:
-four compression calls per leaf.
+Ordinary finite decide proofs and the default kernel are used. Native
+decision procedures are excluded. The public contract, verifier,
+dependency pins, compression width and cost, permutation cost, ABI,
+fuel limits and admission conditions are preserved. Reproducing this
+claim requires the selected 96/32 contract preparation, including the
+768-bit compression input and the thirty-cycle permutation price. Using
+the repository's default-width contract would be a different experiment.
 
-Commitment hashes each leaf in place without copying message blocks and stores internal
-nodes in a gap-heap layout where every sibling pair `[left | right | 0]` occupies 96
-contiguous bytes with a permanent 32-byte zero gap. To amortize loop control overhead
-while keeping all memory and immediate offsets nonnegative:
+## Attribution and dependencies
 
-- **32× unrolled leaf loop (`commit-pair`)**: each of the `2^19` iterations processes
-  32 leaves as four 8-leaf chunks (`x29 = 2048` advances `x8` after each chunk),
-  followed by a 4-instruction loop latch (`1544` cycles per 32 leaves, `48.25`
-  cycles/leaf).
-- **16× unrolled parent loop (`commit-parent`)**: each of the `2^20 - 1` iterations
-  computes 16 internal nodes in descending order using direct 96-byte compression calls
-  on the gap heap, followed by a 3-instruction loop latch (`163` cycles per 16 parents,
-  `10.1875` cycles/parent) and a 15-node straight-line tail down to the root.
+The public base aeca157a and its author 0xplemonade receive credit for
+the complete inherited scheme and proof tree, paired late salts and
+pair-slot cap. Its inherited credits, including submission 97b601a0 and
+dadon's earlier contributions, remain applicable. Our public cursor96
+intermediate a7c38c21-6f1e-4b42-8792-f0f405355c12 is also reused. The
+qualified parent32 intermediate 4fc1fdc6-26fd-4076-b7ed-b26c811d222f is
+also reused and declared following its public promotion. The separate
+dependencies.json records exact public submission identifiers and the
+reuse rationale. Selective truncation, centered leaf cursors and the
+32-parent schedule are stated separately so the contribution of each
+part can be assessed without attributing inherited work to this entry.
 
-Commitment cycles are exactly `1,047,527,478` (`28` setup + `67,108,865` salt sampling +
-`10` ready + `809,500,672` leaf loop + `17` parent setup + `170,917,725` parent loop +
-`150` root tail + `11` root copy and halt) with `5 * 2^24 - 1 = 83,886,079` public
-queries.
-
-## Level-7 Fixed Cap Table for Batch Openings (`k = 128`)
-
-For scored batch openings (`k = 128` positions), instead of repeating the top 7 Merkle
-levels across all 128 authentication paths (`128 * 7 * 32 = 28,672` bytes), the opening
-program emits:
-
-1. 128 truncated records of `576` bytes each (`32`-byte salt + `17` lower siblings from
-   leaf level `0` up to level `16`, stopping at heap indices `128..255`): `73,728` bytes.
-2. The fixed level-7 cap table of all `128` digests at heap indices `128..255` in order:
-   `4,096` bytes.
-
-Total batch proof size is `73,728 + 4,096 = 77,824` bytes, and opening cycles are
-`40,614`. For non-batch opening counts (`k ≠ 128`), the opening and checker retain the
-standard `800 * k`-byte format (`32`-byte salt + `24` siblings per position).
-
-The checker verifies a `k = 128` proof by checking the length (`77,824`), copying the
-128 cap digests into a temporary flat heap at scratch `[4608, 8704)`, hashing parents
-127 down to 1 into `[544, 4608)` to verify the root against the commitment, and then
-running the unified per-position loop for 17 levels against the cap table entry
-`cap[index >> 17]` (`127 + 128 * 21 = 2,815` public queries).
-
-## Claimed Bounds (`BATCH = 128`, `LOG_LENGTH = 24`)
-
-| Claim | Bound |
-| --- | ---: |
-| Proof bytes | 77,824 |
-| Commitment cycles | 1,047,527,478 |
-| Opening cycles | 40,614 |
-
-The product score is `(commitCycles + openingCycles) * proofBytes = 81,525,939,191,808`.
-
-## Verification
-
-`programs.json` delivers the three machine images and their ABI, `claim.json` states the
-claimed metrics, and `Solution.lean` proves the complete `CommitGolf.Certificate`
-(admission, termination, completeness, budgets, proof size, prover cycles, adaptive
-binding, and hiding) against the generated artifact.
-
-From the repository root, on a supported Linux verifier host:
-
-```sh
-bash scripts/setup.sh
-python3 scripts/run.py --track commit-golf-96-32-product
-```
-
-See [RULES.md](../RULES.md) for the trusted contract and verifier requirements.
+No wall-clock speedup is claimed. The comparison is the deterministic
+scoring model proved for these images. The source note and local replay
+are supporting evidence; the official verifier remains authoritative.

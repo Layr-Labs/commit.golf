@@ -6,7 +6,7 @@ namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 structure LeafRegs (s : MachineState) (tile : Nat) (i : Fin 32) : Prop where
-  message : s.getReg .x8 = BitVec.ofNat 64 (msgAddr (32*tile+8*(i.val/8)))
+  message : s.getReg .x8 = BitVec.ofNat 64 (msgAddr (32*tile+16*(i.val/16))) + 2048
   rows : s.getReg .x18 = BitVec.ofNat 64 (rowAddr (32*tile+16*(i.val/16)))
   nodes : s.getReg .x23 = BitVec.ofNat 64 (nodeAddress 0 (32*tile))
   selector : s.getReg .x5 = 0
@@ -29,10 +29,19 @@ def leafReply (s : MachineState) (i : Fin 32) (j : Fin 4) (w : Digest) :=
 
 private theorem base_dst (j : Fin 4) : Reg.x10 ≠ targetReg j := by fin_cases j <;> decide
 
+def sourceBias (j : Nat) : Nat := if j=3 then 0 else 2048
+def targetBias (j : Nat) : Nat := if j=0 then 2048 else 0
+def sourceLogical (i j : Nat) :=
+  if j=3 then 96*(i%16) else 256*(i%16)+(if j=0 then 0 else if j=1 then 64 else 160)
+def targetLogical (i j : Nat) :=
+  if j=0 then 256*(i%16)+64 else targetOffset i j
+
 set_option maxRecDepth 10000 in
 private theorem short_offsets : ∀ i : Fin 32, ∀ j : Fin 4,
-    signExtend12 (BitVec.ofNat 12 (sourceOffset i j)) = BitVec.ofNat 64 (sourceOffset i j) ∧
-    signExtend12 (BitVec.ofNat 12 (targetOffset i j)) = BitVec.ofNat 64 (targetOffset i j) := by decide
+    BitVec.ofNat 64 (sourceBias j) + signExtend12 (BitVec.ofNat 12 (sourceOffset i j)) =
+      BitVec.ofNat 64 (sourceLogical i j) ∧
+    BitVec.ofNat 64 (targetBias j) + signExtend12 (BitVec.ofNat 12 (targetOffset i j)) =
+      BitVec.ofNat 64 (targetLogical i j) := by decide
 
 theorem ready_addresses {s : MachineState} {tile : Nat} {i : Fin 32} (regs : LeafRegs s tile i)
     (j : Fin 4) :
@@ -42,10 +51,21 @@ theorem ready_addresses {s : MachineState} {tile : Nat} {i : Fin 32} (regs : Lea
   dsimp only [leafReady]
   obtain ⟨src,dst⟩ := call_addresses s (sourceReg j) (targetReg j) (BitVec.ofNat 12 (sourceOffset i j))
     (BitVec.ofNat 12 (targetOffset i j)) (base_dst j)
-  rw [src,dst,(short_offsets i j).1,(short_offsets i j).2]
+  rw [src,dst]
+  have sourceBase : s.getReg (sourceReg j) =
+      BitVec.ofNat 64 (if j.val=3 then rowAddr (32*tile+16*(i.val/16))
+        else msgAddr (32*tile+16*(i.val/16))) + BitVec.ofNat 64 (sourceBias j) := by
+    fin_cases j <;> simp [sourceReg,sourceBias,regs.message,regs.rows]
+  have targetBase : s.getReg (targetReg j) =
+      BitVec.ofNat 64 (if j.val=0 then msgAddr (32*tile+16*(i.val/16))
+        else if j.val=3 then nodeAddress 0 (32*tile) else rowAddr (32*tile+16*(i.val/16))) +
+        BitVec.ofNat 64 (targetBias j) := by
+    fin_cases j <;> simp [targetReg,targetBias,regs.message,regs.rows,regs.nodes]
+  rw [sourceBase,targetBase,BitVec.add_assoc,BitVec.add_assoc,
+    (short_offsets i j).1,(short_offsets i j).2]
   have zero : levelOffset 0 = 0 := by decide
   fin_cases j <;>
-    simp only [sourceReg, targetReg, leafSource, leafTarget, sourceOffset, targetOffset,
+    simp only [sourceLogical, targetLogical, leafSource, leafTarget, sourceOffset, targetOffset,
       Fin.isValue, Fin.reduceFinMk, Nat.reduceEqDiff, ↓reduceIte, regs.message, regs.nodes,
       regs.rows, ← BitVec.ofNat_add, nodeAddress, zero, msgAddr, rowAddr, contentAddr, gapOffset] <;>
     constructor <;> apply congrArg (BitVec.ofNat 64) <;> omega

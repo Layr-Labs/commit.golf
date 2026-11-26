@@ -4,15 +4,15 @@ namespace CommitGolfCandidate.Late
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 
 def slotIndex (k : Nat) : Fin 32 := ⟨k%32, Nat.mod_lt _ (by decide)⟩
-def leafBranch (s : MachineState) := execInstrBr s (.BNE .x20 .x0 6624)
+def leafBranch (s : MachineState) := execInstrBr s (.BNE .x20 .x0 6632)
 
 structure AtLeaf (s : MachineState) (k : Nat) : Prop where
-  pc : s.pc = pcAt (if k < LENGTH then leafPC (slotIndex k) 0 else 932)
-  message : s.getReg .x8 = BitVec.ofNat 64 (msgAddr (8*(k/8)))
+  pc : s.pc = pcAt (if k < LENGTH then leafPC (slotIndex k) 0 else 930)
+  message : s.getReg .x8 = BitVec.ofNat 64 (msgAddr (16*(k/16))) + 2048
   rows : s.getReg .x18 = BitVec.ofNat 64 (rowAddr (16*(k/16)))
   nodes : s.getReg .x23 = BitVec.ofNat 64 (nodeAddress 0 (32*(k/32)))
   counter : s.getReg .x20 = BitVec.ofNat 64 (524288-k/32)
-  stride : s.getReg .x29 = 2048
+  stride : s.getReg .x29 = 4096
   base : s.getReg .x9 = 4294971424
   root : s.getReg .x26 = 4294971392
   selector : s.getReg .x5 = 0
@@ -21,7 +21,9 @@ structure AtLeaf (s : MachineState) (k : Nat) : Prop where
 
 theorem toRegs {s : MachineState} {k : Nat} (a : AtLeaf s k) : LeafRegs s (k/32) (slotIndex k) := by
   refine ⟨?_,?_,a.nodes,a.selector,a.len,a.kind⟩
-  · rw [a.message]; congr 2; change _ = 32*(k/32)+8*(k%32/8); omega
+  · rw [a.message]; apply congrArg (fun w : Word => w+2048)
+    apply congrArg (BitVec.ofNat 64); apply congrArg msgAddr
+    change _ = 32*(k/32)+16*(k%32/16); omega
   · rw [a.rows]; congr 2; change _ = 32*(k/32)+16*(k%32/16); omega
 
 def afterLeaf (h : Compression) (s : MachineState) (k : Nat) :=
@@ -32,7 +34,7 @@ def afterLeaf (h : Compression) (s : MachineState) (k : Nat) :=
 def tailCount (k : Nat) := (updates (slotIndex k)).length + (if k%32=31 then 1 else 0)
 
 private theorem end_word (i : Fin 32) :
-    i.val = 31 → latchStart i + (updates i).length = 931 := by intro eq; have same : i = (31 : Fin 32) := Fin.ext eq; subst i; decide
+    i.val = 31 → latchStart i + (updates i).length = 929 := by intro eq; have same : i = (31 : Fin 32) := Fin.ext eq; subst i; decide
 
 private theorem fixed_updates (o : Oracle) (s : MachineState) (i : Fin 32) (fuel : Nat)
     (pc : s.pc = pcAt (latchStart i)) :
@@ -55,7 +57,7 @@ theorem fixed_iteration (o : Oracle) (s : MachineState) (k : Nat) (inside : k < 
   have post : f.pc = pcAt (latchStart i) := exit_pc _ _ _ _ pc
   by_cases e : i.val=31
   · have word := end_word i e
-    have tpc : t.pc = pcAt 931 := by
+    have tpc : t.pc = pcAt 929 := by
       rw [(update_regs f i).pc,post]; unfold pcAt; rw [←BitVec.ofNat_add]
       apply congrArg (BitVec.ofNat 64); omega
     have dyn : tailCount k = (updates i).length + 1 := by

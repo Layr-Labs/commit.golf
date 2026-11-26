@@ -50,8 +50,8 @@ theorem pass_salt (h : Compression) (s : MachineState) (d : Fin 24) (en : Entry 
 theorem final_source (h : Compression) (s : MachineState) (en : Entry s (passStart 23)) :
     (pass h s 23).getReg .x12 = BitVec.ofNat 64 (nodeAddress 24 0) := by
   let t := entered s 23
-  have addr := (parent_addresses (enter_frame s 23 en).toParentRegs).2
-  change (writeBits (parentReady t 0) _ _).getReg .x12 = _
-  exact (writeBits_register (parentReady t 0) _ _ .x12).trans addr
+  have addr := (parent_addresses (enter_frame s 23 en).toParentRegs (by decide)).2
+  change (writeBits (parentReady t 23 0) _ _).getReg .x12 = _
+  exact (writeBits_register (parentReady t 23 0) _ _ .x12).trans addr
 
 end CommitGolfCandidate.Late

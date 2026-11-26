@@ -74,10 +74,10 @@ def submission := CommitGolfCandidate.Late.submission
 theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := rfl
 
 theorem certificate_of_batch (batch : CommitGolfCandidate.Late.Check.BatchEvaluation) :
-    Certificate submission 69120 919142619 100017 :=
+    Certificate submission 69120 915996948 100017 :=
   CommitGolfCandidate.Late.certificate_of_batch batch
 
-theorem certificate : Certificate submission 69120 919142619 100017 :=
+theorem certificate : Certificate submission 69120 915996948 100017 :=
   certificate_of_batch CommitGolfCandidate.PairCap.batchEvaluation
 
 end CommitGolf.Challenge
