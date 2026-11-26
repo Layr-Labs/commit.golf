@@ -1,4 +1,4 @@
-import CommitGolfCandidate.Programs
+import CommitGolf.Programs
 
 /-! Execution composition for the actual challenge interpreter. Splitting a run at
 an instruction boundary preserves its output, randomness, oracle calls, and cycles.
