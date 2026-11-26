@@ -1,5 +1,5 @@
 import CommitGolfCandidate.Probability
-import CommitGolfCandidate.HidingDistribution
+import CommitGolfCandidate.HidingTree
 
 /-! Fresh-salt bounds before commitment. These apply to any query transcript
 fixed by the first adversary stage. Queries after receiving the commitment and

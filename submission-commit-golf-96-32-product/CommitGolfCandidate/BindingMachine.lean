@@ -27,18 +27,26 @@ theorem conflicting_records_exist (claim : Scheme.Claim) (conflicting : claim.Co
   exact ⟨left, right, leftBound, rightBound, leftIndex.trans rightIndex.symm,
     by rw [leftValue, rightValue]; exact different⟩
 
-/-- Compression inputs for replaying one record parsed from the submitted proof. -/
-def recordInputs (compress : Compression) (input : CheckInput) (ordinal : Nat) :
-    List (BitVec COMPRESSION_INPUT_LENGTH) :=
-  openingInputs compress (recordSalt input ordinal) (recordValue input ordinal)
-    (recordPath (recordIndex input ordinal) (recordSibling compress input ordinal))
+/-- Compression inputs for replaying one record parsed from the submitted proof, up to
+the commitment: its leaf chain, its 17-level path and the chain over the supplied cap. -/
+def recordInputs (compress : Compression) (input : CheckInput) (ordinal : Nat) : List (BitVec COMPRESSION_INPUT_LENGTH) :=
+  capOpeningInputs compress (recordSalt input ordinal) (recordValue input ordinal)
+    (recordPath (recordIndex input ordinal) (recordSibling input ordinal)) (recordCap input)
 
 theorem record_inputs_length (compress : Compression) (input : CheckInput) (ordinal : Nat) :
-    (recordInputs compress input ordinal).length = 28 := by
-  rw [recordInputs, openingInputs_length, record_path_length]
+    (recordInputs compress input ordinal).length = 85 := by
+  rw [recordInputs, capOpeningInputs_length, record_path_length]
+  decide
+
+theorem record_cap_node_bound (input : CheckInput) (ordinal : Nat) :
+    (recordIndex input ordinal).val / 2^PATH_LEVELS < 2*CAP_PAIRS := by
+  have := (recordIndex input ordinal).isLt
+  change _ < 16777216 at this
+  simp only [PATH_LEVELS, CAP_PAIRS]
+  omega
 
 /-- Any conflicting ordinal pair in a successful machine binding claim yields a
-compression collision among the 28 replay inputs of each record. This theorem uses
+compression collision among the 85 replay inputs of each record. This theorem uses
 actual checker acceptance, not an assumed abstract verifier. -/
 theorem binding_claim_collision (oracle : Oracle) (claim : Scheme.Claim) (left right : Nat)
     (records : ConflictingRecords claim left right)
@@ -49,23 +57,28 @@ theorem binding_claim_collision (oracle : Oracle) (claim : Scheme.Claim) (left r
         input ≠ input' ∧ oracle.compression input = oracle.compression input' := by
   have leftRoot := check_input_sound oracle (claimLeft claim) leftAccepted left records.1
   have rightRoot := check_input_sound oracle (claimRight claim) rightAccepted right records.2.1
-  apply collision_of_openings_eq oracle.compression
+  apply collision_of_cap_openings_eq oracle.compression
     (recordSalt (claimLeft claim) left) (recordSalt (claimRight claim) right)
     (recordValue (claimLeft claim) left) (recordValue (claimRight claim) right)
-    (recordPath (recordIndex (claimLeft claim) left) (recordSibling oracle.compression (claimLeft claim) left))
-    (recordPath (recordIndex (claimRight claim) right) (recordSibling oracle.compression (claimRight claim) right))
+    (recordPath (recordIndex (claimLeft claim) left) (recordSibling (claimLeft claim) left))
+    (recordPath (recordIndex (claimRight claim) right) (recordSibling (claimRight claim) right))
+    (recordCap (claimLeft claim)) (recordCap (claimRight claim))
+    ((recordIndex (claimLeft claim) left).val / 2^PATH_LEVELS)
+    (record_cap_node_bound _ _)
   · rw [records.2.2.1]
     exact record_path_directions _ _ _
   · exact records.2.2.2
-  · exact leftRoot.trans rightRoot.symm
+  · exact leftRoot.1
+  · rw [records.2.2.1]; exact rightRoot.1
+  · exact leftRoot.2.trans rightRoot.2.symm
 
 /-- A winning binding-game claim forces a collision detectable by replaying at
-most 56 compression calls on the extracted paths (plus cap-tree sibling replay when needed). -/
+most 170 compression calls, independently of the sizes of its two opening batches. -/
 theorem breaks_implies_collision (oracle : Oracle) (claim : Scheme.Claim)
     (breaks : submission.scheme.Breaks oracle claim) :
     ∃ left right, ConflictingRecords claim left right ∧
       (recordInputs oracle.compression (claimLeft claim) left).length +
-        (recordInputs oracle.compression (claimRight claim) right).length = 56 ∧
+        (recordInputs oracle.compression (claimRight claim) right).length = 170 ∧
       ∃ input ∈ recordInputs oracle.compression (claimLeft claim) left,
         ∃ input' ∈ recordInputs oracle.compression (claimRight claim) right,
           input ≠ input' ∧ oracle.compression input = oracle.compression input' := by

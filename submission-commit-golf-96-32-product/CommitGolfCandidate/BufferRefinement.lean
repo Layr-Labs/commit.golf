@@ -93,6 +93,27 @@ theorem opening_input_digest (trapdoor : BitVec (8*submission.sizes.trapdoor))
   intro j hj
   simpa only [Nat.add_assoc] using opening_input_byte trapdoor positions (offset+j) (by omega)
 
+/-- The opening machine reads exact byte slices of any width from its serialized trapdoor
+(used for the 24-byte salts). -/
+theorem opening_input_bytes (trapdoor : BitVec (8*submission.sizes.trapdoor))
+    (positions : Positions) (offset count : Nat) (inside : offset+count ≤ submission.sizes.trapdoor) :
+    readBuffer (submission.initialState .opening (trapdoor, positions))
+      (submission.layout.trapdoor+offset) count = trapdoor.extractLsb' (8*offset) (8*count) := by
+  apply read_serialized_slice
+  intro j hj
+  simpa only [Nat.add_assoc] using opening_input_byte trapdoor positions (offset+j) (by omega)
+
+/-- Width-generic trapdoor roundtrip: every byte slice of commitment memory inside the
+trapdoor reaches the opening machine unchanged. -/
+theorem opening_input_roundtrip_bytes (state : MachineState) (positions : Positions)
+    (offset count : Nat) (inside : offset+count ≤ submission.sizes.trapdoor) :
+    readBuffer (submission.initialState .opening
+      (readBuffer state submission.layout.trapdoor submission.sizes.trapdoor, positions))
+      (submission.layout.trapdoor+offset) count =
+        readBuffer state (submission.layout.trapdoor+offset) count := by
+  rw [opening_input_bytes _ positions offset count inside,
+    read_buffer_slice _ _ _ _ _ inside]
+
 /-- Passing the actual commitment memory through the serialized trapdoor preserves
 all tree nodes and salts read by opening. -/
 theorem opening_input_roundtrip (state : MachineState) (positions : Positions) (offset : Nat)
@@ -129,7 +150,8 @@ theorem check_input_proof_byte (input : CheckInput)
   have cardinal := positions_card_bound input.positions
   rw [initial_input_byte submission .check input _ (by
     change 10871640096+offset < 2^64
-    change input.proof.length ≤ 13421772800 at valid
+    rw [submission_proof_capacity] at valid
+    norm_num [LENGTH, LOG_LENGTH] at valid
     omega)]
   have outsideRoot : ¬ (submission.layout.commitment ≤ submission.layout.proof+offset ∧
       submission.layout.proof+offset < submission.layout.commitment+(DIGEST_BITS+7)/8) := by
@@ -214,38 +236,54 @@ theorem check_input_value_block (input : CheckInput) (ordinal block : Nat)
       simpa only [Nat.add_assoc] using check_input_value_byte input ordinal (64*block+j) present (by omega))
   simpa only [← Nat.mul_assoc, Nat.reduceMul] using decoded
 
+attribute [local irreducible] openingInitializedState openingPositionState openingExitState
+
 /-- The actual bytes returned by opening are the bytes loaded by verification.
 This covers every honest opening input and does not assume the Merkle proof is valid. -/
 theorem check_opening_proof_byte (trapdoor : BitVec (8*submission.sizes.trapdoor))
     (positions : Positions) (commitment : Commitment) (values : Values positions)
-    (offset : Nat) (inside : offset < openingProofBytes positions.card) :
+    (offset : Nat) (inside : offset < (4096+568*positions.card)) :
     (submission.initialState .check
       ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩).getByte
       (BitVec.ofNat 64 (submission.layout.proof+offset)) =
         (openingResult trapdoor positions).state.getByte
           (BitVec.ofNat 64 (submission.layout.proof+offset)) := by
-  let input : CheckInput :=
-    ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩
-  have valid : input.proof.length ≤ submission.sizes.proof := by
-    change (submission.readProof _).length ≤ _
-    rw [opening_proof_length]
+  have valid : (submission.readProof (openingResult trapdoor positions)).length ≤
+      submission.sizes.proof := by
+    rw [opening_proof_length, submission_proof_capacity]
     have cardinal := positions_card_bound positions
-    have le800 := opening_proof_bytes_le positions.card
-    change openingProofBytes positions.card ≤ 13421772800
+    norm_num [LENGTH, LOG_LENGTH]
     omega
-  have bounded : offset < input.proof.length := by
-    change offset < (submission.readProof _).length
+  have bounded : offset < (submission.readProof (openingResult trapdoor positions)).length := by
     rw [opening_proof_length]
     exact inside
-  have loaded := check_input_proof_byte input valid offset bounded
+  have loaded := check_input_proof_byte
+    ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩
+    valid offset bounded
   apply loaded.trans
-  simp only [input, Submission.readProof, opening_result_succeeded, if_true,
+  simp only [Submission.readProof, opening_result_succeeded, if_true,
     opening_result_length, List.getElem_map, List.getElem_range]
+
+/-- Any byte slice of the emitted proof survives the opening-output/check-input boundary
+exactly (used for the 24-byte salts). -/
+theorem check_opening_proof_bytes (trapdoor : BitVec (8*submission.sizes.trapdoor))
+    (positions : Positions) (commitment : Commitment) (values : Values positions)
+    (offset count : Nat) (inside : offset+count ≤ (4096+568*positions.card)) :
+    readBuffer (submission.initialState .check
+      ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩)
+      (submission.layout.proof+offset) count =
+        readBuffer (openingResult trapdoor positions).state (submission.layout.proof+offset) count := by
+  unfold readBuffer
+  apply congrArg (BitVec.ofNat (8*count))
+  apply Finset.sum_congr rfl
+  intro j hj
+  rw [Nat.add_assoc, check_opening_proof_byte trapdoor positions commitment values (offset+j)
+    (by have := Finset.mem_range.mp hj; omega)]
 
 /-- Salt and sibling digests survive the opening-output/check-input boundary exactly. -/
 theorem check_opening_proof_digest (trapdoor : BitVec (8*submission.sizes.trapdoor))
     (positions : Positions) (commitment : Commitment) (values : Values positions)
-    (offset : Nat) (inside : offset+32 ≤ openingProofBytes positions.card) :
+    (offset : Nat) (inside : offset+32 ≤ (4096+568*positions.card)) :
     readBuffer (submission.initialState .check
       ⟨commitment, positions, values, submission.readProof (openingResult trapdoor positions)⟩)
       (submission.layout.proof+offset) 32 =

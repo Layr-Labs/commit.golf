@@ -2,7 +2,8 @@ import CommitGolfCandidate.HidingLeaf
 
 /-! A bounded oracle computation for the reference heap. This is a security-proof
 continuation, not a replacement for the submitted machine or its cycle accounting.
-Recomputing subtrees lets the leaf hiding lemma charge every honest compression. -/
+The heap is computed once (memoized), so the leaf hiding lemma charges each honest
+compression exactly once. -/
 namespace CommitGolfCandidate
 open CommitGolf OracleComp
 
@@ -23,94 +24,148 @@ theorem fixed_hash_parent (oracle : Oracle) (left right : Digest)
   erw [fixed_oracle_run_public]
   rfl
 
-/-- Compute a heap node from oracle-computed leaves. Fuel bounds the tree depth;
-the refinement theorem below proves it is sufficient on all nodes of interest. -/
-def queryHeap (leafCount : Nat) (leaf : Nat → OracleComp World Digest) :
-    Nat → Nat → OracleComp World Digest
-  | 0, node =>
-      if leafCount ≤ node ∧ node < 2*leafCount then leaf (node-leafCount) else pure 0
-  | fuel+1, node =>
-      if 0 < node ∧ node < leafCount then do
-        let left ← queryHeap leafCount leaf fuel (2*node)
-        let right ← queryHeap leafCount leaf fuel (2*node+1)
-        hashParent left right
-      else if leafCount ≤ node ∧ node < 2*leafCount then leaf (node-leafCount)
-      else pure 0
+def queryList {α β : Type} (query : α → OracleComp World β) : List α → OracleComp World (List β)
+  | [] => pure []
+  | head :: tail => do
+      let value ← query head
+      let values ← queryList query tail
+      pure (value :: values)
 
-/-- Two child computations and one parent compression per internal node. -/
-def heapQueryBudget (leafBudget : Nat) : Nat → Nat
-  | 0 => leafBudget
-  | depth+1 => heapQueryBudget leafBudget depth + heapQueryBudget leafBudget depth + 1
+theorem query_list_bound {α β : Type} (query : α → OracleComp World β)
+    (budget : Nat) (bounded : ∀ input, PublicQueryBound (query input) budget) (inputs : List α) :
+    PublicQueryBound (queryList query inputs) (inputs.length*budget) := by
+  induction inputs with
+  | nil => trivial
+  | cons head tail ih =>
+    have rest (value : β) := public_query_bound_bind ih
+      (fun values => (show PublicQueryBound (pure (value :: values) : OracleComp World _) 0 from trivial))
+    have result := public_query_bound_bind (bounded head) rest
+    simpa only [queryList, List.length_cons, Nat.add_zero, Nat.add_mul, Nat.one_mul,
+      Nat.add_comm] using result
 
-theorem heap_query_budget_ge_leaf (leafBudget depth : Nat) :
-    leafBudget ≤ heapQueryBudget leafBudget depth := by
-  induction depth with
-  | zero => exact Nat.le_refl _
-  | succ depth ih => simp only [heapQueryBudget]; omega
+theorem query_list_reference (oracle : Oracle) {α β : Type}
+    (query : α → OracleComp World β) (values : α → β) (inputs : List α)
+    (correct : ∀ input ∈ inputs, fixedOracleRun oracle (query input) = pure (values input)) :
+    fixedOracleRun oracle (queryList query inputs) = pure (inputs.map values) := by
+  induction inputs with
+  | nil => exact fixed_oracle_run_pure _ _
+  | cons head tail ih =>
+    rw [queryList, fixed_oracle_run_bind, correct head List.mem_cons_self, pure_bind]
+    rw [fixed_oracle_run_bind, ih (fun input member => correct input (List.mem_cons_of_mem _ member)), pure_bind]
+    exact fixed_oracle_run_pure _ _
 
-theorem heap_query_budget_formula (leafBudget depth : Nat) :
-    heapQueryBudget leafBudget depth + 1 = (leafBudget+1)*2^depth := by
-  induction depth with
-  | zero => simp [heapQueryBudget]
-  | succ depth ih =>
-    simp only [heapQueryBudget, Nat.pow_succ]
-    nlinarith
+/-! A memoized computation of the whole heap: each leaf once, then each internal
+node once in descending order. This is the honest commitment's own query count. -/
 
-theorem query_heap_bound (leafCount : Nat) (leaf : Nat → OracleComp World Digest)
-    (leafBudget : Nat) (bounded : ∀ index, PublicQueryBound (leaf index) leafBudget)
-    (fuel node : Nat) :
-    PublicQueryBound (queryHeap leafCount leaf fuel node) (heapQueryBudget leafBudget fuel) := by
-  induction fuel generalizing node with
+/-- Leaves placed at heap slots `leafCount .. 2*leafCount-1`; every other slot is zero. -/
+def initialHeap (leafCount : Nat) (leaves : List Digest) (node : Nat) : Digest :=
+  if leafCount ≤ node ∧ node < 2*leafCount then leaves.getD (node-leafCount) 0 else 0
+
+/-- Pure fold: after `m` steps, nodes `leafCount-1` down to `leafCount-m` are combined. -/
+def parentsFrom (compress : Compression) (leafCount : Nat) (heap : Nat → Digest) : Nat → Nat → Digest
+  | 0 => heap
+  | m+1 =>
+      let current := parentsFrom compress leafCount heap m
+      Function.update current (leafCount-1-m)
+        (combine compress (current (2*(leafCount-1-m))) (current (2*(leafCount-1-m)+1)))
+
+def queryParentsFrom (leafCount : Nat) (heap : Nat → Digest) : Nat → OracleComp World (Nat → Digest)
+  | 0 => pure heap
+  | m+1 => do
+      let current ← queryParentsFrom leafCount heap m
+      let digest ← hashParent (current (2*(leafCount-1-m))) (current (2*(leafCount-1-m)+1))
+      pure (Function.update current (leafCount-1-m) digest)
+
+theorem query_parents_from_bound (leafCount : Nat) (heap : Nat → Digest) (m : Nat) :
+    PublicQueryBound (queryParentsFrom leafCount heap m) m := by
+  induction m with
+  | zero => trivial
+  | succ m ih =>
+    have step := public_query_bound_bind ih (fun current =>
+      public_query_bound_bind (hash_parent_bound (current (2*(leafCount-1-m))) (current (2*(leafCount-1-m)+1)))
+        (fun digest => (show PublicQueryBound
+          (pure (Function.update current (leafCount-1-m) digest) : OracleComp World _) 0 from trivial)))
+    exact step
+
+theorem fixed_query_parents_from (oracle : Oracle) (leafCount : Nat) (heap : Nat → Digest) (m : Nat) :
+    fixedOracleRun oracle (queryParentsFrom leafCount heap m) =
+      pure (parentsFrom oracle.compression leafCount heap m) := by
+  induction m with
+  | zero => exact fixed_oracle_run_pure _ _
+  | succ m ih =>
+    rw [queryParentsFrom, fixed_oracle_run_bind, ih, pure_bind, fixed_hash_parent, fixed_oracle_run_pure]
+    rfl
+
+theorem reference_heap_outside (compress : Compression) (leafCount : Nat)
+    (leaf : Nat → Digest) (node : Nat) (outside : node = 0 ∨ 2*leafCount ≤ node) :
+    referenceHeap compress leafCount leaf node = 0 := by
+  rw [referenceHeap, dif_neg (by omega), if_neg (by omega)]
+
+theorem parents_from_reference (compress : Compression) (leafCount : Nat) (leaf heap : Nat → Digest)
+    (initial : ∀ node, leafCount ≤ node ∨ node = 0 → heap node = referenceHeap compress leafCount leaf node)
+    (m : Nat) (enough : m+1 ≤ leafCount) :
+    (∀ node, leafCount-m ≤ node → parentsFrom compress leafCount heap m node =
+      referenceHeap compress leafCount leaf node) ∧
+    (∀ node, node < leafCount-m → parentsFrom compress leafCount heap m node = heap node) := by
+  induction m with
   | zero =>
-    simp only [queryHeap, heapQueryBudget]
-    split
-    · exact bounded _
-    · trivial
-  | succ fuel ih =>
-    simp only [queryHeap]
-    split
-    · have parent := public_query_bound_bind (ih (2*node)) (fun left =>
-        public_query_bound_bind (ih (2*node+1)) (fun right => hash_parent_bound left right))
-      simpa only [heapQueryBudget, Nat.add_assoc] using parent
-    · split
-      · exact (bounded _).mono (heap_query_budget_ge_leaf leafBudget (fuel+1))
-      · trivial
+    exact ⟨fun node above => initial node (Or.inl (by omega)), fun _ _ => rfl⟩
+  | succ m ih =>
+    obtain ⟨upper, lower⟩ := ih (by omega)
+    constructor
+    · intro node above
+      change Function.update (parentsFrom compress leafCount heap m) (leafCount-1-m) _ node = _
+      by_cases same : node = leafCount-1-m
+      · subst node
+        rw [Function.update_self, upper _ (by omega), upper _ (by omega)]
+        exact (reference_heap_parent _ _ _ _ (by omega) (by omega)).symm
+      · rw [Function.update_of_ne same, upper _ (by omega)]
+    · intro node below
+      change Function.update (parentsFrom compress leafCount heap m) (leafCount-1-m) _ node = _
+      rw [Function.update_of_ne (by omega), lower _ (by omega)]
 
-/-- The depth bound ensures no valid subtree is cut short. Every returned digest
-is exactly the reference heap digest, with the same fixed compression table. -/
-theorem query_heap_reference (oracle : Oracle) (leafCount : Nat)
+theorem parents_from_complete (compress : Compression) (leafCount : Nat) (leaf heap : Nat → Digest)
+    (initial : ∀ node, leafCount ≤ node ∨ node = 0 → heap node = referenceHeap compress leafCount leaf node)
+    (positive : 0 < leafCount) :
+    parentsFrom compress leafCount heap (leafCount-1) = referenceHeap compress leafCount leaf := by
+  obtain ⟨upper, lower⟩ := parents_from_reference compress leafCount leaf heap initial (leafCount-1) (by omega)
+  funext node
+  by_cases zero : node = 0
+  · subst node
+    rw [lower 0 (by omega), initial 0 (Or.inr rfl)]
+  · exact upper node (by omega)
+
+/-- The whole heap, every leaf and internal node computed exactly once. -/
+def queryAll (leafCount : Nat) (leaf : Nat → OracleComp World Digest) : OracleComp World (Nat → Digest) := do
+  let leaves ← queryList leaf (List.range leafCount)
+  queryParentsFrom leafCount (initialHeap leafCount leaves) (leafCount-1)
+
+theorem query_all_bound (leafCount : Nat) (leaf : Nat → OracleComp World Digest)
+    (leafBudget : Nat) (bounded : ∀ index, PublicQueryBound (leaf index) leafBudget) :
+    PublicQueryBound (queryAll leafCount leaf) (leafCount*leafBudget+(leafCount-1)) := by
+  have leaves := query_list_bound leaf leafBudget bounded (List.range leafCount)
+  rw [List.length_range] at leaves
+  exact public_query_bound_bind leaves (fun leaves => query_parents_from_bound leafCount _ _)
+
+theorem query_all_reference (oracle : Oracle) (leafCount : Nat)
     (leaf : Nat → OracleComp World Digest) (values : Nat → Digest)
     (leafExact : ∀ index, fixedOracleRun oracle (leaf index) = pure (values index))
-    (fuel node : Nat) (positive : 0 < node) (inside : node < 2*leafCount)
-    (enough : leafCount ≤ 2^fuel*node) :
-    fixedOracleRun oracle (queryHeap leafCount leaf fuel node) =
-      pure (referenceHeap oracle.compression leafCount values node) := by
-  induction fuel generalizing node with
-  | zero =>
-    have lower : leafCount ≤ node := by simpa only [Nat.pow_zero, Nat.one_mul] using enough
+    (positive : 0 < leafCount) :
+    fixedOracleRun oracle (queryAll leafCount leaf) =
+      pure (referenceHeap oracle.compression leafCount values) := by
+  rw [queryAll, fixed_oracle_run_bind,
+    query_list_reference oracle leaf values _ (fun index _ => leafExact index), pure_bind,
+    fixed_query_parents_from]
+  congr 1
+  apply parents_from_complete _ _ _ _ _ positive
+  intro node cases
+  unfold initialHeap
+  split
+  · rename_i inside
     have address : leafCount+(node-leafCount) = node := by omega
-    rw [queryHeap, if_pos ⟨lower, inside⟩, leafExact]
+    rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range (by omega),
+      Option.map_some, Option.getD_some]
     rw [← address, reference_heap_leaf _ _ _ _ (by omega), Nat.add_sub_cancel_left]
-  | succ fuel ih =>
-    rw [queryHeap]
-    split
-    · rename_i branch
-      have leftEnough : leafCount ≤ 2^fuel*(2*node) := by
-        calc leafCount ≤ 2^(fuel+1)*node := enough
-             _ = 2^fuel*(2*node) := by rw [Nat.pow_succ]; ring
-      have rightEnough : leafCount ≤ 2^fuel*(2*node+1) :=
-        leftEnough.trans (Nat.mul_le_mul_left _ (by omega))
-      rw [fixed_oracle_run_bind, ih (2*node) (by omega) (by omega) leftEnough, pure_bind]
-      rw [fixed_oracle_run_bind, ih (2*node+1) (by omega) (by omega) rightEnough, pure_bind]
-      have final := fixed_hash_parent oracle
-        (referenceHeap oracle.compression leafCount values (2*node))
-        (referenceHeap oracle.compression leafCount values (2*node+1)) pure
-      simp only [bind_pure, fixed_oracle_run_pure] at final
-      rw [final, reference_heap_parent _ _ _ _ branch.1 branch.2]
-    · rename_i notBranch
-      have lower : leafCount ≤ node := by omega
-      have address : leafCount+(node-leafCount) = node := by omega
-      rw [if_pos ⟨lower, inside⟩, leafExact]
-      rw [← address, reference_heap_leaf _ _ _ _ (by omega), Nat.add_sub_cancel_left]
+  · exact (reference_heap_outside _ _ _ _ (by omega)).symm
 
 end CommitGolfCandidate

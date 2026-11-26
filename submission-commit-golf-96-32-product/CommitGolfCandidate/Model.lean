@@ -43,6 +43,50 @@ def leafDigest (compress : Compression) (salt : Digest) (value : Entry) : Digest
   (List.range 4).foldl
     (fun state block => absorb compress state (value.extractLsb' (512 * block) 512)) salt
 
+/-- A 24-byte salt as the initial leaf state `salt | 0^64`: the salt occupies the low
+192 bits (the first 24 bytes in memory) and the high word is zero. -/
+def saltState (salt : BitVec 192) : Digest := (0 : BitVec 64) ++ salt
+
+@[simp] theorem saltState_low (salt : BitVec 192) : (saltState salt).extractLsb' 0 192 = salt :=
+  BitVec.extractLsb'_append_eq_right
+
+theorem saltState_injective {salt salt' : BitVec 192} (same : saltState salt = saltState salt') :
+    salt = salt' := by
+  simpa only [saltState_low] using congrArg (fun x : Digest => x.extractLsb' 0 192) same
+
+/-- Number of cap pairs and levels authenticated per record, for the 2^24-leaf vector. -/
+abbrev CAP_PAIRS : Nat := 64
+abbrev PATH_LEVELS : Nat := 17
+
+/-- Two adjacent cap digests as one 512-bit block; the even node is the low half,
+so the chain input in memory reads `[state | cap (2k) | cap (2k+1)]`. -/
+def capBlock (cap : Nat → Digest) (pair : Nat) : LeafBlock := cap (2*pair+1) ++ cap (2*pair)
+
+def capBlocks (cap : Nat → Digest) : List LeafBlock := (List.range CAP_PAIRS).map (capBlock cap)
+
+/-- The commitment: a 96-byte chain over the 64 cap pairs, starting from the zero state. -/
+def capRoot (compress : Compression) (cap : Nat → Digest) : Digest :=
+  (capBlocks cap).foldl (absorb compress) 0
+
+theorem capBlock_injective {cap cap' : Nat → Digest} {pair : Nat}
+    (same : capBlock cap pair = capBlock cap' pair) :
+    cap (2*pair) = cap' (2*pair) ∧ cap (2*pair+1) = cap' (2*pair+1) := by
+  constructor
+  · simpa only [capBlock, BitVec.extractLsb'_append_eq_right] using
+      congrArg (fun x : LeafBlock => x.extractLsb' 0 256) same
+  · simpa only [capBlock, BitVec.extractLsb'_append_eq_left] using
+      congrArg (fun x : LeafBlock => x.extractLsb' 256 256) same
+
+/-- Different cap entries give different block lists. -/
+theorem capBlocks_ne_of_ne {cap cap' : Nat → Digest} {node : Nat} (inside : node < 2*CAP_PAIRS)
+    (different : cap node ≠ cap' node) : capBlocks cap ≠ capBlocks cap' := by
+  intro same
+  have pairEq := List.map_inj_left.mp same (node/2) (List.mem_range.mpr (by omega))
+  have halves := capBlock_injective pairEq
+  rcases Nat.mod_two_eq_zero_or_one node with even | odd
+  · exact different (by have h := halves.1; rwa [show 2*(node/2) = node by omega] at h)
+  · exact different (by have h := halves.2; rwa [show 2*(node/2)+1 = node by omega] at h)
+
 def parentLayer (compress : Compression) : List Digest → List Digest
   | left :: right :: rest => combine compress left right :: parentLayer compress rest
   | _ => []
@@ -62,8 +106,8 @@ theorem digestBytes_length (digest : Digest) : (digestBytes digest).length = 32 
   simp [digestBytes]
 
 theorem referenceProof_length (tree : List (List Digest)) (depth index : Nat) (salt : Digest) :
-    (referenceProof tree depth index salt).length = openingBytes depth := by
-  simp [referenceProof, digestBytes_length, openingBytes, List.length_flatMap, List.sum_replicate]
+    (referenceProof tree depth index salt).length = 32 * (depth + 1) := by
+  simp [referenceProof, digestBytes_length, List.length_flatMap, List.sum_replicate]
   omega
 
 /-- Indexed trees make the root reconstruction invariant independent of memory layout. -/

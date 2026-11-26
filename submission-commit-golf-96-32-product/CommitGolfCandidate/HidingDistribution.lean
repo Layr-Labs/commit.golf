@@ -12,25 +12,6 @@ namespace CommitGolfCandidate
 local instance hidingDistributionDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf CommitGolf.Riscv OracleComp OracleComp.DeferredSampling
 
-theorem fixed_oracle_run_bind (oracle : Oracle) {α β : Type}
-    (computation : OracleComp World α) (next : α → OracleComp World β) :
-    fixedOracleRun oracle (computation >>= next) =
-      (fixedOracleRun oracle computation >>= fun value => fixedOracleRun oracle (next value)) := by
-  simp only [fixedOracleRun, oracle_run_bind, map_bind, map_pure, bind_map_left]
-  simp only [map_eq_bind_pure_comp]
-  apply bind_congr
-  intro first
-  cases first
-  apply bind_congr
-  intro second
-  cases second
-  rfl
-
-theorem fixed_oracle_run_map (oracle : Oracle) {α β : Type}
-    (f : α → β) (computation : OracleComp World α) :
-    fixedOracleRun oracle (f <$> computation) = f <$> fixedOracleRun oracle computation := by
-  simp only [fixedOracleRun, oracle_run_map, Functor.map_map]
-
 /-- The actual commitment followed by its actual opening, returning precisely
 the public transcript seen by the adversary. The private trapdoor is discarded. -/
 def honestTranscript (message : Message) (positions : Positions) :
@@ -39,28 +20,28 @@ def honestTranscript (message : Message) (positions : Positions) :
   let proof ← submission.scheme.opening trapdoor positions
   return (root, proof)
 
-/-- Public transcript of the mathematical salted tree for one fixed salt vector. -/
-def referenceTranscript (compress : Compression) (message : Message)
-    (salt : Index → Digest) (positions : Positions) : Commitment × Proof :=
-  let heap := saltedHeap compress message salt
-  (heap 1, referenceOpening heap salt positions)
-
 private theorem scheme_commit_map (program : Submission) (message : Message) :
     program.scheme.commit message = program.readCommit <$> program.run .commit message := rfl
 
-attribute [local irreducible] commitFinalResult submission readBuffer saltedHeap referenceOpening
+attribute [local irreducible] commitFinalResult submission readBuffer saltedHeap referenceOpening capRoot referenceCap
+  openingResult openingInitializedState openingPositionState openingExitState
 
 private theorem final_transcript (oracle : Oracle) (message : Message) {bits : Nat}
-    (answer : BitVec bits) (width : bits = 256*LENGTH) (positions : Positions) :
+    (answer : BitVec bits) (width : bits = 192*LENGTH) (positions : Positions) :
     let result := (commitFinalResult oracle message answer).1
     let (root, trapdoor) := submission.readCommit result
     (root, submission.readProof (openingResult trapdoor positions)) =
       referenceTranscript oracle.compression message
-        (fun index => answer.extractLsb' (256*index.val) 256) positions := by
+        (fun index => saltState (answer.extractLsb' (192*index.val) 192)) positions := by
   have contents := commit_final_contents oracle message answer width
+  have salts : ∀ index : Index, saltState (readBuffer (commitFinalResult oracle message answer).1.state
+      (5905584160+24*index.val) 24) = saltState (answer.extractLsb' (192*index.val) 192) := by
+    intro index
+    rw [contents.2 index]
   apply Prod.ext
-  · exact committed_root_reference oracle message _ contents.1 _ contents.2
-  · exact opening_reference_bytes oracle message _ contents.1 _ contents.2 positions
+  · have root := committed_root_reference oracle message _ contents.1 _ salts
+    exact root
+  · exact opening_reference_bytes oracle message _ contents.1 _ salts positions
 
 /-- For every fixed oracle and input, the actual transcript is exactly a fresh
 salt draw followed by the reference tree computation. This covers all proof bytes. -/
@@ -68,7 +49,7 @@ theorem honest_transcript_distribution (oracle : Oracle) (message : Message)
     (positions : Positions) :
     fixedOracleRun oracle (honestTranscript message positions) =
       (commitSaltCoins message >>= fun answer => pure (referenceTranscript oracle.compression message
-        (fun index => answer.extractLsb' (256*index.val) 256) positions)) := by
+        (fun index => saltState (answer.extractLsb' (192*index.val) 192)) positions)) := by
   have finish (root : Commitment) (trapdoor : submission.scheme.Trapdoor) :
       fixedOracleRun oracle (do
         let proof ← submission.scheme.opening trapdoor positions
@@ -102,8 +83,9 @@ def referenceHiding {AdversaryState Output : Type} {openingSize : Nat}
     (selectSecond : Bool) : ProbComp Output := do
   let challenge ← fixedOracleRun oracle adversary.choose
   let message := if selectSecond then challenge.message₁ else challenge.message₀
-  let salt ← $ᵗ (Index → Digest)
-  let (root, proof) := referenceTranscript oracle.compression message salt challenge.positions
+  let salt ← $ᵗ (Index → BitVec 192)
+  let (root, proof) := referenceTranscript oracle.compression message
+    (fun index => saltState (salt index)) challenge.positions
   fixedOracleRun oracle (adversary.observe challenge.aux root proof)
 
 private theorem hiding_experiment_transcript {AdversaryState Output : Type} {openingSize : Nat}
@@ -131,9 +113,11 @@ theorem hiding_fixed_reference {AdversaryState Output : Type} {openingSize : Nat
   exact commit_salts_uniform (if selectSecond then challenge.message₁ else challenge.message₀)
     (fun salt => fixedOracleRun oracle (adversary.observe challenge.aux
       (referenceTranscript oracle.compression
-        (if selectSecond then challenge.message₁ else challenge.message₀) salt challenge.positions).1
+        (if selectSecond then challenge.message₁ else challenge.message₀)
+        (fun index => saltState (salt index)) challenge.positions).1
       (referenceTranscript oracle.compression
-        (if selectSecond then challenge.message₁ else challenge.message₀) salt challenge.positions).2))
+        (if selectSecond then challenge.message₁ else challenge.message₀)
+        (fun index => saltState (salt index)) challenge.positions).2))
 
 /-- The original hiding game and the reference game are the same distribution.
 The final hiding proof must still bound the distance between the two selectors. -/

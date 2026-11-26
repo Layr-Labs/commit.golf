@@ -101,4 +101,71 @@ theorem hidden_reprogram_distance (oracle : Oracle) (block : LeafBlock) (answer 
   exact distance.trans (ENNReal.toReal_mono (by finiteness)
     (fresh_query_hit_bound oracle computation budget bounded))
 
+/-- A 192-bit salt placed in the low bits of a zero-extended state is hit only by
+guessing its low 192 bits among those of the traced inputs. -/
+theorem fresh_trace_hit_probability192 (trace : List (BitVec COMPRESSION_INPUT_LENGTH)) :
+    (prEvent ((fun salt : BitVec 192 => trace.any
+      (fun input => decide (input.extractLsb' 0 256 = saltState salt)) = true) <$> (($ᵗ BitVec 192)))) ≤
+      (trace.length : ENNReal) / 2^192 := by
+  have included :
+      (prEvent ((fun salt : BitVec 192 => trace.any
+        (fun input => decide (input.extractLsb' 0 256 = saltState salt)) = true) <$> (($ᵗ BitVec 192)))) ≤
+      (prEvent ((fun salt : BitVec 192 =>
+        salt ∈ trace.map (fun input => (input.extractLsb' 0 256).extractLsb' 0 192)) <$>
+          (($ᵗ BitVec 192)))) := by
+    apply prEvent_mono_of_support
+    intro salt _ hit
+    obtain ⟨input, member, same⟩ := List.any_eq_true.mp hit
+    exact List.mem_map.mpr ⟨input, member, by rw [of_decide_eq_true same, saltState_low]⟩
+  have guess := uniform_list_guess 192
+    (trace.map (fun input => (input.extractLsb' 0 256).extractLsb' 0 192))
+  rw [List.length_map] at guess
+  exact included.trans guess
+
+theorem fresh_query_hit_bound192 (oracle : Oracle) {α : Type}
+    (computation : OracleComp World α) (budget : Nat)
+    (bounded : PublicQueryBound computation budget) :
+    (prEvent ((fun result : α × Unit × Bool => result.2.2 = true) <$> ((($ᵗ BitVec 192) >>= fun salt =>
+      flaggedRun oracle (marksSalt (saltState salt)) computation)))) ≤
+      (budget : ENNReal) / 2^192 := by
+  letI : MeasurableSpace (α × Unit × Bool) := ⊤
+  have reordered :
+      𝒟[($ᵗ BitVec 192) >>= fun salt => flaggedRun oracle (marksSalt (saltState salt)) computation] =
+      𝒟[do let traced ← fixedOracleRun oracle (traceCompression computation)
+           let salt ← $ᵗ BitVec 192
+           pure (traced.1, (), traced.2.any
+             (fun input => decide (input.extractLsb' 0 256 = saltState salt)))] := by
+    simp only [flagged_run_trace, Bool.false_or, map_eq_bind_pure_comp]
+    exact distribution_bind_comm ($ᵗ BitVec 192) (fixedOracleRun oracle (traceCompression computation)) _
+  have probability := (EvalDistEq.of_evalDist_eq reordered).prEvent_eq
+    (fun result => result.2.2 = true)
+  rw [probability]
+  apply prEvent_bind_le_of_forall_le_of_support
+  intro traced reached
+  rw [bind_pure_comp, prEvent_map]
+  refine (fresh_trace_hit_probability192 traced.2).trans ?_
+  exact ENNReal.div_le_div_right (Nat.cast_le.mpr (trace_run_length oracle computation budget
+    bounded traced reached)) _
+
+/-- Programming one input whose initial state is a fresh 192-bit salt changes any
+q-query continuation by at most q/2^192. -/
+theorem hidden_reprogram_distance192 (oracle : Oracle) (block : LeafBlock) (answer : Digest)
+    {α : Type} (computation : OracleComp World α) (budget : Nat)
+    (bounded : PublicQueryBound computation budget) :
+    measureTVDist
+      (($ᵗ BitVec 192) >>= fun _ => fixedOracleRun oracle computation)
+      (($ᵗ BitVec 192) >>= fun salt =>
+        fixedOracleRun (programCompression oracle ((leafInput (saltState salt) block)) answer) computation) ≤
+      ((budget : ENNReal) / 2^192).toReal := by
+  have distance := distance_bind_le_averaged_bad ($ᵗ BitVec 192)
+    (fun _ => fixedOracleRun oracle computation)
+    (fun salt => fixedOracleRun (programCompression oracle ((leafInput (saltState salt) block)) answer) computation)
+    (fun salt => flaggedRun oracle (marksSalt (saltState salt)) computation) (fun salt => by
+      have result := reprogram_compression_distance oracle ((leafInput (saltState salt) block)) answer computation
+      have low : ((leafInput (saltState salt) block)).extractLsb' 0 256 = saltState salt :=
+        leafInput_digest (saltState salt) block
+      simpa only [low] using result)
+  exact distance.trans (ENNReal.toReal_mono (by finiteness)
+    (fresh_query_hit_bound192 oracle computation budget bounded))
+
 end CommitGolfCandidate

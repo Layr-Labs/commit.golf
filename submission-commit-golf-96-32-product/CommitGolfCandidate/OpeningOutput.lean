@@ -1,7 +1,7 @@
 import CommitGolfCandidate.OpeningRecords
 import CommitGolfCandidate.BufferRefinement
 
-/-! Exact proof records (and level-7 cap table for `k = BATCH`) after full opening execution. -/
+/-! Exact proof records after the full opening ABI and machine execution. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
 
@@ -18,21 +18,6 @@ theorem opening_index_bound (positions : Positions) (ordinal : Nat) :
   · exact Fin.isLt _
   · decide
 
-private theorem opening_exit_memory (state : MachineState) :
-    (openingExitState state).mem = state.mem := rfl
-
-private theorem opening_done_gate_memory (state : MachineState) :
-    (openingDoneGateState state).mem = state.mem := rfl
-
-private theorem opening_done_gate_pc (state : MachineState) :
-    (openingDoneGateState state).pc = if state.getReg .x16 = 128 then 4336 else 4472 := rfl
-
-private theorem opening_done_gate_x9 (state : MachineState) :
-    (openingDoneGateState state).getReg .x9 = state.getReg .x9 := rfl
-
-private theorem opening_done_gate_x25 (state : MachineState) :
-    (openingDoneGateState state).getReg .x25 = state.getReg .x25 := rfl
-
 private theorem initial_heap (program : Submission)
     (trapdoor : BitVec (8*program.sizes.trapdoor)) (positions : Positions) :
     (program.initialState .opening (trapdoor, positions)).getReg .x12 =
@@ -48,249 +33,136 @@ private theorem initial_output (program : Submission)
     (program.initialState .opening (trapdoor, positions)).getReg .x15 =
       BitVec.ofNat 64 program.layout.proof := rfl
 
-attribute [local irreducible] openingPositionState openingInitializedState openingDepthState
-  openingCapPairState openingDoneGateState openingCapSetupState openingExitState
-  openingCapExitState Nat.iterate
+/-- Reads of two aligned digests agree when their four words agree pairwise. -/
+private theorem read_digest_transfer (left right : MachineState) (first second : Nat)
+    (firstAligned : first % 8 = 0) (secondAligned : second % 8 = 0)
+    (words : ∀ i < 4, left.getMem (BitVec.ofNat 64 (first + 8*i)) =
+      right.getMem (BitVec.ofNat 64 (second + 8*i))) :
+    readBuffer left first 32 = readBuffer right second 32 := by
+  rw [read_digest_words _ _ firstAligned, read_digest_words _ _ secondAligned]
+  have w0 := words 0 (by decide)
+  have w1 := words 1 (by decide)
+  have w2 := words 2 (by decide)
+  have w3 := words 3 (by decide)
+  simp only [Nat.reduceMul, Nat.add_zero] at w0 w1 w2 w3
+  rw [w0, w1, w2, w3]
 
-private theorem setup_data_records (committed : MachineState) (positions : Positions) (pathDepth : Nat)
-    (depthBound : pathDepth ≤ 24) :
+attribute [local irreducible] openingPositionState openingInitializedState
+
+set_option maxRecDepth 4096 in
+/-- Every emitted cap node, salt and sibling equals the corresponding digest of the
+actual commitment memory, after serialization into the opening's private-state input.
+The proof starts with the 128 cap nodes (heap slots 128..255), followed by one
+568-byte record (24-byte salt and 17 siblings) per position. -/
+theorem opening_output_records (committed : MachineState) (positions : Positions) :
     let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
-    let dReady := openingDepthState (openingInitializedState (submission.initialState .opening (trapdoor, positions)))
+    (∀ node < 128, readBuffer (openingResult trapdoor positions).state
+        (submission.layout.proof+32*node) 32 =
+          readBuffer committed (4294971424+heapOffset (128+node)) 32) ∧
     ∀ ordinal < positions.card,
-      readBuffer ((openingPositionState pathDepth)^[positions.card] dReady)
-        (submission.layout.proof+(32+32*pathDepth)*ordinal) 32 =
-          readBuffer committed (5905584160+32*openingIndex positions ordinal) 32 ∧
-      ∀ level < pathDepth,
-        readBuffer ((openingPositionState pathDepth)^[positions.card] dReady)
-          (submission.layout.proof+(32+32*pathDepth)*ordinal+32+32*level) 32 =
+      readBuffer (openingResult trapdoor positions).state
+        (submission.layout.proof+4096+568*ordinal) 24 =
+          readBuffer committed (5905584160+24*openingIndex positions ordinal) 24 ∧
+      ∀ level < 17,
+        readBuffer (openingResult trapdoor positions).state
+          (submission.layout.proof+4096+568*ordinal+24+32*level) 32 =
             readBuffer committed
               (4294971424+heapOffset (((LENGTH+openingIndex positions ordinal)/2^level) ^^^ 1)) 32 := by
   let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
   let initial := submission.initialState .opening (trapdoor, positions)
   let ready := openingInitializedState initial
-  let dReady := openingDepthState ready
-  have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
+  have cardinal : positions.card ≤ LENGTH := by
+    simpa [Index] using Finset.card_le_univ positions
   have cardinalSmall : positions.card ≤ 16777216 := cardinal
   have regs := opening_setup_registers initial
-  have heap : dReady.getReg .x9 = BitVec.ofNat 64 4294971424 :=
-    (opening_depth_register ready .x9 (by decide) (by decide)).trans
-      (regs.1.trans (initial_heap submission trapdoor positions))
-  have indices : dReady.getReg .x24 = BitVec.ofNat 64 6442455072 :=
-    (opening_depth_register ready .x24 (by decide) (by decide)).trans
-      (regs.2.1.trans (initial_indices submission trapdoor positions))
-  have output : dReady.getReg .x25 = BitVec.ofNat 64 10871640096 :=
-    (opening_depth_register ready .x25 (by decide) (by decide)).trans
-      (regs.2.2.1.trans (initial_output submission trapdoor positions))
-  have leaves : dReady.getReg .x19 = BitVec.ofNat 64 LENGTH :=
-    (opening_depth_register ready .x19 (by decide) (by decide)).trans regs.2.2.2.2.1
-  have salts : dReady.getReg .x18 = BitVec.ofNat 64 5905584160 := by
-    rw [opening_depth_register ready .x18 (by decide) (by decide), regs.2.2.2.2.2.1,
-      initial_heap submission trapdoor positions]; rfl
-  have memory : dReady.mem = initial.mem :=
-    (opening_depth_memory ready).trans regs.2.2.2.2.2.2.2
+  have heap : ready.getReg .x9 = BitVec.ofNat 64 4294971424 :=
+    regs.1.trans (initial_heap submission trapdoor positions)
+  have indices : ready.getReg .x24 = BitVec.ofNat 64 6442455072 :=
+    regs.2.1.trans (initial_indices submission trapdoor positions)
+  have output : ready.getReg .x25 = BitVec.ofNat 64 10871644192 := by
+    rw [regs.2.2.1, initial_output submission trapdoor positions]
+    rfl
+  have leaves : ready.getReg .x19 = BitVec.ofNat 64 LENGTH := regs.2.2.2.2.1
+  have salts : ready.getReg .x18 = BitVec.ofNat 64 5905584160 := by
+    rw [regs.2.2.2.2.2.1, initial_heap submission trapdoor positions]
+    rfl
+  have memoryBelow (address : Nat) (below : address < 10871640096) :
+      ready.getMem (BitVec.ofNat 64 address) = initial.getMem (BitVec.ofNat 64 address) := by
+    apply opening_initialized_memory trapdoor positions
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+    exact below
   have indexData (ordinal : Nat) (present : ordinal < positions.card) :
-      dReady.getMem (BitVec.ofNat 64 (6442455072+8*ordinal)) =
+      ready.getMem (BitVec.ofNat 64 (6442455072+8*ordinal)) =
         BitVec.ofNat 64 (openingIndex positions ordinal) := by
-    rw [show dReady.getMem = initial.getMem from congrArg (fun mem address => mem address) memory]
+    rw [memoryBelow _ (by omega)]
     exact (opening_input_index trapdoor positions ordinal present).trans (by
       simp only [openingIndex, dif_pos present])
   have heapData (slot : Nat) (inside : slot < 2^25) :
-      readBuffer dReady (4294971424+heapOffset slot) 32 =
+      readBuffer ready (4294971424+heapOffset slot) 32 =
         readBuffer committed (4294971424+heapOffset slot) 32 := by
-    rw [read_buffer_memory_congr _ _ memory]
     have within := heap_offset_bound slot (2^24) (by omega)
+    have aligned := heap_offset_aligned slot
+    rw [read_digest_congr _ initial _ (by omega) (fun i hi => memoryBelow _ (by omega))]
     exact opening_input_roundtrip committed positions (heapOffset slot) (by
       change heapOffset slot+32 ≤ 2147483648; omega)
   have saltData (index : Nat) (inside : index < LENGTH) :
-      readBuffer dReady (5905584160+32*index) 32 = readBuffer committed (5905584160+32*index) 32 := by
+      readBuffer ready (5905584160+24*index) 24 = readBuffer committed (5905584160+24*index) 24 := by
     have small : index < 16777216 := inside
-    rw [read_buffer_memory_congr _ _ memory]
-    have result := opening_input_roundtrip committed positions (1610612736+32*index) (by
-      change 1610612736+32*index+32 ≤ 2147483648; omega)
-    change readBuffer initial (4294971424+(1610612736+32*index)) 32 =
-      readBuffer committed (4294971424+(1610612736+32*index)) 32 at result
+    rw [read_salt_congr _ initial _ _ (by omega) (by omega) (fun i hi => memoryBelow _ (by omega))]
+    have result := opening_input_roundtrip_bytes committed positions (1610612736+24*index) 24 (by
+      change 1610612736+24*index+24 ≤ 2147483648; omega)
+    change readBuffer initial (4294971424+(1610612736+24*index)) 24 =
+      readBuffer committed (4294971424+(1610612736+24*index)) 24 at result
     simpa only [← Nat.add_assoc] using result
-  have outBound : 10871640096 + (32 + 32 * pathDepth) * positions.card ≤ MEMORY_BYTES := by
-    have : (32 + 32 * pathDepth) * positions.card ≤ 800 * positions.card :=
-      Nat.mul_le_mul_right _ (by omega)
-    change 10871640096 + _ ≤ 2^36; omega
-  exact opening_all_records pathDepth dReady
+  have records := opening_all_records ready
     (fun slot => readBuffer committed (4294971424+heapOffset slot) 32)
-    (fun index => readBuffer committed (5905584160+32*index) 32)
-    (openingIndex positions) 4294971424 5905584160 6442455072 10871640096 positions.card
+    (fun index => readBuffer committed (5905584160+24*index) 24)
+    (openingIndex positions) 4294971424 5905584160 6442455072 10871644192 positions.card
     heap salts leaves indices output (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by omega) outBound
+    (by decide) (by decide) (by omega)
+    (by change 10871644192+568*positions.card ≤ 2^36; omega)
     indexData (fun ordinal _ => opening_index_bound positions ordinal) heapData saltData
-
-set_option maxRecDepth 4096 in
-/-- For non-batch openings (`positions.card ≠ BATCH`), every emitted salt and 24-level
-sibling equals the corresponding digest of commitment memory. -/
-theorem opening_output_records (committed : MachineState) (positions : Positions)
-    (notBatch : positions.card ≠ BATCH) :
-    let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
-    ∀ ordinal < positions.card,
-      readBuffer (openingResult trapdoor positions).state
-        (submission.layout.proof+800*ordinal) 32 =
-          readBuffer committed (5905584160+32*openingIndex positions ordinal) 32 ∧
-      ∀ level < 24,
-        readBuffer (openingResult trapdoor positions).state
-          (submission.layout.proof+800*ordinal+32+32*level) 32 =
-            readBuffer committed
-              (4294971424+heapOffset (((LENGTH+openingIndex positions ordinal)/2^level) ^^^ 1)) 32 := by
+  have cap := opening_setup_cap initial 4294971424 10871640096
+    (initial_heap submission trapdoor positions) (initial_output submission trapdoor positions)
+    (by decide) (by decide)
+  have finalMemory : (openingResult trapdoor positions).state.mem =
+      (openingPositionState^[positions.card] ready).mem := opening_exit_memory _
+  have proofAddress : submission.layout.proof = 10871640096 := rfl
   dsimp only
-  intro ordinal present
-  have nonempty : positions.card ≠ 0 := by omega
-  let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
-  have finalMem : (openingResult trapdoor positions).state.mem =
-      ((openingPositionState 24)^[positions.card]
-        (openingDepthState (openingInitializedState
-          (submission.initialState .opening (trapdoor, positions))))).mem := by
-    change (openingFinalState trapdoor positions).mem = _
-    simp only [openingFinalState, nonempty, notBatch, ↓reduceIte, opening_exit_memory,
-      opening_done_gate_memory]
-  have recs := setup_data_records committed positions 24 (by decide) ordinal present
+  rw [proofAddress]
   constructor
-  · rw [read_buffer_memory_congr _ _ finalMem]; exact recs.1
-  · intro level inside
-    rw [read_buffer_memory_congr _ _ finalMem]; exact recs.2 level inside
-
-set_option maxHeartbeats 600000 in
-set_option maxRecDepth 4096 in
-/-- For batch openings (`positions.card = BATCH`), the opening emits 128 truncated
-576-byte records (salt + 17 siblings) followed by the 128 level-7 cap digests `heap[128..255]`. -/
-theorem opening_output_records_cap (committed : MachineState) (positions : Positions)
-    (batch : positions.card = BATCH) :
-    let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
-    (∀ ordinal < BATCH,
-      readBuffer (openingResult trapdoor positions).state
-        (submission.layout.proof+576*ordinal) 32 =
-          readBuffer committed (5905584160+32*openingIndex positions ordinal) 32 ∧
-      ∀ level < 17,
-        readBuffer (openingResult trapdoor positions).state
-          (submission.layout.proof+576*ordinal+32+32*level) 32 =
-            readBuffer committed
-              (4294971424+heapOffset (((LENGTH+openingIndex positions ordinal)/2^level) ^^^ 1)) 32) ∧
-    (∀ slot < 128,
-      readBuffer (openingResult trapdoor positions).state
-        (submission.layout.proof+73728+32*slot) 32 =
-          readBuffer committed (4294971424+heapOffset (128+slot)) 32) := by
-  dsimp only
-  let trapdoor := readBuffer committed submission.layout.trapdoor submission.sizes.trapdoor
-  let initial := submission.initialState .opening (trapdoor, positions)
-  let ready := openingInitializedState initial
-  let dReady := openingDepthState ready
-  let afterPos := (openingPositionState 17)^[BATCH] dReady
-  let gated := openingDoneGateState afterPos
-  let capSetup := openingCapSetupState gated
-  have nonempty : positions.card ≠ 0 := by rw [batch]; decide
-  have finalMem : (openingResult trapdoor positions).state.mem =
-      (openingCapPairState^[64] capSetup).mem := by
-    change (openingFinalState trapdoor positions).mem = _
-    unfold openingFinalState
-    rw [if_neg nonempty, if_pos batch]
-    exact opening_cap_exit_memory _
-  have regs := opening_setup_registers initial
-  have dHeap : dReady.getReg .x9 = BitVec.ofNat 64 4294971424 :=
-    (opening_depth_register ready .x9 (by decide) (by decide)).trans
-      (regs.1.trans (initial_heap submission trapdoor positions))
-  have dOut : dReady.getReg .x25 = BitVec.ofNat 64 10871640096 :=
-    (opening_depth_register ready .x25 (by decide) (by decide)).trans
-      (regs.2.2.1.trans (initial_output submission trapdoor positions))
-  have dCnt : dReady.getReg .x27 = BitVec.ofNat 64 BATCH := by
-    rw [opening_depth_register ready .x27 (by decide) (by decide), regs.2.2.2.1, ← batch]; rfl
-  have dOrig : dReady.getReg .x16 = BitVec.ofNat 64 BATCH := by
-    rw [opening_depth_register ready .x16 (by decide) (by decide), regs.2.2.2.2.2.2.1, ← batch]; rfl
-  have posPC : afterPos.pc = 4328 :=
-    (opening_positions_finished 17 BATCH (by decide) dReady dCnt).1
-  have posOrig : afterPos.getReg .x16 = 128 := by
-    rw [opening_positions_preserves_count, dOrig]; rfl
-  have gatePC : gated.pc = 4336 := by rw [opening_done_gate_pc, posOrig]; rfl
-  have posHeap : afterPos.getReg .x9 = BitVec.ofNat 64 4294971424 :=
-    (opening_positions_preserves_heap 17 BATCH dReady).trans dHeap
-  have posOut : afterPos.getReg .x25 = BitVec.ofNat 64 (10871640096 + 73728) := by
-    rw [opening_positions_output 17 BATCH dReady, dOut, ← BitVec.ofNat_add]; rfl
-  have capRegs := opening_cap_setup_registers gated gatePC
-  have capSrc : capSetup.getReg .x23 = BitVec.ofNat 64 (4294971424 + 6144) := by
-    rw [capRegs.2.1, opening_done_gate_x9, posHeap]; rfl
-  have capDst : capSetup.getReg .x25 = BitVec.ofNat 64 (10871640096 + 73728) := by
-    rw [capRegs.2.2.1, opening_done_gate_x25, posOut]
-  have capMem : capSetup.mem = afterPos.mem :=
-    capRegs.2.2.2.2.trans (opening_done_gate_memory afterPos)
-  have dMem : dReady.mem = initial.mem :=
-    (opening_depth_memory ready).trans regs.2.2.2.2.2.2.2
-  have posPreserves (addr : Nat) (aligned : addr % 8 = 0) (below : addr + 32 ≤ 10871640096) :
-      readBuffer afterPos addr 32 = readBuffer initial addr 32 := by
-    apply read_digest_congr _ _ _ aligned
-    intro i hi
-    have h := opening_positions_memory_below 17 BATCH dReady (BitVec.ofNat 64 (addr + 8 * i))
-      (by rw [dOut]; decide)
-      (by rw [dOut, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
-            Nat.mod_eq_of_lt (by omega : addr + 8 * i < 2^64),
-            Nat.mod_eq_of_lt (by decide : 10871640096 < 2^64)]; omega)
-    exact h.trans (congrFun dMem _)
-  have capPreserves (addr : Nat) (aligned : addr % 8 = 0) (below : addr + 32 ≤ 10871640096 + 73728) :
-      readBuffer (openingCapPairState^[64] capSetup) addr 32 = readBuffer afterPos addr 32 := by
-    rw [← read_buffer_memory_congr _ _ capMem]
-    apply read_digest_congr _ _ _ aligned
-    intro i hi
-    apply opening_cap_loop_memory_below 64 capSetup
-    · rw [capDst]; decide
-    · rw [capDst, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
-        Nat.mod_eq_of_lt (by omega : addr + 8 * i < 2^64),
-        Nat.mod_eq_of_lt (by decide : 10871640096 + 73728 < 2^64)]
-      omega
-  constructor
+  · intro node inside
+    rw [read_buffer_memory_congr _ _ finalMemory]
+    have kept : readBuffer (openingPositionState^[positions.card] ready) (10871640096+32*node) 32 =
+        readBuffer ready (10871640096+32*node) 32 := by
+      apply read_digest_congr _ _ _ (by omega)
+      intro i hi
+      apply opening_positions_memory_below
+      · rw [output, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by decide)]
+        change 10871644192+568*positions.card ≤ 2^36
+        omega
+      · rw [output, BitVec.toNat_ofNat, BitVec.toNat_ofNat,
+          Nat.mod_eq_of_lt (by omega : 10871640096+32*node+8*i < 2^64),
+          Nat.mod_eq_of_lt (by decide : 10871644192 < 2^64)]
+        omega
+    rw [kept]
+    have offsetAligned : (4294971424+heapOffset (128+node)) % 8 = 0 := by
+      unfold heapOffset; omega
+    have offsetBound : heapOffset (128+node)+32 ≤ 2147483648 := by
+      unfold heapOffset; omega
+    rw [read_digest_transfer ready initial _ (4294971424+heapOffset (128+node)) (by omega)
+      offsetAligned (fun i hi => by
+        rw [show 10871640096+32*node+8*i = 10871640096+64*(node/2)+8*(4*(node%2)+i) by omega,
+          show 4294971424+heapOffset (128+node)+8*i =
+            4294971424+6144+96*(node/2)+8*(4*(node%2)+i) by unfold heapOffset; omega]
+        exact cap (node/2) (by omega) (4*(node%2)+i) (by omega))]
+    exact opening_input_roundtrip committed positions (heapOffset (128+node)) offsetBound
   · intro ordinal present
-    have recs := setup_data_records committed positions 17 (by decide) ordinal (by rw [batch]; exact present)
-    have eqAfter : ((openingPositionState 17)^[positions.card] dReady) = afterPos := by rw [batch]
-    rw [eqAfter] at recs
-    constructor
-    · rw [read_buffer_memory_congr _ _ finalMem]
-      change readBuffer (openingCapPairState^[64] capSetup) (10871640096 + 576 * ordinal) 32 = _
-      rw [capPreserves _ (by omega) (by change _ ≤ 10871640096 + 73728; change ordinal < 128 at present; omega)]
-      exact recs.1
-    · intro level inside
-      rw [read_buffer_memory_congr _ _ finalMem]
-      change readBuffer (openingCapPairState^[64] capSetup) (10871640096 + 576 * ordinal + 32 + 32 * level) 32 = _
-      rw [capPreserves _ (by omega) (by change _ ≤ 10871640096 + 73728; change ordinal < 128 at present; omega)]
-      exact recs.2 level inside
-  · have capData (p : Nat) (hp : p < 64) :
-        readBuffer capSetup (4294971424 + 6144 + 96 * p) 32 =
-          readBuffer committed (4294971424 + heapOffset (128 + 2 * p)) 32 ∧
-        readBuffer capSetup (4294971424 + 6144 + 96 * p + 32) 32 =
-          readBuffer committed (4294971424 + heapOffset (128 + (2 * p + 1))) 32 := by
-      have offE : 6144 + 96 * p = heapOffset (128 + 2 * p) := by unfold heapOffset; omega
-      have offO : 6144 + 96 * p + 32 = heapOffset (128 + (2 * p + 1)) := by unfold heapOffset; omega
-      constructor
-      · rw [read_buffer_memory_congr _ _ capMem, posPreserves _ (by omega) (by omega),
-          Nat.add_assoc, offE]
-        exact opening_input_roundtrip committed positions _ (by unfold heapOffset; change _ ≤ 2147483648; omega)
-      · rw [read_buffer_memory_congr _ _ capMem, posPreserves _ (by omega) (by omega),
-          show 4294971424 + 6144 + 96 * p + 32 = 4294971424 + (6144 + 96 * p + 32) by omega, offO]
-        exact opening_input_roundtrip committed positions _ (by unfold heapOffset; change _ ≤ 2147483648; omega)
-    have copied := opening_cap_records capSetup
-      (fun s => readBuffer committed (4294971424 + heapOffset (128 + s)) 32)
-      (4294971424 + 6144) (10871640096 + 73728) 64
-      capSrc capDst (by decide) (by decide) (by decide) (by decide) capData
-    intro slot hs
-    rw [read_buffer_memory_congr _ _ finalMem]
-    have pair := copied (slot / 2) (by omega)
-    by_cases even : slot % 2 = 0
-    · have eqSlot : 2 * (slot / 2) = slot := by omega
-      have eqAddr : submission.layout.proof + 73728 + 32 * slot =
-          10871640096 + 73728 + 64 * (slot / 2) := by
-        change 10871640096 + 73728 + 32 * slot = _; omega
-      have h := pair.1
-      rw [eqSlot] at h
-      rw [eqAddr]
-      exact h
-    · have eqSlot : 2 * (slot / 2) + 1 = slot := by omega
-      have eqAddr : submission.layout.proof + 73728 + 32 * slot =
-          10871640096 + 73728 + 64 * (slot / 2) + 32 := by
-        change 10871640096 + 73728 + 32 * slot = _; omega
-      have h := pair.2
-      rw [eqSlot] at h
-      rw [eqAddr]
-      exact h
+    rw [read_buffer_memory_congr _ _ finalMemory,
+      show 10871640096+4096+568*ordinal = 10871644192+568*ordinal by omega]
+    refine ⟨(records ordinal present).1, fun level inside => ?_⟩
+    rw [read_buffer_memory_congr _ _ finalMemory,
+      show 10871644192+568*ordinal+24+32*level = 10871644192+568*ordinal+24+32*level from rfl]
+    exact (records ordinal present).2 level inside
 
 end CommitGolfCandidate

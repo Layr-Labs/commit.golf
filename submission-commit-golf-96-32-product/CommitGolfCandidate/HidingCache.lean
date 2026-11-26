@@ -168,4 +168,69 @@ theorem cached_salted_compression_distance (permutation : Perm) (cache : Compres
     ENNReal.toReal_ofNat, Nat.cast_add]
   exact le_of_eq (add_div _ _ _).symm
 
+theorem cached_salt_hit_bound192 (cache : CompressionCache) (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH))
+    (covered : ∀ input, cache input ≠ none → input ∈ keys) (block : LeafBlock) :
+    (prEvent ((fun salt : BitVec 192 => cache ((leafInput (saltState salt) block)) ≠ none) <$>
+      (($ᵗ BitVec 192)))) ≤ (keys.card : ENNReal) / 2^192 := by
+  have included :
+      (prEvent ((fun salt : BitVec 192 => cache ((leafInput (saltState salt) block)) ≠ none) <$>
+        (($ᵗ BitVec 192)))) ≤
+      (prEvent ((fun salt : BitVec 192 => keys.toList.any
+        (fun input => decide (input.extractLsb' 0 256 = saltState salt)) = true) <$> (($ᵗ BitVec 192)))) := by
+    apply prEvent_mono_of_support
+    intro salt _ hit
+    apply List.any_eq_true.mpr
+    exact ⟨(leafInput (saltState salt) block), Finset.mem_toList.mpr (covered _ hit),
+      decide_eq_true (leafInput_digest (saltState salt) block)⟩
+  exact included.trans (by simpa only [Finset.length_toList] using
+    fresh_trace_hit_probability192 keys.toList)
+
+/-- The single-compression step for a 192-bit salt after a fixed prior cache. -/
+theorem cached_salted_compression_distance192 (permutation : Perm) (cache : CompressionCache)
+    (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
+    (block : LeafBlock) {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
+    (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
+    measureTVDist
+      (do let table ← $ᵗ Compression
+          let salt ← $ᵗ BitVec 192
+          let oracle : Oracle := ⟨tableExtending cache table, permutation⟩
+          fixedOracleRun oracle (next (absorb oracle.compression (saltState salt) block)))
+      (do let table ← $ᵗ Compression
+          let answer ← $ᵗ Digest
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer)) ≤
+      ((keys.card + budget : Nat) : ℝ) / 2^192 := by
+  let intermediate : ProbComp α := do
+    let table ← $ᵗ Compression
+    let salt ← $ᵗ BitVec 192
+    fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next (absorb table (saltState salt) block))
+  have prior : measureTVDist
+      (do let table ← $ᵗ Compression
+          let salt ← $ᵗ BitVec 192
+          let oracle : Oracle := ⟨tableExtending cache table, permutation⟩
+          fixedOracleRun oracle (next (absorb oracle.compression (saltState salt) block)))
+      intermediate ≤ ((keys.card : ENNReal) / 2^192).toReal := by
+    apply measureTVDist_bind_left_le_of_forall_le ($ᵗ Compression) _ _ (by positivity)
+    intro table
+    refine (measureTVDist_bind_left_le_prEvent_of_evalDistEq ($ᵗ BitVec 192) _ _
+      (fun salt => cache ((leafInput (saltState salt) block)) ≠ none) ?_).trans ?_
+    · intro salt unqueried
+      have empty : cache ((leafInput (saltState salt) block)) = none := Classical.not_not.mp unqueried
+      have same : absorb (tableExtending cache table) (saltState salt) block =
+          absorb table (saltState salt) block := by
+        change (cache ((leafInput (saltState salt) block))).getD (table ((leafInput (saltState salt) block))) =
+          table ((leafInput (saltState salt) block))
+        rw [empty]
+        rfl
+      dsimp only
+      rw [same]
+    · exact ENNReal.toReal_mono (by finiteness) (cached_salt_hit_bound192 cache keys covered block)
+  have after := salted_compression_distance192 permutation block
+    (fun answer => cacheAnswers cache (next answer)) budget
+    (fun answer => cache_answers_bound cache (next answer) budget (bounded answer))
+  simp only [fixed_cache_answers] at after
+  refine ((measureTVDist_triangle _ intermediate _).trans (add_le_add prior after)).trans ?_
+  simp only [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_pow,
+    ENNReal.toReal_ofNat, Nat.cast_add]
+  exact le_of_eq (add_div _ _ _).symm
+
 end CommitGolfCandidate

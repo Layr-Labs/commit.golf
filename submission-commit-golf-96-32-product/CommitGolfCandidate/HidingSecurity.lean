@@ -2,33 +2,28 @@ import CommitGolfCandidate.HidingGameIntegration
 
 /-! Statistical hiding of the submitted machine-derived scheme. The proof covers
 the complete two-stage oracle-adaptive game and every opening size, including zero.
-The deliberately loose recomputation bound is below the fixed 120-bit requirement. -/
+The per-leaf hybrid loss, with 192-bit salts, is below the fixed 120-bit requirement. -/
 namespace CommitGolfCandidate
 
 -- Observations retain the discrete measurable structure used by the contract.
 local instance hidingSecurityDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
-attribute [local irreducible] heapQueryBudget
-
-/-- Even charging all leaves for all serialized proof bytes leaves ample room
-under the challenge's 120-bit target. This is proof-only query accounting. -/
+/-- Charging one memoized recomputation of the whole heap (every leaf and node once)
+plus the 64 chain calls per hybrid step, with each leaf's first chain step at the
+192-bit salt entropy, stays below the challenge's 120-bit target. This is proof-only
+query accounting. -/
 theorem hiding_loss_le_target (positions : Positions) (known budget : Nat) (knownBound : known ≤ budget) :
     (LENGTH : ℝ) *
-      (16 * ((known + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) ≤
+      (4 * ((known + (transcriptBudget positions.card + budget) + 8 : Nat) : ℝ) / 2^192) ≤
       ((budget : ℝ)+1) / 2^HIDING_SECURITY_BITS := by
-  have cardinal : positions.card ≤ LENGTH := by
-    simpa only [Index, Fintype.card_fin] using Finset.card_le_univ positions
-  have treeFormula := heap_query_budget_formula 8 LOG_LENGTH
-  have treeBound : heapQueryBudget 8 LOG_LENGTH ≤ 9*LENGTH := by
-    change heapQueryBudget 8 LOG_LENGTH+1 = 9*LENGTH at treeFormula
+  have total : known + (transcriptBudget positions.card + budget) + 8 ≤
+      budget + ((LENGTH*8+(LENGTH-1)+64) + budget) + 8 := by
+    unfold transcriptBudget
     omega
-  have total : known + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 ≤
-      budget + ((1+800*LENGTH)*(9*LENGTH) + budget) + 8 := by
-    gcongr
   calc
     _ ≤ (LENGTH : ℝ) *
-        (16 * ((budget + ((1+800*LENGTH)*(9*LENGTH) + budget) + 8 : Nat) : ℝ) / 2^256) := by
+        (4 * ((budget + ((LENGTH*8+(LENGTH-1)+64) + budget) + 8 : Nat) : ℝ) / 2^192) := by
       gcongr
     _ ≤ _ := by
       norm_num [LENGTH, LOG_LENGTH, HIDING_SECURITY_BITS, Nat.cast_add, Nat.cast_mul]

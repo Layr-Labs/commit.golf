@@ -9,7 +9,7 @@ open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp
 /-- Only the checker image contains the adapter (the commitment's parents are direct
 calls on the zero-gapped heap); both flag values denote the checker. -/
 def paddingProgram (_checker : Bool) : Program := .check
-def paddingEntry (_checker : Bool) : Nat := 181
+def paddingEntry (_checker : Bool) : Nat := 163
 def paddingInstructions : List Instr :=
   paddingSetupInstructions ++ [.ECALL] ++ paddingFinishInstructions
 

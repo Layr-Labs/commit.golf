@@ -25,7 +25,7 @@ theorem hybrid_message_cons (left right : Message) (index : Index) (indices : Li
     simp [hybridMessage]
   · simp [hybridMessage, same]
 
-attribute [local irreducible] heapQueryBudget
+attribute [local irreducible] transcriptBudget
 
 theorem reference_observation_hybrid {α : Type}
     (permutation : Perm) (cache : CompressionCache) (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH))
@@ -38,8 +38,8 @@ theorem reference_observation_hybrid {α : Type}
     measureTVDist (referenceObservation permutation cache left positions observe)
       (referenceObservation permutation cache (hybridMessage left right indices) positions observe) ≤
       (indices.length : ℝ) *
-        (16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) := by
-  let loss : ℝ := 16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256
+        (4 * ((keys.card + (transcriptBudget positions.card + budget) + 8 : Nat) : ℝ) / 2^192) := by
+  let loss : ℝ := 4 * ((keys.card + (transcriptBudget positions.card + budget) + 8 : Nat) : ℝ) / 2^192
   have nonnegative : 0 ≤ loss := by positivity
   change _ ≤ (indices.length : ℝ)*loss
   induction indices with
@@ -77,7 +77,7 @@ theorem reference_observation_distance {α : Type}
     measureTVDist (referenceObservation permutation cache left positions observe)
       (referenceObservation permutation cache right positions observe) ≤
       (LENGTH : ℝ) *
-        (16 * ((keys.card + ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH + budget) + 8 : Nat) : ℝ) / 2^256) := by
+        (4 * ((keys.card + (transcriptBudget positions.card + budget) + 8 : Nat) : ℝ) / 2^192) := by
   have all : hybridMessage left right (Finset.univ.toList : List Index) = right := by
     funext index
     simp [hybridMessage]

@@ -8,13 +8,13 @@ through the supplied digest. All other leaves retain their actual oracle hashes.
 namespace CommitGolfCandidate
 open CommitGolf OracleComp OracleComp.DeferredSampling
 
-theorem opening_index_mem (positions : Positions) (ordinal : Nat)
+theorem record_index_mem (positions : Positions) (ordinal : Nat)
     (present : ordinal < positions.card) :
-    (⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩ : Index) ∈ positions := by
-  have indexEq : (⟨openingIndex positions ordinal, opening_index_bound positions ordinal⟩ : Index) =
+    (⟨hidingRecordIndex positions ordinal, hiding_record_index_bound positions ordinal⟩ : Index) ∈ positions := by
+  have indexEq : (⟨hidingRecordIndex positions ordinal, hiding_record_index_bound positions ordinal⟩ : Index) =
       (positions.sort (· ≤ ·))[ordinal]'(by simpa using present) := by
     apply Fin.ext
-    simp only [openingIndex, dif_pos present]
+    simp only [hidingRecordIndex, dif_pos present]
   rw [indexEq]
   have member := List.getElem_mem (l := positions.sort (· ≤ ·))
     (n := ordinal) (by simpa using present)
@@ -27,26 +27,15 @@ theorem reference_opening_salt_congr (heap : Nat → Digest) (left right : Index
   unfold referenceOpening
   apply List.map_congr_left
   intro offset member
-  have below : offset < openingProofBytes positions.card := List.mem_range.mp member
-  unfold referenceOpeningDigestAt
-  by_cases batch : positions.card = BATCH
-  · rw [if_pos batch, if_pos batch]
-    by_cases inRecs : offset < 73728
-    · rw [if_pos inRecs, if_pos inRecs]
-      dsimp only
-      split
-      · have present : offset / 576 < positions.card := by
-          rw [batch]; change offset / 576 < 128; omega
-        rw [agree _ (opening_index_mem positions _ present)]
-      · rfl
-    · rw [if_neg inRecs, if_neg inRecs]
-  · rw [if_neg batch, if_neg batch]
-    have belowNorm : offset < 800 * positions.card := by
-      simp only [openingProofBytes, if_neg batch] at below; exact below
-    have present : offset / 800 < positions.card := (Nat.div_lt_iff_lt_mul (by decide)).mpr (by omega)
+  have below := List.mem_range.mp member
+  unfold referenceProofByte
+  split
+  · rfl
+  · have present : (offset-4096)/568 < positions.card :=
+      (Nat.div_lt_iff_lt_mul (by decide)).mpr (by omega)
     dsimp only
     split
-    · rw [agree _ (opening_index_mem positions _ present)]
+    · rw [agree _ (record_index_mem positions _ present)]
     · rfl
 
 theorem reference_opening_hidden_salt (heap : Nat → Digest) (salt : Index → Digest)
@@ -116,33 +105,34 @@ theorem query_leaf_except_reference (oracle : Oracle) (message : Message) (salt 
 
 def queryTranscriptExcept (message : Message) (salt : Index → Digest) (positions : Positions)
     (hidden : Index) (digest : Digest) : OracleComp World (Commitment × Proof) :=
-  queryTranscript (queryHeap LENGTH (queryLeafExcept message salt hidden digest) LOG_LENGTH)
+  queryTranscript (queryAll LENGTH (queryLeafExcept message salt hidden digest))
     (Function.update salt hidden 0) positions
 
-attribute [local irreducible] heapQueryBudget queryHeap queryTranscript
+/-- Proof-only query count of one full transcript computation: every leaf (8 calls)
+and every internal node (1 call) of the heap exactly once, plus the 64 chain calls.
+The opened records are read from that one computation. -/
+def transcriptBudget (_card : Nat) : Nat := LENGTH*8+(LENGTH-1)+64
+
+attribute [local irreducible] queryAll queryTranscript
 
 theorem query_transcript_except_bound (message : Message) (salt : Index → Digest)
     (positions : Positions) (hidden : Index) (digest : Digest) :
     PublicQueryBound (queryTranscriptExcept message salt positions hidden digest)
-      ((1+800*positions.card)*heapQueryBudget 8 LOG_LENGTH) := by
-  unfold queryTranscriptExcept
-  apply query_transcript_bound
-  intro node
-  exact query_heap_bound LENGTH _ 8 (query_leaf_except_bound message salt hidden digest) LOG_LENGTH node
+      (transcriptBudget positions.card) := by
+  unfold queryTranscriptExcept transcriptBudget
+  exact query_transcript_bound _ _
+    (query_all_bound LENGTH _ 8 (query_leaf_except_bound message salt hidden digest)) _ _
 
 theorem query_transcript_except_reference (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions) (hidden : Index) (digest : Digest) :
     fixedOracleRun oracle (queryTranscriptExcept message salt positions hidden digest) =
       let heap := referenceHeap oracle.compression LENGTH
         (leafValuesExcept oracle.compression message salt hidden digest)
-      pure (heap 1, referenceOpening heap (Function.update salt hidden 0) positions) := by
+      pure (capRoot oracle.compression (referenceCap heap),
+        referenceOpening heap (Function.update salt hidden 0) positions) := by
   apply query_transcript_reference
-  intro node positive inside
-  apply query_heap_reference oracle LENGTH _ _
-    (query_leaf_except_reference oracle message salt hidden digest) LOG_LENGTH node positive inside
-  change LENGTH ≤ LENGTH*node
-  have larger := Nat.mul_le_mul_left LENGTH positive
-  simpa only [Nat.mul_one] using larger
+  exact query_all_reference oracle LENGTH _ _
+    (query_leaf_except_reference oracle message salt hidden digest) (by decide)
 
 /-- Restoring the hidden leaf's digest gives precisely the tree for the updated
 message and fresh salt; every other leaf is unchanged. -/
@@ -174,8 +164,8 @@ theorem query_transcript_hidden_update (oracle : Oracle) (message : Message)
       pure (referenceTranscript oracle.compression
         (Function.update message hidden value) (Function.update salt hidden fresh) positions) := by
   rw [query_transcript_except_reference, leaf_values_except_update]
-  change pure ((saltedHeap oracle.compression (Function.update message hidden value)
-      (Function.update salt hidden fresh)) 1,
+  change pure (capRoot oracle.compression (referenceCap (saltedHeap oracle.compression
+      (Function.update message hidden value) (Function.update salt hidden fresh))),
     referenceOpening (saltedHeap oracle.compression (Function.update message hidden value)
       (Function.update salt hidden fresh)) (Function.update salt hidden 0) positions) = _
   unfold referenceTranscript

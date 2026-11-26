@@ -212,4 +212,117 @@ theorem cached_leaf_indistinguishable (permutation : Perm) (cache : CompressionC
   refine (triangle.trans (add_le_add leftBound rightBound)).trans ?_
   exact le_of_eq (by ring)
 
+/-- Chain bound when the initial state is a private 192-bit salt: the first step
+costs at 2^192, every later step (from a fresh uniform 256-bit state) at 2^256. -/
+theorem cached_salted_chain_distance192 (permutation : Perm) (cache : CompressionCache)
+    (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
+    (block : LeafBlock) (rest : List LeafBlock)
+    {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
+    (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
+    measureTVDist
+      (do let table ← $ᵗ Compression
+          let salt ← $ᵗ BitVec 192
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩
+            (next ((block :: rest).foldl (fun state block => absorb (tableExtending cache table) state block)
+              (saltState salt))))
+      (do let table ← $ᵗ Compression
+          let answer ← $ᵗ Digest
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer)) ≤
+      ((keys.card + (rest.length + budget) : Nat) : ℝ) / 2^192 +
+        (rest.length : ℝ) * ((keys.card + budget + rest.length : Nat) : ℝ) / 2^256 := by
+  let continuation : Digest → OracleComp World α := fun state => hashBlocks rest state >>= next
+  have continued : ∀ state, PublicQueryBound (continuation state) (rest.length + budget) :=
+    fun state => public_query_bound_bind (hash_blocks_bound rest state) bounded
+  have first := cached_salted_compression_distance192 permutation cache keys covered block continuation
+    (rest.length + budget) continued
+  simp only [continuation, fixed_hash_blocks] at first
+  have second := cached_salted_chain_distance permutation cache keys covered rest next budget bounded
+  have triangle := measureTVDist_triangle (m := ProbComp)
+    (do let table ← $ᵗ Compression
+        let salt ← $ᵗ BitVec 192
+        fixedOracleRun ⟨tableExtending cache table, permutation⟩
+          (next ((block :: rest).foldl (fun state block => absorb (tableExtending cache table) state block)
+            (saltState salt))))
+    (do let table ← $ᵗ Compression
+        let state ← $ᵗ Digest
+        fixedOracleRun ⟨tableExtending cache table, permutation⟩
+          (next (rest.foldl (fun state block => absorb (tableExtending cache table) state block) state)))
+    (do let table ← $ᵗ Compression
+        let answer ← $ᵗ Digest
+        fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer))
+  simp only [List.foldl_cons] at triangle ⊢
+  exact triangle.trans (add_le_add first second)
+
+/-- An entire private leaf with a 192-bit salt remains hidden with a fixed prior
+query transcript, at cost 2*(prior+budget+8)/2^192. -/
+theorem cached_salted_leaf_distance192 (permutation : Perm) (cache : CompressionCache)
+    (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
+    (value : Entry)
+    {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
+    (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
+    measureTVDist
+      (do let table ← $ᵗ Compression
+          let salt ← $ᵗ BitVec 192
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩
+            (next (leafDigest (tableExtending cache table) (saltState salt) value)))
+      (do let table ← $ᵗ Compression
+          let answer ← $ᵗ Digest
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer)) ≤
+      2 * ((keys.card + budget + 8 : Nat) : ℝ) / 2^192 := by
+  have result := cached_salted_chain_distance192 permutation cache keys covered
+    (value.extractLsb' (512*0) 512)
+    ((List.range' 1 3).map fun block => value.extractLsb' (512*block) 512) next budget bounded
+  have blocks : (List.range 4).map (fun block => value.extractLsb' (512*block) 512) =
+      value.extractLsb' (512*0) 512 ::
+        (List.range' 1 3).map (fun block => value.extractLsb' (512*block) 512) := by
+    rfl
+  have unfolded : ∀ compress : Compression, ∀ salt : Digest, leafDigest compress salt value =
+      (value.extractLsb' (512*0) 512 ::
+        (List.range' 1 3).map (fun block => value.extractLsb' (512*block) 512)).foldl
+          (fun state block => absorb compress state block) salt := by
+    intro compress salt
+    rw [← blocks, List.foldl_map]
+    rfl
+  simp only [unfolded]
+  refine result.trans ?_
+  simp only [List.length_map, List.length_range']
+  have keysNonneg : (0 : ℝ) ≤ keys.card := Nat.cast_nonneg _
+  have budgetNonneg : (0 : ℝ) ≤ budget := Nat.cast_nonneg _
+  push_cast
+  linarith
+
+/-- Two leaf values with private 192-bit salts are indistinguishable through the
+same bounded continuation. -/
+theorem cached_leaf_indistinguishable192 (permutation : Perm) (cache : CompressionCache)
+    (keys : Finset (BitVec COMPRESSION_INPUT_LENGTH)) (covered : ∀ input, cache input ≠ none → input ∈ keys)
+    (left right : Entry) {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
+    (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
+    measureTVDist
+      (do let table ← $ᵗ Compression
+          let salt ← $ᵗ BitVec 192
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩
+            (next (leafDigest (tableExtending cache table) (saltState salt) left)))
+      (do let table ← $ᵗ Compression
+          let salt ← $ᵗ BitVec 192
+          fixedOracleRun ⟨tableExtending cache table, permutation⟩
+            (next (leafDigest (tableExtending cache table) (saltState salt) right))) ≤
+      4 * ((keys.card + budget + 8 : Nat) : ℝ) / 2^192 := by
+  have leftBound := cached_salted_leaf_distance192 permutation cache keys covered left next budget bounded
+  have rightBound := cached_salted_leaf_distance192 permutation cache keys covered right next budget bounded
+  rw [measureTVDist_comm] at rightBound
+  have triangle := measureTVDist_triangle (m := ProbComp)
+    (do let table ← $ᵗ Compression
+        let salt ← $ᵗ BitVec 192
+        fixedOracleRun ⟨tableExtending cache table, permutation⟩
+          (next (leafDigest (tableExtending cache table) (saltState salt) left)))
+    (do let table ← $ᵗ Compression
+        let answer ← $ᵗ Digest
+        fixedOracleRun ⟨tableExtending cache table, permutation⟩ (next answer))
+    (do let table ← $ᵗ Compression
+        let salt ← $ᵗ BitVec 192
+        fixedOracleRun ⟨tableExtending cache table, permutation⟩
+          (next (leafDigest (tableExtending cache table) (saltState salt) right)))
+  refine (triangle.trans (add_le_add leftBound rightBound)).trans ?_
+  exact le_of_eq (by ring)
+
 end CommitGolfCandidate

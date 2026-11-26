@@ -1,5 +1,6 @@
 import CommitGolfCandidate.Probability
 import CommitGolfCandidate.HidingHybrid
+import CommitGolfCandidate.HidingDistribution
 
 /-! Preserve the full two-stage adversary while moving its first stage to lazy
 compression sampling. The selected messages, positions, retained state, and cache
@@ -12,21 +13,17 @@ open CommitGolf OracleComp OracleComp.DeferredSampling
 
 def queryActualTranscript (message : Message) (salt : Index → Digest) (positions : Positions) :
     OracleComp World (Commitment × Proof) :=
-  queryTranscript (queryHeap LENGTH (queryLeaf message salt) LOG_LENGTH) salt positions
+  queryTranscript (queryAll LENGTH (queryLeaf message salt)) salt positions
 
-attribute [local irreducible] heapQueryBudget queryHeap queryTranscript
+attribute [local irreducible] queryAll queryTranscript
 
 theorem query_actual_transcript_reference (oracle : Oracle) (message : Message)
     (salt : Index → Digest) (positions : Positions) :
     fixedOracleRun oracle (queryActualTranscript message salt positions) =
       pure (referenceTranscript oracle.compression message salt positions) := by
-  have correct (node : Nat) (positive : 0 < node) (inside : node < 2*LENGTH) :=
-    query_heap_reference oracle LENGTH (queryLeaf message salt)
-      (leafValues oracle.compression message salt) (query_leaf_reference oracle message salt)
-      LOG_LENGTH node positive inside (by
-        change LENGTH ≤ LENGTH*node
-        simpa only [Nat.mul_one] using Nat.mul_le_mul_left LENGTH positive)
-  exact query_transcript_reference oracle _ _ correct salt positions
+  exact query_transcript_reference oracle _ _ (query_all_reference oracle LENGTH (queryLeaf message salt)
+    (leafValues oracle.compression message salt) (query_leaf_reference oracle message salt) (by decide))
+    salt positions
 
 theorem fixed_oracle_run_coins (oracle : Oracle) {α : Type} (coins : ProbComp α) :
     fixedOracleRun oracle (liftM coins : OracleComp World α) = coins := by
@@ -35,14 +32,15 @@ theorem fixed_oracle_run_coins (oracle : Oracle) {α : Type} (coins : ProbComp �
 
 def referenceContinuation {α : Type} (message : Message) (positions : Positions)
     (observe : Commitment → Proof → OracleComp World α) : OracleComp World α := do
-  let salt ← (liftM ($ᵗ (Index → Digest)) : OracleComp World (Index → Digest))
-  let transcript ← queryActualTranscript message salt positions
+  let salt ← (liftM ($ᵗ (Index → BitVec 192)) : OracleComp World (Index → BitVec 192))
+  let transcript ← queryActualTranscript message (fun index => saltState (salt index)) positions
   observe transcript.1 transcript.2
 
 theorem reference_continuation_run {α : Type} (oracle : Oracle) (message : Message)
     (positions : Positions) (observe : Commitment → Proof → OracleComp World α) :
     fixedOracleRun oracle (referenceContinuation message positions observe) =
-      (($ᵗ (Index → Digest)) >>= fun salt => observeTranscript oracle message salt positions observe) := by
+      (($ᵗ (Index → BitVec 192)) >>= fun salt =>
+        observeTranscript oracle message (fun index => saltState (salt index)) positions observe) := by
   rw [referenceContinuation, fixed_oracle_run_bind, fixed_oracle_run_coins]
   apply bind_congr
   intro salt

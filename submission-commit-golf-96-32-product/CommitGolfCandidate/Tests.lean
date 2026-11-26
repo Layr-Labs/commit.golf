@@ -16,20 +16,28 @@ private def run {α : Type} (computation : OracleComp World α) : α :=
 private def ensure (label : String) (condition : Bool) : IO Unit :=
   unless condition do throw (IO.userError label)
 
+private def testRecord (tree : List (List Digest)) (depth index : Nat) (salt : BitVec 192) : Proof :=
+  (List.ofFn fun i : Fin 24 => salt.extractLsb' (8*i) 8) ++ ((List.range depth).flatMap fun level =>
+    digestBytes ((tree[level]?.getD [])[(index / 2^level) ^^^ 1]?.getD 0))
+
 #eval do
   for depth in [1, 2, 3] do
     let s := candidate depth
     let message : Message := fun i => BitVec.ofNat LEAF_SIZE (∑ j ∈ Finset.range 8, (123 + i.val + j * 17) * 2^(256*j))
     let committed := run (s.run .commit message)
     ensure "commit must halt successfully" (committed.exit == Exit.success)
-    ensure "commit query count" (committed.oracleCalls == 5 * 2^depth - 1)
+    let c := capLog depth
+    let k := capCount depth
+    ensure "commit query count" (committed.oracleCalls == 4 * 2^depth + (2^depth - k) + k / 2)
     let (root, trapdoor) := s.readCommit committed
-    let salt := fun i => trapdoor.extractLsb' (8 * (96 * 2^depth + 32*i)) 256
+    let salt : Nat → BitVec 192 := fun i => trapdoor.extractLsb' (8 * (96 * 2^depth + 24*i)) 192
     let leaves := (List.range (2^depth)).map fun i =>
-      leafDigest testOracle.compression (salt i) (message ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩)
+      leafDigest testOracle.compression (saltState (salt i)) (message ⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩)
     let tree := layers testOracle.compression depth leaves
-    ensure "machine root agrees with pure reference"
-      (root == (tree.getLast?.getD []).head?.getD 0)
+    let cap : Nat → Digest := fun m => (tree[depth - c]?.getD [])[m]?.getD 0
+    let chained := (List.range (k / 2)).foldl
+      (fun state pair => absorb testOracle.compression state (capBlock cap pair)) 0
+    ensure "machine commitment is the chain over the reference cap" (root == chained)
     let choices : List Positions := [∅, {(⟨0, by decide⟩ : Index)},
       (Finset.range (2^depth)).filter (fun i => i % 2 = 1) |>.image
         (fun i => (⟨i % LENGTH, Nat.mod_lt _ (by decide)⟩ : Index)),
@@ -39,12 +47,15 @@ private def ensure (label : String) (condition : Bool) : IO Unit :=
       ensure "opening must halt successfully" (s.openingSucceeded opened)
       ensure "opening makes no public queries" (opened.oracleCalls == 0)
       let proof := s.readProof opened
-      let expected := (positions.sort (· ≤ ·)).flatMap fun (i : Index) => referenceProof tree depth i.val (salt i.val)
+      let records := (positions.sort (· ≤ ·)).flatMap fun (i : Index) =>
+        testRecord tree (depth - c) i.val (salt i.val)
+      let expected := ((List.range k).flatMap fun m => digestBytes (cap m)) ++ records
       ensure "machine proof agrees with pure reference" (proof == expected)
-      ensure "opening length" (proof.length == positions.card * openingBytes depth)
+      ensure "opening length" (proof.length == proofBytes depth positions.card)
       let checked := run (s.run .check ⟨root, positions, message.restrict positions, proof⟩)
       ensure "honest proof must verify" (checked.exit == Exit.success)
-      ensure "checker query count" (checked.oracleCalls == positions.card * (4 + depth))
+      ensure "checker query count" (checked.oracleCalls ==
+        positions.card * (4 + depth - c) + (if positions.card > 0 then k / 2 else 0))
       if positions.card > 0 then
         let badValues : Values positions := fun i => message i + 1
         ensure "changed values must reject"
@@ -54,7 +65,7 @@ private def ensure (label : String) (condition : Bool) : IO Unit :=
         let altered := match proof with
           | [] => []
           | byte :: rest => (byte ^^^ 1) :: rest
-        ensure "altered salt must reject"
+        ensure "altered cap must reject"
           ((run (s.run .check ⟨root, positions, message.restrict positions, altered⟩)).exit == Exit.failure)
         ensure "changed root must reject"
           ((run (s.run .check ⟨root + 1, positions, message.restrict positions, proof⟩)).exit == Exit.failure)

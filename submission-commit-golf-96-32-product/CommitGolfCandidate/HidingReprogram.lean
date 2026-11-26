@@ -1,4 +1,4 @@
-import CommitGolfCandidate.HidingDistribution
+import CommitGolfCandidate.HidingTree
 import VCVio.ProgramLogic.Relational.SimulateQ.UntilBad
 
 /-! Changing an oracle at hidden inputs is detectable only after querying one of

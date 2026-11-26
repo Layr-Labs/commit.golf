@@ -118,4 +118,88 @@ theorem salted_compression_distance (permutation : Perm) (block : LeafBlock)
   rw [measureTVDist_comm] at distance
   simpa only [measureTVDist, ideal_eq, programmed_eq] using distance
 
+/-- The 192-bit-salt analogue of `salted_compression_programming`. -/
+theorem salted_compression_programming192 (permutation : Perm) (block : LeafBlock)
+    {α : Type} (next : Digest → OracleComp World α) :
+    𝒟[do let salt ← $ᵗ BitVec 192
+         let answer ← $ᵗ Digest
+         let table ← $ᵗ Compression
+         fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput (saltState salt) block)) answer)
+           (next answer)] =
+    𝒟[do let table ← $ᵗ Compression
+         let salt ← $ᵗ BitVec 192
+         fixedOracleRun ⟨table, permutation⟩ (next (absorb table (saltState salt) block))] := by
+  trans 𝒟[do let salt ← $ᵗ BitVec 192
+              let table ← $ᵗ Compression
+              fixedOracleRun ⟨table, permutation⟩ (next (absorb table (saltState salt) block))]
+  · exact _root_.evalDist_bind_congr _ _ _ (fun salt =>
+      compression_answer_programming permutation ((leafInput (saltState salt) block)) next)
+  · exact distribution_bind_comm _ _ _
+
+/-- A compression output whose initial state is a private 192-bit salt hides its
+block against a bounded adaptive continuation, at cost q/2^192. -/
+theorem salted_compression_distance192 (permutation : Perm) (block : LeafBlock)
+    {α : Type} (next : Digest → OracleComp World α) (budget : Nat)
+    (bounded : ∀ answer, PublicQueryBound (next answer) budget) :
+    measureTVDist
+      (do let table ← $ᵗ Compression
+          let salt ← $ᵗ BitVec 192
+          fixedOracleRun ⟨table, permutation⟩ (next (absorb table (saltState salt) block)))
+      (do let table ← $ᵗ Compression
+          let answer ← $ᵗ Digest
+          fixedOracleRun ⟨table, permutation⟩ (next answer)) ≤
+      ((budget : ENNReal) / 2^192).toReal := by
+  let ideal : ProbComp α := do
+    let answer ← $ᵗ Digest
+    let table ← $ᵗ Compression
+    let _salt ← $ᵗ BitVec 192
+    fixedOracleRun ⟨table, permutation⟩ (next answer)
+  let programmed : ProbComp α := do
+    let answer ← $ᵗ Digest
+    let table ← $ᵗ Compression
+    let salt ← $ᵗ BitVec 192
+    fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput (saltState salt) block)) answer)
+      (next answer)
+  have distance : measureTVDist ideal programmed ≤ ((budget : ENNReal) / 2^192).toReal := by
+    apply measureTVDist_bind_left_le_of_forall_le ($ᵗ Digest) _ _ (by positivity)
+    intro answer
+    apply measureTVDist_bind_left_le_of_forall_le ($ᵗ Compression) _ _ (by positivity)
+    intro table
+    exact hidden_reprogram_distance192 ⟨table, permutation⟩ block answer (next answer)
+      budget (bounded answer)
+  have ideal_eq : 𝒟[ideal] =
+      𝒟[do let table ← $ᵗ Compression
+           let answer ← $ᵗ Digest
+           fixedOracleRun ⟨table, permutation⟩ (next answer)] := by
+    unfold ideal
+    trans 𝒟[do let answer ← $ᵗ Digest
+                let table ← $ᵗ Compression
+                fixedOracleRun ⟨table, permutation⟩ (next answer)]
+    · apply _root_.evalDist_bind_congr
+      intro answer
+      apply _root_.evalDist_bind_congr
+      intro table
+      exact OracleComp.evalDist_bind_const _ _
+    · exact distribution_bind_comm _ _ _
+  have programmed_eq : 𝒟[programmed] =
+      𝒟[do let table ← $ᵗ Compression
+           let salt ← $ᵗ BitVec 192
+           fixedOracleRun ⟨table, permutation⟩ (next (absorb table (saltState salt) block))] := by
+    unfold programmed
+    trans 𝒟[do let salt ← $ᵗ BitVec 192
+                let answer ← $ᵗ Digest
+                let table ← $ᵗ Compression
+                fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput (saltState salt) block)) answer)
+                  (next answer)]
+    · trans 𝒟[do let answer ← $ᵗ Digest
+                  let salt ← $ᵗ BitVec 192
+                  let table ← $ᵗ Compression
+                  fixedOracleRun (programCompression ⟨table, permutation⟩ ((leafInput (saltState salt) block)) answer)
+                    (next answer)]
+      · exact _root_.evalDist_bind_congr _ _ _ (fun _ => distribution_bind_comm _ _ _)
+      · exact distribution_bind_comm _ _ _
+    · exact salted_compression_programming192 permutation block next
+  rw [measureTVDist_comm] at distance
+  simpa only [measureTVDist, ideal_eq, programmed_eq] using distance
+
 end CommitGolfCandidate
