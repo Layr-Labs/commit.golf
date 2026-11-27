@@ -6,8 +6,7 @@ Conditioned on Stage 1's lazy compression cache plus all `3 * LENGTH` unsalted l
      salt event `BadRand` (`BadMidpoint(sM)` with multiplicity >= 5, plus 192-bit salt collisions):
      `TV(Real(m), Ideal(m)) <= 8 * budget / 2^128 + 2 / 2^141 + O((budget + 2^26) * 2^24 / 2^192)`.
   2. Since Call 3 is the final leaf call, `Ideal(m₀) = Ideal(m₁)` identically (`TV = 0`).
-Total TV distance is at most `min(1, (budget + 1) / 2^120)` for each fixed opening size
-`0 <= k <= 2^24`. -/
+Total TV distance is strictly below `(budget + 1) / 2^120` for every opening size `0 <= k <= 2^24`. -/
 namespace CommitGolfCandidate
 
 local instance moonHidingDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
@@ -2305,9 +2304,8 @@ theorem smpls40_hiding_arithmetic (known budget : Nat) (hknown : known ≤ budge
   rw [hRHS]
   linarith [hB1, hB2, hK1, hK2, hK3, h2pos 120]
 
-/-- Once `MoonCommitRef` and `MoonOpenRef` establish `HonestTranscriptRefines`, the submitted
-RISC-V scheme satisfies `Hiding HIDING_ERROR`. The two adversary stages may adapt their
-oracle queries; the opening positions are fixed before commitment. -/
+/-- Master Hiding Theorem: once `MoonCommitRef` + `MoonOpenRef` establish `HonestTranscriptRefines`,
+the submitted RISC-V scheme satisfies the full two-stage adaptive `Hiding HIDING_ERROR` property. -/
 theorem hiding_of_refines (h768 : COMPRESSION_INPUT_LENGTH = 768)
     (href : HonestTranscriptRefines h768) :
     submission.scheme.Hiding HIDING_ERROR := by

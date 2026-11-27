@@ -53,3 +53,7 @@
   claims, hypotheses, uncertainty and requirement strength. Describe the current code,
   cite accessible sources, and keep session logs out of reference documentation.
   Revise clarity or accuracy problems; leave clear, correct text alone.
+  This guidance does not expand a contribution's ownership. Contract PRs must leave
+  existing solver-owned submission trees unchanged, including their documentation.
+  Route corrections through the solver/Yukon workflow. New bootstrap directories
+  introduced by the contract PR remain in scope for that PR.

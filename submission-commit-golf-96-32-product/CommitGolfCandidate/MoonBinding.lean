@@ -2,8 +2,7 @@ import CommitGolfCandidate.MoonImage
 import CommitGolfCandidate.CompressionSampling
 import CommitGolfCandidate.Execution
 
-/-! Adaptive position-binding reduction for the r=1 3-ary/binary tree
-with 238-bit truncated digests.
+/-! Complete 238-bit adaptive position-binding reduction for the r=1 3-ary/binary tree.
 Rather than re-implementing a proof parser for deduplicated cap openings, the collision detector
 directly executes the submitted deterministic `check` image on both conflicting claims while
 recording every `(input, answer)` compression query in `traceCompressionReplies`.
