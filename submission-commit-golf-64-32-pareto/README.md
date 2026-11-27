@@ -1,36 +1,32 @@
-# Initial submission: commit-golf-64-32-pareto
+# Paired 3c1p leaves with one random draw per pair
 
-This is the compression-only salted binary Merkle baseline from the original
-Pareto track, adapted to the 64→32-byte compression / 30-cycle permutation contract.
-Compression costs eight cycles. The programs make no permutation calls, so their
-cycle claims are unchanged. The general interpreter cost helper allows the new
-permutation price.
+This candidate builds on our 3c1p entry f4dc16a0 (Neon's three-compression, one-permutation leaf on
+AdamGagol's acf6ad4d tree). Two adjacent leaves share one 32-byte RANDOM draw: the even leaf's salt is its
+first 16 bytes, the odd leaf's salt the last 16. The leaves are mirrored so that each draw lands where both
+permutation inputs read it, with no salt copy.
 
-Each leaf absorbs eight 32-byte message blocks starting from a private 32-byte
-salt. Parent nodes compress two child digests. An opening contains a salt and
-24 sibling digests for each opened leaf. Each public oracle call consumes one
-query regardless of its cycle cost.
+Leaf `i` with entry `v` computes `q = C(v[0..64))`, `r = C(v[192..256))` and `z = C(q ‖ r)` in place.
+The even leaf permutes bytes 56..256 of its slot (`v[56..192) ‖ z ‖ tag ‖ r[8..16) ‖ salt`) and keeps the
+last 32 bytes of the reply; the odd leaf permutes bytes 0..200 (`salt ‖ tag ‖ q[24..32) ‖ z ‖ v[64..200)`)
+and keeps the first 32. The tag is the window's address in the commit image.
 
-The claimed bounds for a full commitment and an opening of 128 leaves are:
+The commitment program runs blocks of 2,048 leaves: three compressions per leaf, one RANDOM(32) per pair,
+then a tag store and one permutation per leaf. Every 200-byte reply is kept in the trapdoor (which grows to
+232·2^24 + 4,096 bytes; the index, value and proof buffers move up), and the lowest parent level reads the
+two digests of each pair where they are adjacent in the reply area. The upper tree, the 500-byte records,
+the 67,840-byte proof format and the checker's path and cap code are the inherited ones.
 
-| Claim | Bound |
+The opener cannot see the salts, so before the inherited record loop it inverts each opened leaf's stored
+reply (one inverse permutation call per position), takes the salt from the recovered input, and copies the
+mate leaf's digest from the reply area into the heap slot the records read.
+
+| Claimed metric | Bound |
 | --- | ---: |
-| Proof bytes | 102,400 |
-| Commitment cycles | 3,959,423,012 |
-| Opening cycles | 48,670 |
+| Commitment cycles | 1,266,820,219 |
+| Opening cycles for 128 positions | 96,407 |
+| Proof bytes for 128 positions | 67,840 |
 
-The track scores `[commitCycles + openingCycles, proofBytes]`.
-
-`programs.json` delivers the three machine images and their ABI. `Solution.lean`
-assembles the complete certificate and proves equality with the generated artifact.
-The supporting `CommitGolfCandidate/` modules prove execution, resource bounds,
-completeness, binding, and hiding for those images.
-
-From the repository root, on a supported Linux verifier host:
-
-```sh
-bash scripts/setup.sh
-python3 scripts/run.py --track commit-golf-64-32-pareto
-```
-
-See [RULES.md](../RULES.md) for the trusted contract and verifier requirements.
+Security: the mirrored leaf's binding witness and the hiding bound of the paired salts are Fable's
+`C3PPermWitnessBound` (q/2^132 for the cross-oracle event) and `C3PHidingScheme`, and the uniformity of the
+paired salt tape is `PairedSaltDraws`. `C3PTranscript` proves that the machine's commitment and proof are
+the honest view of a uniform salt tape (`paired_transcript_refines`); `C3PAssembly` assembles the certificate.
