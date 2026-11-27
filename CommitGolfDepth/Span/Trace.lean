@@ -2,10 +2,11 @@ import Lean.Elab.Tactic.Omega
 
 /-! # Work and span of executed fork trees
 
-Each instruction contributes a sequential vertex. Binary fork contributes a charged
-launch, two child traces, a charged join, and the parent's continuation. These are costs
-of the specified abstract machine, not a claim about wall-clock time on a fixed processor
-count. The concrete executor constructs this trace; submissions cannot supply a DAG.
+Fork-mode instruction steps contribute sequential vertices. A binary fork contributes
+a charged launch, two child traces, a charged join, and the parent's continuation.
+Legacy execution is represented by one aggregate step. These are costs of the specified
+abstract machine, not wall-clock time on a fixed processor count. The concrete executor
+constructs the trace; submissions cannot supply a DAG.
 -/
 
 namespace CommitGolfDepth.Span.SpanMachine

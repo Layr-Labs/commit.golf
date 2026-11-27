@@ -32,7 +32,7 @@ theorem loadDescriptors_formula (state : MachineState) (base : BitVec 64) (count
   unfold readDescriptor
   rw [kind, source, inputBytes, destination]
 
-/-- Induction is over the index list; a solver never expands a large literal table. -/
+/-- Induction over the index list avoids expanding a large literal table. -/
 theorem snapshotAll_map (state : MachineState) (indices : List Nat)
     (table : Nat → Descriptor) (requests : Nat → Request)
     (valid : ∀ i ∈ indices, snapshot state (table i) = some (requests i)) :
@@ -122,7 +122,8 @@ theorem executeBatched_batch_counted (oracle : Oracle) (image : Image)
   rw [oracle_run_bind]
   simp only [oracle_run_pure, pure_bind, Nat.add_zero, bind_assoc]
 
-/-- Worst-case syntactic resource bounds, stronger than sampling one fixed oracle. -/
+/-- Componentwise bounds on one execution result. The support-quantified rules below
+establish these bounds for every syntactic oracle/coin reply. -/
 def Bounds (result : CommitGolfDepth.Rounds.RoundMachine.Execution) (work queries depth : Nat) : Prop :=
   result.result.cycles ≤ work ∧ result.result.oracleCalls ≤ queries ∧
     result.oracleRounds ≤ depth

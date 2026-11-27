@@ -1,6 +1,6 @@
 # Submission
 
-This is the sole solver-editable directory. Put `Solution.lean`, `claim.json`, `programs.json`, and
+This is the solver-editable directory for the `pareto` track. Put `Solution.lean`, `claim.json`, `programs.json`, and
 optional supporting Lean modules under `CommitGolfCandidate/` here.
 
 Define `CommitGolf.Challenge.submission : CommitGolf.Submission` with three RISC-V
@@ -16,8 +16,9 @@ CommitGolf.Challenge.submission_matches_artifact :
 ```
 
 `claim.json` must contain exactly `proofBytes`, `commitCycles`, and `openingCycles`.
-These are certified worst-case honest bounds for 128-position openings. The score
-is `(commitCycles + openingCycles) * proofBytes`, including one full commitment.
+These are certified worst-case honest bounds for one full commitment and one
+128-position opening. The Pareto objectives are
+`[commitCycles + openingCycles, proofBytes]`, with no priority between them.
 The certificate also requires hiding, binding, completeness, query budgets, successful
 honest machine execution, valid image layouts, and termination on all inputs.
 
@@ -26,7 +27,7 @@ with its inverse. Each call costs one public query and eight abstract machine cy
 Private coins are allowed for commitment and opening, but not checking. See
 [RULES.md](../RULES.md) for the byte layout, syscall interface, and complete requirements.
 
-Run `bash scripts/setup.sh` and `python3 scripts/run.py` on the supported Linux
+Run `bash scripts/setup.sh` and `python3 scripts/run.py --track pareto` on the supported Linux
 verifier host. Historical baselines remain separate and uncompiled.
 
 ## Delivered programs
@@ -85,17 +86,17 @@ normalization when designing a large submission.
 To generate the same module for local proof development, run from the repository root:
 
 ```sh
-python3 scripts/generate_artifact.py
+python3 scripts/generate_artifact.py submission-pareto/programs.json
 lake build CommitGolf.Artifact
-# After changing submission/programs.json:
-python3 scripts/generate_artifact.py --refresh
+# After changing submission-pareto/programs.json:
+python3 scripts/generate_artifact.py submission-pareto/programs.json --refresh
 ```
 
 The command uses the verifier's manifest parser and renderer and writes the ignored local
 `CommitGolf/Artifact.lean`. Creating or refreshing it clears its compiled artifacts;
 when content and permissions are already current, it is left in place. Rebuild after refreshing.
 A standalone file importing that module can then be checked with `lake env lean path/to/file.lean`;
-this does not stage the supporting modules under `submission/CommitGolfCandidate/` as a Lake
+this does not stage the supporting modules under `submission-pareto/CommitGolfCandidate/` as a Lake
 library. Do not include the generated module in your submission. Official verification
 regenerates it from the frozen manifest and checks the full certificate and equality again;
 local generation or compilation does not certify a submission.
@@ -132,15 +133,15 @@ checks that seven calls do not suffice and that block order and trailing zero bl
 This directory contains the initial machine submission and a complete Lean
 `CommitGolf.Challenge.certificate` theorem, including binding and hiding for the
 actual machine-derived scheme. The current claims are 102400 proof bytes,
-3959423012 commitment cycles, and 48670 opening cycles, giving a score of
-**405,449,900,236,800**. The cycle bounds use the exact resource counts already
+3959423012 commitment cycles, and 48670 opening cycles, giving Pareto objectives
+`[3959471682, 102400]`. The cycle bounds use the exact resource counts already
 proved for the images; tightening these claims does not change the programs.
 Run the verifier below before treating a changed claim as accepted.
 
-On 2026-10-28, the Linux verifier accepted the original complete certificate
+On 2026-10-28, the Linux verifier accepted the original product-track certificate
 after an isolated rebuild and Lean kernel replay. That historical claim used
 17179869184 commitment cycles and 1048576 opening cycles, scoring
-**1,759,325,978,624,000**. It does not verify the tightened claim or a later checkout.
+**1,759,325,978,624,000**. That product-track run does not verify the Pareto entry or a later checkout.
 
 The construction uses a binary Merkle tree. Each 2048-bit leaf is compressed in eight
 256-bit blocks starting from an independent private 256-bit salt. A proof contains one
@@ -216,15 +217,15 @@ From the repository root, on Linux with Landlock and user systemd 257 or newer:
 
 ```sh
 bash scripts/setup.sh
-python3 scripts/run.py
+python3 scripts/run.py --track pareto
 ```
 
 Keep the checkout and verifier work directory outside `/tmp` and `/var/tmp`, which
 the sandbox hides. The verifier defaults to a fresh directory under `.work/`.
 
-The runner freezes `submission/`, rebuilds its modules in isolation, checks the
+The runner freezes `submission-pareto/`, rebuilds its modules in isolation, checks the
 certificate and artifact equality against the trusted challenge, replays the proofs
-in Lean's kernel, and writes the accepted score to `scripts/score.json`. It checks the
+in Lean's kernel, and writes the accepted objectives to `scripts/pareto/score.json`. It checks the
 admitted files and permits only `propext`, `Classical.choice`, and `Quot.sound` in the
 checked theorems' axiom dependencies.
 

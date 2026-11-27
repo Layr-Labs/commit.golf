@@ -11,9 +11,9 @@ import CommitGolfCandidate.HidingSecurity
 import CommitGolfCandidate.LeafResourceBridge
 import CommitGolfCandidate.ResourceTests
 
-/-! Certified initial machine implementation. Every requirement below is proved
-for these same RISC-V images, including adaptive binding and commitment-and-opening
-hiding. The comparator replays this theorem against the fixed challenge statement. -/
+/-! Original certificate for the serial baseline images, including adaptive binding
+and commitment-and-opening hiding. The track's `Solution` module transports this
+certificate through the exact legacy bridge to its full depth certificate. -/
 namespace CommitGolfCandidate.LegacyBaseline
 
 def submission : CommitGolf.Submission := CommitGolfCandidate.submission

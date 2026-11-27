@@ -19,7 +19,7 @@ change widths, or access a built-in variable-input RO or XOF.
 - `commit-golf-96-32-product`: product scoring with 96→32-byte compression at 8 cycles and permutation at 30; edit `submission-commit-golf-96-32-product/`.
 - `commit-golf-96-32-pareto`: Pareto scoring with the same 96→32-byte compression and prices; edit `submission-commit-golf-96-32-pareto/`.
 
-The original six tracks share their certificate, query budgets and numeric limits.
+The six non-depth tracks share their certificate, query budgets and numeric limits.
 The original pair charges 8 cycles per permutation call; the four width/price variants charge 30.
 Compression costs 8 in all tracks.
 
@@ -76,6 +76,8 @@ the submission. The contract/test build below checks the trusted definitions and
 regressions; `scripts/run.py` checks the submitted certificate and artifact equality.
 For local development, `python3 scripts/generate_artifact.py` generates the same ignored
 module from `submission/programs.json`; use `--refresh` after changing the manifest.
+For another non-depth track, pass its `programs.json` path to the command.
+The [depth rules](docs/depth-rules.md) specify the additional resource-model argument for depth artifacts.
 See the [submission README](submission/README.md#delivered-programs) for the recommended
 large-image alias and the limits of equality checking across different representations.
 
@@ -95,9 +97,8 @@ uses a fresh directory under the current directory's `.work/` by default.
 Each track’s workflow verifies its own submission directory. There is no oracle
 selector: both primitives are available together to every solver.
 Reports are `scripts/score.json` (product) and `scripts/pareto/score.json` (Pareto).
-The new tracks write `scripts/commit-golf-64-32-product/score.json` and `scripts/commit-golf-64-32-pareto/score.json`.
+Every other track writes `scripts/<track>/score.json`.
 Each report identifies its track, compression input size, and permutation cost.
-The 96→32-byte variants have separate `scripts/<track>/score.json` reports.
 All four width/price variants include submission directories, delivered programs,
 claims and complete certificates. The depth tracks include serial bootstrap candidates
 whose new certificate and artifact-linkage paths must pass release validation.
@@ -127,7 +128,8 @@ and halt/failure, recording abstract cycles and public oracle calls separately.
 Ordinary instructions cost one cycle; multiplication and division cost four.
 Private randomness retains the historical charge of `1 + ceil(bytes / 8)` cycles.
 Compression costs eight cycles. Forward/inverse permutation calls cost eight on the original
-tracks and 30 on the four width/price variants, with no additional instruction charge for the syscall.
+pair and the two depth tracks, and 30 on the four width/price variants.
+Syscalls have no additional ordinary-instruction charge.
 The verifier selects the price from its trusted track configuration, changes only
 `PERMUTATION_CYCLES` and `COMPRESSION_INPUT_LENGTH` in its isolated contract copy, and
 removes incompatible project builds. The repository's `Parameters.lean` retains

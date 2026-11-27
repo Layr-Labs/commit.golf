@@ -1,7 +1,8 @@
 # Depth tracks
 
-These two tracks are under implementation and release validation. They are separate
-from the six existing tracks; their metric values are not interchangeable.
+The two depth tracks minimize prover work, proof size and either oracle rounds or
+weighted CPU span. They use separate execution contracts from the six existing tracks.
+Oracle rounds and weighted span measure different resources.
 
 | Track | Pareto objectives, minimized in this order of reporting | Claim fields |
 | --- | --- | --- |
@@ -46,8 +47,8 @@ each public call as one round. Batched mode adds ECALL selector `t0=3`:
   underlying query still counts separately and incurs its primitive price.
 - The macro costs `1 + 5*k + sum(primitive prices)` cycles for `k` requests and
   consumes one instruction of fuel. It preserves registers and advances PC by four.
-  Caller-side preparation is ordinary charged
-  machine work. Malformed arrays cost one cycle; valid arrays with malformed
+  Caller-side preparation is ordinary charged machine work. Malformed arrays cost
+  one cycle; valid arrays with malformed
   requests incur preparation cost. Fuel exhaustion remains unfinished.
 
 The five-cycle request overhead is an explicit benchmark macro price, not an RV64
@@ -141,20 +142,23 @@ practical. The verifier regenerates the artifact and invalidates cached copies.
 
 The initial baselines are **serial bootstraps**, preserving the old salted-Merkle
 bytes and complete proof. Rounds are 150,994,943 for commitment and zero for
-opening; legacy span equals work. They do not demonstrate parallel optimization. Separate
-[resource-only clients](../verifier/tests/fixtures/README.md) exercise actual batched
-and fork/join images on a fixed zero message, for every fixed oracle. They test
-resource proof feasibility and artifact linkage, without supplying security
-certificates or a parallel secure baseline. The two submission READMEs document
-opt-in symbolic batch/table and fork/continuation lemmas. These proof modules
-leave the certificate imports unchanged and do not discharge table preparation, actual query budgets
-or complete construction/security proofs.
+opening; legacy span equals work. They do not demonstrate parallel optimization.
+
+Separate [resource-only clients](../verifier/tests/fixtures/README.md) exercise
+batched and fork/join images on a fixed zero message, for every fixed oracle. They
+check resource proofs and artifact linkage, without supplying security certificates.
+The [rounds](../submission-commit-golf-oracle-rounds-pareto/README.md#symbolic-proof-helpers)
+and [span](../submission-commit-golf-work-span-pareto/README.md#symbolic-proof-helpers)
+READMEs describe opt-in symbolic proof APIs. These helpers leave certificate imports
+unchanged. They do not discharge table preparation, actual oracle-query budgets or
+complete construction/security proofs.
+
 A level-wise version of that tree would need eight leaf-hash stages plus 24 tree
 levels (32 rounds), assuming a whole layer fits one batch and salts are already
 available without extra oracle dependencies; this is a design estimate,
 not a bound proved for the bootstrap images.
 
-## Limits and release gates
+## Limits
 
 Security is query-dependent: binding error is at most `q/2^120` for `q≥1`, and
 hiding error at most `min(1,(t+1)/2^120)`. The inherited hiding definition fixes an
@@ -179,9 +183,17 @@ Ratios of independently certified upper bounds do not prove actual parallelism;
 `max(work/P, span)` is not a certified runtime upper bound. Scalar scoring options
 remain [research comparisons](depth-track-design.md), not production scoring policies.
 
-Before launch: independent review of both execution models and verifier integration,
-actual supported full-certificate checks for both bootstraps, mode/byte linkage
-negative cases, and unchanged-track regression results are required. The existing
-pre-sandbox bounded-read/staging fixes in [PR #31](https://github.com/Layr-Labs/commit.golf/pull/31)
-and administrator enforcement of `contract-regressions` remain deployment dependencies.
-No supported-verifier result is implied by source review or ordinary compilation.
+## Validation and launch
+
+[CI run 45911609582](https://github.com/Layr-Labs/commit.golf/actions/runs/45911609582)
+at [636d294](https://github.com/Layr-Labs/commit.golf/commit/636d294b7780ad03b34b5f5bc14614120e689d86)
+passed 151 Python tests, 19 resource-client cases, full-certificate verification for
+all eight tracks, and the `contract-regressions` gate. These results apply to that
+commit. Source review or ordinary Lean compilation alone does not establish
+supported-verifier acceptance.
+
+Launch still requires the pre-sandbox bounded-read/staging fixes in
+[PR #31](https://github.com/Layr-Labs/commit.golf/pull/31), administrator enforcement
+of `contract-regressions`, and Yukon approval of the three-objective tracks and their
+abstract prices. Future execution or verifier changes need independent review and
+verification of the affected certificates at the new commit.

@@ -136,10 +136,12 @@ records the comparisons and application limits.
 
 ## Submit and verify
 
-**Only the selected track’s directory is solver-editable: `submission/` for product,
-`submission-pareto/` for Pareto, `submission-commit-golf-64-32-product/` for commit-golf-64-32-product, or
-`submission-commit-golf-64-32-pareto/` for commit-golf-64-32-pareto, `submission-commit-golf-96-32-product/` for
-commit-golf-96-32-product, or `submission-commit-golf-96-32-pareto/` for commit-golf-96-32-pareto.** Define
+**Only the selected track’s submission directory is solver-editable.**
+The [track list](README.md#tracks) names all eight directories.
+The two depth tracks use the full depth certificates and schema-v2 artifacts in
+[depth rules](docs/depth-rules.md).
+
+For the six non-depth tracks, define
 `CommitGolf.Challenge.submission : CommitGolf.Submission`, and prove
 `CommitGolf.Challenge.certificate : Certificate submission proofBytes commitCycles openingCycles`.
 Deliver all image bytes and ABI fields in `programs.json` ([encoding](submission/README.md#delivered-programs)).

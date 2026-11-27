@@ -25,16 +25,17 @@
 - `Oracle.lean` uses a 512→256 compression function (768→256 on the `commit-golf-96-32-*` tracks)
   and 1,600-bit permutation. Compression
   costs eight cycles in every track. Forward and inverse permutation calls cost eight on the
-  original tracks and 30 on every `commit-golf-*` track. The verifier selects the
+  original and depth tracks, and 30 on the four `commit-golf-64-32-*` and
+  `commit-golf-96-32-*` tracks. The verifier selects the
   trusted width and cost in its isolated contract; the repository's `Parameters.lean`
   retains the 512-bit compression input and eight-cycle permutation price.
   Queries and cycles are separate accounting systems; every public call consumes one query.
 - Never weaken the comparator to accept a missing or incomplete certificate.
-  Full-score workflows require the same complete certificate. The PR gate verifies
-  the original product and Pareto baselines plus every changed new-track submission.
-  Submission-only same-repository `submissions/*` branches delegate verification to
-  Yukon; contract changes override that delegation. Unchanged new-track submissions
-  are not part of the baseline PR gate.
+  Full-score workflows require the same complete certificate. For a contract change,
+  the PR gate verifies the original product and Pareto baselines and every new-track
+  baseline whose submission root exists. Changed roots also require verification,
+  including deleted or replaced roots. Submission-only same-repository `submissions/*`
+  branches delegate verification to Yukon; contract changes override that delegation.
 - Historical baselines are preserved but excluded from compilation and submission imports.
 - Build with `lake build CommitGolf CommitGolfTests`.
   Verify with `bash scripts/setup.sh` and `python3 scripts/run.py` on supported Linux.
@@ -44,3 +45,11 @@
 - When changing the contract, keep `RULES.md` concise and the repository minimal. Keep the Lean
   statements commented so that each file reads on its own, and refresh the line anchors in
   `RULES.md` when line numbers move.
+
+- Follow [ArkLib's writing guidance](https://github.com/Verified-zkEVM/ArkLib/blob/main/docs/wiki/writing.md)
+  and the applicable [contribution guidance](https://github.com/Verified-zkEVM/ArkLib/blob/main/CONTRIBUTING.md#description)
+  for all documentation: READMEs, rules and design notes, code docstrings and comments,
+  commit messages, PR and issue descriptions, and review text. Preserve mathematical
+  claims, hypotheses, uncertainty and requirement strength. Describe the current code,
+  cite accessible sources, and keep session logs out of reference documentation.
+  Revise clarity or accuracy problems; leave clear, correct text alone.

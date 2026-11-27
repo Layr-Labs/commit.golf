@@ -1,25 +1,27 @@
-# Depth-aware commitment tracks: design and validation
+# Depth-aware commitment tracks: design
 
-Status: both models selected as separate production tracks; implementation and release validation in progress.
-Base: production commit `1a8a66f3609ac24a19e6fbded3a5d26b4d3b9909` (26 November 2026).
-Yukon supports adding both tracks. The six existing tracks, their certificates and pins
-remain the compatibility boundary. The prototypes are not accepted submissions.
+The challenge has separate oracle-round and CPU work/span tracks. Both use
+three-objective Pareto ranking, preserving total prover work and proof bytes as
+objectives. The [depth rules](depth-rules.md) specify their execution, artifact and
+claim interfaces and record [validation and launch requirements](depth-rules.md#validation-and-launch).
 
-Implemented checkpoints:
+The six existing tracks, their certificates and dependency pins retain their
+semantics. The depth design started from production commit
+`1a8a66f3609ac24a19e6fbded3a5d26b4d3b9909` (26 November 2026).
 
-- The batch helper and bounded-RAM batch instruction compile, including actual
-  fixed-oracle query/count proofs, fuel handling and snapshot-alias regressions.
-  A five-word test image uses two queries, one round and 31 abstract cycles.
-- The structured work/span model compiles with real RISC-V kernel bounds. Its
-  concrete plans have equal work 22 and declared spans 22/14; both canonical
-  serializations execute 22 cycles. This is not a parallel-backend theorem.
-- Seven synthetic scoring regressions distinguish the competing objectives.
+## Research prototypes
 
-See [archived prototype sources and build instructions](https://github.com/Layr-Labs/commit.golf/blob/d45f94302f2c36881f34f4c4bb455321f64d4325/DepthPrototype/README.md).
+The [archived prototypes](https://github.com/Layr-Labs/commit.golf/blob/d45f94302f2c36881f34f4c4bb455321f64d4325/DepthPrototype/README.md)
+compared the models before the production interpreters:
 
-The track contracts and artifact/claim interfaces are specified in [depth rules](depth-rules.md).
-Initial baselines preserve the complete serial certificate through exact legacy bridges.
-They establish an admission path, not an optimized parallel construction.
+- A five-word batch image uses two queries, one round and 31 abstract cycles.
+- Two structured work/span plans have equal work 22 and declared spans 22/14.
+  Both canonical serializations execute 22 cycles. This is not a parallel-backend theorem.
+- Seven synthetic scoring tests distinguish Pareto/scalar tradeoffs and finite-worker
+  scheduling costs. They do not measure live submissions.
+
+The current serial baselines preserve the complete certificate through exact
+legacy bridges. They establish an admission path, not an optimized parallel construction.
 
 ## Goal and common workload
 
@@ -27,15 +29,15 @@ Reward lower sequential dependence alongside total prover work and opening-proof
 bytes. Preserve one commitment to `2^24` logical 256-byte leaves followed by one
 opening of 128 positions. Record commitment and opening costs separately. Their
 resource bounds must cover the same fixed-oracle/message/position/private-coin
-quantifiers as the existing honest bounds. Checking remains outside the objectives; adding it requires a separately certified
-bound and an explicit policy choice.
+quantifiers as the existing honest bounds. Checking remains outside the objectives.
+Adding it requires a separately certified bound and an explicit policy choice.
 
 The security games can be reused only for the scheme derived from the new
 executable semantics. A certificate for the old interpreter does not certify a
 new batch instruction: old failure on a selector can become execution in the new
 interpreter, including on adversarial inputs.
 
-## Candidate A: batched oracle-round depth
+## Oracle-round depth
 
 One batch supplies a finite collection of nonadaptive public queries. Every
 descriptor and every input byte is captured before the first oracle answer or
@@ -43,15 +45,16 @@ output write. Answers use the same fixed compression/permutation pair as the
 rest of the experiment. Repeated queries and forward/inverse calls retain their
 correlations: nonadaptivity does not mean statistical independence.
 
-- Count every underlying call in query budgets, including repeats and inverses.
+- Every underlying call counts in query budgets, including repeats and inverses.
 - A nonempty batch consumes one round; an empty batch consumes zero rounds.
 - Ordinary single oracle calls consume one round each. Randomness and local
   instructions contribute work but are not public oracle rounds.
-- Charge total primitive work, descriptor processing and required memory work;
-  batching is not a free bulk-data instruction.
-- Bound descriptor count, byte sizes, alignment and addresses without overflow.
-  Define/restrict output overlap and snapshot input/output aliases explicitly.
-- Specify behavior on malformed requests, faults, exhaustion and checker coins.
+- The macro charges primitive work and descriptor overhead. Caller preparation
+  remains ordinary machine work.
+- The parser checks descriptor count, byte sizes, alignment and addresses without
+  wraparound. Inputs use a common snapshot; overlapping outputs use array order.
+- Malformed requests reject before any query. Faults reject, exhaustion remains
+  unfinished, and the checker cannot obtain private coins.
 
 A serial evaluation of the captured query list is a valid implementation of this
 ideal round semantics. It is not a proof of physical simultaneous evaluation.
@@ -69,38 +72,34 @@ The batch-width limit is part of the model: splitting a layer across batches
 increases its rounds. The 32-round estimate assumes the limit can accommodate
 the `2^24`-query leaf stages. It is not a bound for an arbitrary smaller limit.
 
-## Candidate B: executable work and span
+## Executable work and span
 
-Use an explicit structured fork/join plan over delivered RISC-V kernels. Kernel
-costs come from execution; ownership/dependency conditions justify concurrency.
-Work sums all computation, while span adds along sequencing and takes the maximum
-over parallel branches, including declared preparation and fork/join costs.
+The [fork/join interpreter](../CommitGolfDepth/Span/Machine.lean) executes delivered
+RV64 images. Guest-memory descriptors select child entry points, owned regions and
+reserved instruction budgets. The interpreter constructs the dependency trace from
+those executions. Work sums all computation; span adds sequential costs and takes
+the maximum over child spans, including the declared launch and join costs.
 
-The prototype must keep the following boundaries visible:
+Each task executes its input-dependent control flow and register operations in order.
+The [memory policy](../CommitGolfDepth/Span/Memory.lean) guards shared-memory accesses.
+The children cannot read or write each other's owned regions. Snapshot inputs and
+disjoint writes justify the logical shared-memory join. Task inputs, copies and
+output assembly must follow the specified ABI and execution, rather than an arbitrary
+unpriced Lean function.
 
-- Input-dependent control, register dependencies, memory aliases and output
-  assembly cannot be dropped from the dependency relation without proof.
-- Kernel input views, wiring, copies, randomness, scheduling and readout are not
-  arbitrary free Lean functions. State exactly which interface work is excluded.
-- Specify oracle latency, throughput and worker occupancy, rather than converting
-  query count to processor time by an assumed constant.
-- Specify shared versus private memory and aggregate storage limits. A sequential
-  peak-state bound is not aggregate memory for concurrently live workers.
-- Prove semantic correspondence for each fixed oracle, with a coupling of private
-  coins, to the scheme whose security and completeness are certified.
+Canonical evaluation keeps the same fixed oracle and private-coin sampling effects
+as the scheme whose security the certificate proves. A physical scheduler refinement
+is separate from this abstract span contract. Predicting elapsed time also requires
+an oracle latency/throughput model, worker occupancy and memory communication costs.
+A sequential peak-state bound does not bound aggregate storage for concurrent workers.
 
-The first prototype compares concrete sequential and independent kernel tasks.
-It does not itself establish a full commitment certificate or scheduling theorem.
-Production supplies a specified fork interpreter, actual-image security/resource
-certificate and delivered-artifact linkage. A physical scheduler refinement is
-separate from this abstract span contract.
 At full vector size, the plan must also have a compact executable representation
 or generator. A giant proof-side list of leaf tasks cannot replace delivered
 code, evade image-size admission or hide plan construction and wiring costs.
 
-## Scoring alternatives to compare
+## Scoring and scalar alternatives
 
-For either depth model, three-objective Pareto ranking is possible:
+Both depth models use three-objective Pareto ranking:
 
 `[commitWork + openingWork, proofBytes, commitDepth + openingDepth]`.
 
@@ -128,36 +127,33 @@ and span two, but need four ticks on two workers. Three independent two-task
 chains have the same work/span and finish in three ticks. Neither the maximum
 formula nor the pair of metrics determines exact finite-worker time.
 
-## Implementation gates
+## Remaining proof work
 
-1. Build bounded Lean prototypes for both models, including nonvacuous concrete
-   executions and counterexamples to misleading metrics.
-2. Independently review snapshots, aliases, counting, private coins, executable
-   correspondence, and ranking tradeoffs. Record unresolved bridges.
-3. Selection: develop both models as separate tracks, each with three-objective Pareto ranking. Scalar comparisons remain research tools, not runtime claims.
-4. Add an isolated machine/resource certificate and trusted comparator template,
-   strict claim schema, artifact representation, track configuration and reports.
-   Existing templates and track semantics remain unchanged.
-5. Supply a fully certified baseline. A legacy-execution bootstrap is acceptable
-   only when explicitly identified; it does not demonstrate a parallel baseline.
-6. Run unit, kernel, linkage, maximum-image and supported full-certificate checks;
-   obtain independent review before publishing implementation commits.
+The opt-in [rounds](../CommitGolfDepth/Rounds/Proofs.lean) and
+[span](../CommitGolfDepth/Span/Proofs.lean) APIs compose symbolic interpreter steps
+and bounds over every supported result. A parallel commitment still needs proofs
+of table preparation, data layout, complete execution, actual oracle-query budgets
+and security. The serial bootstrap does not discharge those obligations for new modes.
+
+For an arbitrary child runner, the span API's query coordinate counts trace annotations.
+A runner can make an actual oracle query and return a zero-query trace. A theorem
+relating those annotations to the independent `Oracle.run` counter therefore needs
+cost-compatible child runners. The full certificate's query-budget field remains
+an independent obligation.
 
 ## Upstream reuse and references
 
 The [upstream handoff](depth-upstream-needs.md) ties requests to these concrete
 clients and distinguishes reusable APIs from missing machine refinement proofs.
-
-
 The current PolyFun pin `4181c82238142d9b73403fbf4c4b13e1a801e400` already has
 `FreeM.parallel` and quantitative execution/resource contracts. Its sequential
 handler interprets joint calls left-before-right; the syntax does not supply a
 machine work/span theorem. Current import policy does not allow direct PolyFun
 imports. A reviewed public bridge or alternate-track policy would be needed.
-Ark extractor-stage path length is a different resource from parallel span.
+ArkLib extractor-stage path length is a different resource from parallel span.
 
-- [Current rules](https://github.com/Layr-Labs/commit.golf/blob/1a8a66f3609ac24a19e6fbded3a5d26b4d3b9909/RULES.md).
-- [Current certificate](https://github.com/Layr-Labs/commit.golf/blob/1a8a66f3609ac24a19e6fbded3a5d26b4d3b9909/CommitGolf/Statements.lean).
+- [Rules at the design base](https://github.com/Layr-Labs/commit.golf/blob/1a8a66f3609ac24a19e6fbded3a5d26b4d3b9909/RULES.md).
+- [Certificate at the design base](https://github.com/Layr-Labs/commit.golf/blob/1a8a66f3609ac24a19e6fbded3a5d26b4d3b9909/CommitGolf/Statements.lean).
 - [PolyFun parallel syntax and handler caveats](https://github.com/Verified-zkEVM/PolyFun/blob/4181c82238142d9b73403fbf4c4b13e1a801e400/PolyFun/PFunctor/Free/Parallel.lean).
 - [PolyFun quantitative execution](https://github.com/Verified-zkEVM/PolyFun/blob/4181c82238142d9b73403fbf4c4b13e1a801e400/PolyFun/Realizability/Quantitative.lean).
 - [OpenCilk work/span concepts](https://www.opencilk.org/doc/tutorials/opencilk-concepts/).

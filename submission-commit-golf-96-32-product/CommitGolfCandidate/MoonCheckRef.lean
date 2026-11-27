@@ -5,7 +5,7 @@ import CommitGolfCandidate.MoonBinding
 /-! End-to-end verification of the submitted `check` image:
 - `check_run_termination`: universal termination on all inputs within step fuel and `28 * k` oracle calls.
 - `check_honest_accepts`: perfect completeness and `CHECK_BUDGET` bound on `referenceProof`.
-- `check_sound`: `CheckSound h768` witness-path and compression-trace extraction for adaptive 238-bit binding. -/
+- `check_sound`: `CheckSound h768` witness-path and compression-trace extraction for the adaptive binding reduction with 238-bit digests. -/
 namespace CommitGolfCandidate
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp OracleSpec
 
