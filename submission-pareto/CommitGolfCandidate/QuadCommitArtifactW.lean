@@ -1,0 +1,582 @@
+import CommitGolfCandidate.QuadCommitWalk_node0
+import CommitGolfCandidate.QuadCommitWalk_node1
+import CommitGolfCandidate.QuadCommitWalk_node2
+import CommitGolfCandidate.QuadCommitWalk_node3
+import CommitGolfCandidate.QuadCommitWalk_node4
+import CommitGolfCandidate.QuadCommitWalk_node5
+import CommitGolfCandidate.QuadCommitWalk_node6
+import CommitGolfCandidate.QuadCommitWalk_node7
+namespace TwoPermutationPrototype.ArtifactMatchB
+open CommitGolf Quad.Commit
+set_option maxRecDepth 1000000
+set_option maxHeartbeats 0
+
+theorem walk_range_join (g : Nat → List (BitVec 32)) (i j k s m c : Nat)
+    (first : walk 32 Artifact.commitCode g i (List.range' s m) = some j)
+    (rest : walk 32 Artifact.commitCode g j (List.range' (s + m) c) = some k) :
+    walk 32 Artifact.commitCode g i (List.range' s (m + c)) = some k := by
+  rw [range'_split]; exact walk_append 32 _ g _ _ i j k first rest
+
+private theorem prefixMatches_ofFn_aux {n : Nat} (p : CommitGolf.ArtifactEncoding.Packed n) :
+    ∀ (m base : Nat) (h : base + m ≤ n),
+      prefixMatches 32 p base (List.ofFn fun i : Fin m => p.get 32 ⟨base + i.val, by omega⟩) = true
+  | 0, _, _ => rfl
+  | m + 1, base, h => by
+      rw [List.ofFn_succ]
+      simp only [prefixMatches, show base < n by omega, dite_true, beq_self_eq_true, Bool.true_and, Nat.add_zero]
+      have h' := prefixMatches_ofFn_aux p m (base + 1) (by omega)
+      simpa [Nat.add_assoc, Nat.add_comm 1] using h'
+
+private theorem walk_ofFn {n : Nat} (p : CommitGolf.ArtifactEncoding.Packed n)
+    (base m : Nat) (h : base + m ≤ n) :
+    walk 32 p id base [List.ofFn fun i : Fin m => p.get 32 ⟨base + i.val, by omega⟩] = some (base + m) := by
+  simp only [walk, id, prefixMatches_ofFn_aux p m base h, if_true, List.length_ofFn]
+theorem n1s_from_29184 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 132778 (List.range' 29184 246) = some 133516 :=
+  n1s_block_29184
+theorem n1s_from_28672 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 131242 (List.range' 28672 758) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 131242 132778 133516 28672 512 246 n1s_block_28672 n1s_from_29184
+theorem n1s_from_28160 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 129706 (List.range' 28160 1270) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 129706 131242 133516 28160 512 758 n1s_block_28160 n1s_from_28672
+theorem n1s_from_27648 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 128170 (List.range' 27648 1782) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 128170 129706 133516 27648 512 1270 n1s_block_27648 n1s_from_28160
+theorem n1s_from_27136 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 126634 (List.range' 27136 2294) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 126634 128170 133516 27136 512 1782 n1s_block_27136 n1s_from_27648
+theorem n1s_from_26624 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 125098 (List.range' 26624 2806) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 125098 126634 133516 26624 512 2294 n1s_block_26624 n1s_from_27136
+theorem n1s_from_26112 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 123562 (List.range' 26112 3318) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 123562 125098 133516 26112 512 2806 n1s_block_26112 n1s_from_26624
+theorem n1s_from_25600 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 122026 (List.range' 25600 3830) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 122026 123562 133516 25600 512 3318 n1s_block_25600 n1s_from_26112
+theorem n1s_from_25088 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 120490 (List.range' 25088 4342) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 120490 122026 133516 25088 512 3830 n1s_block_25088 n1s_from_25600
+theorem n1s_from_24576 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 118954 (List.range' 24576 4854) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 118954 120490 133516 24576 512 4342 n1s_block_24576 n1s_from_25088
+theorem n1s_from_24064 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 117418 (List.range' 24064 5366) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 117418 118954 133516 24064 512 4854 n1s_block_24064 n1s_from_24576
+theorem n1s_from_23552 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 115882 (List.range' 23552 5878) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 115882 117418 133516 23552 512 5366 n1s_block_23552 n1s_from_24064
+theorem n1s_from_23040 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 114346 (List.range' 23040 6390) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 114346 115882 133516 23040 512 5878 n1s_block_23040 n1s_from_23552
+theorem n1s_from_22528 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 112810 (List.range' 22528 6902) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 112810 114346 133516 22528 512 6390 n1s_block_22528 n1s_from_23040
+theorem n1s_from_22016 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 111274 (List.range' 22016 7414) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 111274 112810 133516 22016 512 6902 n1s_block_22016 n1s_from_22528
+theorem n1s_from_21504 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 109738 (List.range' 21504 7926) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 109738 111274 133516 21504 512 7414 n1s_block_21504 n1s_from_22016
+theorem n1s_from_20992 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 108202 (List.range' 20992 8438) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 108202 109738 133516 20992 512 7926 n1s_block_20992 n1s_from_21504
+theorem n1s_from_20480 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 106666 (List.range' 20480 8950) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 106666 108202 133516 20480 512 8438 n1s_block_20480 n1s_from_20992
+theorem n1s_from_19968 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 105130 (List.range' 19968 9462) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 105130 106666 133516 19968 512 8950 n1s_block_19968 n1s_from_20480
+theorem n1s_from_19456 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 103594 (List.range' 19456 9974) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 103594 105130 133516 19456 512 9462 n1s_block_19456 n1s_from_19968
+theorem n1s_from_18944 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 102058 (List.range' 18944 10486) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 102058 103594 133516 18944 512 9974 n1s_block_18944 n1s_from_19456
+theorem n1s_from_18432 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 100522 (List.range' 18432 10998) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 100522 102058 133516 18432 512 10486 n1s_block_18432 n1s_from_18944
+theorem n1s_from_17920 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 98986 (List.range' 17920 11510) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 98986 100522 133516 17920 512 10998 n1s_block_17920 n1s_from_18432
+theorem n1s_from_17408 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 97450 (List.range' 17408 12022) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 97450 98986 133516 17408 512 11510 n1s_block_17408 n1s_from_17920
+theorem n1s_from_16896 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 95914 (List.range' 16896 12534) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 95914 97450 133516 16896 512 12022 n1s_block_16896 n1s_from_17408
+theorem n1s_from_16384 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 94378 (List.range' 16384 13046) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 94378 95914 133516 16384 512 12534 n1s_block_16384 n1s_from_16896
+theorem n1s_from_15872 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 92842 (List.range' 15872 13558) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 92842 94378 133516 15872 512 13046 n1s_block_15872 n1s_from_16384
+theorem n1s_from_15360 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 91306 (List.range' 15360 14070) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 91306 92842 133516 15360 512 13558 n1s_block_15360 n1s_from_15872
+theorem n1s_from_14848 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 89770 (List.range' 14848 14582) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 89770 91306 133516 14848 512 14070 n1s_block_14848 n1s_from_15360
+theorem n1s_from_14336 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 88234 (List.range' 14336 15094) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 88234 89770 133516 14336 512 14582 n1s_block_14336 n1s_from_14848
+theorem n1s_from_13824 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 86698 (List.range' 13824 15606) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 86698 88234 133516 13824 512 15094 n1s_block_13824 n1s_from_14336
+theorem n1s_from_13312 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 85162 (List.range' 13312 16118) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 85162 86698 133516 13312 512 15606 n1s_block_13312 n1s_from_13824
+theorem n1s_from_12800 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 83626 (List.range' 12800 16630) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 83626 85162 133516 12800 512 16118 n1s_block_12800 n1s_from_13312
+theorem n1s_from_12288 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 82090 (List.range' 12288 17142) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 82090 83626 133516 12288 512 16630 n1s_block_12288 n1s_from_12800
+theorem n1s_from_11776 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 80554 (List.range' 11776 17654) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 80554 82090 133516 11776 512 17142 n1s_block_11776 n1s_from_12288
+theorem n1s_from_11264 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 79018 (List.range' 11264 18166) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 79018 80554 133516 11264 512 17654 n1s_block_11264 n1s_from_11776
+theorem n1s_from_10752 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 77482 (List.range' 10752 18678) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 77482 79018 133516 10752 512 18166 n1s_block_10752 n1s_from_11264
+theorem n1s_from_10240 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 75946 (List.range' 10240 19190) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 75946 77482 133516 10240 512 18678 n1s_block_10240 n1s_from_10752
+theorem n1s_from_9728 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 74410 (List.range' 9728 19702) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 74410 75946 133516 9728 512 19190 n1s_block_9728 n1s_from_10240
+theorem n1s_from_9216 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 72874 (List.range' 9216 20214) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 72874 74410 133516 9216 512 19702 n1s_block_9216 n1s_from_9728
+theorem n1s_from_8704 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 71338 (List.range' 8704 20726) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 71338 72874 133516 8704 512 20214 n1s_block_8704 n1s_from_9216
+theorem n1s_from_8192 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 69802 (List.range' 8192 21238) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 69802 71338 133516 8192 512 20726 n1s_block_8192 n1s_from_8704
+theorem n1s_from_7680 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 68266 (List.range' 7680 21750) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 68266 69802 133516 7680 512 21238 n1s_block_7680 n1s_from_8192
+theorem n1s_from_7168 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 66730 (List.range' 7168 22262) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 66730 68266 133516 7168 512 21750 n1s_block_7168 n1s_from_7680
+theorem n1s_from_6656 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 65194 (List.range' 6656 22774) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 65194 66730 133516 6656 512 22262 n1s_block_6656 n1s_from_7168
+theorem n1s_from_6144 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 63658 (List.range' 6144 23286) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 63658 65194 133516 6144 512 22774 n1s_block_6144 n1s_from_6656
+theorem n1s_from_5632 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 62122 (List.range' 5632 23798) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 62122 63658 133516 5632 512 23286 n1s_block_5632 n1s_from_6144
+theorem n1s_from_5120 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 60586 (List.range' 5120 24310) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 60586 62122 133516 5120 512 23798 n1s_block_5120 n1s_from_5632
+theorem n1s_from_4608 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 59050 (List.range' 4608 24822) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 59050 60586 133516 4608 512 24310 n1s_block_4608 n1s_from_5120
+theorem n1s_from_4096 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 57514 (List.range' 4096 25334) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 57514 59050 133516 4096 512 24822 n1s_block_4096 n1s_from_4608
+theorem n1s_from_3584 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 55978 (List.range' 3584 25846) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 55978 57514 133516 3584 512 25334 n1s_block_3584 n1s_from_4096
+theorem n1s_from_3072 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 54442 (List.range' 3072 26358) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 54442 55978 133516 3072 512 25846 n1s_block_3072 n1s_from_3584
+theorem n1s_from_2560 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 52906 (List.range' 2560 26870) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 52906 54442 133516 2560 512 26358 n1s_block_2560 n1s_from_3072
+theorem n1s_from_2048 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 51370 (List.range' 2048 27382) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 51370 52906 133516 2048 512 26870 n1s_block_2048 n1s_from_2560
+theorem n1s_from_1536 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 49834 (List.range' 1536 27894) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 49834 51370 133516 1536 512 27382 n1s_block_1536 n1s_from_2048
+theorem n1s_from_1024 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 48298 (List.range' 1024 28406) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 48298 49834 133516 1024 512 27894 n1s_block_1024 n1s_from_1536
+theorem n1s_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 46762 (List.range' 512 28918) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 46762 48298 133516 512 512 28406 n1s_block_512 n1s_from_1024
+theorem n1s_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 45226 (List.range' 0 29430) = some 133516 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 45226 46762 133516 0 512 28918 n1s_block_0 n1s_from_512
+theorem n1r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 133518 (List.range' 0 424) = some 134790 :=
+  n1r_block_0
+theorem n2s_from_14336 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 177811 (List.range' 14336 249) = some 178558 :=
+  n2s_block_14336
+theorem n2s_from_13824 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 176275 (List.range' 13824 761) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 176275 177811 178558 13824 512 249 n2s_block_13824 n2s_from_14336
+theorem n2s_from_13312 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 174739 (List.range' 13312 1273) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 174739 176275 178558 13312 512 761 n2s_block_13312 n2s_from_13824
+theorem n2s_from_12800 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 173203 (List.range' 12800 1785) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 173203 174739 178558 12800 512 1273 n2s_block_12800 n2s_from_13312
+theorem n2s_from_12288 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 171667 (List.range' 12288 2297) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 171667 173203 178558 12288 512 1785 n2s_block_12288 n2s_from_12800
+theorem n2s_from_11776 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 170131 (List.range' 11776 2809) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 170131 171667 178558 11776 512 2297 n2s_block_11776 n2s_from_12288
+theorem n2s_from_11264 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 168595 (List.range' 11264 3321) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 168595 170131 178558 11264 512 2809 n2s_block_11264 n2s_from_11776
+theorem n2s_from_10752 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 167059 (List.range' 10752 3833) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 167059 168595 178558 10752 512 3321 n2s_block_10752 n2s_from_11264
+theorem n2s_from_10240 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 165523 (List.range' 10240 4345) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 165523 167059 178558 10240 512 3833 n2s_block_10240 n2s_from_10752
+theorem n2s_from_9728 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 163987 (List.range' 9728 4857) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 163987 165523 178558 9728 512 4345 n2s_block_9728 n2s_from_10240
+theorem n2s_from_9216 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 162451 (List.range' 9216 5369) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 162451 163987 178558 9216 512 4857 n2s_block_9216 n2s_from_9728
+theorem n2s_from_8704 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 160915 (List.range' 8704 5881) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 160915 162451 178558 8704 512 5369 n2s_block_8704 n2s_from_9216
+theorem n2s_from_8192 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 159379 (List.range' 8192 6393) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 159379 160915 178558 8192 512 5881 n2s_block_8192 n2s_from_8704
+theorem n2s_from_7680 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 157843 (List.range' 7680 6905) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 157843 159379 178558 7680 512 6393 n2s_block_7680 n2s_from_8192
+theorem n2s_from_7168 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 156307 (List.range' 7168 7417) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 156307 157843 178558 7168 512 6905 n2s_block_7168 n2s_from_7680
+theorem n2s_from_6656 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 154771 (List.range' 6656 7929) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 154771 156307 178558 6656 512 7417 n2s_block_6656 n2s_from_7168
+theorem n2s_from_6144 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 153235 (List.range' 6144 8441) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 153235 154771 178558 6144 512 7929 n2s_block_6144 n2s_from_6656
+theorem n2s_from_5632 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 151699 (List.range' 5632 8953) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 151699 153235 178558 5632 512 8441 n2s_block_5632 n2s_from_6144
+theorem n2s_from_5120 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 150163 (List.range' 5120 9465) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 150163 151699 178558 5120 512 8953 n2s_block_5120 n2s_from_5632
+theorem n2s_from_4608 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 148627 (List.range' 4608 9977) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 148627 150163 178558 4608 512 9465 n2s_block_4608 n2s_from_5120
+theorem n2s_from_4096 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 147091 (List.range' 4096 10489) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 147091 148627 178558 4096 512 9977 n2s_block_4096 n2s_from_4608
+theorem n2s_from_3584 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 145555 (List.range' 3584 11001) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 145555 147091 178558 3584 512 10489 n2s_block_3584 n2s_from_4096
+theorem n2s_from_3072 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 144019 (List.range' 3072 11513) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 144019 145555 178558 3072 512 11001 n2s_block_3072 n2s_from_3584
+theorem n2s_from_2560 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 142483 (List.range' 2560 12025) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 142483 144019 178558 2560 512 11513 n2s_block_2560 n2s_from_3072
+theorem n2s_from_2048 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 140947 (List.range' 2048 12537) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 140947 142483 178558 2048 512 12025 n2s_block_2048 n2s_from_2560
+theorem n2s_from_1536 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 139411 (List.range' 1536 13049) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 139411 140947 178558 1536 512 12537 n2s_block_1536 n2s_from_2048
+theorem n2s_from_1024 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 137875 (List.range' 1024 13561) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 137875 139411 178558 1024 512 13049 n2s_block_1024 n2s_from_1536
+theorem n2s_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 136339 (List.range' 512 14073) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 136339 137875 178558 512 512 13561 n2s_block_512 n2s_from_1024
+theorem n2s_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 134803 (List.range' 0 14585) = some 178558 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 134803 136339 178558 0 512 14073 n2s_block_0 n2s_from_512
+theorem n2r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 178560 (List.range' 0 179) = some 179097 :=
+  n2r_block_0
+theorem n3s_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 180646 (List.range' 512 488) = some 182110 :=
+  n3s_block_512
+theorem n3s_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 179110 (List.range' 0 1000) = some 182110 :=
+  walk_range_join (fun p => nodeWordsR 5 (p % 5)) 179110 180646 182110 0 512 488 n3s_block_0 n3s_from_512
+theorem n3r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 182112 (List.range' 0 218) = some 182766 :=
+  n3r_block_0
+theorem n4s_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 184319 (List.range' 512 488) = some 185783 :=
+  n4s_block_512
+theorem n4s_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 182783 (List.range' 0 1000) = some 185783 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 182783 184319 185783 0 512 488 n4s_block_0 n4s_from_512
+theorem n4r_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 187321 (List.range' 512 332) = some 188317 :=
+  n4r_block_512
+theorem n4r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 185785 (List.range' 0 844) = some 188317 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 185785 187321 188317 0 512 332 n4r_block_0 n4r_from_512
+theorem n5s_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 189862 (List.range' 512 488) = some 191326 :=
+  n5s_block_512
+theorem n5s_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 188326 (List.range' 0 1000) = some 191326 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 188326 189862 191326 0 512 488 n5s_block_0 n5s_from_512
+theorem n5r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 191328 (List.range' 0 422) = some 192594 :=
+  n5r_block_0
+theorem n6s_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 194139 (List.range' 512 488) = some 195603 :=
+  n6s_block_512
+theorem n6s_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 192603 (List.range' 0 1000) = some 195603 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 192603 194139 195603 0 512 488 n6s_block_0 n6s_from_512
+theorem n6r_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 197141 (List.range' 512 199) = some 197738 :=
+  n6r_block_512
+theorem n6r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 195605 (List.range' 0 711) = some 197738 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 195605 197141 197738 0 512 199 n6r_block_0 n6r_from_512
+theorem n7s_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 199287 (List.range' 512 488) = some 200751 :=
+  n7s_block_512
+theorem n7s_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 197751 (List.range' 0 1000) = some 200751 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 197751 199287 200751 0 512 488 n7s_block_0 n7s_from_512
+theorem n7r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 200753 (List.range' 0 356) = some 201821 :=
+  n7r_block_0
+theorem n8r_from_1536 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 206438 (List.range' 1536 142) = some 206864 :=
+  n8r_block_1536
+theorem n8r_from_1024 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 204902 (List.range' 1024 654) = some 206864 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 204902 206438 206864 1024 512 142 n8r_block_1024 n8r_from_1536
+theorem n8r_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 203366 (List.range' 512 1166) = some 206864 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 203366 204902 206864 512 512 654 n8r_block_512 n8r_from_1024
+theorem n8r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 201830 (List.range' 0 1678) = some 206864 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 201830 203366 206864 0 512 1166 n8r_block_0 n8r_from_512
+theorem n9r_from_512 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 208409 (List.range' 512 327) = some 209390 :=
+  n9r_block_512
+theorem n9r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 206873 (List.range' 0 839) = some 209390 :=
+  walk_range_join (fun p => nodeWordsR 2 (p % 2)) 206873 208409 209390 0 512 327 n9r_block_0 n9r_from_512
+theorem n10r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 2 (p % 2)) 209403 (List.range' 0 420) = some 210663 :=
+  n10r_block_0
+theorem n11r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 210672 (List.range' 0 210) = some 211302 :=
+  n11r_block_0
+theorem n12r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 211311 (List.range' 0 42) = some 211437 :=
+  n12r_block_0
+theorem n13r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 211458 (List.range' 0 9) = some 211485 :=
+  n13r_block_0
+theorem n14r_from_0 : walk 32 Artifact.commitCode (fun p => nodeWordsR 5 (p % 5)) 211498 (List.range' 0 2) = some 211504 :=
+  n14r_block_0
+theorem seg_0 : walk 32 Artifact.commitCode id 0 [setupWords] = some 19 := by
+  simpa only [setupWords, Nat.zero_add] using walk_ofFn Artifact.commitCode 0 19 (by omega)
+theorem seg_1 : walk 32 Artifact.commitCode id 19 [leafCode] = some 45183 := by
+  simpa only [leafCode] using walk_ofFn Artifact.commitCode 19 45164 (by omega)
+theorem seg_2 : walk 32 Artifact.commitCode id 45183 [leafLatchWords] = some 45201 := by
+  simpa only [leafLatchWords] using walk_ofFn Artifact.commitCode 45183 18 (by omega)
+theorem seg_3 : walk 32 Artifact.commitCode id 45201 [leafZeroWords] = some 45217 := by decide +kernel
+theorem seg_4 : walk 32 Artifact.commitCode id 45217 [levelSetupWords 1] = some 45226 := by decide +kernel
+theorem seg_5 : walk 32 Artifact.commitCode id 45226 [nodeCodeR 5 (levelS 1)] = some 133516 := by
+  rw [show nodeCodeR 5 (levelS 1) = (List.range' 0 29430).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelS 1 = 29430 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 45226 133516 n1s_from_0
+theorem seg_6 : walk 32 Artifact.commitCode id 133516 [levelLatchWords 1] = some 133518 := by decide +kernel
+theorem seg_7 : walk 32 Artifact.commitCode id 133518 [nodeCodeR 5 (levelR 1)] = some 134790 := by
+  rw [show nodeCodeR 5 (levelR 1) = (List.range' 0 424).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelR 1 = 424 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 133518 134790 n1r_from_0
+theorem seg_8 : walk 32 Artifact.commitCode id 134790 [levelZeroWords 1] = some 134794 := by decide +kernel
+theorem seg_9 : walk 32 Artifact.commitCode id 134794 [levelSetupWords 2] = some 134803 := by decide +kernel
+theorem seg_10 : walk 32 Artifact.commitCode id 134803 [nodeCodeR 5 (levelS 2)] = some 178558 := by
+  rw [show nodeCodeR 5 (levelS 2) = (List.range' 0 14585).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelS 2 = 14585 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 134803 178558 n2s_from_0
+theorem seg_11 : walk 32 Artifact.commitCode id 178558 [levelLatchWords 2] = some 178560 := by decide +kernel
+theorem seg_12 : walk 32 Artifact.commitCode id 178560 [nodeCodeR 5 (levelR 2)] = some 179097 := by
+  rw [show nodeCodeR 5 (levelR 2) = (List.range' 0 179).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelR 2 = 179 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 178560 179097 n2r_from_0
+theorem seg_13 : walk 32 Artifact.commitCode id 179097 [levelZeroWords 2] = some 179101 := by decide +kernel
+theorem seg_14 : walk 32 Artifact.commitCode id 179101 [levelSetupWords 3] = some 179110 := by decide +kernel
+theorem seg_15 : walk 32 Artifact.commitCode id 179110 [nodeCodeR 5 (levelS 3)] = some 182110 := by
+  rw [show nodeCodeR 5 (levelS 3) = (List.range' 0 1000).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelS 3 = 1000 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 179110 182110 n3s_from_0
+theorem seg_16 : walk 32 Artifact.commitCode id 182110 [levelLatchWords 3] = some 182112 := by decide +kernel
+theorem seg_17 : walk 32 Artifact.commitCode id 182112 [nodeCodeR 5 (levelR 3)] = some 182766 := by
+  rw [show nodeCodeR 5 (levelR 3) = (List.range' 0 218).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelR 3 = 218 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 182112 182766 n3r_from_0
+theorem seg_18 : walk 32 Artifact.commitCode id 182766 [levelZeroWords 3] = some 182774 := by decide +kernel
+theorem seg_19 : walk 32 Artifact.commitCode id 182774 [levelSetupWords 4] = some 182783 := by decide +kernel
+theorem seg_20 : walk 32 Artifact.commitCode id 182783 [nodeCodeR 2 (levelS 4)] = some 185783 := by
+  rw [show nodeCodeR 2 (levelS 4) = (List.range' 0 1000).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelS 4 = 1000 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 182783 185783 n4s_from_0
+theorem seg_21 : walk 32 Artifact.commitCode id 185783 [levelLatchWords 4] = some 185785 := by decide +kernel
+theorem seg_22 : walk 32 Artifact.commitCode id 185785 [nodeCodeR 2 (levelR 4)] = some 188317 := by
+  rw [show nodeCodeR 2 (levelR 4) = (List.range' 0 844).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelR 4 = 844 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 185785 188317 n4r_from_0
+theorem seg_23 : walk 32 Artifact.commitCode id 188317 [levelZeroWords 4] = some 188317 := by decide +kernel
+theorem seg_24 : walk 32 Artifact.commitCode id 188317 [levelSetupWords 5] = some 188326 := by decide +kernel
+theorem seg_25 : walk 32 Artifact.commitCode id 188326 [nodeCodeR 2 (levelS 5)] = some 191326 := by
+  rw [show nodeCodeR 2 (levelS 5) = (List.range' 0 1000).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelS 5 = 1000 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 188326 191326 n5s_from_0
+theorem seg_26 : walk 32 Artifact.commitCode id 191326 [levelLatchWords 5] = some 191328 := by decide +kernel
+theorem seg_27 : walk 32 Artifact.commitCode id 191328 [nodeCodeR 2 (levelR 5)] = some 192594 := by
+  rw [show nodeCodeR 2 (levelR 5) = (List.range' 0 422).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelR 5 = 422 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 191328 192594 n5r_from_0
+theorem seg_28 : walk 32 Artifact.commitCode id 192594 [levelZeroWords 5] = some 192594 := by decide +kernel
+theorem seg_29 : walk 32 Artifact.commitCode id 192594 [levelSetupWords 6] = some 192603 := by decide +kernel
+theorem seg_30 : walk 32 Artifact.commitCode id 192603 [nodeCodeR 2 (levelS 6)] = some 195603 := by
+  rw [show nodeCodeR 2 (levelS 6) = (List.range' 0 1000).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelS 6 = 1000 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 192603 195603 n6s_from_0
+theorem seg_31 : walk 32 Artifact.commitCode id 195603 [levelLatchWords 6] = some 195605 := by decide +kernel
+theorem seg_32 : walk 32 Artifact.commitCode id 195605 [nodeCodeR 2 (levelR 6)] = some 197738 := by
+  rw [show nodeCodeR 2 (levelR 6) = (List.range' 0 711).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelR 6 = 711 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 195605 197738 n6r_from_0
+theorem seg_33 : walk 32 Artifact.commitCode id 197738 [levelZeroWords 6] = some 197742 := by decide +kernel
+theorem seg_34 : walk 32 Artifact.commitCode id 197742 [levelSetupWords 7] = some 197751 := by decide +kernel
+theorem seg_35 : walk 32 Artifact.commitCode id 197751 [nodeCodeR 2 (levelS 7)] = some 200751 := by
+  rw [show nodeCodeR 2 (levelS 7) = (List.range' 0 1000).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelS 7 = 1000 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 197751 200751 n7s_from_0
+theorem seg_36 : walk 32 Artifact.commitCode id 200751 [levelLatchWords 7] = some 200753 := by decide +kernel
+theorem seg_37 : walk 32 Artifact.commitCode id 200753 [nodeCodeR 2 (levelR 7)] = some 201821 := by
+  rw [show nodeCodeR 2 (levelR 7) = (List.range' 0 356).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelR 7 = 356 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 200753 201821 n7r_from_0
+theorem seg_38 : walk 32 Artifact.commitCode id 201821 [levelZeroWords 7] = some 201821 := by decide +kernel
+theorem seg_39 : walk 32 Artifact.commitCode id 201821 [levelSetupWords 8] = some 201830 := by decide +kernel
+theorem seg_40 : walk 32 Artifact.commitCode id 201830 [nodeCodeR 2 (levelR 8)] = some 206864 := by
+  rw [show nodeCodeR 2 (levelR 8) = (List.range' 0 1678).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelR 8 = 1678 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 201830 206864 n8r_from_0
+theorem seg_41 : walk 32 Artifact.commitCode id 206864 [levelZeroWords 8] = some 206864 := by decide +kernel
+theorem seg_42 : walk 32 Artifact.commitCode id 206864 [levelSetupWords 9] = some 206873 := by decide +kernel
+theorem seg_43 : walk 32 Artifact.commitCode id 206873 [nodeCodeR 2 (levelR 9)] = some 209390 := by
+  rw [show nodeCodeR 2 (levelR 9) = (List.range' 0 839).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelR 9 = 839 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 206873 209390 n9r_from_0
+theorem seg_44 : walk 32 Artifact.commitCode id 209390 [levelZeroWords 9] = some 209394 := by decide +kernel
+theorem seg_45 : walk 32 Artifact.commitCode id 209394 [levelSetupWords 10] = some 209403 := by decide +kernel
+theorem seg_46 : walk 32 Artifact.commitCode id 209403 [nodeCodeR 2 (levelR 10)] = some 210663 := by
+  rw [show nodeCodeR 2 (levelR 10) = (List.range' 0 420).flatMap (fun p => nodeWordsR 2 (p % 2)) by
+    rw [show levelR 10 = 420 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 209403 210663 n10r_from_0
+theorem seg_47 : walk 32 Artifact.commitCode id 210663 [levelZeroWords 10] = some 210663 := by decide +kernel
+theorem seg_48 : walk 32 Artifact.commitCode id 210663 [levelSetupWords 11] = some 210672 := by decide +kernel
+theorem seg_49 : walk 32 Artifact.commitCode id 210672 [nodeCodeR 5 (levelR 11)] = some 211302 := by
+  rw [show nodeCodeR 5 (levelR 11) = (List.range' 0 210).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelR 11 = 210 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 210672 211302 n11r_from_0
+theorem seg_50 : walk 32 Artifact.commitCode id 211302 [levelZeroWords 11] = some 211302 := by decide +kernel
+theorem seg_51 : walk 32 Artifact.commitCode id 211302 [levelSetupWords 12] = some 211311 := by decide +kernel
+theorem seg_52 : walk 32 Artifact.commitCode id 211311 [nodeCodeR 5 (levelR 12)] = some 211437 := by
+  rw [show nodeCodeR 5 (levelR 12) = (List.range' 0 42).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelR 12 = 42 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 211311 211437 n12r_from_0
+theorem seg_53 : walk 32 Artifact.commitCode id 211437 [levelZeroWords 12] = some 211449 := by decide +kernel
+theorem seg_54 : walk 32 Artifact.commitCode id 211449 [levelSetupWords 13] = some 211458 := by decide +kernel
+theorem seg_55 : walk 32 Artifact.commitCode id 211458 [nodeCodeR 5 (levelR 13)] = some 211485 := by
+  rw [show nodeCodeR 5 (levelR 13) = (List.range' 0 9).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelR 13 = 9 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 211458 211485 n13r_from_0
+theorem seg_56 : walk 32 Artifact.commitCode id 211485 [levelZeroWords 13] = some 211489 := by decide +kernel
+theorem seg_57 : walk 32 Artifact.commitCode id 211489 [levelSetupWords 14] = some 211498 := by decide +kernel
+theorem seg_58 : walk 32 Artifact.commitCode id 211498 [nodeCodeR 5 (levelR 14)] = some 211504 := by
+  rw [show nodeCodeR 5 (levelR 14) = (List.range' 0 2).flatMap (fun p => nodeWordsR 5 (p % 5)) by
+    rw [show levelR 14 = 2 from rfl, nodeCodeR, List.range_eq_range']]
+  exact walk_flatten 32 _ _ _ 211498 211504 n14r_from_0
+theorem seg_59 : walk 32 Artifact.commitCode id 211504 [levelZeroWords 14] = some 211516 := by decide +kernel
+theorem seg_60 : walk 32 Artifact.commitCode id 211516 [rootSetupWords] = some 211521 := by decide +kernel
+theorem seg_61 : walk 32 Artifact.commitCode id 211521 [rootWords] = some 212404 := by decide +kernel
+theorem tail_61 : walk 32 Artifact.commitCode id 211521 [rootWords] = some 212404 := seg_61
+theorem tail_60 : walk 32 Artifact.commitCode id 211516 ([rootSetupWords] ++ ([rootWords])) = some 212404 :=
+  walk_append 32 _ id _ _ 211516 211521 212404 seg_60 tail_61
+theorem tail_59 : walk 32 Artifact.commitCode id 211504 ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))) = some 212404 :=
+  walk_append 32 _ id _ _ 211504 211516 212404 seg_59 tail_60
+theorem tail_58 : walk 32 Artifact.commitCode id 211498 ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))) = some 212404 :=
+  walk_append 32 _ id _ _ 211498 211504 212404 seg_58 tail_59
+theorem tail_57 : walk 32 Artifact.commitCode id 211489 ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211489 211498 212404 seg_57 tail_58
+theorem tail_56 : walk 32 Artifact.commitCode id 211485 ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211485 211489 212404 seg_56 tail_57
+theorem tail_55 : walk 32 Artifact.commitCode id 211458 ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211458 211485 212404 seg_55 tail_56
+theorem tail_54 : walk 32 Artifact.commitCode id 211449 ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211449 211458 212404 seg_54 tail_55
+theorem tail_53 : walk 32 Artifact.commitCode id 211437 ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211437 211449 212404 seg_53 tail_54
+theorem tail_52 : walk 32 Artifact.commitCode id 211311 ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211311 211437 212404 seg_52 tail_53
+theorem tail_51 : walk 32 Artifact.commitCode id 211302 ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211302 211311 212404 seg_51 tail_52
+theorem tail_50 : walk 32 Artifact.commitCode id 211302 ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 211302 211302 212404 seg_50 tail_51
+theorem tail_49 : walk 32 Artifact.commitCode id 210672 ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 210672 211302 212404 seg_49 tail_50
+theorem tail_48 : walk 32 Artifact.commitCode id 210663 ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 210663 210672 212404 seg_48 tail_49
+theorem tail_47 : walk 32 Artifact.commitCode id 210663 ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 210663 210663 212404 seg_47 tail_48
+theorem tail_46 : walk 32 Artifact.commitCode id 209403 ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 209403 210663 212404 seg_46 tail_47
+theorem tail_45 : walk 32 Artifact.commitCode id 209394 ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 209394 209403 212404 seg_45 tail_46
+theorem tail_44 : walk 32 Artifact.commitCode id 209390 ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 209390 209394 212404 seg_44 tail_45
+theorem tail_43 : walk 32 Artifact.commitCode id 206873 ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 206873 209390 212404 seg_43 tail_44
+theorem tail_42 : walk 32 Artifact.commitCode id 206864 ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 206864 206873 212404 seg_42 tail_43
+theorem tail_41 : walk 32 Artifact.commitCode id 206864 ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 206864 206864 212404 seg_41 tail_42
+theorem tail_40 : walk 32 Artifact.commitCode id 201830 ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 201830 206864 212404 seg_40 tail_41
+theorem tail_39 : walk 32 Artifact.commitCode id 201821 ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 201821 201830 212404 seg_39 tail_40
+theorem tail_38 : walk 32 Artifact.commitCode id 201821 ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 201821 201821 212404 seg_38 tail_39
+theorem tail_37 : walk 32 Artifact.commitCode id 200753 ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 200753 201821 212404 seg_37 tail_38
+theorem tail_36 : walk 32 Artifact.commitCode id 200751 ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 200751 200753 212404 seg_36 tail_37
+theorem tail_35 : walk 32 Artifact.commitCode id 197751 ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 197751 200751 212404 seg_35 tail_36
+theorem tail_34 : walk 32 Artifact.commitCode id 197742 ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 197742 197751 212404 seg_34 tail_35
+theorem tail_33 : walk 32 Artifact.commitCode id 197738 ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 197738 197742 212404 seg_33 tail_34
+theorem tail_32 : walk 32 Artifact.commitCode id 195605 ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 195605 197738 212404 seg_32 tail_33
+theorem tail_31 : walk 32 Artifact.commitCode id 195603 ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 195603 195605 212404 seg_31 tail_32
+theorem tail_30 : walk 32 Artifact.commitCode id 192603 ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 192603 195603 212404 seg_30 tail_31
+theorem tail_29 : walk 32 Artifact.commitCode id 192594 ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 192594 192603 212404 seg_29 tail_30
+theorem tail_28 : walk 32 Artifact.commitCode id 192594 ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 192594 192594 212404 seg_28 tail_29
+theorem tail_27 : walk 32 Artifact.commitCode id 191328 ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 191328 192594 212404 seg_27 tail_28
+theorem tail_26 : walk 32 Artifact.commitCode id 191326 ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 191326 191328 212404 seg_26 tail_27
+theorem tail_25 : walk 32 Artifact.commitCode id 188326 ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 188326 191326 212404 seg_25 tail_26
+theorem tail_24 : walk 32 Artifact.commitCode id 188317 ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 188317 188326 212404 seg_24 tail_25
+theorem tail_23 : walk 32 Artifact.commitCode id 188317 ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 188317 188317 212404 seg_23 tail_24
+theorem tail_22 : walk 32 Artifact.commitCode id 185785 ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 185785 188317 212404 seg_22 tail_23
+theorem tail_21 : walk 32 Artifact.commitCode id 185783 ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 185783 185785 212404 seg_21 tail_22
+theorem tail_20 : walk 32 Artifact.commitCode id 182783 ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 182783 185783 212404 seg_20 tail_21
+theorem tail_19 : walk 32 Artifact.commitCode id 182774 ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 182774 182783 212404 seg_19 tail_20
+theorem tail_18 : walk 32 Artifact.commitCode id 182766 ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 182766 182774 212404 seg_18 tail_19
+theorem tail_17 : walk 32 Artifact.commitCode id 182112 ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 182112 182766 212404 seg_17 tail_18
+theorem tail_16 : walk 32 Artifact.commitCode id 182110 ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 182110 182112 212404 seg_16 tail_17
+theorem tail_15 : walk 32 Artifact.commitCode id 179110 ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 179110 182110 212404 seg_15 tail_16
+theorem tail_14 : walk 32 Artifact.commitCode id 179101 ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 179101 179110 212404 seg_14 tail_15
+theorem tail_13 : walk 32 Artifact.commitCode id 179097 ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 179097 179101 212404 seg_13 tail_14
+theorem tail_12 : walk 32 Artifact.commitCode id 178560 ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 178560 179097 212404 seg_12 tail_13
+theorem tail_11 : walk 32 Artifact.commitCode id 178558 ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 178558 178560 212404 seg_11 tail_12
+theorem tail_10 : walk 32 Artifact.commitCode id 134803 ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 134803 178558 212404 seg_10 tail_11
+theorem tail_9 : walk 32 Artifact.commitCode id 134794 ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 134794 134803 212404 seg_9 tail_10
+theorem tail_8 : walk 32 Artifact.commitCode id 134790 ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 134790 134794 212404 seg_8 tail_9
+theorem tail_7 : walk 32 Artifact.commitCode id 133518 ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 133518 134790 212404 seg_7 tail_8
+theorem tail_6 : walk 32 Artifact.commitCode id 133516 ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 133516 133518 212404 seg_6 tail_7
+theorem tail_5 : walk 32 Artifact.commitCode id 45226 ([nodeCodeR 5 (levelS 1)] ++ ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 45226 133516 212404 seg_5 tail_6
+theorem tail_4 : walk 32 Artifact.commitCode id 45217 ([levelSetupWords 1] ++ ([nodeCodeR 5 (levelS 1)] ++ ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 45217 45226 212404 seg_4 tail_5
+theorem tail_3 : walk 32 Artifact.commitCode id 45201 ([leafZeroWords] ++ ([levelSetupWords 1] ++ ([nodeCodeR 5 (levelS 1)] ++ ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 45201 45217 212404 seg_3 tail_4
+theorem tail_2 : walk 32 Artifact.commitCode id 45183 ([leafLatchWords] ++ ([leafZeroWords] ++ ([levelSetupWords 1] ++ ([nodeCodeR 5 (levelS 1)] ++ ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 45183 45201 212404 seg_2 tail_3
+theorem tail_1 : walk 32 Artifact.commitCode id 19 ([leafCode] ++ ([leafLatchWords] ++ ([leafZeroWords] ++ ([levelSetupWords 1] ++ ([nodeCodeR 5 (levelS 1)] ++ ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords]))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 19 45183 212404 seg_1 tail_2
+theorem tail_0 : walk 32 Artifact.commitCode id 0 ([setupWords] ++ ([leafCode] ++ ([leafLatchWords] ++ ([leafZeroWords] ++ ([levelSetupWords 1] ++ ([nodeCodeR 5 (levelS 1)] ++ ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) = some 212404 :=
+  walk_append 32 _ id _ _ 0 19 212404 seg_0 tail_1
+theorem level_code_1 : levelCode 1 = levelSetupWords 1 ++ (nodeCodeR 5 (levelS 1) ++
+    (levelLatchWords 1 ++ (nodeCodeR 5 (levelR 1) ++ levelZeroWords 1))) := by
+  rw [levelCode, if_neg (by decide)]
+  simp only [List.append_assoc, show levelRadix 1 = 5 from rfl]
+theorem level_code_2 : levelCode 2 = levelSetupWords 2 ++ (nodeCodeR 5 (levelS 2) ++
+    (levelLatchWords 2 ++ (nodeCodeR 5 (levelR 2) ++ levelZeroWords 2))) := by
+  rw [levelCode, if_neg (by decide)]
+  simp only [List.append_assoc, show levelRadix 2 = 5 from rfl]
+theorem level_code_3 : levelCode 3 = levelSetupWords 3 ++ (nodeCodeR 5 (levelS 3) ++
+    (levelLatchWords 3 ++ (nodeCodeR 5 (levelR 3) ++ levelZeroWords 3))) := by
+  rw [levelCode, if_neg (by decide)]
+  simp only [List.append_assoc, show levelRadix 3 = 5 from rfl]
+theorem level_code_4 : levelCode 4 = levelSetupWords 4 ++ (nodeCodeR 2 (levelS 4) ++
+    (levelLatchWords 4 ++ (nodeCodeR 2 (levelR 4) ++ levelZeroWords 4))) := by
+  rw [levelCode, if_neg (by decide)]
+  simp only [List.append_assoc, show levelRadix 4 = 2 from rfl]
+theorem level_code_5 : levelCode 5 = levelSetupWords 5 ++ (nodeCodeR 2 (levelS 5) ++
+    (levelLatchWords 5 ++ (nodeCodeR 2 (levelR 5) ++ levelZeroWords 5))) := by
+  rw [levelCode, if_neg (by decide)]
+  simp only [List.append_assoc, show levelRadix 5 = 2 from rfl]
+theorem level_code_6 : levelCode 6 = levelSetupWords 6 ++ (nodeCodeR 2 (levelS 6) ++
+    (levelLatchWords 6 ++ (nodeCodeR 2 (levelR 6) ++ levelZeroWords 6))) := by
+  rw [levelCode, if_neg (by decide)]
+  simp only [List.append_assoc, show levelRadix 6 = 2 from rfl]
+theorem level_code_7 : levelCode 7 = levelSetupWords 7 ++ (nodeCodeR 2 (levelS 7) ++
+    (levelLatchWords 7 ++ (nodeCodeR 2 (levelR 7) ++ levelZeroWords 7))) := by
+  rw [levelCode, if_neg (by decide)]
+  simp only [List.append_assoc, show levelRadix 7 = 2 from rfl]
+theorem level_code_8 : levelCode 8 = levelSetupWords 8 ++ (nodeCodeR 2 (levelR 8) ++ levelZeroWords 8) := by
+  rw [levelCode, if_pos (by decide)]
+  simp only [List.nil_append, List.append_assoc, show levelRadix 8 = 2 from rfl]
+theorem level_code_9 : levelCode 9 = levelSetupWords 9 ++ (nodeCodeR 2 (levelR 9) ++ levelZeroWords 9) := by
+  rw [levelCode, if_pos (by decide)]
+  simp only [List.nil_append, List.append_assoc, show levelRadix 9 = 2 from rfl]
+theorem level_code_10 : levelCode 10 = levelSetupWords 10 ++ (nodeCodeR 2 (levelR 10) ++ levelZeroWords 10) := by
+  rw [levelCode, if_pos (by decide)]
+  simp only [List.nil_append, List.append_assoc, show levelRadix 10 = 2 from rfl]
+theorem level_code_11 : levelCode 11 = levelSetupWords 11 ++ (nodeCodeR 5 (levelR 11) ++ levelZeroWords 11) := by
+  rw [levelCode, if_pos (by decide)]
+  simp only [List.nil_append, List.append_assoc, show levelRadix 11 = 5 from rfl]
+theorem level_code_12 : levelCode 12 = levelSetupWords 12 ++ (nodeCodeR 5 (levelR 12) ++ levelZeroWords 12) := by
+  rw [levelCode, if_pos (by decide)]
+  simp only [List.nil_append, List.append_assoc, show levelRadix 12 = 5 from rfl]
+theorem level_code_13 : levelCode 13 = levelSetupWords 13 ++ (nodeCodeR 5 (levelR 13) ++ levelZeroWords 13) := by
+  rw [levelCode, if_pos (by decide)]
+  simp only [List.nil_append, List.append_assoc, show levelRadix 13 = 5 from rfl]
+theorem level_code_14 : levelCode 14 = levelSetupWords 14 ++ (nodeCodeR 5 (levelR 14) ++ levelZeroWords 14) := by
+  rw [levelCode, if_pos (by decide)]
+  simp only [List.nil_append, List.append_assoc, show levelRadix 14 = 5 from rfl]
+
+theorem commit_code_matches : matchesFrom 32 Artifact.commitCode 0 image.code = true := by
+  obtain ⟨ok, len⟩ := walk_sound 32 _ id _ 0 212404 tail_0
+  have code : image.code = (([setupWords] ++ ([leafCode] ++ ([leafLatchWords] ++ ([leafZeroWords] ++ ([levelSetupWords 1] ++ ([nodeCodeR 5 (levelS 1)] ++ ([levelLatchWords 1] ++ ([nodeCodeR 5 (levelR 1)] ++ ([levelZeroWords 1] ++ ([levelSetupWords 2] ++ ([nodeCodeR 5 (levelS 2)] ++ ([levelLatchWords 2] ++ ([nodeCodeR 5 (levelR 2)] ++ ([levelZeroWords 2] ++ ([levelSetupWords 3] ++ ([nodeCodeR 5 (levelS 3)] ++ ([levelLatchWords 3] ++ ([nodeCodeR 5 (levelR 3)] ++ ([levelZeroWords 3] ++ ([levelSetupWords 4] ++ ([nodeCodeR 2 (levelS 4)] ++ ([levelLatchWords 4] ++ ([nodeCodeR 2 (levelR 4)] ++ ([levelZeroWords 4] ++ ([levelSetupWords 5] ++ ([nodeCodeR 2 (levelS 5)] ++ ([levelLatchWords 5] ++ ([nodeCodeR 2 (levelR 5)] ++ ([levelZeroWords 5] ++ ([levelSetupWords 6] ++ ([nodeCodeR 2 (levelS 6)] ++ ([levelLatchWords 6] ++ ([nodeCodeR 2 (levelR 6)] ++ ([levelZeroWords 6] ++ ([levelSetupWords 7] ++ ([nodeCodeR 2 (levelS 7)] ++ ([levelLatchWords 7] ++ ([nodeCodeR 2 (levelR 7)] ++ ([levelZeroWords 7] ++ ([levelSetupWords 8] ++ ([nodeCodeR 2 (levelR 8)] ++ ([levelZeroWords 8] ++ ([levelSetupWords 9] ++ ([nodeCodeR 2 (levelR 9)] ++ ([levelZeroWords 9] ++ ([levelSetupWords 10] ++ ([nodeCodeR 2 (levelR 10)] ++ ([levelZeroWords 10] ++ ([levelSetupWords 11] ++ ([nodeCodeR 5 (levelR 11)] ++ ([levelZeroWords 11] ++ ([levelSetupWords 12] ++ ([nodeCodeR 5 (levelR 12)] ++ ([levelZeroWords 12] ++ ([levelSetupWords 13] ++ ([nodeCodeR 5 (levelR 13)] ++ ([levelZeroWords 13] ++ ([levelSetupWords 14] ++ ([nodeCodeR 5 (levelR 14)] ++ ([levelZeroWords 14] ++ ([rootSetupWords] ++ ([rootWords])))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))).flatMap id) := by
+    simp only [image, levelsCode, level_code_1, level_code_2, level_code_3, level_code_4, level_code_5, level_code_6, level_code_7, level_code_8, level_code_9, level_code_10, level_code_11, level_code_12, level_code_13, level_code_14,
+      List.append_assoc, List.cons_append, List.nil_append, List.flatMap_cons, List.flatMap_nil, id, List.append_nil]
+  rw [code]
+  exact matches_of_prefix 32 _ _ 0 ok len
+
+theorem quad_commit_image : Artifact.submission.image .commit = image := by
+  simp only [Artifact.submission]
+  rw [decode_of_matches 32 _ _ commit_code_matches]
+  rfl
+
+end TwoPermutationPrototype.ArtifactMatchB
