@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationPackedOpeningImage
+import CommitGolfCandidate.TwoPermutationPackedOpeningWordCode
 import CommitGolfCandidate.TwoPermutationPackedOpeningSchedule
 
 namespace TwoPermutationPrototype.PackedOpening
@@ -26,6 +26,14 @@ theorem sibling_width_exact (level : Fin 16) :
   have h : ∀ i : Fin 16, 2*(siblingSite i).halfwords = siblingWidth i.val := by decide
   exact h level
 
+
+theorem sibling_cycles_exact (level : Fin 16) :
+    (siblingSite level).cycles = siblingCopyCycles level.val := by
+  exact (show ∀ i : Fin 16, (siblingSite i).cycles = siblingCopyCycles i.val by decide) level
+
+theorem fast_sibling_offset (level : Fin 16) (fast : (siblingSite level).fast=true) :
+    siblingOffset level.val%4=0 := by
+  exact (show ∀ i : Fin 16, (siblingSite i).fast=true → siblingOffset i.val%4=0 by decide) level fast
 
 theorem sibling_copy_start (level : Fin 16) : siblingStart level+3 = (siblingSite level).start := by
   unfold siblingStart siblingSite

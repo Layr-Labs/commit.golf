@@ -15,7 +15,7 @@ set_option autoImplicit false
 set_option maxRecDepth 65536
 set_option maxHeartbeats 8000000
 
-theorem paired_certificate : Certificate pairedSubmission 67840 1266820219 96407 :=
+theorem paired_certificate : Certificate pairedSubmission 67840 1266820219 80407 :=
   certificate_of_facts paired_commit_resources paired_admitted paired_opening_facts
     (Packed.Checker.paired_checker_facts c3p_replay_bound)
     (scheme_hiding_of_c3p_transcript pairedSubmission.scheme Hybrid.builder paired_opening_facts.refines)

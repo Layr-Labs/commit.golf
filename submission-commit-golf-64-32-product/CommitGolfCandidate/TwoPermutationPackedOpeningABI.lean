@@ -61,7 +61,7 @@ theorem opening_empty_run (s : Submission) (abi : OpeningABI s)
 
 /-- Cycles of the leader's records, cap preparation, cap walk and exit, from word 13 on. -/
 def restCycles (positions : Positions) : Nat :=
-  (592*positions.card-1)+770+capSubtreeCycles (groupsBefore positions positions.card) 1 8+8
+  (467*positions.card-1)+770+capSubtreeCycles (groupsBefore positions positions.card) 1 8+8
 
 /-- What the leader's opener proves about its run from the first record onwards. -/
 structure RestPhysical (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
@@ -114,8 +114,8 @@ theorem opening_records_run (recordsExecute : RecordsExecute) (s : Submission) (
   obtain ⟨after, ranCap, afterPC, endPosition, footerBytes⟩ :=
     cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC above aligned room
   let final := exitPrefix (advanceUp after) 3
-  have ranRecords : RunsOpeningBlock begin lower (592*positions.card-1) := by
-    have charged : recordsCost positions.card 0 positions.card = 592*positions.card-1 := by
+  have ranRecords : RunsOpeningBlock begin lower (467*positions.card-1) := by
+    have charged : recordsCost positions.card 0 positions.card = 467*positions.card-1 := by
       simp [recordsCost, positive]
     exact charged ▸ assembled.run
   have ranPrep : RunsOpeningBlock lower prepared 770 :=
@@ -135,7 +135,7 @@ theorem opening_records_run (recordsExecute : RecordsExecute) (s : Submission) (
   · have ⟨ranExit, _, _⟩ := root_exit after afterPC endPosition.nodeWord surplus coins
     have prefixTrace := ((ranRecords.next ranPrep).next ranCap) (8+surplus) coins
     rw [show restCycles positions+surplus =
-      (592*positions.card-1)+770+capSubtreeCycles grouped 1 8+(8+surplus) by
+      (467*positions.card-1)+770+capSubtreeCycles grouped 1 8+(8+surplus) by
         unfold restCycles; dsimp only [grouped]; omega,
       prefixTrace, ranExit]
     simp [Execution.charge, final, restCycles, grouped, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
@@ -206,7 +206,7 @@ theorem opening_success (s : Submission) (abi : OpeningABI s)
 theorem opening_scored_limits (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (result : Execution) (physical : OpenPhysical s trapdoor positions result)
     (count : positions.card = BATCH) :
-    result.cycles ≤ 85767 ∧ (result.state.getReg .x11).toNat ≤ 67840 := by
+    result.cycles ≤ 69767 ∧ (result.state.getReg .x11).toNat ≤ 67840 := by
   rw [physical.cycles, physical.length]
   exact scheduled_scored_limits positions count
 
