@@ -1,3 +1,4 @@
+import CommitGolfCandidate.R1bParentEntry
 import CommitGolfCandidate.TwoPermutationHybridLower
 import CommitGolfCandidate.TwoPermutationPackedParentImage
 
@@ -10,13 +11,11 @@ attribute [local irreducible] execute packedWideCommitImage
 def hybridStart (s : MachineState) : MachineState :=
   execInstrBr (execInstrBr s (.LUI .x18 65536)) (.ADD .x18 .x18 .x8)
 
-def hybridUpper (s : MachineState) : OracleComp World MachineState := do
-  let mid ← packedParentsTrace 8361285 27322 s
-  packedParentGroups 610808 27595 303 (mid.setPC 610808)
+def hybridUpper (s : MachineState) := R1bParents.trace hybridCut (R1bParents.setup s 5)
 
 def hybridParentPhase (s : MachineState) : OracleComp World MachineState := do
   let lower ← hybridLowerP 256 (hybridStart s)
-  hybridUpper (lower.setPC 615176)
+  hybridUpper (lower.setPC 4180)
 
 theorem hybrid_start_run (s : MachineState) (pc : s.pc=217572) (fuel : Nat) :
     execute packedWideCommitImage (2+fuel) s true =
@@ -45,79 +44,50 @@ theorem hybrid_threshold (s : MachineState) (out : s.getReg .x8=4294971392) :
 
 theorem hybrid_skip_run (s : MachineState) (pc : s.pc=610804) (fuel : Nat) :
     execute packedWideCommitImage (1+fuel) s true =
-      (do let out ← execute packedWideCommitImage fuel (s.setPC 615176) true
+      (do let out ← execute packedWideCommitImage fuel (s.setPC 4180) true
           return out.charge 1 0) := by
-  have jump : ordinaryStep s (.base (.JAL .x0 4372)) = some (s.setPC 615176) := by
+  have jump : ordinaryStep s (.base (.JAL .x0 1490528)) = some (s.setPC 4180) := by
     simp [ordinaryStep,memoryArgumentsValid,memAccess,execInstrBr,MachineState.setReg,MachineState.setPC,pc]
     rfl
   rw [Nat.add_comm 1 fuel,CommitGolfCandidate.execute_ordinary_step _ _ _ _ _ _ (hybrid_skip s pc) jump]
   rfl
 
-theorem hybrid_upper_run (s : MachineState) (fuel : Nat) (regs : ParentRegs s hybridCut) (pc : s.pc=615176) :
-    execute packedWideCommitImage (33555035+fuel) s true =
+theorem hybrid_upper_run (s : MachineState) (fuel : Nat) (regs : ParentRegs s hybridCut) (pc : s.pc=4180) :
+    execute packedWideCommitImage (34619391+fuel) s true =
       (do let out ← hybridUpper s
           let res ← execute packedWideCommitImage fuel out true
-          return res.charge 92275284 hybridCut) := by
-  have part := packed_parent_segment packedWideCommitImage 610808 27595 packed_parent_words 8361285 27322 273
-    (2+(33445745+fuel)) s (by decide) (by decide) regs pc
-  rw [show 33555035+fuel=4*27322+(2+(33445745+fuel)) by omega,part]
-  simp only [hybridUpper,bind_assoc]
-  apply bind_congr_of_forall_mem_support
-  intro body hit
-  have post := packed_parent_segment_post 610808 8361285 27322 273 s regs pc hit
-  have latch := packed_parent_latch packedWideCommitImage 610808 27595 fixedWideParentControl 8361285 (33445745+fuel)
-    body (by decide) post.1 post.2
-  rw [show 2=longParentLatchCost 8361285 from rfl,latch]
-  let next := body.setPC 610808
-  have nr : ParentRegs next 8361285 :=
-    ⟨post.1.source,post.1.target,post.1.selector,post.1.size,post.1.primitive,post.1.heap⟩
-  have rest := packed_group_execution packedWideCommitImage 610808 27595 packed_parent_words
-    fixedWideParentControl (by decide) 303 fuel next (by decide) nr (fun _ => rfl)
-  change execute packedWideCommitImage (33445745+fuel) next true = _ at rest
-  rw [show body.setPC (packedParentNextPC 610808 27595 8361285)=next from rfl,rest]
-  simp [next,Execution.charge,←Nat.add_assoc]
-  rfl
+          return res.charge 93339640 hybridCut) := by
+  have ready:=R1bParents.setupReady s pc regs
+  have trace:=R1bParents.trace_run R1bParents.node_execution hybridCut fuel _ (by decide) ready
+  change execute packedWideCommitImage (34619386+fuel) _ true=_ at trace
+  rw [show 34619391+fuel=5+(34619386+fuel) by omega,R1bParents.setupRun s pc,trace]
+  simp [hybridUpper,Execution.charge,←Nat.add_assoc,R1bParents.remainingSteps,hybridCut]
 
-private theorem packed_groups_frame (groups : Nat) (s : MachineState) {out : MachineState}
-    (hit : out ∈ support (packedParentGroups 610808 27595 groups s)) : out.getReg .x8=s.getReg .x8 := by
-  induction groups generalizing s with
-  | zero => simp only [packedParentGroups,support_pure,Set.mem_singleton_iff] at hit;subst out;rfl
-  | succ n ih =>
-    simp only [packedParentGroups,mem_support_bind_iff] at hit
-    obtain ⟨body,path,tail⟩ := hit
-    exact (ih _ tail).trans (packed_trace_frame _ _ s (out:=body) path)
-
-theorem hybrid_upper_post (s : MachineState) (regs : ParentRegs s hybridCut) (pc : s.pc=615176)
+theorem hybrid_upper_post (s : MachineState) (regs : ParentRegs s hybridCut) (pc : s.pc=4180)
     {out : MachineState} (hit : out ∈ support (hybridUpper s)) :
     ParentRegs out 0 ∧ out.pc=1052336 ∧ out.getReg .x8=s.getReg .x8 := by
-  simp only [hybridUpper,mem_support_bind_iff] at hit
-  obtain ⟨body,path,tail⟩ := hit
-  have post := packed_parent_segment_post 610808 8361285 27322 273 s regs pc path
-  let next := body.setPC 610808
-  have nr : ParentRegs next 8361285 :=
-    ⟨post.1.source,post.1.target,post.1.selector,post.1.size,post.1.primitive,post.1.heap⟩
-  have rest := packed_groups_post 610808 27595 303 next (by decide) (fun _ => rfl) nr tail
-  exact ⟨rest.1,rest.2 (by decide),(packed_groups_frame 303 next tail).trans (packed_trace_frame _ _ s (out:=body) path)⟩
+  obtain ⟨done,saved⟩ := R1bParents.trace_post hybridCut _ (R1bParents.setupReady s pc regs) hit
+  exact ⟨done.toParentRegs,done.pc,saved⟩
 
 private theorem fixedLowerCode : HybridLowerCodeP packedWideCommitImage :=
   ⟨hybrid_full_words,hybrid_lower_branch,hybrid_lower_back⟩
 
 theorem hybrid_parent_phase (state : MachineState) (fuel : Nat) (regs : ParentRegsP state (2^24-1))
     (pc : state.pc=217572) (output : state.getReg .x8=4294971392) :
-    execute packedWideCommitImage (58721373+fuel) state true =
+    execute packedWideCommitImage (59785729+fuel) state true =
       (do let next ← hybridParentPhase state
           let result ← execute packedWideCommitImage fuel next true
-          return result.charge 176161878 16777215) := by
+          return result.charge 177226234 16777215) := by
   have start : (hybridStart state).pc=217580 := by change state.pc+4+4=_;rw [pc];rfl
   have regs' := hybrid_start_regsP state _ regs
-  rw [show 58721373+fuel=2+(lowerCost 3 256+(1+(33555035+fuel))) by change 58721373+fuel=2+(25166335+(1+(33555035+fuel)));omega,hybrid_start_run state pc,
+  rw [show 59785729+fuel=2+(lowerCost 3 256+(1+(34619391+fuel))) by change 59785729+fuel=2+(25166335+(1+(34619391+fuel)));omega,hybrid_start_run state pc,
     lower_runP packedWideCommitImage fixedLowerCode 256 _ _ (by decide) regs' (fun _ => start) (hybrid_threshold state output)]
   simp only [hybridParentPhase,bind_assoc]
   apply bind_congr_of_forall_mem_support
   intro mid hit
   have post := lower_postP 256 _ (fun _ => start) regs' hit
   have cutRegs := regs_of_cut mid post.1
-  have next : ParentRegs (mid.setPC 615176) hybridCut := ⟨cutRegs.source,cutRegs.target,cutRegs.selector,
+  have next : ParentRegs (mid.setPC 4180) hybridCut := ⟨cutRegs.source,cutRegs.target,cutRegs.selector,
     cutRegs.size,cutRegs.primitive,cutRegs.heap⟩
   rw [hybrid_skip_run mid (post.2.1 (by decide)),hybrid_upper_run _ fuel next rfl]
   simp [Execution.charge,lowerCost,fullSpan,hybridCut,←Nat.add_assoc]
@@ -131,7 +101,7 @@ theorem hybrid_parent_phase_post (state : MachineState) (regs : ParentRegsP stat
   have start : (hybridStart state).pc=217580 := by change state.pc+4+4=_;rw [pc];rfl
   have post := lower_postP 256 _ (fun _ => start) (hybrid_start_regsP state _ regs) path
   have cutRegs := regs_of_cut mid post.1
-  have nr : ParentRegs (mid.setPC 615176) hybridCut :=
+  have nr : ParentRegs (mid.setPC 4180) hybridCut :=
     ⟨cutRegs.source,cutRegs.target,cutRegs.selector,cutRegs.size,cutRegs.primitive,cutRegs.heap⟩
   have rest := hybrid_upper_post _ nr rfl tail
   exact ⟨rest.1,rest.2.1,rest.2.2.trans post.2.2⟩

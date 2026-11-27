@@ -26,7 +26,7 @@ private def expectedWord (i : Nat) : BitVec 32 :=
   else if i = 53370 then 0x00890933
   else if i = 151675 then 0x01260463
   else if i = 151676 then 0xffd9f06f
-  else if i = 151677 then 0x1140106f
+  else if i = 151677 then 0xe616b06f
   else if i = 262058 then 0x00960463
   else if i = 262059 then 0xb4c9406f
   else rootWords.getD (i-262060) 0
@@ -1427,7 +1427,7 @@ theorem hybrid_lower_back (state : MachineState) (pc : state.pc=610800) :
   packed_index_fetch state 151676 pc (by decide) (by decide)
 
 theorem hybrid_skip (state : MachineState) (pc : state.pc=610804) :
-    fetch packedWideCommitImage state=some (.base (.JAL .x0 4372)) :=
+    fetch packedWideCommitImage state=some (.base (.JAL .x0 1490528)) :=
   packed_index_fetch state 151677 pc (by decide) (by decide)
 
 def fixedWideParentControl : PackedParentControl packedWideCommitImage 610808 27595 where

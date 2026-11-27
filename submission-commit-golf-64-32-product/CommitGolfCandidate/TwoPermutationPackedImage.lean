@@ -1,14 +1,15 @@
+import CommitGolf.Artifact
 import CommitGolfCandidate.TwoPermutationPackedFetchBase
 
-/-! Exact 454-word checker of the paired 3c1p entry (word 22 jumps to the paired leaf block at words 372..453). -/
+/-! Exact 372-word checker of the 3c1p entry (words 22..61 hold the 3c1p leaf block). -/
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
 set_option maxRecDepth 8192
 
-def packedImage : Image := ⟨[
-  0x1f400313, 0x02680333, 0x5a68e463, 0x58080a63, 0x00068413, 0x00058493, 0x00080913, 0xfd870993,
+private def deliveredPrefix : List (BitVec 32) := [
+  0x5d00006f, 0x02680333, 0x5a68e463, 0x58080a63, 0x00068413, 0x00058493, 0x00080913, 0xfd870993,
   0x01000a37, 0x00078a93, 0x01178b33, 0x00003bb7, 0x00003c37, 0x100c0c13, 0x00004cb7, 0x00001d37,
-  0x10000d93, 0x00003237, 0xff020213, 0x000011b7, 0xfd818193, 0x00000293, 0x5780006f, 0x00831e13,
+  0x10000d93, 0x00003237, 0xff020213, 0x000011b7, 0xfd818193, 0x00000293, 0x4600a06f, 0x00831e13,
   0x01c18e33, 0x04000593, 0x00000693, 0x0e898513, 0x00050613, 0x00000073, 0xfe050513, 0x00850613,
   0x00000073, 0xff050513, 0x00000073, 0x028e0f93, 0x01f53023, 0x000adf83, 0x01f51423, 0x002adf83,
   0x01f51523, 0x004adf83, 0x01f51623, 0x006adf83, 0x01f51723, 0x008adf83, 0x01f51823, 0x00aadf83,
@@ -48,21 +49,23 @@ def packedImage : Image := ⟨[
   0x00eadf83, 0x01f39723, 0x010adf83, 0x01f39823, 0x012adf83, 0x01f39923, 0x014adf83, 0x01f39a23,
   0x016adf83, 0x01f39b23, 0x018adf83, 0x01f39c23, 0x01aadf83, 0x01f39d23, 0x01cadf83, 0x01f39e23,
   0x00039f23, 0x01ea8a93, 0x00100393, 0x02730a63, 0x00137393, 0x02038263, 0x00135313, 0x00631513,
-  0x00ac8533, 0x00531613, 0x00cc8633, 0x00000073, 0x00061f23, 0xfd5ff06f, 0x00130313, 0xf21ff06f,
+  0x00ac8533, 0x00531613, 0x00cc8633, 0x00000073, 0x7550906f, 0xfd5ff06f, 0x00130313, 0xf21ff06f,
   0x056a9863, 0x020cbe83, 0x0004bf03, 0x05ee9263, 0x028cbe83, 0x0084bf03, 0x03ee9c63, 0x030cbe83,
   0x0104bf03, 0x03ee9663, 0x038cbe83, 0x0184bf03, 0x03ee9063, 0x00100293, 0x00000513, 0x00000073,
   0x00089863, 0x00100293, 0x00000513, 0x00000073, 0x00100293, 0x00100513, 0x00000073, 0x01437663,
-  0x000b9f23, 0xdedff06f, 0x00000013, 0xde5ff06f, 0x00043303, 0x00137393, 0x0a039a63, 0x04000593,
-  0x00000693, 0x0e898513, 0x02050613, 0x00000073, 0xf4050513, 0x0c050613, 0x00000073, 0x0c050513,
-  0x00000073, 0x00831e13, 0x01c18e33, 0x060e0f93, 0x03f53023, 0x000adf83, 0x03f51823, 0x002adf83,
-  0x03f51923, 0x004adf83, 0x03f51a23, 0x006adf83, 0x03f51b23, 0x008adf83, 0x03f51c23, 0x00aadf83,
-  0x03f51d23, 0x00cadf83, 0x03f51e23, 0x00eadf83, 0x03f51f23, 0x0c800593, 0x00100693, 0xf7850513,
-  0x000b8613, 0x00000073, 0x0a8bbf83, 0x01fbb023, 0x0b0bbf83, 0x01fbb423, 0x0b8bbf83, 0x01fbb823,
-  0x0c0bbf83, 0x01fbbc23, 0xa61ff06f, 0x04000593, 0x00000693, 0x02898513, 0x00050613, 0x00000073,
-  0x0c050513, 0xf6050613, 0x00000073, 0xf4050513, 0x00000073, 0x00831e13, 0x01c18e33, 0x028e0f93,
-  0x01f53823, 0x000adf83, 0x01f51023, 0x002adf83, 0x01f51123, 0x004adf83, 0x01f51223, 0x006adf83,
-  0x01f51323, 0x008adf83, 0x01f51423, 0x00aadf83, 0x01f51523, 0x00cadf83, 0x01f51623, 0x00eadf83,
-  0x01f51723, 0x0c800593, 0x00100693, 0x000b8613, 0x00000073, 0x9d5ff06f], []⟩
+  0x6c10906f, 0xdedff06f, 0x00000013, 0xde5ff06f]
+
+def packedImage : Image :=
+  ⟨deliveredPrefix ++ (ArtifactEncoding.decode 32 Artifact.checkCode).drop 372, []⟩
+
+set_option maxRecDepth 65536 in
+set_option maxHeartbeats 8000000 in
+theorem delivered_check_image : Artifact.submission.image .check = packedImage := by
+  have prefixEq : (ArtifactEncoding.decode 32 Artifact.checkCode).take 372=deliveredPrefix := by rfl
+  change Image.mk (ArtifactEncoding.decode 32 Artifact.checkCode) _ = _
+  rw [packedImage, ←prefixEq, List.take_append_drop]
+  rfl
+
 
 inductive FieldSite where
   | nonce | rightInternal | leftInternal | rightLeaf | leftLeaf | boundary
@@ -106,10 +109,8 @@ theorem project_fetch (site : ProjectSite) (s : MachineState)
   refine cap_image_fetch _ _ _ _ (by cases site <;> decide) here ?_
   cases site <;> rfl
 
-theorem project_fetch_mask (site : ProjectSite) (cap : site = .cap) (s : MachineState)
-    (here : s.pc=BitVec.ofNat 64 (4096+4*(site.start+1))) :
-    fetch packedImage s=some (.base (.SH site.dest .x0 30)) := by
-  subst site
-  exact cap_image_fetch _ _ _ _ (by decide) here rfl
+theorem project_fetch_mask (s : MachineState) (here : s.pc=5456) :
+    fetch packedImage s=some (.base (.JAL .x0 40788)) := by
+  exact cap_image_fetch _ _ 340 _ (by decide) here rfl
 
 end TwoPermutationPrototype.Packed.Checker

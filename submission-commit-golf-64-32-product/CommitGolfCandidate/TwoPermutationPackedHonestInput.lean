@@ -4,7 +4,7 @@ import CommitGolfCandidate.InputOrder
 import CommitGolfCandidate.TwoPermutationPackedTrustedInput
 import CommitGolfCandidate.TwoPermutationPackedCertificate
 import CommitGolfCandidate.TwoPermutationPackedOpeningSchedule
-import CommitGolfCandidate.TwoPermutationPackedOpeningProofBytes
+import CommitGolfCandidate.TwoPermutationPackedOpeningModel
 
 namespace TwoPermutationPrototype.PackedHonest
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64
@@ -178,14 +178,26 @@ theorem later_sibling_byte (heap : Nat → Digest) (index : Index) (salt : BitVe
   simp only [proofDigestBytes, ite_true, List.getElem?_take, if_pos inside,
     digestBytes,List.getElem?_ofFn,Nat.lt_trans inside (by decide : 30<32),dite_true]
 
+private theorem padded_projected (z : BitVec 238) :
+    0#16 ++ ((0#18) ++ z).extractLsb' 0 240 = (0#18) ++ z := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i _
+  by_cases inside : i<240
+  · simp only [BitVec.getLsbD_append,if_pos inside,BitVec.getLsbD_extractLsb',
+      decide_eq_true inside,Bool.true_and,Nat.zero_add]
+  · have outside : ¬i<238 := by omega
+    simp only [BitVec.getLsbD_append,if_neg inside,if_neg outside,BitVec.getLsbD_zero]
+
 theorem honest_projected_node (compress : Compression) (leaves : DigestTape) (node : Nat)
     (pos : 0<node) (internal : node<LENGTH/2) :
     (0#16) ++ (Hybrid.heap compress leaves node).extractLsb' 0 240 =
       Hybrid.heap compress leaves node := by
   rw [Hybrid.heap_parent compress leaves node ⟨pos,by omega⟩,Hybrid.normalize,ite_eq_left internal]
-  unfold ShortTree.padLow
-  rw [BitVec.extractLsb'_append_eq_right]
-  rfl
+  split
+  · exact padded_projected _
+  · unfold ShortTree.padLow
+    rw [BitVec.extractLsb'_append_eq_right]
+    rfl
 
 theorem honest_input_admitted (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) :

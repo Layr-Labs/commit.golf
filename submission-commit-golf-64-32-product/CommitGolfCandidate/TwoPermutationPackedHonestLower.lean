@@ -1,10 +1,11 @@
+import CommitGolfCandidate.TwoPermutationPackedInputFrame
 import CommitGolfCandidate.TwoPermutationHybridHeapFacts
 import CommitGolfCandidate.TwoPermutationPackedCheckRecordData
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.ShortTree RiscvZkvm.Rv64
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Checker (RecordInputFrame honestIndex)
+open TwoPermutationPrototype.Checker (honestIndex)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 open TwoPermutationPrototype.PackedHonest (honestHeap honest_projected_node)
 set_option maxRecDepth 8192
@@ -41,7 +42,7 @@ private theorem later_sibling_internal (index : Index) (level : Nat) (later : 2 
 
 theorem canonical_lower_wire_sibling (oracle : Oracle) (message : Message)
     (positions : Positions) (salts : CompleteSaltTape) (ordinal : Nat) (present : ordinal < positions.card)
-    (state : MachineState) (framed : RecordInputFrame (honestCheckInput oracle message positions salts) ordinal state)
+    (state : MachineState) (framed : InputFrame (honestCheckInput oracle message positions salts) ordinal state)
     (level : Nat) (within : level < 16) :
     lowerWireSibling state ordinal level =
       honestHeap oracle message salts (Opening.lowerNode (honestIndex positions ordinal present) level ^^^ 1) := by

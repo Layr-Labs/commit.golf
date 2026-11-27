@@ -45,7 +45,7 @@ theorem cap_hash_stable (state : MachineState) (parent : Nat) (reply : BitVec 25
   intro r found
   simp [capFixedRegisters] at found
   rcases found with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    exact cap_hash_register _ _ _ _ (by decide) (by decide) (by decide)
+    exact cap_hash_register _ _ _ _ (by decide) (by decide) (by decide) (by decide)
 
 theorem cap_lookup_observation (state : MachineState) (node : Nat)
     (controls : CapControls state) (heap : state.getReg .x6 = BitVec.ofNat 64 node) :
@@ -91,7 +91,7 @@ def capHashSegment (oracle : Oracle) {state : MachineState} {node : Nat}
     let parent := node/2
     let pair := capRootAt state (2*parent+1) ++ capRootAt state (2*parent)
     Segment oracle state (capHashReply state parent (oracle.compression pair)) :=
-  Segment.query oracle 8 15 (capHashQuery state (node/2)) _
+  Segment.query oracle 13 20 (capHashQuery state (node/2)) _
     (execute_cap_hash ready) (cap_hash_rows oracle state (node/2))
 
 attribute [local simp] MachineState.getReg_setPC Opening.getReg_setReg
@@ -187,7 +187,7 @@ theorem cap_right_stable (state : MachineState) : CapStable state (capRight stat
 theorem cap_hash_heap {state : MachineState} {node : Nat} (ready : CapHashReady state node)
     (answer : BitVec 256) :
     (capHashReply state (node/2) answer).getReg .x6 = BitVec.ofNat 64 (node/2) := by
-  rw [capHashReply, MachineState.getReg_setPC, writeBits_register, (cap_parent_post state ready.pc).2.1, ready.nodeReg]
+  rw [capHashReply, MachineState.getReg_setPC, MachineState.getReg_setReg_ne _ _ _ _ (by decide : Reg.x1 ≠ .x6), writeBits_register, (cap_parent_post state ready.pc).2.1, ready.nodeReg]
   have bound := ready.bound
   apply BitVec.eq_of_toNat_eq
   rw [BitVec.toNat_ushiftRight, BitVec.toNat_ofNat, BitVec.toNat_ofNat,

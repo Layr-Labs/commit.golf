@@ -102,7 +102,7 @@ theorem masked_reply_memory (state : MachineState) (base : Nat) (answer : BitVec
         (writeBits_memory_outside state _ q (padLow answer) away).symm
 
 
-private theorem write_frame {bits : Nat} (state : MachineState) (address : Word) (answer : BitVec bits) :
+theorem write_frame {bits : Nat} (state : MachineState) (address : Word) (answer : BitVec bits) :
     writeBits state address answer =
       { state with mem := (writeBits state address answer).mem, pc := state.pc+4 } := by
   let put (s : MachineState) (i : Nat) := s.setByte (address + BitVec.ofNat 64 i)

@@ -30,7 +30,7 @@ def commitEnd (oracle : Oracle) (initial : MachineState) (wss : List (List (BitV
 /-- What the paired commit needs from a submission. -/
 structure PairedCommitLayout (s : Submission) : Prop where
   image : s.image .commit = packedWideCommitImage
-  fuel : 276964482 ≤ s.steps .commit
+  fuel : 278028838 ≤ s.steps .commit
   message : s.layout.message = 4096
   commitment : s.layout.commitment = 4294971392
   trapdoor : s.layout.trapdoor = 4294971424
@@ -46,12 +46,12 @@ theorem paired_commit_entry (s : Submission) (lay : PairedCommitLayout s) (msg :
 theorem paired_commit_distribution (s : Submission) (lay : PairedCommitLayout s) (oracle : Oracle) (msg : Message) :
     fixedOracleRun oracle (s.scheme.commit msg) =
       ((List.range 8192).mapM (fun _ => (List.range 1024).mapM (fun _ => ($ᵗ BitVec 256 : ProbComp (BitVec 256)))) >>=
-        fun wss => pure (s.readCommit ⟨.success, commitEnd oracle (s.initialState .commit msg) wss, 1266820219,
+        fun wss => pure (s.readCommit ⟨.success, commitEnd oracle (s.initialState .commit msg) wss, 1267884575,
           83886079⟩)) := by
   change fixedOracleRun oracle (s.readCommit <$> s.run .commit msg) = _
   have run : s.run .commit msg = commitTraceP (s.initialState .commit msg) := by
     change execute (s.image .commit) (s.steps .commit) (s.initialState .commit msg) true = _
-    rw [lay.image, show s.steps .commit = 276964482 + (s.steps .commit - 276964482) by have := lay.fuel; omega]
+    rw [lay.image, show s.steps .commit = 278028838 + (s.steps .commit - 278028838) by have := lay.fuel; omega]
     exact paired_commit_execution _ (paired_commit_entry s lay msg) _
   rw [run, fixed_oracle_run_map, commit_fixed, map_bind]
   simp only [map_pure]

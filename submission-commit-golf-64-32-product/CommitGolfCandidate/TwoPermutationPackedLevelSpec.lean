@@ -37,7 +37,7 @@ structure LevelFacts (oracle : Oracle) (s : MachineState) (node proof left : Nat
   syscallSelector : block.state.getReg .x13=0
   saved : ∀ r, RecordSaved r → block.state.getReg r=s.getReg r
   frame : LowerFrame s block.state
-  cost : block.steps≤116
+  cost : block.steps≤124
   digest : readBuffer block.state 12288 32=Hybrid.normalize (node/2) (oracle.compression (levelPair s node proof left))
   row : PublicRow.compression (levelPair s node proof left) (oracle.compression (levelPair s node proof left)) ∈ block.rows
   run : ∀ fuel,

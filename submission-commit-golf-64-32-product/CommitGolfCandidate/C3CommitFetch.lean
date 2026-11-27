@@ -2,10 +2,10 @@ import CommitGolfCandidate.TwoPermutationPackedLeafFetch
 
 /-! # The 3c1p commit loop in the delivered image
 
-Word 20 is `jal zero,<12341>`. The loop body occupies words `12341 .. 45155`: an entry of four
+Word 20 is `jal zero,<12357>`. The loop body occupies words `12357 .. 45155`: an entry of four
 words, pass 1 (eight words per leaf, 2,048 leaves), a switch of three words, pass 3 (eight words
-per leaf plus `addi s4,a2,32` after every 64th leaf and `add s6,s6,t2` after every 256th), then the
-latch at the leader's words 45156 (`beq s4,s5,<45172>`, unchanged) and 45157 (`jal zero,<12341>`).
+per leaf plus `add s4,s4,t2` after leaves with `j % 128 = 63` and `add s6,s6,t2` after every 256th), then the
+latch at the leader's words 45156 (`beq s4,s5,<45172>`, unchanged) and 45157 (`jal zero,<12357>`).
 Every decoded instruction below is checked against the artifact by the kernel. -/
 namespace TwoPermutationPrototype.RV64.C3Leaves
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
@@ -14,11 +14,11 @@ set_option maxRecDepth 16384
 set_option maxHeartbeats 6000000
 attribute [local irreducible] ArtifactEncoding.decode
 
-def blockStart : Nat := 12341
+def blockStart : Nat := 12357
 
 def p1Index (j : Nat) : Nat := blockStart + 4 + 8 * j
 def switchIndex : Nat := blockStart + 16388
-def p3Index (j : Nat) : Nat := blockStart + 16391 + 8 * j + j / 64 + j / 256
+def p3Index (j : Nat) : Nat := blockStart + 16391 + 8 * j + (j + 64) / 128 + j / 256
 
 def wordPC (index : Nat) : Word := BitVec.ofNat 64 (4096 + 4 * index)
 
@@ -34,7 +34,7 @@ def switchOps : List Instr := [.ADDI .x11 .x0 200, .ADDI .x13 .x0 1, .ADDI .x10 
 def p3Ops (j : Nat) : List Instr :=
   [.SD .x10 .x10 144, .LD .x31 .x22 (BitVec.ofNat 12 (16 * (j % 256) + 2048)), .SD .x10 .x31 152,
    .LD .x31 .x22 (BitVec.ofNat 12 (16 * (j % 256) + 2056)), .SD .x10 .x31 160,
-   .ADDI .x12 .x20 (BitVec.ofNat 12 (32 * (j % 64))), .ECALL, .ADDI .x10 .x10 256]
+   .ADDI .x12 .x20 (BitVec.ofNat 12 (32 * (j % 128))), .ECALL, .ADDI .x10 .x10 256]
 
 def opAt (ops : List Instr) (offset : Nat) : Instr := (ops[offset]?).getD .EBREAK
 
@@ -166,25 +166,25 @@ theorem fetch_switch (i : Nat) (inside : i < 3) (state : MachineState) (pc : sta
     fetch packedWideCommitImage state = some (.base (opAt switchOps i)) :=
   fetch_word state _ (by unfold switchIndex blockStart; omega) pc _ (switch_decoded ⟨i, inside⟩)
 
-private theorem heap_rebase_decoded : ∀ tile : Fin 32,
-    Manifest.decodeBase (packed_wideCodeWord (p3Index (64 * tile.val + 63) + 8)) = some (.ADDI .x20 .x12 32) := by
+private theorem heap_rebase_decoded : ∀ tile : Fin 16,
+    Manifest.decodeBase (packed_wideCodeWord (p3Index (128 * tile.val + 63) + 8)) = some (.ADD .x20 .x20 .x7) := by
   decide +kernel
 
 private theorem nonce_rebase_decoded : ∀ segment : Fin 8,
-    Manifest.decodeBase (packed_wideCodeWord (p3Index (256 * segment.val + 255) + 9)) =
+    Manifest.decodeBase (packed_wideCodeWord (p3Index (256 * segment.val + 255) + 8)) =
       some (.ADD .x22 .x22 .x7) := by
   decide +kernel
 
-theorem fetch_heap_rebase (j : Nat) (bound : j < 2048) (last : j % 64 = 63) (state : MachineState)
+theorem fetch_heap_rebase (j : Nat) (bound : j < 2048) (last : j % 128 = 63) (state : MachineState)
     (pc : state.pc = wordPC (p3Index j + 8)) :
-    fetch packedWideCommitImage state = some (.base (.ADDI .x20 .x12 32)) := by
-  have decoded := heap_rebase_decoded ⟨j / 64, by omega⟩
-  have pos : 64 * (j / 64) + 63 = j := by omega
+    fetch packedWideCommitImage state = some (.base (.ADD .x20 .x20 .x7)) := by
+  have decoded := heap_rebase_decoded ⟨j / 128, by omega⟩
+  have pos : 128 * (j / 128) + 63 = j := by omega
   simp only [Fin.val_mk, pos] at decoded
   exact fetch_word state _ (by unfold p3Index blockStart; omega) pc _ decoded
 
 theorem fetch_nonce_rebase (j : Nat) (bound : j < 2048) (last : j % 256 = 255) (state : MachineState)
-    (pc : state.pc = wordPC (p3Index j + 9)) :
+    (pc : state.pc = wordPC (p3Index j + 8)) :
     fetch packedWideCommitImage state = some (.base (.ADD .x22 .x22 .x7)) := by
   have decoded := nonce_rebase_decoded ⟨j / 256, by omega⟩
   have pos : 256 * (j / 256) + 255 = j := by omega
@@ -192,11 +192,11 @@ theorem fetch_nonce_rebase (j : Nat) (bound : j < 2048) (last : j % 256 = 255) (
   exact fetch_word state _ (by unfold p3Index blockStart; omega) pc _ decoded
 
 theorem fetch_first_jump (state : MachineState) (pc : state.pc = 4176) :
-    fetch packedWideCommitImage state = some (.base (.JAL .x0 49284)) :=
+    fetch packedWideCommitImage state = some (.base (.JAL .x0 49348)) :=
   fetch_word state 20 (by decide) pc _ rfl
 
 theorem fetch_loop_jump (state : MachineState) (pc : state.pc = 184724) :
-    fetch packedWideCommitImage state = some (.base (.JAL .x0 1965888)) :=
+    fetch packedWideCommitImage state = some (.base (.JAL .x0 1965952)) :=
   fetch_word state 45157 (by decide) pc _ rfl
 
 theorem p3_end : p3Index 2048 = 45156 := by decide

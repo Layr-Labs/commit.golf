@@ -1,3 +1,4 @@
+import CommitGolfCandidate.R1bParentRun
 import CommitGolfCandidate.TwoPermutationHybridModel
 import CommitGolfCandidate.TwoPermutationPackedParentMask
 
@@ -20,10 +21,10 @@ theorem raw_parent (compress : Compression) (leaves : DigestTape) (n : Nat)
 
 theorem masked_parent (compress : Compression) (leaves : DigestTape) (n : Nat)
     (lo : 0 < n) (hi : n < 8388608) :
-    heap compress leaves n = projectReply (compress (heap compress leaves (2*n+1) ++ heap compress leaves (2*n))) := by
+    heap compress leaves n = R1bParents.retained n (compress (heap compress leaves (2*n+1) ++ heap compress leaves (2*n))) := by
   have within : n < LENGTH := by change n < 16777216; omega
   rw [heap_parent _ _ _ ⟨lo, within⟩, normalize, if_pos]
-  · rfl
+  · unfold R1bParents.retained;split <;> rfl
   · exact hi
 
 end TwoPermutationPrototype.Hybrid

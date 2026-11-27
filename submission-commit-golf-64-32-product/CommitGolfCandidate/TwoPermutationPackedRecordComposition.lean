@@ -1,3 +1,4 @@
+import CommitGolfCandidate.TwoPermutationPackedInputFrame
 import CommitGolfCandidate.TwoPermutationPackedLowerRecursion
 import CommitGolfCandidate.TaggedPinnedModel
 import CommitGolfCandidate.C3PBindingWitness
@@ -5,7 +6,7 @@ import CommitGolfCandidate.C3PBindingWitness
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Checker (RecordInputFrame honestIndex checker_positions_bound checkSourceWord)
+open TwoPermutationPrototype.Checker (honestIndex checker_positions_bound checkSourceWord)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1600000
@@ -18,7 +19,7 @@ structure PackedLeafTrace (oracle : Oracle) (index : Index) (entry : Entry) (dig
 
 structure LeafBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (before : MachineState) (block : RecordBlock) : Prop where
-  steps : block.steps ≤ 169
+  steps : block.steps ≤ 53
   run : ∀ fuel,
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel block.state false))
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+fuel) before false)) =
@@ -37,7 +38,7 @@ structure LeafBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
 
 def LeafBlockRefines (leaf : Oracle → Nat → Index → MachineState → RecordBlock) : Prop :=
   ∀ (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (present : ordinal < input.positions.card)
-    (state : MachineState), ProofWithin input → RecordCursor input ordinal state → RecordInputFrame input ordinal state →
+    (state : MachineState), ProofWithin input → RecordCursor input ordinal state → InputFrame input ordinal state →
       LeafBlockFacts oracle input ordinal present state
         (leaf oracle ordinal (honestIndex input.positions ordinal present).val state)
 
@@ -79,9 +80,9 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
   have room := (packed_record_geometry input ordinal present fits).2.2.2.1
   have tail := run_lower_facts step lowerKernel oracle ordinal item.val 16 0 (by decide) room early.state entry.cursor
   refine ⟨?_,?_,tail.cursor.pc.trans (ite_eq_left rfl),?_,?_,?_,?_,?_,?_⟩
-  · have leafCost : early.steps ≤ 169 := entry.steps
-    have lowerCost : later.steps ≤ 116*16 := tail.steps
-    change early.steps+later.steps ≤ 2025
+  · have leafCost : early.steps ≤ 53 := entry.steps
+    have lowerCost : later.steps ≤ 124*16 := tail.steps
+    change early.steps+later.steps ≤ 2037
     omega
   · intro fuel
     dsimp only [joinedRecord]
@@ -107,10 +108,10 @@ theorem joined_record_refines (leaf : Oracle → Nat → Index → MachineState 
     exact witness
   · intro message salts canonical
     let leaves := c3pFullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts
-    have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
-      Eq.mp (congrArg (fun data => RecordInputFrame data ordinal before) canonical) framed
+    have loaded : InputFrame (honestCheckInput oracle message input.positions salts) ordinal before :=
+      Eq.mp (congrArg (fun data => InputFrame data ordinal before) canonical) framed
     change readBuffer later.state 12288 32 =
-      Hybrid.heap oracle.compression leaves (capGroup item.val)
+      Hybrid.heap oracle.compression leaves (Sampling.capGroup item.val)
     apply tail.honest leaves
     · simpa only [Opening.lowerNode,Nat.pow_zero,Nat.div_one,Hybrid.heap_leaf] using entry.honest message salts canonical
     · intro level _ within

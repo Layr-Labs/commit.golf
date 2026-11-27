@@ -62,10 +62,10 @@ theorem setup_pc (state : MachineState) (pc : state.pc = 0x1000)
 /-- The zero-cardinality opener bypasses the marks and outputs zero proof bytes. -/
 theorem execute_empty (state : MachineState) (pc : state.pc = 0x1000) (fuel : Nat)
     (allowCoins : Bool) (empty : state.getReg .x16 = 0#64) :
-    execute openingImage (7 + fuel) state allowCoins =
-      pure ⟨.success, exitPrefix (setupPrefix state 3) 3, 7, 0⟩ := by
-  have ranSetup : execute openingImage (3 + (4 + fuel)) state allowCoins =
-      (do let result ← execute openingImage (4 + fuel) (setupPrefix state 3) allowCoins
+    execute openingImage (4 + fuel) state allowCoins =
+      (do let out ← execute openingImage fuel (exitPrefix (setupPrefix state 3) 1) allowCoins;return out.charge 4 0) := by
+  have ranSetup : execute openingImage (3 + (1 + fuel)) state allowCoins =
+      (do let result ← execute openingImage (1 + fuel) (setupPrefix state 3) allowCoins
           return result.charge 3 0) := by
     apply execute_unit_steps (states := setupPrefix state)
     intro i bounded
@@ -77,11 +77,11 @@ theorem execute_empty (state : MachineState) (pc : state.pc = 0x1000) (fuel : Na
     · interval_cases i <;> rfl
   have branchPC : (setupPrefix state 3).pc = 0x1a5c := by
     simp [setupPrefix, setupInstructions, Opening.setupInstructions, execInstrBr, signExtend13, pc, beq_iff_eq, empty]
-  rw [show 7 + fuel = 3 + (4 + fuel) by omega, ranSetup, execute_exit _ branchPC]
-  simp [Execution.charge]
+  rw [show 4 + fuel = 3 + (1 + fuel) by omega, ranSetup, execute_exit _ branchPC]
+  simp [Execution.charge,bind_assoc,←Nat.add_assoc]
 
 theorem empty_proof_length (state : MachineState) :
-    (exitPrefix (setupPrefix state 3) 3).getReg .x11 = 0 := by
+    (exitPrefix (setupPrefix state 3) 1).getReg .x11 = 0 := by
   rw [exit_register]
   by_cases empty : state.getReg .x16 = 0#64 <;>
     simp [setupPrefix, setupInstructions, Opening.setupInstructions, execInstrBr, signExtend12, beq_iff_eq, empty]

@@ -25,7 +25,7 @@ structure CapFinished (oracle : Oracle) (groups : List Nat) (before : MachineSta
   honestCalls : (checkEvaluation oracle (recordRows (execute packedImage fuel before false))).2 ≤ 8*groups.length
   paths : let observed := checkEvaluation oracle (recordRows (execute packedImage fuel before false))
     observed.1.1.exit = .success → ∀ leaf ∈ groups, 256 ≤ leaf → leaf < 512 →
-      ProjectedPath observed.1.2 leaf 8 (capRootAt before leaf) (readBuffer before (8*claim) 32)
+      CapPath238 observed.1.2 leaf 8 (capRootAt before leaf) (readBuffer before (8*claim) 32)
   terminates : (checkEvaluation oracle (recordRows (execute packedImage fuel before false))).1.1.exit ≠ .unfinished
   honest : ∀ heap, CapHeapCorrect oracle heap → CapContents groups before 1 8 pointer heap →
     readBuffer before (8*claim) 32 = heap 1 →

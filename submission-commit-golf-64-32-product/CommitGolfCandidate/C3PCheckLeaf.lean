@@ -9,14 +9,15 @@ import CommitGolfCandidate.TwoPermutationCheckerRecordSetup
 import CommitGolfCandidate.TwoPermutationPackedCheckRecordData
 import CommitGolfCandidate.TwoPermutationPackedInputFrame
 import CommitGolfCandidate.TwoPermutationOpeningBlocks
+import CommitGolfCandidate.R1bMachine
 
-/-! # The checker's paired-leaf block (check image word 22, words 372..453, lower setup 58..62)
+/-! # The checker's paired-leaf block (check image word 22, words 10542..453, lower setup 58..62)
 
 With `src = checkSourceWord ordinal`, the claimed value `v` is at words `src+5 .. src+37`
-(`V = 8 (src+5)`, `s3 = x19 = V - 40`). Word 22 is `jal zero,<372>`; then
-`ld t1,0(s0) ; andi t2,t1,1 ; bne t2,zero,<419>`.
+(`V = 8 (src+5)`, `s3 = x19 = V - 40`). Word 22 is `jal zero,<10542>`; then
+`ld t1,0(s0) ; andi t2,t1,1 ; bne t2,zero,<10589>`.
 
-Even path (words 375..418, 48 steps, 4 calls):
+Even path (words 10545..418, 48 steps, 4 calls):
 `addi a1,zero,64 ; addi a3,zero,0 ; addi a0,s3,232 ; addi a2,a0,32 ; ecall` (r at src+33),
 `addi a0,a0,-192 ; addi a2,a0,192 ; ecall` (q at src+29), `addi a0,a0,192 ; ecall` (z at src+29),
 `slli t3,t1,8 ; add t3,gp,t3 ; addi t6,t3,96 ; sd t6,32(a0)` (tag at src+33),
@@ -24,7 +25,7 @@ Even path (words 375..418, 48 steps, 4 calls):
 addi a0,a0,-136 ; addi a2,s7,0 ; ecall` (the reply at 1536), 4 word copies of reply words 21..24 to
 1536..1539, `jal zero,<58>`.
 
-Odd path (words 419..453, 39 steps, 4 calls):
+Odd path (words 10589..453, 39 steps, 4 calls):
 `addi a1,zero,64 ; addi a3,zero,0 ; addi a0,s3,40 ; addi a2,a0,0 ; ecall` (q at src+5),
 `addi a0,a0,192 ; addi a2,a0,-160 ; ecall` (r at src+9), `addi a0,a0,-192 ; ecall` (z at src+9),
 `slli t3,t1,8 ; add t3,gp,t3 ; addi t6,t3,40 ; sd t6,16(a0)` (tag at src+7), 8 halfword copies of
@@ -34,9 +35,7 @@ namespace TwoPermutationPrototype.Packed.C3PRecordLeaf
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.RV64.C3Leaves TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.Packed.Checker
-open TwoPermutationPrototype.Checker (checkIndexWord checkSourceWord checker_positions_bound RecordInputFrame
-  honestIndex record_input_index record_input_value beginLower beginLowerCode lower_setup_post
-  lower_setup_register lower_setup_mem check_recorded_bind check_recorded_map checker_value_data buffer_window)
+open TwoPermutationPrototype.Checker (checkIndexWord checkSourceWord checker_positions_bound honestIndex beginLower beginLowerCode lower_setup_post lower_setup_register lower_setup_mem check_recorded_bind check_recorded_map checker_value_data buffer_window)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 -- Sequential elaboration, as in C3PAdmission (the verifier builds with parallel elaboration on two CPUs).
 set_option Elab.async false
@@ -56,11 +55,17 @@ abbrev ckPC (k : Nat) : Word := BitVec.ofNat 64 (4096 + 4 * k)
 theorem ck_pc_next (k : Nat) : ckPC k + 4 = ckPC (k + 1) := by
   rw [show (4 : Word) = BitVec.ofNat 64 4 by rfl, ← BitVec.ofNat_add]; congr 1
 
+theorem ck_fetch (st : MachineState) (k : Nat) (instr : Instr) (bounded : k < 10624) (pc : st.pc = ckPC k)
+    (decoded : decodeInstruction (R1b.Machine.Code.word .check k) = some (.base instr)) :
+    fetch packedImage st = some (.base instr) := by
+  rw [← delivered_check_image]
+  exact (R1b.Machine.fetched .check k bounded st pc).trans decoded
+
 /-! ### The two salt copies -/
 
 def evenSaltCode : CopyCode where
   image := packedImage
-  start := 389
+  start := 10559
   count := 8
   source := .x21
   dest := .x10
@@ -68,12 +73,12 @@ def evenSaltCode : CopyCode where
   sourceTemp := by decide
   destTemp := by decide
   offsetBound := by decide
-  load := fun j bounded s pc => cap_image_fetch packedImage s _ _ (by omega) pc (by interval_cases j <;> rfl)
-  store := fun j bounded s pc => cap_image_fetch packedImage s _ _ (by omega) pc (by interval_cases j <;> rfl)
+  load := fun j bounded s pc => ck_fetch s _ _ (by omega) pc (by interval_cases j <;> rfl)
+  store := fun j bounded s pc => ck_fetch s _ _ (by omega) pc (by interval_cases j <;> rfl)
 
 def oddSaltCode : CopyCode where
   image := packedImage
-  start := 433
+  start := 10603
   count := 8
   source := .x21
   dest := .x10
@@ -81,8 +86,8 @@ def oddSaltCode : CopyCode where
   sourceTemp := by decide
   destTemp := by decide
   offsetBound := by decide
-  load := fun j bounded s pc => cap_image_fetch packedImage s _ _ (by omega) pc (by interval_cases j <;> rfl)
-  store := fun j bounded s pc => cap_image_fetch packedImage s _ _ (by omega) pc (by interval_cases j <;> rfl)
+  load := fun j bounded s pc => ck_fetch s _ _ (by omega) pc (by interval_cases j <;> rfl)
+  store := fun j bounded s pc => ck_fetch s _ _ (by omega) pc (by interval_cases j <;> rfl)
 
 theorem code_bytes (c : CopyCode) (s : MachineState) (source target : Nat)
     (ready : CopyReady c s source target 0) (order : target ≤ source) :
@@ -124,13 +129,13 @@ structure CkReady (s : MachineState) (src proof : Nat) (index : Index) : Prop wh
   proofBound : proof + 16 ≤ MEMORY_BYTES
   apart : 8 * (src + 37) ≤ proof
 
-/-- After `jal zero,<372> ; ld t1,0(s0) ; andi t2,t1,1`. -/
+/-- After `jal zero,<10542> ; ld t1,0(s0) ; andi t2,t1,1`. -/
 def ckHead (s : MachineState) : MachineState :=
-  execInstrBr (execInstrBr (s.setPC (ckPC 372)) (.LD .x6 .x8 0)) (.ANDI .x7 .x6 1)
+  execInstrBr (execInstrBr (s.setPC (ckPC 10542)) (.LD .x6 .x8 0)) (.ANDI .x7 .x6 1)
 
 theorem ck_head_facts (s : MachineState) :
     (ckHead s).mem = s.mem ∧ (ckHead s).getReg .x6 = s.getMem (s.getReg .x8) ∧
-    (ckHead s).getReg .x7 = s.getMem (s.getReg .x8) &&& 1 ∧ (ckHead s).pc = ckPC 374 ∧
+    (ckHead s).getReg .x7 = s.getMem (s.getReg .x8) &&& 1 ∧ (ckHead s).pc = ckPC 10544 ∧
     ∀ r, r ≠ .x6 → r ≠ .x7 → (ckHead s).getReg r = s.getReg r := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · simp [ckHead, execInstrBr]
@@ -151,8 +156,8 @@ theorem parity_word (i : Nat) (small : i < 2 ^ 64) :
 
 def evOps1 : List Instr := [.ADDI .x11 .x0 64, .ADDI .x13 .x0 0, .ADDI .x10 .x19 232, .ADDI .x12 .x10 32]
 
-/-- Entry of the even path (word 375). -/
-def ev0 (s : MachineState) : MachineState := (ckHead s).setPC (ckPC 375)
+/-- Entry of the even path (word 10545). -/
+def ev0 (s : MachineState) : MachineState := (ckHead s).setPC (ckPC 10545)
 
 def ev1 (s : MachineState) : MachineState := evOps1.foldl execInstrBr (ev0 s)
 
@@ -201,7 +206,7 @@ private theorem imm_up (a n : Nat) (imm : BitVec 12) (value : signExtend12 imm =
   rw [value, address_up]
 
 theorem ev0_facts (s : MachineState) :
-    (ev0 s).mem = s.mem ∧ (ev0 s).getReg .x6 = s.getMem (s.getReg .x8) ∧ (ev0 s).pc = ckPC 375 ∧
+    (ev0 s).mem = s.mem ∧ (ev0 s).getReg .x6 = s.getMem (s.getReg .x8) ∧ (ev0 s).pc = ckPC 10545 ∧
     ∀ r, r ≠ .x6 → r ≠ .x7 → (ev0 s).getReg r = s.getReg r := by
   obtain ⟨m, h6, _, _, keep⟩ := ck_head_facts s
   refine ⟨?_, ?_, rfl, fun r a b => ?_⟩
@@ -211,7 +216,7 @@ theorem ev0_facts (s : MachineState) :
 
 theorem ev1_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index) :
     (ev1 s).getReg .x10 = wordAddress (src + 29) ∧ (ev1 s).getReg .x12 = wordAddress (src + 33) ∧
-    (ev1 s).getReg .x11 = 64 ∧ (ev1 s).getReg .x13 = 0 ∧ (ev1 s).pc = ckPC 379 ∧ (ev1 s).mem = s.mem ∧
+    (ev1 s).getReg .x11 = 64 ∧ (ev1 s).getReg .x13 = 0 ∧ (ev1 s).pc = ckPC 10549 ∧ (ev1 s).mem = s.mem ∧
     (∀ r, r ≠ .x10 → r ≠ .x11 → r ≠ .x12 → r ≠ .x13 → (ev1 s).getReg r = (ev0 s).getReg r) := by
   obtain ⟨m0, _, p0, k0⟩ := ev0_facts s
   have x19 : (ev0 s).getReg .x19 = wordAddress src := (k0 .x19 (by decide) (by decide)).trans ready.source
@@ -247,7 +252,7 @@ theorem ev1_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : 
 theorem ev2_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
     (r : BitVec 256) :
     (ev2 s src r).getReg .x10 = wordAddress (src + 5) ∧ (ev2 s src r).getReg .x12 = wordAddress (src + 29) ∧
-    (ev2 s src r).pc = ckPC 382 ∧
+    (ev2 s src r).pc = ckPC 10552 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → (ev2 s src r).getReg g = (ev1 s).getReg g) := by
   obtain ⟨a10, _, _, _, p1, _, _⟩ := ev1_facts s src proof index ready
   let w := writeBits (ev1 s) (wordAddress (src + 33)) r
@@ -265,7 +270,7 @@ theorem ev2_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : 
 theorem ev3_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
     (r q : BitVec 256) :
     (ev3 s src r q).getReg .x10 = wordAddress (src + 29) ∧ (ev3 s src r q).getReg .x12 = wordAddress (src + 29) ∧
-    (ev3 s src r q).pc = ckPC 384 ∧
+    (ev3 s src r q).pc = ckPC 10554 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → (ev3 s src r q).getReg g = (ev1 s).getReg g) := by
   obtain ⟨b10, b12, bpc, bkeep⟩ := ev2_facts s src proof index ready r
   let w := writeBits (ev2 s src r) (wordAddress (src + 29)) q
@@ -322,7 +327,7 @@ theorem odd_tag_value (index : Index) (odd : ¬ c3pEven index) :
   congr 1
   omega
 
-/-- The register state just before the even tag store (`sd t6,32(a0)` at word 388). -/
+/-- The register state just before the even tag store (`sd t6,32(a0)` at word 10558). -/
 def ev4pre (s : MachineState) (src : Nat) (r q z : BitVec 256) : MachineState :=
   execInstrBr (execInstrBr (execInstrBr (writeBits (ev3 s src r q) (wordAddress (src + 29)) z)
     (.SLLI .x28 .x6 8)) (.ADD .x28 .x3 .x28)) (.ADDI .x31 .x28 96)
@@ -334,7 +339,7 @@ theorem ev4pre_facts (s : MachineState) (src proof : Nat) (index : Index) (ready
     (even : c3pEven index) (r q z : BitVec 256) :
     (ev4pre s src r q z).getReg .x10 = wordAddress (src + 29) ∧
     (ev4pre s src r q z).getReg .x31 = c3pTag index ∧
-    (ev4pre s src r q z).pc = ckPC 388 ∧
+    (ev4pre s src r q z).pc = ckPC 10558 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → g ≠ .x28 → g ≠ .x31 → (ev4pre s src r q z).getReg g = (ev1 s).getReg g) := by
   obtain ⟨c10, _, cpc, ckeep⟩ := ev3_facts s src proof index ready r q
   obtain ⟨_, h6, _, k0⟩ := ev0_facts s
@@ -426,7 +431,7 @@ theorem even_mem_outside (M : Memory) (src : Nat) (dr dq dz : Words 4) (tag : Wo
 
 theorem ev4_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
     (even : c3pEven index) (r q z : BitVec 256) :
-    (ev4 s src r q z).getReg .x10 = wordAddress (src + 29) ∧ (ev4 s src r q z).pc = ckPC 389 ∧
+    (ev4 s src r q z).getReg .x10 = wordAddress (src + 29) ∧ (ev4 s src r q z).pc = ckPC 10559 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → g ≠ .x28 → g ≠ .x31 → (ev4 s src r q z).getReg g = (ev1 s).getReg g) := by
   obtain ⟨p10, _, ppc, pkeep⟩ := ev4pre_facts s src proof index ready even r q z
   refine ⟨by rw [ev4_unfold, sd_reg, p10], ?_, fun g a b c d => by rw [ev4_unfold, sd_reg, pkeep g a b c d]⟩
@@ -445,7 +450,7 @@ theorem ev4_copy_ready (s : MachineState) (src proof : Nat) (index : Index) (rea
   have pb := ready.proofBound
   have sb := ready.sourceBound
   refine ⟨?_, ?_, ?_, ?_, ?_, ready.proofAligned, ?_⟩
-  · change (ev4 s src r q z).pc = ckPC (389 + 2 * 0)
+  · change (ev4 s src r q z).pc = ckPC (10559 + 2 * 0)
     exact dpc
   · change (ev4 s src r q z).getReg .x21 = _
     rw [dkeep .x21 (by decide) (by decide) (by decide) (by decide),
@@ -459,7 +464,7 @@ theorem ev4_copy_ready (s : MachineState) (src proof : Nat) (index : Index) (rea
   · change 8 * (src + 35) % 2 = 0; omega
 
 theorem ev5_pc (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
-    (even : c3pEven index) (r q z : BitVec 256) : (ev5 s src r q z).pc = ckPC 405 :=
+    (even : c3pEven index) (r q z : BitVec 256) : (ev5 s src r q z).pc = ckPC 10575 :=
   copy_field_pc _ _ _ _ (ev4_copy_ready s src proof index ready even r q z)
 
 theorem ev5_reg (s : MachineState) (src : Nat) (r q z : BitVec 256) (g : Reg) (h : g ≠ .x31) :
@@ -478,7 +483,7 @@ theorem ev6_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : 
     (ev6 s src r q z).getReg .x5 = 0 ∧
     (ev6 s src r q z).getReg .x11 = 200 ∧
     (ev6 s src r q z).getReg .x13 = 1 ∧
-    (ev6 s src r q z).pc = ckPC 409 := by
+    (ev6 s src r q z).pc = ckPC 10579 := by
   have sb := ready.sourceBound
   obtain ⟨d10, _, dkeep⟩ := ev4_facts s src proof index ready even r q z
   have p5 := ev5_pc s src proof index ready even r q z
@@ -658,7 +663,7 @@ theorem ev7_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : 
     let Y := writeBits (ev6 s src r q z) (wordAddress 1536) y
     (∀ w < 2 ^ 33, memoryView (ev7 s src r q z y) w =
       if 1536 ≤ w ∧ w < 1540 then memoryView Y (w + 21) else memoryView Y w) ∧
-    (ev7 s src r q z y).pc = ckPC 418 ∧
+    (ev7 s src r q z y).pc = ckPC 10588 ∧
     (∀ g, g ≠ .x31 → (ev7 s src r q z y).getReg g = (ev6 s src r q z).getReg g) := by
   intro Y
   have y23 : Y.getReg .x23 = wordAddress 1536 :=
@@ -720,11 +725,6 @@ theorem ordinary_one (st next : MachineState) (instr : Instr) (fuel : Nat)
 theorem charge_charge (r : Execution) (a b c d : Nat) : (r.charge a b).charge c d = r.charge (c + a) (d + b) := by
   simp only [Execution.charge, Nat.add_assoc]
 
-theorem ck_fetch (st : MachineState) (k : Nat) (instr : Instr) (bounded : k < 512) (pc : st.pc = ckPC k)
-    (decoded : (packedImage.code[k]?).bind decodeInstruction = some (.base instr)) :
-    fetch packedImage st = some (.base instr) :=
-  cap_image_fetch packedImage st k instr bounded pc decoded
-
 theorem sd_step (t : MachineState) (b src : Reg) (imm : BitVec 12)
     (valid : accessValid (t.getReg b + signExtend12 imm) 8 = true) :
     ordinaryStep t (.base (.SD b src imm)) = some (execInstrBr t (.SD b src imm)) := by
@@ -759,20 +759,20 @@ theorem execute_ev1 (s : MachineState) (fuel : Nat) :
   apply execute_unit_steps (states := fun i => (evOps1.take i).foldl execInstrBr (ev0 s))
   intro i bounded
   refine ⟨.base (evOps1[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply ck_fetch _ (375 + i) _ (by omega)
+  · apply ck_fetch _ (10545 + i) _ (by omega)
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-theorem execute_ev6 (s : MachineState) (src : Nat) (r q z : BitVec 256) (pc : (ev5 s src r q z).pc = ckPC 405)
+theorem execute_ev6 (s : MachineState) (src : Nat) (r q z : BitVec 256) (pc : (ev5 s src r q z).pc = ckPC 10575)
     (fuel : Nat) :
     execute packedImage (4 + fuel) (ev5 s src r q z) false =
       (do let result ← execute packedImage fuel (ev6 s src r q z) false; return result.charge 4 0) := by
   apply execute_unit_steps (states := fun i => (evOps6.take i).foldl execInstrBr (ev5 s src r q z))
   intro i bounded
   refine ⟨.base (evOps6[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply ck_fetch _ (405 + i) _ (by omega)
+  · apply ck_fetch _ (10575 + i) _ (by omega)
     · interval_cases i <;> simp only [List.take, List.foldl, evOps6, addi_pc, pc] <;> rfl
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
@@ -791,63 +791,63 @@ theorem execute_even (s : MachineState) (src proof : Nat) (index : Index) (ready
       (((ev0_facts s).2.2.2 .x5 (by decide) (by decide)).trans ready.selector)
   rw [show 44 + fuel = 4 + ((39 + fuel) + 1) by omega, execute_ev1 s,
     execute_compression_on packedImage (39 + fuel) (ev1 s) false (src + 29) (src + 33) (by omega) (by omega)
-      a10 a12 sel1 a11 a13 (ck_fetch _ 379 .ECALL (by decide) p1 rfl)]
+      a10 a12 sel1 a11 a13 (ck_fetch _ 10549 .ECALL (by decide) p1 rfl)]
   simp only [evQueries, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro r _
   -- two ordinary steps and the second compression (q)
-  have w1pc : (writeBits (ev1 s) (wordAddress (src + 33)) r).pc = ckPC 380 := by
+  have w1pc : (writeBits (ev1 s) (wordAddress (src + 33)) r).pc = ckPC 10550 := by
     rw [ck_written_pc, p1]; rfl
-  have m1pc : (execInstrBr (writeBits (ev1 s) (wordAddress (src + 33)) r) (.ADDI .x10 .x10 3904)).pc = ckPC 381 := by
+  have m1pc : (execInstrBr (writeBits (ev1 s) (wordAddress (src + 33)) r) (.ADDI .x10 .x10 3904)).pc = ckPC 10551 := by
     rw [addi_pc, w1pc]; rfl
   obtain ⟨b10, b12, bpc, bkeep⟩ := ev2_facts s src proof index ready r
   rw [show 39 + fuel = 1 + (1 + ((36 + fuel) + 1)) by omega,
-    ordinary_one _ _ (.ADDI .x10 .x10 3904) _ (ck_fetch _ 380 _ (by decide) w1pc rfl) rfl rfl,
-    ordinary_one _ (ev2 s src r) (.ADDI .x12 .x10 192) _ (ck_fetch _ 381 _ (by decide) m1pc rfl) rfl rfl,
+    ordinary_one _ _ (.ADDI .x10 .x10 3904) _ (ck_fetch _ 10550 _ (by decide) w1pc rfl) rfl rfl,
+    ordinary_one _ (ev2 s src r) (.ADDI .x12 .x10 192) _ (ck_fetch _ 10551 _ (by decide) m1pc rfl) rfl rfl,
     execute_compression_on packedImage (36 + fuel) (ev2 s src r) false (src + 5) (src + 29) (by omega) (by omega)
       b10 b12 ((bkeep .x5 (by decide) (by decide)).trans sel1) ((bkeep .x11 (by decide) (by decide)).trans a11)
-      ((bkeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 382 .ECALL (by decide) bpc rfl)]
+      ((bkeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 10552 .ECALL (by decide) bpc rfl)]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro q _
   -- one ordinary step and the third compression (z)
   obtain ⟨c10, c12, cpc, ckeep⟩ := ev3_facts s src proof index ready r q
-  have w2pc : (writeBits (ev2 s src r) (wordAddress (src + 29)) q).pc = ckPC 383 := by
+  have w2pc : (writeBits (ev2 s src r) (wordAddress (src + 29)) q).pc = ckPC 10553 := by
     rw [ck_written_pc, bpc]; rfl
   rw [show 36 + fuel = 1 + ((34 + fuel) + 1) by omega,
-    ordinary_one _ (ev3 s src r q) (.ADDI .x10 .x10 192) _ (ck_fetch _ 383 _ (by decide) w2pc rfl) rfl rfl,
+    ordinary_one _ (ev3 s src r q) (.ADDI .x10 .x10 192) _ (ck_fetch _ 10553 _ (by decide) w2pc rfl) rfl rfl,
     execute_compression_on packedImage (34 + fuel) (ev3 s src r q) false (src + 29) (src + 29) (by omega) (by omega)
       c10 c12 ((ckeep .x5 (by decide) (by decide)).trans sel1) ((ckeep .x11 (by decide) (by decide)).trans a11)
-      ((ckeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 384 .ECALL (by decide) cpc rfl)]
+      ((ckeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 10554 .ECALL (by decide) cpc rfl)]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro z _
   -- tag (4 steps), salt copy (16), permutation setup (4), permutation call
   let w3 := writeBits (ev3 s src r q) (wordAddress (src + 29)) z
-  have w3pc : w3.pc = ckPC 385 := by rw [ck_written_pc, cpc]; rfl
+  have w3pc : w3.pc = ckPC 10555 := by rw [ck_written_pc, cpc]; rfl
   have w3x10 : w3.getReg .x10 = wordAddress (src + 29) := (CommitGolfCandidate.writeBits_register _ _ _ _).trans c10
   let t1 := execInstrBr w3 (.SLLI .x28 .x6 8)
   let t2 := execInstrBr t1 (.ADD .x28 .x3 .x28)
-  have t1pc : t1.pc = ckPC 386 := by change w3.pc + 4 = _; rw [w3pc]; rfl
-  have t2pc : t2.pc = ckPC 387 := by change t1.pc + 4 = _; rw [t1pc]; rfl
+  have t1pc : t1.pc = ckPC 10556 := by change w3.pc + 4 = _; rw [w3pc]; rfl
+  have t2pc : t2.pc = ckPC 10557 := by change t1.pc + 4 = _; rw [t1pc]; rfl
   obtain ⟨p10, _, ppc, _⟩ := ev4pre_facts s src proof index ready even r q z
   have sdValid : accessValid ((ev4pre s src r q z).getReg .x10 + signExtend12 32) 8 = true := by
     rw [p10]; exact word_valid (src + 29) 4 32 (by decide) (by omega)
   have copyRun : ∀ X, execute packedImage (16 + X) (ev4 s src r q z) false =
       (do let res ← execute packedImage X (ev5 s src r q z) false; return res.charge 16 0) := fun X =>
     copy_field_execute evenSaltCode _ _ _ (ev4_copy_ready s src proof index ready even r q z) X false
-  have p4 : (ev4 s src r q z).pc = ckPC 389 := (ev4_facts s src proof index ready even r q z).2.1
+  have p4 : (ev4 s src r q z).pc = ckPC 10559 := (ev4_facts s src proof index ready even r q z).2.1
   have p5 := ev5_pc s src proof index ready even r q z
   obtain ⟨e10, e12, e5, e11, e13, e6pc⟩ := ev6_facts s src proof index ready even r q z
   rw [show 34 + fuel = 1 + (1 + (1 + (1 + (16 + (4 + ((8 + (1 + fuel)) + 1)))))) by omega,
-    ordinary_one _ t1 (.SLLI .x28 .x6 8) _ (ck_fetch _ 385 _ (by decide) w3pc rfl) rfl rfl,
-    ordinary_one _ t2 (.ADD .x28 .x3 .x28) _ (ck_fetch _ 386 _ (by decide) t1pc rfl) rfl rfl,
-    ordinary_one _ (ev4pre s src r q z) (.ADDI .x31 .x28 96) _ (ck_fetch _ 387 _ (by decide) t2pc rfl) rfl rfl,
-    ordinary_one _ (ev4 s src r q z) (.SD .x10 .x31 32) _ (ck_fetch _ 388 _ (by decide) ppc rfl)
+    ordinary_one _ t1 (.SLLI .x28 .x6 8) _ (ck_fetch _ 10555 _ (by decide) w3pc rfl) rfl rfl,
+    ordinary_one _ t2 (.ADD .x28 .x3 .x28) _ (ck_fetch _ 10556 _ (by decide) t1pc rfl) rfl rfl,
+    ordinary_one _ (ev4pre s src r q z) (.ADDI .x31 .x28 96) _ (ck_fetch _ 10557 _ (by decide) t2pc rfl) rfl rfl,
+    ordinary_one _ (ev4 s src r q z) (.SD .x10 .x31 32) _ (ck_fetch _ 10558 _ (by decide) ppc rfl)
       (sd_step _ _ _ _ sdValid) rfl,
     copyRun, execute_ev6 s src r q z p5,
     execute_permutation_call packedImage ((8 + (1 + fuel))) (ev6 s src r q z) false (src + 12) 1536 (by omega)
-      (by decide) e10 e12 e5 e11 e13 (ck_fetch _ 409 .ECALL (by decide) e6pc rfl)]
+      (by decide) e10 e12 e5 e11 e13 (ck_fetch _ 10579 .ECALL (by decide) e6pc rfl)]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro y _
@@ -855,7 +855,7 @@ theorem execute_even (s : MachineState) (src proof : Nat) (index : Index) (ready
   let Y := writeBits (ev6 s src r q z) (wordAddress 1536) y
   have y23 : Y.getReg .x23 = wordAddress 1536 :=
     (CommitGolfCandidate.writeBits_register _ _ _ _).trans (ev6_x23 s src proof index ready even r q z)
-  have ypc : Y.pc = ckPC 410 := by rw [ck_written_pc, e6pc]; rfl
+  have ypc : Y.pc = ckPC 10580 := by rw [ck_written_pc, e6pc]; rfl
   obtain ⟨_, a0, p0, _⟩ := copy_pair Y y23 0 (by decide) 168 0 (by decide) (by decide)
   obtain ⟨_, a1, p1', _⟩ := copy_pair _ a0 1 (by decide) 176 8 (by decide) (by decide)
   obtain ⟨_, a2, p2, _⟩ := copy_pair _ a1 2 (by decide) 184 16 (by decide) (by decide)
@@ -874,45 +874,45 @@ theorem execute_even (s : MachineState) (src proof : Nat) (index : Index) (ready
     have l1 : L1.getReg .x23 = wordAddress 1536 := (ld_other _ _ _ _ _ (by decide)).trans a0
     have l2 : L2.getReg .x23 = wordAddress 1536 := (ld_other _ _ _ _ _ (by decide)).trans a1
     have l3 : L3.getReg .x23 = wordAddress 1536 := (ld_other _ _ _ _ _ (by decide)).trans a2
-    have q0 : L0.pc = ckPC 411 := by change Y.pc + 4 = _; rw [ypc]; rfl
-    have q1 : S0.pc = ckPC 412 := by rw [p0, ypc]; rfl
-    have q2 : L1.pc = ckPC 413 := by change S0.pc + 4 = _; rw [q1]; rfl
-    have q3 : S1.pc = ckPC 414 := by rw [p1', q1]; rfl
-    have q4 : L2.pc = ckPC 415 := by change S1.pc + 4 = _; rw [q3]; rfl
-    have q5 : S2.pc = ckPC 416 := by rw [p2, q3]; rfl
-    have q6 : L3.pc = ckPC 417 := by change S2.pc + 4 = _; rw [q5]; rfl
+    have q0 : L0.pc = ckPC 10581 := by change Y.pc + 4 = _; rw [ypc]; rfl
+    have q1 : S0.pc = ckPC 10582 := by rw [p0, ypc]; rfl
+    have q2 : L1.pc = ckPC 10583 := by change S0.pc + 4 = _; rw [q1]; rfl
+    have q3 : S1.pc = ckPC 10584 := by rw [p1', q1]; rfl
+    have q4 : L2.pc = ckPC 10585 := by change S1.pc + 4 = _; rw [q3]; rfl
+    have q5 : S2.pc = ckPC 10586 := by rw [p2, q3]; rfl
+    have q6 : L3.pc = ckPC 10587 := by change S2.pc + 4 = _; rw [q5]; rfl
     rw [show 8 + X = 1 + (1 + (1 + (1 + (1 + (1 + (1 + (1 + X))))))) by omega,
-      ordinary_one _ L0 (.LD .x31 .x23 168) _ (ck_fetch _ 410 _ (by decide) ypc rfl)
+      ordinary_one _ L0 (.LD .x31 .x23 168) _ (ck_fetch _ 10580 _ (by decide) ypc rfl)
         (ld_step _ _ _ _ (by rw [y23]; exact word_valid 1536 21 168 (by decide) (by decide))) rfl,
-      ordinary_one _ S0 (.SD .x23 .x31 0) _ (ck_fetch _ 411 _ (by decide) q0 rfl)
+      ordinary_one _ S0 (.SD .x23 .x31 0) _ (ck_fetch _ 10581 _ (by decide) q0 rfl)
         (sd_step _ _ _ _ (by rw [l0]; exact word_valid 1536 0 0 (by decide) (by decide))) rfl,
-      ordinary_one _ L1 (.LD .x31 .x23 176) _ (ck_fetch _ 412 _ (by decide) q1 rfl)
+      ordinary_one _ L1 (.LD .x31 .x23 176) _ (ck_fetch _ 10582 _ (by decide) q1 rfl)
         (ld_step _ _ _ _ (by rw [a0]; exact word_valid 1536 22 176 (by decide) (by decide))) rfl,
-      ordinary_one _ S1 (.SD .x23 .x31 8) _ (ck_fetch _ 413 _ (by decide) q2 rfl)
+      ordinary_one _ S1 (.SD .x23 .x31 8) _ (ck_fetch _ 10583 _ (by decide) q2 rfl)
         (sd_step _ _ _ _ (by rw [l1]; exact word_valid 1536 1 8 (by decide) (by decide))) rfl,
-      ordinary_one _ L2 (.LD .x31 .x23 184) _ (ck_fetch _ 414 _ (by decide) q3 rfl)
+      ordinary_one _ L2 (.LD .x31 .x23 184) _ (ck_fetch _ 10584 _ (by decide) q3 rfl)
         (ld_step _ _ _ _ (by rw [a1]; exact word_valid 1536 23 184 (by decide) (by decide))) rfl,
-      ordinary_one _ S2 (.SD .x23 .x31 16) _ (ck_fetch _ 415 _ (by decide) q4 rfl)
+      ordinary_one _ S2 (.SD .x23 .x31 16) _ (ck_fetch _ 10585 _ (by decide) q4 rfl)
         (sd_step _ _ _ _ (by rw [l2]; exact word_valid 1536 2 16 (by decide) (by decide))) rfl,
-      ordinary_one _ L3 (.LD .x31 .x23 192) _ (ck_fetch _ 416 _ (by decide) q5 rfl)
+      ordinary_one _ L3 (.LD .x31 .x23 192) _ (ck_fetch _ 10586 _ (by decide) q5 rfl)
         (ld_step _ _ _ _ (by rw [a2]; exact word_valid 1536 24 192 (by decide) (by decide))) rfl,
-      ordinary_one _ (ev7 s src r q z y) (.SD .x23 .x31 24) _ (ck_fetch _ 417 _ (by decide) q6 rfl)
+      ordinary_one _ (ev7 s src r q z y) (.SD .x23 .x31 24) _ (ck_fetch _ 10587 _ (by decide) q6 rfl)
         (sd_step _ _ _ _ (by rw [l3]; exact word_valid 1536 3 24 (by decide) (by decide))) rfl]
     simp only [bind_assoc, pure_bind, charge_charge]
   have p7 := (ev7_facts s src proof index ready even r q z y).2.1
-  have jump : ordinaryStep (ev7 s src r q z y) (.base (.JAL .x0 2095712)) = some (ev8 s src r q z y) := by
+  have jump : ordinaryStep (ev7 s src r q z y) (.base (.JAL .x0 2055032)) = some (ev8 s src r q z y) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, ev8, MachineState.setReg,
       MachineState.setPC, p7]
     rfl
-  rw [run8, ordinary_one _ (ev8 s src r q z y) _ _ (ck_fetch _ 418 _ (by decide) p7 rfl) jump rfl]
+  rw [run8, ordinary_one _ (ev8 s src r q z y) _ _ (ck_fetch _ 10588 _ (by decide) p7 rfl) jump rfl]
   simp only [bind_assoc, pure_bind, charge_charge]
 
 /-! ### Odd path: states -/
 
 def odOps1 : List Instr := [.ADDI .x11 .x0 64, .ADDI .x13 .x0 0, .ADDI .x10 .x19 40, .ADDI .x12 .x10 0]
 
-/-- Entry of the odd path (word 419). -/
-def od0 (s : MachineState) : MachineState := (ckHead s).setPC (ckPC 419)
+/-- Entry of the odd path (word 10589). -/
+def od0 (s : MachineState) : MachineState := (ckHead s).setPC (ckPC 10589)
 
 def od1 (s : MachineState) : MachineState := odOps1.foldl execInstrBr (od0 s)
 
@@ -945,7 +945,7 @@ def od7 (s : MachineState) (src : Nat) (q r z : BitVec 256) (y : Block) : Machin
 /-! ### Odd path: registers and memory -/
 
 theorem od0_facts (s : MachineState) :
-    (od0 s).mem = s.mem ∧ (od0 s).getReg .x6 = s.getMem (s.getReg .x8) ∧ (od0 s).pc = ckPC 419 ∧
+    (od0 s).mem = s.mem ∧ (od0 s).getReg .x6 = s.getMem (s.getReg .x8) ∧ (od0 s).pc = ckPC 10589 ∧
     ∀ r, r ≠ .x6 → r ≠ .x7 → (od0 s).getReg r = s.getReg r := by
   obtain ⟨m, h6, _, _, keep⟩ := ck_head_facts s
   refine ⟨?_, ?_, rfl, fun r a b => ?_⟩
@@ -955,7 +955,7 @@ theorem od0_facts (s : MachineState) :
 
 theorem od1_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index) :
     (od1 s).getReg .x10 = wordAddress (src + 5) ∧ (od1 s).getReg .x12 = wordAddress (src + 5) ∧
-    (od1 s).getReg .x11 = 64 ∧ (od1 s).getReg .x13 = 0 ∧ (od1 s).pc = ckPC 423 ∧ (od1 s).mem = s.mem ∧
+    (od1 s).getReg .x11 = 64 ∧ (od1 s).getReg .x13 = 0 ∧ (od1 s).pc = ckPC 10593 ∧ (od1 s).mem = s.mem ∧
     (∀ r, r ≠ .x10 → r ≠ .x11 → r ≠ .x12 → r ≠ .x13 → (od1 s).getReg r = (od0 s).getReg r) := by
   obtain ⟨m0, _, p0, k0⟩ := od0_facts s
   have x19 : (od0 s).getReg .x19 = wordAddress src := (k0 .x19 (by decide) (by decide)).trans ready.source
@@ -993,7 +993,7 @@ theorem od1_keeps (s : MachineState) (src proof : Nat) (index : Index) (ready : 
 theorem od2_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
     (q : BitVec 256) :
     (od2 s src q).getReg .x10 = wordAddress (src + 29) ∧ (od2 s src q).getReg .x12 = wordAddress (src + 9) ∧
-    (od2 s src q).pc = ckPC 426 ∧
+    (od2 s src q).pc = ckPC 10596 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → (od2 s src q).getReg g = (od1 s).getReg g) := by
   obtain ⟨a10, _, _, _, p1, _, _⟩ := od1_facts s src proof index ready
   let w := writeBits (od1 s) (wordAddress (src + 5)) q
@@ -1011,7 +1011,7 @@ theorem od2_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : 
 theorem od3_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
     (q r : BitVec 256) :
     (od3 s src q r).getReg .x10 = wordAddress (src + 5) ∧ (od3 s src q r).getReg .x12 = wordAddress (src + 9) ∧
-    (od3 s src q r).pc = ckPC 428 ∧
+    (od3 s src q r).pc = ckPC 10598 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → (od3 s src q r).getReg g = (od1 s).getReg g) := by
   obtain ⟨b10, b12, bpc, bkeep⟩ := od2_facts s src proof index ready q
   let w := writeBits (od2 s src q) (wordAddress (src + 9)) r
@@ -1029,7 +1029,7 @@ theorem od4pre_facts (s : MachineState) (src proof : Nat) (index : Index) (ready
     (odd : ¬ c3pEven index) (q r z : BitVec 256) :
     (od4pre s src q r z).getReg .x10 = wordAddress (src + 5) ∧
     (od4pre s src q r z).getReg .x31 = c3pTag index ∧
-    (od4pre s src q r z).pc = ckPC 432 ∧
+    (od4pre s src q r z).pc = ckPC 10602 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → g ≠ .x28 → g ≠ .x31 → (od4pre s src q r z).getReg g = (od1 s).getReg g) := by
   obtain ⟨c10, _, cpc, ckeep⟩ := od3_facts s src proof index ready q r
   obtain ⟨_, h6, _, k0⟩ := od0_facts s
@@ -1107,7 +1107,7 @@ theorem odd_mem_outside (M : Memory) (src : Nat) (dq dr dz : Words 4) (tag : Wor
 
 theorem od4_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
     (odd : ¬ c3pEven index) (q r z : BitVec 256) :
-    (od4 s src q r z).getReg .x10 = wordAddress (src + 5) ∧ (od4 s src q r z).pc = ckPC 433 ∧
+    (od4 s src q r z).getReg .x10 = wordAddress (src + 5) ∧ (od4 s src q r z).pc = ckPC 10603 ∧
     (∀ g, g ≠ .x10 → g ≠ .x12 → g ≠ .x28 → g ≠ .x31 → (od4 s src q r z).getReg g = (od1 s).getReg g) := by
   obtain ⟨p10, _, ppc, pkeep⟩ := od4pre_facts s src proof index ready odd q r z
   refine ⟨by rw [od4, sd_reg, p10], ?_, fun g a b c d => by rw [od4, sd_reg, pkeep g a b c d]⟩
@@ -1121,7 +1121,7 @@ theorem od4_copy_ready (s : MachineState) (src proof : Nat) (index : Index) (rea
   have pb := ready.proofBound
   have sb := ready.sourceBound
   refine ⟨?_, ?_, ?_, ?_, ?_, ready.proofAligned, ?_⟩
-  · change (od4 s src q r z).pc = ckPC (433 + 2 * 0)
+  · change (od4 s src q r z).pc = ckPC (10603 + 2 * 0)
     exact dpc
   · change (od4 s src q r z).getReg .x21 = _
     rw [dkeep .x21 (by decide) (by decide) (by decide) (by decide),
@@ -1135,7 +1135,7 @@ theorem od4_copy_ready (s : MachineState) (src proof : Nat) (index : Index) (rea
   · change 8 * (src + 5) % 2 = 0; omega
 
 theorem od5_pc (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
-    (odd : ¬ c3pEven index) (q r z : BitVec 256) : (od5 s src q r z).pc = ckPC 449 :=
+    (odd : ¬ c3pEven index) (q r z : BitVec 256) : (od5 s src q r z).pc = ckPC 10619 :=
   copy_field_pc _ _ _ _ (od4_copy_ready s src proof index ready odd q r z)
 
 theorem od5_reg (s : MachineState) (src : Nat) (q r z : BitVec 256) (g : Reg) (h : g ≠ .x31) :
@@ -1154,7 +1154,7 @@ theorem od6_facts (s : MachineState) (src proof : Nat) (index : Index) (ready : 
     (od6 s src q r z).getReg .x5 = 0 ∧
     (od6 s src q r z).getReg .x11 = 200 ∧
     (od6 s src q r z).getReg .x13 = 1 ∧
-    (od6 s src q r z).pc = ckPC 452 ∧
+    (od6 s src q r z).pc = ckPC 10622 ∧
     (∀ g, g ≠ .x10 → g ≠ .x11 → g ≠ .x12 → g ≠ .x13 → g ≠ .x28 → g ≠ .x31 →
       (od6 s src q r z).getReg g = (od1 s).getReg g) := by
   obtain ⟨d10, _, dkeep⟩ := od4_facts s src proof index ready odd q r z
@@ -1268,20 +1268,20 @@ theorem execute_od1 (s : MachineState) (fuel : Nat) :
   apply execute_unit_steps (states := fun i => (odOps1.take i).foldl execInstrBr (od0 s))
   intro i bounded
   refine ⟨.base (odOps1[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply ck_fetch _ (419 + i) _ (by omega)
+  · apply ck_fetch _ (10589 + i) _ (by omega)
     · interval_cases i <;> rfl
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
   · interval_cases i <;> rfl
 
-theorem execute_od6 (s : MachineState) (src : Nat) (q r z : BitVec 256) (pc : (od5 s src q r z).pc = ckPC 449)
+theorem execute_od6 (s : MachineState) (src : Nat) (q r z : BitVec 256) (pc : (od5 s src q r z).pc = ckPC 10619)
     (fuel : Nat) :
     execute packedImage (3 + fuel) (od5 s src q r z) false =
       (do let result ← execute packedImage fuel (od6 s src q r z) false; return result.charge 3 0) := by
   apply execute_unit_steps (states := fun i => (odOps6.take i).foldl execInstrBr (od5 s src q r z))
   intro i bounded
   refine ⟨.base (odOps6[i]?.getD .EBREAK), ?_, ?_, ?_⟩
-  · apply ck_fetch _ (449 + i) _ (by omega)
+  · apply ck_fetch _ (10619 + i) _ (by omega)
     · interval_cases i <;> simp only [List.take, List.foldl, odOps6, addi_pc, pc] <;> rfl
     · interval_cases i <;> rfl
   · interval_cases i <;> rfl
@@ -1300,41 +1300,41 @@ theorem execute_odd (s : MachineState) (src proof : Nat) (index : Index) (ready 
       (((od0_facts s).2.2.2 .x5 (by decide) (by decide)).trans ready.selector)
   rw [show 35 + fuel = 4 + ((30 + fuel) + 1) by omega, execute_od1 s,
     execute_compression_on packedImage (30 + fuel) (od1 s) false (src + 5) (src + 5) (by omega) (by omega)
-      a10 a12 sel1 a11 a13 (ck_fetch _ 423 .ECALL (by decide) p1 rfl)]
+      a10 a12 sel1 a11 a13 (ck_fetch _ 10593 .ECALL (by decide) p1 rfl)]
   simp only [odQueries, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro q _
-  have w1pc : (writeBits (od1 s) (wordAddress (src + 5)) q).pc = ckPC 424 := by
+  have w1pc : (writeBits (od1 s) (wordAddress (src + 5)) q).pc = ckPC 10594 := by
     rw [ck_written_pc, p1]; rfl
-  have m1pc : (execInstrBr (writeBits (od1 s) (wordAddress (src + 5)) q) (.ADDI .x10 .x10 192)).pc = ckPC 425 := by
+  have m1pc : (execInstrBr (writeBits (od1 s) (wordAddress (src + 5)) q) (.ADDI .x10 .x10 192)).pc = ckPC 10595 := by
     rw [addi_pc, w1pc]; rfl
   obtain ⟨b10, b12, bpc, bkeep⟩ := od2_facts s src proof index ready q
   rw [show 30 + fuel = 1 + (1 + ((27 + fuel) + 1)) by omega,
-    ordinary_one _ _ (.ADDI .x10 .x10 192) _ (ck_fetch _ 424 _ (by decide) w1pc rfl) rfl rfl,
-    ordinary_one _ (od2 s src q) (.ADDI .x12 .x10 3936) _ (ck_fetch _ 425 _ (by decide) m1pc rfl) rfl rfl,
+    ordinary_one _ _ (.ADDI .x10 .x10 192) _ (ck_fetch _ 10594 _ (by decide) w1pc rfl) rfl rfl,
+    ordinary_one _ (od2 s src q) (.ADDI .x12 .x10 3936) _ (ck_fetch _ 10595 _ (by decide) m1pc rfl) rfl rfl,
     execute_compression_on packedImage (27 + fuel) (od2 s src q) false (src + 29) (src + 9) (by omega) (by omega)
       b10 b12 ((bkeep .x5 (by decide) (by decide)).trans sel1) ((bkeep .x11 (by decide) (by decide)).trans a11)
-      ((bkeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 426 .ECALL (by decide) bpc rfl)]
+      ((bkeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 10596 .ECALL (by decide) bpc rfl)]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro r _
   obtain ⟨c10, c12, cpc, ckeep⟩ := od3_facts s src proof index ready q r
-  have w2pc : (writeBits (od2 s src q) (wordAddress (src + 9)) r).pc = ckPC 427 := by
+  have w2pc : (writeBits (od2 s src q) (wordAddress (src + 9)) r).pc = ckPC 10597 := by
     rw [ck_written_pc, bpc]; rfl
   rw [show 27 + fuel = 1 + ((25 + fuel) + 1) by omega,
-    ordinary_one _ (od3 s src q r) (.ADDI .x10 .x10 3904) _ (ck_fetch _ 427 _ (by decide) w2pc rfl) rfl rfl,
+    ordinary_one _ (od3 s src q r) (.ADDI .x10 .x10 3904) _ (ck_fetch _ 10597 _ (by decide) w2pc rfl) rfl rfl,
     execute_compression_on packedImage (25 + fuel) (od3 s src q r) false (src + 5) (src + 9) (by omega) (by omega)
       c10 c12 ((ckeep .x5 (by decide) (by decide)).trans sel1) ((ckeep .x11 (by decide) (by decide)).trans a11)
-      ((ckeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 428 .ECALL (by decide) cpc rfl)]
+      ((ckeep .x13 (by decide) (by decide)).trans a13) (ck_fetch _ 10598 .ECALL (by decide) cpc rfl)]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro z _
   let w3 := writeBits (od3 s src q r) (wordAddress (src + 9)) z
-  have w3pc : w3.pc = ckPC 429 := by rw [ck_written_pc, cpc]; rfl
+  have w3pc : w3.pc = ckPC 10599 := by rw [ck_written_pc, cpc]; rfl
   let t1 := execInstrBr w3 (.SLLI .x28 .x6 8)
   let t2 := execInstrBr t1 (.ADD .x28 .x3 .x28)
-  have t1pc : t1.pc = ckPC 430 := by change w3.pc + 4 = _; rw [w3pc]; rfl
-  have t2pc : t2.pc = ckPC 431 := by change t1.pc + 4 = _; rw [t1pc]; rfl
+  have t1pc : t1.pc = ckPC 10600 := by change w3.pc + 4 = _; rw [w3pc]; rfl
+  have t2pc : t2.pc = ckPC 10601 := by change t1.pc + 4 = _; rw [t1pc]; rfl
   obtain ⟨p10, _, ppc, _⟩ := od4pre_facts s src proof index ready odd q r z
   have sdValid : accessValid ((od4pre s src q r z).getReg .x10 + signExtend12 16) 8 = true := by
     rw [p10]; exact word_valid (src + 5) 2 16 (by decide) (by omega)
@@ -1344,25 +1344,25 @@ theorem execute_odd (s : MachineState) (src proof : Nat) (index : Index) (ready 
   have p5 := od5_pc s src proof index ready odd q r z
   obtain ⟨e10, e12, e5, e11, e13, e6pc, _⟩ := od6_facts s src proof index ready odd q r z
   rw [show 25 + fuel = 1 + (1 + (1 + (1 + (16 + (3 + ((1 + fuel) + 1)))))) by omega,
-    ordinary_one _ t1 (.SLLI .x28 .x6 8) _ (ck_fetch _ 429 _ (by decide) w3pc rfl) rfl rfl,
-    ordinary_one _ t2 (.ADD .x28 .x3 .x28) _ (ck_fetch _ 430 _ (by decide) t1pc rfl) rfl rfl,
-    ordinary_one _ (od4pre s src q r z) (.ADDI .x31 .x28 40) _ (ck_fetch _ 431 _ (by decide) t2pc rfl) rfl rfl,
-    ordinary_one _ (od4 s src q r z) (.SD .x10 .x31 16) _ (ck_fetch _ 432 _ (by decide) ppc rfl)
+    ordinary_one _ t1 (.SLLI .x28 .x6 8) _ (ck_fetch _ 10599 _ (by decide) w3pc rfl) rfl rfl,
+    ordinary_one _ t2 (.ADD .x28 .x3 .x28) _ (ck_fetch _ 10600 _ (by decide) t1pc rfl) rfl rfl,
+    ordinary_one _ (od4pre s src q r z) (.ADDI .x31 .x28 40) _ (ck_fetch _ 10601 _ (by decide) t2pc rfl) rfl rfl,
+    ordinary_one _ (od4 s src q r z) (.SD .x10 .x31 16) _ (ck_fetch _ 10602 _ (by decide) ppc rfl)
       (sd_step _ _ _ _ sdValid) rfl,
     copyRun, execute_od6 s src q r z p5,
     execute_permutation_call packedImage (1 + fuel) (od6 s src q r z) false (src + 5) 1536 (by omega)
-      (by decide) e10 e12 e5 e11 e13 (ck_fetch _ 452 .ECALL (by decide) e6pc rfl)]
+      (by decide) e10 e12 e5 e11 e13 (ck_fetch _ 10622 .ECALL (by decide) e6pc rfl)]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro y _
-  have ypc : (writeBits (od6 s src q r z) (wordAddress 1536) y).pc = ckPC 453 := by
+  have ypc : (writeBits (od6 s src q r z) (wordAddress 1536) y).pc = ckPC 10623 := by
     rw [ck_written_pc, e6pc]; rfl
-  have jump : ordinaryStep (writeBits (od6 s src q r z) (wordAddress 1536) y) (.base (.JAL .x0 2095572)) =
+  have jump : ordinaryStep (writeBits (od6 s src q r z) (wordAddress 1536) y) (.base (.JAL .x0 2054892)) =
       some (od7 s src q r z y) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, od7, MachineState.setReg,
       MachineState.setPC, ypc]
     rfl
-  rw [ordinary_one _ (od7 s src q r z y) _ _ (ck_fetch _ 453 _ (by decide) ypc rfl) jump rfl]
+  rw [ordinary_one _ (od7 s src q r z y) _ _ (ck_fetch _ 10623 _ (by decide) ypc rfl) jump rfl]
   simp only [bind_assoc, pure_bind, charge_charge]
 
 /-! ### The head and the whole leaf block -/
@@ -1378,9 +1378,9 @@ theorem execute_head (s : MachineState) (src proof : Nat) (index : Index) (ready
     execute packedImage (4 + fuel) s false =
       (do let res ← execute packedImage fuel (if c3pEven index then ev0 s else od0 s) false
           return res.charge 4 0) := by
-  let j := s.setPC (ckPC 372)
+  let j := s.setPC (ckPC 10542)
   let l := execInstrBr j (.LD .x6 .x8 0)
-  have jstep : ordinaryStep s (.base (.JAL .x0 1400)) = some j := by
+  have jstep : ordinaryStep s (.base (.JAL .x0 42080)) = some j := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, j, MachineState.setReg,
       MachineState.setPC, ready.pc]
     rfl
@@ -1388,8 +1388,8 @@ theorem execute_head (s : MachineState) (src proof : Nat) (index : Index) (ready
     rw [show j.getReg .x8 = s.getReg .x8 from rfl, show signExtend12 (0 : BitVec 12) = 0#64 by decide,
       BitVec.add_zero]
     exact ready.indexAccess
-  have lpc : l.pc = ckPC 373 := rfl
-  have hpc : (ckHead s).pc = ckPC 374 := (ck_head_facts s).2.2.2.1
+  have lpc : l.pc = ckPC 10543 := rfl
+  have hpc : (ckHead s).pc = ckPC 10544 := (ck_head_facts s).2.2.2.1
   have parity : (ckHead s).getReg .x7 = BitVec.ofNat 64 (index.val % 2) := by
     rw [(ck_head_facts s).2.2.1, ready.indexValue, parity_word _ (by have := index.isLt; change index.val < 16777216 at this; omega)]
   have branch : ordinaryStep (ckHead s) (.base (.BNE .x7 .x0 180)) =
@@ -1404,9 +1404,9 @@ theorem execute_head (s : MachineState) (src proof : Nat) (index : Index) (ready
       rfl
   rw [show 4 + fuel = 1 + (1 + (1 + (1 + fuel))) by omega,
     ordinary_one s j _ _ (fetch_at _ 22 _ (by decide) (by rw [ready.pc]; rfl) rfl) jstep rfl,
-    ordinary_one j l _ _ (ck_fetch _ 372 _ (by decide) rfl rfl) (ld_step _ _ _ _ lvalid) rfl,
-    ordinary_one l (ckHead s) (.ANDI .x7 .x6 1) _ (ck_fetch _ 373 _ (by decide) lpc rfl) rfl rfl,
-    ordinary_one _ _ _ _ (ck_fetch _ 374 _ (by decide) hpc rfl) branch rfl]
+    ordinary_one j l _ _ (ck_fetch _ 10542 _ (by decide) rfl rfl) (ld_step _ _ _ _ lvalid) rfl,
+    ordinary_one l (ckHead s) (.ANDI .x7 .x6 1) _ (ck_fetch _ 10543 _ (by decide) lpc rfl) rfl rfl,
+    ordinary_one _ _ _ _ (ck_fetch _ 10544 _ (by decide) hpc rfl) branch rfl]
   simp only [bind_assoc, pure_bind, charge_charge]
 
 theorem execute_c3p_leaf (s : MachineState) (src proof : Nat) (index : Index) (ready : CkReady s src proof index)
@@ -1736,7 +1736,7 @@ def c3pBlock (oracle : Oracle) (ordinal : Nat) (index : Index) (s : MachineState
 
 theorem ck_ready_p (input : CheckInput) (ordinal : Nat) (present : ordinal < input.positions.card)
     (s : MachineState) (fits : ProofWithin input) (cursor : RecordCursor input ordinal s)
-    (framed : RecordInputFrame input ordinal s) :
+    (framed : InputFrame input ordinal s) :
     CkReady s (checkSourceWord ordinal) (checkProofByte ordinal) (honestIndex input.positions ordinal present).val := by
   obtain ⟨aligned, _, _, room, _⟩ := packed_record_geometry input ordinal present fits
   have card := checker_positions_bound input
@@ -1745,7 +1745,7 @@ theorem ck_ready_p (input : CheckInput) (ordinal : Nat) (present : ordinal < inp
   refine ⟨cursor.pc.trans (ite_eq_right (show ¬ ordinal = input.positions.card by omega)), ?_, ?_, cursor.value,
     cursor.proof, cursor.tag, cursor.digest, cursor.selector, ?_, ?_, aligned, ?_, ?_⟩
   · rw [cursor.index]; exact acc
-  · rw [cursor.index]; exact record_input_index input ordinal present s framed
+  · rw [cursor.index]; exact frame_index input ordinal present s framed
   · unfold checkSourceWord; omega
   · unfold checkSourceWord; omega
   · omega
@@ -1785,7 +1785,7 @@ theorem c3p_leaf_block : LeafBlockRefines c3pBlock := by
   let proof := checkProofByte ordinal
   have ready : CkReady s src proof item.val := ck_ready_p input ordinal present s fits cursor framed
   have values : window (memoryView s) (src + 5) = entryWords (input.values item) :=
-    checker_value_data (fun _ => input.values item) item.val (record_input_value input ordinal present s framed)
+    checker_value_data (fun _ => input.values item) item.val (frame_value input ordinal present s framed)
   obtain ⟨fin, rowsOk⟩ := c3p_raw_spec oracle s src proof item.val ready _ values
   let raw := (c3pRaw oracle s src item.val).1
   have params := lower_setup_post raw
@@ -1802,7 +1802,7 @@ theorem c3p_leaf_block : LeafBlockRefines c3pBlock := by
     change readBuffer (beginLower raw 5) 12288 32 = _
     rw [read_buffer_memory_congr _ _ (lower_setup_mem raw), fin.digest]
     rfl
-  refine ⟨by change c3pSteps _ + 5 ≤ 169; unfold c3pSteps; split <;> decide,
+  refine ⟨by change c3pSteps _ + 5 ≤ 53; unfold c3pSteps; split <;> decide,
     c3p_exact_run oracle ordinal item.val s proof ready, ?_, finalSaved, ?_, ?_, ?_⟩
   · change LowerCursor ordinal item.val 0 (beginLower raw 5)
     refine ⟨?_, ?_, ?_, params.2.2.2.2.1, (finalSaved .x23 (by decide)).trans cursor.digest,
@@ -1826,8 +1826,8 @@ theorem c3p_leaf_block : LeafBlockRefines c3pBlock := by
   · exact ⟨⟨ckNonce s proof, rowsOk, digest.symm⟩⟩
   · intro message salts canonical
     rw [digest]
-    have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal s :=
-      Eq.mp (congrArg (fun data => RecordInputFrame data ordinal s) canonical) framed
+    have loaded : InputFrame (honestCheckInput oracle message input.positions salts) ordinal s :=
+      Eq.mp (congrArg (fun data => InputFrame data ordinal s) canonical) framed
     have salt := packed_record_nonce oracle message input.positions salts ordinal present s loaded
     have nonce : ckNonce s proof = saltWords (salts item.val) := by
       funext i

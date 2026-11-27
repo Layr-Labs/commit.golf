@@ -11,7 +11,7 @@ set_option maxHeartbeats 1000000
 attribute [local irreducible] readBuffer execute prepare writeBits
 
 def resume (s : MachineState) (node left : Nat) (answer : BitVec 256) : MachineState :=
-  (writeBits (prepare s node left) (wordAddress 1536) (Hybrid.normalize (node/2) answer)).setPC 5040
+  (withMaskReg (writeBits (prepare s node left) (wordAddress 1536) (Hybrid.normalize (node/2) answer)) node answer).setPC 5040
 
 def levelQuery (s : MachineState) (node proof left : Nat) : OracleComp World MachineState := do
   let answer ← World.query (.inr (.inl (levelPair s node proof left)))
@@ -20,13 +20,17 @@ def levelQuery (s : MachineState) (node proof left : Nat) : OracleComp World Mac
 def levelResult (oracle : Oracle) (s : MachineState) (node proof left : Nat) : RecordBlock :=
   let pair := levelPair s node proof left
   let answer := oracle.compression pair
-  ⟨latch (resume s node left answer),prepareCost node left+9,prepareCost node left+16,[.compression pair answer]⟩
+  ⟨latch (resume s node left answer),prepareCost node left+9+maskExtra node,prepareCost node left+16+maskExtra node,[.compression pair answer]⟩
+
+private theorem combineCharges (r : Execution) (a b c d : Nat) :
+    (r.charge a b).charge c d=r.charge (c+a) (d+b) := by
+  cases r;simp [Execution.charge,Nat.add_assoc]
 
 private theorem level_execute (s : MachineState) (node proof left : Nat) (ready : LevelReady s node proof left)
-    (fuel : Nat) : execute packedImage (prepareCost node left+9+fuel) s false = do
+    (fuel : Nat) : execute packedImage (prepareCost node left+9+maskExtra node+fuel) s false = do
       let next ← levelQuery s node proof left
       let result ← execute packedImage fuel next false
-      return result.charge (prepareCost node left+16) 1 := by
+      return result.charge (prepareCost node left+16+maskExtra node) 1 := by
   let h := prepare s node left
   have p := prepare_facts _ _ _ _ ready
   have x23 : h.getReg .x23=12288 := (p.reg _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.digest
@@ -38,19 +42,23 @@ private theorem level_execute (s : MachineState) (node proof left : Nat) (ready 
     ((p.reg _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.nodeReg)
     ((p.reg _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.challengeLength) ready.nodeBound p.src p.dst (x23.trans p.dst.symm) sel
     (by decide) (by decide) (by decide) (by decide) (4+fuel)
-  rw [show prepareCost node left+9+fuel=prepareCost node left+(5+(4+fuel)) by omega,p.run,hash]
+  rw [show prepareCost node left+9+maskExtra node+fuel=prepareCost node left+((5+maskExtra node)+(4+fuel)) by omega,p.run,hash]
   erw [p.input]
   simp only [levelQuery,bind_assoc,pure_bind]
   apply bind_congr_of_forall_mem_support
   intro answer _
-  have endState : (capCompressionAnswer h (Hybrid.normalize (node/2) answer)).setPC (h.pc+8)=resume s node left answer := by
+  have endState : (withMaskReg (capCompressionAnswer h (Hybrid.normalize (node/2) answer)) node answer).setPC (h.pc+8)=resume s node left answer := by
     unfold capCompressionAnswer resume
-    change (writeBits h (h.getReg .x12) (Hybrid.normalize (node/2) answer)).setPC (h.pc+8)=(writeBits h _ _).setPC _
+    change (withMaskReg (writeBits h (h.getReg .x12) (Hybrid.normalize (node/2) answer)) node answer).setPC (h.pc+8)=(withMaskReg (writeBits h _ _) node answer).setPC _
     rw [show h.getReg .x12=12288 from p.dst, show h.pc=5032 from p.pc]
     rfl
   rw [endState]
   erw [execute_latch (resume s node left answer) rfl fuel]
-  simp only [bind_assoc,pure_bind,Execution.charge,Nat.zero_add,←Nat.add_assoc]
+  have charge (r : Execution) : ((r.charge 4 0).charge (12+maskExtra node) 1).charge (prepareCost node left) 0 =
+      r.charge (prepareCost node left+16+maskExtra node) 1 := by
+    rw [combineCharges r 4 0 (12+maskExtra node) 1,combineCharges]
+    exact congrArg (fun n=>r.charge n 1) (show prepareCost node left+(12+maskExtra node+4)=prepareCost node left+16+maskExtra node by omega)
+  simp only [bind_assoc,pure_bind,charge]
 
 private theorem level_rows (oracle : Oracle) (s : MachineState) (node proof left : Nat) :
     let pair := levelPair s node proof left
@@ -60,9 +68,9 @@ private theorem level_rows (oracle : Oracle) (s : MachineState) (node proof left
   simp only [levelQuery,record_rows_query,check_evaluation_public_bind,check_evaluation_map,record_rows_pure,check_evaluation_pure]
   rfl
 
-private theorem resume_register (s : MachineState) (node left : Nat) (ans : BitVec 256) (r : Reg) :
+private theorem resume_register (s : MachineState) (node left : Nat) (ans : BitVec 256) (r : Reg) (t : r≠.x1) :
     (resume s node left ans).getReg r=(prepare s node left).getReg r := by
-  simp only [resume,MachineState.getReg_setPC,writeBits_register]
+  simp only [resume,MachineState.getReg_setPC,maskReg_keeps _ _ _ _ t,writeBits_register]
 
 private theorem latch_keeps (s : MachineState) (r : Reg) (n : r≠.x6) (p : r≠.x21) (l : r≠.x29) :
     (latch s).getReg r=s.getReg r := by
@@ -93,20 +101,20 @@ theorem levelFacts (oracle : Oracle) (s : MachineState) (node proof left : Nat) 
   let mid := resume s node left answer
   let h := prepare s node left
   have p := prepare_facts _ _ _ _ ready
-  have pre (r : Reg) (a : r≠.x10) (b : r≠.x12) (c : r≠.x31) (d : r≠.x7) (e : r≠.x30) :
-      mid.getReg r=s.getReg r := (resume_register _ _ _ _ r).trans (p.reg r a b c d e)
-  have proofReg : mid.getReg .x21=BitVec.ofNat 64 proof := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.proofReg
-  have nodeReg : mid.getReg .x6=BitVec.ofNat 64 node := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.nodeReg
-  have counter : mid.getReg .x29=BitVec.ofNat 64 left := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.counter
-  have wreg : mid.getReg .x30=BitVec.ofNat 64 (width (decide (15≤left))) := (resume_register _ _ _ _ _).trans p.widthReg
-  have unchanged (r : Reg) (ok : r≠.x10 ∧ r≠.x12 ∧ r≠.x31 ∧ r≠.x7 ∧ r≠.x30 ∧ r≠.x6 ∧ r≠.x21 ∧ r≠.x29) :
-      (latch mid).getReg r=s.getReg r := (latch_keeps mid r ok.2.2.2.2.2.1 ok.2.2.2.2.2.2.1 ok.2.2.2.2.2.2.2).trans
-        (pre r ok.1 ok.2.1 ok.2.2.1 ok.2.2.2.1 ok.2.2.2.2.1)
+  have pre (r : Reg) (a : r≠.x10) (b : r≠.x12) (c : r≠.x31) (d : r≠.x7) (e : r≠.x30) (t : r≠.x1) :
+      mid.getReg r=s.getReg r := (resume_register _ _ _ _ r t).trans (p.reg r a b c d e)
+  have proofReg : mid.getReg .x21=BitVec.ofNat 64 proof := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.proofReg
+  have nodeReg : mid.getReg .x6=BitVec.ofNat 64 node := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.nodeReg
+  have counter : mid.getReg .x29=BitVec.ofNat 64 left := (pre _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans ready.counter
+  have wreg : mid.getReg .x30=BitVec.ofNat 64 (width (decide (15≤left))) := (resume_register _ _ _ _ _ (by decide)).trans p.widthReg
+  have unchanged (r : Reg) (ok : r≠.x10 ∧ r≠.x12 ∧ r≠.x31 ∧ r≠.x7 ∧ r≠.x30 ∧ r≠.x6 ∧ r≠.x21 ∧ r≠.x29 ∧ r≠.x1) :
+      (latch mid).getReg r=s.getReg r := (latch_keeps mid r ok.2.2.2.2.2.1 ok.2.2.2.2.2.2.1 ok.2.2.2.2.2.2.2.1).trans
+        (pre r ok.1 ok.2.1 ok.2.2.1 ok.2.2.2.1 ok.2.2.2.2.1 ok.2.2.2.2.2.2.2.2)
   obtain ⟨nodeAfter, ptrAfter, cntAfter, pcAfter⟩ := latch_regs mid
   rw [nodeReg,shift_word node ready.nodeBound] at nodeAfter
   rw [proofReg,wreg,←BitVec.ofNat_add] at ptrAfter
   rw [counter,sub_word left ready.leftPositive] at cntAfter pcAfter
-  have mem : (latch mid).mem=(writeBits h (wordAddress 1536) (Hybrid.normalize (node/2) answer)).mem := rfl
+  have mem : (latch mid).mem=(writeBits h (wordAddress 1536) (Hybrid.normalize (node/2) answer)).mem := maskReg_mem _ _ _
   refine ⟨?_,nodeAfter,ptrAfter,cntAfter,(unchanged _ (by decide)).trans ready.syscallBytes,
     (unchanged _ (by decide)).trans ready.syscallSelector,?_,?_,?_,?_,by exact List.mem_cons_self,?_⟩
   · change (latch mid).pc=_
@@ -127,7 +135,8 @@ theorem levelFacts (oracle : Oracle) (s : MachineState) (node proof left : Nat) 
     rw [MachineState.getMem,mem]
     exact (write_bits_word_outside h (Hybrid.normalize (node/2) answer) 1536 w (by decide) (by omega) (by omega)).trans
       (p.frame _ (by omega) pairAway)
-  · change prepareCost node left+9≤116
+  · change prepareCost node left+9+maskExtra node≤124
+    have extra : maskExtra node≤7 := by unfold maskExtra;split_ifs <;> decide
     unfold prepareCost routeCost siblingCost
     dsimp only
     split <;> split <;> omega
@@ -135,13 +144,13 @@ theorem levelFacts (oracle : Oracle) (s : MachineState) (node proof left : Nat) 
     rw [read_digest_congr _ (writeBits h (wordAddress 1536) (Hybrid.normalize (node/2) answer)) _ (by decide) (fun _ _ => congrFun mem _)]
     exact compressed_digest _ _ _
   · intro fuel
-    change checkEvaluation oracle (recordRows (execute packedImage (prepareCost node left+9+fuel) s false))=_
+    change checkEvaluation oracle (recordRows (execute packedImage (prepareCost node left+9+maskExtra node+fuel) s false))=_
     rw [level_execute _ _ _ _ ready,check_recorded_bind,level_rows]
     dsimp only
     erw [show (do
       let result ← execute packedImage fuel (latch mid) false
-      pure (result.charge (prepareCost node left+16) 1)) =
-      (fun result => result.charge (prepareCost node left+16) 1) <$> execute packedImage fuel (latch mid) false
+      pure (result.charge (prepareCost node left+16+maskExtra node) 1)) =
+      (fun result => result.charge (prepareCost node left+16+maskExtra node) 1) <$> execute packedImage fuel (latch mid) false
       from bind_pure_comp _ _]
     rw [check_recorded_map]
     rfl

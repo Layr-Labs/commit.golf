@@ -4,8 +4,8 @@ import CommitGolfCandidate.C3CommitPass1
 
 With `a0 = B` (the leaf's message address, word `base`):
 `sd a0,144(a0)` (the tag `B`), `ld t6,X(s6) ; sd t6,152(a0) ; ld t6,X+8(s6) ; sd t6,160(a0)` (the
-salt, from the leader's signed nonce window), `addi a2,s4,32*(j%64) ; ecall` (P on the 200 bytes
-at `B`, reply at the leaf's heap slot), `addi a0,a0,256`. 37 cycles, 1 call. -/
+salt, from the leader's signed nonce window), then `addi a2,s4,D` with signed offset `D = 32 * ((j + 64) % 128) - 2048`.
+The `ecall` permutes the 200 bytes at `B`, writes the reply at the leaf's heap slot, and is followed by `addi a0,a0,256`. 37 cycles, 1 call. -/
 namespace TwoPermutationPrototype.RV64.C3Leaves
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype.Sampling
 set_option maxRecDepth 8192
@@ -28,12 +28,14 @@ theorem c3_nonce_load_addresses (base : Word) (j : Nat) :
   rw [offsets.1, offsets.2]
   constructor <;> simp only [BitVec.sub_eq_add_neg] <;> ac_rfl
 
-private theorem output_offset_table : ∀ slot : Fin 64,
-    signExtend12 (BitVec.ofNat 12 (32 * slot.val)) = BitVec.ofNat 64 (32 * slot.val) := by decide
+private theorem output_offset_table : ∀ slot : Fin 128,
+    signExtend12 (BitVec.ofNat 12 (32 * slot.val)) = BitVec.ofNat 64 (32 * ((slot.val + 64) % 128)) - 2048 := by decide
 
 theorem c3_output_offset (j : Nat) :
-    signExtend12 (BitVec.ofNat 12 (32 * (j % 64))) = BitVec.ofNat 64 (32 * (j % 64)) :=
-  output_offset_table ⟨j % 64, Nat.mod_lt _ (by decide)⟩
+    signExtend12 (BitVec.ofNat 12 (32 * (j % 128))) =
+      BitVec.ofNat 64 (32 * ((j + 64) % 128)) - 2048 := by
+  have h := output_offset_table ⟨j % 128, Nat.mod_lt _ (by decide)⟩
+  simpa only [show (j % 128 + 64) % 128 = (j + 64) % 128 by omega] using h
 
 theorem c3_nonce_bias (base : Nat) : wordAddress (base + 256) - 2048 = wordAddress base := by
   change BitVec.ofNat 64 (8 * (base + 256)) - BitVec.ofNat 64 2048 = BitVec.ofNat 64 (8 * base)
@@ -43,7 +45,7 @@ theorem c3_nonce_bias (base : Nat) : wordAddress (base + 256) - 2048 = wordAddre
 `salts` the first salt word of the current 256-salt window. -/
 structure P3Ready (s : MachineState) (j base dst salts : Nat) : Prop where
   source : s.getReg .x10 = wordAddress base
-  destination : s.getReg .x20 + BitVec.ofNat 64 (32 * (j % 64)) = wordAddress dst
+  destination : s.getReg .x20 + (BitVec.ofNat 64 (32 * ((j + 64) % 128)) - 2048) = wordAddress dst
   nonces : s.getReg .x22 = wordAddress (salts + 256)
   sourceBound : base + 32 ≤ 2 ^ 33
   heapBound : dst + 25 ≤ 2 ^ 33
@@ -71,7 +73,7 @@ def p3s4 (s : MachineState) (j : Nat) : MachineState :=
   execInstrBr (p3s3 s j) (.LD .x31 .x22 (BitVec.ofNat 12 (16 * (j % 256) + 2056)))
 def p3s5 (s : MachineState) (j : Nat) : MachineState := execInstrBr (p3s4 s j) (.SD .x10 .x31 160)
 def p3Prep (s : MachineState) (j : Nat) : MachineState :=
-  execInstrBr (p3s5 s j) (.ADDI .x12 .x20 (BitVec.ofNat 12 (32 * (j % 64))))
+  execInstrBr (p3s5 s j) (.ADDI .x12 .x20 (BitVec.ofNat 12 (32 * (j % 128))))
 
 /-- The leaf words after the tag and salt stores. -/
 def p3Stamp (M : Memory) (base : Nat) (tag n0 n1 : Word) : Memory :=

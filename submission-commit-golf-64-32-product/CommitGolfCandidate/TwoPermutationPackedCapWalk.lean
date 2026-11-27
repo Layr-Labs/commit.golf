@@ -1,6 +1,6 @@
 import CommitGolfCandidate.TwoPermutationPackedCapVisit
 import CommitGolfCandidate.TwoPermutationPackedCapFrontier
-import CommitGolfCandidate.TwoPermutationPackedPaths
+import CommitGolfCandidate.R1bCapPath
 import CommitGolfCandidate.TwoPermutationPackedCapBytes
 import CommitGolfCandidate.TwoPermutationCheckerCapCounts
 
@@ -53,7 +53,7 @@ structure CapContents (groups : List Nat) (before : MachineState)
 
 def CapHeapCorrect (oracle : Oracle) (heap : Nat → BitVec 256) : Prop :=
   ∀ node, 0 < node → node < 256 → heap node =
-    padLow (oracle.compression (heap (2*node+1) ++ heap (2*node)))
+    Hybrid.pad238 (oracle.compression (heap (2*node+1) ++ heap (2*node)))
 
 structure CapWalkResult (oracle : Oracle) (groups : List Nat) (before : MachineState)
     (node height pointer : Nat) where
@@ -69,7 +69,7 @@ structure CapWalkResult (oracle : Oracle) (groups : List Nat) (before : MachineS
   stable : CapStable before state
   frame : CapFrame groups node before state
   authentic : done = true → ∀ leaf ∈ groups, 256 ≤ leaf → leaf < 512 → leaf / 2^height = node →
-    ProjectedPath segment.rows leaf height (capRootAt before leaf) (capRootAt state node)
+    CapPath238 segment.rows leaf height (capRootAt before leaf) (capRootAt state node)
   available : pointer + 30*(capFrontierNodes groups node height).length ≤
     (before.getReg .x22).toNat → done = true
   realizes : done = true → ∀ heap, CapHeapCorrect oracle heap →
@@ -214,11 +214,11 @@ def cap_walk_frontier (codec : FrontierKernel) {groups : List Nat} {before : Mac
 
 private theorem joined_parent_path {rows : List PublicRow} {node h leaf : Nat}
     {leafDigest childDigest sibling parent : BitVec 256}
-    (child : ProjectedPath rows leaf h leafDigest childDigest)
+    (child : CapPath238 rows leaf h leafDigest childDigest)
     (branch : leaf/2^h = node)
     (recorded : PublicRow.compression (pathPair node childDigest sibling) parent ∈ rows) :
-    ProjectedPath rows leaf (h+1) leafDigest (padLow parent) := by
-  have edge : ProjectedPath rows node 1 childDigest (padLow parent) := .step recorded (.done (node/2) (padLow parent))
+    CapPath238 rows leaf (h+1) leafDigest (Hybrid.pad238 parent) := by
+  have edge : CapPath238 rows node 1 childDigest (Hybrid.pad238 parent) := .step recorded (.done (node/2) (Hybrid.pad238 parent))
   exact child.append (by simpa only [branch] using edge)
 
 private theorem child_scope (leaf node height : Nat) (inside : leaf/2^(height+1) = node) :

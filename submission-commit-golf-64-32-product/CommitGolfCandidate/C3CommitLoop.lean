@@ -5,7 +5,7 @@ import CommitGolfCandidate.TwoPermutationPackedCommit
 
 A block: entry (`addi s2,a0,0 ; addi a1,zero,64 ; addi a3,zero,0 ; addi a0,a0,-112`), pass 1,
 switch (`addi a1,zero,200 ; addi a3,zero,1 ; addi a0,s2,0`), pass 3, latch
-(`beq s4,s5,<45172> ; jal zero,<12341>`). The leaf phase is `jal zero,<12341>` and 8,192 blocks. -/
+(`beq s4,s5,<45172> ; jal zero,<12357>`). The leaf phase is `jal zero,<12357>` and 8,192 blocks. -/
 namespace TwoPermutationPrototype.RV64.C3Leaves
 open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64 OracleComp TwoPermutationPrototype.Sampling
 set_option maxRecDepth 8192
@@ -168,7 +168,7 @@ theorem c3_latch_run (s : MachineState) (g fuel : Nat) (bound : g < 8192)
     have diff : s.getReg .x20 ≠ s.getReg .x21 := fun h => last (eq.mp h)
     have step : ordinaryStep s (.base (.BEQ .x20 .x21 64)) = some middle := by
       simp [middle, ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, here, diff]
-    have jump : ordinaryStep middle (.base (.JAL .x0 1965888)) = some (s.setPC (wordPC blockStart)) := by
+    have jump : ordinaryStep middle (.base (.JAL .x0 1965952)) = some (s.setPC (wordPC blockStart)) := by
       simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, middle, MachineState.setReg,
         MachineState.setPC]
       rfl
@@ -214,13 +214,13 @@ theorem block_inner (s : MachineState) (g : Nat) (bound : g < 8192) (r : BlockRe
 
 theorem block_run (s : MachineState) (g fuel : Nat) (bound : g < 8192) (r : BlockRegs s g)
     (stop : s.getReg .x21 = wordAddress (leafDest (2 ^ 24))) :
-    execute packedWideCommitImage (32815 + c3LatchCost g + fuel) s true =
+    execute packedWideCommitImage (32799 + c3LatchCost g + fuel) s true =
       (do let next ← blockTrace g s
           let result ← execute packedWideCommitImage fuel next true
-          return result.charge (135215 + c3LatchCost g) 8192) := by
+          return result.charge (135199 + c3LatchCost g) 8192) := by
   obtain ⟨e1, _, _, _⟩ := entry_facts s g bound r
-  have spanAll : span3 0 2048 = 40 := by decide
-  rw [show 32815 + c3LatchCost g + fuel = 4 + (8 * 2048 + (3 + (8 * 2048 + span3 0 2048 + (c3LatchCost g + fuel))))
+  have spanAll : span3 0 2048 = 24 := by decide
+  rw [show 32799 + c3LatchCost g + fuel = 4 + (8 * 2048 + (3 + (8 * 2048 + span3 0 2048 + (c3LatchCost g + fuel))))
       by rw [spanAll]; omega,
     entry_run s g _ bound r, pass1_run _ g 2048 0 _ bound (by decide) e1]
   simp only [blockTrace, bind_assoc]
@@ -272,18 +272,18 @@ def blocks : Nat → Nat → MachineState → OracleComp World MachineState
 
 theorem blocks_run (s : MachineState) (cnt g fuel : Nat) (limit : g + cnt = 8192)
     (r : 0 < cnt → BlockRegs s g) (stop : s.getReg .x21 = wordAddress (leafDest (2 ^ 24))) :
-    execute packedWideCommitImage ((32817 * cnt - 1) + fuel) s true =
+    execute packedWideCommitImage ((32801 * cnt - 1) + fuel) s true =
       (do let next ← blocks cnt g s
           let result ← execute packedWideCommitImage fuel next true
-          return result.charge (135217 * cnt - 1) (8192 * cnt)) := by
+          return result.charge (135201 * cnt - 1) (8192 * cnt)) := by
   induction cnt generalizing g s with
   | zero => simp [blocks, Execution.charge]
   | succ k ih =>
-    have last : (32817 * (k + 1) - 1) = 32815 + c3LatchCost g + (32817 * k - 1) ∧
-        (135217 * (k + 1) - 1) = 135215 + c3LatchCost g + (135217 * k - 1) := by
+    have last : (32801 * (k + 1) - 1) = 32799 + c3LatchCost g + (32801 * k - 1) ∧
+        (135201 * (k + 1) - 1) = 135199 + c3LatchCost g + (135201 * k - 1) := by
       unfold c3LatchCost; split <;> constructor <;> omega
     have valid := r (by omega)
-    rw [last.1, Nat.add_assoc (32815 + c3LatchCost g), block_run s g _ (by omega) valid stop]
+    rw [last.1, Nat.add_assoc (32799 + c3LatchCost g), block_run s g _ (by omega) valid stop]
     simp only [blocks, bind_assoc]
     apply bind_congr_of_forall_mem_support
     intro next reached
@@ -333,7 +333,7 @@ theorem ready_block_regs (s : MachineState) (entry : CommitEntry s) {bits : Nat}
 theorem first_jump_run (s : MachineState) (pc : s.pc = 4176) (fuel : Nat) :
     execute packedWideCommitImage (1 + fuel) s true =
       (do let out ← execute packedWideCommitImage fuel (jumpState s) true; return out.charge 1 0) := by
-  have step : ordinaryStep s (.base (.JAL .x0 49284)) = some (jumpState s) := by
+  have step : ordinaryStep s (.base (.JAL .x0 49348)) = some (jumpState s) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, jumpState, MachineState.setReg,
       MachineState.setPC, pc]
     rfl
@@ -345,7 +345,7 @@ def c3Leaves : PackedLeafExecution where
   executes s entry _ coins fuel := by
     obtain ⟨regs, stop⟩ := ready_block_regs s entry coins
     have pc := (packed_wide_ready_state_entry s entry coins).1
-    rw [show 268836864 + fuel = 1 + ((32817 * 8192 - 1) + fuel) by omega, first_jump_run _ pc,
+    rw [show 268705792 + fuel = 1 + ((32801 * 8192 - 1) + fuel) by omega, first_jump_run _ pc,
       blocks_run _ 8192 0 fuel (by decide) (fun _ => regs) stop]
     simp only [leafPhase, bind_assoc, pure_bind]
     simp [Execution.charge, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]

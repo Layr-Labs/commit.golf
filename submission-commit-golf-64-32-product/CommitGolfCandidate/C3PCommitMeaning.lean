@@ -361,7 +361,7 @@ theorem commit_fixed (oracle : Oracle) (initial : MachineState) :
     fixedOracleRun oracle (commitTraceP initial) =
       ((List.range 8192).mapM (fun _ => (List.range 1024).mapM (fun _ => ($ᵗ BitVec 256 : ProbComp (BitVec 256)))) >>=
         fun wss => pure (⟨.success, rootPrefix (checkEvaluation oracle
-          (hybridParentPhase (exitState (leafDet oracle wss 0 (firstState initial))))).1 10, 1266820219, 83886079⟩ :
+          (hybridParentPhase (exitState (leafDet oracle wss 0 (firstState initial))))).1 10, 1267884575, 83886079⟩ :
             Execution)) := by
   unfold commitTraceP
   rw [leaf_fixed]

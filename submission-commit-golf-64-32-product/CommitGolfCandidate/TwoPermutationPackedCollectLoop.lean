@@ -1,9 +1,10 @@
+import CommitGolfCandidate.TwoPermutationPackedInputFrame
 import CommitGolfCandidate.TwoPermutationPackedCollectControl
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Checker (GroupAccepted RecordInputFrame honestIndex)
+open TwoPermutationPrototype.Checker (GroupAccepted honestIndex)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1600000
@@ -37,12 +38,12 @@ noncomputable def collectRecords (record : Oracle → Nat → Index → MachineS
 /-- Successful collection stops at the start of cap processing. A mismatch stops at the rejection HALT. -/
 structure CollectionFacts (oracle : Oracle) (input : CheckInput) (left : Nat)
     (result : CollectionResult) (rows : List PublicRow) : Prop where
-  stepBound : result.steps ≤ 2048*left
+  stepBound : result.steps ≤ 2060*left
   queryRecords : result.records ≤ left
   rejected : result.rejected = true → result.state.pc = 0x15b0
   live : result.rejected = false → result.records = left ∧
     RecordCursor input input.positions.card result.state ∧
-    RecordInputFrame input input.positions.card result.state ∧
+    InputFrame input input.positions.card result.state ∧
     CollectedTable oracle input input.positions.card result.state (rows++result.rows)
   honest : ∀ message salts, input = honestCheckInput oracle message input.positions salts → result.rejected = false
 
@@ -53,7 +54,7 @@ theorem collect_records_observation (record : Oracle → Nat → Index → Machi
     (oracle : Oracle) (input : CheckInput)
     (left ordinal : Nat) (count : ordinal+left=input.positions.card)
     (state : MachineState) (rows : List PublicRow)
-    (cursor : RecordCursor input ordinal state) (loaded : RecordInputFrame input ordinal state)
+    (cursor : RecordCursor input ordinal state) (loaded : InputFrame input ordinal state)
     (table : CollectedTable oracle input ordinal state rows) (fits : ProofWithin input) (fuel : Nat) :
     let collected := collectRecords record oracle input left ordinal state
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel collected.state false))
@@ -83,11 +84,11 @@ theorem collect_records_observation (record : Oracle → Nat → Index → Machi
       verified oracle input ordinal present state fits cursor loaded
     have phase := group_after_record_ready oracle input ordinal present state cursor lower recordFacts
     have frame := group_run_state lower.state (capGroup index) (input.positions.card-(ordinal+1)) phase
-    have bound : steps ≤ 2048 := by
+    have bound : steps ≤ 2060 := by
       have one := recordFacts.steps
       have insert := group_run_cost lower.state (capGroup index) (input.positions.card-(ordinal+1)) phase
       change group.2 ≤ 23 at insert
-      change lower.steps+group.2 ≤ 2048
+      change lower.steps+group.2 ≤ 2060
       omega
     dsimp only
     rw [collectRecords, dite_eq_left present]
@@ -106,8 +107,8 @@ theorem collect_records_observation (record : Oracle → Nat → Index → Machi
         simp only [Execution.charge, List.append_assoc, Nat.mul_succ, Nat.add_assoc, Nat.add_left_comm]
         rfl
       · refine ⟨?_,?_,facts.rejected,?_,facts.honest⟩
-        · have limit : tail.steps ≤ 2048*left := facts.stepBound
-          change steps+tail.steps ≤ 2048*(left+1)
+        · have limit : tail.steps ≤ 2060*left := facts.stepBound
+          change steps+tail.steps ≤ 2060*(left+1)
           omega
         · have count : tail.records ≤ left := facts.queryRecords
           change tail.records+1 ≤ left+1
@@ -121,7 +122,7 @@ theorem collect_records_observation (record : Oracle → Nat → Index → Machi
       · simpa only [Nat.mul_one] using
           execute_record_group oracle input ordinal present state cursor lower recordFacts fuel
       · refine ⟨?_,Nat.succ_le_succ (Nat.zero_le _),?_,?_,?_⟩
-        · change steps ≤ 2048*(left+1)
+        · change steps ≤ 2060*(left+1)
           omega
         · intro _
           exact frame.pc.trans (ite_eq_right accepted)

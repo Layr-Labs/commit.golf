@@ -71,7 +71,7 @@ theorem packed_next_parent_regs (state : MachineState) (n : Nat) (answer : BitVe
   · exact (packed_parent_keeps_register state _ answer .x13 (by decide) (by decide)).trans regs.primitive
   · exact (packed_parent_keeps_register state _ answer .x9 (by decide) (by decide)).trans regs.heap
 
-private theorem parent_call_at (image : Image) (s : MachineState) (n fuel : Nat)
+theorem parent_call_at (image : Image) (s : MachineState) (n fuel : Nat)
     (bound : n < 2^24) (regs : ParentRegs s n)
     (fetched : fetch image s=some (.base .ECALL)) :
     execute image (fuel+1) s true =
@@ -93,7 +93,7 @@ private theorem parent_call_at (image : Image) (s : MachineState) (n fuel : Nat)
     oracleCycles,COMPRESSION_CYCLES]
   rfl
 
-private theorem packed_parent_step (image : Image) (s : MachineState) (n fuel : Nat) (pc : Word)
+theorem packed_parent_step (image : Image) (s : MachineState) (n fuel : Nat) (pc : Word)
     (here : s.pc=pc) (bound : n<2^24) (regs : ParentRegs s n)
     (fetched : PackedParentWordsAt image pc) :
     execute image (4+fuel) s true =

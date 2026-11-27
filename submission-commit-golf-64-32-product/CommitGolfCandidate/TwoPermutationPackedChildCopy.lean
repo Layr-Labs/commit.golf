@@ -1,3 +1,4 @@
+import CommitGolfCandidate.R1bMachine
 import CommitGolfCandidate.TwoPermutationPackedCheckerSteps
 import CommitGolfCandidate.TwoPermutationCheckerCopyDigest
 
@@ -5,6 +6,7 @@ namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64
 set_option maxRecDepth 8192
+attribute [local irreducible] execute
 def ChildSite (start : Nat) : Prop := start=99 ∨ start=108 ∨ start=183 ∨ start=192
 def childOffset (start : Nat) := if start=99 ∨ start=183 then 32 else 0
 
@@ -57,10 +59,13 @@ theorem execute_child_copy (state : MachineState) (start : Nat)
   apply execute_unit_steps (states := copyPrefix state start)
   intro i hi
   refine ⟨.base (((copyCode start)[i]?).getD .EBREAK), ?_, ?_, ?_⟩
-  · apply fetch_at _ (start + i) _ (by rcases location with rfl | rfl | rfl | rfl <;> omega)
-    · rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;>
-        simp [copyPrefix, copyCode, execInstrBr, pc, MachineState.setPC]
-    · rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;> rfl
+  · have addr : (copyPrefix state start i).pc=R1bPC.pcAt (start+i) := by
+      rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;>
+        simp [copyPrefix,copyCode,execInstrBr,pc,MachineState.setPC,R1bPC.pcAt]
+    have bound : start+i<10624 := by rcases location with rfl | rfl | rfl | rfl <;> omega
+    rw [←delivered_check_image]
+    apply (R1b.Machine.fetched .check (start+i) bound _ addr).trans
+    rcases location with rfl | rfl | rfl | rfl <;> interval_cases i <;> apply R1b.Machine.stood <;> decide
   · have sourceReg := copy_prefix_register state start i (by omega) (.x23)
       (by rcases location with rfl | rfl | rfl | rfl <;> decide)
     have targetReg := copy_prefix_register state start i (by omega) (.x24)

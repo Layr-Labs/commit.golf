@@ -2,6 +2,7 @@ import CommitGolfCandidate.C3POpenPrepass
 import CommitGolfCandidate.TwoPermutationPackedOpeningProofBytes
 import CommitGolfCandidate.TwoPermutationPackedOpeningRecordRun
 import CommitGolfCandidate.TwoPermutationPackedOpeningRecords
+import CommitGolfCandidate.TwoPermutationPackedCapBytes
 
 /-! # The paired opener's whole run
 
@@ -210,7 +211,7 @@ theorem prepass_boundary (s : Submission) (abi : OpeningABI s)
   have countValue : initial.getReg .x16 = BitVec.ofNat 64 positions.card := rfl
   obtain ⟨r20, r21, r8, r9, r18, _, r19, r22, r23, r25, r26, _⟩ := setup12_registers initial nonempty
   have K (g : Reg) (h5 : g ≠ .x5) (h6 : g ≠ .x6) (h7 : g ≠ .x7) (h10 : g ≠ .x10) (h11 : g ≠ .x11) (h12 : g ≠ .x12)
-      (h13 : g ≠ .x13) (h14 : g ≠ .x14) (h15 : g ≠ .x15) (h16 : g ≠ .x16) (h17 : g ≠ .x17) (h27 : g ≠ .x27)
+      (h13 : g ≠ .x13) (h14 : g ≠ .x14) (h15 : g ≠ .x15) (h16 : g ≠ .x1) (h17 : g ≠ .x17) (h27 : g ≠ .x27)
       (h28 : g ≠ .x28) (h29 : g ≠ .x29) (h30 : g ≠ .x30) (h31 : g ≠ .x31) :
       P.getReg g = (setupPrefix initial 12).getReg g :=
     ended.keep g h5 h6 h7 h10 h11 h12 h13 h14 h15 h16 h17 h27 h28 h29 h30 h31
@@ -246,40 +247,99 @@ theorem prepass_boundary (s : Submission) (abi : OpeningABI s)
 
 /-! ### The whole run -/
 
-theorem paired_fuel_fits (positions : Positions) :
-    12 + (prepassSteps positions.card + restCycles positions) ≤ 17179934720 := by
+theorem prepass_pad (s : Submission) (abi : OpeningABI s) (trapdoor : BitVec (8 * s.sizes.trapdoor))
+    (positions : Positions) (positive : 0 < positions.card) (ys : Nat → Sampling.Block) (P : MachineState)
+    (ended : PreEnd (setupPrefix (s.initialState .opening (trapdoor, positions)) 12) positions.card
+      (preIdx positions) ys P) :
+    ∀ a, proofBase ≤ a → a < MEMORY_BYTES → P.getByte (BitVec.ofNat 64 a) = 0 := by
+  let initial := s.initialState .opening (trapdoor, positions)
+  intro a above fit
+  have nonempty : initial.getReg .x16 ≠ 0#64 :=
+    (show initial.getReg .x16 = BitVec.ofNat 64 positions.card from rfl) ▸ nonempty_count positions positive
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, mem12⟩ := setup12_registers initial nonempty
+  have small := (pre_ready s abi.toOpeningLayout trapdoor positions positive).idxSmall
+  have pb : proofBase = 12616474720 := by norm_num [proofBase, indicesBase, trapdoorBase, Opening.trapdoorBytes, LENGTH, LOG_LENGTH]
+  have mb : MEMORY_BYTES = 68719476736 := rfl
+  have tbytes : Opening.trapdoorBytes = 232 * 2 ^ 24 + 4096 := by unfold Opening.trapdoorBytes; rfl
+  have same : memoryView P (a / 8) = memoryView initial (a / 8) := by
+    have cb := (pre_ready s abi.toOpeningLayout trapdoor positions positive).cardBound
+    have hL : LENGTH = 16777216 := rfl
+    have saltFrame : ∀ j < positions.card,
+        a / 8 ≠ NW + 2 * preIdx positions j ∧ a / 8 ≠ NW + 2 * preIdx positions j + 1 := by
+      intro j hj
+      have h1 := small j hj
+      unfold NW TDw
+      constructor <;> omega
+    have mateFrame : ∀ j < positions.card, ∀ t < 4, a / 8 ≠ HW + 4 * (preIdx positions j ^^^ 1) + t := by
+      intro j hj t ht
+      have h1 := small j hj
+      have h2 := xor_one_small _ (show preIdx positions j < 2 ^ 24 by omega)
+      unfold HW TDw
+      omega
+    rw [ended.frame (a / 8) (by omega) (Or.inr (by unfold scratchW; omega))
+      (Or.inr (by unfold Lw; change positions.card ≤ 16777216 at cb; omega)) saltFrame mateFrame]
+    simp only [memoryView, MachineState.getMem]
+    exact congrFun mem12 _
+  rw [TwoPermutationPrototype.Packed.Checker.byte_eq_of_word_frame initial P a same]
+  exact initial_padding s abi trapdoor positions a above fit
+
+theorem prepass_count (s : Submission) (trapdoor : BitVec (8 * s.sizes.trapdoor))
+    (positions : Positions) (positive : 0 < positions.card) (ys : Nat → Sampling.Block) (P : MachineState)
+    (ended : PreEnd (setupPrefix (s.initialState .opening (trapdoor, positions)) 12) positions.card
+      (preIdx positions) ys P) :
+    P.getReg .x16 = R1b.Machine.W positions.card := by
+  let initial := s.initialState .opening (trapdoor, positions)
+  have nonempty : initial.getReg .x16 ≠ 0#64 :=
+    (show initial.getReg .x16 = BitVec.ofNat 64 positions.card from rfl) ▸ nonempty_count positions positive
+  obtain ⟨_, _, _, _, _, r16, _, _, _, _, _, _⟩ := setup12_registers initial nonempty
+  rw [ended.keep .x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide), r16]
+  rfl
+
+def openSteps (positions : Positions) (len : Nat) : Nat := 12 + (prepassSteps positions.card + restSteps positions len)
+
+theorem paired_fuel_fits (positions : Positions) (len : Nat) :
+    openSteps positions len ≤ 17179934720 := by
   have cardinal : positions.card ≤ 16777216 := by
     have bound : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
     exact bound
   have cap := opening_cap_cycles_bound (groupsBefore positions positions.card)
-  unfold prepassSteps restCycles
+  have tail : R1b.Opening.tailSteps positions.card len ≤ 11192 := by
+    unfold R1b.Opening.tailSteps; split_ifs <;> omega
+  unfold openSteps prepassSteps restSteps restCycles
   omega
 
-/-- Every reachable end of a nonempty opening: the pre-pass state `P`, then the leader's records and
-footer for `trapdoorOf s P`. -/
+/-- Every reachable end of a nonempty opening: the pre-pass state `P`, then R1b's records, cap and codec
+for `trapdoorOf s P`. -/
 theorem paired_opening_support (s : Submission) (abi : OpeningABI s) (trapdoor : BitVec (8 * s.sizes.trapdoor))
     (positions : Positions) (positive : 0 < positions.card) (result : Execution)
     (reached : result ∈ support (s.run .opening (trapdoor, positions))) :
     ∃ (P : MachineState) (ys : Nat → Sampling.Block),
       PreEnd (setupPrefix (s.initialState .opening (trapdoor, positions)) 12) positions.card (preIdx positions) ys P ∧
-      result.exit = .success ∧ result.cycles = 12 + (prepassCycles positions.card + restCycles positions) ∧
-      result.oracleCalls = positions.card ∧ RestPhysical s (trapdoorOf s P) positions result.state := by
+      result.exit = .success ∧
+      result.cycles = 12 + (prepassCycles positions.card +
+        restCost positions (proofFromTrapdoor (s := s) (trapdoorOf s P) positions).length) ∧
+      result.oracleCalls = positions.card ∧ RestWire s (trapdoorOf s P) positions result.state := by
   let initial := s.initialState .opening (trapdoor, positions)
   have nonempty : initial.getReg .x16 ≠ 0#64 :=
     (show initial.getReg .x16 = BitVec.ofNat 64 positions.card from rfl) ▸ nonempty_count positions positive
   have ready := pre_ready s abi.toOpeningLayout trapdoor positions positive
-  have budget := (paired_fuel_fits positions).trans abi.fuel
   change result ∈ support (execute (s.image .opening) (s.steps .opening) initial true) at reached
-  rw [abi.image, show s.steps .opening = 12 + (prepassSteps positions.card + (restCycles positions +
-      (s.steps .opening - (12 + (prepassSteps positions.card + restCycles positions))))) by omega,
+  rw [abi.image, show s.steps .opening = 12 + (prepassSteps positions.card + (s.steps .opening - (12 + prepassSteps positions.card))) by
+      have := (paired_fuel_fits positions 0).trans abi.fuel; unfold openSteps at this; omega,
     execute_setup12 initial rfl _ true nonempty, prepass_run _ _ _ ready] at reached
   simp only [bind_assoc, mem_support_bind_iff, support_pure, Set.mem_singleton_iff, pure_bind] at reached
   obtain ⟨P, hP, res, hres, rfl⟩ := reached
   obtain ⟨ys, ended⟩ := prepass_support _ _ _ ready P hP
-  obtain ⟨final, run, rest⟩ := opening_records_run (execute_records_from_step execute_record) s abi
+  let len := (proofFromTrapdoor (s := s) (trapdoorOf s P) positions).length
+  obtain ⟨final, run, rest⟩ := opening_rest_run (execute_records_from_step execute_record) s abi
     (trapdoorOf s P) positions positive P (prepass_boundary s abi trapdoor positions positive ys P ended)
     (prepass_marks s abi.toOpeningLayout abi.image trapdoor positions positive ys P ended)
-  rw [run, support_pure, Set.mem_singleton_iff] at hres
+    (prepass_pad s abi trapdoor positions positive ys P ended) (prepass_count s trapdoor positions positive ys P ended)
+  have budget := (paired_fuel_fits positions len).trans abi.fuel
+  rw [show s.steps .opening - (12 + prepassSteps positions.card) = restSteps positions len +
+      (s.steps .opening - openSteps positions len) by unfold openSteps at budget ⊢; omega, run, support_pure,
+    Set.mem_singleton_iff] at hres
   subst hres
   refine ⟨P, ys, ended, rfl, ?_, ?_, rest⟩
   · simp only [Execution.charge] <;> omega
@@ -293,24 +353,27 @@ theorem paired_opening_fixed (s : Submission) (abi : OpeningABI s) (oracle : Ora
       PreEnd (setupPrefix (s.initialState .opening (trapdoor, positions)) 12) positions.card (preIdx positions)
         (honestYs oracle (memoryView (setupPrefix (s.initialState .opening (trapdoor, positions)) 12))
           (preIdx positions)) P ∧
-      result.exit = .success ∧ RestPhysical s (trapdoorOf s P) positions result.state := by
+      result.exit = .success ∧ RestWire s (trapdoorOf s P) positions result.state := by
   let initial := s.initialState .opening (trapdoor, positions)
   have nonempty : initial.getReg .x16 ≠ 0#64 :=
     (show initial.getReg .x16 = BitVec.ofNat 64 positions.card from rfl) ▸ nonempty_count positions positive
   have ready := pre_ready s abi.toOpeningLayout trapdoor positions positive
-  have budget := (paired_fuel_fits positions).trans abi.fuel
   obtain ⟨P, fixed, ended⟩ := prepass_fixed oracle _ _ _ ready
-  obtain ⟨final, run, rest⟩ := opening_records_run (execute_records_from_step execute_record) s abi
+  let len := (proofFromTrapdoor (s := s) (trapdoorOf s P) positions).length
+  obtain ⟨final, run, rest⟩ := opening_rest_run (execute_records_from_step execute_record) s abi
     (trapdoorOf s P) positions positive P (prepass_boundary s abi trapdoor positions positive _ P ended)
     (prepass_marks s abi.toOpeningLayout abi.image trapdoor positions positive _ P ended)
-  refine ⟨P, ((⟨.success, final, restCycles positions, 0⟩ : Execution).charge (prepassCycles positions.card)
+    (prepass_pad s abi trapdoor positions positive _ P ended) (prepass_count s trapdoor positions positive _ P ended)
+  have budget := (paired_fuel_fits positions len).trans abi.fuel
+  refine ⟨P, ((⟨.success, final, restCost positions len, 0⟩ : Execution).charge (prepassCycles positions.card)
     positions.card).charge 12 0, ?_, ended, rfl, rest⟩
   change fixedOracleRun oracle (execute (s.image .opening) (s.steps .opening) initial true) = _
-  rw [abi.image, show s.steps .opening = 12 + (prepassSteps positions.card + (restCycles positions +
-      (s.steps .opening - (12 + (prepassSteps positions.card + restCycles positions))))) by omega,
+  rw [abi.image, show s.steps .opening = 12 + (prepassSteps positions.card + (restSteps positions len +
+      (s.steps .opening - openSteps positions len))) by unfold openSteps at budget ⊢; omega,
     execute_setup12 initial rfl _ true nonempty, prepass_run _ _ _ ready]
   simp only [bind_assoc]
   rw [fixed_oracle_run_bind, fixed, pure_bind, run]
   simp only [pure_bind, fixed_oracle_run_pure]
+  rfl
 
 end TwoPermutationPrototype.PackedOpening

@@ -244,13 +244,13 @@ theorem exit_regs (t : MachineState) (x5 : t.getReg .x5 = 0) (x21 : t.getReg .x2
 def commitTraceP (initial : MachineState) : OracleComp World Execution := do
   let leaves ← leafPhaseP 8192 0 (firstState initial)
   let parents ← hybridParentPhase (exitState leaves)
-  return ⟨.success, rootPrefix parents 10, 1266820219, 83886079⟩
+  return ⟨.success, rootPrefix parents 10, 1267884575, 83886079⟩
 
 theorem paired_commit_execution (initial : MachineState) (entry : CommitEntry initial) (fuel : Nat) :
-    execute packedWideCommitImage (276964482 + fuel) initial true = commitTraceP initial := by
+    execute packedWideCommitImage (278028838 + fuel) initial true = commitTraceP initial := by
   obtain ⟨regs0, x21, x8, x9, x19⟩ := first_regs initial entry
   have inv0 : LoopRegs (firstState initial) 0 4294971392 4294971424 536870912 := ⟨regs0, x21, x8, x9, x19⟩
-  rw [show 276964482 + fuel = 21 + (blocksSteps 8192 + (6 + (58721373 + (11 + fuel)))) by
+  rw [show 278028838 + fuel = 21 + (blocksSteps 8192 + (6 + (59785729 + (11 + fuel)))) by
       unfold blocksSteps; omega,
     setup_run initial entry, blocks_run _ _ _ 8192 0 _ (by omega) inv0]
   simp only [commitTraceP, bind_assoc, pure_bind]

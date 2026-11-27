@@ -1,3 +1,4 @@
+import CommitGolfCandidate.R1bOpenCountTable
 import CommitGolfCandidate.TwoPermutationPackedOpeningInitial
 import CommitGolfCandidate.TwoPermutationPackedOpeningFinish
 
@@ -37,33 +38,91 @@ private theorem byte_memory (before after : MachineState) (address : Nat) (fit :
 
 attribute [local irreducible] execute capPreparation setupPrefix readBuffer
 
-/-- The zero-cardinality run (unchanged leader code: the branch at word 2 skips setup and pre-pass). -/
-theorem opening_empty_run (s : Submission) (abi : OpeningABI s)
+structure WidePrefix (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
+    (positions : Positions) (t : MachineState) : Prop where
+  run : RunsOpeningBlock (s.initialState .opening (trapdoor,positions)) t (scheduledCycles positions-3)
+  atCodec : t.pc=6752
+  proofPtr : t.getReg .x20=BitVec.ofNat 64 proofBase
+  bytes : OpenPhysical s trapdoor positions ⟨.success,t,scheduledCycles positions,0⟩
+  padding : ∀ a, proofBase+proofLength positions≤a → a<MEMORY_BYTES → t.getByte (BitVec.ofNat 64 a)=0
+
+theorem initial_padding (s : Submission) (abi : OpeningABI s) (trapdoor : BitVec (8*s.sizes.trapdoor))
+    (positions : Positions) (a : Nat) (high : proofBase≤a) (bound : a<MEMORY_BYTES) :
+    (s.initialState .opening (trapdoor,positions)).getByte (BitVec.ofNat 64 a)=0 := by
+  refine (initial_input_byte s .opening (trapdoor,positions) a (by unfold MEMORY_BYTES at bound;omega)).trans ?_
+  have card : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
+  have pastHeap : trapdoorBase+Opening.trapdoorBytes≤a := by
+    unfold proofBase Opening.indicesBase at high;omega
+  have pastIndices : Opening.indicesBase+8*positions.card≤a := by unfold proofBase at high;omega
+  let first:=fixedBuffer s.layout.trapdoor trapdoor
+  let second:=positionsBuffer s.layout.indices positions
+  let hit (b : InputBuffer):=decide (b.address≤a ∧ a<b.address+b.length)
+  have noFirst : hit first=false := by
+    apply decide_eq_false
+    change ¬(s.layout.trapdoor≤a ∧ a<s.layout.trapdoor+(8*s.sizes.trapdoor+7)/8)
+    rw [abi.trapdoor,abi.trapdoorSize];omega
+  have noSecond : hit second=false := by
+    apply decide_eq_false
+    change ¬(s.layout.indices≤a ∧ a<s.layout.indices+8*(positions.sort (· ≤ ·)).length)
+    rw [abi.indices];simp only [Finset.length_sort];omega
+  have absent : [first,second].find? hit=none := by simp [List.find?,noFirst,noSecond]
+  have noData : (s.image .opening).data=[] := by rw [abi.image];rfl
+  change (match [first,second].find? hit with
+    | some b => b.byteAt (a-b.address)
+    | none => if dataBase (s.image .opening)≤a then (s.image .opening).data[a-dataBase (s.image .opening)]?.getD 0 else 0)=0
+  rw [absent];simp [noData]
+
+private theorem byte_frame (z u : MachineState) (eq : z.mem=u.mem) (a : Nat) :
+    z.getByte (BitVec.ofNat 64 a)=u.getByte (BitVec.ofNat 64 a) := by
+  simp only [MachineState.getByte,MachineState.getMem,eq]
+
+private theorem empty_prefix_fields (z : MachineState) (pc : z.pc=4096) (count : z.getReg .x16=0) :
+    let t:=exitPrefix (setupPrefix z 3) 1
+    t.pc=6752 ∧ t.getReg .x20=z.getReg .x15 ∧ t.mem=z.mem := by
+  let a:=execInstrBr z (.ADDI .x20 .x15 0)
+  let b:=execInstrBr a (.ADDI .x21 .x15 0)
+  have addr : b.pc=4104 := by change z.pc+4+4=_;rw [pc] <;> rfl
+  have test : b.getReg .x16=0 := count
+  have branch : setupPrefix z 3=b.setPC 6748 := by
+    unfold setupPrefix
+    change execInstrBr b (.BEQ .x16 .x0 2644)=_
+    simp [execInstrBr,addr,test,show b.getReg .x0=0 by rfl,beq_iff_eq,signExtend13] <;> rfl
+  rw [branch]
+  exact ⟨rfl,BitVec.add_zero _,rfl⟩
+
+set_option maxHeartbeats 2000000 in
+/-- The empty opening (word 2 skips setup, pre-pass and records). -/
+theorem wide_prefix_empty (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (empty : positions.card = 0) :
-    ∃ result : Execution, s.run .opening (trapdoor, positions) = pure result ∧ OpenPhysical s trapdoor positions result := by
+    ∃ t, WidePrefix s trapdoor positions t := by
   let initial := s.initialState .opening (trapdoor, positions)
   have countReg : initial.getReg .x16 = BitVec.ofNat 64 positions.card := rfl
+  have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
   have budget : scheduledCycles positions ≤ s.steps .opening := (scheduled_fuel_fits positions).trans abi.fuel
-  let result : Execution := ⟨.success, exitPrefix (setupPrefix initial 3) 3, 7, 0⟩
-  have charge : scheduledCycles positions = 7 := by simp [scheduledCycles, empty]
-  have steps : 7+(s.steps .opening-7) = s.steps .opening := by rw [charge] at budget; omega
-  refine ⟨result, ?_, ⟨rfl, ?_, rfl, charge.symm, ?_, ?_⟩⟩
-  · change execute (s.image .opening) (s.steps .opening) initial true = pure result
-    rw [abi.image, ← steps]
-    exact execute_empty initial rfl _ true (by rw [countReg, empty])
-  · change ((exitPrefix (setupPrefix initial 3) 3).getReg .x11).toNat = _
-    rw [empty_proof_length]
-    simp [proofLength, openingNodes, empty]
-  · intro ordinal present _
-    omega
-  · intro i inside
-    simp [openingNodes, empty] at inside
+  have allFit := (Nat.add_le_add_left (proof_fits_every_cardinality positions) _).trans packed_proof_memory
+  let t:=exitPrefix (setupPrefix initial 3) 1
+  have count : initial.getReg .x16=0 := by rw [countReg,empty];rfl
+  have charge : scheduledCycles positions=7 := by simp [scheduledCycles,empty]
+  have returned : t.getReg .x11=0 := empty_proof_length _
+  refine ⟨t,⟨?_,?_,?_,⟨rfl,?_,rfl,rfl,?_,?_⟩,?_⟩⟩
+  · rw [charge];intro fuel coins;exact execute_empty initial rfl fuel coins count
+  · exact (empty_prefix_fields initial rfl count).1
+  · exact (empty_prefix_fields initial rfl count).2.1.trans (congrArg (BitVec.ofNat 64) abi.proof)
+  · change (t.getReg .x11).toNat=_
+    rw [returned];simp [proofLength,openingNodes,empty]
+  · intro _ h;omega
+  · intro _ h;simp [openingNodes,empty] at h
+  · intro a above fit
+    have eq : t.mem=initial.mem := (empty_prefix_fields initial rfl count).2.2
+    have saved : t.getByte (BitVec.ofNat 64 a)=initial.getByte (BitVec.ofNat 64 a) := by
+      simp only [MachineState.getByte,MachineState.getMem,eq]
+    exact saved.trans (initial_padding s abi trapdoor positions a (by omega) fit)
 
-/-- Cycles of the leader's records, cap preparation, cap walk and exit, from word 13 on. -/
+/-- Cycles of R1b's records, cap preparation, cap walk and root exit, from word 13 to the codec. -/
 def restCycles (positions : Positions) : Nat :=
-  (467*positions.card-1)+770+capSubtreeCycles (groupsBefore positions positions.card) 1 8+8
+  (467*positions.card-1)+770+capSubtreeCycles (groupsBefore positions positions.card) 1 8+5
 
-/-- What the leader's opener proves about its run from the first record onwards. -/
+/-- What the records, the cap and the root exit leave in memory. -/
 structure RestPhysical (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     (positions : Positions) (final : MachineState) : Prop where
   length : (final.getReg .x11).toNat = proofLength positions
@@ -72,15 +131,23 @@ structure RestPhysical (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
     readBuffer final (recordBase positions.card+30*i) 30 =
       (trapdoor.extractLsb' (256*(openingNodes positions)[i]) 256).extractLsb' 0 240
 
-/-- The leader's opener from the first record boundary to HALT: any state at word 13 with the
-record cursor's registers, untouched input words (relative to `s.initialState` of `trapdoor`) and
-empty marks runs to a success with the leader's records and footer. -/
-theorem opening_records_run (recordsExecute : RecordsExecute) (s : Submission) (abi : OpeningABI s)
+structure RestPrefix (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoor))
+    (positions : Positions) (begin t : MachineState) : Prop where
+  run : RunsOpeningBlock begin t (restCycles positions)
+  atCodec : t.pc=6752
+  proofPtr : t.getReg .x20=BitVec.ofNat 64 proofBase
+  bytes : RestPhysical s trapdoor positions t
+  padding : ∀ a, proofBase+proofLength positions≤a → a<MEMORY_BYTES → t.getByte (BitVec.ofNat 64 a)=0
+
+/-- R1b's opener from the first record boundary (word 13) to the codec entry: any state with the record
+cursor's registers, untouched input words (relative to `s.initialState` of `trapdoor`), empty marks and
+zero bytes past the proof buffer. -/
+theorem wide_prefix_from (recordsExecute : RecordsExecute) (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) (positive : 0 < positions.card)
     (begin : MachineState) (ready : RecordBoundary s trapdoor positions begin 0)
-    (marks : Opening.RecordMarks positions begin 0) :
-    ∃ final : MachineState, (∀ surplus coins, execute openingImage (restCycles positions+surplus) begin coins =
-      pure ⟨.success, final, restCycles positions, 0⟩) ∧ RestPhysical s trapdoor positions final := by
+    (marks : Opening.RecordMarks positions begin 0)
+    (pad : ∀ a, proofBase ≤ a → a < MEMORY_BYTES → begin.getByte (BitVec.ofNat 64 a) = 0) :
+    ∃ t, RestPrefix s trapdoor positions begin t := by
   let initial := s.initialState .opening (trapdoor, positions)
   have cardinal : positions.card ≤ LENGTH := by simpa [Index] using Finset.card_le_univ positions
   have allFit := (Nat.add_le_add_left (proof_fits_every_cardinality positions) _).trans packed_proof_memory
@@ -113,13 +180,14 @@ theorem opening_records_run (recordsExecute : RecordsExecute) (s : Submission) (
   have above : proofBase ≤ dest := by unfold dest recordBase; omega
   obtain ⟨after, ranCap, afterPC, endPosition, footerBytes⟩ :=
     cap_subtree grouped prepared 1 8 dest Opening.cap_span_root root rootPC above aligned room
-  let final := exitPrefix (advanceUp after) 3
+  let final := exitPrefix (advanceUp after) 1
   have ranRecords : RunsOpeningBlock begin lower (467*positions.card-1) := by
     have charged : recordsCost positions.card 0 positions.card = 467*positions.card-1 := by
       simp [recordsCost, positive]
     exact charged ▸ assembled.run
   have ranPrep : RunsOpeningBlock lower prepared 770 :=
     execute_cap_preparation lower (by simpa using atCap.pc) atCap.marks
+  have ⟨_, finalMem, retLen⟩ := root_exit after afterPC endPosition.nodeWord 0 true
   have lowerFrame (address : Nat) (fromProof : proofBase ≤ address) (beforeCap : address < dest) :
       final.getByte (BitVec.ofNat 64 address) = lower.getByte (BitVec.ofNat 64 address) := by
     have byteFit : address < MEMORY_BYTES := by omega
@@ -129,18 +197,22 @@ theorem opening_records_run (recordsExecute : RecordsExecute) (s : Submission) (
       (fun query low fit => cap_preparation_frame lower query low fit atCap.marks)
       (heapBefore.trans fromProof)
     have unchanged := (footerBytes.frame address (by omega) (Or.inl beforeCap)).trans prepStable
-    have eq : final.mem = after.mem := (root_exit after afterPC endPosition.nodeWord 0 true).2.1
+    have eq : final.mem = after.mem := finalMem
     simpa only [MachineState.getByte, MachineState.getMem, eq] using unchanged
-  refine ⟨final, fun surplus coins => ?_, ⟨?_, ?_, ?_⟩⟩
-  · have ⟨ranExit, _, _⟩ := root_exit after afterPC endPosition.nodeWord surplus coins
-    have prefixTrace := ((ranRecords.next ranPrep).next ranCap) (8+surplus) coins
-    rw [show restCycles positions+surplus =
-      (467*positions.card-1)+770+capSubtreeCycles grouped 1 8+(8+surplus) by
-        unfold restCycles; dsimp only [grouped]; omega,
-      prefixTrace, ranExit]
-    simp [Execution.charge, final, restCycles, grouped, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
-  · have ⟨_, _, retLen⟩ := root_exit after afterPC endPosition.nodeWord 0 true
-    change (final.getReg .x11).toNat = _
+  refine ⟨final,⟨?_,?_,?_,⟨?_,?_,?_⟩,?_⟩⟩
+  · intro fuel coins
+    have rExit := (root_exit after afterPC endPosition.nodeWord fuel coins).1
+    have same : capSubtreeCycles (groupsBefore positions positions.card) 1 8 = capSubtreeCycles grouped 1 8 := rfl
+    have amount : restCycles positions+fuel =
+        (467*positions.card-1)+770+capSubtreeCycles grouped 1 8+(5+fuel) := by unfold restCycles; omega
+    have prefixTrace := ((ranRecords.next ranPrep).next ranCap) (5+fuel) coins
+    rw [amount,prefixTrace,rExit]
+    have cost : restCycles positions=(467*positions.card-1)+770+capSubtreeCycles grouped 1 8+5 := by
+      unfold restCycles; omega
+    simp [Execution.charge,bind_assoc,cost,Nat.add_assoc,final]
+  · exact (root_prefix_fields after afterPC endPosition.nodeWord).1
+  · exact (root_prefix_fields after afterPC endPosition.nodeWord).2.trans endPosition.context.proofStart
+  · change (final.getReg .x11).toNat = _
     have ret : final.getReg .x11 = after.getReg .x21-after.getReg .x20 := retLen
     rw [ret]
     apply terminal_length after _ _ endPosition.context.proofStart allFit
@@ -188,11 +260,24 @@ theorem opening_records_run (recordsExecute : RecordsExecute) (s : Submission) (
         (small.trans_le (by decide : 512 ≤ 2*LENGTH))
     have written := footerBytes.digest i insideNodes
     rw [stable, digest] at written
-    have returnMem : final.mem = after.mem := (root_exit after afterPC endPosition.nodeWord 0 true).2.1
+    have returnMem : final.mem = after.mem := finalMem
     change readBuffer final (dest+30*i) 30 = _
     have saved : readBuffer final (dest+30*i) 30 = readBuffer after (dest+30*i) 30 := by
       simp only [readBuffer, MachineState.getByte, MachineState.getMem, returnMem]
     exact saved.trans written
+
+  · intro a above fit
+    have tail : dest+30*nodes.length≤a := by simpa only [dest,recordBase,frontier,proofLength,Nat.add_assoc] using above
+    have aboveHeap : trapdoorBase ≤ a := by
+      have h : trapdoorBase≤proofBase := by decide
+      omega
+    have kept : recordBase (0+positions.card)≤a := by
+      rw [Nat.zero_add];change dest≤a;omega
+    have before : lower.getByte (BitVec.ofNat 64 a)=begin.getByte (BitVec.ofNat 64 a) := assembled.future a fit kept
+    exact (byte_frame final after finalMem a).trans
+      ((footerBytes.frame a (by unfold MEMORY_BYTES at fit;omega) (Or.inr tail)).trans
+      ((byte_memory lower prepared a fit (fun q h b=>cap_preparation_frame lower q h b atCap.marks) aboveHeap).trans
+      (before.trans (pad a (by omega) fit))))
 
 theorem opening_success (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)

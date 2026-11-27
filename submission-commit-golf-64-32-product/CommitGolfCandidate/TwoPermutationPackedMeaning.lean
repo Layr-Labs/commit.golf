@@ -44,7 +44,7 @@ theorem packed_wide_counted_body (leaves : PackedLeafExecution) (meaning : Packe
 
 def packed_widePackedOutput (leaves : PackedLeafExecution) (oracle : Oracle) (initial : MachineState)
     {bits : Nat} (packed : BitVec bits) : Execution :=
-  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1317414011,83886079⟩
+  ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1318347295,83886079⟩
 
 theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : PackedLeafMeaning leaves)
     (oracle : Oracle) (initial : MachineState) :
@@ -63,10 +63,10 @@ theorem packed_wide_counted_trace (leaves : PackedLeafExecution) (meaning : Pack
 private theorem packed_wide_output_eq (leaves : PackedLeafExecution) (oracle : Oracle)
     (initial : MachineState) {bits : Nat} (packed : BitVec bits) :
     packed_widePackedOutput leaves oracle initial packed =
-      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1317414011,83886079⟩ := rfl
+      ⟨.success,(checkEvaluation oracle (packed_wideCommitBody leaves initial packed)).1,1318347295,83886079⟩ := rfl
 
 private theorem execution_state (state : MachineState) :
-    (⟨.success,state,1317414011,83886079⟩ : Execution).state = state := rfl
+    (⟨.success,state,1318347295,83886079⟩ : Execution).state = state := rfl
 
 attribute [local irreducible] packed_widePackedOutput
 
@@ -140,7 +140,7 @@ theorem packed_wide_physical_results (leaves : PackedLeafExecution) (meaning : P
       heap n = oracle.compression (heap (2*n+1) ++ heap (2*n)) :=
     Hybrid.raw_parent _ _ n lo hi
   have masked (n : Nat) (lo : 0 < n) (hi : n < 8388608) :
-      heap n = projectReply (oracle.compression (heap (2*n+1) ++ heap (2*n))) :=
+      heap n = R1bParents.retained n (oracle.compression (heap (2*n+1) ++ heap (2*n))) :=
     Hybrid.masked_parent _ _ n lo hi
   have initialContent := meaning.content oracle message packed
   have finished := leaves.finished initial (packed_wide_entry message) packed out

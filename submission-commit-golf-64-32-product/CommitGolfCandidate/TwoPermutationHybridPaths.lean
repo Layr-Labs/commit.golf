@@ -3,6 +3,7 @@ import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.ProjectedCompression
 import CommitGolfCandidate.TwoPermutationCheckerReplay
 import CommitGolfCandidate.C3PReplayBound
+import CommitGolfCandidate.C3PReplay238
 
 /-! Paid binding for the packed two-permutation design. Each compression row
 retains the actual full reply while its child authentication step receives
@@ -22,14 +23,20 @@ private theorem equal_path_pair {node : Nat} {child₀ sibling₀ child₁ sibli
     exact BitVec.extractLsb'_append_eq_left.symm.trans (hit.trans BitVec.extractLsb'_append_eq_left)
 
 /-- The lowest parent row keeps all bits. Higher rows keep the low 240 bits. -/
+def pad238 (v : Digest) : Digest := (0 : BitVec 18) ++ low238 v
+
 def normalize (node : Nat) (digest : BitVec 256) : BitVec 256 :=
-  if node < LENGTH/2 then padLow digest else digest
+  if node < LENGTH/2 then
+    if node < 524288 then pad238 digest else padLow digest
+  else digest
 
 theorem low_normalize (node : Nat) (digest : BitVec 256) :
-    low240 (normalize node digest) = low240 digest := by
+    low238 (normalize node digest) = low238 digest := by
   unfold normalize
   split
-  · exact low240_padLow digest
+  · split
+    · exact BitVec.extractLsb'_append_eq_right (a := (0 : BitVec 18)) (b := low238 digest)
+    · exact low238_of_low240 (low240_padLow digest)
   · rfl
 
 /-- A proof path cites the full compressor output and authenticates the stored width at its level. -/
@@ -67,7 +74,7 @@ theorem ProjectedPath.compare {rows : List PublicRow} {node height : Nat}
     {start₀ start₁ root : BitVec 256}
     (left : ProjectedPath rows node height start₀ root)
     (right : ProjectedPath rows node height start₁ root) :
-    CompressionWitness rows ∨ start₀ = start₁ := by
+    CompressionWitness238 rows ∨ start₀ = start₁ := by
   induction height generalizing node start₀ start₁ root with
   | zero =>
     cases left
@@ -82,7 +89,7 @@ theorem ProjectedPath.compare {rows : List PublicRow} {node height : Nat}
         · exact Or.inl collision
         by_cases sameInput : pathPair node start₀ sibling₀ = pathPair node start₁ sibling₁
         · exact Or.inr (equal_path_pair sameInput)
-        · exact Or.inl ⟨_, _, _, _, call₀, call₁, sameInput, (low_normalize (node/2) parent₀).symm.trans ((congrArg low240 sameParent).trans (low_normalize (node/2) parent₁))⟩
+        · exact Or.inl ⟨_, _, _, _, call₀, call₁, sameInput, (low_normalize (node/2) parent₀).symm.trans ((congrArg low238 sameParent).trans (low_normalize (node/2) parent₁))⟩
 
 /-- The four leaf rows (three compressions, one permutation call) and the subsequent
 authenticated path for an opened index, all in a single genuine checker replay. -/
@@ -97,11 +104,12 @@ theorem projected_openings_conflict (oracle : Oracle) (index : Index) (root : Co
     (value₀ value₁ : Entry) (conflict : value₀ ≠ value₁)
     (rows₀ rows₁ : List PublicRow) (left : ProjectedOpening oracle index value₀ root rows₀)
     (right : ProjectedOpening oracle index value₁ root rows₁) :
-    C3PReplayEvidence (rows₀ ++ rows₁) := by
+    C3PReplayEvidence238 (rows₀ ++ rows₁) := by
   rcases (left.path.mono (fun _ h => List.mem_append_left _ h)).compare
     (right.path.mono (fun _ h => List.mem_append_right _ h)) with hash | sameLeaf
   · exact Or.inl hash
-  · exact c3p_leaf_rows_conflict (rows₀ ++ rows₁) oracle.compression oracle.permutation index
+  · apply C3PReplayEvidence.to238
+    exact c3p_leaf_rows_conflict (rows₀ ++ rows₁) oracle.compression oracle.permutation index
       left.nonce right.nonce (entryWords value₀) (entryWords value₁)
       (left.leaf.mono (fun _ h => List.mem_append_left _ h))
       (right.leaf.mono (fun _ h => List.mem_append_right _ h))
@@ -125,7 +133,7 @@ private theorem packed_limited_check (s : Submission) (oracle : Oracle) (input :
 
 theorem packed_replay_extracts (s : Submission) (refines : HybridAcceptedTrace s)
     (oracle : Oracle) (claim : Scheme.Claim) (breaks : s.scheme.Breaks oracle claim) :
-    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), C3PReplayEvidence result.2 := by
+    ∀ result ∈ support (fixedOracleRun oracle (recordRows (checkerReplay s claim))), C3PReplayEvidence238 result.2 := by
   obtain ⟨⟨index, member₀, member₁, conflict⟩, accepted₀, accepted₁⟩ := breaks
   let x := leftCheck claim
   let y := rightCheck claim
@@ -158,11 +166,21 @@ theorem packed_replay_extracts (s : Submission) (refines : HybridAcceptedTrace s
     (path₀ ⟨index, member₀⟩).some (path₁ ⟨index, member₁⟩).some
 
 def hybrid_binding_replay (s : Submission) (specified : HybridAcceptedTrace s) :
-    BindingReplayEvidence s.scheme C3PReplayEvidence :=
+    BindingReplayEvidence s.scheme C3PReplayEvidence238 :=
   ⟨checkerReplay s, checker_replay_bounded s, packed_replay_extracts s specified⟩
 
+abbrev C3PReplayBound238 :=
+  ∀ (program : OracleComp World Unit) (q calls : Nat),
+    1 ≤ q → q ≤ 2^120 → calls ≤ q+2^31 → PublicQueryBound (recordRows program) calls →
+    Pr{let result ← (Oracle.sample >>= fun oracle => fixedOracleRun oracle (recordRows program))}[
+      C3PReplayEvidence238 result.2] ≤ (q : ENNReal)/2^120
+
+theorem c3p_replay_bound238 : C3PReplayBound238 :=
+  fun program q calls positive small replayed bounded =>
+    c3p_replay_bound_238 program q calls positive small replayed bounded
+
 theorem binding_of_packed_trace (candidate : Submission) (trace : HybridAcceptedTrace candidate)
-    (bound : C3PReplayBound) : candidate.scheme.Binding :=
+    (bound : C3PReplayBound238) : candidate.scheme.Binding :=
   scheme_binding_of_replay_with candidate.scheme (hybrid_binding_replay candidate trace)
     (fun contained witness => witness.mono contained) bound
 

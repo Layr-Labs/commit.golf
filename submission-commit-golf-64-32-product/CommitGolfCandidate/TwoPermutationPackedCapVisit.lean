@@ -1,3 +1,4 @@
+import CommitGolfCandidate.TwoPermutationHybridPaths
 import CommitGolfCandidate.TwoPermutationPackedCapTransitions
 import CommitGolfCandidate.TwoPermutationOpeningCapStructure
 
@@ -92,7 +93,7 @@ theorem cap_next_sibling {groups : List Nat} {state : MachineState} {node pointe
 structure CapParentResult (oracle : Oracle) (groups : List Nat) (before : MachineState) (node pointer : Nat) where
   state : MachineState
   segment : Segment oracle before state
-  steps : segment.steps = 12
+  steps : segment.steps = 17
   row : segment.rows =
     [.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node))
       (oracle.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node)))]
@@ -102,7 +103,7 @@ structure CapParentResult (oracle : Oracle) (groups : List Nat) (before : Machin
   frame : ∀ word < 2^61, (word < 2048+4*node ∨ 2048+4*node+4 ≤ word) →
     memoryView state word = memoryView before word
   digest : capRootAt state node =
-    padLow (oracle.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node)))
+    Hybrid.pad238 (oracle.compression (capRootAt before (2*node+1) ++ capRootAt before (2*node)))
 
 attribute [local irreducible] capAfterTests capHashReply capRootAt
 
@@ -125,7 +126,7 @@ noncomputable def cap_return_parent {groups : List Nat} {state : MachineState} {
   have half : (2*node+1)/2 = node := by omega
   let hashSegment : Segment oracle beforeCall next := capHashSegment oracle ready
   let tested := capTestsSegment oracle state (2*node+1) (by omega) pc position.heap
-  have hashed : capRootAt next node = padLow answer := (congrArg (capRootAt next) half).symm.trans (cap_hash_digest beforeCall parent answer)
+  have hashed : capRootAt next node = Hybrid.pad238 answer := (congrArg (capRootAt next) half).symm.trans (cap_hash_digest beforeCall parent answer)
   have bytes (i : Nat) : capRootAt beforeCall i = capRootAt state i := by
     unfold capRootAt
     exact read_digest_congr _ _ _ (by omega) (fun _ _ => congrFun mem _)
@@ -147,7 +148,7 @@ noncomputable def cap_return_parent {groups : List Nat} {state : MachineState} {
   · refine ⟨position.context.transport stable (fun word _ bound => frame word (by omega) (Or.inl (by omega))),
       ?_, ?_, position.above, position.even⟩
     · exact (cap_hash_heap ready answer).trans (congrArg (BitVec.ofNat 64) half)
-    · exact (cap_hash_register beforeCall parent answer .x21 (by decide) (by decide) (by decide)).trans
+    · exact (cap_hash_register beforeCall parent answer .x21 (by decide) (by decide) (by decide) (by decide)).trans
         ((cap_tests_cursor state).trans position.proof)
   · have parentEq : parent = node := half
     exact hashed.trans (by simp only [answer, pair, parentEq, bytes])

@@ -115,12 +115,13 @@ theorem execute_records_from_step (execute_record : RecordExecute) (s : Submissi
     RecordsFinished s trapdoor positions state (runRecords positions.card ordinal count state) ordinal count := by
   induction count generalizing ordinal state with
   | zero =>
-    refine ⟨?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · intro fuel coins
       simp [runRecords, recordsCost, Execution.charge]
     · simpa only [runRecords, Nat.add_zero] using start
     · simpa only [runRecords, Nat.add_zero] using marks
     · simpa only [runRecords, Nat.add_zero] using bytes
+    · intro addr fit above;rfl
   | succ count ih =>
     have present : ordinal < positions.card := by omega
     let next := runRecord state (decide (ordinal+1=positions.card))
@@ -134,7 +135,7 @@ theorem execute_records_from_step (execute_record : RecordExecute) (s : Submissi
     have withBytes := collected_record s trapdoor positions state next ordinal present start step bytes
     have rest := ih next (ordinal+1) (by omega) step.next withMark withBytes
     have shift : ordinal+(count+1)=ordinal+1+count := by omega
-    refine ⟨?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · rw [records_cost_next _ _ _ limit]
       exact step.run.next rest.run
     · rw [shift]
@@ -143,5 +144,13 @@ theorem execute_records_from_step (execute_record : RecordExecute) (s : Submissi
       exact rest.marks
     · rw [shift]
       exact rest.bytes
+    · intro addr fit above
+      rw [shift] at above
+      have last:=rest.future addr fit above
+      have outside : recordBase (ordinal+1)≤addr := by unfold recordBase recordBytes at *;omega
+      have lower : trapdoorBase≤addr := by
+        have h : trapdoorBase≤proofBase := by decide
+        unfold recordBase at outside;omega
+      exact last.trans (step.frame _ fit lower (Or.inr outside))
 
 end TwoPermutationPrototype.PackedOpening

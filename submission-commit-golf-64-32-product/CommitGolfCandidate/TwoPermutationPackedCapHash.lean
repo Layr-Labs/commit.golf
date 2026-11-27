@@ -1,3 +1,4 @@
+import CommitGolfCandidate.TwoPermutationHybridPaths
 import CommitGolfCandidate.TwoPermutationPackedCapAdvance
 import CommitGolfCandidate.TwoPermutationPackedParent
 import CommitGolfCandidate.TwoPermutationCheckerCapHash
@@ -45,7 +46,7 @@ structure CapHashReady (state : MachineState) (node : Nat) where
   bound : node < 512
 
 def capHashReply (state : MachineState) (parent : Nat) (answer : BitVec 256) : MachineState :=
-  (writeBits (capParent state) (wordAddress (2048+4*parent)) (padLow answer)).setPC 0x1528
+  ((writeBits (capParent state) (wordAddress (2048+4*parent)) (Hybrid.pad238 answer)).setReg .x1 (RV64.maskValue answer)).setPC 0x1528
 
 def capHashQuery (state : MachineState) (parent : Nat) : OracleComp World MachineState := do
   let answer ← World.query (.inr (.inl (capRootAt state (2*parent+1) ++ capRootAt state (2*parent))))
@@ -55,10 +56,10 @@ set_option maxRecDepth 4096
 attribute [local irreducible] execute readBuffer writeBits
 
 theorem execute_cap_hash {state : MachineState} {node : Nat} (ready : CapHashReady state node) (fuel : Nat) :
-    execute packedImage (8+fuel) state false =
+    execute packedImage (13+fuel) state false =
       (do let next ← capHashQuery state (node/2)
           let result ← execute packedImage fuel next false
-          return result.charge 15 1) := by
+          return result.charge 20 1) := by
   obtain ⟨pc, parent, source, dest, mem⟩ := cap_parent_post state ready.pc
   have room := ready.bound
   have shifted : state.getReg .x6 >>> 1 = BitVec.ofNat 64 (node/2) := by
@@ -93,12 +94,12 @@ theorem execute_cap_hash {state : MachineState} {node : Nat} (ready : CapHashRea
     rw [offset, base]
     congr 1 <;> apply read_digest_congr _ _ _ (by omega) <;>
       intro i _ <;> exact congrFun mem _
-  rw [show 8+fuel = 5+(2+(1+fuel)) by omega, execute_cap_parent_setup _ ready.pc, call]
+  rw [show 13+fuel = 5+(7+(1+fuel)) by omega, execute_cap_parent_setup _ ready.pc, call]
   erw [halves]
   simp only [capHashQuery, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro answer _
-  let resumed := (capCompressionAnswer (capParent state) (padLow answer)).setPC ((capParent state).pc+8)
+  let resumed := ((capCompressionAnswer (capParent state) (Hybrid.pad238 answer)).setReg .x1 (RV64.maskValue answer)).setPC ((capParent state).pc+8)
   have resumePC : resumed.pc = 0x1554 := by
     change (capParent state).pc+8#64 = _
     rw [pc]
@@ -112,11 +113,13 @@ theorem execute_cap_hash {state : MachineState} {node : Nat} (ready : CapHashRea
   rw [final]
 
 theorem cap_hash_digest (state : MachineState) (parent : Nat) (answer : BitVec 256) :
-    capRootAt (capHashReply state parent answer) parent = padLow answer := by
-  unfold capRootAt capHashReply
-  rw [read_digest_congr _ (writeBits (capParent state) (wordAddress (2048+4*parent)) (padLow answer)) _ (by omega)
-    (fun _ _ => MachineState.getMem_setPC)]
-  exact compressed_digest _ _ (padLow answer)
+    capRootAt (capHashReply state parent answer) parent = Hybrid.pad238 answer := by
+  let dst:=2048+4*parent
+  let v:=Hybrid.pad238 answer
+  let written:=writeBits (capParent state) (wordAddress dst) v
+  have frame : (capHashReply state parent answer).mem=written.mem := rfl
+  exact (read_buffer_memory_congr (capHashReply state parent answer) written frame (8*dst) 32).trans
+    (compressed_digest (capParent state) dst v)
 
 theorem cap_hash_rows (oracle : Oracle) (state : MachineState) (parent : Nat) :
     let pair := capRootAt state (2*parent+1) ++ capRootAt state (2*parent)

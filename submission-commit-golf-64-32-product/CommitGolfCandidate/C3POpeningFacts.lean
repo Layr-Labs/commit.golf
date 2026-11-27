@@ -14,7 +14,7 @@ set_option maxHeartbeats 8000000
 
 theorem commit_trace_resources (initial : RiscvZkvm.Rv64.MachineState) (r : Execution)
     (h : r ∈ support (RV64.C3P.commitTraceP initial)) :
-    r.exit = .success ∧ r.cycles = 1266820219 ∧ r.oracleCalls = 83886079 := by
+    r.exit = .success ∧ r.cycles = 1267884575 ∧ r.oracleCalls = 83886079 := by
   unfold RV64.C3P.commitTraceP at h
   simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at h
   obtain ⟨_, _, _, _, rfl⟩ := h
@@ -22,10 +22,10 @@ theorem commit_trace_resources (initial : RiscvZkvm.Rv64.MachineState) (r : Exec
 
 theorem commit_resources_of (s : Submission) (lay : RV64.C3P.PairedCommitLayout s) (message : Message)
     (result : Execution) (reachable : result ∈ support (s.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 1266820219 ∧ result.oracleCalls = 83886079 := by
+    result.exit = .success ∧ result.cycles = 1267884575 ∧ result.oracleCalls = 83886079 := by
   have run : s.run .commit message = RV64.C3P.commitTraceP (s.initialState .commit message) := by
     change execute (s.image .commit) (s.steps .commit) (s.initialState .commit message) true = _
-    rw [lay.image, show s.steps .commit = 276964482 + (s.steps .commit - 276964482) by
+    rw [lay.image, show s.steps .commit = 278028838 + (s.steps .commit - 278028838) by
       have := lay.fuel; omega]
     exact RV64.C3P.paired_commit_execution _ (RV64.C3P.paired_commit_entry _ lay message) _
   rw [run] at reachable
@@ -33,7 +33,7 @@ theorem commit_resources_of (s : Submission) (lay : RV64.C3P.PairedCommitLayout 
 
 theorem paired_commit_resources (message : Message) (result : Execution)
     (reachable : result ∈ support (pairedSubmission.run .commit message)) :
-    result.exit = .success ∧ result.cycles = 1266820219 ∧ result.oracleCalls = 83886079 :=
+    result.exit = .success ∧ result.cycles = 1267884575 ∧ result.oracleCalls = 83886079 :=
   commit_resources_of pairedSubmission paired_commit_layout message result reachable
 
 theorem paired_read_proof_length (s : Submission) (result : Execution) (succeeded : s.openingSucceeded result = true) :
@@ -44,32 +44,35 @@ theorem paired_opening_facts : OpeningFacts pairedSubmission where
   runs trapdoor positions result reached := by
     have abi := paired_opening_abi
     by_cases empty : positions.card = 0
-    · obtain ⟨r, run, physical⟩ := PackedOpening.opening_empty_run pairedSubmission abi trapdoor positions empty
+    · obtain ⟨r, run, wire⟩ := PackedOpening.opening_physical_empty pairedSubmission abi trapdoor positions empty
       rw [run, support_pure, Set.mem_singleton_iff] at reached
       subst reached
-      refine ⟨physical.success, PackedOpening.opening_success pairedSubmission abi trapdoor positions _ physical,
-        by rw [physical.noCalls]; exact Nat.zero_le _, fun batch => ?_⟩
-      have : positions.card = 128 := batch
-      omega
+      refine ⟨wire.exit, wire.success, ?_, fun batch => ?_⟩
+      · rw [wire.calls]; exact Nat.zero_le _
+      · have : positions.card = 128 := batch
+        omega
     · obtain ⟨P, ys, ended, success, cycles, calls, rest⟩ :=
         PackedOpening.paired_opening_support pairedSubmission abi trapdoor positions (by omega) result reached
-      have fit : (result.state.getReg .x11).toNat ≤ pairedSubmission.sizes.proof := by
-        rw [rest.length]
-        exact (PackedOpening.proof_fits_every_cardinality positions).trans abi.capacity
+      have shape : result = ⟨.success, result.state, result.cycles, result.oracleCalls⟩ := by
+        cases result; simp_all
       have succeeded : pairedSubmission.openingSucceeded result = true := by
-        simp [Submission.openingSucceeded, success, fit]
+        rw [shape]; exact rest.succeeded _ _
       refine ⟨success, succeeded, by rw [calls]; unfold OPEN_BUDGET; omega, fun batch => ?_⟩
-      obtain ⟨cyc, bytes⟩ := PackedOpening.scheduled_scored_limits positions batch
+      obtain ⟨cyc, _⟩ := PackedOpening.scheduled_scored_limits positions batch
       have size : positions.card = 128 := batch
       refine ⟨?_, ?_⟩
       · rw [cycles]
+        have extra : CommitGolfCandidate.R1b.Opening.extra positions.card
+            (PackedOpening.proofFromTrapdoor (s := pairedSubmission) (PackedOpening.trapdoorOf pairedSubmission P)
+              positions).length ≤ 11192 := by
+          unfold CommitGolfCandidate.R1b.Opening.extra; split_ifs <;> omega
         unfold PackedOpening.scheduledCycles at cyc
-        unfold PackedOpening.restCycles PackedOpening.Prepass.prepassCycles
+        unfold PackedOpening.restCost PackedOpening.restCycles PackedOpening.Prepass.prepassCycles
         rw [ite_eq_right (by omega)] at cyc
-        rw [size] at cyc ⊢
+        rw [size] at cyc extra ⊢
         omega
-      · rw [paired_read_proof_length _ _ succeeded, rest.length]
-        exact bytes
+      · rw [shape, rest.proof]
+        exact Hybrid.wireBound positions _ batch
   refines := PackedOpening.paired_transcript_refines pairedSubmission paired_commit_layout paired_opening_abi
 
 end TwoPermutationPrototype.PackedCertificate

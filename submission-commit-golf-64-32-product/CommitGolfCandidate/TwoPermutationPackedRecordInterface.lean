@@ -5,7 +5,7 @@ import CommitGolfCandidate.TwoPermutationPackedGroupRun
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Checker (RecordInputFrame checkSourceWord honestIndex)
+open TwoPermutationPrototype.Checker (checkSourceWord honestIndex)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 open TwoPermutationPrototype.PackedHonest (honestHeap)
 
@@ -27,7 +27,7 @@ instance (r : Reg) : Decidable (RecordSaved r) := by unfold RecordSaved; infer_i
 
 structure RecordBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (before : MachineState) (block : RecordBlock) : Prop where
-  steps : block.steps ≤ 2025
+  steps : block.steps ≤ 2037
   run : ∀ fuel,
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel block.state false))
     checkEvaluation oracle (recordRows (execute packedImage (block.steps+fuel) before false)) =
@@ -48,7 +48,7 @@ structure RecordBlockFacts (oracle : Oracle) (input : CheckInput) (ordinal : Nat
 def RecordRefines (record : Oracle → Nat → Index → MachineState → RecordBlock) : Prop :=
   ∀ (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (present : ordinal < input.positions.card)
     (state : MachineState), ProofWithin input → RecordCursor input ordinal state →
-    RecordInputFrame input ordinal state →
+    InputFrame input ordinal state →
     RecordBlockFacts oracle input ordinal present state
       (record oracle ordinal (honestIndex input.positions ordinal present).val state)
 

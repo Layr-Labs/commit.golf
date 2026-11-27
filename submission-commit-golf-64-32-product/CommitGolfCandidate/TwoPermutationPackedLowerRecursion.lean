@@ -29,7 +29,7 @@ def LowerSaved (before after : MachineState) : Prop :=
 structure LowerStepFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (level : Nat)
     (before : MachineState) (step : RecordBlock) : Prop where
   cursor : LowerCursor ordinal index (level+1) step.state
-  steps : step.steps ≤ 116
+  steps : step.steps ≤ 124
   saved : LowerSaved before step.state
   frame : LowerFrame before step.state
   digest :
@@ -61,7 +61,7 @@ def runLower (step : Oracle → Nat → Index → Nat → MachineState → Recor
 structure LowerRunFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (level left : Nat)
     (before : MachineState) (run : RecordBlock) : Prop where
   cursor : LowerCursor ordinal index 16 run.state
-  steps : run.steps ≤ 116*left
+  steps : run.steps ≤ 124*left
   saved : LowerSaved before run.state
   frame : LowerFrame before run.state
   path : Hybrid.ProjectedPath run.rows (Opening.lowerNode index level) left (readBuffer before 12288 32)
@@ -71,7 +71,7 @@ structure LowerRunFacts (oracle : Oracle) (ordinal : Nat) (index : Index) (level
     readBuffer before 12288 32 = heap (Opening.lowerNode index level) →
     (∀ j, level ≤ j → j < 16 →
       lowerWireSibling before ordinal j = heap (Opening.lowerNode index j ^^^ 1)) →
-    readBuffer run.state 12288 32 = heap (capGroup index)
+    readBuffer run.state 12288 32 = heap (Sampling.capGroup index)
   exact_run : ∀ fuel,
     let tail := checkEvaluation oracle (recordRows (execute packedImage fuel run.state false))
     checkEvaluation oracle (recordRows (execute packedImage (run.steps+fuel) before false)) =
@@ -119,8 +119,8 @@ theorem run_lower_facts (step : Oracle → Nat → Index → Nat → MachineStat
     rcases current with ⟨headCursor,headCost,headRegs,headMem,headDigest,headRow,headRun⟩
     rw [runLower]
     refine ⟨tail.cursor,?_,?_,?_,?_,?_,?_⟩
-    · have tailCost : rest.steps ≤ 116*left := tail.steps
-      change head.steps+rest.steps ≤ 116*(left+1)
+    · have tailCost : rest.steps ≤ 124*left := tail.steps
+      change head.steps+rest.steps ≤ 124*(left+1)
       omega
     · intro r kept
       exact (tail.saved _ kept).trans (headRegs _ kept)

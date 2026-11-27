@@ -1,4 +1,4 @@
-import CommitGolfCandidate.TwoPermutationHybridModel
+import CommitGolfCandidate.R1bWire
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.C3PLeafModel
 import CommitGolfCandidate.TwoPermutationTranscript
@@ -22,8 +22,8 @@ structure OpeningFacts (s : Submission) : Prop where
   runs : ∀ (trapdoor : s.scheme.Trapdoor) (positions : Positions) (result : Execution),
     result ∈ support (s.run .opening (trapdoor, positions)) → result.exit = .success ∧
     s.openingSucceeded result = true ∧ result.oracleCalls ≤ OPEN_BUDGET positions.card ∧
-    (positions.card = BATCH → result.cycles ≤ 80407 ∧ (s.readProof result).length ≤ 67840)
-  refines : C3PTranscriptRefines s.scheme Hybrid.builder
+    (positions.card = BATCH → result.cycles ≤ 91600 ∧ (s.readProof result).length ≤ 67489)
+  refines : C3PTranscriptRefines s.scheme Hybrid.wireBuilder
 
 def honestCheckInput (oracle : Oracle) (message : Message) (positions : Positions)
     (salts : CompleteSaltTape) : CheckInput :=
@@ -31,12 +31,17 @@ def honestCheckInput (oracle : Oracle) (message : Message) (positions : Position
     (BiPermutation.equiv Block oracle.permutation) message positions salts
   ⟨view.1, positions, message.restrict positions, view.2⟩
 
+def wireCheckInput (oracle : Oracle) (message : Message) (positions : Positions)
+    (salts : CompleteSaltTape) : CheckInput :=
+  let x:=honestCheckInput oracle message positions salts
+  {x with proof:=Hybrid.wireProof positions x.proof}
+
 structure CheckerFacts (s : Submission) : Prop where
   terminates : ∀ oracle input, (Checker.checkObservation s oracle input).1.1.exit ≠ .unfinished
   queryBudget : ∀ oracle input, (Checker.checkObservation s oracle input).2 ≤ 100*input.positions.card
   binding : s.scheme.Binding
   honestAccepted : ∀ oracle message positions salts,
-    (Checker.checkObservation s oracle (honestCheckInput oracle message positions salts)).1.1.exit = .success
+    (Checker.checkObservation s oracle (wireCheckInput oracle message positions salts)).1.1.exit = .success
 
 variable {s : Submission} {commitCycles : Nat}
 variable (commit : ∀ (message : Message) (result : Execution), result ∈ support (s.run .commit message) →
@@ -86,7 +91,7 @@ private theorem scheme_commit_budget (oracle : Oracle) (message : Message)
 private theorem opening_run (opens : OpeningFacts s) (trapdoor : s.scheme.Trapdoor) (positions : Positions)
     (opened : Execution) (reached : opened ∈ support (s.run .opening (trapdoor,positions))) :
     opened.exit = .success ∧ s.openingSucceeded opened = true ∧
-    (positions.card = BATCH → opened.cycles ≤ 80407 ∧ (s.readProof opened).length ≤ 67840) := by
+    (positions.card = BATCH → opened.cycles ≤ 91600 ∧ (s.readProof opened).length ≤ 67489) := by
   obtain ⟨success, succeeded, _, scored⟩ := opens.runs trapdoor positions opened reached
   exact ⟨success, succeeded, scored⟩
 
@@ -94,7 +99,7 @@ private theorem opening_run (opens : OpeningFacts s) (trapdoor : s.scheme.Trapdo
 private theorem scheme_open_budget (opens : OpeningFacts s) (oracle : Oracle) (trapdoor : s.scheme.Trapdoor)
     (positions : Positions) (opened : Proof × Nat)
     (reached : opened ∈ support (oracle.run (s.scheme.opening trapdoor positions))) :
-    opened.2 ≤ OPEN_BUDGET positions.card ∧ (positions.card = BATCH → opened.1.length ≤ 67840) := by
+    opened.2 ≤ OPEN_BUDGET positions.card ∧ (positions.card = BATCH → opened.1.length ≤ 67489) := by
   change opened ∈ support (oracle.run (s.readProof <$> s.run .opening (trapdoor,positions))) at reached
   rw [oracle_run_map oracle s.readProof, support_map] at reached
   obtain ⟨execution, execReached, same⟩ := reached
@@ -112,7 +117,7 @@ include commit in
 private theorem honest_machine_resources (opens : OpeningFacts s) (message : Message) (positions : Positions)
     (result : MachineResult) (reached : result ∈ support (s.honestMachine message positions)) :
     result.success = true ∧
-      (positions.card = BATCH → result.commitCycles ≤ commitCycles ∧ result.openingCycles ≤ 80407) := by
+      (positions.card = BATCH → result.commitCycles ≤ commitCycles ∧ result.openingCycles ≤ 91600) := by
   change result ∈ support (do
     let committed ← s.run .commit message
     let opened ← s.run .opening ((s.readCommit committed).2,positions)
@@ -136,7 +141,7 @@ theorem machine_success (opens : OpeningFacts s) : s.MachineSuccess := by
     (writer_support (oracle.world.withAddCost Oracle.callCost) _ result reached)).1
 
 include commit in
-theorem prover_cycles (opens : OpeningFacts s) : s.ProverCycles commitCycles 80407 := by
+theorem prover_cycles (opens : OpeningFacts s) : s.ProverCycles commitCycles 91600 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
@@ -179,7 +184,7 @@ theorem honest_budgets (opens : OpeningFacts s) (checks : CheckerFacts s) : s.sc
     exact checks.queryBudget oracle input
   exact ⟨scheme_commit_budget commit oracle message _ committed,opened.1,checked⟩
 
-theorem proof_size (opens : OpeningFacts s) : s.scheme.ProofSize 67840 := by
+theorem proof_size (opens : OpeningFacts s) : s.scheme.ProofSize 67489 := by
   intro oracle message positions batch
   apply (OracleComp.prEvent_eq_one_iff _ _).mpr
   intro result reached
@@ -208,7 +213,7 @@ theorem completeness (opens : OpeningFacts s) (checks : CheckerFacts s) : s.sche
   intro view reached
   simp only [mem_support_bind_iff,support_pure,Set.mem_singleton_iff] at reached
   obtain ⟨salts,_,rfl⟩ := reached
-  let input := honestCheckInput oracle message positions salts
+  let input := wireCheckInput oracle message positions salts
   change (oracle.eval (s.scheme.check input.commitment input.positions input.values input.proof)).1 = true
   rw [scheme_check_observation]
   dsimp only
@@ -218,7 +223,7 @@ theorem completeness (opens : OpeningFacts s) (checks : CheckerFacts s) : s.sche
 include commit in
 theorem certificate_of_facts (admitted : s.Admission) (opens : OpeningFacts s) (checks : CheckerFacts s)
     (privateView : s.scheme.Hiding (fun _ budget => min 1 (((budget : ℝ) + 1) / 2 ^ 120))) :
-    Certificate s 67840 commitCycles 80407 where
+    Certificate s 67489 commitCycles 91600 where
   admission := admitted
   machineSuccess := machine_success commit opens
   termination := termination commit opens checks

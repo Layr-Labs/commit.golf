@@ -307,7 +307,7 @@ def pairedEnd (s : Submission) (oracle : Oracle) (msg : Message) (wss : List (Li
 theorem paired_commit_distribution' (s : Submission) (lay : PairedCommitLayout s) (oracle : Oracle) (msg : Message) :
     fixedOracleRun oracle (s.scheme.commit msg) =
       ((List.range 8192).mapM (fun _ => (List.range 1024).mapM (fun _ => ($ᵗ BitVec 256 : ProbComp (BitVec 256)))) >>=
-        fun wss => pure (asTrapdoor s (s.readCommit ⟨.success, pairedEnd s oracle msg wss, 1266820219, 83886079⟩))) :=
+        fun wss => pure (asTrapdoor s (s.readCommit ⟨.success, pairedEnd s oracle msg wss, 1267884575, 83886079⟩))) :=
   paired_commit_distribution s lay oracle msg
 
 theorem empty_builder (compress : Compression) (positions : Positions) (salts : OpenedSalts positions)
@@ -331,7 +331,7 @@ theorem transcript_at (s : Submission) (lay : PairedCommitLayout s) (abi : Openi
     fixedOracleRun oracle (s.scheme.opening (readBuffer (pairedEnd s oracle msg wss) s.layout.trapdoor s.sizes.trapdoor)
         positions >>= fun opening => pure (readBuffer (pairedEnd s oracle msg wss) s.layout.commitment DIGEST_BYTES,
           opening)) =
-      pure (c3pHonestView Hybrid.builder oracle.compression (BiPermutation.equiv Block oracle.permutation) msg positions
+      pure (c3pHonestView Hybrid.wireBuilder oracle.compression (BiPermutation.equiv Block oracle.permutation) msg positions
         (pairedSaltTape wss.flatten)) := by
   obtain ⟨root0, nodes, replies⟩ := commit_end_facts s lay oracle msg wss len lens
   have root : readBuffer (pairedEnd s oracle msg wss) 4294971392 DIGEST_BYTES =
@@ -341,23 +341,30 @@ theorem transcript_at (s : Submission) (lay : PairedCommitLayout s) (abi : Openi
   change (fixedOracleRun oracle (s.readProof <$> s.run .opening (td, positions)) >>= _) = _
   rw [fixed_oracle_run_map]
   by_cases empty : positions.card = 0
-  · obtain ⟨result, run, physical⟩ := opening_empty_run s abi td positions empty
+  · obtain ⟨result, run, wire⟩ := opening_physical_empty s abi td positions empty
     rw [run, fixed_oracle_run_pure, map_pure, pure_bind, fixed_oracle_run_pure]
     unfold c3pHonestView
     refine congrArg Pure.pure (Prod.ext ?_ ?_)
     · exact root
-    rw [empty_read_proof s result (by rw [physical.length]; simp [proofLength, Opening.openingNodes, empty])]
-    exact (empty_builder _ _ _ _ empty).symm
+    rw [wire.bytes]
+    show Hybrid.wireProof positions _ = Hybrid.wireProof positions _
+    congr 1
+    have e : positions = ∅ := Finset.card_eq_zero.mp empty
+    subst e
+    simp [proofFromTrapdoor, Hybrid.builder, frontierProof, Opening.openingNodes]
   · obtain ⟨P, result, fixed, ended, success, rest⟩ := paired_opening_fixed s abi oracle td positions (by omega)
     rw [fixed, map_pure, pure_bind, fixed_oracle_run_pure]
     unfold c3pHonestView
     refine congrArg Pure.pure (Prod.ext ?_ ?_)
     · exact root
-    rw [read_opening_proof s abi (trapdoorOf s P) positions result success rest]
+    have shape : result = ⟨.success, result.state, result.cycles, result.oracleCalls⟩ := by
+      cases result; simp_all
+    rw [shape, rest.proof]
     obtain ⟨tI, tM, tS⟩ := trapdoor_prime s abi oracle msg (pairedSaltTape wss.flatten) _ nodes replies positions
       (by omega) P ended
-    exact proof_from_trapdoor_on s (trapdoorOf s P) positions oracle.compression
-      (pLeaves oracle msg (pairedSaltTape wss.flatten)) _ tI tM tS
+    show Hybrid.wireProof positions _ = Hybrid.wireProof positions _
+    rw [proof_from_trapdoor_on s (trapdoorOf s P) positions oracle.compression
+      (pLeaves oracle msg (pairedSaltTape wss.flatten)) _ tI tM tS]
 
 theorem flat_map_const_length {α β : Type} (xs : List α) (ys : List β) :
     (xs.flatMap fun _ => ys).length = xs.length * ys.length := by
@@ -368,9 +375,9 @@ theorem flat_map_const_length {α β : Type} (xs : List α) (ys : List β) :
 /-- **`C3PTranscriptRefines`**: the paired machine's commitment and opening are the honest view of a
 uniform salt tape. -/
 theorem paired_transcript_refines (s : Submission) (lay : PairedCommitLayout s) (abi : OpeningABI s) :
-    C3PTranscriptRefines s.scheme Hybrid.builder := by
+    C3PTranscriptRefines s.scheme Hybrid.wireBuilder := by
   intro oracle msg positions
-  let V := fun salts => c3pHonestView Hybrid.builder oracle.compression (BiPermutation.equiv Block oracle.permutation)
+  let V := fun salts => c3pHonestView Hybrid.wireBuilder oracle.compression (BiPermutation.equiv Block oracle.permutation)
     msg positions salts
   unfold executableTranscript
   rw [fixed_oracle_run_bind, paired_commit_distribution' s lay oracle msg, bind_assoc]

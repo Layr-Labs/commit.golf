@@ -1,3 +1,4 @@
+import CommitGolfCandidate.TwoPermutationPackedInputFrame
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.C3PLeafModel
 import CommitGolfCandidate.TwoPermutationPackedCheckerBody
@@ -6,8 +7,7 @@ import CommitGolfCandidate.TwoPermutationPackedCapComplete
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate CommitGolfCandidate.ShortTree RiscvZkvm.Rv64
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Checker (RecordInputFrame capRootAt checker_positions_bound record_input_root
-  checker_honest_cap_nodes record_groups_length)
+open TwoPermutationPrototype.Checker (capRootAt checker_positions_bound checker_honest_cap_nodes record_groups_length)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 open TwoPermutationPrototype.PackedHonest (honestHeap honest_proof_length honest_frontier_digest honest_projected_node)
 set_option maxHeartbeats 2200000
@@ -61,7 +61,7 @@ theorem checker_cap_ready (oracle : Oracle) (input : CheckInput) (state : Machin
 
 theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : MachineState)
     (rows : List PublicRow) (table : CollectedTable oracle input input.positions.card state rows)
-    (framed : RecordInputFrame input input.positions.card state)
+    (framed : InputFrame input input.positions.card state)
     (cursor : RecordCursor input input.positions.card state) (positive : input.positions.card ≠ 0)
     (message : Message) (salts : CompleteSaltTape)
     (canonical : input = honestCheckInput oracle message input.positions salts) :
@@ -75,8 +75,8 @@ theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : 
   let pointer := checkProofByte input.positions.card
   let heap := honestHeap oracle message salts
   let honest := honestCheckInput oracle message input.positions salts
-  have reframed : RecordInputFrame honest input.positions.card state :=
-    Eq.mp (congrArg (fun bytes => RecordInputFrame bytes input.positions.card state) canonical) framed
+  have reframed : InputFrame honest input.positions.card state :=
+    Eq.mp (congrArg (fun bytes => InputFrame bytes input.positions.card state) canonical) framed
   have nodes : Opening.openingNodes input.positions = capFrontierNodes groups 1 8 :=
     checker_honest_cap_nodes input.positions positive
   refine ⟨⟨?_,?_⟩,?_ ,?_⟩
@@ -89,7 +89,8 @@ theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : 
       have geom := (checker_cap_ready oracle input state rows cursor table).proofRoom
       change pointer+30*(capFrontierNodes groups 1 8).length ≤ 2^36 at geom
       omega
-    have frame := record_proof_frame honest input.positions.card (30*i) 30 state reframed (by rfl) limit
+    have frame := record_proof_frame honest input.positions.card (30*i) 30 state reframed (by rfl) limit (by
+      rw [show honest.proof.length=_ from PackedHonest.honest_proof_length oracle message input.positions salts];unfold PackedOpening.proofLength PackedOpening.recordBytes;omega)
     have raw := honest_frontier_digest oracle message input.positions salts i present
     rw [PackedChecker.initial_state] at raw
     have addr : PackedChecker.submission.layout.proof+(500*input.positions.card+30*i) =
@@ -102,7 +103,7 @@ theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : 
     obtain ⟨positiveNode, capNode⟩ := frontier_node_bounds groups 1 8 Opening.cap_span_root _ member
     have length : 512 ≤ LENGTH/2 := by decide
     exact honest_projected_node _ _ _ positiveNode (by omega)
-  · have root := record_input_root input input.positions.card state framed
+  · have root := frame_root input input.positions.card state framed
     exact root.trans (congrArg CheckInput.commitment canonical)
   · rw [cursor.proofEnd]
     have proofLen := congrArg (fun value : CheckInput => value.proof.length) canonical
@@ -117,7 +118,7 @@ theorem checker_honest_cap_data (oracle : Oracle) (input : CheckInput) (state : 
 theorem checker_cap_facts (oracle : Oracle) (input : CheckInput) (positive : input.positions.card ≠ 0)
     (state : MachineState) (rows : List PublicRow) (fuel : Nat) (enough : 25056 ≤ fuel)
     (cursor : RecordCursor input input.positions.card state)
-    (framed : RecordInputFrame input input.positions.card state)
+    (framed : InputFrame input input.positions.card state)
     (table : CollectedTable oracle input input.positions.card state rows) :
     CheckerCapFacts oracle input state fuel := by
   let groups := Opening.groupsBefore input.positions input.positions.card

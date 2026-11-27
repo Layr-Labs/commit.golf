@@ -13,30 +13,15 @@ local instance openingDiscreteSpace {α : Type} : MeasurableSpace α := ⊤
 
 theorem opening_physical (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) :
-    ∃ result : Execution, s.run .opening (trapdoor, positions) = pure result ∧ OpenPhysical s trapdoor positions result :=
+    ∃ result : Execution,s.run .opening (trapdoor,positions)=pure result ∧ WireResult s trapdoor positions result :=
   opening_physical_with (execute_records_from_step execute_record) s abi trapdoor positions
 
 theorem scheme_open_bytes (s : Submission) (abi : OpeningABI s)
     (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions) :
-    s.scheme.opening trapdoor positions = pure (proofFromTrapdoor (s := s) trapdoor positions) :=
-  scheme_open_bytes_with (execute_records_from_step execute_record) s abi trapdoor positions
-
-theorem opening_proof_size (s : Submission) (abi : OpeningABI s)
-    (trapdoor : BitVec (8*s.sizes.trapdoor)) (positions : Positions)
-    (result : Execution) (physical : OpenPhysical s trapdoor positions result) :
-    (s.readProof result).length = (result.state.getReg .x11).toNat := by
-  simp only [Submission.readProof, opening_success s abi trapdoor positions result physical,
-    ite_true, List.length_map, List.length_range]
-
-theorem opening_scored_attainment (s : Submission) (abi : OpeningABI s)
-    (trapdoor : BitVec (8*s.sizes.trapdoor)) :
-    ∃ (positions : Positions) (result : Execution), positions.card = BATCH ∧
-      s.run .opening (trapdoor, positions) = pure result ∧
-      result.cycles = 85767 ∧ (s.readProof result).length = 67840 := by
-  obtain ⟨positions, count, cycleVal, byteVal⟩ := scheduled_scored_attainment
-  obtain ⟨result, run, physical⟩ := opening_physical s abi trapdoor positions
-  exact ⟨positions, result, count, run, physical.cycles.trans cycleVal,
-    (opening_proof_size s abi trapdoor positions result physical).trans (physical.length.trans byteVal)⟩
+    s.scheme.opening trapdoor positions=pure (Hybrid.wireProof positions (proofFromTrapdoor (s:=s) trapdoor positions)) := by
+  obtain ⟨result,run,facts⟩:=opening_physical s abi trapdoor positions
+  change (s.readProof <$> s.run .opening (trapdoor,positions))=_
+  rw [run,map_pure,facts.bytes]
 
 /-- Compose the exact packed opener with the commit distribution supplied by the concrete heap proof. -/
 theorem transcript_refines (s : Submission) (abi : OpeningABI s)
@@ -51,7 +36,7 @@ theorem transcript_refines (s : Submission) (abi : OpeningABI s)
       trapdoorHeap (s := s) (trapdoorOf oracle message salts) node =
         Hybrid.heap oracle.compression
           (c3FullLeafDigests oracle.compression (BiPermutation.equiv Block oracle.permutation) message salts) node) :
-    C3TranscriptRefines s.scheme (Hybrid.builder) := by
+    C3TranscriptRefines s.scheme Hybrid.wireBuilder := by
   intro oracle message positions
   unfold executableTranscript
   rw [fixed_oracle_run_bind]

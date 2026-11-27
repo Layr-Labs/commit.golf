@@ -21,8 +21,8 @@ attribute [local simp] Opening.getReg_setReg Opening.getReg_setMem
 
 theorem root_exit (state : MachineState) (pc : state.pc = 0x1a3c)
     (root : state.getReg .x6 = 1#64) (fuel : Nat) (allowCoins : Bool) :
-    let result := exitPrefix (advanceUp state) 3
-    execute openingImage (8 + fuel) state allowCoins = pure ⟨.success, result, 8, 0⟩ ∧
+    let result := exitPrefix (advanceUp state) 1
+    execute openingImage (5 + fuel) state allowCoins = (do let out ← execute openingImage fuel result allowCoins;return out.charge 5 0) ∧
     result.mem = state.mem ∧ result.getReg .x11 = state.getReg .x21 - state.getReg .x20 := by
   let tested := afterAdvanceChecks state
   let checked := advanceUp state
@@ -41,11 +41,28 @@ theorem root_exit (state : MachineState) (pc : state.pc = 0x1a3c)
   have start : checked.getReg .x20 = state.getReg .x20 := by
     simp [checked, advanceUp, afterAdvanceChecks, advancePrefix, advanceCode, execInstrBr, signExtend12, root]
   refine ⟨?_, (exit_memory checked).trans memory, ?_⟩
-  · rw [show 8 + fuel = 2 + (2 + (4 + fuel)) by omega, execute_advance_parity_test _ pc,
+  · rw [show 5 + fuel = 2 + (2 + (1 + fuel)) by omega, execute_advance_parity_test _ pc,
       execute_advance_up (advancePrefix state 41 2) odd,
       execute_exit (advancePrefix (advancePrefix state 41 2) 47 2) ready]
-    simp [Execution.charge, advanceUp, afterAdvanceChecks]
+    simp [Execution.charge, advanceUp, afterAdvanceChecks,bind_assoc,←Nat.add_assoc]
   · rw [exit_register, dest, start]
+
+theorem root_prefix_fields (state : MachineState) (pc : state.pc=0x1a3c) (root : state.getReg .x6=1#64) :
+    let final:=exitPrefix (advanceUp state) 1
+    final.pc=6752 ∧ final.getReg .x20=state.getReg .x20 := by
+  let tested := afterAdvanceChecks state
+  let checked := advanceUp state
+  have odd : tested.pc = 0x1a54 := by
+    rw [show tested.pc = _ from advance_parity_target state pc, root]; rfl
+  have testNode : tested.getReg .x6 = 1#64 := by
+    simp [tested, afterAdvanceChecks, advancePrefix, advanceCode, execInstrBr, signExtend12, root]
+  have ready : checked.pc = 0x1a5c := by
+    rw [show checked.pc = _ from (advance_up_post tested odd).1, testNode]; rfl
+  constructor
+  · change checked.pc+4=_
+    rw [ready] <;> rfl
+  · change checked.getReg .x20=_
+    simp [checked,advanceUp,afterAdvanceChecks,advancePrefix,advanceCode,execInstrBr,signExtend12,root]
 
 theorem terminal_length (state : MachineState) (outputLen : Nat)
     (final : state.getReg .x21 = BitVec.ofNat 64 (proofBase+outputLen))

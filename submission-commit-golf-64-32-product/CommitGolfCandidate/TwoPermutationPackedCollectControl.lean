@@ -1,12 +1,10 @@
+import CommitGolfCandidate.TwoPermutationPackedInputFrame
 import CommitGolfCandidate.TwoPermutationPackedRecordInterface
 
 namespace TwoPermutationPrototype.Packed.Checker
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.Sampling
-open TwoPermutationPrototype.Checker (GroupAccepted groupMemory group_memory_other group_memory_mark group_memory_root
-  RecordInputFrame checkIndexWord checkSourceWord record_input_frame_step checker_positions_bound
-  aligned_digest_frame aligned_buffer_frame honestIndex checker_cap_group
-  check_recorded_map machineMarks capRootAt checker_marks_as_word)
+open TwoPermutationPrototype.Checker (GroupAccepted groupMemory group_memory_other group_memory_mark group_memory_root checkIndexWord checkSourceWord checker_positions_bound aligned_digest_frame aligned_buffer_frame honestIndex checker_cap_group check_recorded_map machineMarks capRootAt checker_marks_as_word)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 set_option maxHeartbeats 1000000
 set_option maxRecDepth 8192
@@ -124,13 +122,13 @@ theorem group_accepts_honest (oracle : Oracle) (input : CheckInput) (ordinal : N
 
 theorem group_collect_transition (oracle : Oracle) (input : CheckInput) (ordinal : Nat)
     (present : ordinal < input.positions.card) (state : MachineState)
-    (cursor : RecordCursor input ordinal state) (loaded : RecordInputFrame input ordinal state)
+    (cursor : RecordCursor input ordinal state) (loaded : InputFrame input ordinal state)
     (block : RecordBlock) (facts : RecordBlockFacts oracle input ordinal present state block)
     (rows : List PublicRow) (table : CollectedTable oracle input ordinal state rows) :
     let index := (honestIndex input.positions ordinal present).val
     let group := groupRun block.state (capGroup index)
     GroupAccepted block.state (capGroup index) →
-    RecordCursor input (ordinal+1) group.1 ∧ RecordInputFrame input (ordinal+1) group.1 ∧
+    RecordCursor input (ordinal+1) group.1 ∧ InputFrame input (ordinal+1) group.1 ∧
       CollectedTable oracle input (ordinal+1) group.1 (rows++block.rows) := by
   let attached := honestIndex input.positions ordinal present
   let index := attached.val
@@ -147,11 +145,11 @@ theorem group_collect_transition (oracle : Oracle) (input : CheckInput) (ordinal
       memoryView next word = memoryView block.state word :=
     (nextWord word).trans (group_memory_other block.state group word bound fit mark roots)
   change GroupAccepted block.state group → RecordCursor input (ordinal+1) next ∧
-    RecordInputFrame input (ordinal+1) next ∧
+    InputFrame input (ordinal+1) next ∧
     CollectedTable oracle input (ordinal+1) next (rows++block.rows)
   intro accepted
   refine ⟨group_after_record_cursor oracle input ordinal present state cursor block facts accepted, ?_, ?_⟩
-  · apply record_input_frame_step input ordinal state next loaded
+  · apply frame_step input ordinal state next loaded
     intro word fit used
     have above : 4096 ≤ word := by
       rcases used with h | h | h

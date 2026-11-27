@@ -15,6 +15,6 @@ theorem canonical_cap_heap (oracle : Oracle) (leaves : DigestTape) :
   intro node positive below
   have room : 256 ≤ LENGTH/2 := by decide
   rw [Hybrid.heap_parent oracle.compression leaves node ⟨positive,by omega⟩,Hybrid.normalize,ite_eq_left (by omega)]
-  rfl
+  rw [if_pos (by omega)] <;> rfl
 
 end TwoPermutationPrototype.Packed.Checker

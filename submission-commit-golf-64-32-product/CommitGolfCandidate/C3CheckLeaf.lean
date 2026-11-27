@@ -23,9 +23,7 @@ namespace TwoPermutationPrototype.Packed.C3RecordLeaf
 open CommitGolf CommitGolf.Riscv CommitGolfCandidate RiscvZkvm.Rv64 OracleComp
 open TwoPermutationPrototype.RV64 TwoPermutationPrototype.RV64.C3Leaves TwoPermutationPrototype.Sampling
 open TwoPermutationPrototype.Packed.Checker
-open TwoPermutationPrototype.Checker (checkIndexWord checkSourceWord checker_positions_bound RecordInputFrame
-  honestIndex record_input_index record_input_value beginLower beginLowerCode lower_setup_post
-  lower_setup_register lower_setup_mem check_recorded_bind check_recorded_map checker_value_data buffer_window)
+open TwoPermutationPrototype.Checker (checkIndexWord checkSourceWord checker_positions_bound honestIndex beginLower beginLowerCode lower_setup_post lower_setup_register lower_setup_mem check_recorded_bind check_recorded_map checker_value_data buffer_window)
 open TwoPermutationPrototype.PackedCertificate (honestCheckInput)
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1600000
@@ -703,7 +701,7 @@ def c3Block (oracle : Oracle) (ordinal : Nat) (_index : Index) (s : MachineState
 
 theorem ck_ready (input : CheckInput) (ordinal : Nat) (present : ordinal < input.positions.card)
     (s : MachineState) (fits : ProofWithin input) (cursor : RecordCursor input ordinal s)
-    (framed : RecordInputFrame input ordinal s) :
+    (framed : InputFrame input ordinal s) :
     CkReady s (checkSourceWord ordinal) (checkProofByte ordinal) (honestIndex input.positions ordinal present).val := by
   obtain ⟨aligned, _, _, room, _⟩ := packed_record_geometry input ordinal present fits
   have card := checker_positions_bound input
@@ -712,7 +710,7 @@ theorem ck_ready (input : CheckInput) (ordinal : Nat) (present : ordinal < input
   refine ⟨cursor.pc.trans (ite_eq_right (show ¬ ordinal = input.positions.card by omega)), ?_, ?_, cursor.value,
     cursor.proof, cursor.tag, cursor.digest, cursor.selector, ?_, ?_, aligned, ?_, ?_⟩
   · rw [cursor.index]; exact acc
-  · rw [cursor.index]; exact record_input_index input ordinal present s framed
+  · rw [cursor.index]; exact frame_index input ordinal present s framed
   · unfold checkSourceWord; omega
   · unfold checkSourceWord; omega
   · omega
@@ -754,7 +752,7 @@ theorem c3_leaf_block : LeafBlockRefines c3Block := by
   let proof := checkProofByte ordinal
   have ready : CkReady s src proof item.val := ck_ready input ordinal present s fits cursor framed
   have values : window (memoryView s) (src + 5) = entryWords (input.values item) :=
-    checker_value_data (fun _ => input.values item) item.val (record_input_value input ordinal present s framed)
+    checker_value_data (fun _ => input.values item) item.val (frame_value input ordinal present s framed)
   obtain ⟨⟨t1, t2, t3, finalEq⟩, rowsEq⟩ := c3_raw_spec oracle s src proof item.val ready _ values
   let raw := (c3Raw oracle s src).1
   have rawEq : raw = ck7 s src t1 t2 t3 _ := finalEq
@@ -771,7 +769,7 @@ theorem c3_leaf_block : LeafBlockRefines c3Block := by
     change readBuffer (beginLower raw 5) 12288 32 = _
     rw [read_buffer_memory_congr _ _ (lower_setup_mem raw), rawEq, ck7_digest]
     rfl
-  refine ⟨by change 41 ≤ 169; decide, c3_exact_run oracle ordinal item.val s proof ready, ?_, finalSaved, ?_, ?_, ?_⟩
+  refine ⟨by change 41 ≤ 41; decide, c3_exact_run oracle ordinal item.val s proof ready, ?_, finalSaved, ?_, ?_, ?_⟩
   · change LowerCursor ordinal item.val 0 (beginLower raw 5)
     refine ⟨?_, ?_, ?_, params.2.2.2.2.1, (finalSaved .x23 (by decide)).trans cursor.digest,
       (finalSaved .x24 (by decide)).trans cursor.pair, (finalSaved .x5 (by decide)).trans cursor.selector,
@@ -799,8 +797,8 @@ theorem c3_leaf_block : LeafBlockRefines c3Block := by
       List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))⟩
   · intro message salts canonical
     rw [digest]
-    have loaded : RecordInputFrame (honestCheckInput oracle message input.positions salts) ordinal s :=
-      Eq.mp (congrArg (fun data => RecordInputFrame data ordinal s) canonical) framed
+    have loaded : InputFrame (honestCheckInput oracle message input.positions salts) ordinal s :=
+      Eq.mp (congrArg (fun data => InputFrame data ordinal s) canonical) framed
     have salt := packed_record_nonce oracle message input.positions salts ordinal present s loaded
     have nonce : ckNonce s proof = saltWords (salts item.val) := by
       funext i

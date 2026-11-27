@@ -80,6 +80,8 @@ structure RecordsFinished (s : Submission) (trapdoor : BitVec (8*s.sizes.trapdoo
   boundary : RecordBoundary s trapdoor positions after (ordinal+count)
   marks : RecordMarks positions after (ordinal+count)
   bytes : CompletedRecords s trapdoor positions after (ordinal+count)
+  future : ∀ address < MEMORY_BYTES, recordBase (ordinal+count) ≤ address →
+    after.getByte (BitVec.ofNat 64 address) = before.getByte (BitVec.ofNat 64 address)
 
 def RecordExecute : Prop :=
   ∀ (s : Submission) (_layout : OpeningLayout s)

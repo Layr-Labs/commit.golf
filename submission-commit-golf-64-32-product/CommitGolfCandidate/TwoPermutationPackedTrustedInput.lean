@@ -48,7 +48,7 @@ theorem check_initial_registers (input : CheckInput) :
 theorem check_run_admitted (input : CheckInput)
     (admitted : input.proof.length ≤ submission.sizes.proof) :
     submission.run .check input =
-      execute (submission.image .check) 34359803904 (submission.initialState .check input) false := by
+      execute (submission.image .check) 34628239360 (submission.initialState .check input) false := by
   simp only [Submission.run,admitted,decide_true,ite_true]
   rfl
 

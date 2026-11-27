@@ -61,46 +61,33 @@ theorem lower_frame (span : Nat) : ∀ n (s : MachineState), hybridCut + span * 
     rw [show memoryView (mid.setPC (lowerNext (span * n))) = memoryView mid from memoryView_congr rfl]
     exact parents_p_frame _ span s b1 mid path w wb (le_trans (tree_word_mono (by simp only [Nat.mul_succ]; omega)) above)
 
-theorem packed_trace_mem_frame (remaining : Nat) : ∀ count (s : MachineState), ParentRegs s (remaining + count) →
-    remaining + count < 2 ^ 24 → ∀ out ∈ support (packedParentsTrace remaining count s),
-      ParentRegs out remaining ∧
-        ∀ w < 2 ^ 33, treeWord (remaining + count + 1) ≤ w → memoryView out w = memoryView s w := by
-  intro count
-  induction count with
-  | zero =>
-    intro s regs _ out hit
-    simp only [packedParentsTrace, support_pure, Set.mem_singleton_iff] at hit
-    subst hit; exact ⟨regs, fun _ _ _ => rfl⟩
-  | succ k ih =>
-    intro s regs bound out hit
-    simp only [packedParentsTrace, mem_support_bind_iff] at hit
-    obtain ⟨answer, _, rest⟩ := hit
-    have regs' := packed_next_parent_regs s (remaining + k) answer regs
-    obtain ⟨endRegs, frame⟩ := ih _ regs' (by omega) out rest
-    refine ⟨endRegs, fun w wb above => ?_⟩
-    rw [frame w wb (le_trans (tree_word_mono (by omega)) above),
-      memoryView_congr (packed_parent_memory s (remaining + k + 1) answer regs (by omega)),
-      written_frame s (remaining + k + 1) _ (by omega) w wb (le_trans (tree_word_mono (by omega)) above)]
+theorem upper_step_mem (s : MachineState) (n : Nat) (v : BitVec 256) (r : R1bParents.Ready s n)
+    (hn : n < 8388608) :
+    (R1bParents.nextState s n v).mem = (parentWritten s n (R1bParents.retained n v)).mem := by
+  change (R1bParents.laneState s n v).mem = _
+  unfold R1bParents.laneState
+  by_cases lo : n < 524288
+  · rw [if_pos lo, R1bParents.retained, if_pos lo]
+    exact R1bParents.narrowed_mem s n v hn r.toParentRegs r.mask
+  · rw [if_neg lo, R1bParents.retained, if_neg lo]
+    exact packed_parent_memory s n v r.toParentRegs (by change n < 16777216; omega)
 
-theorem groups_mem_frame (base : Word) (span : Nat) : ∀ groups (s : MachineState), ParentRegs s (span * groups) →
-    span * groups < 2 ^ 24 → ∀ out ∈ support (packedParentGroups base span groups s),
-      ∀ w < 2 ^ 33, treeWord (span * groups + 1) ≤ w → memoryView out w = memoryView s w := by
-  intro groups
-  induction groups with
+theorem upper_trace_frame : ∀ n (s : MachineState), R1bParents.Ready s n → n < 8388608 →
+    ∀ out ∈ support (R1bParents.trace n s), ∀ w < 2 ^ 33, treeWord (n + 1) ≤ w →
+      memoryView out w = memoryView s w := by
+  intro n
+  induction n with
   | zero =>
     intro s _ _ out hit w _ _
-    simp only [packedParentGroups, support_pure, Set.mem_singleton_iff] at hit
+    simp only [R1bParents.trace, support_pure, Set.mem_singleton_iff] at hit
     subst hit; rfl
-  | succ g ih =>
-    intro s regs bound out hit w wb above
-    simp only [packedParentGroups, mem_support_bind_iff] at hit
-    obtain ⟨body, path, rest⟩ := hit
-    have regs1 : ParentRegs s (span * g + span) := by rw [← Nat.mul_succ]; exact regs
-    have b1 : span * g + span < 2 ^ 24 := by rw [Nat.mul_succ] at bound; exact bound
-    obtain ⟨bodyRegs, frame⟩ := packed_trace_mem_frame (span * g) span s regs1 b1 body path
-    rw [ih _ (parent_regs_set_pc bodyRegs _) (by omega) out rest w wb (le_trans (tree_word_mono (by simp only [Nat.mul_succ]; omega)) above),
-      show memoryView (body.setPC (packedParentNextPC base span (span * g))) = memoryView body from memoryView_congr rfl,
-      frame w wb (le_trans (tree_word_mono (by simp only [Nat.mul_succ]; omega)) above)]
+  | succ k ih =>
+    intro s r bound out hit w wb above
+    simp only [R1bParents.trace, mem_support_bind_iff] at hit
+    obtain ⟨v, _, rest⟩ := hit
+    rw [ih _ (R1bParents.next_regs v r) (by omega) out rest w wb (le_trans (tree_word_mono (by omega)) above),
+      memoryView_congr (upper_step_mem s (k + 1) v r bound),
+      written_frame s (k + 1) _ (by omega) w wb above]
 
 theorem hybrid_start_mem (s : MachineState) : (hybridStart s).mem = s.mem := by
   unfold hybridStart
@@ -117,18 +104,12 @@ theorem parent_phase_frame (X : MachineState) (regs : ParentRegsP X (2 ^ 24 - 1)
   have start : (hybridStart X).pc = 217580 := by change X.pc + 4 + 4 = _; rw [pc]; rfl
   have post := lower_postP 256 _ (fun _ => start) (hybrid_start_regsP X _ regs) path
   have cutRegs := regs_of_cut lower post.1
-  have nr : ParentRegs (lower.setPC 615176) hybridCut :=
+  have nr : ParentRegs (lower.setPC 4180) hybridCut :=
     ⟨cutRegs.source, cutRegs.target, cutRegs.selector, cutRegs.size, cutRegs.primitive, cutRegs.heap⟩
-  simp only [hybridUpper, mem_support_bind_iff] at tail
-  obtain ⟨mid, midPath, groupsPath⟩ := tail
-  have nr' : ParentRegs (lower.setPC 615176) (8361285 + 27322) := nr
-  obtain ⟨midRegs, midFrame⟩ := packed_trace_mem_frame 8361285 27322 _ nr' (by decide) mid midPath
-  have gr : ParentRegs (mid.setPC 610808) (27595 * 303) := parent_regs_set_pc midRegs _
-  rw [groups_mem_frame 610808 27595 303 _ gr (by decide) out groupsPath w wb
-      (le_trans (tree_word_mono (by decide)) above),
-    show memoryView (mid.setPC 610808) = memoryView mid from memoryView_congr rfl,
-    midFrame w wb (le_trans (tree_word_mono (by decide)) above),
-    show memoryView (lower.setPC 615176) = memoryView lower from memoryView_congr rfl,
+  unfold hybridUpper at tail
+  have ready := R1bParents.setupReady (lower.setPC 4180) rfl nr
+  rw [upper_trace_frame hybridCut _ ready (by decide) out tail w wb (le_trans (tree_word_mono (by decide)) above),
+    show memoryView (R1bParents.setup (lower.setPC 4180) 5) = memoryView lower from memoryView_congr rfl,
     lower_frame fullSpan 256 _ (by decide) lower path w wb (le_trans (tree_word_mono (by decide)) above),
     memoryView_congr (hybrid_start_mem X)]
 

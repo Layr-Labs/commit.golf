@@ -2,18 +2,19 @@ import CommitGolfCandidate.TwoPermutationPackedOpeningInitial
 import CommitGolfCandidate.TwoPermutationPackedOpeningABI
 import CommitGolfCandidate.TwoPermutationSyscall
 import CommitGolfCandidate.C3CommitMemory
+import CommitGolfCandidate.R1bMachine
 
-/-! # The paired opener's pre-pass (opening image words 12 and 1435..1504)
+/-! # The paired opener's pre-pass (opening image words 12 and 12626..12696)
 
-The leader's word 12 becomes `jal zero,<1435>`. For the `count` sorted positions `i_k`:
+The leader's word 12 becomes `jal zero,<12626>`. For the `count` sorted positions `i_k`:
 
-pass 1 (words 1444..1475, one inverse permutation call per position): the reply of leaf `i` at
+pass 1 (words 12636..12667, one inverse permutation call per position): the reply of leaf `i` at
 word `Rw + 25 i` (byte `R = TD + 2^29 + 168`) is inverted into scratch words 2048..2072; its salt
 (input words 23, 24 for even `i`, words 0, 1 for odd `i`) and the mate's digest (reply words
 `Rw + 25 i + 25 ..` for even `i`, `Rw + 25 i - 4 ..` for odd `i`) go to list words `Lw k .. Lw k + 6`
 (`Lw k = 2^27 + 6 k`).
 
-pass 2 (words 1481..1502): list words to the leader's salt slot (`TDw + 10 LENGTH + 2 i`, the
+pass 2 (words 12673..12694): list words to the leader's salt slot (`TDw + 10 LENGTH + 2 i`, the
 leader's nonce table) and to the mate's heap leaf slot (`TDw + 2^26 + 4 (i^1)`).
 
 Then `addi s11,zero,256` (the leader's word 12) and `jal zero,<13>`. -/
@@ -45,17 +46,11 @@ def Lw (k : Nat) : Nat := 2 ^ 27 + 6 * k
 def scratchW : Nat := 2048
 
 theorem pre_fetch (state : MachineState) (index : Nat) (instruction : Instr)
-    (indexBound : index < 1505) (pc : state.pc = opPC index)
-    (decoded : (openingImage.code[index]?).bind decodeInstruction = some (.base instruction)) :
+    (indexBound : index < 12697) (pc : state.pc = opPC index)
+    (decoded : decodeInstruction (R1b.Machine.Code.word .opening index) = some (.base instruction)) :
     fetch openingImage state = some (.base instruction) := by
-  have pcNat : state.pc.toNat = 4096 + 4 * index := by
-    rw [pc, BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
-    omega
-  rw [fetch, pcNat, ite_eq_left (by omega)]
-  rw [show (4096 + 4 * index - 4096) / 4 = index by omega]
-  cases word : openingImage.code[index]? with
-  | none => simp [word] at decoded
-  | some word => simpa [word] using decoded
+  rw [← delivered_opening_image]
+  exact (R1b.Machine.fetched .opening index indexBound state pc).trans decoded
 
 theorem oracle_input_inverse (state : MachineState) (src dst : Nat)
     (srcBound : src + 25 ≤ 2 ^ 33) (dstBound : dst + 25 ≤ 2 ^ 33)
@@ -234,8 +229,8 @@ theorem op_pc_next (k : Nat) : opPC k + 4 = opPC (k + 1) := by
 
 /-- A straight-line block of one-cycle ALU instructions (no memory access) at words `start ..`. -/
 theorem alu_run (s : MachineState) (start : Nat) (ops : List Instr) (fuel : Nat) (coins : Bool)
-    (pc : s.pc = opPC start) (fits : start + ops.length ≤ 1505)
-    (code : ∀ j (h : j < ops.length), (openingImage.code[start + j]?).bind decodeInstruction = some (.base ops[j]))
+    (pc : s.pc = opPC start) (fits : start + ops.length ≤ 12697)
+    (code : ∀ j (h : j < ops.length), decodeInstruction (R1b.Machine.Code.word .opening (start + j)) = some (.base ops[j]))
     (plain : ∀ j (h : j + 1 < ops.length) (t : MachineState), (execInstrBr t ops[j]).pc = t.pc + 4)
     (alu : ∀ j (h : j < ops.length) (t : MachineState), ordinaryStep t (.base ops[j]) = some (execInstrBr t ops[j]))
     (unit : ∀ j (h : j < ops.length), instructionCycles (.base ops[j]) = 1) :
@@ -260,9 +255,9 @@ theorem alu_run (s : MachineState) (start : Nat) (ops : List Instr) (fuel : Nat)
 
 /-- `ld t6,la(rs) ; sd t6,sb(rd)` at words `k, k+1`: two steps. -/
 theorem ld_sd_run (t : MachineState) (k : Nat) (rs rd : Reg) (load store : BitVec 12) (a b la sb : Nat)
-    (pc : t.pc = opPC k) (hk : k + 2 ≤ 1505)
-    (dl : (openingImage.code[k]?).bind decodeInstruction = some (.base (.LD .x31 rs load)))
-    (ds : (openingImage.code[k + 1]?).bind decodeInstruction = some (.base (.SD rd .x31 store)))
+    (pc : t.pc = opPC k) (hk : k + 2 ≤ 12697)
+    (dl : decodeInstruction (R1b.Machine.Code.word .opening (k)) = some (.base (.LD .x31 rs load)))
+    (ds : decodeInstruction (R1b.Machine.Code.word .opening (k + 1)) = some (.base (.SD rd .x31 store)))
     (hrd : rd ≠ .x31) (ra : t.getReg rs = wordAddress a) (rb : t.getReg rd = wordAddress b)
     (lv : signExtend12 load = BitVec.ofNat 64 (8 * la)) (sv : signExtend12 store = BitVec.ofNat 64 (8 * sb))
     (ba : a + la < 2 ^ 33) (bb : b + sb < 2 ^ 33) (fuel : Nat) (coins : Bool) :
@@ -288,8 +283,8 @@ def p1OpsA7 : List Instr := [.SLLI .x7 .x6 3, .SLLI .x28 .x6 6, .ADD .x7 .x7 .x2
   .SLLI .x28 .x6 7, .ADD .x7 .x7 .x28, .ADD .x7 .x15 .x7, .ADDI .x10 .x7 0]
 def p1OpsB : List Instr := [.ANDI .x29 .x6 1, .ADDI .x29 .x29 4095, .ANDI .x28 .x29 184, .ADD .x28 .x12 .x28]
 def p1OpsD : List Instr := [.ANDI .x29 .x29 232, .ADD .x7 .x7 .x29, .ADDI .x7 .x7 4064]
-def p1OpsF3 : List Instr := [.ADDI .x17 .x17 48, .ADDI .x14 .x14 8, .ADDI .x16 .x16 4095]
-def p1OpsF : List Instr := p1OpsF3 ++ [.BNE .x16 .x0 8068]
+def p1OpsF3 : List Instr := [.ADDI .x17 .x17 48, .ADDI .x14 .x14 8, .ADDI .x1 .x1 4095]
+def p1OpsF : List Instr := p1OpsF3 ++ [.BNE .x1 .x0 8068]
 
 /-- The salt's word offset in an inverted input, and the mate digest's reply word. -/
 def saltOff (i : Nat) : Nat := if i % 2 = 0 then 23 else 0
@@ -302,7 +297,7 @@ def p1W (s : MachineState) (y : Sampling.Block) : MachineState := writeBits (p1A
 def copyPair (t : MachineState) (rs rd : Reg) (load store : BitVec 12) : MachineState :=
   execInstrBr (execInstrBr t (.LD .x31 rs load)) (.SD rd .x31 store)
 
-/-- The salt copy (words 1457..1460) and the digest copy (words 1464..1471). -/
+/-- The salt copy (words 12649..12652) and the digest copy (words 12656..12663). -/
 def saltCopy (t : MachineState) : MachineState := copyPair (copyPair t .x28 .x17 0 0) .x28 .x17 8 8
 
 def digestCopy (t : MachineState) : MachineState :=
@@ -313,12 +308,12 @@ def p1Next (s : MachineState) (y : Sampling.Block) : MachineState :=
   runOps (digestCopy (runOps (saltCopy (runOps (p1W s y) p1OpsB)) p1OpsD)) p1OpsF
 
 structure P1Ready (s : MachineState) (k i card : Nat) : Prop where
-  pc : s.pc = opPC 1444
+  pc : s.pc = opPC 12636
   idx : s.getReg .x14 = wordAddress (IW + k)
   idxVal : memoryView s (IW + k) = BitVec.ofNat 64 i
   reply : s.getReg .x15 = wordAddress Rw
   list : s.getReg .x17 = wordAddress (Lw k)
-  left : s.getReg .x16 = BitVec.ofNat 64 (card - k)
+  left : s.getReg .x1 = BitVec.ofNat 64 (card - k)
   size : s.getReg .x11 = 200
   out : s.getReg .x12 = wordAddress scratchW
   prim : s.getReg .x13 = 2
@@ -329,7 +324,7 @@ structure P1Ready (s : MachineState) (k i card : Nat) : Prop where
 
 theorem p1a_facts (s : MachineState) (k i card : Nat) (r : P1Ready s k i card) :
     (p1A s).getReg .x6 = BitVec.ofNat 64 i ∧ (p1A s).getReg .x10 = wordAddress (Rw + 25 * i) ∧
-    (p1A s).getReg .x7 = wordAddress (Rw + 25 * i) ∧ (p1A s).mem = s.mem ∧ (p1A s).pc = opPC 1452 ∧
+    (p1A s).getReg .x7 = wordAddress (Rw + 25 * i) ∧ (p1A s).mem = s.mem ∧ (p1A s).pc = opPC 12644 ∧
     ∀ g, g ≠ .x6 → g ≠ .x7 → g ≠ .x28 → g ≠ .x10 → (p1A s).getReg g = s.getReg g := by
   have hi := r.small
   have len : LENGTH = 2 ^ 24 := rfl
@@ -351,7 +346,7 @@ theorem p1a_facts (s : MachineState) (k i card : Nat) (r : P1Ready s k i card) :
     simp [p1A, p1OpsA7, runOps, execInstrBr, Ne.symm a, Ne.symm b, Ne.symm c, Ne.symm d]
 
 theorem p1w_facts (s : MachineState) (k i card : Nat) (r : P1Ready s k i card) (y : Sampling.Block) :
-    (∀ g, (p1W s y).getReg g = (p1A s).getReg g) ∧ (p1W s y).pc = opPC 1453 ∧
+    (∀ g, (p1W s y).getReg g = (p1A s).getReg g) ∧ (p1W s y).pc = opPC 12645 ∧
     ∀ w < 2 ^ 33, memoryView (p1W s y) w = writeWindow (memoryView s) scratchW (replyWords y) w := by
   obtain ⟨_, _, _, mem, pc, _⟩ := p1a_facts s k i card r
   refine ⟨fun g => by unfold p1W; exact CommitGolfCandidate.writeBits_register _ _ _ _, ?_, fun w hw => ?_⟩
@@ -442,19 +437,19 @@ theorem stage_d (C : MachineState) (i : Nat) (x29 : C.getReg .x29 = if i % 2 = 0
     simp [p1OpsD, runOps, execInstrBr, Ne.symm a, Ne.symm b]
 
 theorem stage_f (E : MachineState) (k card : Nat) (hk : k < card) (hc : card ≤ 2 ^ 24)
-    (x14 : E.getReg .x14 = wordAddress (IW + k)) (x16 : E.getReg .x16 = BitVec.ofNat 64 (card - k))
-    (x17 : E.getReg .x17 = wordAddress (Lw k)) (pc : E.pc = opPC 1472) :
+    (x14 : E.getReg .x14 = wordAddress (IW + k)) (x16 : E.getReg .x1 = BitVec.ofNat 64 (card - k))
+    (x17 : E.getReg .x17 = wordAddress (Lw k)) (pc : E.pc = opPC 12664) :
     (runOps E p1OpsF).getReg .x14 = wordAddress (IW + (k + 1)) ∧
-    (runOps E p1OpsF).getReg .x16 = BitVec.ofNat 64 (card - (k + 1)) ∧
+    (runOps E p1OpsF).getReg .x1 = BitVec.ofNat 64 (card - (k + 1)) ∧
     (runOps E p1OpsF).getReg .x17 = wordAddress (Lw (k + 1)) ∧
     (runOps E p1OpsF).mem = E.mem ∧
-    (runOps E p1OpsF).pc = (if k + 1 = card then opPC 1476 else opPC 1444) ∧
-    ∀ g, g ≠ .x14 → g ≠ .x16 → g ≠ .x17 → (runOps E p1OpsF).getReg g = E.getReg g := by
-  have split3 : runOps E p1OpsF = execInstrBr (runOps E p1OpsF3) (.BNE .x16 .x0 8068) := by
+    (runOps E p1OpsF).pc = (if k + 1 = card then opPC 12668 else opPC 12636) ∧
+    ∀ g, g ≠ .x14 → g ≠ .x1 → g ≠ .x17 → (runOps E p1OpsF).getReg g = E.getReg g := by
+  have split3 : runOps E p1OpsF = execInstrBr (runOps E p1OpsF3) (.BNE .x1 .x0 8068) := by
     rw [p1OpsF, run_ops_append, run_ops_singleton]
   let F3 := runOps E p1OpsF3
-  have f16 : F3.getReg .x16 = BitVec.ofNat 64 (card - (k + 1)) := by
-    have e : F3.getReg .x16 = E.getReg .x16 + signExtend12 4095 := by
+  have f16 : F3.getReg .x1 = BitVec.ofNat 64 (card - (k + 1)) := by
+    have e : F3.getReg .x1 = E.getReg .x1 + signExtend12 4095 := by
       simp only [F3, runOps, p1OpsF3, List.foldl, execInstrBr, Opening.getReg_setReg, MachineState.getReg_setPC,
         reduceCtorEq, false_and, true_and, ne_eq, not_false_eq_true, ↓reduceIte]
     rw [e, x16, show signExtend12 (4095 : BitVec 12) = BitVec.ofNat 64 (2 ^ 64 - 1) by decide, ← BitVec.ofNat_add]
@@ -472,7 +467,7 @@ theorem stage_f (E : MachineState) (k card : Nat) (hk : k < card) (hc : card ≤
         reduceCtorEq, false_and, true_and, ne_eq, not_false_eq_true, ↓reduceIte]
     rw [e, x17, show signExtend12 (48 : BitVec 12) = BitVec.ofNat 64 (8 * 6) by decide, address_up]
     unfold Lw; congr 1
-  have fpc : F3.pc = opPC 1475 := by
+  have fpc : F3.pc = opPC 12667 := by
     change E.pc + 4 + 4 + 4 = _
     rw [pc]; rfl
   have fmem : F3.mem = E.mem := by simp only [F3, runOps, p1OpsF3, List.foldl, execInstrBr, set_mem]
@@ -518,9 +513,9 @@ theorem p1_next_facts (s : MachineState) (k i card : Nat) (r : P1Ready s k i car
     (∀ w < 2 ^ 33, memoryView (p1Next s y) w = p1Mem (memoryView s) y k i w) ∧
     (p1Next s y).getReg .x14 = wordAddress (IW + (k + 1)) ∧
     (p1Next s y).getReg .x17 = wordAddress (Lw (k + 1)) ∧
-    (p1Next s y).getReg .x16 = BitVec.ofNat 64 (card - (k + 1)) ∧
-    (p1Next s y).pc = (if k + 1 = card then opPC 1476 else opPC 1444) ∧
-    (∀ g, g ≠ .x6 → g ≠ .x7 → g ≠ .x10 → g ≠ .x14 → g ≠ .x16 → g ≠ .x17 → g ≠ .x28 → g ≠ .x29 → g ≠ .x31 →
+    (p1Next s y).getReg .x1 = BitVec.ofNat 64 (card - (k + 1)) ∧
+    (p1Next s y).pc = (if k + 1 = card then opPC 12668 else opPC 12636) ∧
+    (∀ g, g ≠ .x6 → g ≠ .x7 → g ≠ .x10 → g ≠ .x14 → g ≠ .x1 → g ≠ .x17 → g ≠ .x28 → g ≠ .x29 → g ≠ .x31 →
       (p1Next s y).getReg g = s.getReg g) := by
   have hi := r.small
   have hk := r.present
@@ -576,13 +571,13 @@ theorem p1_next_facts (s : MachineState) (k i card : Nat) (r : P1Ready s k i car
   have toW (g : Reg) (h7 : g ≠ .x7) (h29 : g ≠ .x29) (h31 : g ≠ .x31) (h28 : g ≠ .x28) :
       E.getReg g = W.getReg g :=
     (ekeep g h31).trans ((dkeep g h7 h29).trans ((ckeep g h31).trans (bkeep g h28 h29)))
-  have epc : E.pc = opPC 1472 := by
+  have epc : E.pc = opPC 12664 := by
     rw [e4pc, e3pc, e2pc, e1pc, dpc, c2pc, c1pc, bpc, wpc]; rfl
   obtain ⟨f14, f16, f17, fmem, fpc, fkeep⟩ := stage_f E k card hk (by omega)
     ((toW .x14 (by decide) (by decide) (by decide) (by decide)).trans
       ((keepW .x14 (by decide) (by decide) (by decide) (by decide)).trans r.idx))
-    ((toW .x16 (by decide) (by decide) (by decide) (by decide)).trans
-      ((keepW .x16 (by decide) (by decide) (by decide) (by decide)).trans r.left))
+    ((toW .x1 (by decide) (by decide) (by decide) (by decide)).trans
+      ((keepW .x1 (by decide) (by decide) (by decide) (by decide)).trans r.left))
     ((ekeep .x17 (by decide)).trans d17) epc
   have nextIs : p1Next s y = runOps E p1OpsF := rfl
   rw [nextIs]
@@ -635,34 +630,34 @@ theorem execute_p1 (s : MachineState) (k i card : Nat) (r : P1Ready s k i card) 
   have rwv : Rw = 603980313 := rfl
   have iwv : IW = 1023411204 := rfl
   obtain ⟨a6, a10, a7, amem, apc, akeep⟩ := p1a_facts s k i card r
-  -- word 1444: the index load
+  -- word 12636: the index load
   let L := execInstrBr s (.LD .x6 .x14 0)
-  have lpc : L.pc = opPC 1445 := by rw [ld_pc, r.pc, op_pc_next]
+  have lpc : L.pc = opPC 12637 := by rw [ld_pc, r.pc, op_pc_next]
   have runL : ∀ X, execute openingImage (1 + X) s coins =
       (do let res ← execute openingImage X L coins; return res.charge 1 0) := fun X =>
-    ordinary_one _ L (.LD .x6 .x14 0) _ _ (pre_fetch _ 1444 _ (by decide) r.pc rfl)
+    ordinary_one _ L (.LD .x6 .x14 0) _ _ (pre_fetch _ 12636 _ (by decide) r.pc rfl)
       (ld_step _ _ _ _ (by rw [r.idx]; exact word_valid (IW + k) 0 0 (by decide) (by omega))) rfl
   have runA : ∀ X, execute openingImage (7 + X) L coins =
       (do let res ← execute openingImage X (p1A s) coins; return res.charge 7 0) := fun X =>
-    alu_run L 1445 p1OpsA7 X coins lpc (by decide)
+    alu_run L 12637 p1OpsA7 X coins lpc (by decide)
       (by intro j h; change j < 7 at h; interval_cases j <;> rfl)
       (by intro j h t; have hj : j < 6 := (by change j + 1 < 7 at h; omega); interval_cases j <;> rfl)
       (by intro j h t; change j < 7 at h; interval_cases j <;> rfl)
       (by intro j h; change j < 7 at h; interval_cases j <;> rfl)
-  -- word 1452: the inverse call
+  -- word 12644: the inverse call
   have call := execute_inverse_call openingImage (23 + fuel) (p1A s) coins (Rw + 25 * i) scratchW
     (by omega) (by unfold scratchW; omega) a10
     ((akeep .x12 (by decide) (by decide) (by decide) (by decide)).trans r.out)
     ((akeep .x5 (by decide) (by decide) (by decide) (by decide)).trans r.sel)
     ((akeep .x11 (by decide) (by decide) (by decide) (by decide)).trans r.size)
     ((akeep .x13 (by decide) (by decide) (by decide) (by decide)).trans r.prim)
-    (pre_fetch _ 1452 _ (by decide) apc rfl)
+    (pre_fetch _ 12644 _ (by decide) apc rfl)
   rw [show 32 + fuel = 1 + (7 + ((23 + fuel) + 1)) by omega, runL, runA, call, memoryView_congr amem]
   simp only [bind_assoc, pure_bind]
   congr 1
   funext y
   rw [p1w_eq]
-  -- words 1453..1475 after the call
+  -- words 12645..12667 after the call
   have so := salt_off_small i
   have mb := mate_word_bounds i (by omega)
   have lwk : Lw k + 6 ≤ 2 ^ 27 + 6 * 2 ^ 24 := by unfold Lw; omega
@@ -673,10 +668,10 @@ theorem execute_p1 (s : MachineState) (k i card : Nat) (r : P1Ready s k i card) 
   obtain ⟨b29, b28, _, bpc, bkeep⟩ := stage_b W i (by omega) ((wreg .x6).trans a6)
     ((keepW .x12 (by decide) (by decide) (by decide) (by decide)).trans r.out)
   let B := runOps W p1OpsB
-  have bpc' : B.pc = opPC 1457 := by rw [bpc, wpc]; decide
+  have bpc' : B.pc = opPC 12649 := by rw [bpc, wpc]; decide
   have runB : ∀ X, execute openingImage (4 + X) W coins =
       (do let res ← execute openingImage X B coins; return res.charge 4 0) := fun X =>
-    alu_run W 1453 p1OpsB X coins wpc (by decide)
+    alu_run W 12645 p1OpsB X coins wpc (by decide)
       (by intro j h; change j < 4 at h; interval_cases j <;> rfl)
       (by intro j h t; have hj : j < 3 := (by change j + 1 < 4 at h; omega); interval_cases j <;> rfl)
       (by intro j h t; change j < 4 at h; interval_cases j <;> rfl)
@@ -685,30 +680,30 @@ theorem execute_p1 (s : MachineState) (k i card : Nat) (r : P1Ready s k i card) 
     (bkeep .x17 (by decide) (by decide)).trans ((keepW .x17 (by decide) (by decide) (by decide) (by decide)).trans r.list)
   have runC1 : ∀ X, execute openingImage (2 + X) B coins =
       (do let res ← execute openingImage X (copyPair B .x28 .x17 0 0) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run B 1457 .x28 .x17 0 0 (scratchW + saltOff i) (Lw k) 0 0 bpc' (by decide) rfl rfl (by decide) b28 b17
+    ld_sd_run B 12649 .x28 .x17 0 0 (scratchW + saltOff i) (Lw k) 0 0 bpc' (by decide) rfl rfl (by decide) b28 b17
       (by decide) (by decide) (by unfold scratchW; omega) (by omega) X coins
   obtain ⟨_, c1pc, c1keep⟩ := copy_pair_view B .x28 .x17 (by decide) (by decide)
     (scratchW + saltOff i) (Lw k) 0 0 b28 b17 0 0 (by decide) (by decide) (by unfold scratchW; omega) (by omega)
   let C1 := copyPair B .x28 .x17 0 0
-  have c1pc' : C1.pc = opPC 1459 := by rw [c1pc, bpc']; decide
+  have c1pc' : C1.pc = opPC 12651 := by rw [c1pc, bpc']; decide
   have runC2 : ∀ X, execute openingImage (2 + X) C1 coins =
       (do let res ← execute openingImage X (copyPair C1 .x28 .x17 8 8) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run C1 1459 .x28 .x17 8 8 (scratchW + saltOff i) (Lw k) 1 1 c1pc' (by decide) rfl rfl (by decide)
+    ld_sd_run C1 12651 .x28 .x17 8 8 (scratchW + saltOff i) (Lw k) 1 1 c1pc' (by decide) rfl rfl (by decide)
       ((c1keep .x28 (by decide)).trans b28) ((c1keep .x17 (by decide)).trans b17)
       (by decide) (by decide) (by unfold scratchW; omega) (by omega) X coins
   obtain ⟨_, c2pc, c2keep⟩ := copy_pair_view C1 .x28 .x17 (by decide) (by decide)
     (scratchW + saltOff i) (Lw k) 1 1 ((c1keep .x28 (by decide)).trans b28) ((c1keep .x17 (by decide)).trans b17)
     8 8 (by decide) (by decide) (by unfold scratchW; omega) (by omega)
   let C := copyPair C1 .x28 .x17 8 8
-  have cpc : C.pc = opPC 1461 := by rw [c2pc, c1pc']; decide
+  have cpc : C.pc = opPC 12653 := by rw [c2pc, c1pc']; decide
   have ckeep (g : Reg) (h : g ≠ .x31) : C.getReg g = B.getReg g := (c2keep g h).trans (c1keep g h)
   obtain ⟨d7, _, dpc, dkeep⟩ := stage_d C i ((ckeep .x29 (by decide)).trans b29)
     ((ckeep .x7 (by decide)).trans ((bkeep .x7 (by decide) (by decide)).trans ((wreg .x7).trans a7)))
   let D := runOps C p1OpsD
-  have dpc' : D.pc = opPC 1464 := by rw [dpc, cpc]; decide
+  have dpc' : D.pc = opPC 12656 := by rw [dpc, cpc]; decide
   have runD : ∀ X, execute openingImage (3 + X) C coins =
       (do let res ← execute openingImage X D coins; return res.charge 3 0) := fun X =>
-    alu_run C 1461 p1OpsD X coins cpc (by decide)
+    alu_run C 12653 p1OpsD X coins cpc (by decide)
       (by intro j h; change j < 3 at h; interval_cases j <;> rfl)
       (by intro j h t; have hj : j < 2 := (by change j + 1 < 3 at h; omega); interval_cases j <;> rfl)
       (by intro j h t; change j < 3 at h; interval_cases j <;> rfl)
@@ -717,45 +712,45 @@ theorem execute_p1 (s : MachineState) (k i card : Nat) (r : P1Ready s k i card) 
     (dkeep .x17 (by decide) (by decide)).trans ((ckeep .x17 (by decide)).trans b17)
   have runE1 : ∀ X, execute openingImage (2 + X) D coins =
       (do let res ← execute openingImage X (copyPair D .x7 .x17 0 16) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run D 1464 .x7 .x17 0 16 (mateWord i) (Lw k) 0 2 dpc' (by decide) rfl rfl (by decide) d7 d17
+    ld_sd_run D 12656 .x7 .x17 0 16 (mateWord i) (Lw k) 0 2 dpc' (by decide) rfl rfl (by decide) d7 d17
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e1pc, e1keep⟩ := copy_pair_view D .x7 .x17 (by decide) (by decide)
     (mateWord i) (Lw k) 0 2 d7 d17 0 16 (by decide) (by decide) (by omega) (by omega)
   let E1 := copyPair D .x7 .x17 0 16
-  have e1pc' : E1.pc = opPC 1466 := by rw [e1pc, dpc']; decide
+  have e1pc' : E1.pc = opPC 12658 := by rw [e1pc, dpc']; decide
   have e1_7 : E1.getReg .x7 = wordAddress (mateWord i) := (e1keep .x7 (by decide)).trans d7
   have e1_17 : E1.getReg .x17 = wordAddress (Lw k) := (e1keep .x17 (by decide)).trans d17
   have runE2 : ∀ X, execute openingImage (2 + X) E1 coins =
       (do let res ← execute openingImage X (copyPair E1 .x7 .x17 8 24) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run E1 1466 .x7 .x17 8 24 (mateWord i) (Lw k) 1 3 e1pc' (by decide) rfl rfl (by decide) e1_7 e1_17
+    ld_sd_run E1 12658 .x7 .x17 8 24 (mateWord i) (Lw k) 1 3 e1pc' (by decide) rfl rfl (by decide) e1_7 e1_17
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e2pc, e2keep⟩ := copy_pair_view E1 .x7 .x17 (by decide) (by decide)
     (mateWord i) (Lw k) 1 3 e1_7 e1_17 8 24 (by decide) (by decide) (by omega) (by omega)
   let E2 := copyPair E1 .x7 .x17 8 24
-  have e2pc' : E2.pc = opPC 1468 := by rw [e2pc, e1pc']; decide
+  have e2pc' : E2.pc = opPC 12660 := by rw [e2pc, e1pc']; decide
   have e2_7 : E2.getReg .x7 = wordAddress (mateWord i) := (e2keep .x7 (by decide)).trans e1_7
   have e2_17 : E2.getReg .x17 = wordAddress (Lw k) := (e2keep .x17 (by decide)).trans e1_17
   have runE3 : ∀ X, execute openingImage (2 + X) E2 coins =
       (do let res ← execute openingImage X (copyPair E2 .x7 .x17 16 32) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run E2 1468 .x7 .x17 16 32 (mateWord i) (Lw k) 2 4 e2pc' (by decide) rfl rfl (by decide) e2_7 e2_17
+    ld_sd_run E2 12660 .x7 .x17 16 32 (mateWord i) (Lw k) 2 4 e2pc' (by decide) rfl rfl (by decide) e2_7 e2_17
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e3pc, e3keep⟩ := copy_pair_view E2 .x7 .x17 (by decide) (by decide)
     (mateWord i) (Lw k) 2 4 e2_7 e2_17 16 32 (by decide) (by decide) (by omega) (by omega)
   let E3 := copyPair E2 .x7 .x17 16 32
-  have e3pc' : E3.pc = opPC 1470 := by rw [e3pc, e2pc']; decide
+  have e3pc' : E3.pc = opPC 12662 := by rw [e3pc, e2pc']; decide
   have e3_7 : E3.getReg .x7 = wordAddress (mateWord i) := (e3keep .x7 (by decide)).trans e2_7
   have e3_17 : E3.getReg .x17 = wordAddress (Lw k) := (e3keep .x17 (by decide)).trans e2_17
   have runE4 : ∀ X, execute openingImage (2 + X) E3 coins =
       (do let res ← execute openingImage X (copyPair E3 .x7 .x17 24 40) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run E3 1470 .x7 .x17 24 40 (mateWord i) (Lw k) 3 5 e3pc' (by decide) rfl rfl (by decide) e3_7 e3_17
+    ld_sd_run E3 12662 .x7 .x17 24 40 (mateWord i) (Lw k) 3 5 e3pc' (by decide) rfl rfl (by decide) e3_7 e3_17
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e4pc, _⟩ := copy_pair_view E3 .x7 .x17 (by decide) (by decide)
     (mateWord i) (Lw k) 3 5 e3_7 e3_17 24 40 (by decide) (by decide) (by omega) (by omega)
   let E := copyPair E3 .x7 .x17 24 40
-  have epc : E.pc = opPC 1472 := by rw [e4pc, e3pc']; decide
+  have epc : E.pc = opPC 12664 := by rw [e4pc, e3pc']; decide
   have runF : ∀ X, execute openingImage (4 + X) E coins =
       (do let res ← execute openingImage X (runOps E p1OpsF) coins; return res.charge 4 0) := fun X =>
-    alu_run E 1472 p1OpsF X coins epc (by decide)
+    alu_run E 12664 p1OpsF X coins epc (by decide)
       (by intro j h; change j < 4 at h; interval_cases j <;> rfl)
       (by intro j h t; have hj : j < 3 := (by change j + 1 < 4 at h; omega); interval_cases j <;> rfl)
       (by intro j h t; change j < 4 at h; interval_cases j <;> rfl)
@@ -815,17 +810,17 @@ theorem p1mem_entry (M : Memory) (y : Sampling.Block) (k i t : Nat) (ht : t < 6)
   · exact mj 3 (by decide)
 
 structure P1Inv (S0 s : MachineState) (k card : Nat) (idx : Nat → Nat) (ys : Nat → Sampling.Block) : Prop where
-  pc : s.pc = if k = card then opPC 1476 else opPC 1444
+  pc : s.pc = if k = card then opPC 12668 else opPC 12636
   idx14 : s.getReg .x14 = wordAddress (IW + k)
   reply : s.getReg .x15 = wordAddress Rw
   list : s.getReg .x17 = wordAddress (Lw k)
-  left : s.getReg .x16 = BitVec.ofNat 64 (card - k)
+  left : s.getReg .x1 = BitVec.ofNat 64 (card - k)
   size : s.getReg .x11 = 200
   out : s.getReg .x12 = wordAddress scratchW
   prim : s.getReg .x13 = 2
   sel : s.getReg .x5 = 0
   keep : ∀ g, g ≠ .x5 → g ≠ .x6 → g ≠ .x7 → g ≠ .x10 → g ≠ .x11 → g ≠ .x12 → g ≠ .x13 → g ≠ .x14 → g ≠ .x15 →
-    g ≠ .x16 → g ≠ .x17 → g ≠ .x28 → g ≠ .x29 → g ≠ .x31 → s.getReg g = S0.getReg g
+    g ≠ .x1 → g ≠ .x17 → g ≠ .x28 → g ≠ .x29 → g ≠ .x31 → s.getReg g = S0.getReg g
   frame : ∀ w < 2 ^ 33, (w < scratchW ∨ scratchW + 25 ≤ w) → (w < Lw 0 ∨ Lw k ≤ w) →
     memoryView s w = memoryView S0 w
   entries : ∀ j < k, ∀ t < 6, memoryView s (Lw j + t) = listVal (memoryView S0) (ys j) (idx j) t
@@ -1011,7 +1006,7 @@ def HW : Nat := TDw + 2 ^ 26
 
 def p2OpsA2 : List Instr := [.SLLI .x30 .x6 4, .ADD .x30 .x22 .x30]
 def p2OpsB : List Instr := [.XORI .x30 .x6 1, .SLLI .x30 .x30 5, .ADD .x30 .x15 .x30]
-def p2OpsF : List Instr := p1OpsF3 ++ [.BNE .x16 .x0 8108]
+def p2OpsF : List Instr := p1OpsF3 ++ [.BNE .x1 .x0 8108]
 
 def p2A (s : MachineState) : MachineState := runOps (execInstrBr s (.LD .x6 .x14 0)) p2OpsA2
 
@@ -1023,11 +1018,11 @@ def p2Digest (t : MachineState) : MachineState :=
 def p2Next (s : MachineState) : MachineState := runOps (p2Digest (runOps (p2Salt (p2A s)) p2OpsB)) p2OpsF
 
 structure P2Ready (s : MachineState) (k i card : Nat) : Prop where
-  pc : s.pc = opPC 1481
+  pc : s.pc = opPC 12673
   idx : s.getReg .x14 = wordAddress (IW + k)
   idxVal : memoryView s (IW + k) = BitVec.ofNat 64 i
   list : s.getReg .x17 = wordAddress (Lw k)
-  left : s.getReg .x16 = BitVec.ofNat 64 (card - k)
+  left : s.getReg .x1 = BitVec.ofNat 64 (card - k)
   heap : s.getReg .x15 = wordAddress HW
   salts : s.getReg .x22 = wordAddress NW
   small : i < LENGTH
@@ -1059,7 +1054,7 @@ theorem xor_one_small (i : Nat) (hi : i < 2 ^ 24) : i ^^^ 1 < 2 ^ 24 :=
 
 theorem p2a_facts (s : MachineState) (k i card : Nat) (r : P2Ready s k i card) :
     (p2A s).getReg .x6 = BitVec.ofNat 64 i ∧ (p2A s).getReg .x30 = wordAddress (NW + 2 * i) ∧
-    (p2A s).mem = s.mem ∧ (p2A s).pc = opPC 1484 ∧
+    (p2A s).mem = s.mem ∧ (p2A s).pc = opPC 12676 ∧
     ∀ g, g ≠ .x6 → g ≠ .x30 → (p2A s).getReg g = s.getReg g := by
   have hi := r.small
   have len : LENGTH = 2 ^ 24 := rfl
@@ -1095,19 +1090,19 @@ theorem stage_p2b (T : MachineState) (i : Nat) (hi : i < 2 ^ 24) (x6 : T.getReg 
     simp [p2OpsB, runOps, execInstrBr, Ne.symm a]
 
 theorem stage_f2 (E : MachineState) (k card : Nat) (hk : k < card) (hc : card ≤ 2 ^ 24)
-    (x14 : E.getReg .x14 = wordAddress (IW + k)) (x16 : E.getReg .x16 = BitVec.ofNat 64 (card - k))
-    (x17 : E.getReg .x17 = wordAddress (Lw k)) (pc : E.pc = opPC 1499) :
+    (x14 : E.getReg .x14 = wordAddress (IW + k)) (x16 : E.getReg .x1 = BitVec.ofNat 64 (card - k))
+    (x17 : E.getReg .x17 = wordAddress (Lw k)) (pc : E.pc = opPC 12691) :
     (runOps E p2OpsF).getReg .x14 = wordAddress (IW + (k + 1)) ∧
-    (runOps E p2OpsF).getReg .x16 = BitVec.ofNat 64 (card - (k + 1)) ∧
+    (runOps E p2OpsF).getReg .x1 = BitVec.ofNat 64 (card - (k + 1)) ∧
     (runOps E p2OpsF).getReg .x17 = wordAddress (Lw (k + 1)) ∧
     (runOps E p2OpsF).mem = E.mem ∧
-    (runOps E p2OpsF).pc = (if k + 1 = card then opPC 1503 else opPC 1481) ∧
-    ∀ g, g ≠ .x14 → g ≠ .x16 → g ≠ .x17 → (runOps E p2OpsF).getReg g = E.getReg g := by
-  have split3 : runOps E p2OpsF = execInstrBr (runOps E p1OpsF3) (.BNE .x16 .x0 8108) := by
+    (runOps E p2OpsF).pc = (if k + 1 = card then opPC 12695 else opPC 12673) ∧
+    ∀ g, g ≠ .x14 → g ≠ .x1 → g ≠ .x17 → (runOps E p2OpsF).getReg g = E.getReg g := by
+  have split3 : runOps E p2OpsF = execInstrBr (runOps E p1OpsF3) (.BNE .x1 .x0 8108) := by
     rw [p2OpsF, run_ops_append, run_ops_singleton]
   let F3 := runOps E p1OpsF3
-  have f16 : F3.getReg .x16 = BitVec.ofNat 64 (card - (k + 1)) := by
-    have e : F3.getReg .x16 = E.getReg .x16 + signExtend12 4095 := by
+  have f16 : F3.getReg .x1 = BitVec.ofNat 64 (card - (k + 1)) := by
+    have e : F3.getReg .x1 = E.getReg .x1 + signExtend12 4095 := by
       simp only [F3, runOps, p1OpsF3, List.foldl, execInstrBr, Opening.getReg_setReg, MachineState.getReg_setPC,
         reduceCtorEq, false_and, true_and, ne_eq, not_false_eq_true, ↓reduceIte]
     rw [e, x16, show signExtend12 (4095 : BitVec 12) = BitVec.ofNat 64 (2 ^ 64 - 1) by decide, ← BitVec.ofNat_add]
@@ -1125,7 +1120,7 @@ theorem stage_f2 (E : MachineState) (k card : Nat) (hk : k < card) (hc : card �
         reduceCtorEq, false_and, true_and, ne_eq, not_false_eq_true, ↓reduceIte]
     rw [e, x17, show signExtend12 (48 : BitVec 12) = BitVec.ofNat 64 (8 * 6) by decide, address_up]
     unfold Lw; congr 1
-  have fpc : F3.pc = opPC 1502 := by
+  have fpc : F3.pc = opPC 12694 := by
     change E.pc + 4 + 4 + 4 = _
     rw [pc]; rfl
   have fmem : F3.mem = E.mem := by simp only [F3, runOps, p1OpsF3, List.foldl, execInstrBr, set_mem]
@@ -1165,9 +1160,9 @@ theorem p2_next_facts (s : MachineState) (k i card : Nat) (r : P2Ready s k i car
     (∀ w < 2 ^ 33, memoryView (p2Next s) w = p2Mem (memoryView s) k i w) ∧
     (p2Next s).getReg .x14 = wordAddress (IW + (k + 1)) ∧
     (p2Next s).getReg .x17 = wordAddress (Lw (k + 1)) ∧
-    (p2Next s).getReg .x16 = BitVec.ofNat 64 (card - (k + 1)) ∧
-    (p2Next s).pc = (if k + 1 = card then opPC 1503 else opPC 1481) ∧
-    (∀ g, g ≠ .x6 → g ≠ .x14 → g ≠ .x16 → g ≠ .x17 → g ≠ .x30 → g ≠ .x31 → (p2Next s).getReg g = s.getReg g) := by
+    (p2Next s).getReg .x1 = BitVec.ofNat 64 (card - (k + 1)) ∧
+    (p2Next s).pc = (if k + 1 = card then opPC 12695 else opPC 12673) ∧
+    (∀ g, g ≠ .x6 → g ≠ .x14 → g ≠ .x1 → g ≠ .x17 → g ≠ .x30 → g ≠ .x31 → (p2Next s).getReg g = s.getReg g) := by
   have hi := r.small
   have hk := r.present
   have hc := r.cardBound
@@ -1213,11 +1208,11 @@ theorem p2_next_facts (s : MachineState) (k i card : Nat) (r : P2Ready s k i car
     (e4keep g h).trans ((e3keep g h).trans ((e2keep g h).trans (e1keep g h)))
   have toA (g : Reg) (h30 : g ≠ .x30) (h31 : g ≠ .x31) : E.getReg g = A.getReg g :=
     (ekeep g h31).trans ((bkeep g h30).trans (ckeep g h31))
-  have epc : E.pc = opPC 1499 := by
+  have epc : E.pc = opPC 12691 := by
     rw [e4pc, e3pc, e2pc, e1pc, bpc, c2pc, c1pc, apc]; decide
   obtain ⟨f14, f16, f17, fmem, fpc, fkeep⟩ := stage_f2 E k card hk (by omega)
     ((toA .x14 (by decide) (by decide)).trans ((akeep .x14 (by decide) (by decide)).trans r.idx))
-    ((toA .x16 (by decide) (by decide)).trans ((akeep .x16 (by decide) (by decide)).trans r.left))
+    ((toA .x1 (by decide) (by decide)).trans ((akeep .x1 (by decide) (by decide)).trans r.left))
     ((ekeep .x17 (by decide)).trans b17) epc
   have nextIs : p2Next s = runOps E p2OpsF := rfl
   rw [nextIs]
@@ -1260,14 +1255,14 @@ theorem execute_p2 (s : MachineState) (k i card : Nat) (r : P2Ready s k i card) 
   have hwv : HW = 603980292 := rfl
   obtain ⟨a6, a30, _, apc, akeep⟩ := p2a_facts s k i card r
   let L := execInstrBr s (.LD .x6 .x14 0)
-  have lpc : L.pc = opPC 1482 := by rw [ld_pc, r.pc, op_pc_next]
+  have lpc : L.pc = opPC 12674 := by rw [ld_pc, r.pc, op_pc_next]
   have runL : ∀ X, execute openingImage (1 + X) s coins =
       (do let res ← execute openingImage X L coins; return res.charge 1 0) := fun X =>
-    ordinary_one _ L (.LD .x6 .x14 0) _ _ (pre_fetch _ 1481 _ (by decide) r.pc rfl)
+    ordinary_one _ L (.LD .x6 .x14 0) _ _ (pre_fetch _ 12673 _ (by decide) r.pc rfl)
       (ld_step _ _ _ _ (by rw [r.idx]; exact word_valid (IW + k) 0 0 (by decide) (by omega))) rfl
   have runA : ∀ X, execute openingImage (2 + X) L coins =
       (do let res ← execute openingImage X (p2A s) coins; return res.charge 2 0) := fun X =>
-    alu_run L 1482 p2OpsA2 X coins lpc (by decide)
+    alu_run L 12674 p2OpsA2 X coins lpc (by decide)
       (by intro j h; change j < 2 at h; interval_cases j <;> rfl)
       (by intro j h t; have hj : j < 1 := (by change j + 1 < 2 at h; omega); interval_cases j <;> rfl)
       (by intro j h t; change j < 2 at h; interval_cases j <;> rfl)
@@ -1276,30 +1271,30 @@ theorem execute_p2 (s : MachineState) (k i card : Nat) (r : P2Ready s k i card) 
   have a17 : A.getReg .x17 = wordAddress (Lw k) := (akeep .x17 (by decide) (by decide)).trans r.list
   have runC1 : ∀ X, execute openingImage (2 + X) A coins =
       (do let res ← execute openingImage X (copyPair A .x17 .x30 0 0) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run A 1484 .x17 .x30 0 0 (Lw k) (NW + 2 * i) 0 0 apc (by decide) rfl rfl (by decide) a17 a30
+    ld_sd_run A 12676 .x17 .x30 0 0 (Lw k) (NW + 2 * i) 0 0 apc (by decide) rfl rfl (by decide) a17 a30
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, c1pc, c1keep⟩ := copy_pair_view A .x17 .x30 (by decide) (by decide)
     (Lw k) (NW + 2 * i) 0 0 a17 a30 0 0 (by decide) (by decide) (by omega) (by omega)
   let C1 := copyPair A .x17 .x30 0 0
-  have c1pc' : C1.pc = opPC 1486 := by rw [c1pc, apc]; decide
+  have c1pc' : C1.pc = opPC 12678 := by rw [c1pc, apc]; decide
   have runC2 : ∀ X, execute openingImage (2 + X) C1 coins =
       (do let res ← execute openingImage X (copyPair C1 .x17 .x30 8 8) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run C1 1486 .x17 .x30 8 8 (Lw k) (NW + 2 * i) 1 1 c1pc' (by decide) rfl rfl (by decide)
+    ld_sd_run C1 12678 .x17 .x30 8 8 (Lw k) (NW + 2 * i) 1 1 c1pc' (by decide) rfl rfl (by decide)
       ((c1keep .x17 (by decide)).trans a17) ((c1keep .x30 (by decide)).trans a30)
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, c2pc, c2keep⟩ := copy_pair_view C1 .x17 .x30 (by decide) (by decide)
     (Lw k) (NW + 2 * i) 1 1 ((c1keep .x17 (by decide)).trans a17) ((c1keep .x30 (by decide)).trans a30)
     8 8 (by decide) (by decide) (by omega) (by omega)
   let C := copyPair C1 .x17 .x30 8 8
-  have cpc : C.pc = opPC 1488 := by rw [c2pc, c1pc']; decide
+  have cpc : C.pc = opPC 12680 := by rw [c2pc, c1pc']; decide
   have ckeep (g : Reg) (h : g ≠ .x31) : C.getReg g = A.getReg g := (c2keep g h).trans (c1keep g h)
   obtain ⟨b30, _, bpc, bkeep⟩ := stage_p2b C i (by omega) ((ckeep .x6 (by decide)).trans a6)
     ((ckeep .x15 (by decide)).trans ((akeep .x15 (by decide) (by decide)).trans r.heap))
   let B := runOps C p2OpsB
-  have bpc' : B.pc = opPC 1491 := by rw [bpc, cpc]; decide
+  have bpc' : B.pc = opPC 12683 := by rw [bpc, cpc]; decide
   have runB : ∀ X, execute openingImage (3 + X) C coins =
       (do let res ← execute openingImage X B coins; return res.charge 3 0) := fun X =>
-    alu_run C 1488 p2OpsB X coins cpc (by decide)
+    alu_run C 12680 p2OpsB X coins cpc (by decide)
       (by intro j h; change j < 3 at h; interval_cases j <;> rfl)
       (by intro j h t; have hj : j < 2 := (by change j + 1 < 3 at h; omega); interval_cases j <;> rfl)
       (by intro j h t; change j < 3 at h; interval_cases j <;> rfl)
@@ -1307,45 +1302,45 @@ theorem execute_p2 (s : MachineState) (k i card : Nat) (r : P2Ready s k i card) 
   have b17 : B.getReg .x17 = wordAddress (Lw k) := (bkeep .x17 (by decide)).trans ((ckeep .x17 (by decide)).trans a17)
   have runE1 : ∀ X, execute openingImage (2 + X) B coins =
       (do let res ← execute openingImage X (copyPair B .x17 .x30 16 0) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run B 1491 .x17 .x30 16 0 (Lw k) (HW + 4 * (i ^^^ 1)) 2 0 bpc' (by decide) rfl rfl (by decide) b17 b30
+    ld_sd_run B 12683 .x17 .x30 16 0 (Lw k) (HW + 4 * (i ^^^ 1)) 2 0 bpc' (by decide) rfl rfl (by decide) b17 b30
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e1pc, e1keep⟩ := copy_pair_view B .x17 .x30 (by decide) (by decide)
     (Lw k) (HW + 4 * (i ^^^ 1)) 2 0 b17 b30 16 0 (by decide) (by decide) (by omega) (by omega)
   let E1 := copyPair B .x17 .x30 16 0
-  have e1pc' : E1.pc = opPC 1493 := by rw [e1pc, bpc']; decide
+  have e1pc' : E1.pc = opPC 12685 := by rw [e1pc, bpc']; decide
   have e1_17 : E1.getReg .x17 = wordAddress (Lw k) := (e1keep .x17 (by decide)).trans b17
   have e1_30 : E1.getReg .x30 = wordAddress (HW + 4 * (i ^^^ 1)) := (e1keep .x30 (by decide)).trans b30
   have runE2 : ∀ X, execute openingImage (2 + X) E1 coins =
       (do let res ← execute openingImage X (copyPair E1 .x17 .x30 24 8) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run E1 1493 .x17 .x30 24 8 (Lw k) (HW + 4 * (i ^^^ 1)) 3 1 e1pc' (by decide) rfl rfl (by decide) e1_17 e1_30
+    ld_sd_run E1 12685 .x17 .x30 24 8 (Lw k) (HW + 4 * (i ^^^ 1)) 3 1 e1pc' (by decide) rfl rfl (by decide) e1_17 e1_30
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e2pc, e2keep⟩ := copy_pair_view E1 .x17 .x30 (by decide) (by decide)
     (Lw k) (HW + 4 * (i ^^^ 1)) 3 1 e1_17 e1_30 24 8 (by decide) (by decide) (by omega) (by omega)
   let E2 := copyPair E1 .x17 .x30 24 8
-  have e2pc' : E2.pc = opPC 1495 := by rw [e2pc, e1pc']; decide
+  have e2pc' : E2.pc = opPC 12687 := by rw [e2pc, e1pc']; decide
   have e2_17 : E2.getReg .x17 = wordAddress (Lw k) := (e2keep .x17 (by decide)).trans e1_17
   have e2_30 : E2.getReg .x30 = wordAddress (HW + 4 * (i ^^^ 1)) := (e2keep .x30 (by decide)).trans e1_30
   have runE3 : ∀ X, execute openingImage (2 + X) E2 coins =
       (do let res ← execute openingImage X (copyPair E2 .x17 .x30 32 16) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run E2 1495 .x17 .x30 32 16 (Lw k) (HW + 4 * (i ^^^ 1)) 4 2 e2pc' (by decide) rfl rfl (by decide) e2_17 e2_30
+    ld_sd_run E2 12687 .x17 .x30 32 16 (Lw k) (HW + 4 * (i ^^^ 1)) 4 2 e2pc' (by decide) rfl rfl (by decide) e2_17 e2_30
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e3pc, e3keep⟩ := copy_pair_view E2 .x17 .x30 (by decide) (by decide)
     (Lw k) (HW + 4 * (i ^^^ 1)) 4 2 e2_17 e2_30 32 16 (by decide) (by decide) (by omega) (by omega)
   let E3 := copyPair E2 .x17 .x30 32 16
-  have e3pc' : E3.pc = opPC 1497 := by rw [e3pc, e2pc']; decide
+  have e3pc' : E3.pc = opPC 12689 := by rw [e3pc, e2pc']; decide
   have e3_17 : E3.getReg .x17 = wordAddress (Lw k) := (e3keep .x17 (by decide)).trans e2_17
   have e3_30 : E3.getReg .x30 = wordAddress (HW + 4 * (i ^^^ 1)) := (e3keep .x30 (by decide)).trans e2_30
   have runE4 : ∀ X, execute openingImage (2 + X) E3 coins =
       (do let res ← execute openingImage X (copyPair E3 .x17 .x30 40 24) coins; return res.charge 2 0) := fun X =>
-    ld_sd_run E3 1497 .x17 .x30 40 24 (Lw k) (HW + 4 * (i ^^^ 1)) 5 3 e3pc' (by decide) rfl rfl (by decide) e3_17 e3_30
+    ld_sd_run E3 12689 .x17 .x30 40 24 (Lw k) (HW + 4 * (i ^^^ 1)) 5 3 e3pc' (by decide) rfl rfl (by decide) e3_17 e3_30
       (by decide) (by decide) (by omega) (by omega) X coins
   obtain ⟨_, e4pc, _⟩ := copy_pair_view E3 .x17 .x30 (by decide) (by decide)
     (Lw k) (HW + 4 * (i ^^^ 1)) 5 3 e3_17 e3_30 40 24 (by decide) (by decide) (by omega) (by omega)
   let E := copyPair E3 .x17 .x30 40 24
-  have epc : E.pc = opPC 1499 := by rw [e4pc, e3pc']; decide
+  have epc : E.pc = opPC 12691 := by rw [e4pc, e3pc']; decide
   have runF : ∀ X, execute openingImage (4 + X) E coins =
       (do let res ← execute openingImage X (runOps E p2OpsF) coins; return res.charge 4 0) := fun X =>
-    alu_run E 1499 p2OpsF X coins epc (by decide)
+    alu_run E 12691 p2OpsF X coins epc (by decide)
       (by intro j h; change j < 4 at h; interval_cases j <;> rfl)
       (by intro j h t; have hj : j < 3 := (by change j + 1 < 4 at h; omega); interval_cases j <;> rfl)
       (by intro j h t; change j < 4 at h; interval_cases j <;> rfl)
@@ -1388,11 +1383,11 @@ theorem xor_one_inj {a b : Nat} (h : a ^^^ 1 = b ^^^ 1) : a = b := by
   simpa [Nat.xor_assoc] using this
 
 structure P2Inv (S1 s : MachineState) (k card : Nat) (idx : Nat → Nat) : Prop where
-  pc : s.pc = if k = card then opPC 1503 else opPC 1481
+  pc : s.pc = if k = card then opPC 12695 else opPC 12673
   idx14 : s.getReg .x14 = wordAddress (IW + k)
   list : s.getReg .x17 = wordAddress (Lw k)
-  left : s.getReg .x16 = BitVec.ofNat 64 (card - k)
-  keep : ∀ g, g ≠ .x6 → g ≠ .x14 → g ≠ .x16 → g ≠ .x17 → g ≠ .x30 → g ≠ .x31 → s.getReg g = S1.getReg g
+  left : s.getReg .x1 = BitVec.ofNat 64 (card - k)
+  keep : ∀ g, g ≠ .x6 → g ≠ .x14 → g ≠ .x1 → g ≠ .x17 → g ≠ .x30 → g ≠ .x31 → s.getReg g = S1.getReg g
   heap : S1.getReg .x15 = wordAddress HW
   salts : S1.getReg .x22 = wordAddress NW
   frame : ∀ w < 2 ^ 33, (∀ j < k, w ≠ NW + 2 * idx j ∧ w ≠ NW + 2 * idx j + 1) →
@@ -1509,15 +1504,15 @@ theorem pass2_inv (S1 : MachineState) (card : Nat) (idx : Nat → Nat) :
     rw [iter_succ]
     exact ih (k + 1) _ (by omega) (p2_inv_step inv (by omega))
 
-/-! ### Head (word 12, words 1435..1443), middle (1476..1480) and tail (1503, 1504) -/
+/-! ### Head (word 12, words 12626..12635), middle (12668..12672) and tail (12695, 12696) -/
 
-def headOps : List Instr := [.ADDI .x14 .x8 0, .ADDI .x11 .x0 200, .LUI .x12 4, .ADDI .x13 .x0 2, .ADDI .x5 .x0 0,
+def headOps : List Instr := [.ADDI .x1 .x18 0, .ADDI .x14 .x8 0, .ADDI .x11 .x0 200, .LUI .x12 4, .ADDI .x13 .x0 2, .ADDI .x5 .x0 0,
   .LUI .x15 0x20000, .ADDI .x15 .x15 168, .ADD .x15 .x9 .x15, .LUI .x17 0x40000]
-def midOps : List Instr := [.ADDI .x14 .x8 0, .ADDI .x16 .x18 0, .LUI .x17 0x40000, .LUI .x15 0x20000,
+def midOps : List Instr := [.ADDI .x14 .x8 0, .ADDI .x1 .x18 0, .LUI .x17 0x40000, .LUI .x15 0x20000,
   .ADD .x15 .x9 .x15]
-def tailOps : List Instr := [.ADDI .x27 .x0 256, .JAL .x0 2091188]
+def tailOps : List Instr := [.ADDI .x27 .x0 256, .JAL .x0 2046420]
 
-def headState (Q : MachineState) : MachineState := runOps (execInstrBr Q (.JAL .x0 5692)) headOps
+def headState (Q : MachineState) : MachineState := runOps (execInstrBr Q (.JAL .x0 50456)) headOps
 def midState (T : MachineState) : MachineState := runOps T midOps
 def tailState (V : MachineState) : MachineState := runOps V tailOps
 
@@ -1528,10 +1523,10 @@ theorem head_facts (Q : MachineState) (pc : Q.pc = opPC 12)
     (headState Q).getReg .x12 = wordAddress scratchW ∧ (headState Q).getReg .x13 = 2 ∧
     (headState Q).getReg .x5 = 0 ∧ (headState Q).getReg .x15 = wordAddress Rw ∧
     (headState Q).getReg .x17 = wordAddress (Lw 0) ∧ (headState Q).mem = Q.mem ∧
-    (headState Q).pc = opPC 1444 ∧
-    (∀ g, g ≠ .x5 → g ≠ .x11 → g ≠ .x12 → g ≠ .x13 → g ≠ .x14 → g ≠ .x15 → g ≠ .x17 →
-      (headState Q).getReg g = Q.getReg g) := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    (headState Q).pc = opPC 12636 ∧
+    (∀ g, g ≠ .x5 → g ≠ .x11 → g ≠ .x12 → g ≠ .x13 → g ≠ .x14 → g ≠ .x15 → g ≠ .x17 → g ≠ .x1 →
+      (headState Q).getReg g = Q.getReg g) ∧ (headState Q).getReg .x1 = Q.getReg .x18 := by
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [headState, headOps, runOps, List.foldl, execInstrBr, Opening.getReg_setReg, MachineState.getReg_setPC,
       reduceCtorEq, false_and, true_and, ne_eq, not_false_eq_true, not_true_eq_false, and_false, ↓reduceIte,
       reg_zero]
@@ -1561,19 +1556,23 @@ theorem head_facts (Q : MachineState) (pc : Q.pc = opPC 12)
       reg_zero]
     decide
   · simp only [headState, headOps, runOps, List.foldl, execInstrBr, set_mem]
-  · rw [show (headState Q).pc = Q.pc + signExtend21 5692 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 from rfl, pc]
+  · rw [show (headState Q).pc = Q.pc + signExtend21 50456 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 from rfl, pc]
     decide
-  · intro g a b c d e f h
+  · intro g a b c d e f h i
     simp [headState, headOps, runOps, execInstrBr, Ne.symm a, Ne.symm b, Ne.symm c, Ne.symm d, Ne.symm e,
-      Ne.symm f, Ne.symm h]
+      Ne.symm f, Ne.symm h, Ne.symm i]
+  · simp only [headState, headOps, runOps, List.foldl, execInstrBr, Opening.getReg_setReg, MachineState.getReg_setPC,
+      reduceCtorEq, false_and, true_and, ne_eq, not_false_eq_true, not_true_eq_false, and_false, ↓reduceIte,
+      reg_zero]
+    rw [show signExtend12 (0 : BitVec 12) = 0#64 by decide, BitVec.add_zero]
 
-theorem mid_facts (T : MachineState) (pc : T.pc = opPC 1476)
+theorem mid_facts (T : MachineState) (pc : T.pc = opPC 12668)
     (x8 : T.getReg .x8 = BitVec.ofNat 64 Opening.indicesBase)
     (x9 : T.getReg .x9 = BitVec.ofNat 64 Opening.trapdoorBase) :
-    (midState T).getReg .x14 = wordAddress (IW + 0) ∧ (midState T).getReg .x16 = T.getReg .x18 ∧
+    (midState T).getReg .x14 = wordAddress (IW + 0) ∧ (midState T).getReg .x1 = T.getReg .x18 ∧
     (midState T).getReg .x17 = wordAddress (Lw 0) ∧ (midState T).getReg .x15 = wordAddress HW ∧
-    (midState T).mem = T.mem ∧ (midState T).pc = opPC 1481 ∧
-    (∀ g, g ≠ .x14 → g ≠ .x15 → g ≠ .x16 → g ≠ .x17 → (midState T).getReg g = T.getReg g) := by
+    (midState T).mem = T.mem ∧ (midState T).pc = opPC 12673 ∧
+    (∀ g, g ≠ .x14 → g ≠ .x15 → g ≠ .x1 → g ≠ .x17 → (midState T).getReg g = T.getReg g) := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [midState, midOps, runOps, List.foldl, execInstrBr, Opening.getReg_setReg, MachineState.getReg_setPC,
       reduceCtorEq, false_and, true_and, ne_eq, not_false_eq_true, not_true_eq_false, and_false, ↓reduceIte,
@@ -1596,7 +1595,7 @@ theorem mid_facts (T : MachineState) (pc : T.pc = opPC 1476)
   · intro g a b c d
     simp [midState, midOps, runOps, execInstrBr, Ne.symm a, Ne.symm b, Ne.symm c, Ne.symm d]
 
-theorem tail_facts (V : MachineState) (pc : V.pc = opPC 1503) :
+theorem tail_facts (V : MachineState) (pc : V.pc = opPC 12695) :
     (tailState V).getReg .x27 = 256 ∧ (tailState V).mem = V.mem ∧ (tailState V).pc = 0x1034 ∧
     (∀ g, g ≠ .x27 → (tailState V).getReg g = V.getReg g) := by
   refine ⟨?_, ?_, ?_, ?_⟩
@@ -1605,45 +1604,45 @@ theorem tail_facts (V : MachineState) (pc : V.pc = opPC 1503) :
       reg_zero]
     decide
   · simp only [tailState, tailOps, runOps, List.foldl, execInstrBr, set_mem]
-  · rw [show (tailState V).pc = V.pc + 4 + signExtend21 2091188 from rfl, pc]; decide
+  · rw [show (tailState V).pc = V.pc + 4 + signExtend21 2046420 from rfl, pc]; decide
   · intro g a
     simp [tailState, tailOps, runOps, execInstrBr, Ne.symm a]
 
 theorem run_head (Q : MachineState) (pc : Q.pc = opPC 12) (fuel : Nat) (coins : Bool) :
-    execute openingImage (10 + fuel) Q coins =
-      (do let res ← execute openingImage fuel (headState Q) coins; return res.charge 10 0) := by
+    execute openingImage (11 + fuel) Q coins =
+      (do let res ← execute openingImage fuel (headState Q) coins; return res.charge 11 0) := by
   have jumpRun : ∀ X, execute openingImage (1 + X) Q coins =
-      (do let res ← execute openingImage X (runOps Q [.JAL .x0 5692]) coins; return res.charge 1 0) := fun X =>
-    alu_run Q 12 [.JAL .x0 5692] X coins pc (by decide)
+      (do let res ← execute openingImage X (runOps Q [.JAL .x0 50456]) coins; return res.charge 1 0) := fun X =>
+    alu_run Q 12 [.JAL .x0 50456] X coins pc (by decide)
       (by intro j h; change j < 1 at h; interval_cases j; rfl)
       (by intro j h t; change j + 1 < 1 at h; omega)
       (by intro j h t; change j < 1 at h; interval_cases j; rfl)
       (by intro j h; change j < 1 at h; interval_cases j; rfl)
-  have jpc : (execInstrBr Q (.JAL .x0 5692)).pc = opPC 1435 := by
-    rw [show (execInstrBr Q (.JAL .x0 5692)).pc = Q.pc + signExtend21 5692 from rfl, pc]; decide
-  have headRun : ∀ X, execute openingImage (9 + X) (execInstrBr Q (.JAL .x0 5692)) coins =
-      (do let res ← execute openingImage X (headState Q) coins; return res.charge 9 0) := fun X =>
-    alu_run _ 1435 headOps X coins jpc (by decide)
-      (by intro j h; change j < 9 at h; interval_cases j <;> rfl)
-      (by intro j h t; have hj : j < 8 := (by change j + 1 < 9 at h; omega); interval_cases j <;> rfl)
-      (by intro j h t; change j < 9 at h; interval_cases j <;> rfl)
-      (by intro j h; change j < 9 at h; interval_cases j <;> rfl)
-  rw [show 10 + fuel = 1 + (9 + fuel) by omega, jumpRun, run_ops_singleton, headRun]
+  have jpc : (execInstrBr Q (.JAL .x0 50456)).pc = opPC 12626 := by
+    rw [show (execInstrBr Q (.JAL .x0 50456)).pc = Q.pc + signExtend21 50456 from rfl, pc]; decide
+  have headRun : ∀ X, execute openingImage (10 + X) (execInstrBr Q (.JAL .x0 50456)) coins =
+      (do let res ← execute openingImage X (headState Q) coins; return res.charge 10 0) := fun X =>
+    alu_run _ 12626 headOps X coins jpc (by decide)
+      (by intro j h; change j < 10 at h; interval_cases j <;> rfl)
+      (by intro j h t; have hj : j < 9 := (by change j + 1 < 10 at h; omega); interval_cases j <;> rfl)
+      (by intro j h t; change j < 10 at h; interval_cases j <;> rfl)
+      (by intro j h; change j < 10 at h; interval_cases j <;> rfl)
+  rw [show 11 + fuel = 1 + (10 + fuel) by omega, jumpRun, run_ops_singleton, headRun]
   simp only [bind_assoc, pure_bind, charge_charge, Nat.reduceAdd]
 
-theorem run_mid (T : MachineState) (pc : T.pc = opPC 1476) (fuel : Nat) (coins : Bool) :
+theorem run_mid (T : MachineState) (pc : T.pc = opPC 12668) (fuel : Nat) (coins : Bool) :
     execute openingImage (5 + fuel) T coins =
       (do let res ← execute openingImage fuel (midState T) coins; return res.charge 5 0) :=
-  alu_run T 1476 midOps fuel coins pc (by decide)
+  alu_run T 12668 midOps fuel coins pc (by decide)
     (by intro j h; change j < 5 at h; interval_cases j <;> rfl)
     (by intro j h t; have hj : j < 4 := (by change j + 1 < 5 at h; omega); interval_cases j <;> rfl)
     (by intro j h t; change j < 5 at h; interval_cases j <;> rfl)
     (by intro j h; change j < 5 at h; interval_cases j <;> rfl)
 
-theorem run_tail (V : MachineState) (pc : V.pc = opPC 1503) (fuel : Nat) (coins : Bool) :
+theorem run_tail (V : MachineState) (pc : V.pc = opPC 12695) (fuel : Nat) (coins : Bool) :
     execute openingImage (2 + fuel) V coins =
       (do let res ← execute openingImage fuel (tailState V) coins; return res.charge 2 0) :=
-  alu_run V 1503 tailOps fuel coins pc (by decide)
+  alu_run V 12695 tailOps fuel coins pc (by decide)
     (by intro j h; change j < 2 at h; interval_cases j <;> rfl)
     (by intro j h t; have hj : j < 1 := (by change j + 1 < 2 at h; omega); interval_cases j <;> rfl)
     (by intro j h t; change j < 2 at h; interval_cases j <;> rfl)
@@ -1655,8 +1654,8 @@ def prePass (card : Nat) (idx : Nat → Nat) (Q : MachineState) : OracleComp Wor
   let T ← pass1Loop (memoryView Q) idx card 0 (headState Q)
   pure (tailState (iterState (fun _ => p2Next) card 0 (midState T)))
 
-def prepassSteps (card : Nat) : Nat := 10 + 32 * card + 5 + 22 * card + 2
-def prepassCycles (card : Nat) : Nat := 10 + 61 * card + 5 + 22 * card + 2
+def prepassSteps (card : Nat) : Nat := 11 + 32 * card + 5 + 22 * card + 2
+def prepassCycles (card : Nat) : Nat := 11 + 61 * card + 5 + 22 * card + 2
 
 /-- What the pre-pass needs of the state after the leader's first twelve setup words. -/
 structure PreReady (Q : MachineState) (card : Nat) (idx : Nat → Nat) : Prop where
@@ -1678,7 +1677,7 @@ structure PreEnd (Q : MachineState) (card : Nat) (idx : Nat → Nat) (ys : Nat �
   pc : P.pc = 0x1034
   x27 : P.getReg .x27 = 256
   keep : ∀ g, g ≠ .x5 → g ≠ .x6 → g ≠ .x7 → g ≠ .x10 → g ≠ .x11 → g ≠ .x12 → g ≠ .x13 → g ≠ .x14 → g ≠ .x15 →
-    g ≠ .x16 → g ≠ .x17 → g ≠ .x27 → g ≠ .x28 → g ≠ .x29 → g ≠ .x30 → g ≠ .x31 → P.getReg g = Q.getReg g
+    g ≠ .x1 → g ≠ .x17 → g ≠ .x27 → g ≠ .x28 → g ≠ .x29 → g ≠ .x30 → g ≠ .x31 → P.getReg g = Q.getReg g
   salt : ∀ j < card, ∀ t < 2, memoryView P (NW + 2 * idx j + t) = listVal (memoryView Q) (ys j) (idx j) t
   mate : ∀ j < card, ∀ t < 4,
     memoryView P (HW + 4 * (idx j ^^^ 1) + t) = listVal (memoryView Q) (ys j) (idx j) (2 + t)
@@ -1691,12 +1690,11 @@ theorem salts_word : wordAddress NW = BitVec.ofNat 64 (Opening.trapdoorBase + 80
 
 theorem pre_inv0 (Q : MachineState) (card : Nat) (idx : Nat → Nat) (r : PreReady Q card idx) :
     P1Inv Q (headState Q) 0 card idx (fun _ => 0) := by
-  obtain ⟨h14, h11, h12, h13, h5, h15, h17, hmem, hpc, hkeep⟩ := head_facts Q r.pc r.x8 r.x9
+  obtain ⟨h14, h11, h12, h13, h5, h15, h17, hmem, hpc, hkeep, h1⟩ := head_facts Q r.pc r.x8 r.x9
   refine ⟨by rw [if_neg (by have := r.positive; omega)]; exact hpc, h14, h15, h17, ?_, h11, h12, h13, h5,
-    fun g a b c d e f h i j l m n o p => hkeep g a e f h i j m, ?_, fun j hj => absurd hj (Nat.not_lt_zero _),
+    fun g a b c d e f h i j l m n o p => hkeep g a e f h i j m l, ?_, fun j hj => absurd hj (Nat.not_lt_zero _),
     r.idxMem, r.idxSmall, Nat.zero_le _, r.cardBound⟩
-  · rw [hkeep .x16 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide), r.x16,
-      Nat.sub_zero]
+  · rw [h1, r.x18, Nat.sub_zero]
   · intro w _ _ _
     rw [memoryView_congr hmem]
 
@@ -1718,7 +1716,7 @@ theorem pre_inv2 (Q : MachineState) (card : Nat) (idx : Nat → Nat) (r : PreRea
   have t22 : T.getReg .x22 = BitVec.ofNat 64 (Opening.trapdoorBase + 80 * LENGTH) :=
     (inv.keep .x22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans r.x22
-  have tpc : T.pc = opPC 1476 := by rw [inv.pc, if_pos rfl]
+  have tpc : T.pc = opPC 12668 := by rw [inv.pc, if_pos rfl]
   obtain ⟨m14, m16, m17, m15, mmem, mpc, mkeep⟩ := mid_facts T tpc t8 t9
   refine ⟨by rw [if_neg (by have := r.positive; omega)]; exact mpc, m14, m17, by rw [m16, t18]; rfl,
     fun g _ _ _ _ _ _ => rfl, m15, ?_, fun w _ _ _ => rfl, fun j hj => absurd hj (Nat.not_lt_zero _),
@@ -1734,7 +1732,7 @@ theorem pre_end (Q : MachineState) (card : Nat) (idx : Nat → Nat) (r : PreRead
     PreEnd Q card idx ys (tailState (iterState (fun _ => p2Next) card 0 (midState T))) := by
   have hc := r.cardBound
   have len : LENGTH = 2 ^ 24 := rfl
-  have tpc : T.pc = opPC 1476 := by rw [inv.pc, if_pos rfl]
+  have tpc : T.pc = opPC 12668 := by rw [inv.pc, if_pos rfl]
   have t8 : T.getReg .x8 = BitVec.ofNat 64 Opening.indicesBase :=
     (inv.keep .x8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)).trans r.x8
@@ -1744,7 +1742,7 @@ theorem pre_end (Q : MachineState) (card : Nat) (idx : Nat → Nat) (r : PreRead
   obtain ⟨_, _, _, _, mmem, _, mkeep⟩ := mid_facts T tpc t8 t9
   have inv2 := pass2_inv (midState T) card idx card 0 (midState T) (by omega) (pre_inv2 Q card idx r T ys inv)
   let V := iterState (fun _ => p2Next) card 0 (midState T)
-  have vpc : V.pc = opPC 1503 := by rw [inv2.pc, if_pos rfl]
+  have vpc : V.pc = opPC 12695 := by rw [inv2.pc, if_pos rfl]
   obtain ⟨p27, pmem, ppc, pkeep⟩ := tail_facts V vpc
   have mview : memoryView (midState T) = memoryView T := memoryView_congr mmem
   refine ⟨ppc, p27, ?_, ?_, ?_, ?_⟩
@@ -1768,19 +1766,19 @@ theorem prepass_run (Q : MachineState) (card : Nat) (idx : Nat → Nat) (r : Pre
           let res ← execute openingImage fuel P coins
           return res.charge (prepassCycles card) card) := by
   have inv0 := pre_inv0 Q card idx r
-  rw [show prepassSteps card + fuel = 10 + (32 * card + (5 + (22 * card + (2 + fuel)))) by unfold prepassSteps; omega,
+  rw [show prepassSteps card + fuel = 11 + (32 * card + (5 + (22 * card + (2 + fuel)))) by unfold prepassSteps; omega,
     run_head Q r.pc, pass1_run Q card idx card 0 (headState Q) _ (by omega) inv0]
   simp only [prePass, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro T hT
   obtain ⟨ys, inv1⟩ := pass1_support Q card idx card 0 (headState Q) _ (by omega) inv0 T hT
-  have tpc : T.pc = opPC 1476 := by rw [inv1.pc, if_pos rfl]
+  have tpc : T.pc = opPC 12668 := by rw [inv1.pc, if_pos rfl]
   have inv2 := pass2_inv (midState T) card idx card 0 (midState T) (by omega) (pre_inv2 Q card idx r T ys inv1)
-  have vpc : (iterState (fun _ => p2Next) card 0 (midState T)).pc = opPC 1503 := by rw [inv2.pc, if_pos rfl]
+  have vpc : (iterState (fun _ => p2Next) card 0 (midState T)).pc = opPC 12695 := by rw [inv2.pc, if_pos rfl]
   rw [run_mid T tpc, pass2_run (midState T) card idx card 0 (midState T) (by omega) (pre_inv2 Q card idx r T ys inv1),
     run_tail _ vpc]
   simp only [bind_assoc, pure_bind, charge_charge]
-  rw [show 10 + 61 * card + (5 + (22 * card + 2)) = prepassCycles card by unfold prepassCycles; omega,
+  rw [show 11 + 61 * card + (5 + (22 * card + 2)) = prepassCycles card by unfold prepassCycles; omega,
     show 0 + card + (0 + (0 + 0)) = card by omega]
 
 theorem prepass_support (Q : MachineState) (card : Nat) (idx : Nat → Nat) (r : PreReady Q card idx)

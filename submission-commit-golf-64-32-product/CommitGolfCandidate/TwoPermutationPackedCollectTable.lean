@@ -1,7 +1,7 @@
 import CommitGolfCandidate.TwoPermutationPinnedTranscript
 import CommitGolfCandidate.TwoPermutationHybridPaths
 import CommitGolfCandidate.TwoPermutationCollectTable
-import CommitGolfCandidate.TwoPermutationPackedPaths
+import CommitGolfCandidate.R1bCapPath
 import CommitGolfCandidate.TwoPermutationPackedHonestInput
 
 namespace TwoPermutationPrototype.Packed.Checker
@@ -26,21 +26,22 @@ def RecordedLower.mono {oracle : Oracle} {index : Index} {value : Entry} {groupR
   ⟨lower.nonce, lower.leaf.mono contains, lower.path.mono contains⟩
 
 private theorem hybrid_cap_path {rows : List PublicRow} {node height : Nat} {start finish : Digest}
-    (path : ProjectedPath rows node height start finish) (bounded : node < LENGTH/2) :
+    (path : CapPath238 rows node height start finish) (bounded : node < 512) :
     Hybrid.ProjectedPath rows node height start finish := by
   induction path with
   | done node digest => exact .done node digest
   | @step node height child parent sibling root call next ih =>
     apply Hybrid.ProjectedPath.step call
-    have small : node/2 < LENGTH/2 := by omega
-    rw [Hybrid.normalize,ite_eq_left small]
-    exact ih small
+    have small : node/2 < LENGTH/2 := by change node/2<8388608;omega
+    have upper : node/2<524288 := by omega
+    rw [Hybrid.normalize,ite_eq_left small,ite_eq_left upper]
+    exact ih (by omega)
 
 def RecordedLower.join {oracle : Oracle} {index : Index} {value : Entry} {groupRoot : Digest}
     {rows : List PublicRow} {root : Commitment} (lower : RecordedLower oracle index value groupRoot rows)
-    (cap : ProjectedPath rows (capGroup index) 8 groupRoot root) :
+    (cap : CapPath238 rows (capGroup index) 8 groupRoot root) :
     Hybrid.ProjectedOpening oracle index value root rows :=
-  ⟨lower.nonce, lower.leaf, lower.path.append (hybrid_cap_path cap (by have h := (checker_cap_group index).2;change capGroup index<8388608;omega))⟩
+  ⟨lower.nonce, lower.leaf, lower.path.append (hybrid_cap_path cap (checker_cap_group index).2)⟩
 
 /-- The accepted prefix and the cap groups its records authenticate. -/
 structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) (state : MachineState)
@@ -57,13 +58,11 @@ structure CollectedTable (oracle : Oracle) (input : CheckInput) (ordinal : Nat) 
       capRootAt state group = honestHeap oracle message salts group
 
 theorem collected_table_empty (oracle : Oracle) (input : CheckInput) (state : MachineState)
-    (memory : state.mem = (Assembly.submission.initialState .check input).mem) :
+    (zero : ∀ n<512,state.getMem (wordAddress (512+n))=0) :
     CollectedTable oracle input 0 state [] := by
   constructor
   · intro group inside
-    have framed := congrFun memory (wordAddress (512+group))
-    have mark := check_mark_zero input group inside
-    have clean : machineMarks state group = 0 := (checker_marks_as_word _ _).trans (framed.trans mark)
+    have clean : machineMarks state group = 0 := (checker_marks_as_word _ _).trans (zero group inside)
     simpa only [Opening.groupsBefore, List.take_zero, List.map_nil, List.not_mem_nil, ite_false] using clean
   · intro earlier before
     omega
