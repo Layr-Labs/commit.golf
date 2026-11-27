@@ -1,0 +1,15 @@
+import CommitGolfDepth.Rounds
+import CommitGolf.Artifact
+
+/-! Trusted full oracle-round certificate and exact delivered execution modes.
+The generated Artifact value is fixed; it is not a comparator definition hole. -/
+namespace CommitGolf.Challenge
+
+noncomputable def submission : CommitGolfDepth.Rounds.Submission := sorry
+
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.depthSubmission := sorry
+
+theorem certificate : CommitGolfDepth.Rounds.Certificate submission
+    {{proofBytes}} {{commitCycles}} {{openingCycles}} {{commitRounds}} {{openingRounds}} := sorry
+
+end CommitGolf.Challenge

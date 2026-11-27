@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import shutil
 
+from depth_profiles import depth_profile
+
 
 @dataclass(frozen=True)
 class Track:
@@ -11,6 +13,13 @@ class Track:
     pareto: bool
     permutation_cycles: int
     compression_input_bytes: int = 64
+    depth_model: str | None = None
+
+    def __post_init__(self):
+        if self.depth_model is not None:
+            depth_profile(self.depth_model)
+            if not self.pareto:
+                raise ValueError("depth resource contracts currently require Pareto scoring")
 
 
 TRACKS = {
@@ -31,6 +40,16 @@ TRACKS = {
     "commit-golf-96-32-pareto": Track(
         "submission-commit-golf-96-32-pareto",
         "scripts/commit-golf-96-32-pareto/score.json", True, 30, 96,
+    ),
+    "commit-golf-oracle-rounds-pareto": Track(
+        "submission-commit-golf-oracle-rounds-pareto",
+        "scripts/commit-golf-oracle-rounds-pareto/score.json", True, 8,
+        depth_model="oracle-rounds",
+    ),
+    "commit-golf-work-span-pareto": Track(
+        "submission-commit-golf-work-span-pareto",
+        "scripts/commit-golf-work-span-pareto/score.json", True, 8,
+        depth_model="work-span",
     ),
 }
 

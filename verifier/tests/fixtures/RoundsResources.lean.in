@@ -1,0 +1,82 @@
+import CommitGolfDepth.Rounds
+import CommitGolf.Artifact
+
+/-! Resource-only regression contract. This is not a production security certificate. -/
+namespace CommitGolf.Challenge
+open OracleComp OracleSpec CommitGolfDepth.Rounds CommitGolfDepth.Rounds.RoundMachine
+
+noncomputable def submission : CommitGolfDepth.Rounds.Submission := sorry
+
+theorem submission_matches_artifact : submission = Artifact.depthSubmission := sorry
+
+theorem admission : submission.core.Admission := sorry
+
+theorem resource_fixture (oracle : Oracle) :
+    Pr{let result ← oracle.run (submission.run .commit (fun _ => 0))}[
+      result.1.result.exit = .success ∧ result.1.result.cycles ≤ {{work}} ∧
+      result.1.oracleRounds ≤ {{depth}} ∧ result.1.result.oracleCalls = 2 ∧ result.2 = 2 ∧
+      result.1.result.state.getByte 543 = (oracle.compression 0).extractLsb' 248 8 ∧
+      result.1.result.state.getByte 575 = (oracle.compression 0).extractLsb' 248 8] = 1 := sorry
+
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
+open CommitGolfDepth.Rounds.Batch
+
+/-- Symbolic solver-side rules, checked against core-only trusted statements. -/
+theorem symbolic_step : ∀ (image : Image) (state : MachineState) (steps count : Nat)
+    (coins : Bool) (table : Nat → Descriptor) (requests : Nat → Request)
+    (call : isBatchCall image state = true)
+    (countReg : (state.getReg .x11).toNat = count)
+    (valid : ArrayValid (state.getReg .x10) count)
+    (words : ∀ i < count,
+      readBuffer state ((state.getReg .x10).toNat + 32*i) 8 = (table i).kind ∧
+      readBuffer state ((state.getReg .x10).toNat + 32*i + 8) 8 = (table i).source ∧
+      readBuffer state ((state.getReg .x10).toNat + 32*i + 16) 8 = (table i).inputBytes ∧
+      readBuffer state ((state.getReg .x10).toNat + 32*i + 24) 8 = (table i).destination)
+    (captured : ∀ i < count, CommitGolfDepth.Rounds.Batch.snapshot state (table i) = some (requests i)),
+    executeBatched image (steps+1) state coins = (do
+      let written ← runFrozenWorld state ((List.range count).map requests)
+      let rest ← executeBatched image steps (written.setPC (state.pc + 4)) coins
+      pure (charge rest (preparationCycles count +
+        requestCost oracleCycles ((List.range count).map requests)) count
+        (if count = 0 then 0 else 1))) := sorry
+
+theorem symbolic_bounds : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (descriptors : List Descriptor) (requests : List Request)
+    (call : isBatchCall image state = true)
+    (loaded : loadDescriptors state (state.getReg .x10) (state.getReg .x11).toNat =
+      some descriptors)
+    (captured : snapshotAll state descriptors = some requests)
+    (work queries depth : Nat)
+    (continuation : ∀ written ∈ support (runFrozenWorld state requests),
+      ∀ rest ∈ support (executeBatched image steps (written.setPC (state.pc+4)) coins),
+        (rest.result.cycles ≤ work ∧ rest.result.oracleCalls ≤ queries ∧ rest.oracleRounds ≤ depth))
+    (result : CommitGolfDepth.Rounds.RoundMachine.Execution) (reached : result ∈ support
+      (executeBatched image (steps+1) state coins)),
+    (result.result.cycles ≤ (quote requests).priced batchFees + work ∧
+      result.result.oracleCalls ≤ requests.length+queries ∧ result.oracleRounds ≤ rounds requests+depth) := sorry
+
+/-- Ordinary instruction equations and bounds, stated with core machine definitions. -/
+theorem ordinary_step : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false),
+    executeBatched image (steps+1) state coins = (do
+      let tick ← Riscv.execute image 1 state coins
+      if tick.exit = .unfinished then do
+        let rest ← executeBatched image steps tick.state coins
+        pure (charge rest tick.cycles tick.oracleCalls tick.oracleCalls)
+      else pure (⟨tick, tick.oracleCalls⟩ : CommitGolfDepth.Rounds.RoundMachine.Execution)) := sorry
+
+theorem ordinary_bounds : ∀ (image : Image) (state : MachineState) (steps : Nat)
+    (coins : Bool) (nonbatch : isBatchCall image state = false)
+    (tickWork tickQueries restWork restQueries restDepth : Nat)
+    (ticks : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.cycles ≤ tickWork ∧ tick.oracleCalls ≤ tickQueries)
+    (continuation : ∀ tick ∈ support (Riscv.execute image 1 state coins),
+      tick.exit = .unfinished →
+      ∀ rest ∈ support (executeBatched image steps tick.state coins),
+        (rest.result.cycles ≤ restWork ∧ rest.result.oracleCalls ≤ restQueries ∧ rest.oracleRounds ≤ restDepth))
+    (result : CommitGolfDepth.Rounds.RoundMachine.Execution)
+    (reached : result ∈ support (executeBatched image (steps+1) state coins)),
+    (result.result.cycles ≤ tickWork+restWork ∧ result.result.oracleCalls ≤ tickQueries+restQueries ∧
+      result.oracleRounds ≤ tickQueries+restDepth) := sorry
+
+end CommitGolf.Challenge

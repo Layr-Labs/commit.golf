@@ -11,7 +11,10 @@ independently. A candidate dominates another when it is no worse on both and str
 better on at least one. `commit-golf-64-32-product` and `commit-golf-64-32-pareto` use the corresponding
 scoring rules with permutation calls priced at 30 cycles. `commit-golf-96-32-product` and
 `commit-golf-96-32-pareto` additionally widen compression to 96→32 bytes, still at 8 cycles.
-All six tracks share every other contract parameter and numeric limit below.
+These six tracks share every other contract parameter and numeric limit below.
+The separate `commit-golf-oracle-rounds-pareto` and `commit-golf-work-span-pareto`
+tracks use the execution and resource contracts in [depth rules](docs/depth-rules.md).
+They retain the workload and security games below; their certificates also prove depth bounds.
 
 The cycle bounds and opening-proof byte bound are worst-case honest-run bounds, not
 sample averages. Commitment bytes, private trapdoor storage, opened values, indices,
@@ -80,7 +83,7 @@ Oversized proofs reject.
 | Ordinary instruction | 1 |
 | Multiplication/division, including remainder and word forms | 4 |
 | Compression syscall | 8 |
-| Forward or inverse permutation syscall | 8 (`product`, `pareto`); 30 (all `commit-golf-*` tracks) |
+| Forward or inverse permutation syscall | 8 (`product`, `pareto`); 30 (the `64-32-*` and `96-32-*` tracks) |
 | Private randomness, `n` bytes | 1 + ceil(n / 8) |
 | HALT | 1 |
 
@@ -133,10 +136,12 @@ records the comparisons and application limits.
 
 ## Submit and verify
 
-**Only the selected track’s directory is solver-editable: `submission/` for product,
-`submission-pareto/` for Pareto, `submission-commit-golf-64-32-product/` for commit-golf-64-32-product, or
-`submission-commit-golf-64-32-pareto/` for commit-golf-64-32-pareto, `submission-commit-golf-96-32-product/` for
-commit-golf-96-32-product, or `submission-commit-golf-96-32-pareto/` for commit-golf-96-32-pareto.** Define
+**Only the selected track’s submission directory is solver-editable.**
+The [track list](README.md#tracks) names all eight directories.
+The two depth tracks use the full depth certificates and schema-v2 artifacts in
+[depth rules](docs/depth-rules.md).
+
+For the six non-depth tracks, define
 `CommitGolf.Challenge.submission : CommitGolf.Submission`, and prove
 `CommitGolf.Challenge.certificate : Certificate submission proofBytes commitCycles openingCycles`.
 Deliver all image bytes and ABI fields in `programs.json` ([encoding](submission/README.md#delivered-programs)).

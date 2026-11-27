@@ -24,3 +24,6 @@ lean_lib CommitGolfTests
 -- Verifier-only namespace: candidate modules are copied here during submission checking.
 -- The default contract build does not build or check a submission.
 lean_lib CommitGolfCandidate
+
+-- Separate execution/resource contracts for the new depth-aware tracks.
+lean_lib CommitGolfDepth

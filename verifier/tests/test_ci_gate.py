@@ -9,7 +9,7 @@ import unittest
 
 WORKFLOW = Path(__file__).resolve().parents[2] / '.github/workflows/test-pr.yml'
 RESULTS = ('BENCHMARK_RESULT', 'PARETO_RESULT', 'LINKAGE_RESULT', 'SCALE_RESULT')
-TRACKS = ('64_32_PRODUCT', '64_32_PARETO', '96_32_PRODUCT', '96_32_PARETO')
+TRACKS = ('64_32_PRODUCT', '64_32_PARETO', '96_32_PRODUCT', '96_32_PARETO', 'ORACLE_ROUNDS_PARETO', 'WORK_SPAN_PARETO')
 
 
 def workflow_shell(job_name):
@@ -85,7 +85,7 @@ class ContractGateTests(unittest.TestCase):
                                'SCALE_RESULT': 'skipped', worker: status})
 
     def test_every_changed_track_subset_requires_its_selected_jobs(self):
-        for mask in range(16):
+        for mask in range(1 << len(TRACKS)):
             for contract in ('true', 'false'):
                 for managed in ('true', 'false'):
                     env = {'CONTRACT_CHANGED': contract, 'SOLVER_BRANCH': managed}

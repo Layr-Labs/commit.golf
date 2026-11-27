@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 import stat
 
+from depth_profiles import depth_profile
+
 MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_PROGRAM_BYTES = 2**20
 MEMORY_BYTES = 2**36
@@ -106,6 +108,8 @@ class Artifact:
     layout: tuple[int, ...]
     steps: tuple[int, ...]
     images: tuple[Image, ...]
+    resource_model: str | None = None
+    execution_modes: tuple[str, ...] | None = None
 
     @property
     def digest(self):
@@ -114,8 +118,10 @@ class Artifact:
 
     def lean_source(self):
         """Only validated integers enter generated code; solver source is never interpolated."""
-        lines = ['import CommitGolf.Programs', 'import CommitGolf.ArtifactEncoding', '',
-                 'namespace CommitGolf.Artifact', '']
+        lines = ['import CommitGolf.Programs', 'import CommitGolf.ArtifactEncoding']
+        if self.resource_model is not None:
+            lines.append('import ' + depth_profile(self.resource_model).namespace)
+        lines.extend(['', 'namespace CommitGolf.Artifact', ''])
         for name, image in zip(PROGRAMS, self.images):
             raw_code = b''.join(word.to_bytes(4, 'little') for word in image.code)
             for suffix, raw, bits in (('Code', raw_code, 32), ('Data', image.data, 8)):
@@ -130,11 +136,22 @@ class Artifact:
                      f'ArtifactEncoding.decode 8 {name}Data⟩' for name in PROGRAMS)
         lines.append('  steps')
         lines.extend(f'    | .{name} => {steps}' for name, steps in zip(PROGRAMS, self.steps))
+        if self.resource_model is not None:
+            profile = depth_profile(self.resource_model)
+            if (self.execution_modes is None or len(self.execution_modes) != len(PROGRAMS)
+                    or any(mode not in profile.execution_modes for mode in self.execution_modes)):
+                raise ValueError('invalid artifact execution modes')
+            lines.extend(['', '/-- Exact execution modes delivered with these same images. -/',
+                          f'def depthSubmission : {profile.namespace}.Submission where',
+                          '  core := submission', '  modes'])
+            lines.extend(f'    | .{name} => .{mode}'
+                         for name, mode in zip(PROGRAMS, self.execution_modes))
         lines.extend(['', 'end CommitGolf.Artifact', ''])
         return '\n'.join(lines)
 
 
-def parse_artifact(raw: bytes) -> Artifact:
+def parse_artifact(raw: bytes, *, resource_model: str | None = None) -> Artifact:
+    profile = depth_profile(resource_model) if resource_model is not None else None
     if len(raw) > MAX_MANIFEST_BYTES:
         raise ValueError('programs.json exceeds 8 MiB')
     try:
@@ -142,9 +159,20 @@ def parse_artifact(raw: bytes) -> Artifact:
                            parse_constant=reject_constant)
     except RecursionError as exc:
         raise ValueError('manifest nesting is too deep') from exc
-    exact_object(value, ('schemaVersion', 'sizes', 'layout', 'steps', 'images'), 'manifest')
-    if type(value['schemaVersion']) is not int or value['schemaVersion'] != 1:
-        raise ValueError('schemaVersion must be the integer 1')
+    keys = ('schemaVersion', 'sizes', 'layout', 'steps', 'images')
+    if profile is not None:
+        keys += ('executionModes',)
+    exact_object(value, keys, 'manifest')
+    version = 2 if profile is not None else 1
+    if type(value['schemaVersion']) is not int or value['schemaVersion'] != version:
+        raise ValueError(f'schemaVersion must be the integer {version}')
+    modes = None
+    if profile is not None:
+        delivered = exact_object(value['executionModes'], PROGRAMS, 'executionModes')
+        if any(type(delivered[name]) is not str or delivered[name] not in profile.execution_modes
+               for name in PROGRAMS):
+            raise ValueError('executionModes contain a mode outside the selected resource model')
+        modes = tuple(delivered[name] for name in PROGRAMS)
     sizes = exact_object(value['sizes'], SIZE_FIELDS, 'sizes')
     layout = exact_object(value['layout'], LAYOUT_FIELDS, 'layout')
     steps = exact_object(value['steps'], PROGRAMS, 'steps')
@@ -164,17 +192,17 @@ def parse_artifact(raw: bytes) -> Artifact:
         tuple(natural(sizes[key], MEMORY_BYTES, f'sizes.{key}') for key in SIZE_FIELDS),
         tuple(natural(layout[key], MEMORY_BYTES, f'layout.{key}') for key in LAYOUT_FIELDS),
         tuple(natural(steps[key], STEP_LIMIT, f'steps.{key}', minimum=1) for key in PROGRAMS),
-        tuple(parsed_images))
+        tuple(parsed_images), resource_model, modes)
 
 
-def load_artifact(path: Path) -> Artifact:
+def load_artifact(path: Path, *, resource_model: str | None = None) -> Artifact:
     # A rejected symlink or FIFO must not be followed or block policy validation.
     flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, 'O_NOFOLLOW', 0)
     with os.fdopen(os.open(path, flags), 'rb') as source:
         if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
             raise ValueError('programs.json must be a regular file')
         raw = source.read(MAX_MANIFEST_BYTES + 1)
-    return parse_artifact(raw)
+    return parse_artifact(raw, resource_model=resource_model)
 
 
 def write_artifact_module(artifact: Artifact, project: Path):

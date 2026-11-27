@@ -16,6 +16,8 @@ class TrackWidthTests(unittest.TestCase):
         expected = {
             'product': (64, 8, False),
             'pareto': (64, 8, True),
+            'commit-golf-oracle-rounds-pareto': (64, 8, True),
+            'commit-golf-work-span-pareto': (64, 8, True),
             'commit-golf-96-32-product': (96, 30, False),
             'commit-golf-96-32-pareto': (96, 30, True),
             'commit-golf-64-32-product': (64, 30, False),

@@ -1,0 +1,161 @@
+import CommitGolfDepth.Span
+import CommitGolf.Artifact
+
+/-! Resource-only regression contract. This is not a production security certificate. -/
+namespace CommitGolf.Challenge
+open OracleComp CommitGolfDepth.Span CommitGolfDepth.Span.SpanMachine
+
+noncomputable def submission : CommitGolfDepth.Span.Submission := sorry
+
+theorem submission_matches_artifact : submission = Artifact.depthSubmission := sorry
+
+theorem admission : submission.core.Admission := sorry
+
+theorem resource_fixture (oracle : Oracle) :
+    Pr{let result ← oracle.run (submission.run .commit (fun _ => 0))}[
+      result.1.exit = .success ∧ result.1.work ≤ {{work}} ∧ result.1.span ≤ {{depth}} ∧
+      result.1.oracleCalls = 0 ∧ result.2 = 0 ∧
+      result.1.trace.instructions = 16 ∧ result.1.span < result.1.work ∧
+      result.1.state.mem 512 = 49 ∧ result.1.state.mem 520 = 81] = 1 := sorry
+
+open CommitGolf CommitGolf.Riscv RiscvZkvm.Rv64
+
+/-- Symbolic solver-side rules, checked against core-only trusted statements. -/
+theorem symbolic_step : ∀ (children : ChildRunner) (image : Riscv.Image) (p : Policy)
+    (coins : Bool) (fuel : Nat) (state : MachineState) (left right : Child)
+    (fetched : Riscv.fetch image state = some (.base .ECALL))
+    (selector : state.getReg .x5 = 3)
+    (loaded : forkChildren p state = some (left, right))
+    (reserved : left.fuel + right.fuel ≤ fuel),
+    Subtype.val <$> runBody children true image p coins (fuel + 1) state = (do
+      let l ← children (childPolicy p left.region right.region) left.fuel (childState state left)
+      let r ← children (childPolicy p right.region left.region) right.fuel (childState state right)
+      let c ← if childrenExit l.val.exit r.val.exit = .success then
+          runBody children true image p coins (fuel - left.fuel - right.fuel)
+            ((protectWrites p state
+              (merge state l.val.state r.val.state left.region right.region)).setPC (state.pc + 4))
+        else pure (boundedStop (fuel - left.fuel - right.fuel)
+          (childrenExit l.val.exit r.val.exit) state)
+      return {c.val with trace := .fork FORK_CYCLES JOIN_CYCLES l.val.trace r.val.trace c.val.trace}) := sorry
+
+theorem symbolic_bounds : ∀ (children : ChildRunner) (image : Riscv.Image) (p : Policy)
+    (coins : Bool) (fuel : Nat) (state : MachineState) (left right : Child)
+    (fetched : Riscv.fetch image state = some (.base .ECALL))
+    (selector : state.getReg .x5 = 3)
+    (loaded : forkChildren p state = some (left, right))
+    (reserved : left.fuel + right.fuel ≤ fuel)
+    (lw ls lq rw rs rq cw cs cq : Nat)
+    (hl : ∀ l ∈ support (children (childPolicy p left.region right.region) left.fuel
+      (childState state left)), (l.val.work ≤ lw ∧ l.val.span ≤ ls ∧ l.val.oracleCalls ≤ lq))
+    (hr : ∀ r ∈ support (children (childPolicy p right.region left.region) right.fuel
+      (childState state right)), (r.val.work ≤ rw ∧ r.val.span ≤ rs ∧ r.val.oracleCalls ≤ rq))
+    (hc : ∀ l ∈ support (children (childPolicy p left.region right.region) left.fuel
+      (childState state left)), ∀ r ∈ support (children (childPolicy p right.region left.region)
+      right.fuel (childState state right)), ∀ c ∈ support
+      (if childrenExit l.val.exit r.val.exit = .success then
+        runBody children true image p coins (fuel - left.fuel - right.fuel)
+          ((protectWrites p state (merge state l.val.state r.val.state left.region right.region)).setPC
+            (state.pc + 4))
+      else pure (boundedStop (fuel - left.fuel - right.fuel)
+        (childrenExit l.val.exit r.val.exit) state)), (c.val.work ≤ cw ∧ c.val.span ≤ cs ∧ c.val.oracleCalls ≤ cq))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children true image p coins (fuel + 1) state)),
+    (out.val.work ≤ FORK_CYCLES + lw + rw + JOIN_CYCLES + cw ∧
+      out.val.span ≤ FORK_CYCLES + max ls rs + JOIN_CYCLES + cs ∧
+      out.val.oracleCalls ≤ lq + rq + cq) := sorry
+
+/-- Ordinary instruction equations and bounds, stated with core machine definitions. -/
+theorem ordinary_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL),
+    runBody children canFork image p coins (fuel + 1) state =
+      (if ordinaryAllowed p state instruction then
+        match Riscv.ordinaryStep state instruction with
+        | none => pure (boundedExit fuel .failure state)
+        | some next => do
+          let result ← runBody children canFork image p coins fuel (protectWrites p state next)
+          return boundedCharge result (Riscv.instructionCycles instruction) 0
+      else pure (boundedExit fuel .failure state)) := sorry
+
+theorem ordinary_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state next : MachineState)
+    (instruction : Riscv.Instruction) (fetched : Riscv.fetch image state = some instruction)
+    (ordinary : instruction ≠ .base .ECALL) (allowed : ordinaryAllowed p state instruction = true)
+    (stepped : Riscv.ordinaryStep state instruction = some next)
+    (work span queries : Nat)
+    (h : ∀ result ∈ support (runBody children canFork image p coins fuel
+      (protectWrites p state next)), (result.val.work ≤ work ∧ result.val.span ≤ span ∧ result.val.oracleCalls ≤ queries))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ Riscv.instructionCycles instruction + work ∧
+      out.val.span ≤ Riscv.instructionCycles instruction + span ∧ out.val.oracleCalls ≤ queries) := sorry
+
+/-- Syscall rules and bounds, specified solely with live interpreter definitions. -/
+theorem oracle_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 0),
+    runBody children canFork image p coins (fuel + 1) state =
+      (if oracleAllowed p state then
+        match Riscv.oracleInput state with
+        | none => pure (boundedExit fuel .failure state)
+        | some query => do
+          let answer ← World.query (.inr query)
+          let result ← runBody children canFork image p coins fuel
+            (protectWrites p state (Riscv.writeOracleAnswer state (state.getReg .x12) query answer))
+          return boundedCharge result (Riscv.oracleCycles query) 1
+      else pure (boundedExit fuel .failure state)) := sorry
+
+theorem oracle_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState) (query : PublicSpec.Domain)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 0)
+    (allowed : oracleAllowed p state = true) (input : Riscv.oracleInput state = some query)
+    (work span queries : Nat)
+    (h : ∀ answer : PublicSpec.Range query, ∀ result ∈ support
+      (runBody children canFork image p coins fuel
+        (protectWrites p state (Riscv.writeOracleAnswer state (state.getReg .x12) query answer))),
+        (result.val.work ≤ work ∧ result.val.span ≤ span ∧ result.val.oracleCalls ≤ queries))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ Riscv.oracleCycles query + work ∧ out.val.span ≤ Riscv.oracleCycles query + span ∧
+      out.val.oracleCalls ≤ 1 + queries) := sorry
+
+theorem halt_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 1),
+    runBody children canFork image p coins (fuel + 1) state =
+      pure (boundedExit fuel (if state.getReg .x10 = 0 then .success else .failure) state) := sorry
+
+theorem halt_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 1)
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ 1 ∧ out.val.span ≤ 1 ∧ out.val.oracleCalls ≤ 0) := sorry
+
+theorem random_step : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 2),
+    runBody children canFork image p coins (fuel + 1) state =
+      (if coins && randomAllowed p state then do
+        let answer ← liftM ($ᵗ BitVec (8 * (state.getReg .x11).toNat) :
+          ProbComp (BitVec (8 * (state.getReg .x11).toNat)))
+        let result ← runBody children canFork image p coins fuel
+          (protectWrites p state (Riscv.writeBits state (state.getReg .x10) answer))
+        return boundedCharge result (1 + ((state.getReg .x11).toNat + 7) / 8) 0
+      else pure (boundedExit fuel .failure state)) := sorry
+
+theorem random_bounds : ∀ (children : ChildRunner) (canFork : Bool) (image : Riscv.Image)
+    (p : Policy) (coins : Bool) (fuel : Nat) (state : MachineState)
+    (fetched : Riscv.fetch image state = some (.base .ECALL)) (selector : state.getReg .x5 = 2)
+    (allowed : (coins && randomAllowed p state) = true) (work span queries : Nat)
+    (h : ∀ answer : BitVec (8 * (state.getReg .x11).toNat), ∀ result ∈ support
+      (runBody children canFork image p coins fuel
+        (protectWrites p state (Riscv.writeBits state (state.getReg .x10) answer))),
+        (result.val.work ≤ work ∧ result.val.span ≤ span ∧ result.val.oracleCalls ≤ queries))
+    (out : BoundedResult (fuel + 1))
+    (reached : out ∈ support (runBody children canFork image p coins (fuel + 1) state)),
+    (out.val.work ≤ 1 + ((state.getReg .x11).toNat + 7) / 8 + work ∧
+      out.val.span ≤ 1 + ((state.getReg .x11).toNat + 7) / 8 + span ∧ out.val.oracleCalls ≤ queries) := sorry
+
+end CommitGolf.Challenge

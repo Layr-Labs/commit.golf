@@ -7,14 +7,15 @@ import json
 import re
 from pathlib import Path
 
-from artifact import load_artifact
+from artifact import load_artifact, unique_object, reject_constant
 
 MAX_FILES = 1000
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 32 * 1024 * 1024
 MODULE = re.compile(r"[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*")
 INTEGER = re.compile(r"0|[1-9][0-9]*")
-from scoring import score_claim
+from scoring import score_claim, depth_objectives
+from depth_profiles import DEPTH_PROFILES, depth_profile
 ALLOWED_LIBRARIES = ("Mathlib", "ToMathlib", "VCVio", "Batteries", "Lean", "Init", "Std", "RiscvZkvm", "ArkLib", "CompPoly")
 ALLOWED_CONTRACT = {"CommitGolf", "CommitGolf.Parameters", "CommitGolf.Oracle", "CommitGolf.Scheme",
                     "CommitGolf.Honest", "CommitGolf.Binding", "CommitGolf.Hiding", "CommitGolf.Statements",
@@ -68,16 +69,21 @@ def imports(source: str) -> list[str]:
     return found
 
 
-def claim(path: Path) -> dict[str, int]:
+def claim(path: Path, *, resource_model: str | None = None) -> dict[str, int]:
     raw = path.read_bytes()
     if len(raw) > 512:
         raise ValueError("claim.json exceeds 512 bytes")
-    value = json.loads(raw)
-    score_claim(value)
+    value = (json.loads(raw) if resource_model is None else
+             json.loads(raw, object_pairs_hook=unique_object, parse_constant=reject_constant))
+    if resource_model is None:
+        score_claim(value)
+    else:
+        depth_objectives(value, resource_model)
     return value
 
 
-def check(root: Path) -> dict:
+def check(root: Path, *, resource_model: str | None = None) -> dict:
+    profile = depth_profile(resource_model) if resource_model is not None else None
     errors = []
     if root.is_symlink() or not root.is_dir():
         return {"ok": False, "errors": ["submission root is not a directory"]}
@@ -108,12 +114,12 @@ def check(root: Path) -> dict:
     if not (root / "Solution.lean").is_file():
         errors.append("Solution.lean is required")
     try:
-        values = claim(root / "claim.json")
+        values = claim(root / "claim.json", resource_model=resource_model)
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         values = None
         errors.append(f"invalid claim.json: {exc}")
     try:
-        artifact_digest = load_artifact(root / 'programs.json').digest
+        artifact_digest = load_artifact(root / 'programs.json', resource_model=resource_model).digest
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         artifact_digest = None
         errors.append(f"invalid programs.json: {exc}")
@@ -125,21 +131,28 @@ def check(root: Path) -> dict:
         try:
             source = path.read_text(encoding="utf-8")
             for module in imports(source):
-                if module in ALLOWED_CONTRACT or module in modules or any(
+                depth_import = profile is not None and (
+                    module == profile.namespace or module.startswith(profile.namespace + "."))
+                if module in ALLOWED_CONTRACT or depth_import or module in modules or any(
                     module == library or module.startswith(library + ".") for library in ALLOWED_LIBRARIES):
                     continue
                 errors.append(f"{path.relative_to(root)}: import {module} is outside the allowed modules")
         except (OSError, UnicodeError, ValueError) as exc:
             errors.append(f"{path.relative_to(root)}: invalid Lean source: {exc}")
-    return {"ok": not errors, "claim": values, "artifactDigest": artifact_digest,
-            "score": score_claim(values) if values is not None else None,
-            "files": len(files), "bytes": total, "errors": errors}
+    result = {"ok": not errors, "claim": values, "artifactDigest": artifact_digest,
+              "score": score_claim(values) if values is not None and profile is None else None,
+              "files": len(files), "bytes": total, "errors": errors}
+    if profile is not None:
+        result.update(resource_model=profile.version,
+                      scores=depth_objectives(values, resource_model) if values is not None else None)
+    return result
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("root", type=Path)
+    parser.add_argument("--resource-model", choices=tuple(DEPTH_PROFILES))
     args = parser.parse_args()
-    result = check(args.root)
+    result = check(args.root, resource_model=args.resource_model)
     print(json.dumps(result, sort_keys=True))
     raise SystemExit(0 if result["ok"] else 1)

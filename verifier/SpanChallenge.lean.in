@@ -1,0 +1,15 @@
+import CommitGolfDepth.Span
+import CommitGolf.Artifact
+
+/-! Trusted full fork/join work-span certificate and exact delivered modes.
+The generated Artifact value is fixed; it is not a comparator definition hole. -/
+namespace CommitGolf.Challenge
+
+noncomputable def submission : CommitGolfDepth.Span.Submission := sorry
+
+theorem submission_matches_artifact : submission = CommitGolf.Artifact.depthSubmission := sorry
+
+theorem certificate : CommitGolfDepth.Span.Certificate submission
+    {{proofBytes}} {{commitWork}} {{openingWork}} {{commitSpan}} {{openingSpan}} := sorry
+
+end CommitGolf.Challenge

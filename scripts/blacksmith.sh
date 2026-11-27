@@ -70,7 +70,7 @@ CLOUD
     # Export before any candidate code runs; only trusted dependency/build trees.
     guest 'sudo tar --zstd -C /srv -cf - golf/.elan commit-benchmark/.lake commit-benchmark/verifier/.tools' > .cache/trusted.tar.zst
     ;;
-  run|run-pareto|run-commit-golf-64-32-product|run-commit-golf-64-32-pareto|run-commit-golf-96-32-product|run-commit-golf-96-32-pareto)
+  run|run-pareto|run-commit-golf-64-32-product|run-commit-golf-64-32-pareto|run-commit-golf-96-32-product|run-commit-golf-96-32-pareto|run-commit-golf-oracle-rounds-pareto|run-commit-golf-work-span-pareto)
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
     case "$1" in
       run) track=product ;;
@@ -79,6 +79,8 @@ CLOUD
       run-commit-golf-64-32-pareto) track=commit-golf-64-32-pareto ;;
       run-commit-golf-96-32-product) track=commit-golf-96-32-product ;;
       run-commit-golf-96-32-pareto) track=commit-golf-96-32-pareto ;;
+      run-commit-golf-oracle-rounds-pareto) track=commit-golf-oracle-rounds-pareto ;;
+      run-commit-golf-work-span-pareto) track=commit-golf-work-span-pareto ;;
     esac
     guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 scripts/run.py --track '"$track"
     ;;
@@ -88,6 +90,11 @@ CLOUD
     guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 -m unittest discover -s verifier/tests'
     # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
     guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_artifact_linkage.py'
+    # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_depth_linkage.py'
+    # Resource-only actual new-mode clients; never produce a benchmark score.
+    # shellcheck disable=SC2016 # Resolve the judge UID inside the guest.
+    guest 'cd /srv/commit-benchmark && sudo -u golf -H env PATH=/srv/golf/.elan/bin:/usr/local/bin:/usr/bin:/bin XDG_RUNTIME_DIR=/run/user/$(id -u golf) python3 verifier/tests/check_depth_resources.py'
     ;;
   test-scale)
     # Admission and byte-read checks at the image limit; this produces no security score.
@@ -103,5 +110,5 @@ CLOUD
   stop)
     if [[ -f "${vm}/qemu.pid" ]]; then sudo kill "$(sudo cat "${vm}/qemu.pid")"; fi
     ;;
-  *) echo 'Usage: blacksmith.sh start | setup | cache | run | run-pareto | run-commit-golf-64-32-product | run-commit-golf-64-32-pareto | run-commit-golf-96-32-product | run-commit-golf-96-32-pareto | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
+  *) echo 'Usage: blacksmith.sh start | setup | cache | run | run-pareto | run-commit-golf-64-32-product | run-commit-golf-64-32-pareto | run-commit-golf-96-32-product | run-commit-golf-96-32-pareto | run-commit-golf-oracle-rounds-pareto | run-commit-golf-work-span-pareto | test-linkage | test-scale | collect | stop' >&2; exit 2 ;;
 esac

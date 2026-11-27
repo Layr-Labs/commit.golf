@@ -16,3 +16,5 @@ scripts/commit-golf-64-32-product/
 scripts/commit-golf-64-32-pareto/
 scripts/commit-golf-96-32-product/
 scripts/commit-golf-96-32-pareto/
+scripts/commit-golf-oracle-rounds-pareto/
+scripts/commit-golf-work-span-pareto/
