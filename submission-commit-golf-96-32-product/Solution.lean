@@ -1,18 +1,10 @@
-import CommitGolfCandidate.MoonCertificate
-import CommitGolf.Artifact
-
-/-! Certified machine implementation for the 96-to-32-byte compression track. Every requirement
-below is proved for these same RISC-V images, including adaptive position binding and
-commitment-and-opening statistical hiding. -/
+import CommitGolfCandidate.RungACompact
+import CommitGolfCandidate.RungAAssembly
+import CommitGolfCandidate.RungAOpeningProof
 namespace CommitGolf.Challenge
-
-def submission : CommitGolf.Submission := CommitGolfCandidate.submission
-
-set_option maxRecDepth 100000 in
-theorem submission_matches_artifact : submission = CommitGolf.Artifact.submission := by
-  rfl
-
-theorem certificate : CommitGolf.Certificate submission 69365 850256070 160000 :=
-  CommitGolfCandidate.moon_certificate rfl
-
+open CommitGolfCandidate.RungA
+def submission : CommitGolf.Submission := Artifact.submission
+theorem submission_matches_artifact : submission=Artifact.submission := rfl
+theorem certificate : Certificate submission 70080 841142282 136043 :=
+  Assembly.certified rungAOpening compactCommitLaw
 end CommitGolf.Challenge
