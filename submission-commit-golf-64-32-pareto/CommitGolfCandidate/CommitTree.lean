@@ -25,7 +25,7 @@ theorem commit_parent_step_counter (state : MachineState) (answer : BitVec 256) 
   rw [commit_parent_register state answer .x20 (by simp)]
 
 theorem commit_parent_step_register (state : MachineState) (answer : BitVec 256) (reg : Reg)
-    (member : reg ∈ [Reg.x9, .x19, .x21, .x26]) :
+    (member : reg ∈ [Reg.x5, .x9, .x11, .x13, .x19, .x21, .x26]) :
     (commitParentNextState (commitParentState state answer)).getReg reg = state.getReg reg := by
   have not20 : Reg.x20 ≠ reg := by intro h; subst reg; simp at member
   rw [commitParentNextState, MachineState.getReg_setPC,
@@ -36,22 +36,22 @@ theorem commit_parent_step_register (state : MachineState) (answer : BitVec 256)
 
 theorem commit_parent_step_pc (state : MachineState) (answer : BitVec 256) :
     (commitParentNextState (commitParentState state answer)).pc =
-      if state.getReg .x20 - 1 = 0 then 4388 else 4348 := by
-  change (if (commitParentState state answer).getReg .x20 - 1 = 0 then 4388 else 4348) = _
+      if state.getReg .x20 - 1 = 0 then 4388 else 4360 := by
+  change (if (commitParentState state answer).getReg .x20 - 1 = 0 then 4388 else 4360) = _
   rw [commit_parent_register state answer .x20 (by simp)]
 
 attribute [local irreducible] execute commitParentState commitParentNextState
 
-/-- All internal nodes are processed in descending heap order. Each costs ten
-instructions, seventeen cycles, and one query, independently of oracle answers. -/
+/-- All internal nodes are processed in descending heap order. Each costs seven
+instructions, fourteen cycles, and one query, independently of oracle answers. -/
 theorem commit_parents (state : MachineState) (remaining : Nat) (bounded : remaining < 2 ^ 24)
-    (pc : 0 < remaining → state.pc = 4348)
+    (pc : 0 < remaining → state.pc = 4360) (arguments : ParentArguments state)
     (counter : state.getReg .x20 = BitVec.ofNat 64 remaining)
     (buffers : ParentBuffers (state.getReg .x9) remaining) (fuel : Nat) :
-    execute (submission.image .commit) (10 * remaining + fuel) state true =
+    execute (submission.image .commit) (7 * remaining + fuel) state true =
       (do let finished ← commitParents state remaining
           let result ← execute (submission.image .commit) fuel finished true
-          return result.charge (17 * remaining) remaining) := by
+          return result.charge (14 * remaining) remaining) := by
   induction remaining generalizing state with
   | zero => simp [commitParents, Execution.charge]
   | succ remaining ih =>
@@ -64,7 +64,7 @@ theorem commit_parents (state : MachineState) (remaining : Nat) (bounded : remai
       rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
       congr 1
     have nextPC (answer : BitVec 256) (positive : 0 < remaining) :
-        (commitParentNextState (commitParentState state answer)).pc = 4348 := by
+        (commitParentNextState (commitParentState state answer)).pc = 4360 := by
       rw [commit_parent_step_pc]
       apply if_neg
       rw [← commit_parent_step_counter state answer, nextCounter]
@@ -76,14 +76,19 @@ theorem commit_parents (state : MachineState) (remaining : Nat) (bounded : remai
         ParentBuffers ((commitParentNextState (commitParentState state answer)).getReg .x9) remaining := by
       rw [commit_parent_step_register state answer .x9 (by simp)]
       exact fun node positive bound => buffers node positive (by omega)
-    rw [show 10 * (remaining + 1) + fuel = 10 + (10 * remaining + fuel) by omega,
-      commit_parent state (pc (by omega)) current.1 current.2.1 current.2.2.1 current.2.2.2]
+    have nextArguments (answer : BitVec 256) :
+        ParentArguments (commitParentNextState (commitParentState state answer)) := by
+      exact ⟨(commit_parent_step_register state answer .x5 (by simp)).trans arguments.1,
+        (commit_parent_step_register state answer .x11 (by simp)).trans arguments.2.1,
+        (commit_parent_step_register state answer .x13 (by simp)).trans arguments.2.2⟩
+    rw [show 7 * (remaining + 1) + fuel = 7 + (7 * remaining + fuel) by omega,
+      commit_parent state (pc (by omega)) arguments current.1 current.2.1 current.2.2.1 current.2.2.2]
     simp only [commitParents, bind_assoc]
     apply congrArg (fun continuation =>
       (liftM (World.query (.inr (commitParentQuery state))) : OracleComp World (BitVec 256)) >>= continuation)
     funext answer
     change BitVec 256 at answer
-    rw [ih _ (by omega) (nextPC answer) (nextCounter answer) (nextBuffers answer)]
+    rw [ih _ (by omega) (nextPC answer) (nextArguments answer) (nextCounter answer) (nextBuffers answer)]
     simp [Execution.charge, Nat.mul_add, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
 
 theorem commit_parents_finished (state : MachineState) (remaining : Nat)
@@ -108,7 +113,10 @@ theorem commit_parents_finished (state : MachineState) (remaining : Nat)
       rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) (remaining + 1) 1 (by decide) (by omega)]
       congr 1
     have done := ih _ (by omega) nextCounter reached
-    refine ⟨?_, fun reg member => (done.2 reg member).trans (commit_parent_step_register state answer reg member)⟩
+    refine ⟨?_, fun reg member => (done.2 reg member).trans
+      (commit_parent_step_register state answer reg (by
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at member ⊢
+        tauto))⟩
     intro _
     by_cases empty : remaining = 0
     · subst remaining
@@ -118,30 +126,53 @@ theorem commit_parents_finished (state : MachineState) (remaining : Nat)
       rfl
     · exact done.1 (Nat.pos_of_ne_zero empty)
 
-/-- Initialize the descending internal-node counter. -/
+private def parentSetupInstructions : List Instr :=
+  [.ADDI .x5 .x0 0, .ADDI .x11 .x0 64, .ADDI .x13 .x0 0]
+
+private def parentSetupPrefix (state : MachineState) (count : Nat) : MachineState :=
+  (parentSetupInstructions.take count).foldl execInstrBr state
+
+/-- Initialize the fixed compression arguments and descending internal-node counter. -/
 def commitParentsStartState (state : MachineState) : MachineState :=
-  (state.setReg .x20 (state.getReg .x19 - 1)).setPC
-    (if state.getReg .x19 - 1 = 0 then 4388 else 4348)
+  ((parentSetupPrefix state 3).setReg .x20 (state.getReg .x19 - 1)).setPC
+    (if state.getReg .x19 - 1 = 0 then 4388 else 4360)
 
 theorem commit_parents_start (state : MachineState) (pc : state.pc = 4340) (fuel : Nat) :
-    execute (submission.image .commit) (2 + fuel) state true =
+    execute (submission.image .commit) (5 + fuel) state true =
       (do let result ← execute (submission.image .commit) fuel (commitParentsStartState state) true
-          return result.charge 2 0) := by
-  let next := (state.setReg .x20 (state.getReg .x19 - 1)).setPC 4344
-  have f0 : fetch (submission.image .commit) state = some (.base (.ADDI .x20 .x19 4095)) := by
-    apply commit_fetch _ 61 _ (by decide) pc; rfl
-  have f1 : fetch (submission.image .commit) next = some (.base (.BEQ .x20 .x0 44)) := by
-    apply commit_fetch _ 62 _ (by decide) rfl; rfl
-  have s0 : ordinaryStep state (.base (.ADDI .x20 .x19 4095)) = some next := by
+          return result.charge 5 0) := by
+  have setup (remaining : Nat) :
+      execute (submission.image .commit) (3 + remaining) state true =
+        (do let result ← execute (submission.image .commit) remaining (parentSetupPrefix state 3) true
+            return result.charge 3 0) := by
+    apply execute_unit_steps (states := parentSetupPrefix state)
+    intro i hi
+    refine ⟨.base ((parentSetupInstructions[i]?).getD .EBREAK), ?_, ?_, ?_⟩
+    · apply commit_fetch _ (61 + i) _ (by omega)
+      · interval_cases i <;>
+          simp [parentSetupPrefix, parentSetupInstructions, execInstrBr, pc, MachineState.setPC]
+      · interval_cases i <;> rfl
+    · interval_cases i <;> rfl
+    · interval_cases i <;> rfl
+  let ready := parentSetupPrefix state 3
+  have readyPC : ready.pc = 4352 := by
+    simp [ready, parentSetupPrefix, parentSetupInstructions, execInstrBr, pc, MachineState.setPC]
+  let next := (ready.setReg .x20 (state.getReg .x19 - 1)).setPC 4356
+  have f0 : fetch (submission.image .commit) ready = some (.base (.ADDI .x20 .x19 4095)) := by
+    apply commit_fetch _ 64 _ (by decide) readyPC; rfl
+  have f1 : fetch (submission.image .commit) next = some (.base (.BEQ .x20 .x0 32)) := by
+    apply commit_fetch _ 65 _ (by decide) rfl; rfl
+  have s0 : ordinaryStep ready (.base (.ADDI .x20 .x19 4095)) = some next := by
+    have total : ready.getReg .x19 = state.getReg .x19 := rfl
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend12,
-      next, pc, BitVec.sub_eq_add_neg]
-  have s1 : ordinaryStep next (.base (.BEQ .x20 .x0 44)) = some (commitParentsStartState state) := by
+      next, readyPC, total, BitVec.sub_eq_add_neg]
+  have s1 : ordinaryStep next (.base (.BEQ .x20 .x0 32)) = some (commitParentsStartState state) := by
     simp [ordinaryStep, memoryArgumentsValid, memAccess, execInstrBr, signExtend13,
-      next, commitParentsStartState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
+      next, ready, commitParentsStartState, MachineState.getReg, MachineState.setReg, MachineState.setPC]
     split <;> simp_all
-  rw [show 2 + fuel = (fuel + 1) + 1 by omega,
+  rw [show 5 + fuel = 3 + ((fuel + 1) + 1) by omega, setup,
     execute_ordinary_step _ _ _ _ _ _ f0 s0, execute_ordinary_step _ _ _ _ _ _ f1 s1]
-  simp [instructionCycles, Execution.charge, ← Nat.add_assoc]
+  simp [bind_assoc, pure_bind, instructionCycles, Execution.charge, ← Nat.add_assoc]
 
 def commitExitState (state : MachineState) : MachineState :=
   ((state.setReg .x5 1).setReg .x10 0).setPC 4428
@@ -203,30 +234,26 @@ theorem commit_body (state : MachineState) (count : Nat)
     (outputValid : ∀ word : Fin 4,
       accessValid (state.getReg .x26 + BitVec.ofNat 64 (8 * word.val)) 8 = true)
     (fuel : Nat) :
-    execute (submission.image .commit) (169 * count + 3 + fuel) state true =
+    execute (submission.image .commit) (166 * count + 9 + fuel) state true =
       (do let finished ← commitBody state count
-          return ⟨.success, finished, 232 * count - 4, 9 * count - 1⟩) := by
-  rw [show 169 * count + 3 + fuel =
-    159 * count + (2 + (10 * (count - 1) + (11 + fuel))) by omega,
+          return ⟨.success, finished, 229 * count + 2, 9 * count - 1⟩) := by
+  rw [show 166 * count + 9 + fuel =
+    159 * count + (5 + (7 * (count - 1) + (11 + fuel))) by omega,
     commit_leaves state count leaves]
   simp only [commitBody, bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro hashed reached
   have leafDone := commit_leaves_finished state count leaves hashed reached
   let ready := commitParentsStartState hashed
-  have readyRegister (reg : Reg) (notCounter : Reg.x20 ≠ reg) :
-      ready.getReg reg = hashed.getReg reg := by
-    dsimp only [ready]
-    rw [commitParentsStartState, MachineState.getReg_setPC,
-      MachineState.getReg_setReg_ne _ _ _ _ notCounter]
+  have readyArguments : ParentArguments ready := ⟨rfl, rfl, rfl⟩
   have readyCount : ready.getReg .x20 = BitVec.ofNat 64 (count - 1) := by
     change hashed.getReg .x19 - 1 = _
     rw [leafDone.2 .x19 (by simp), total]
     change BitVec.ofNat 64 count - BitVec.ofNat 64 1 = _
     rw [BitVec.ofNat_sub_ofNat_of_le (w := 64) count 1 (by decide) (by omega)]
-  have readyPC : 0 < count - 1 → ready.pc = 4348 := by
+  have readyPC : 0 < count - 1 → ready.pc = 4360 := by
     intro _
-    change (if hashed.getReg .x19 - 1 = 0 then 4388 else 4348) = _
+    change (if hashed.getReg .x19 - 1 = 0 then 4388 else 4360) = _
     rw [leafDone.2 .x19 (by simp), total]
     apply if_neg
     change BitVec.ofNat 64 count - BitVec.ofNat 64 1 ≠ 0
@@ -235,14 +262,12 @@ theorem commit_body (state : MachineState) (count : Nat)
     have equal := congrArg BitVec.toNat zero
     change (count - 1) % 18446744073709551616 = 0 at equal
     omega
-  have readyHeap : ready.getReg .x9 = state.getReg .x9 :=
-    (readyRegister .x9 (by decide)).trans (leafDone.2 .x9 (by simp))
-  have readyOutput : ready.getReg .x26 = state.getReg .x26 :=
-    (readyRegister .x26 (by decide)).trans (leafDone.2 .x26 (by simp))
+  have readyHeap : ready.getReg .x9 = state.getReg .x9 := leafDone.2 .x9 (by simp)
+  have readyOutput : ready.getReg .x26 = state.getReg .x26 := leafDone.2 .x26 (by simp)
   have readyBuffers : ParentBuffers (ready.getReg .x9) (count - 1) := by
     rw [readyHeap]; exact parents
   rw [commit_parents_start hashed leafDone.1,
-    commit_parents ready (count - 1) (by omega) readyPC readyCount readyBuffers]
+    commit_parents ready (count - 1) (by omega) readyPC readyArguments readyCount readyBuffers]
   simp only [bind_assoc, pure_bind]
   apply bind_congr_of_forall_mem_support
   intro finished reachedParents
